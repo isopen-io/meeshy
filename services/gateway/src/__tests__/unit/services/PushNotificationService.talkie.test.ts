@@ -156,18 +156,27 @@ describe('#17142 — le réveil du talkie au chokepoint', () => {
   it('sans PushToTalk : le push TALKIE est time-sensitive, de catégorie TALKIE, collapse-id et expiré avec la fenêtre ; data-only sur Android', () => {
     const [apns, fcm] = wake('push');
 
-    expect(apns).toMatchObject({ types: ['apns'], platforms: ['ios'], payload: { interruptionLevel: 'time-sensitive', category: 'TALKIE', collapseId: `talkie-${TALKIE}`, ttlMs: TALKIE_WAKE_TTL_MS } });
+    expect(apns).toMatchObject({ types: ['apns'], platforms: ['ios'], payload: { interruptionLevel: 'time-sensitive', category: 'MEESHY_TALKIE', collapseId: `talkie-${TALKIE}`, ttlMs: TALKIE_WAKE_TTL_MS } });
     expect(apns.payload.title).toBe('Awa vous parle');
     expect(fcm).toMatchObject({ types: ['fcm'], platforms: ['android', 'web'], payload: { dataOnlyOnAndroid: true, ttlMs: TALKIE_WAKE_TTL_MS } });
   });
 
-  it.each([[IOS], [ANDROID]])('rétrocompatibilité : un client qui ne route pas talkie_incoming (%j) ne reçoit RIEN', async (token) => {
+  it.each([[{ ...IOS, appVersion: '1.1.6' }], [ANDROID]])('rétrocompatibilité : un client qui ne route pas talkie_incoming (%j) ne reçoit RIEN', async (token) => {
     const svc = await service();
     mockPrisma.pushToken.findMany.mockResolvedValue([token]);
 
     expect(await svc.sendToUser(wake('push')[token.type === 'apns' ? 0 : 1])).toEqual([]);
     expect(mockApnsSend).not.toHaveBeenCalled();
     expect(mockFirebaseMessagingSend).not.toHaveBeenCalled();
+  });
+
+  it('un iPhone à partir de 1.1.7 reçoit le push TALKIE', async () => {
+    const svc = await service();
+    mockPrisma.pushToken.findMany.mockResolvedValue([{ ...IOS, appVersion: '1.1.7' }]);
+
+    await svc.sendToUser(wake('push')[0]);
+
+    expect(mockApnsSend).toHaveBeenCalledTimes(1);
   });
 
   it('les préférences s’appliquent : pushs coupés ⇒ rien ne part, PushToTalk compris', async () => {
@@ -193,7 +202,7 @@ describe('#17142 — le réveil du talkie au chokepoint', () => {
     });
 
     expect(pushes.map((p) => p.types)).toEqual([['apns'], ['fcm']]);
-    expect(pushes[0].payload).toMatchObject({ category: 'TALKIE', collapseId: `talkie-${TALKIE}` });
+    expect(pushes[0].payload).toMatchObject({ category: 'MEESHY_TALKIE', collapseId: `talkie-${TALKIE}` });
     expect(pushes[0].payload.data).toMatchObject({
       type: 'talkie_incoming', phase: 'ended', audioUrl: AUDIO, availableUntil: until.toISOString(),
       attachmentUrl: AUDIO, attachmentMimeType: 'audio/aac', attachmentFileSize: '4200', attachmentDurationMs: '3100', attachmentId: TALKIE, attachmentLanguage: '',

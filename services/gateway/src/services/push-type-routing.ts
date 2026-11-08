@@ -59,7 +59,7 @@ const BRING_STOPPED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> =
  * table (`talkieWakeChannel`) — sans appareil capable, la voix se replie en message vocal au lieu d'attendre en vain.
  */
 const TALKIE_INCOMING_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
-  ios: null, 'android-native': null, 'android-shell': null, web: null,
+  ios: '1.1.7', 'android-native': null, 'android-shell': null, web: null,
 };
 
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([

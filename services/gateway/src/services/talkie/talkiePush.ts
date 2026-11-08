@@ -38,7 +38,7 @@ import { talkieAudioUrl } from './talkieAudioToken';
 import { retireOrphanPushToTalkTokens, type PushToTalkPrisma } from './pushToTalkTokens';
 import { tokenRoutesPushType } from '../push-type-routing';
 
-export const TALKIE_PUSH_CATEGORY = 'TALKIE';
+export const TALKIE_PUSH_CATEGORY = 'MEESHY_TALKIE';
 /** Une voix réveillée vit au plus le temps d'une prise de parole et de sa fenêtre de rattrapage. */
 export const TALKIE_WAKE_TTL_MS = TALKIE_MAX_DURATION_MS + TALKIE_JOIN_WINDOW_MS;
 /** Le mime COMPLET des trames ADTS : la NSE ne reconnaît un audio qu'au préfixe `audio/`. */
