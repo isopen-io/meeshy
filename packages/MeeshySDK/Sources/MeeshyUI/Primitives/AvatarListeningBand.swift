@@ -75,7 +75,9 @@ public struct AvatarListeningBand: View {
         return ZStack(alignment: .bottomTrailing) {
             Color.clear
             Text(listening.glyph)
-                .font(.system(size: (diameter * 0.62).rounded()))
+                .font(MeeshyFont.relative((diameter * 0.62).rounded()))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
                 .frame(width: diameter, height: diameter)
                 .background(Circle().fill(Color.black.opacity(0.55)))
                 .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1))
