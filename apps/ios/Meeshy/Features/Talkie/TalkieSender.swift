@@ -15,7 +15,8 @@ protocol TalkieCapturing: AnyObject {
 /// Ferme une prise de parole passé sa durée maximale. Rend de quoi l'annuler.
 typealias TalkieDeadlineScheduler = @MainActor (TimeInterval, @escaping @MainActor () -> Void) -> () -> Void
 
-/// **ÉMETTRE LE TALKIE DEPUIS iOS** (#16927, iso `createTalkieSender` de `apps/web/src/lib/talkie/talkie-sender.ts`).
+/// **ÉMETTRE LE TALKIE DEPUIS iOS** (#16927, iso `createTalkieSender` de `apps/web/src/lib/talkie/talkie-sender.ts`) —
+/// le micro est `TalkieMicCapture`, la socket `TalkieSocketEmitter`, le bouton `ProfileTalkieRow`.
 ///
 /// - **Appuyer** ouvre `talkie:start` ET le micro EN MÊME TEMPS : ce qui est capté avant l'accusé est gardé (borné par
 ///   le plafond d'une prise de parole) et part dès l'ouverture — le premier mot n'est jamais mangé par l'aller-retour.
