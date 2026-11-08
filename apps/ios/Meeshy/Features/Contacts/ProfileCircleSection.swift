@@ -30,16 +30,22 @@ struct ProfileCircleSection: View {
                     if viewModel.offersBring {
                         ProfileBringRow(userId: viewModel.userId, displayName: displayName)
                     }
+                    if viewModel.offersTogether {
+                        ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
+                    }
                     promoteButton
                     loweringButton(from: level)
                 }
-            } else if viewModel.offersTalkie || viewModel.offersBring {
+            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     if viewModel.offersTalkie {
                         ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
                     }
                     if viewModel.offersBring {
                         ProfileBringRow(userId: viewModel.userId, displayName: displayName)
+                    }
+                    if viewModel.offersTogether {
+                        ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
                     }
                 }
             } else {
