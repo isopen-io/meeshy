@@ -402,3 +402,54 @@ objet voisin emportait le texte. Il a fallu quelqu'un qui cherche à CASSER.
 > croyait appliquée. Ce cycle a eu besoin des deux, et le compte final le dit —
 > quatre lots déclenchés par un cliquet, deux constats bloquants trouvés par un
 > audit, et un défaut que j'avais introduit moi-même.
+
+---
+
+## Troisième tour — la moitié PUSH, prise au lieu d'être différée
+
+Le second tour avait fermé l'ÉVÉNEMENT `mention:created` et renvoyé la BANNIÈRE
+en issue. C'était la mauvaise décision, et elle se voit en une phrase : laisser
+une garde posée sur l'événement et absente de la bannière, c'est **exactement**
+le défaut que le second tour venait de corriger — une garde posée sur un chemin
+qui se lit comme posée sur le sujet.
+
+`notifyNewlyMentioned` relit `loadMessageProtection`, qui couvre la vue unique,
+le flou, l'éphémère et le chiffré — **jamais le plancher**. Un inscrit entré par
+un lien sans historique recevait donc sur son écran verrouillé le texte intégral
+d'un message écrit avant son arrivée, dès qu'une édition l'y nommait. Le message
+n'a même pas besoin d'être protégé : c'est sa DATE qui le met hors de portée.
+
+Deux choses que ce tour a trouvées en se faisant, et qui valent plus que le
+correctif :
+
+**La garde devait se relire SUR PLACE, et le fichier le disait déjà.** Son
+doc-comment voisin porte, mot pour mot : « une garde de confidentialité qui
+dépend du câblage de l'appelant échoue en montrant PLUS ». Le correctif n'a donc
+pas eu à décider où poser la lecture — il a eu à LIRE la décision déjà écrite
+pour la dimension voisine.
+
+**Une projection trop ÉTROITE bloque une loi en aval sans qu'aucun témoin ne
+rougisse.** `MentionPrisma` ne déclarait pas `conversationShareLink`, que la loi
+lit pour savoir si un lien d'entrée autorise l'historique. C'est la leçon du
+cycle 124 — dix-sept sites avaient alors sauté la forme du `select` plutôt que
+l'appel — et ici c'est le COMPILATEUR qui l'a dite, parce que la loi déclare le
+client dont elle a besoin au lieu de l'accepter large.
+
+> **Le type d'un client Prisma est l'endroit où une loi déclare ce qu'elle a
+> besoin de lire.** `EditAudiencePrisma` nomme ses trois tables ; un appelant
+> dont la projection n'en couvre que deux ne compile pas. C'est la seule des
+> quatre familles de défaut de schéma (§ CLAUDE.md) qu'un cliquet ne peut pas
+> voir, et un type bien posé la rend visible gratuitement.
+
+## Une erreur de méthode, mesurée, à ne pas refaire
+
+Un des quatre passages de la suite complète a rendu **deux rouges qui n'en
+étaient pas** (`core-auth-refusal-status`, `me-export`), tous deux verts en
+isolation. La cause n'est pas une flakiness : **j'éditais des fichiers pendant
+que la suite tournait.** Jest lit chaque fichier au démarrage de sa suite, donc
+une édition en vol produit des échecs qui n'appartiennent à aucune révision.
+
+> **Une mesure prise sur un arbre qu'on modifie ne mesure rien**, et elle coûte
+> deux fois : le temps de la passe, et le temps de disculper les faux rouges.
+> La suite complète se lance sur un arbre GELÉ — après le dernier commit, pas
+> pendant le prochain.
