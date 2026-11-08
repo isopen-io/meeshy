@@ -28,6 +28,7 @@
  *    ne reçoit rien : il relira la page.
  */
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { PLAN_UNAVAILABLE } from './planOutcome';
 
 import { safeBroadcast } from './serverEmit';
 
@@ -87,7 +88,7 @@ export type MessageNewEmission<P extends MessageNewPayload> = {
 };
 
 export function emitMessageNew<P extends MessageNewPayload>(input: MessageNewEmission<P>): void {
-  if (input.readerSigned === 'unavailable') return;
+  if (input.readerSigned === PLAN_UNAVAILABLE) return;
   if (input.readerSigned) {
     emitPerReader(input, input.readerSigned);
     return;

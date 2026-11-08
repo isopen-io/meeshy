@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
@@ -78,10 +78,99 @@ protocol ComposerLimitSpeaking: AnyObject {
     func say(_ message: String)
 }
 
+/// **La limite se dit par une CAPSULE, plus par un toast** (#17111) : posée
+/// au-dessus de la pilule (L12), elle chiffre la borne, vibre d'un avertissement et se
+/// dit à VoiceOver. Le toast montait loin du geste refusé et couvrait le socle.
 @MainActor
 final class ComposerSystemLimitSpeaker: ComposerLimitSpeaking {
-    func say(_ message: String) { FeedbackToastManager.shared.showNotice(message) }
+    private let capsule: ComposerLimitCapsule
+    private let haptic: () -> Void
+    private let announce: (String) -> Void
+
+    init(capsule: ComposerLimitCapsule = .shared,
+         haptic: @escaping () -> Void = { HapticFeedback.warning() },
+         announce: @escaping (String) -> Void = { AdaptiveAccessibility.announce($0) }) {
+        self.capsule = capsule
+        self.haptic = haptic
+        self.announce = announce
+    }
+
+    func say(_ message: String) {
+        haptic()
+        announce(message)
+        capsule.show(message)
+    }
+
     nonisolated deinit {}
+}
+
+/// **Ce que la capsule montre, et combien de temps** : un message à la fois,
+/// le dernier refus remplace le précédent, et elle se retire seule.
+@MainActor
+final class ComposerLimitCapsule: ObservableObject {
+    static let shared = ComposerLimitCapsule()
+    static let visibleFor: Duration = .milliseconds(2200)
+
+    @Published private(set) var message: String?
+    private var generation = 0
+    private let sleep: @Sendable (Duration) async throws -> Void
+
+    init(sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
+        self.sleep = sleep
+    }
+
+    nonisolated deinit {}
+
+    func show(_ text: String) {
+        generation += 1
+        let tour = generation
+        message = text
+        let sleep = self.sleep
+        Task { [weak self] in
+            do {
+                try await sleep(Self.visibleFor)
+                self?.retire(ifStill: tour)
+            } catch {}
+        }
+    }
+
+    func retire(ifStill tour: Int? = nil) {
+        guard tour == nil || tour == generation else { return }
+        message = nil
+    }
+}
+
+/// La capsule posée au-dessus de la pilule : verre sombre, texte blanc, muette pour
+/// VoiceOver (l'annonce est déjà faite), et elle ne prend aucun doigt.
+struct ComposerLimitCapsuleView: View {
+    @ObservedObject var capsule: ComposerLimitCapsule
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            if let message = capsule.message {
+                Text(message)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
+                    .adaptiveGlass(in: Capsule(), tint: Color.black.opacity(0.55))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .accessibilityHidden(true)
+                    .accessibilityIdentifier("composer.limit.capsule")
+            }
+        }
+        // **Au-dessus de la pilule, jamais sous ✕** (L12) : le socle est un
+        // `safeAreaInset` bas de la surface, la capsule se pose donc sur lui, au
+        // plus près du geste refusé, sans croiser la rangée des scènes du haut.
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.sm)
+        .frame(maxWidth: .infinity)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: capsule.message)
+        .allowsHitTesting(false)
+    }
 }
 
 @MainActor

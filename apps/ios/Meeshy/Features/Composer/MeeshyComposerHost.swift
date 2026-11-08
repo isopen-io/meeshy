@@ -216,6 +216,9 @@ struct MeeshyComposerHost: View {
     @State var reelAutoSwitch = ComposerReelAutoSwitch.State()
     /// Le post à une seule vidéo qui attend « C'est un Réel / C'est un Post » (#8603).
     @State var pendingReelOffer: ComposerPublishChoice?
+    /// L'état masqué de la scène (#17111) : posé et levé par un toucher dans
+    /// le vide, jamais par un minuteur.
+    @State var sceneChromeIsConcealed = false
     @State var composerVisibility: PostVisibility
     @State var composerVisibilityUserIds: [String] = []
 
@@ -833,6 +836,7 @@ struct MeeshyComposerHost: View {
             backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil,
             bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil,
             writesText: writesText)
+        if sceneRestRelay.concealmentConsumes(issue) { return }
         if issue == .endWriting { return endSceneWriting() }
         if ComposerSceneEmptyTap.closesBand(issue) { requestedSceneBand = nil }
         if issue == .armViewfinder, handleSceneQuickTap() { return }
@@ -880,6 +884,7 @@ struct MeeshyComposerHost: View {
         // avalée — le mode de panne qui ne rougit nulle part.
         withComposerAutosave(withSceneCameraViewfinder(sceneMenuPresented(composerStackNode)))
         .background(tint.color.ignoresSafeArea())
+        .environment(\.composerChromeIsConcealed, sceneChromeIsConcealedServed)
     }
 
     func composerLifecycle<Contenu: View>(_ contenu: Contenu) -> some View {

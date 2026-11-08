@@ -14,6 +14,7 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
     case sticker
     case sound
     case drawing
+    case camera
     case background
     case mention
     case place
@@ -27,6 +28,7 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
         case .sticker: return .sticker
         case .sound: return .sound
         case .drawing: return .drawing
+        case .camera: return nil
         case .background: return .background
         case .mention: return .mention
         case .place: return .place
@@ -35,7 +37,10 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
         }
     }
 
-    var symbol: String { door?.symbolName ?? "ellipsis" }
+    var symbol: String {
+        if self == .camera { return "camera" }
+        return door?.symbolName ?? "ellipsis"
+    }
 }
 
 /// **Ce que la scène porte, état par état** (#13839, qui renverse #4561 et #4633 : les contrôles se posent SUR la scène, plus
@@ -89,15 +94,24 @@ nonisolated enum ComposerRestChrome {
     /// « Texte du post » n'est offert qu'au post et au réel (`ComposerRailDoor
     /// .removedFromFormat`) : c'est la seule option qui varie d'un format à
     /// l'autre, au pied de la colonne, et le socle ne bouge pas (#14457).
-    private static let sceneTools: [ComposerRestTool] = [.text, .media, .sticker, .sound, .drawing,
+    private static let sceneTools: [ComposerRestTool] = [.text, .media, .sticker, .sound, .drawing, .camera,
                                                          .background, .mention, .place, .postText]
 
     /// Un fond MÉDIA retire la porte de la palette (`sceneDoors`), jamais
     /// l'entrée « Fond » : elle SÉLECTIONNE alors le fond, dont les outils à
     /// plat prennent le rail (#14048, `handleRestTool`).
-    static func tools(offered doors: [ComposerRailDoor], hasBackgroundMedia: Bool = false) -> [ComposerRestTool] {
+    ///
+    /// **La porte Caméra arme le viseur dans la scène** (#17111) : elle n'est
+    /// pas une `ComposerRailDoor` — elle n'ingère rien par un sélecteur, elle
+    /// appelle `armSceneCamera()` — et elle se retire là où le format ne sert
+    /// aucun mode (`ComposerSceneCamera.modes(for:)` vide, le statut).
+    static func tools(offered doors: [ComposerRailDoor], hasBackgroundMedia: Bool = false,
+                      cameraModes: [ComposerSceneCameraMode] = []) -> [ComposerRestTool] {
         let offertes = Set(doors).union(hasBackgroundMedia ? [.background] : [])
-        return sceneTools.filter { outil in outil.door.map(offertes.contains) ?? false } + [.more]
+        return sceneTools.filter { outil in
+            if outil == .camera { return !cameraModes.isEmpty }
+            return outil.door.map(offertes.contains) ?? false
+        } + [.more]
     }
 
     /// **Le pied de la colonne ne défile jamais** (#14622, comme Android
@@ -212,11 +226,149 @@ nonisolated enum ComposerRestChromeCopy {
             return String(localized: "composer.more.background", defaultValue: "Fond", bundle: .main)
         }
         if tool == .postText { return ComposerPostTextPill.label }
+        if tool == .camera { return ComposerPillCopy.camera }
         guard let door = tool.door else { return ComposerOverflowCopy.menu }
         return ComposerRailCopy.label(door)
     }
 
     static var column: String {
         String(localized: "composer.rest.column", defaultValue: "Outils de la scène", bundle: .main)
+    }
+}
+
+// MARK: - La grammaire de la pilule (#17111)
+
+/// **Ce que la pilule du bas porte** : `(…) · Texte · Média · Publier ▾`. Les
+/// deux entrées qui font naître la matière de la plupart des scènes restent à
+/// portée de pouce ; tout le reste vit derrière `(…)`, dans les deux rails.
+nonisolated enum ComposerPillSlot: String, CaseIterable, Equatable, Sendable {
+    case more
+    case text
+    case media
+    case publish
+}
+
+/// **Le rail droit ouvert par `(…)`** : ce qui structure la scène et la
+/// publication. Chaque entrée rejoint l'action du menu ⋯ qu'elle remplace
+/// (`moreEntry`) ; « Fond » et « Plus » n'en sont pas.
+nonisolated enum ComposerRightRailEntry: String, CaseIterable, Equatable, Sendable {
+    case background
+    case addScene
+    case animation
+    case duration
+    case caption
+    case hashtags
+    case plus
+
+    var moreEntry: ComposerMoreMenuEntry? {
+        switch self {
+        case .addScene: return .addSlide
+        case .animation: return .animation
+        case .duration: return .slideDuration
+        case .caption: return .legend
+        case .hashtags: return .hashtags
+        case .background, .plus: return nil
+        }
+    }
+}
+
+nonisolated enum ComposerPillGrammar {
+
+    /// Publier est ABSENT d'une scène vide (#17111) : ni grisé, ni toast qui
+    /// dirait pourquoi — il paraît dès qu'il y a quelque chose à publier.
+    static func pill(hasMatterToPublish: Bool) -> [ComposerPillSlot] {
+        ComposerPillSlot.allCases.filter { $0 != .publish || hasMatterToPublish }
+    }
+
+    static func publishIsShown(hasMatterToPublish: Bool) -> Bool {
+        pill(hasMatterToPublish: hasMatterToPublish).contains(.publish)
+    }
+
+    /// Le rail gauche, dans l'ordre de la planche : ce qu'on POSE sur la scène.
+    static let leftRailOrder: [ComposerRestTool] = [.sticker, .sound, .drawing, .camera, .mention, .place]
+
+    static func leftRail(_ offered: [ComposerRestTool]) -> [ComposerRestTool] {
+        leftRailOrder.filter(offered.contains)
+    }
+
+    /// Le rail droit : « Fond » quand le format en offre un, les entrées du ⋯
+    /// que le contexte sert, puis « Plus » qui porte le reste.
+    static func rightRail(offersBackground: Bool, moreEntries: [ComposerMoreMenuEntry]) -> [ComposerRightRailEntry] {
+        let servies = Set(moreEntries)
+        let structure = ComposerRightRailEntry.allCases.filter { $0.moreEntry.map(servies.contains) ?? false }
+        return (offersBackground ? [.background] : []) + structure + [.plus]
+    }
+
+    /// La feuille « Plus » : ce que le ⋯ servait et qu'aucun rail ne porte.
+    static func plusSheet(_ moreEntries: [ComposerMoreMenuEntry]) -> [ComposerMoreMenuEntry] {
+        let portees = Set(ComposerRightRailEntry.allCases.compactMap(\.moreEntry))
+        return moreEntries.filter { !portees.contains($0) }
+    }
+
+    /// **iPad** : le rail « Ajouter » commence par Texte et Média, que la
+    /// pilule porte sur iPhone.
+    static func addRail(_ offered: [ComposerRestTool]) -> [ComposerRestTool] {
+        [ComposerRestTool.text, .media].filter(offered.contains) + leftRail(offered)
+    }
+
+    /// Les rails se GRISENT, jamais ne disparaissent, quand un mode plein écran
+    /// ou le viseur armé possède la scène : leur place ne saute pas.
+    static func railsAreGreyed(fullScreenModeIsOpen: Bool, cameraIsArmed: Bool) -> Bool {
+        fullScreenModeIsOpen || cameraIsArmed
+    }
+
+    enum TrailingTitle: Equatable, Sendable {
+        case scene
+        case selection
+    }
+
+    static func trailingTitle(objectIsSelected: Bool) -> TrailingTitle {
+        objectIsSelected ? .selection : .scene
+    }
+}
+
+// MARK: - L'état masqué (#17111)
+
+/// **Toucher le vide d'une scène habitée MASQUE tout le chrome** : la scène
+/// prend le viewport entier en gardant son 9:16 (letterbox), sans minuteur ;
+/// un second toucher rend le chrome. Une scène VIERGE garde son geste : elle
+/// arme la caméra.
+nonisolated enum ComposerChromeConcealment {
+
+    enum Tap: Equatable, Sendable {
+        case reveal
+        case conceal
+        case passThrough
+    }
+
+    static func tap(isConcealed: Bool, emptyTap: ComposerSceneEmptyTap.Outcome, sceneHasContent: Bool) -> Tap {
+        if isConcealed { return .reveal }
+        guard sceneHasContent else { return .passThrough }
+        switch emptyTap {
+        case .nothing, .selectBackground: return .conceal
+        case .endWriting, .deselect, .closeEffect, .armViewfinder, .closeBand: return .passThrough
+        }
+    }
+}
+
+nonisolated enum ComposerPillCopy {
+    static var camera: String {
+        String(localized: "composer.shell.camera", defaultValue: "Caméra", table: "ComposerShell", bundle: .main)
+    }
+
+    static var concealedHint: String {
+        String(localized: "composer.shell.concealed.hint",
+               defaultValue: "Touchez la scène pour retrouver les outils", table: "ComposerShell", bundle: .main)
+    }
+
+    static func title(_ title: ComposerPillGrammar.TrailingTitle) -> String {
+        switch title {
+        case .scene:
+            return String(localized: "composer.shell.rail.scene", defaultValue: "Scène",
+                          table: "ComposerShell", bundle: .main)
+        case .selection:
+            return String(localized: "composer.shell.rail.selection", defaultValue: "SÉLECTION",
+                          table: "ComposerShell", bundle: .main)
+        }
     }
 }

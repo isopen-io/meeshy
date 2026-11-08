@@ -51,6 +51,27 @@ const EXPRESSION_KEY_LENGTH = 120;
  * l'expliquer — c'est leur rôle, et le doc-comment de `broadcastLinkMessage` en
  * porte trois. Les chaînes le sont parce qu'un `'void x()'` dans un message de
  * journal n'est pas du code.
+ *
+ * ─── Et les littéraux de REGEX, depuis #17068 ────────────────────────────────
+ *
+ * Une accolade DÉSÉQUILIBRÉE dans une regex — `/\{/`, `/[}]/` — faussait
+ * l'appariement de `spansAfter` chez le balayage voisin, donc ses verdicts
+ * « gardé / non gardé ». Mesuré sur fixture : un `{` seul dans un `try` et un
+ * `}` seul après l'émission faisaient couvrir celle-ci par une fenêtre de `try`
+ * qui s'arrêtait AVANT l'enfilage — une émission non gardée certifiée gardée.
+ *
+ * Précision que l'issue n'apportait pas : son exemple `/\d{2}/` est
+ * ÉQUILIBRÉ, donc inoffensif. Le déclencheur est l'accolade SEULE, la forme
+ * qu'écrit toute regex reconnaissant du JSON ou un gabarit.
+ *
+ * **Le discriminant est CONSERVATEUR, et le sens de son erreur est choisi.**
+ * `/` est aussi la division, et la règle usuelle regarde le dernier token non
+ * blanc qui précède : une fin d'EXPRESSION (identifiant, chiffre, `)`, `]`,
+ * `}`, quote) ⇒ division ; tout le reste ⇒ regex. Les cas ambigus — `if (x)
+ * /re/.test(y)` — sont donc lus comme une division, c'est-à-dire **laissés
+ * tels quels** : le comportement d'avant ce lot, jamais une suppression de code
+ * réel. Prendre une division pour une regex serait l'erreur chère, puisqu'elle
+ * effacerait tout jusqu'au `/` suivant.
  */
 export function blankOutNonCode(source: string): string {
   let out = '';
@@ -96,10 +117,54 @@ export function blankOutNonCode(source: string): string {
       }
       continue;
     }
+    if (c === '/' && startsRegex(out)) {
+      out += c;
+      i += 1;
+      let inClass = false;
+      while (i < source.length) {
+        const ch = source[i];
+        if (ch === '\\') {
+          out += '  ';
+          i += 2;
+          continue;
+        }
+        if (ch === '\n') break;
+        if (ch === '[') inClass = true;
+        else if (ch === ']') inClass = false;
+        else if (ch === '/' && !inClass) {
+          out += '/';
+          i += 1;
+          break;
+        }
+        out += ' ';
+        i += 1;
+      }
+      continue;
+    }
     out += c;
     i += 1;
   }
   return out;
+}
+
+/**
+ * Le `/` qui suit ce texte ouvre-t-il une REGEX plutôt qu'une division ?
+ *
+ * Décidé sur le dernier caractère non blanc DÉJÀ ÉMIS — donc déjà dépouillé de
+ * ses commentaires et de ses chaînes, ce qui évite de reconnaître une division
+ * dans un commentaire. Une fin d'expression ⇒ division ; tout le reste ⇒ regex.
+ * Les mots-clés qui peuvent précéder une regex (`return`, `typeof`, `case`,
+ * `in`, `of`, `delete`, `void`, `new`, `do`, `else`, `yield`, `await`) sont
+ * nommés : sans eux, `return /x/` passerait pour une division.
+ */
+const EXPRESSION_END = /[A-Za-z0-9_$)\]}'"`]$/;
+const KEYWORD_BEFORE_REGEX = /\b(?:return|typeof|instanceof|case|in|of|delete|void|new|do|else|yield|await)$/;
+
+function startsRegex(emitted: string): boolean {
+  const before = emitted.replace(/[\s]+$/, '');
+  if (before.length === 0) return true;
+  if (KEYWORD_BEFORE_REGEX.test(before)) return true;
+  return !EXPRESSION_END.test(before);
 }
 
 /**

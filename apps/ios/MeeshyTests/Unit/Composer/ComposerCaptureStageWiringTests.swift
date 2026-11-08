@@ -86,24 +86,25 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
 
     /// La disposition vient de sa loi (#9753) : la croix ouvre la rangée, le
     /// flash puis le retournement la ferment, au bord droit.
-    func test_theTopRow_putsTheCrossLeft_andTheFlashThenTheFlipRight() throws {
+    func test_theTopRow_putsQuitLeft_validateRight_andTheCapsuleCentred() throws {
         let rangee = ComposerCaptureTopRow.Input(stage: .armed)
-        XCTAssertEqual(ComposerCaptureTopRow.leading(rangee).first, .close, "la croix ouvre la rangée, à gauche")
-        XCTAssertEqual(Array(ComposerCaptureTopRow.trailing(rangee).suffix(2)), [.flash, .flip],
-                       "le retournement à DROITE du flash (porteur 2026-10-09)")
+        XCTAssertEqual(ComposerCaptureTopRow.leading(rangee).first, .close, "Quitter ouvre la rangée, à gauche")
+        XCTAssertEqual(ComposerCaptureTopRow.trailing(rangee).last, .validate, "✓ Valider la ferme, à droite (A8)")
+        XCTAssertEqual(ComposerCaptureTopRow.capsule(rangee), [.flash, .selfTimer, .flip, .more])
         let barre = try Self.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("ForEach(ComposerCaptureTopRow.leading(row)"))
         XCTAssertTrue(barre.contains("ForEach(trailingItems"))
+        XCTAssertTrue(barre.contains("ForEach(capsuleItems"))
     }
 
     /// **Sous le flash, UN curseur vertical : son intensité** (porteur 2026-10-07,
     /// #9566). Le curseur de luminosité permanent est retiré.
     func test_theFlashSlider_isVertical_underTheFlash_andOnlyWhileTheFlashIsOn() throws {
         let barre = try Self.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
-        let rangee = try XCTUnwrap(barre.range(of: "topControls\n"))
+        let rangee = try XCTUnwrap(barre.range(of: "controlCapsule\n"))
         let curseur = try XCTUnwrap(barre.range(of: "ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity"))
-        XCTAssertLessThan(rangee.lowerBound, curseur.lowerBound, "sous la rangée haute, donc sous le flash")
-        XCTAssertTrue(barre.contains("trailingItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode)"),
+        XCTAssertLessThan(rangee.lowerBound, curseur.lowerBound, "sous la capsule, donc sous le flash")
+        XCTAssertTrue(barre.contains("capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode)"),
                       "le curseur n'existe que sous un flash montré et allumé")
         XCTAssertFalse(barre.contains("Exposure"), "plus de curseur de luminosité permanent")
         let vue = try Self.code("Meeshy/Features/Composer/ComposerFlashIntensitySlider.swift")
@@ -121,7 +122,7 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
     func test_whileRecording_onlyTheChosenThumbnailAndTheLockRemain() throws {
         let chrome = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertFalse(chrome.contains("if session.stage != .recording {"),
-                       "la rangée haute reste : la croix et le chrono y demeurent (#9753)")
+                       "la rangée haute reste montée : c'est sa loi qui retire l'en-tête et garde le chrono (A9)")
         let enregistre = ComposerCaptureTopRow.Input(stage: .recording)
         XCTAssertEqual(ComposerCaptureTopRow.trailing(enregistre), [], "ni flash, ni retournement en filmant")
         let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")

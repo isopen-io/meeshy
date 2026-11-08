@@ -9,8 +9,9 @@
  * Chaque acceptation et chaque synchronisation REJUGE la paire (`togetherGate.ts`) : une
  * baisse, un blocage, un départ de la conversation ou un média devenu protégé coupe la
  * séance chez les deux, dite comme un départ (`left`) : le bloqué n'apprend rien de plus.
- * Une pierre tombale posée par la fin protège de la course entre un jugement et l'écriture. Les routes qui changent un lien appellent
- * {@link rejudgeTogetherBetween} : la coupure n'attend pas la synchronisation suivante.
+ * Une pierre tombale posée par la fin protège de la course entre un jugement et l'écriture. Les routes qui
+ * ferment une porte (lien, blocage, compte, appartenance, message supprimé) appellent
+ * {@link rejudgeTogetherWhere} : la coupure n'attend pas la synchronisation suivante (#17022).
  *
  * Le journal ne porte jamais la séance : seulement l'erreur.
  */
@@ -39,9 +40,10 @@ import {
   extendPairThroughCache,
   releasePairThroughCache,
   clearTogether,
-  indexTogetherUsers,
+  indexTogether,
   isTogetherEnded,
   markTogetherEnded,
+  readConversationTogether,
   readPairTogether,
   readTogether,
   readUserTogether,
@@ -115,7 +117,7 @@ async function save(deps: TogetherRelayDeps, session: TogetherSession): Promise<
   const kept = { ...session, expiresAt };
   await storeTogether(deps.cache, kept, ttl);
   await (deps.extendPair ?? extendPairThroughCache(deps.cache))(togetherPairKey(kept.hostId, kept.guestId), kept.sessionId, ttl);
-  await indexTogetherUsers(deps.cache, kept);
+  await indexTogether(deps.cache, kept);
   if (!(await isTogetherEnded(deps.cache, kept.sessionId))) return kept;
   await clear(deps, kept);
   return null;
@@ -268,8 +270,51 @@ export async function endTogetherOf(deps: TogetherRelayDeps, userId: string): Pr
   await Promise.all(sessions.map((session) => end(deps, session, !session.joined && userId === session.guestId ? 'declined' : 'left')));
 }
 
-/** À appeler APRÈS un blocage, une baisse ou un retrait : la séance de la paire est rejugée, coupée si refusée. */
-export async function rejudgeTogetherBetween(deps: TogetherRelayDeps, pair: { readonly userA: string; readonly userB: string }): Promise<void> {
-  const session = await readPairTogether(deps.cache, pair.userA, pair.userB, deps.now());
-  if (session) await stillAllowed(deps, session);
+/**
+ * Ce qu'une route vient de fermer, et donc les séances à rejuger (#17022) :
+ * - une PAIRE, après un blocage, une baisse ou un retrait de lien ;
+ * - un COMPTE, après sa désactivation, sa suppression, ou la fin de son appartenance à une
+ *   conversation (départ, bannissement, retrait) ;
+ * - une CONVERSATION, après la suppression d'un de ses messages.
+ */
+export type TogetherCutScope =
+  | { readonly userA: string; readonly userB: string }
+  | { readonly userId: string }
+  | { readonly conversationId: string };
+
+const uniqueSessions = (sessions: readonly (TogetherSession | null)[]): readonly TogetherSession[] => [
+  ...new Map(sessions.filter((session): session is TogetherSession => session !== null).map((session) => [session.sessionId, session])).values(),
+];
+
+/**
+ * Les séances d'une paire : celle que désigne l'index de paire, ET celles que l'index du
+ * compte rattache à l'autre membre — une invitation concurrente a pu en sortir une de
+ * l'index de paire, la coupure de route la retrouve quand même.
+ */
+async function pairSessions(deps: TogetherRelayDeps, userA: string, userB: string): Promise<readonly TogetherSession[]> {
+  const [indexed, ofA] = await Promise.all([
+    readPairTogether(deps.cache, userA, userB, deps.now()),
+    readUserTogether(deps.cache, userA, deps.now()),
+  ]);
+  return uniqueSessions([indexed, ...ofA.filter((session) => membersOf(session).includes(userB))]);
 }
+
+const sessionsOf = (deps: TogetherRelayDeps, scope: TogetherCutScope): Promise<readonly TogetherSession[]> => {
+  if ('userA' in scope) return pairSessions(deps, scope.userA, scope.userB);
+  if ('userId' in scope) return readUserTogether(deps.cache, scope.userId, deps.now());
+  return readConversationTogether(deps.cache, scope.conversationId, deps.now());
+};
+
+/**
+ * À appeler APRÈS l'écriture qui ferme la porte : chaque séance concernée est rejugée, et
+ * coupée chez les deux, comme un départ, si elle est refusée. Une séance encore permise
+ * continue sans rien émettre.
+ */
+export async function rejudgeTogetherWhere(deps: TogetherRelayDeps, scope: TogetherCutScope): Promise<void> {
+  const sessions = await sessionsOf(deps, scope);
+  await Promise.all(sessions.map((session) => stillAllowed(deps, session)));
+}
+
+/** À appeler APRÈS un blocage, une baisse ou un retrait : la séance de la paire est rejugée, coupée si refusée. */
+export const rejudgeTogetherBetween = (deps: TogetherRelayDeps, pair: { readonly userA: string; readonly userB: string }): Promise<void> =>
+  rejudgeTogetherWhere(deps, pair);

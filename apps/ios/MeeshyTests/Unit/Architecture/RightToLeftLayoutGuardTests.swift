@@ -28,8 +28,8 @@ import XCTest
 ///
 /// **L'exemption vaut pour les CHEVRONS autant que pour les flèches**
 /// (2026-09-02). Elle ne s'appliquait qu'au test des flèches, parce que seules
-/// des flèches habitaient alors les timelines. `MeeshyAudioTrimmer` (SDK) pose
-/// depuis un `chevron.left` / `chevron.right` sur une poignée sortie du champ :
+/// des flèches habitaient alors les timelines. `MeeshyAudioTrimmer` (SDK, retiré
+/// au profit de `MediaTrimStrip`, #17110) posait un `chevron.left` / `chevron.right` sur une poignée sortie du champ :
 /// la flèche dit DE QUEL CÔTÉ de la bande visible la borne est partie, et une
 /// bande de temps coule de gauche à droite quelle que soit la langue — un
 /// `chevron.backward` s'y retournerait en arabe et désignerait le mauvais bord.
@@ -44,9 +44,6 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
     private static let directionalByDesign: Set<String> = [
         "ClipTimingBar.swift",
         "MeeshyImageEditorView.swift",
-        // Poignées du trimmer audio : la pointe désigne le bord de la bande
-        // par lequel la borne est sortie (2026-09-02).
-        "MeeshyAudioTrimmer.swift",
     ]
 
     private func repoRoot() -> URL {
@@ -108,24 +105,6 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
             timeline ou une géométrie :
             \(offenders.joined(separator: "\n"))
             """
-        )
-    }
-
-    /// **Une exemption qu'aucun témoin ne nomme se lit comme un oubli.** Le
-    /// trimmer est entré dans `directionalByDesign` pour UN motif précis — ses
-    /// poignées hors champ. Le jour où ce motif disparaît (poignées toujours
-    /// dans le champ, ou symbole remplacé), l'exemption doit partir avec lui :
-    /// sinon un `chevron.right` de NAVIGATION ajouté plus tard dans ce fichier
-    /// passerait la garde en silence.
-    func test_lExemptionDuTrimmer_couvreUnChevronQuiExisteEncore() throws {
-        let trimmer = try XCTUnwrap(
-            swiftSources().first { $0.lastPathComponent == "MeeshyAudioTrimmer.swift" },
-            "`MeeshyAudioTrimmer.swift` a disparu du balayage : retirer son exemption de `directionalByDesign`"
-        )
-        let code = strippingComments(try String(contentsOf: trimmer, encoding: .utf8))
-        XCTAssertTrue(
-            code.contains("\"chevron.left\"") && code.contains("\"chevron.right\""),
-            "Le trimmer ne porte plus ses chevrons de poignée : l'exemption n'a plus d'objet, la retirer"
         )
     }
 
