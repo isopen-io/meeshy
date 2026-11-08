@@ -20,6 +20,23 @@ public data class TalkieWakePush(
 ) {
     /** Le titre affiché : celui de la passerelle, sinon « X vous parle » (nom servi, ou « Quelqu'un »). */
     public fun displayTitle(fallback: (String) -> String, someone: String): String = title ?: fallback(fromName ?: someone)
+
+    /**
+     * L'audio que « Lire » a le droit de jouer : seulement s'il vient de la PASSERELLE configurée ([gateway], même
+     * schéma, hôte et port) — une autre origine ferait jouer une fausse voix d'urgence. `null` ⇒ rattrapage par la socket.
+     */
+    public fun playableAudio(gateway: String): String? {
+        val audio = audioUrl?.let(::originOf) ?: return null
+        return audioUrl.takeIf { audio == originOf(gateway) }
+    }
+
+    private fun originOf(url: String): String? = runCatching {
+        val uri = java.net.URI(url)
+        val scheme = uri.scheme?.lowercase() ?: return null
+        val host = uri.host?.lowercase() ?: return null
+        val port = if (uri.port == -1 && scheme == "https") 443 else uri.port
+        "$scheme://$host:$port"
+    }.getOrNull()
 }
 
 /** Le nom client → serveur du rattrapage (`talkie:join { talkieId }`, contrat de #17142). */

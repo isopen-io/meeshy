@@ -93,4 +93,17 @@ class TalkieWakeTest {
         assertThat(clear.audioUrl).isNull()
         assertThat(absent.audioUrl).isNull()
     }
+
+    @Test
+    fun `Lire ne joue que l'audio de la passerelle configuree`() {
+        fun push(url: String) = (TalkieWakePushRouter.route(wake("audioUrl" to url)) as TalkieWakeRoute.Wake).push
+        val gateway = "https://gate.meeshy.me"
+
+        assertThat(push("https://gate.meeshy.me/talkie/t1.aac").playableAudio(gateway)).isEqualTo("https://gate.meeshy.me/talkie/t1.aac")
+        assertThat(push("https://GATE.meeshy.me:443/talkie/t1.aac").playableAudio(gateway)).isNotNull()
+        assertThat(push("https://attaquant.example/faux.aac").playableAudio(gateway)).isNull()
+        assertThat(push("https://gate.meeshy.me.attaquant.example/faux.aac").playableAudio(gateway)).isNull()
+        assertThat(push("https://gate.meeshy.me:8443/faux.aac").playableAudio(gateway)).isNull()
+        assertThat((TalkieWakePushRouter.route(wake()) as TalkieWakeRoute.Wake).push.playableAudio(gateway)).isNull()
+    }
 }

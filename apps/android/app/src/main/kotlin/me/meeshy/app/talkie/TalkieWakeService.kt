@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
 import me.meeshy.sdk.model.relation.TalkieWakeContract
 import me.meeshy.sdk.model.relation.TalkieWakeProgress
 import me.meeshy.sdk.model.relation.TalkieWakePush
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.playback.AudioEngineEvent
 import me.meeshy.sdk.playback.AudioPlaybackEngine
 import me.meeshy.sdk.socket.RelationSocketEventsManager
@@ -59,6 +60,9 @@ class TalkieWakeService : Service() {
     @Inject
     lateinit var engine: AudioPlaybackEngine
 
+    @Inject
+    lateinit var config: MeeshyConfig
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var following: String? = null
     private var watch: Job? = null
@@ -81,9 +85,10 @@ class TalkieWakeService : Service() {
             finish()
             return START_NOT_STICKY
         }
-        if (replay && push.audioUrl != null) {
+        val served = if (replay) push.playableAudio(config.socketUrl) else null
+        if (served != null) {
             runCatching { promoteOnly(push) }
-            playServed(push, push.audioUrl)
+            playServed(push, served)
             return START_NOT_STICKY
         }
         if (replay) {
