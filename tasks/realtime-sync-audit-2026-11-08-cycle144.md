@@ -332,6 +332,26 @@ annonces du regard, et les deux moments de chacune.
 | #16796 | une socket est dans les rooms avant d'être dans `userSockets` : fenêtre sans exclusion pendant sa propre authentification | audit, F11 — préexistant, partagé par les trois signaux |
 | #16797 | `live-start` rend deux verdicts contradictoires au même client | audit, F13 — préexistant |
 | #16798 | un blocage garde les COMPTES, pas les PERSONNES : un bloqué revient par un lien partagé | audit, F10 — limite de MODÈLE |
+| #16800 | les TROIS exclusions se composent depuis une carte PAR PROCESSUS | audit (son dernier doute) — **instruit et mesuré par la session** |
+
+**#16800 est le doute que l'auditeur a laissé ouvert, et la session l'a tranché.**
+Son rapport disait : « je n'ai pas vérifié si la production tourne en
+mono-instance — **si ce n'est pas le cas, c'est un défaut d'un rang au-dessus de
+tous ceux ci-dessus** ». Mesuré :
+
+| mesure | résultat |
+|---|---|
+| `REDIS_URL` dans `docker-compose.prod.yml` | **défini** — donc `@socket.io/redis-adapter` est MONTÉ |
+| instances de passerelle déclarées | **une** (`container_name: meeshy-gateway`, aucun `replicas`) |
+| source des trois listes d'exclusion | `userSockets`, une `Map` **par processus** |
+
+La diffusion traverse donc déjà les instances **par conception**, et une seule
+instance tourne. La garde est complète aujourd'hui, et elle deviendrait
+incomplète — en silence, sans qu'un témoin rougisse — à la deuxième instance,
+que la directive #9232 exige explicitement de pouvoir monter. **Le défaut est
+armé, pas actif, et il s'armera par une opération d'infrastructure, pas par un
+commit.** Les trois handlers portent désormais cette limite dans leur en-tête :
+un invariant annoncé plus fort qu'il n'est vaut moins que pas d'invariant.
 
 **#16795 mérite d'être nommée à part.** `location.live` est déclarée au seuil le
 plus haut du produit (`BLOOD`) et parmi les features à consentement rituel ; la

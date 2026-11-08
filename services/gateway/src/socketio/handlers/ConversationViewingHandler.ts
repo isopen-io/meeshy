@@ -14,6 +14,15 @@
  *
  * Tout vit en mémoire : aucune écriture en base, un registre borné par le
  * nombre de sockets connectés, vidé à `disconnecting`.
+ *
+ * ─── CE QUE CE FILTRE NE COUVRE PAS (#16800) ────────────────────────────────
+ *
+ * Il est LOCAL AU NŒUD, comme chez ses deux jumeaux de salon : `userSockets`
+ * est une `Map` par processus, alors que la diffusion traverse les instances
+ * (l'adaptateur Redis est monté en production). Avec une seconde instance, un
+ * pair bloqué attaché à l'autre nœud recevrait les annonces émises ici. Une
+ * seule instance tourne aujourd'hui ; la limite est dite parce qu'un invariant
+ * annoncé plus fort qu'il n'est vaut moins que pas d'invariant.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';

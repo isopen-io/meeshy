@@ -149,6 +149,21 @@
  * Même principe au regard, #16752 : là-bas `SocketViewing.blockRelated` filtre
  * `viewing:start`, l'instantané et `viewing:activity`, et les deux rétractations
  * partent sans exclusion.
+ *
+ * ─── CE QUE CET INVARIANT NE COUVRE PAS (#16800) ────────────────────────────
+ *
+ * Il est LOCAL AU NŒUD. `userSockets` — d'où se compose la liste d'exclusion —
+ * est une `Map` en mémoire, par processus, alors que `io.to(room).emit(...)`
+ * traverse les instances : l'adaptateur Redis de Socket.IO est monté en
+ * production (`REDIS_URL` y est défini). Avec une SECONDE instance de
+ * passerelle, un pair bloqué attaché au nœud B recevrait donc une annonce
+ * émise depuis le nœud A, dont la carte ne contient pas son socket.
+ *
+ * Une seule instance tourne aujourd'hui, donc la garde est complète ; elle
+ * s'armerait par une opération d'INFRASTRUCTURE, sans qu'un témoin rougisse.
+ * Les deux jumeaux de salon (frappe, regard) ont exactement la même limite, et
+ * elle est dite ici parce qu'un invariant annoncé plus fort qu'il n'est vaut
+ * moins que pas d'invariant.
  */
 
 import type { MeeshySocket as Socket } from '../typed-socket';
