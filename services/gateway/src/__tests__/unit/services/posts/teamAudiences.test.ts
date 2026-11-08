@@ -179,6 +179,53 @@ describe('les énumérateurs d\'audience ajoutent les collègues aux liens réel
   });
 });
 
+describe('une seule définition de l\'équipe : la loi lue en base et l\'énumérateur disent la même chose', () => {
+  it('un rôle stocké hors de la casse de l\'énumération n\'est de l\'équipe ni pour la loi ni pour l\'énumérateur', async () => {
+    const prisma = world([{ id: AUTHOR, role: 'ADMIN' }, { id: COLLEAGUE, role: 'moderator' }, { id: ADMIN2, role: 'BIGBOSS' }]);
+    const admitted = await filterPostConsumers({ prisma, authorId: AUTHOR, visibility: 'BLOOD', candidateUserIds: [COLLEAGUE, ADMIN2] });
+    const named = await circleAudienceIds(prisma, AUTHOR, 'BLOOD');
+    expect(admitted).toEqual([ADMIN2]);
+    expect([...(named ?? [])]).toEqual([ADMIN2]);
+    expect(await canUserViewPost(prisma, record('BLOOD'), COLLEAGUE)).toBe(false);
+  });
+});
+
+describe('le bouclier des mineurs tient dans les deux sens : un collègue adulte sans lien ne pousse rien vers un mineur déclaré', () => {
+  const adultAuthorMinorReader = () =>
+    world([{ id: AUTHOR, role: 'ADMIN' }, { id: COLLEAGUE, role: 'MODERATOR', birthDate: CHILD }, { id: ADMIN2, role: 'BIGBOSS' }]);
+
+  it.each(CIRCLES)('filterPostConsumers(%s) d\'un auteur adulte n\'admet pas le collègue mineur, et garde le collègue adulte', async (visibility) => {
+    const admitted = await filterPostConsumers({ prisma: adultAuthorMinorReader(), authorId: AUTHOR, visibility, candidateUserIds: [COLLEAGUE, ADMIN2] });
+    expect(admitted).toEqual([ADMIN2]);
+  });
+
+  it.each(CIRCLES)('canUserViewPost(%s) refuse au collègue mineur la publication d\'un auteur adulte sans lien', async (visibility) => {
+    expect(await canUserViewPost(adultAuthorMinorReader(), record(visibility), COLLEAGUE)).toBe(false);
+  });
+
+  it.each(CIRCLES)('circleAudienceIds(%s) d\'un auteur adulte ne nomme pas le collègue mineur', async (visibility) => {
+    const ids = await circleAudienceIds(adultAuthorMinorReader(), AUTHOR, visibility);
+    expect(ids ?? []).not.toContain(COLLEAGUE);
+    expect(ids ?? []).toContain(ADMIN2);
+  });
+
+  it('loadFeedCircles d\'un lecteur mineur de l\'équipe ne range aucun collègue adulte sans lien', async () => {
+    const circles = await loadFeedCircles({ prisma: adultAuthorMinorReader(), userId: COLLEAGUE });
+    expect(circles).toEqual({ acquaintance: [], close: [], blood: [] });
+  });
+
+  it('resolveEntourage d\'un propriétaire adulte ne prévient pas le collègue mineur sans lien', async () => {
+    const { ids } = await resolveEntourage(adultAuthorMinorReader(), { ownerId: AUTHOR, key: 'circlePublicationPost' });
+    expect(ids).not.toContain(COLLEAGUE);
+    expect(ids).toContain(ADMIN2);
+  });
+
+  it('deux collègues mineurs déclarés gardent le privilège entre eux', async () => {
+    const prisma = world([{ id: AUTHOR, role: 'MODERATOR', birthDate: CHILD }, { id: COLLEAGUE, role: 'MODERATOR', birthDate: CHILD }]);
+    expect(await filterPostConsumers({ prisma, authorId: AUTHOR, visibility: 'BLOOD', candidateUserIds: [COLLEAGUE] })).toEqual([COLLEAGUE]);
+  });
+});
+
 describe('resolveEntourage — l\'entourage d\'un compte de l\'équipe comprend ses collègues', () => {
   it('prévient les collègues sans lien, pas l\'utilisateur ordinaire', async () => {
     const { ids } = await resolveEntourage(world(), { ownerId: AUTHOR, key: 'circlePublicationPost' });

@@ -220,6 +220,25 @@ export const RELATION_TEAM_CLOSED_FEATURES: ReadonlySet<RelationFeature> = new S
 ]);
 
 /**
+ * LE PRIVILÈGE D'ÉQUIPE S'ÉTEINT ENTRE UN MINEUR ET UN MAJEUR DÉCLARÉS pour ces features
+ * (#16623, audit du 2026-11-08). Ailleurs, le bouclier des mineurs ne protège que la
+ * CIBLE ; ici, le viewer de la loi est le LECTEUR d'une publication ou le DESTINATAIRE
+ * d'une notification d'entourage : un collègue adulte sans lien ne pousse ni ses
+ * publications Connaissances, Proches ou Sang, ni son entourage vers un mineur déclaré,
+ * et l'inverse non plus. Deux mineurs, ou deux majeurs, gardent le privilège.
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
+export const RELATION_TEAM_MINOR_APART_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'audience.acquaintances',
+  'audience.close',
+  'audience.blood',
+  'notify.newContent',
+  'relay.commentersOnMyPosts',
+  'relay.myCommentsElsewhere',
+]);
+
+/**
  * LE RÉGLAGE D'ENTOURAGE (#13929, directives porteur du 2026-10-31) — chacun
  * choisit, action par action, le cran minimal de son entourage qui est PRÉVENU.
  * Il ne gouverne que la diffusion à l'entourage : la personne directement visée
