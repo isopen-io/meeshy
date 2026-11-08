@@ -57,20 +57,48 @@ nonisolated enum ComposerMediaVolume {
             set: { viewModel.setAudioVolume(audioId: mediaId, volume: Float($0)) })
     }
 
+    /// **Les réglages que « Rogner et régler » montre** (#17110) : le volume et
+    /// Muet d'une vidéo ou d'un son posé, lus dans le modèle. `nil` pour un
+    /// objet sans son.
+    @MainActor
+    static func adjustments(viewModel: StoryComposerViewModel, id: String) -> MediaTrimAdjustments? {
+        if let son = sound(viewModel, id) {
+            return MediaTrimAdjustments(volume: Double(son.volume), isMuted: son.isMuted,
+                                        loops: son.loop ?? false, ducksUnderVoices: true)
+        }
+        guard let media = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == id }),
+              media.kind == .video else { return nil }
+        return MediaTrimAdjustments(volume: Double(media.volume), isMuted: media.isMuted,
+                                    loops: media.loop, isDuckingDisabled: media.isDuckingDisabled)
+    }
+
+    /// **Écrire ce que la bande a changé**, par les écrivains du modèle : Muet
+    /// bascule (le mémento rend le niveau quitté), sinon le curseur écrit.
+    @MainActor
+    static func apply(_ reglages: MediaTrimAdjustments, viewModel: StoryComposerViewModel, id: String) {
+        guard let avant = adjustments(viewModel: viewModel, id: id) else { return }
+        if reglages.isMuted != avant.isMuted {
+            guard sound(viewModel, id) != nil else { return viewModel.toggleMediaMute(id: id) }
+            return viewModel.toggleAudioMute(id: id)
+        }
+        guard reglages.volume != avant.volume else { return }
+        sliderBinding(viewModel: viewModel, mediaId: id).wrappedValue = reglages.volume
+    }
+
     @MainActor
     private static func sound(_ viewModel: StoryComposerViewModel, _ id: String) -> StoryAudioPlayerObject? {
         viewModel.currentEffects.audioPlayerObjects?.first { $0.id == id }
     }
 
-    @MainActor
     static func valueText(_ volume: Double) -> String {
-        (Double(percent(volume)) / 100).formatted(.percent.precision(.fractionLength(0)))
+        MediaVolumeSlider.valueText(volume)
     }
 }
 
 /// **N3 « Volume » : le curseur SEUL, dans la feuille basse**, avec
-/// Réinitialiser (100 %) dès que le niveau s'en écarte. Toucher deux fois la
-/// valeur la remet aussi à 100 %, le geste des réglages.
+/// Réinitialiser (100 %) dès que le niveau s'en écarte. Le curseur est celui
+/// de « Rogner et régler » (`MediaVolumeSlider`, #17110) : toucher deux fois la
+/// valeur la remet à 100 %, le geste des réglages.
 struct ComposerMediaVolumeDial: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let mediaId: String
@@ -80,27 +108,13 @@ struct ComposerMediaVolumeDial: View {
         let ecart = ComposerMediaVolume.percent(curseur.wrappedValue) != ComposerMediaVolume.percent(ComposerMediaVolume.neutral)
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if ecart { resetControl }
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: "speaker.fill")
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.7))
-                    .accessibilityHidden(true)
-                Slider(value: curseur, in: ComposerMediaVolume.range(viewModel: viewModel, id: mediaId))
-                    .tint(Color.white)
-                    .frame(minHeight: 44)
-                    .accessibilityLabel(Text(ComposerCaptureCopy.volume))
-                    .accessibilityValue(Text(ComposerMediaVolume.valueText(curseur.wrappedValue)))
-                    .accessibilityAction(named: Text(ComposerAdjustCopy.reset)) { reset() }
-                Text(ComposerMediaVolume.valueText(curseur.wrappedValue))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(Color.white.opacity(ecart ? 0.92 : 0.55))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .frame(minWidth: 48, minHeight: 44, alignment: .trailing)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { reset() }
-                    .accessibilityHidden(true)
-            }
+            MediaVolumeSlider(value: curseur,
+                              in: ComposerMediaVolume.range(viewModel: viewModel, id: mediaId),
+                              tint: Color.white,
+                              secondary: Color.white.opacity(0.8),
+                              label: ComposerCaptureCopy.volume,
+                              neutral: ComposerMediaVolume.neutral,
+                              resetLabel: ComposerAdjustCopy.reset)
         }
         .accessibilityIdentifier("composer.media.volume.dial")
     }

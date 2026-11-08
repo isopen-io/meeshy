@@ -94,6 +94,15 @@ public nonisolated enum StoryVolumeResolver {
         slideDucks && !(isDuckingDisabled ?? false)
     }
 
+    /// **Le gain qu'on ENTEND d'un média réglé** (#17110, « Rogner et régler ») :
+    /// Muet l'emporte sur tout, puis le volume borné, puis l'atténuation sous
+    /// les voix, composés depuis `ducked`, la règle que le lecteur et l'export
+    /// appliquent déjà.
+    public static func audibleGain(volume: Float, isMuted: Bool, isDucking: Bool) -> Float {
+        guard !isMuted else { return 0 }
+        return ducked(clamp(volume), isDucking: isDucking)
+    }
+
     private static func clamp(_ v: Float) -> Float {
         min(StoryVolume.maxGain, max(0, v))
     }
