@@ -20,6 +20,12 @@ nonisolated enum RainbowLetters {
             : ["#4338CA", "#A21CAF", "#BE123C", "#92400E", "#047857", "#0369A1"]
     }
 
+    /// La palette de lecture, en couleurs : le seul site qui la convertit, pour les lettres comme pour le dégradé
+    /// d'un aperçu de liste.
+    static func palette(isDark: Bool) -> [Color] {
+        paletteHex(isDark: isDark).map { Color(hex: $0) }
+    }
+
     /// `count` indices de palette, déterministes pour `seed`, sans deux voisins égaux.
     static func colorIndices(count: Int, seed: String, paletteSize: Int) -> [Int] {
         guard count > 0, paletteSize > 0 else { return [] }
@@ -40,7 +46,7 @@ nonisolated enum RainbowLetters {
     /// Colore les lettres ORDINAIRES (encre `baseColor`, sans lien) ; mentions, hashtags, liens et espaces
     /// gardent leur rendu. Le texte ne change pas.
     static func painting(_ text: AttributedString, baseColor: Color, seed: String, isDark: Bool) -> AttributedString {
-        let palette = paletteHex(isDark: isDark).map { Color(hex: $0) }
+        let inks = palette(isDark: isDark)
         var painted = text
         var letters: [Range<AttributedString.Index>] = []
         for run in text.runs where run.foregroundColor == baseColor && run.link == nil {
@@ -51,9 +57,9 @@ nonisolated enum RainbowLetters {
                 index = next
             }
         }
-        let indices = colorIndices(count: letters.count, seed: seed, paletteSize: palette.count)
+        let indices = colorIndices(count: letters.count, seed: seed, paletteSize: inks.count)
         for (range, colorIndex) in zip(letters, indices) {
-            painted[range].foregroundColor = palette[colorIndex]
+            painted[range].foregroundColor = inks[colorIndex]
         }
         return painted
     }

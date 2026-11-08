@@ -316,7 +316,7 @@ struct ConversationPreviewLine: View {
                 .layoutPriority(1)
             Text(preview.segments.map(\.text).joined(separator: Self.segmentSeparator))
                 .font(font)
-                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
                 .redacted(reason: .placeholder)
                 .blur(radius: 1.5)
                 .accessibilityHidden(true)
