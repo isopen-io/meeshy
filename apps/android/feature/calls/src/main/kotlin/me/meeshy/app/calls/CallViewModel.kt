@@ -221,6 +221,9 @@ class CallViewModel @Inject constructor(
      */
     val activeConfig: CallConfig get() = config
 
+    /** Mon identifiant de compte : la clé de MA couleur dans l'appel (loi 4, [CallTileRim]). Vide hors session. */
+    val selfUserId: String get() = selfId
+
     /** L'aperçu avant décroché (#8480) : la vidéo de l'appelant chez l'appelé, l'exposition chez l'appelant. */
     val previewUi: StateFlow<CallPreviewUi> get() = preview.ui
 

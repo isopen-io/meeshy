@@ -62,6 +62,7 @@ import me.meeshy.sdk.model.call.CallTilePoint
 import me.meeshy.sdk.model.call.CallTileSize
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 import kotlin.math.roundToInt
 
 /** La mémoire des paliers de la vignette, tenue pour le processus : un appel y retrouve SON palier. */
@@ -71,6 +72,7 @@ internal object CallSelfTileMemories {
 
 private const val BORDER_ALPHA = 0.3f
 private const val PAUSED_BORDER_ALPHA = 0.8f
+private val RIM_WIDTH = 2.dp
 private val TileShadow = 8.dp
 
 /**
@@ -85,7 +87,8 @@ private val TileShadow = 8.dp
  * au-dessus de la pilule.
  *
  * [content] est le flux qu'elle montre ; [overlay] se pose par-dessus, au coin (micro coupé du pair
- * après une permutation).
+ * après une permutation). [rimHex] est la couleur de qui elle montre (loi 4, [CallTileRim]) : son liseré la porte,
+ * sauf en pause où l'ambre prime ; sans couleur connue, le liseré reste blanc et fin.
  */
 @Composable
 internal fun CallSelfTile(
@@ -98,6 +101,7 @@ internal fun CallSelfTile(
     effectsCount: Int = 0,
     cameraCount: Int = 0,
     controlsVisible: Boolean = true,
+    rimHex: String? = null,
     effectsControls: @Composable () -> Unit = {},
     cameraControls: @Composable () -> Unit = {},
     overlay: @Composable BoxScope.() -> Unit = {},
@@ -191,7 +195,12 @@ internal fun CallSelfTile(
         val pausedHint = stringResource(R.string.call_stage_video_paused_hint)
         val largerLabel = stringResource(R.string.call_stage_tile_larger)
         val smallerLabel = stringResource(R.string.call_stage_tile_smaller)
-        val borderColor = if (paused) MeeshyTheme.tokens.warning.copy(alpha = PAUSED_BORDER_ALPHA) else Color.White.copy(alpha = BORDER_ALPHA)
+        val rim = rimHex?.let(::hexColor)?.takeIf { it != Color.Unspecified }
+        val border = when {
+            paused -> BorderStroke(1.dp, MeeshyTheme.tokens.warning.copy(alpha = PAUSED_BORDER_ALPHA))
+            rim != null -> BorderStroke(RIM_WIDTH, rim)
+            else -> BorderStroke(1.dp, Color.White.copy(alpha = BORDER_ALPHA))
+        }
 
         Box(
             modifier = Modifier
@@ -199,7 +208,7 @@ internal fun CallSelfTile(
                 .size(size.widthDp.dp, size.heightDp.dp)
                 .shadow(TileShadow, shape)
                 .clip(shape)
-                .border(BorderStroke(1.dp, borderColor), shape)
+                .border(border, shape)
                 .callSelfTileGestures(handlers)
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (paused) "$swapLabel, $pausedName. $pausedHint" else swapLabel

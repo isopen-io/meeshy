@@ -234,6 +234,8 @@ fun CallScreen(
                     selfEffects = selfEffects,
                     controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
                     framed = framed,
+                    selfUserId = viewModel.selfUserId,
+                    peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
                 )
             }
 
