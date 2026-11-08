@@ -754,9 +754,17 @@
     "community_detail": {
       "pattern": "^assets/community-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
+        "value": 6,
+        "status": "CIBLE -- MESUREE PAR #6364, REMESUREE PAR #6379, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13 : 1,15 Ko gzip -9 pour `assets/community-<hash>.js` -- l'ECRAN du detail d'une communaute (`routes/community.tsx`), ses pieces vivant dans le chunk `communities` ci-dessus. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge. Le motif exige HUIT caracteres apres `community-` : il exclut `community-new-` (borne ci-dessous). -- Remesure du 2026-11-08 (#6379, meme methode) : 2,67 Ko sur `dev` avant le lot (adhesion, membres, invitation, reglages), 5,07 Ko apres. L'ecart est les deux onglets Conversations / Publications (`routes/community-tabs.tsx`, ~0,4 Ko) et surtout la CARTE DE PRECHARGEMENT que Vite ecrit dans ce chunk pour l'onglet Publications charge a la demande (`lazy(() => import('@/routes/community-posts'))`, ~2 Ko : les noms d'une centaine de modules du graphe de `FeedPostCard`). Alternative ecartee : importer l'onglet statiquement retirerait cette carte mais ferait telecharger tout le graphe de la carte du Flux a chaque ouverture du detail, onglet Conversations compris ; le placer dans le point d'entree alourdirait la premiere peinture. Arrondi au Ko SUPERIEUR (6)."
+      }
+    },
+    "community_posts": {
+      "pattern": "^assets/community-posts-[A-Za-z0-9_-]{7}\\.js$",
+      "kb": {
         "value": 3,
-        "status": "CIBLE -- MESUREE PAR #6364, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-13 : 1,15 Ko gzip -9 pour `assets/community-<hash>.js` -- l'ECRAN du detail d'une communaute (`routes/community.tsx`), ses pieces vivant dans le chunk `communities` ci-dessus. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge. Le motif exige HUIT caracteres apres `community-` : il exclut `community-new-` (borne ci-dessous)."
+        "status": "CIBLE -- MESUREE PAR #6379, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-11-08 : 2,07 Ko gzip -9 pour `assets/community-posts-<hash>.js` -- l'onglet Publications du detail d'une communaute (`routes/community-posts.tsx` : liste de `FeedPostCard`, chargement, vide, echec), charge a la demande quand l'onglet est choisi ; la carte et ses gestes vivent dans leurs propres chunks. Arrondi au Ko SUPERIEUR (3)."
       }
     },
     "community_create": {
@@ -1068,6 +1076,15 @@
         "value": 6,
         "status": "MESUREE PAR BUILD LOCAL LE 2026-11-07 -- A CONFIRMER PAR LE PORTEUR",
         "source": "RELEVE 2026-11-07 (#6378) -- `bun run build` puis gzip -9 des sept fichiers : 2,18 Ko pour les SEPT catalogues de l adhesion a une communaute (huit cles `community.membership.*` : Rejoindre, Quitter la communaute, la confirmation du depart, hors ligne, l echec, le refus d une communaute privee), charges avec le detail d une communaute (`routes/route-table.tsx`, route `community`) et jamais au demarrage -- les catalogues d interface sont a 215,55 Ko pour un plafond de 216. Arrondi au Ko SUPERIEUR (3). -- Remesure du 2026-11-07 (#6375, meme methode) : 3,66 Ko apres vingt-deux cles `community.members.*` de l ecran Membres (titre, sections et roles, nommer / repasser, retirer et sa confirmation, vide, chargement, erreur, refus), chargees avec le detail et la route `communityMembers`, jamais au demarrage. Arrondi au Ko SUPERIEUR (4). -- Remesure du 2026-11-07 (#6376, meme methode) : 5,28 Ko apres dix-sept cles `community.invite.*` de la feuille Inviter (titre, recherche, amis / autres, deja membre, recherche en cours, vide, hors ligne, bouton selon le nombre, issue, partiel, echec, refus), chargees avec le detail, jamais au demarrage. Arrondi au Ko SUPERIEUR (6). -- Remesure du 2026-11-08 (#6376, meme methode) : 5,87 Ko apres trois cles `community.create.members.*` (titre, recherche, retirer une personne choisie), chargees aussi avec la route `communityNew`, jamais au demarrage. Plafond inchange (6)."
+      }
+    },
+    "interface_catalogs_community_posts": {
+      "pattern": "^assets/catalog-community-posts-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "MESUREE PAR BUILD LOCAL LE 2026-11-08 -- A CONFIRMER PAR LE PORTEUR",
+        "source": "RELEVE 2026-11-08 (#6379) -- `bun run build` puis gzip -9 des sept fichiers : 2,22 Ko pour les SEPT catalogues des publications d une communaute (dix cles `community.posts.*` : les deux onglets et leur nom, chargement, vide, echec, hors ligne, reessayer, suite), charges avec le detail d une communaute (`routes/route-table.tsx`, route `community`) et jamais au demarrage -- celui de l adhesion est a 5,87 Ko pour un plafond de 6. Arrondi au Ko SUPERIEUR (3)."
       }
     },
     "interface_catalogs_community_settings": {

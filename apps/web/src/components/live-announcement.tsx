@@ -53,6 +53,9 @@ const MARKERS = {
      sourdine, archiver, lu) : confirmé à l'oreille, ou refusé et la rangée
      revenue à sa place. */
   conversationRows: { 'data-conversation-rows-announce': '' },
+  /* Les publications d'une communauté (#6379) — l'issue d'un geste posé sur
+     une carte de l'onglet Publications du détail. */
+  communityPosts: { 'data-community-posts-announce': '' },
 } as const;
 
 export type AnnouncementMarker = keyof typeof MARKERS;
