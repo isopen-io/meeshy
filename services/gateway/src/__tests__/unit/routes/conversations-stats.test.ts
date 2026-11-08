@@ -14,7 +14,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
 }));
 
-const mockResolveConversationId = jest.fn<any>().mockResolvedValue('conv-resolved-id');
+const mockResolveConversationId = jest.fn<any>().mockResolvedValue('507f1f77bcf86cd799439077');
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...a: any[]) => mockResolveConversationId(...a),
 }));
@@ -50,7 +50,12 @@ import { registerStatsRoutes } from '../../../routes/conversations/stats';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = 'conv-aabbcc';
-const CONV_RESOLVED_ID = 'conv-resolved-id';
+// Forme de PRODUCTION (#17076) : la colonne est un ObjectId, et depuis que la
+// route lit le plancher du lecteur cette valeur part dans `participant.findFirst`
+// puis, sous plancher, dans `message.findMany`. Un double qui accepte un
+// argument que le vrai client REFUSE ne se voit jamais — le test qu'il sert
+// passe (§ « un double mente aussi par ce qu'il ACCEPTE »).
+const CONV_RESOLVED_ID = '507f1f77bcf86cd799439077';
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 

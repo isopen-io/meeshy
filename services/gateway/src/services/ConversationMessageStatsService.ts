@@ -1,7 +1,15 @@
 import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withOrphanedSenderRepair } from './messaging/withOrphanedSenderRepair';
 import {
-  aggregateMessageStatsUnderFloor,
+  applyPersonalHistoryHiding,
+  hidingFingerprint,
+  NO_PERSONAL_HIDING,
+  type PersonalHistoryHiding,
+} from './personalHistoryFilter';
+import {
+  FLOORED_FOLD_PAGE,
+  mergeFoldedStats,
+  type FoldedMessageStats,
   countCharacters,
   countWords,
   foldMessageStats,
@@ -74,11 +82,14 @@ export class ConversationMessageStatsService {
    * périmé qu'un lecteur ordinaire.
    *
    * **Et le seau ne peut pas servir une fenêtre pour une autre** : la clé EST
-   * le plancher. Mettre un agrégat planchéisé dans la carte d'origine l'aurait
-   * servi à toute la conversation — la fuite inverse de celle qu'on ferme.
+   * la fenêtre (plancher + masquage personnel). Mettre un agrégat planchéisé
+   * dans la carte d'origine l'aurait servi à toute la conversation — la fuite
+   * inverse de celle qu'on ferme.
    */
   private readonly flooredCache = new Map<string, Map<string, CacheEntry>>();
   private readonly ttlMs = 5 * 60 * 1000;
+  /** Fenêtres distinctes gardées par conversation — cf. `getStatsUnderFloor`. */
+  private readonly maxFlooredWindows = 32;
 
   private constructor() {}
 
@@ -379,20 +390,98 @@ export class ConversationMessageStatsService {
     prisma: PrismaClient,
     conversationId: string,
     floor: Date,
+    hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
   ): Promise<Record<string, unknown>> {
-    const floorKey = floor.toISOString();
+    // **La clé porte TOUT ce qui borne la fenêtre**, pas seulement le plancher :
+    // deux lecteurs peuvent partager un plancher et masquer personnellement des
+    // choses différentes (`clear-history`, `delete-for-me`). Une clé qui ne
+    // nommerait que le plancher servirait l'agrégat de l'un à l'autre — plus
+    // étroit, donc jamais une fuite, mais faux, et faux d'une façon qu'aucun
+    // témoin ne verrait.
+    const windowKey = `${floor.toISOString()}|${hidingFingerprint(hiding)}`;
     const bucket = this.flooredCache.get(conversationId);
-    const cached = bucket?.get(floorKey);
+    const cached = bucket?.get(windowKey);
     if (this.isValid(cached)) {
       return cached.data;
     }
 
-    const shaped = await aggregateMessageStatsUnderFloor(prisma, conversationId, floor);
+    const shaped = await this.foldFlooredWindow(prisma, conversationId, floor, hiding);
 
     const target = bucket ?? new Map<string, CacheEntry>();
-    target.set(floorKey, { data: shaped, expiresAt: Date.now() + this.ttlMs });
+    // Le seau est BORNÉ. Sans plafond, une conversation sans nouveau message
+    // garderait une entrée par fenêtre distincte pour la vie du processus,
+    // chacune portant un `participantStats` complet — et `invalidate` est le
+    // seul chemin de sortie. La plus ancienne part : l'ordre d'insertion d'une
+    // `Map` est celui de l'arrivée.
+    if (!target.has(windowKey) && target.size >= this.maxFlooredWindows) {
+      const oldest = target.keys().next();
+      if (!oldest.done) target.delete(oldest.value);
+    }
+    target.set(windowKey, { data: shaped, expiresAt: Date.now() + this.ttlMs });
     this.flooredCache.set(conversationId, target);
     return shaped;
+  }
+
+  /**
+   * La fenêtre PLANCHÉISÉE, lue page par page et repliée.
+   *
+   * Quatre propriétés, et chacune a son témoin dans
+   * `stats-history-floor.test.ts` :
+   *
+   * 1. **la borne part dans la REQUÊTE** (`createdAt.gte`), jamais en filtrage
+   *    après coup — un pli sur tout puis un masque laisserait les totaux
+   *    parler ;
+   * 2. **le masquage PERSONNEL du lecteur s'applique aussi.** Un agrégat par
+   *    lecteur est précisément le régime où `clear-history` et `delete-for-me`
+   *    veulent dire quelque chose : compter ce que le lecteur a effacé de SA vue
+   *    contredirait la vue que toutes les autres surfaces lui servent. Il ne
+   *    peut que RÉTRÉCIR (`applyPersonalHistoryHiding` fusionne borne par
+   *    borne), donc il ne peut pas desserrer le plancher ;
+   * 3. **elle n'ÉCRIT rien.** Elle ne peut pas emprunter `recompute()`, dont
+   *    l'`upsert` remplacerait la ligne de TOUS par la fenêtre d'UN seul ;
+   * 4. **elle ne répare pas les expéditeurs orphelins**, et c'est la conséquence
+   *    de (3) : la réparation est une ÉCRITURE. `recompute()` la porte parce
+   *    qu'elle est le chemin AUTORITATIF ; ici un orphelin retombe sur
+   *    `senderId` — un `Participant.id` que l'enrichissement nominal de la route
+   *    ne trouvera pas — exactement comme une réparation qui échoue.
+   *
+   * La pagination est par `id` croissant plutôt que par `createdAt` : deux
+   * messages peuvent partager une date à la milliseconde, et un curseur sur une
+   * valeur non unique saute ou répète une ligne à chaque frontière de page.
+   */
+  private async foldFlooredWindow(
+    prisma: PrismaClient,
+    conversationId: string,
+    floor: Date,
+    hiding: PersonalHistoryHiding,
+  ): Promise<Record<string, unknown>> {
+    const where = applyPersonalHistoryHiding(
+      { conversationId, deletedAt: null, createdAt: { gte: floor } },
+      hiding,
+    );
+
+    const pages: FoldedMessageStats[] = [];
+    let cursor: string | null = null;
+
+    for (;;) {
+      const page = await prisma.message.findMany({
+        where,
+        select: { id: true, ...FOLDABLE_MESSAGE_SELECT },
+        orderBy: { id: 'asc' },
+        take: FLOORED_FOLD_PAGE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      if (page.length === 0) break;
+      pages.push(foldMessageStats(page as unknown as readonly FoldableMessage[]));
+      if (page.length < FLOORED_FOLD_PAGE) break;
+      cursor = (page[page.length - 1] as { id: string }).id;
+    }
+
+    return shapeMessageStats({
+      conversationId,
+      ...mergeFoldedStats(pages),
+      updatedAt: new Date(),
+    });
   }
 
   /**

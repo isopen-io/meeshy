@@ -29,7 +29,6 @@
  * donne.
  */
 
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 export interface ParticipantStatEntry {
   messageCount: number;
@@ -255,33 +254,103 @@ export function shapeMessageStats(row: Record<string, unknown>): Record<string, 
 }
 
 /**
- * La fenêtre PLANCHÉISÉE : les mêmes messages que `GET …/messages` sert déjà à
- * ce lecteur, pliés à la demande.
+ * Combien de messages une fenêtre planchéisée matérialise à la fois.
  *
- * Trois propriétés, et chacune a son témoin :
+ * **La borne n'est pas cosmétique, et la justification qu'elle remplace était
+ * FAUSSE.** Ce module a d'abord adossé son coût à `GET …/messages` — « la
+ * fenêtre d'un lecteur planchéisé est celle que la liste lui sert déjà ». C'est
+ * vrai du DROIT et faux du COÛT : la liste est PAGINÉE
+ * (`MESSAGES_LIST_PAGINATION.maxLimit = 50`), elle ne matérialise jamais la
+ * fenêtre. Un lecteur entré il y a deux ans dans un salon à fort trafic aurait
+ * fait charger, en un seul appel, le `content` et les pièces jointes de tout ce
+ * qui a été écrit depuis — OOM ou pause GC sur le processus qui sert tout le
+ * temps réel.
  *
- * 1. **la borne part dans la REQUÊTE** (`createdAt.gte`), jamais en filtrage
- *    après coup — un pli sur tout puis un masque laisserait les totaux parler ;
- * 2. **elle n'ÉCRIT rien.** Elle ne peut pas emprunter `recompute()`, dont
- *    l'`upsert` remplacerait la ligne de TOUS par la fenêtre d'UN seul ;
- * 3. **elle ne répare pas les expéditeurs orphelins.** `recompute()` le fait
- *    (`withOrphanedSenderRepair`) parce qu'elle est le chemin AUTORITATIF ;
- *    une lecture planchéisée n'a pas à écrire pour servir, et un orphelin y
- *    retombe sur `senderId`, exactement comme une réparation qui échoue.
+ * Le pli est une RÉDUCTION : il n'a besoin que d'une page à la fois. Le total de
+ * travail en base ne change pas (c'est le prix d'un agrégat par fenêtre), la
+ * mémoire du processus, oui.
+ *
+ * La LECTURE, elle, vit chez `ConversationMessageStatsService` : ce module-ci
+ * ne connaît ni `prisma`, ni cache, ni horloge autre que celle des messages
+ * qu'on lui donne, et c'est ce qui le rend partageable par les deux fenêtres.
  */
-export async function aggregateMessageStatsUnderFloor(
-  prisma: Pick<PrismaClient, 'message'>,
-  conversationId: string,
-  floor: Date,
-): Promise<Record<string, unknown>> {
-  const messages = await prisma.message.findMany({
-    where: { conversationId, deletedAt: null, createdAt: { gte: floor } },
-    select: FOLDABLE_MESSAGE_SELECT,
-  });
+export const FLOORED_FOLD_PAGE = 500;
 
-  return shapeMessageStats({
-    conversationId,
-    ...foldMessageStats(messages as unknown as readonly FoldableMessage[]),
-    updatedAt: new Date(),
-  });
+/**
+ * Le recollement des pages. Il existe parce que le pli est une RÉDUCTION, donc
+ * associatif — et chaque champ dit comment il se recolle, ce qui est le seul
+ * endroit où une erreur serait SILENCIEUSE : un compteur mal recollé rend un
+ * nombre plausible.
+ *
+ * `dailyActivity` est ré-élagué APRÈS le recollement, pas avant : élaguer
+ * chaque page puis sommer donne le même résultat, mais l'ordre inverse serait
+ * faux si la fenêtre de 90 jours se déplaçait entre deux pages.
+ */
+export function mergeFoldedStats(pages: readonly FoldedMessageStats[]): FoldedMessageStats {
+  // Une fenêtre VIDE (un lecteur arrivé après le dernier message) est le cas
+  // nominal d'un plancher récent, pas un cas d'erreur : elle rend les compteurs
+  // à zéro, et la boucle de pages ne lui donne AUCUNE page.
+  if (pages.length === 0) return foldMessageStats([]);
+  if (pages.length === 1) return { ...pages[0], dailyActivity: pruneDailyActivity(pages[0].dailyActivity) };
+
+  const sumInto = (target: Record<string, number>, source: Record<string, number>): void => {
+    for (const [key, value] of Object.entries(source)) target[key] = (target[key] ?? 0) + value;
+  };
+
+  const merged: FoldedMessageStats = {
+    totalMessages: 0,
+    totalWords: 0,
+    totalCharacters: 0,
+    textMessages: 0,
+    imageCount: 0,
+    audioCount: 0,
+    videoCount: 0,
+    fileCount: 0,
+    locationCount: 0,
+    participantStats: {},
+    dailyActivity: {},
+    hourlyDistribution: {},
+    languageDistribution: {},
+  };
+
+  for (const page of pages) {
+    merged.totalMessages += page.totalMessages;
+    merged.totalWords += page.totalWords;
+    merged.totalCharacters += page.totalCharacters;
+    merged.textMessages += page.textMessages;
+    merged.imageCount += page.imageCount;
+    merged.audioCount += page.audioCount;
+    merged.videoCount += page.videoCount;
+    merged.fileCount += page.fileCount;
+    merged.locationCount += page.locationCount;
+    sumInto(merged.dailyActivity, page.dailyActivity);
+    sumInto(merged.hourlyDistribution, page.hourlyDistribution);
+    sumInto(merged.languageDistribution, page.languageDistribution);
+
+    for (const [userId, entry] of Object.entries(page.participantStats)) {
+      const target = merged.participantStats[userId];
+      if (!target) {
+        merged.participantStats[userId] = { ...entry };
+        continue;
+      }
+      target.messageCount += entry.messageCount;
+      target.wordCount += entry.wordCount;
+      target.characterCount += entry.characterCount;
+      target.imageCount += entry.imageCount;
+      target.audioCount += entry.audioCount;
+      target.videoCount += entry.videoCount;
+      // Les deux extrêmes se recollent par comparaison, jamais par
+      // remplacement : les pages sont ordonnées par `id`, et un ObjectId n'est
+      // monotone qu'à la seconde — deux messages de la même seconde peuvent
+      // donc traverser la frontière de page dans l'ordre inverse de leur date.
+      if (!target.firstMessageAt || (entry.firstMessageAt && entry.firstMessageAt < target.firstMessageAt)) {
+        target.firstMessageAt = entry.firstMessageAt;
+      }
+      if (!target.lastMessageAt || (entry.lastMessageAt && entry.lastMessageAt > target.lastMessageAt)) {
+        target.lastMessageAt = entry.lastMessageAt;
+      }
+    }
+  }
+
+  return { ...merged, dailyActivity: pruneDailyActivity(merged.dailyActivity) };
 }

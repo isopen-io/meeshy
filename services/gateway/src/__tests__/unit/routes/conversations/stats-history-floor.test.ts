@@ -64,7 +64,14 @@ const FLOOR = new Date('2026-11-08T00:00:00.000Z');
 const BEFORE_FLOOR = new Date('2026-03-04T09:15:00.000Z');
 const AFTER_FLOOR = new Date('2026-11-08T10:20:00.000Z');
 
-type FloorRow = { joinedAt: Date; historyVisibleFrom: Date | null; shareLinkId: string | null } | null;
+type FloorRow = {
+  joinedAt: Date;
+  historyVisibleFrom: Date | null;
+  shareLinkId: string | null;
+  role?: string;
+  permissions?: { canViewHistory?: boolean } | null;
+  user?: { role?: string } | null;
+} | null;
 
 /**
  * Les messages que la conversation PORTE — l'avant-plancher et l'après. Le
@@ -75,6 +82,7 @@ type FloorRow = { joinedAt: Date; historyVisibleFrom: Date | null; shareLinkId: 
  */
 const ALL_MESSAGES = [
   {
+    id: '507f1f77bcf86cd79943aa01',
     content: 'les tout débuts',
     senderId: OTHER_USER,
     createdAt: BEFORE_FLOOR,
@@ -84,6 +92,7 @@ const ALL_MESSAGES = [
     attachments: [],
   },
   {
+    id: '507f1f77bcf86cd79943aa02',
     content: 'bonjour à toi',
     senderId: OTHER_USER,
     createdAt: AFTER_FLOOR,
@@ -97,16 +106,28 @@ const ALL_MESSAGES = [
 function makePrisma(floorRow: FloorRow) {
   const findMany = jest.fn<any>().mockImplementation(async (args: any) => {
     const gte: Date | undefined = args?.where?.createdAt?.gte;
-    return gte ? ALL_MESSAGES.filter((m) => m.createdAt.getTime() >= gte.getTime()) : ALL_MESSAGES;
+    const rows = gte ? ALL_MESSAGES.filter((m) => m.createdAt.getTime() >= gte.getTime()) : ALL_MESSAGES;
+    // Le double PAGINE comme la vraie requête : le pli planchéisé avance par
+    // curseur d'`id`, et un double qui ignorerait `cursor`/`take` rendrait la
+    // même page indéfiniment — une boucle infinie que le témoin verrait comme
+    // un gel, pas comme un défaut.
+    const after = args?.cursor?.id as string | undefined;
+    const start = after ? rows.findIndex((m) => m.id === after) + 1 : 0;
+    return rows.slice(start, start + (args?.take ?? rows.length));
   });
 
   return {
     prisma: {
       participant: { findFirst: jest.fn<any>().mockResolvedValue(floorRow) },
       conversationShareLink: {
-        findUnique: jest.fn<any>().mockResolvedValue({ id: 'lien', allowViewHistory: false }),
-        findMany: jest.fn<any>().mockResolvedValue([{ id: 'lien', allowViewHistory: false }]),
+        // `expiresAt: null` = lien VIVANT. La porte le lit, le plancher lit
+        // `allowViewHistory` : une seule ligne répond aux deux questions, et un
+        // double qui n'en porterait qu'une ferait passer la porte pour absente.
+        findUnique: jest.fn<any>().mockResolvedValue({ id: 'lien', allowViewHistory: false, expiresAt: null }),
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'lien', allowViewHistory: false, expiresAt: null }]),
       },
+      userConversationPreferences: { findFirst: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([]) },
       conversationMessageStats: {
         findUnique: jest.fn<any>().mockResolvedValue({
           conversationId: CONV_ID,
@@ -165,10 +186,50 @@ async function buildApp(floorRow: FloorRow): Promise<{ app: FastifyInstance; fin
   return { app, findMany };
 }
 
+
+/** Monte la route sur un double déjà composé — pour les témoins qui le bricolent. */
+async function buildAppOn(prisma: any, authContext: Record<string, unknown>): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  registerStatsRoutes(app, prisma as any, (async (req: FastifyRequest) => {
+    (req as any).authContext = authContext;
+  }) as any);
+  await app.ready();
+  conversationMessageStatsService.invalidate(CONV_ID);
+  return app;
+}
+
+const AS_USER = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID };
+
 const url = `/conversations/${CONV_ID}/stats`;
 
-/** Le lecteur planchéisé : entré par lien, l'avant lui est refusé. */
-const FLOORED: FloorRow = { joinedAt: FLOOR, historyVisibleFrom: FLOOR, shareLinkId: 'lien' };
+/**
+ * Le lecteur planchéisé — **par son LIEN**, et c'est la seule forme qui
+ * exerce le cas de l'issue.
+ *
+ * La première version de cette fixture portait `historyVisibleFrom: FLOOR`.
+ * C'était vert, et c'était un témoin qui ne mesurait pas ce qu'il disait :
+ * `historyVisibleFrom` est le rang (iii) de `settleBeforeLink`, qui tranche
+ * AVANT toute lecture de lien. La branche `link-decides` — un `shareLinkId`
+ * plus `allowViewHistory: false`, exactement la population que l'issue décrit
+ * — n'était exercée par aucun témoin, et le double de
+ * `conversationShareLink.findUnique` était du code que rien ne pouvait
+ * atteindre.
+ *
+ * Un octroi par DATE reste couvert, par la fixture `FLOORED_BY_GRANT` plus
+ * bas : les deux chemins mènent au même plancher, et un seul des deux était
+ * testé.
+ */
+const FLOORED: FloorRow = {
+  joinedAt: FLOOR,
+  historyVisibleFrom: null,
+  shareLinkId: 'lien',
+  role: 'member',
+  permissions: null,
+  user: { role: 'USER' },
+};
+
+/** Le MÊME plancher, octroyé par date plutôt que par le lien (rang iii). */
+const FLOORED_BY_GRANT: FloorRow = { ...FLOORED, historyVisibleFrom: FLOOR, shareLinkId: null };
 
 describe('l’agrégat de statistiques est borné par le plancher du lecteur (#17076)', () => {
   beforeEach(() => {
@@ -313,6 +374,171 @@ describe('l’agrégat de statistiques est borné par le plancher du lecteur (#1
       const [args] = (prisma.participant.findFirst as jest.Mock<any>).mock.calls[0] as [{ where: Record<string, unknown> }];
       expect(args.where).toMatchObject({ id: PARTICIPANT_ID, conversationId: CONV_ID });
       expect(args.where).not.toHaveProperty('userId');
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * **LA PORTE, et pas seulement le PLANCHER.** Le lien répond à DEUX questions
+   * sur la même ligne : qui peut lire (la porte) et depuis quand (le plancher).
+   * La première version de ce lot n'en posait qu'une.
+   *
+   * Ce qui rend l'écart exploitable est écrit dans `shareLinkGuestsWhere` : la
+   * révocation d'un lien ne touche que les participations ANONYMES. Un inscrit
+   * admis par lien n'est jamais révoqué, sa ligne reste active, et
+   * `canAccessConversation` continue de l'accepter — si bien que cette surface
+   * était la SEULE que l'expiration ne fermait pas, pendant que le fil, la
+   * recherche, les fils de réponses et les épinglés lui rendaient 403.
+   */
+  it('un lien ÉCHU ferme la route, comme le fil et la recherche', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
+      id: 'lien',
+      allowViewHistory: false,
+      expiresAt: new Date('2026-11-01T00:00:00.000Z'),
+    });
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe('SHARE_LINK_EXPIRED');
+      expect(res.json().data).toBeUndefined();
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  /** Le MÊME plancher par l'autre chemin : un octroi par date (rang iii). */
+  it('un plancher octroyé par date borne la fenêtre comme celui d’un lien', async () => {
+    const { prisma } = makePrisma(FLOORED_BY_GRANT);
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(1);
+      expect(prisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * Le bypass PLATEFORME (#3892, #11217) — un rôle privilégié lit tout, y
+   * compris quand sa propre ligne porte un lien sans historique. Sans ce
+   * témoin, un correctif qui planchéiserait « tout ce qui a un `shareLinkId` »
+   * retirerait silencieusement la modération.
+   */
+  it('un rôle de plateforme privilégié lit l’agrégat COMPLET malgré son lien', async () => {
+    const { prisma } = makePrisma({ ...FLOORED, user: { role: 'ADMIN' } });
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(2);
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  /** Le droit FIGÉ au join, qui tranche avant le lien et dans les deux sens. */
+  it('un `canViewHistory: false` figé borne, et un `true` figé ouvre', async () => {
+    const refuse = makePrisma({ ...FLOORED, permissions: { canViewHistory: false } });
+    const admet = makePrisma({ ...FLOORED, permissions: { canViewHistory: true } });
+    const appRefuse = await buildAppOn(refuse.prisma, AS_USER);
+    try {
+      expect((await appRefuse.inject({ method: 'GET', url })).json().data.totalMessages).toBe(1);
+    } finally {
+      await appRefuse.close();
+    }
+    const appAdmet = await buildAppOn(admet.prisma, AS_USER);
+    try {
+      expect((await appAdmet.inject({ method: 'GET', url })).json().data.totalMessages).toBe(2);
+    } finally {
+      await appAdmet.close();
+    }
+  });
+
+  /**
+   * Le masquage PERSONNEL du lecteur s'applique aussi à SA fenêtre. Un agrégat
+   * par lecteur est le régime où `clear-history` et `delete-for-me` veulent
+   * dire quelque chose : compter ce que le lecteur a effacé de sa vue
+   * contredirait la vue que toutes les autres surfaces lui servent.
+   */
+  it('ce que le lecteur a effacé pour lui ne compte pas dans SA fenêtre', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    prisma.userConversationPreferences.findFirst = jest.fn<any>().mockResolvedValue({
+      clearHistoryBefore: new Date('2026-11-08T12:00:00.000Z'),
+    });
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      await app.inject({ method: 'GET', url });
+      const [args] = prisma.message.findMany.mock.calls[0] as [{ where: { createdAt?: { gte?: Date } } }];
+      // La borne la plus STRICTE gagne : le masquage personnel ne peut que
+      // rétrécir, donc il ne peut jamais desserrer le plancher.
+      expect(args.where.createdAt?.gte?.toISOString()).toBe('2026-11-08T12:00:00.000Z');
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * Le pli planchéisé PAGINE (la fenêtre d'un lecteur entré il y a deux ans
+   * n'entre pas en mémoire), donc il recolle. Un recollement qui se tromperait
+   * rendrait un nombre PLAUSIBLE — c'est le seul endroit du lot où une erreur
+   * serait silencieuse.
+   */
+  it('le pli recolle ses pages sans perdre ni compter deux fois', async () => {
+    const page = 500;
+    const rows = Array.from({ length: page + 7 }, (_, index) => ({
+      id: `507f1f77bcf86cd79943${String(index).padStart(4, '0')}`,
+      content: 'mot',
+      senderId: OTHER_USER,
+      createdAt: new Date(AFTER_FLOOR.getTime() + index * 1000),
+      originalLanguage: index % 2 === 0 ? 'fr' : 'en',
+      messageType: 'text',
+      sender: { userId: OTHER_USER },
+      attachments: [],
+    }));
+    const { prisma } = makePrisma(FLOORED);
+    prisma.message.findMany = jest.fn<any>().mockImplementation(async (args: any) => {
+      const after = args?.cursor?.id as string | undefined;
+      const start = after ? rows.findIndex((r) => r.id === after) + 1 : 0;
+      return rows.slice(start, start + args.take);
+    });
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(rows.length);
+      expect(data.participantStats[0].messageCount).toBe(rows.length);
+      expect(data.languageDistribution.reduce((sum: number, l: { count: number }) => sum + l.count, 0)).toBe(rows.length);
+      expect(data.participantStats[0].firstMessageAt).toBe(rows[0].createdAt.toISOString());
+      expect(data.participantStats[0].lastMessageAt).toBe(rows[rows.length - 1].createdAt.toISOString());
+      expect((prisma.message.findMany as jest.Mock<any>).mock.calls.length).toBe(2);
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * Une fenêtre VIDE est le cas NOMINAL d'un plancher récent — quelqu'un qui
+   * vient d'entrer et à qui personne n'a encore écrit — pas un cas d'erreur.
+   * Le pli par pages ne reçoit alors AUCUNE page, et son recollement doit rendre
+   * les compteurs à zéro plutôt que lever : une levée ici serait un 500 pour
+   * toute une population, le jour de son arrivée.
+   */
+  it('une fenêtre VIDE sert des compteurs à zéro, pas une erreur', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    prisma.message.findMany = jest.fn<any>().mockResolvedValue([]);
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      const { data } = res.json();
+      expect(data.totalMessages).toBe(0);
+      expect(data.participantStats).toEqual([]);
+      expect(data.dailyActivity).toEqual([]);
+      expect(data.contentTypes).toEqual({ text: 0, image: 0, audio: 0, video: 0, file: 0, location: 0 });
     } finally {
       await app.close();
     }

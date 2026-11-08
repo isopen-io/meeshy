@@ -1,10 +1,6 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import {
-  ConversationMessageStatsService,
-  statsAuthorKey,
-} from '../../../services/ConversationMessageStatsService';
-// La table MIME vit avec le PLI depuis #17076 — une seule définition, deux
-// fenêtres d'agrégation.
+import { ConversationMessageStatsService, statsAuthorKey } from '../../../services/ConversationMessageStatsService';
+// La table MIME vit avec le PLI depuis #17076 (fichier hors budget : on n'y ajoute pas de ligne).
 import { resolveAttachmentType } from '../../../services/conversations/messageStatsAggregate';
 
 // Reset the singleton between tests to ensure isolation.
