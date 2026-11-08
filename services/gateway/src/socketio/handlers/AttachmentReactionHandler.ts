@@ -164,6 +164,59 @@ export class AttachmentReactionHandler {
         }
       }
 
+      // #16951 — L'ACCUSÉ PART ICI, avant tout `await` de plus. La réaction est
+      // PERSISTÉE depuis le bloc ci-dessus ; tout ce qui suit — la lecture du
+      // résumé, la diffusion de room, la file hors ligne, le rang de liste —
+      // est un effet d'APRÈS-SUCCÈS.
+      //
+      // La jumelle `ReactionHandler` écrit la règle en toutes lettres : « A
+      // transient failure in those reads must NOT flip the ACK to failure —
+      // that would make the client roll back a reaction already committed to
+      // the DB ». Ici l'accusé était la DERNIÈRE instruction du `try` dont le
+      // `catch` répond `{ success: false }`. Une levée de `getReactionSummary`
+      // (lecture Mongo) ou d'`emitServerEvent` — le dépôt écrit lui-même qu'un
+      // `io.to(room).emit(...)` LÈVE quand l'adaptateur ou l'encodeur est en
+      // défaut — produisait TROIS choses d'un coup : accusé d'ÉCHEC sur une
+      // écriture réussie (le client annule son optimiste et ré-affiche
+      // l'absence d'une réaction qui EST en base), aucune diffusion, et aucune
+      // entrée de file hors ligne — la seule garantie DURABLE du chemin,
+      // sautée par la levée.
+      //
+      // C'est la forme littérale du cycle 130 bis, rejouée sur la famille
+      // jumelle : « l'émission de room n'était pas gardée … la levée ayant
+      // sauté la suite, l'entrée de file hors ligne n'était jamais posée ».
+      callback?.({ success: true });
+
+      await this._afterApplied(action, conversationId, resolved, validated, activityAt);
+    } catch (error: unknown) {
+      logger.error('attachment reaction failed', { action, error });
+      callback?.({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed',
+        ...(error instanceof E2eeSignalChannelRequiredError ? { code: error.code } : {}),
+      });
+    }
+  }
+
+  /**
+   * Ce qui suit l'accusé : résumé, diffusion de room, file hors ligne, rang de
+   * liste.
+   *
+   * Unité SÉPARÉE, et pas seulement pour la lisibilité — c'est ce qui rend
+   * impossible qu'une levée d'ici atteigne le `catch` d'`_apply`, lequel
+   * rappellerait le callback avec un échec APRÈS le succès déjà envoyé. La
+   * jumelle obtient la même propriété par un `try` imbriqué ; ici le
+   * gestionnaire était déjà au budget, et une unité nommée dit mieux ce qu'elle
+   * garantit.
+   */
+  private async _afterApplied(
+    action: 'add' | 'remove',
+    conversationId: string,
+    resolved: { readonly participantId: string; readonly userId: string; readonly isAnonymous: boolean },
+    validated: { readonly attachmentId: string; readonly messageId: string; readonly emoji: string },
+    activityAt: Date | undefined,
+  ): Promise<void> {
+    try {
       const reactionSummary = await this.deps.service.getReactionSummary(validated.attachmentId);
       const event = action === 'add'
         ? SERVER_EVENTS.ATTACHMENT_REACTION_ADDED
@@ -216,14 +269,13 @@ export class AttachmentReactionHandler {
           logger.error('attachment reaction list rank update rejected', { conversationId, error })
         );
       }
-
-      callback?.({ success: true });
-    } catch (error: unknown) {
-      logger.error('attachment reaction failed', { action, error });
-      callback?.({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed',
-        ...(error instanceof E2eeSignalChannelRequiredError ? { code: error.code } : {}),
+    } catch (sideEffectError: unknown) {
+      // La réaction est écrite et le client a déjà son accusé. Les pairs se
+      // réconcilient à la prochaine synchronisation, et l'absent par la file —
+      // quand elle a pu être écrite.
+      logger.error('attachment reaction post-success side-effects failed', {
+        conversationId,
+        error: sideEffectError,
       });
     }
   }
