@@ -277,3 +277,49 @@ Réparé aux deux niveaux — le prédicat part dans un module FEUILLE (rien à
 doubler, donc rien à oublier de doubler), et le double est PROLONGÉ plutôt que
 remplacé. Détail :
 `tasks/lessons/2026-11-08-un-predicat-pur-appartient-a-un-module-feuille.md`.
+
+---
+
+## Preuve
+
+| gate | résultat |
+|---|---|
+| `tsc --noEmit` gateway | **EXIT=0**, 0 ligne |
+| suite gateway COMPLÈTE, arbre gelé, machine au repos | **2 573 suites, 40 194 témoins — 6 rouges** |
+| rouges à l'arrivée comme au départ | **les SIX suites de codecs d'image**, celles que le cycle 147 a relevées sur `dev` |
+| le diff touche-t-il leur chemin ? | **non** — zéro fichier sous `attach`/`upload`/`exif`/`heif`/`avif`/`sharp`/`image` |
+| rouge, lot A | 4 des 6 témoins tombent ; les 2 cas nominaux verts des deux côtés |
+| rouge, lot C | 2 cliquets neufs, plus 4 témoins existants démasqués par le réordonnancement |
+| rouge, lot D | les 2 témoins tombent sous la mutation de la constante (un au site, un à la PORTE) |
+| rouge, lot E | 4 des 5 tombent, en rendant exactement `[1,1,0]` et 2 écritures pour 5 tentatives |
+| rouge, lot F | les 2 témoins tombent ; les 3 du prédicat partagé sont neufs |
+| cliquets élargis | 3 (findMany borné, portes d'arrivée par délégation, réactivation sur les DEUX colonnes de départ) |
+
+Le cycle rend donc `dev` **exactement à sa ligne de base**, et il y ajoute cinq
+cliquets (deux neufs, trois élargis).
+
+## Trois mesures de méthode, toutes payées dans ce cycle
+
+1. **Une annulation de CI répétée n'est pas une panne d'infrastructure.** Sur la
+   branche du cycle 147, c'était une autre session qui poussait. Sur la mienne,
+   un run de dispatch a été évincé à 60 s avec trois jobs déjà verts et deux en
+   vol — et `ci.yml` DÉCRIT ce motif dans son propre en-tête (« les annulations
+   surviennent à des âges courts et irréguliers, signature d'un run qui
+   ATTENDAIT et qu'un arrivant plus récent a évincé »). **La CI des PR est de
+   plus GELÉE par `vars.PR_CI_GEL`** : tous les jobs y sont `skipped`, et le
+   « Verdict CI » vert d'une PR n'atteste donc rien du code. La preuve d'un lot
+   de passerelle est la suite locale.
+
+2. **Une mesure prise sur une machine SATURÉE ne mesure rien**, et c'est la
+   seconde moitié de la règle du cycle 147. `tsc-never-loaded-tests-ratchet`
+   LANCE un compilateur : étouffé par une seconde passe `jest`, il a rendu
+   `Received: 0` sur son garde anti-vide — soit exactement le symptôme d'une
+   sonde mal configurée. Relancé seul : 24 ms, vert. Détail :
+   `tasks/lessons/2026-11-08-un-cliquet-qui-lance-un-compilateur-rougit-sur-une-machine-saturee.md`.
+
+3. **Sur les six lots du cycle, cinq ont fait tomber un témoin qui gelait le
+   défaut** — cinq fixtures de pin, un `toEqual` sur l'état de rentrée, un
+   témoin de plafond à soixante entrées distinctes, un témoin de performance à
+   cinquante paires distinctes. Aucun n'était faux ; tous mesuraient à côté.
+   C'est la forme dominante de ce cycle, et elle a une question :
+   **« ce témoin pourrait-il tomber sur le défaut que je viens de décrire ? »**
