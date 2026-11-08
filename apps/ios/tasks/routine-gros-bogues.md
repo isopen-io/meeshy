@@ -121,7 +121,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : CAM-6 (boutons de volume, côté interface).
 
 ## OPUS-10 — Vidéo du viseur : stabilisation, cadence et basse lumière laissées au hasard
-- Statut : à faire
+- Statut : en cours (#16816) — stabilisation `standard` et basse lumière livrées ; restent les modes `cinematic` et la cadence 60 i/s, après recette sur iPhone
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : doc 08 § R9 et R10
 - Constat : ni `preferredVideoStabilizationMode`, ni cadence choisie (`activeVideoMinFrameDuration`), ni `isLowLightBoostEnabled` dans `Main/Components/` ; le système décide, souvent sans stabilisation en caméra avant.
