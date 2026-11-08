@@ -25,6 +25,8 @@ import MeeshyUI
 struct ComposerCaptureBottomRow: View {
     @ObservedObject var session: ComposerCaptureSession
     let context: ComposerCaptureGestureContext
+    /// Le rail au repos retombe avec la rangée haute (CAM-8).
+    var railOpacity: Double = 1
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Le cadenas qui se ferme, élastique, avant de partir (#9753).
@@ -113,6 +115,7 @@ struct ComposerCaptureBottomRow: View {
                     ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
                         session.toggleFamily(famille)
                     }
+                    .opacity(railOpacity)
                     .padding(.leading, MeeshySpacing.mdPlus)
                     .padding(.bottom, ComposerLookStripRule.railBottomInset)
                         .transition(.opacity)
