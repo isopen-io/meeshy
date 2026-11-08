@@ -74,7 +74,7 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
     /// Depuis #13839, le retrait d'un son de fond passe par le menu du bouton
     /// Son, posé une seule fois sur la scène — plus par une trace en tête.
     func test_leRetraitDuSonDeFond_aUnSeulSite_leBoutonSon() throws {
-        let surface = try source("ComposerSceneSurface.swift")
+        let surface = try source("ComposerSceneSurface.swift") + source("ComposerSceneSurface+RestChrome.swift")
         XCTAssertFalse(surface.contains("ComposerAvatarSoundBadge"),
                        "une capsule est restée en bas — deux témoins pour un seul fond")
         XCTAssertTrue(surface.contains("onDelete: onDeleteBackgroundSound"),
