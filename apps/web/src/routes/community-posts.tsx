@@ -66,13 +66,16 @@ export default function CommunityPostsPanel({
   const sentinel = useLoadMoreSentinel({
     root: scroller,
     rootMargin: '0px 0px 480px 0px',
-    enabled: posts.hasNextPage && !posts.isFetchingNextPage && !posts.isFetchNextPageError,
+    enabled: online && posts.hasNextPage && !posts.isFetchingNextPage && !posts.isFetchNextPageError,
     onReach: () => void posts.fetchNextPage(),
   });
 
   const body =
     posts.data === undefined ? (
-      posts.isError ? (
+      /* HORS LIGNE SUR UN CACHE VIDE, LA REQUÊTE EST EN PAUSE (`networkMode`
+         par défaut), jamais en échec : sans ce cas, le squelette tournerait
+         sans fin — même défaut que `user-profile-states.tsx` documente. */
+      posts.isError || !online || posts.fetchStatus === 'paused' ? (
         <CommunityPostsFailure language={language} online={online} onRetry={() => void posts.refetch()} />
       ) : (
         <span

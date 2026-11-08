@@ -2,7 +2,7 @@ import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
 import { holdViewerPoints } from '@/lib/feed/viewer-points';
 
-import { COMMUNITY_POSTS_QUERY_ROOT } from './card-caches';
+import { communityPostsQueryKey } from './communities';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import {
@@ -29,7 +29,7 @@ import type { ApiResult, HttpTransport } from './http';
  * jamais l'auteur qu'un blocage sépare du lecteur. Une liste vide n'est donc
  * pas un défaut de ce port.
  *
- * **LA RACINE VIT AU REGISTRE DES CARTES** (`card-caches.ts`) : un cœur, un
+ * **LA CAISSE EST AU REGISTRE DES CARTES** (`card-caches.ts`) : un cœur, un
  * signet, une suppression ou une traduction livrée en direct atteint cette
  * caisse comme celle du Flux.
  */
@@ -40,7 +40,7 @@ export const COMMUNITY_POSTS_PAGE_SIZE = 20;
 
 export const COMMUNITY_POSTS_STALE_TIME = 60_000;
 
-export const communityPostsQueryKey = (communityId: string) => [...COMMUNITY_POSTS_QUERY_ROOT, communityId] as const;
+export { communityPostsQueryKey };
 
 const paginationOf = (raw: unknown): FeedPagination => {
   const wire = (raw ?? {}) as { readonly limit?: unknown; readonly hasMore?: unknown; readonly nextCursor?: unknown };

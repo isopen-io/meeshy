@@ -10,6 +10,8 @@ import { PostFeedService } from '../../../services/PostFeedService';
  * blocage, dans un sens ou dans l'autre, retire l'auteur de la liste.
  */
 
+const COMMUNITY_ID = '507f1f77bcf86cd799439044';
+
 type CommunityRow = { readonly isPrivate: boolean; readonly createdBy: string } | null;
 
 function makePrisma(options: {
@@ -42,7 +44,7 @@ function makePrisma(options: {
 type Prisma = ReturnType<typeof makePrisma>;
 
 const serve = async (prisma: Prisma, viewer: string | undefined) =>
-  new PostFeedService(prisma as never).getCommunityFeed('c1', viewer);
+  new PostFeedService(prisma as never).getCommunityFeed(COMMUNITY_ID, viewer);
 
 const postWhere = (prisma: Prisma) => {
   const call = prisma.post.findMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }] | undefined;
@@ -100,7 +102,7 @@ describe('PostFeedService.getCommunityFeed — qui lit quoi', () => {
     const prisma = makePrisma();
     await serve(prisma, 'viewer-1');
     const call = prisma.community.findFirst.mock.calls[0] as unknown as [{ where: Record<string, unknown> }];
-    expect(call[0].where).toEqual({ id: 'c1', isActive: true });
+    expect(call[0].where).toEqual({ id: COMMUNITY_ID, isActive: true });
   });
 
   it('une panne de la lecture de la communauté ne sert rien (elle lève, jamais un fil ouvert)', async () => {
@@ -114,6 +116,16 @@ describe('PostFeedService.getCommunityFeed — qui lit quoi', () => {
     prisma.communityMember.findFirst.mockRejectedValue(new Error('mongo down'));
     const result = await serve(prisma, 'viewer-1');
     expect(result.items).toEqual([]);
+    expect(prisma.post.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('PostFeedService.getCommunityFeed — un identifiant malformé', () => {
+  it('ne lit rien et ne lève pas (le connecteur MongoDB rendrait un 500)', async () => {
+    const prisma = makePrisma({ activeMember: true });
+    const result = await new PostFeedService(prisma as never).getCommunityFeed('pas-un-objectid', 'viewer-1');
+    expect(result.items).toEqual([]);
+    expect(prisma.community.findFirst).not.toHaveBeenCalled();
     expect(prisma.post.findMany).not.toHaveBeenCalled();
   });
 });

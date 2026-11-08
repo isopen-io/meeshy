@@ -11,6 +11,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-07 | Créer une conversation dans une communauté n'y fait plus entrer que ce que l'appelant peut admettre (passerelle) | #16697 | #16639 | fusionnée dans dev |
 | 2026-11-07 | Un salon d'une communauté privée n'accueille que ce que la communauté admet — inviter, ajouter, lien (passerelle) | #16705 | #16695 | fusionnée dans dev |
 | 2026-11-07 | Retiré ou parti d'une communauté privée, on ne lit plus ses salons (passerelle) | #16710 | #16704 | voir réveil 8 |
+| 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web), et la passerelle ne les sert qu'à qui peut les lire | voir réveil 15 | #6379 | voir réveil 15 |
 
 ## 2026-11-07 — lot 1
 
@@ -124,3 +125,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : `src/test-support/act-leak-guard.test.ts` rougit en conteneur (il relance `bun test` sur des fixtures) indépendamment du lot.
 - iOS/Android : aucun code client à changer, ils profitent du correctif de passerelle. #6377 se ferme (la couleur et l'emoji iOS ne quittent pas l'appareil : aucun champ serveur).
 - Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), puis #6379 (publications dans le détail, web).
+
+## 2026-11-08 — réveil 15
+
+- Lot : #6379 (web + passerelle). Le détail d'une communauté porte deux onglets, Conversations et Publications, miroir du `Picker(.segmented)` d'iOS (`routes/community-tabs.tsx` : liste d'onglets, flèches et Début/Fin, 44 px). Publications (`routes/community-posts.tsx`, chargé à la demande) lit le port `lib/api/community-posts.ts` (`scope=community`, curseur opaque), cache d'abord, caisse inscrite au registre des cartes (`card-caches.ts`) ; la même `FeedPostCard` et les mêmes gestes que le Flux ; chargement, vide, échec, hors ligne dessinés. Catalogue paresseux `community.posts.*` × 7 langues (1,97 Ko, plafond 3), chargé avec le détail.
+- Passerelle : `GET social.posts?scope=community` (et l'alias `/posts/community/:id`) servait les publications PUBLIC d'une communauté PRIVÉE à tout le monde, celles d'une communauté désactivée et celles d'un auteur bloqué. Lecture extraite dans `services/posts/communityFeed.ts` (`PostFeedService.ts` était hors budget) : communauté vivante, privée réservée aux membres actifs et au créateur, blocage dans les deux sens. Page vide, jamais d'erreur : aucun client installé ne change de contrat.
+- Budget `community_detail` remesuré 3 → 6 Ko : 2,67 Ko sur dev, 5,07 Ko après — surtout la carte de préchargement que Vite écrit pour l'onglet paresseux (graphe de `FeedPostCard`). Alternatives écartées dans `budgets.json`. Nouveau plafond `community_posts` (2,03 Ko, plafond 3).
+- Gotcha : un `lazy(import())` d'un écran qui monte `FeedPostCard` coûte ~2 Ko gzip de liste de préchargement au chunk qui l'appelle.
+- iOS : l'onglet « Feed » est un état vide FIXE (aucune lecture) → #16878. Android → #16879.
+- Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités — décision à prendre), sinon #6381 (vérification connectée sur staging) ou #16878.

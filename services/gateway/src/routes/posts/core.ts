@@ -69,6 +69,7 @@ import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
 import { isBlockedWithAny } from '../../utils/blocking';
+import { mayPublishInCommunity } from '../../services/posts/communityFeed';
 import { OnlyUnlinkedBudgetRefused, refuseOnlyUnlinkedBudget, releaseOnlyUnlinkedBudget, spendOnlyUnlinkedBudget } from './onlyUnlinkedBudget';
 import { spendOnlyUnlinkedBudgetOnEdit } from './onlyUnlinkedBudgetOnEdit';
 
@@ -450,6 +451,10 @@ export function registerCoreRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const authorId = authContext.registeredUser.id;
+      // #6379 — publier dans une communauté : ses membres et son créateur seulement, même refus pour tout le reste.
+      if (creation.communityId !== undefined && !(await mayPublishInCommunity(prisma, creation.communityId, authorId))) {
+        return sendForbidden(reply, 'Not allowed to publish in this community', { code: 'COMMUNITY_POST_FORBIDDEN' });
+      }
       // #14105 — un post ONLY original : ses choisis sans lien comptent au plafond
       // quotidien, débités DANS l'opération journalisée (une création rejouée ne
       // recompte rien) et rendus si l'écriture échoue.

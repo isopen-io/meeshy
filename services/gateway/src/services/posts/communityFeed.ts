@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostType } from '@meeshy/shared/prisma/client';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 import { decodeCursor, encodeCursor } from '../../routes/posts/types';
 import { blockedIdsAroundViewer } from '../ContactDirectoryService';
@@ -23,7 +24,8 @@ import { withViewerPostState } from './viewerPostState';
  *
  * Une panne de la lecture d'adhésion vaut « pas membre » (`isActiveCommunityMember`),
  * donc `none` sur une communauté privée ; une panne de la lecture de la
- * communauté lève.
+ * communauté lève. Un identifiant qui n'est pas un ObjectId vaut `none` sans
+ * lecture (le connecteur MongoDB lèverait « Malformed ObjectID », un 500).
  */
 export type CommunityFeedAccess = 'none' | 'public' | 'member';
 
@@ -32,6 +34,7 @@ export async function communityFeedAccess(
   communityId: string,
   viewerUserId: string | undefined,
 ): Promise<CommunityFeedAccess> {
+  if (!isValidObjectId(communityId)) return 'none';
   const community = await prisma.community.findFirst({
     where: { id: communityId, isActive: true },
     select: { isPrivate: true, createdBy: true },
@@ -44,7 +47,15 @@ export async function communityFeedAccess(
   return community.isPrivate ? 'none' : 'public';
 }
 
-const EMPTY_PAGE = { items: [], nextCursor: null, hasMore: false } as const;
+/**
+ * Publier DANS une communauté (`Post.communityId`) : ses membres actifs et son
+ * créateur, dans une communauté vivante — la même loi que la lecture `member`.
+ * Sans elle, n'importe quel compte posait une publication dans le fil d'une
+ * communauté privée.
+ */
+export async function mayPublishInCommunity(prisma: PrismaClient, communityId: string, authorId: string): Promise<boolean> {
+  return (await communityFeedAccess(prisma, communityId, authorId)) === 'member';
+}
 
 export async function loadCommunityFeed(
   prisma: PrismaClient,
@@ -57,7 +68,7 @@ export async function loadCommunityFeed(
   },
 ) {
   const access = await communityFeedAccess(prisma, params.communityId, params.viewerUserId);
-  if (access === 'none') return EMPTY_PAGE;
+  if (access === 'none') return { items: [], nextCursor: null, hasMore: false };
 
   const blockedAuthorIds = params.viewerUserId === undefined ? [] : await blockedIdsAroundViewer(prisma, params.viewerUserId);
   const cursorData = params.cursor ? decodeCursor(params.cursor) : null;

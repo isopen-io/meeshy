@@ -4,6 +4,7 @@ import { dropCardPost, mapCardPosts, type CardPages } from '@/lib/feed/interacti
 import { servedOverHeld } from '@/lib/feed/viewer-points';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
+import { COMMUNITY_POSTS_QUERY_ROOT } from './communities';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedPost } from './feed-pages';
 import { postQueryKey } from './publication-detail';
@@ -37,8 +38,6 @@ import { REELS_QUERY_ROOT } from './reels-query-key';
  */
 export const HASHTAG_QUERY_ROOT = ['hashtag'] as const;
 export const AUTHOR_POSTS_QUERY_ROOT = ['author-posts'] as const;
-/** Les publications d'une communauté (#6379), peintes dans son détail. */
-export const COMMUNITY_POSTS_QUERY_ROOT = ['community-posts'] as const;
 
 type CardList = {
   readonly queryKey: QueryKey;

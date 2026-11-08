@@ -73,6 +73,20 @@ describe('l’onglet Publications', () => {
     expect(html).not.toContain('data-community-posts-empty');
   });
 
+  test('hors ligne sur un cache vide, le panneau le dit au lieu de tourner sans fin', () => {
+    const html = renderToStaticMarkup(<CommunityPostsPanel language="fr" communityId="c-offline" online={false} scroller={scroller} />);
+    expect(html).toContain('data-community-posts-error');
+    expect(html).toContain('Hors ligne');
+    expect(html).not.toContain('aria-busy="true"');
+  });
+
+  test('hors ligne, un cache plein se peint toujours', () => {
+    seed('c-offline-cache', { posts: [POST_IMAGE_FR], pagination: { limit: 20, hasMore: false, nextCursor: null } });
+    const html = renderToStaticMarkup(<CommunityPostsPanel language="fr" communityId="c-offline-cache" online={false} scroller={scroller} />);
+    expect(html).toContain(`data-feed-card-id="${POST_IMAGE_FR.id}"`);
+    expect(html).not.toContain('data-community-posts-error');
+  });
+
   test('une communauté sans publication le dit', () => {
     seed('c-empty', { posts: [], pagination: { limit: 20, hasMore: false, nextCursor: null } });
     const html = renderToStaticMarkup(<CommunityPostsPanel language="fr" communityId="c-empty" online scroller={scroller} />);

@@ -991,7 +991,7 @@ describe('PostFeedService — parité des flags personnels', () => {
     mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'cf-1' }]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     const item = result.items[0] as any;
     expect(item.isBookmarkedByMe).toBe(true);
@@ -1009,7 +1009,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     mockPostFindMany.mockResolvedValue([post]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', undefined);
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', undefined);
 
     expect(result.items).toHaveLength(1);
     expect((result.items[0] as any).currentUserReactions).toEqual([]);
@@ -1022,7 +1022,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     mockPostReactionFindMany.mockResolvedValue([makeReactionRow('cp-2', '🔥')]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
   });
@@ -1035,7 +1035,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     ]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     const cp3 = result.items.find((i: any) => i.id === 'cp-3') as any;
     const cp4 = result.items.find((i: any) => i.id === 'cp-4') as any;
@@ -1049,7 +1049,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '🔥')]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
   });
@@ -1575,11 +1575,11 @@ describe('PostFeedService — hoist de position par surface', () => {
     mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-community-1')]);
 
     const service = new PostFeedService(mockPrisma);
-    const anonymous = await service.getCommunityFeed('community-1', undefined);
+    const anonymous = await service.getCommunityFeed('507f1f77bcf86cd799439044', undefined);
     expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
 
     mockPostReactionFindMany.mockResolvedValue([]);
-    const authenticated = await service.getCommunityFeed('community-1', 'viewer-1');
+    const authenticated = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
     expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
   });
 
