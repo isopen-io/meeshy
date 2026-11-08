@@ -405,3 +405,56 @@ socket jusqu'au client.
 2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord.
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
    de #16613.
+
+## Cycle 10 — 2026-11-08
+
+- **Base** : `origin/dev` @ `6a08a6227` (le cycle 9, #16715, y est fusionné).
+- **Branche** : `claude/determined-volta-ifcb29`.
+- **Objectif** : #16735 et #16716 (piste 1 du cycle 9), groupés parce qu'ils touchent le même site.
+  La publication d'un résultat et le lot ZMQ doivent tourner sous le régime de leurs tâches.
+- **Livré** (seul le traducteur change : ni la passerelle, ni le protocole ZMQ, ni la forme des
+  résultats publiés) :
+  - `task_privacy.batch_is_ordinary` / `batch_scope` : un lot est ordinaire seulement si toutes ses
+    tâches le sont (non au repos, pas un sous-titre). Sinon il est tu ;
+  - `process_single_translation` : toute la tâche tourne sous `task_scope`, y compris le refus de
+    langue et la publication du résultat ou de l'erreur. Ses journaux passent par `shown(str(e))` ;
+  - `process_batch_translation` → `_process_batch` sous `batch_scope`. Chaque publication passe
+    sous le régime de SA tâche. Les erreurs du lot sont publiées HORS du bloc `except` : sans
+    cela, la publication ratée d'un message ordinaire, dans un lot mixte, joignait par
+    `__context__` l'exception qui citait le sous-titre (réserve R1 de la QA, corrigée dans le
+    cycle) ;
+  - `_publish_translation_result` : `{e}` → `shown(str(e))`, et `traceback.print_exc()` →
+    `exc_info=text_may_be_logged()`. Le régime ordinaire garde sa trace, désormais par le logger
+    et non plus par stderr ;
+  - `translation_service.py` : trois `logger.error` passent par `shown`. Dans
+    `translator_engine.py`, la création du pipeline journalise avec `exc_info=True` (R2 de #16716).
+- **Tests** : `tests/test_call_caption_publish_regime.py` (39 témoins) et
+  `tests/test_call_caption_publish_regime_qa.py` (8 témoins, ajoutés par la QA).
+  - **Rouge sur le code d'avant** : 25 des 39, puis le témoin R1 seul (1 sur 8).
+  - **Vert** : 119/119 sur les 9 fichiers des cycles 6 à 10 et du processeur, relancé par moi.
+  - **Suites `zmq_pool` / `translation_processor`** : 316 passés, 6 sautés, aucun échec.
+  - **56 fichiers voisins** : la différence avant/après se réduit aux 25 témoins. Les échecs
+    restants sont préexistants : torch, `langdetect`, un vrai service attendu.
+- **QA** : favorable avec réserves. R1 est corrigée dans le cycle ; R2 → #16765, R3 → #16766.
+- **Environnement** : venv uv jetable avec
+  `uv pip install --no-config --index-url https://pypi.org/simple pytest pytest-asyncio pytest-cov
+  numpy pydantic psutil pyzmq redis python-dotenv fastapi httpx prometheus-client`.
+  `--no-config` est indispensable : la configuration uv du dépôt ajoute l'index pytorch, que le
+  proxy refuse.
+
+### Limites connues
+
+- Quatre sites tournent hors régime et citent encore `{e}` en brut : `zmq_pool_manager.py:284` et
+  `:351`, `zmq_translation_handler.py:396` et `:398`. Aucun texte plausible n'y arrive aujourd'hui.
+  → #16765.
+- Le champ `error` d'un résultat de lot porte l'exception du lot. `_is_valid_translation` le jette
+  avant l'envoi, mais aucun témoin ne le verrouille. → #16766.
+
+### Cycle suivant : par où reprendre
+
+1. **Changer d'axe.** Dix cycles ont été consacrés à la vie privée des journaux du traducteur.
+   #16765, #16766 et #16736 restent petits et peuvent attendre un cycle groupé.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (chemin batch, désormais sous `batch_scope`).
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.

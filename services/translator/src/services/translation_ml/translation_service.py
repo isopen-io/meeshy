@@ -15,6 +15,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
+from services.task_privacy import shown
 from utils.text_segmentation import TextSegmenter, protect_entities
 from .translation_cache import segments_without_cache
 
@@ -247,7 +248,7 @@ class TranslationService:
             return result
 
         except Exception as e:
-            logger.error(f"❌ Erreur traduction ML [{source_channel}]: {e}")
+            logger.error(f"❌ Erreur traduction ML [{source_channel}]: {shown(str(e))}")
             return await self._fallback_translate(
                 text, source_language, target_language, model_type, source_channel
             )
@@ -358,7 +359,7 @@ class TranslationService:
                         )
 
                 except Exception as e:
-                    logger.error(f"[BATCH-STRUCT] Erreur batch ML: {e}")
+                    logger.error(f"[BATCH-STRUCT] Erreur batch ML: {shown(str(e))}")
                     # Fallback individuel
                     for idx, text_to_trans in segments_to_translate:
                         try:
@@ -399,7 +400,7 @@ class TranslationService:
             return result
 
         except Exception as e:
-            logger.error(f"❌ Erreur traduction structurée [{source_channel}]: {e}")
+            logger.error(f"❌ Erreur traduction structurée [{source_channel}]: {shown(str(e))}")
             return await self.translate(text, source_language, target_language, model_type, source_channel)
 
     async def _fallback_translate(
