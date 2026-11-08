@@ -148,7 +148,7 @@ extension StoryComposerViewModel {
     /// silently still pointing at via the shared old key.
     ///
     /// Mirrors the per-element id reassignment performed by `duplicateElement`.
-    func duplicateSlide(at index: Int) {
+    public func duplicateSlide(at index: Int) {
         guard canAddSlide, slides.indices.contains(index) else { return }
         let originalSlideId = slides[index].id
         var copy = slides[index]
@@ -243,7 +243,7 @@ extension StoryComposerViewModel {
     /// so a move needs no cache surgery — only `order` is reindexed. (it.37: was a
     /// remove+insert with a `destination < count` guard that rejected move-to-end and
     /// produced an off-by-one vs the drop offset; that path was also entirely unwired.)
-    func moveSlide(from source: Int, to destination: Int) {
+    public func moveSlide(from source: Int, to destination: Int) {
         guard slides.indices.contains(source),
               destination >= 0, destination <= slides.count,
               source != destination, source != destination - 1 else { return }

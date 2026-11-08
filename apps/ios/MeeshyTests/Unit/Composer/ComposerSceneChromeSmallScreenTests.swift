@@ -29,6 +29,10 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
     private static let iPad360 = CGSize(width: 360, height: 640)
     private static let smallScreens = [iPhoneSE, iPhone13mini, iPad360]
     private static let socleReserve: CGFloat = 46
+    /// La colonne du post à deux diapos mesurée depuis #14500. La porte Caméra
+    /// (#17111) s'y ajoute et défile avec le corps de la colonne au besoin
+    /// (#14622) ; la mesure au point garde les dix boutons d'hier.
+    private static let postTools = ComposerRestTool.allCases.filter { $0 != .camera }
 
     private struct Harness: View {
         let chrome: ComposerSceneOverlayChrome
@@ -86,7 +90,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
                                         sceneTopInset: CGFloat = 0) -> ComposerSceneOverlayChrome {
         ComposerSceneOverlayChrome(state: state, slideRow: slides(), slideCount: 2,
                                    onClose: {}, onUndo: {}, onRedo: {},
-                                   tools: ComposerRestTool.allCases, onTool: { _ in },
+                                   tools: postTools, onTool: { _ in },
                                    moreMenu: moreMenu(), pasteEntry: paste ? pasteEntry() : nil,
                                    selection: selection, sceneSideInset: sceneSideInset,
                                    sceneTopInset: sceneTopInset)
@@ -112,7 +116,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
     }
 
     func test_auRepos_lePostADeuxDiapos_neCroiseAucuneZoneDeControle() throws {
-        let tools = ComposerRestTool.allCases.map { "composer.rest.\($0.rawValue)" }
+        let tools = Self.postTools.map { "composer.rest.\($0.rawValue)" }
         for size in Self.smallScreens {
             let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(), size: size),
                                         size: size, hostSafeArea: false)
@@ -130,7 +134,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
                                     size: Self.iPhoneSE, hostSafeArea: false)
         defer { screen.dismount() }
 
-        for tool in ComposerRestTool.allCases {
+        for tool in Self.postTools {
             let frame = try XCTUnwrap(screen.frame(of: "composer.rest.\(tool.rawValue)"), "\(tool) introuvable")
             XCTAssertGreaterThanOrEqual(min(frame.width, frame.height), 44 - 0.5,
                                         "\(tool) : cible sous 44 pt sur le SE (\(frame)).")
@@ -240,7 +244,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
     func test_lePiedDeLaColonne_estTexteDuPostPuisPlus_etLeResteDefile() {
         XCTAssertEqual(ComposerRestChrome.columnFoot(ComposerRestTool.allCases), [.postText, .more])
         XCTAssertEqual(ComposerRestChrome.columnBody(ComposerRestTool.allCases),
-                       [.text, .media, .sticker, .sound, .drawing, .background, .mention, .place])
+                       [.text, .media, .sticker, .sound, .drawing, .camera, .background, .mention, .place])
         let story = ComposerRestChrome.tools(offered: [.text, .media, .sticker, .sound, .drawing, .background])
         XCTAssertEqual(ComposerRestChrome.columnFoot(story), [.more])
         XCTAssertEqual(ComposerRestChrome.columnBody(story) + ComposerRestChrome.columnFoot(story), story)

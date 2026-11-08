@@ -131,15 +131,10 @@ extension MeeshyComposerHost {
             // faisait aussi arriver la photo COUCHÉE. Une seule correction
             // ferme les deux défauts, et elle est la bonne pour une raison de
             // fond : on ne reconstruit pas ce qu'on a reçu.
-            let (octets, suffixe) = ComposerCapturePayload.bytes(
-                original: originaux, fallback: image)
-            guard let octets else { return }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_camera_\(UUID().uuidString).\(suffixe)")
-            guard (try? octets.write(to: url)) != nil else { return }
+            guard let photo = ComposerMediaSeeding.writeCapturedPhoto(image, original: originaux) else { return }
             ingestIntoDocument([ComposerDocumentMediaFactory.media(
-                url: url,
-                declaredMimeType: ComposerCapturePayload.mime(for: suffixe))])
+                url: photo.url,
+                declaredMimeType: photo.mime)])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
             ingestIntoDocument([ComposerDocumentMediaFactory.media(

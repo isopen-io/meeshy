@@ -65,18 +65,6 @@ nonisolated struct ComposerTrimTrackGeometry: Equatable, Sendable {
     }
 }
 
-/// Les vignettes du clip entier, UNE fois : la plage est une fenêtre posée
-/// dessus, la régler ne les change pas (spec § 3.3 : jamais pendant un geste).
-nonisolated enum ComposerTrimThumbnails {
-    @concurrent
-    static func images(url: URL, count: Int) async -> [CGImage] {
-        guard count > 0 else { return [] }
-        return await VideoThumbnailGenerator.shared.images(for: VideoThumbnailRequest(
-            url: url, instants: .evenlySpaced(count: count, atMostOnePerSecond: false),
-            maximumSize: CGSize(width: 120, height: 120))).compactMap(\.cgImage)
-    }
-}
-
 /// **La piste de découpe** (#9353, spec § 3.3) : `[poignée] ── vignettes (forme
 /// d'onde en filigrane) ── [poignée]`, une tête de lecture qui parcourt la plage
 /// en boucle ; toucher les vignettes y place la tête. Les deux poignées et le
@@ -85,8 +73,14 @@ nonisolated enum ComposerTrimThumbnails {
 ///
 /// **Appui long sur une poignée ⇒ précision à la milliseconde** : la piste se
 /// dilate autour d'elle sous un trait FIXE, et le doigt fait défiler la bande —
-/// on AMÈNE l'instant, on ne le vise pas (principe de `MeeshyAudioTrimmer`,
-/// #4657). Le temps se lit au-dessus, `0:03.482`.
+/// on AMÈNE l'instant, on ne le vise pas (#4657). Le temps se lit au-dessus,
+/// `0:03.482`.
+///
+/// **La bande est celle de « Rogner et régler »** (#17110) : `MediaTrimSourceTrack`
+/// du SDK, la même que le son et la vidéo d'une story — vignettes de
+/// `VideoFilmstrip` extraites UNE fois (jamais pendant un geste), onde en
+/// filigrane. Cette vue ne garde que ce qui est propre à la prise : la loupe
+/// de précision et la tête de la boucle de retouche.
 ///
 /// Pendant un geste, seule la plage bouge ; à sa fin — levée du doigt ou geste
 /// annulé par le système — la boucle repart sur elle. Le temps ne se met pas en
@@ -109,7 +103,6 @@ struct ComposerTrimTrack: View {
     private static let accessibleStep: TimeInterval = 0.1
     private static let accessiblePlayheadStep: TimeInterval = 1
 
-    @State private var frames: [CGImage] = []
     @State private var samples: [Float] = []
     /// L'instant de la poignée au début du geste en cours.
     @State private var origin: TimeInterval?
@@ -184,9 +177,9 @@ struct ComposerTrimTrack: View {
         .task(id: url) { @MainActor in await load() }
     }
 
-    /// Les vignettes puis l'onde, hors du fil principal ; un clip muet n'a pas d'onde.
+    /// L'onde, hors du fil principal ; un clip muet n'en a pas. Les vignettes
+    /// sont chargées par la bande partagée elle-même.
     private func load() async {
-        frames = await ComposerTrimThumbnails.images(url: url, count: Self.thumbnailCount)
         samples = (try? await WaveformCache.shared.samples(from: url, count: Self.waveformSamples)) ?? []
     }
 
@@ -237,16 +230,10 @@ struct ComposerTrimTrack: View {
     private func strip(_ piste: ComposerTrimTrackGeometry) -> some View {
         ZStack(alignment: .leading) {
             Color.white.opacity(0.12)
-            HStack(spacing: 0) {
-                ForEach(Array(frames.enumerated()), id: \.offset) { _, image in
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: piste.width / CGFloat(max(1, frames.count)), height: Self.height)
-                        .clipped()
-                }
-            }
-            waveform(width: piste.width).opacity(0.25)
+            MediaTrimSourceTrack(content: .video(url), waveform: samples, reading: .measured,
+                                 tint: .white, height: Self.height, frameCount: Self.thumbnailCount,
+                                 waveformOpacity: 0.5)
+                .frame(width: piste.width, height: Self.height)
             Color.black.opacity(0.55)
                 .frame(width: max(0, piste.offset(for: range.lowerBound)), height: Self.height)
             Color.black.opacity(0.55)
@@ -304,21 +291,6 @@ struct ComposerTrimTrack: View {
         .frame(width: piste.width, height: Self.height)
         .allowsHitTesting(false)
         .transition(.opacity)
-    }
-
-    private func waveform(width: CGFloat) -> some View {
-        let releve = samples
-        return Path { chemin in
-            guard !releve.isEmpty else { return }
-            let pas = width / CGFloat(releve.count)
-            for (index, valeur) in releve.enumerated() {
-                let hauteur = max(2, CGFloat(WaveformScale.displayHeight(rms: valeur)) * Self.height)
-                chemin.addRect(CGRect(x: CGFloat(index) * pas, y: (Self.height - hauteur) / 2,
-                                      width: max(1, pas - 1), height: hauteur))
-            }
-        }
-        .fill(Color.white)
-        .frame(width: width, height: Self.height)
     }
 
     /// Le liseré de la plage gardée, d'une poignée à l'autre.

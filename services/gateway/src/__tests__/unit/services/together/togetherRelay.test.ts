@@ -10,7 +10,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, afterEach } from '@jest/globals';
-import { togetherPairKey } from '../../../../services/together/togetherStore';
+import { togetherConversationKey, togetherPairKey } from '../../../../services/together/togetherStore';
 import { relationPairKey } from '@meeshy/shared/types/relation';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { TOGETHER_ERROR_CODES, TOGETHER_INVITE_TTL_SECONDS, TOGETHER_SESSION_TTL_SECONDS, togetherInvitePayloadSchema, togetherSessionPayloadSchema, togetherSyncPayloadSchema } from '@meeshy/shared/types/together';
@@ -22,6 +22,7 @@ import {
   leaveTogether,
   endTogetherOf,
   rejudgeTogetherBetween,
+  rejudgeTogetherWhere,
   syncTogether,
   type TogetherRelayDeps,
 } from '../../../../services/together/togetherRelay';
@@ -155,7 +156,7 @@ const inviter = (m: ReturnType<typeof monde>, toUserId = PROCHE, attachmentId = 
 const REFUS = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_ALLOWED };
 const INTROUVABLE = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_FOUND };
 const sessionValues = (m: ReturnType<typeof monde>) =>
-  [...m.cache.entries.entries()].filter(([key]) => !key.startsWith('together:ended:') && !key.startsWith('together:user:')).map(([, entry]) => entry);
+  [...m.cache.entries.entries()].filter(([key]) => !key.startsWith('together:ended:') && !key.startsWith('together:user:') && !key.startsWith('together:conversation:')).map(([, entry]) => entry);
 const KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
 afterEach(() => {
@@ -671,5 +672,117 @@ describe('#17043 (contre-audit) — réserves levées', () => {
     await inviteTogether(deps, HOTE, { toUserId: PROCHE, conversationId: CONV, attachmentId: VIDEO });
     await leaveTogether(deps, HOTE, { sessionId: SESSION_ID });
     expect(released).toEqual([[togetherPairKey(HOTE, PROCHE), SESSION_ID]]);
+  });
+});
+
+describe('#17022 — une séance s\'arrête aussi dans le geste qui ferme sa porte', () => {
+  const SEANCE_SANG = 'f'.repeat(31) + '2';
+  const deuxSeances = async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    await inviter(m, SANG, AUDIO);
+    await joinTogether(m.deps, SANG, { sessionId: SEANCE_SANG });
+    m.emissions.length = 0;
+    return m;
+  };
+  const fins = (m: ReturnType<typeof monde>) =>
+    m.emissions.filter((e) => e.event === SERVER_EVENTS.TOGETHER_ENDED).map((e) => [e.room, e.data.sessionId, e.data.reason]);
+
+  it('un compte désactivé : ses séances finissent chez les deux, celles des autres continuent', async () => {
+    const m = await deuxSeances();
+    await m.world.users.updateMany({ where: { id: PROCHE }, data: { deactivatedAt: new Date(T0) } });
+
+    await rejudgeTogetherWhere(m.deps, { userId: PROCHE });
+
+    expect(fins(m)).toEqual([
+      [ROOMS.user(HOTE), SESSION_ID, 'left'],
+      [ROOMS.user(PROCHE), SESSION_ID, 'left'],
+    ]);
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SEANCE_SANG, playing: true, positionMs: 0 })).toMatchObject({ success: true });
+  });
+
+  it('un compte supprimé, hôte de deux séances : les deux finissent', async () => {
+    const m = await deuxSeances();
+    await m.world.users.updateMany({ where: { id: HOTE }, data: { isActive: false, deletedAt: new Date(T0) } });
+
+    await rejudgeTogetherWhere(m.deps, { userId: HOTE });
+
+    expect(fins(m).map(([room, id]) => `${id}@${room}`).sort()).toEqual(
+      [`${SESSION_ID}@${ROOMS.user(HOTE)}`, `${SESSION_ID}@${ROOMS.user(PROCHE)}`, `${SEANCE_SANG}@${ROOMS.user(HOTE)}`, `${SEANCE_SANG}@${ROOMS.user(SANG)}`].sort(),
+    );
+  });
+
+  it('un membre banni de la conversation : sa séance finit chez les deux, sans dire le bannissement', async () => {
+    const m = await deuxSeances();
+    await m.world.participant.updateMany({ where: { userId: PROCHE }, data: { bannedAt: new Date(T0), isActive: false, leftAt: new Date(T0) } });
+
+    await rejudgeTogetherWhere(m.deps, { userId: PROCHE });
+
+    expect(fins(m)).toEqual([
+      [ROOMS.user(HOTE), SESSION_ID, 'left'],
+      [ROOMS.user(PROCHE), SESSION_ID, 'left'],
+    ]);
+  });
+
+  it('une invitation en attente vers un membre parti finit aussi', async () => {
+    const m = monde();
+    await inviter(m);
+    m.emissions.length = 0;
+    await m.world.participant.updateMany({ where: { userId: PROCHE }, data: { isActive: false, leftAt: new Date(T0) } });
+
+    await rejudgeTogetherWhere(m.deps, { userId: PROCHE });
+
+    expect(fins(m)).toEqual([
+      [ROOMS.user(HOTE), SESSION_ID, 'left'],
+      [ROOMS.user(PROCHE), SESSION_ID, 'left'],
+    ]);
+  });
+
+  it('le message du média supprimé : la séance de cette pièce finit, celle d\'une autre pièce de la conversation continue', async () => {
+    const m = await deuxSeances();
+    const video = (m.deps.prisma as unknown as { messageAttachment: { rows: Row[] } }).messageAttachment.rows.find((r) => r.id === VIDEO)!;
+    Object.assign(video, { message: { ...(video.message as Row), deletedAt: new Date(T0) } });
+
+    await rejudgeTogetherWhere(m.deps, { conversationId: CONV });
+
+    expect(fins(m)).toEqual([
+      [ROOMS.user(HOTE), SESSION_ID, 'left'],
+      [ROOMS.user(PROCHE), SESSION_ID, 'left'],
+    ]);
+    expect(await syncTogether(m.deps, SANG, { sessionId: SEANCE_SANG, playing: false, positionMs: 1 })).toMatchObject({ success: true });
+  });
+
+  it('une conversation sans séance ne dit rien', async () => {
+    const m = await deuxSeances();
+    await rejudgeTogetherWhere(m.deps, { conversationId: AUTRE_CONV });
+    await rejudgeTogetherWhere(m.deps, { userId: ETRANGER });
+    expect(m.emissions).toEqual([]);
+  });
+
+  it('une séance sortie de l\'index de paire (invitations concurrentes) est retrouvée par la coupure de route', async () => {
+    const m = await deuxSeances();
+    m.cache.entries.delete(togetherPairKey(HOTE, PROCHE));
+    await m.lier(HOTE, PROCHE, 'FRIEND');
+
+    await rejudgeTogetherBetween(m.deps, { userA: PROCHE, userB: HOTE });
+
+    expect(fins(m)).toEqual([
+      [ROOMS.user(HOTE), SESSION_ID, 'left'],
+      [ROOMS.user(PROCHE), SESSION_ID, 'left'],
+    ]);
+  });
+
+  it('l\'index de conversation ne nomme pas la conversation, et la fin l\'efface', async () => {
+    process.env.SECRETS_AT_REST_KEY = KEY;
+    const m = await deuxSeances();
+    const key = togetherConversationKey(CONV);
+    expect(key).not.toContain(CONV);
+    expect(m.cache.entries.has(key)).toBe(true);
+
+    await leaveTogether(m.deps, HOTE, { sessionId: SESSION_ID });
+    await leaveTogether(m.deps, SANG, { sessionId: SEANCE_SANG });
+
+    expect(m.cache.entries.has(key)).toBe(false);
   });
 });
