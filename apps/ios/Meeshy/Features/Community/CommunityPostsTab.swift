@@ -13,7 +13,7 @@ struct CommunityPostsTab: View {
     @StateObject private var viewModel: CommunityPostsViewModel
     var onCreatePost: (() -> Void)?
 
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     /// Publication citée depuis son bouton Repost (#15911).
     @State private var quotedPost: FeedPost?
     @Environment(\.meeshyQuoteComposerHost) private var quoteHost
@@ -21,7 +21,12 @@ struct CommunityPostsTab: View {
     @State private var shareableLink: ShareableLink?
 
     init(communityId: String, onCreatePost: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CommunityPostsViewModel(communityId: communityId))
+        _viewModel = StateObject(wrappedValue: CommunityPostsViewModel(
+            communityId: communityId,
+            service: PostService.shared,
+            cacheProvider: { CacheCoordinator.shared.feed },
+            onError: { FeedbackToastManager.shared.showError($0) }
+        ))
         self.onCreatePost = onCreatePost
     }
 

@@ -28,7 +28,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
         currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
-        postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { CacheCoordinator.shared.feed }
+        postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil }
     ) {
         self.communityId = communityId
         self.service = service

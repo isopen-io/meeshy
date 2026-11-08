@@ -47,6 +47,7 @@ final class CommunityPostsViewModel: ObservableObject {
     private let service: PostServiceProviding
     private let languageProvider: LanguageProviding
     private let cacheProvider: @MainActor () async -> CommunityPostsCache?
+    private let onError: @MainActor (String) -> Void
     private let reposter: ListedPostReposter
     private let bookmarker: PostBookmarkWriter
     private let sharer: ListedPostSharer
@@ -58,9 +59,10 @@ final class CommunityPostsViewModel: ObservableObject {
 
     init(
         communityId: String,
-        service: PostServiceProviding = PostService.shared,
+        service: PostServiceProviding,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
-        cacheProvider: @escaping @MainActor () async -> CommunityPostsCache? = { CacheCoordinator.shared.feed },
+        cacheProvider: @escaping @MainActor () async -> CommunityPostsCache?,
+        onError: @escaping @MainActor (String) -> Void = { _ in },
         impressions: ReachImpressionRecording? = nil,
         reposter: ListedPostReposter? = nil,
         bookmarker: PostBookmarkWriter? = nil
@@ -69,6 +71,7 @@ final class CommunityPostsViewModel: ObservableObject {
         self.service = service
         self.languageProvider = languageProvider
         self.cacheProvider = cacheProvider
+        self.onError = onError
         self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: service))
         self.bookmarker = bookmarker ?? PostBookmarkWriter()
         self.sharer = ListedPostSharer(service: service)
@@ -119,7 +122,7 @@ final class CommunityPostsViewModel: ObservableObject {
             let response = try await service.getCommunityPosts(communityId: communityId, cursor: cursor, limit: 20)
             guard current == generation else { return }
             let shown = Set(posts.map(\.id))
-            let fresh = await converted(response.data).filter { !shown.contains($0.id) }
+            let fresh = converted(response.data).filter { !shown.contains($0.id) }
             guard current == generation else { return }
             posts.append(contentsOf: fresh)
             nextCursor = response.pagination?.nextCursor
@@ -139,7 +142,7 @@ final class CommunityPostsViewModel: ObservableObject {
         if posts.isEmpty { phase = .loading }
         do {
             let response = try await service.getCommunityPosts(communityId: communityId, cursor: nil, limit: 20)
-            let page = await converted(response.data)
+            let page = converted(response.data)
             guard current == generation else { return }
             posts = page
             nextCursor = response.pagination?.nextCursor
@@ -152,13 +155,11 @@ final class CommunityPostsViewModel: ObservableObject {
         }
     }
 
-    /// Décodage hors du fil principal : `toFeedPost` résout médias, citations
-    /// et traduction servie (Prisme), comme le fil.
-    private func converted(_ payload: [APIPost]) async -> [FeedPost] {
+    /// `toFeedPost` résout médias, citations et traduction servie (Prisme),
+    /// comme le fil.
+    private func converted(_ payload: [APIPost]) -> [FeedPost] {
         let preferred = languageProvider.preferredLanguages
-        return await Task.detached(priority: .userInitiated) {
-            payload.map { $0.toFeedPost(preferredLanguages: preferred) }
-        }.value
+        return payload.map { $0.toFeedPost(preferredLanguages: preferred) }
     }
 
     /// Le SEUL site qui écrit cet onglet dans le cache.
@@ -200,7 +201,7 @@ final class CommunityPostsViewModel: ObservableObject {
             if let current = posts.firstIndex(where: { $0.id == postId }) {
                 posts[current] = snapshot
             }
-            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
+            onError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
         }
     }
 

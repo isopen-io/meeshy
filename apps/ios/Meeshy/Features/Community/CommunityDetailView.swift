@@ -19,7 +19,10 @@ struct CommunityDetailView: View {
          onInvite: ((String) -> Void)? = nil,
          onDismiss: (() -> Void)? = nil,
          onCreatePost: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(communityId: communityId))
+        _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(
+            communityId: communityId,
+            postsCache: { CacheCoordinator.shared.feed }
+        ))
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
         self.onOpenMembers = onOpenMembers
