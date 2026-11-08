@@ -130,7 +130,8 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
     func test_vectors_areSealedByTheLibsignalVersionThisSDKPins() throws {
         let pinned = try String(contentsOf: Self.libsignalVersionURL, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        XCTAssertEqual("v\(try loadVectors().libsignal)", pinned)
+        let sealedBy = try loadVectors().libsignal
+        XCTAssertEqual("v\(sealedBy)", pinned)
     }
 
     func test_freshSession_bobOpensBothPreKeyMessagesFromHisPreKeysAlone() throws {
