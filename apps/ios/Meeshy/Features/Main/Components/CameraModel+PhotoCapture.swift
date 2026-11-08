@@ -75,7 +75,6 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
     func noteShutterPress() {
         shutterPresses += 1
         shutterClock.start()
-        HapticFeedback.light()
     }
 
     /// AVFoundation n'a rendu aucune image : le déclencheur se libère, et le dit.
