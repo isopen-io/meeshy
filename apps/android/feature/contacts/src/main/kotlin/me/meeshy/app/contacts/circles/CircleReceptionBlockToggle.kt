@@ -23,25 +23,30 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.ui.R as UiR
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
 internal const val CIRCLE_BLOCK_BRING_TAG = "circles.settings.blockBring"
+internal const val CIRCLE_BLOCK_TALKIE_TAG = "circles.settings.blockTalkie"
 
 private const val FAILURE_VISIBLE_MS = 4_000L
 
 /**
- * L'interrupteur ACTIF « Bloquer ses Bring » de la fiche d'un lien (#16617) — iso `CircleBringBlockToggle.swift`. La ligne
- * entière bascule (48 dp), annoncée comme un interrupteur par TalkBack.
+ * L'interrupteur ACTIF d'une préférence de réception sur la fiche d'un lien — « Bloquer ses Bring » (#16617) et « Couper
+ * son talkie » (#16675) —, iso `CircleReceptionBlockToggle.swift`. La ligne entière bascule (48 dp), annoncée comme un
+ * interrupteur par TalkBack, avec son explication quand elle en a une.
  */
 @Composable
-internal fun CircleBringBlockToggle(
+internal fun CircleReceptionBlockToggle(
     userId: String,
+    setting: RelationReceptionSetting,
     title: String,
-    viewModel: CircleBringBlockViewModel = hiltViewModel(key = "bring-block-$userId"),
+    detail: String? = null,
+    viewModel: CircleReceptionBlockViewModel = hiltViewModel(key = "reception-block-${setting.name}-$userId"),
 ) {
-    LaunchedEffect(userId) { viewModel.load(userId) }
+    LaunchedEffect(userId, setting) { viewModel.load(userId, setting) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column {
         Row(
@@ -54,7 +59,7 @@ internal fun CircleBringBlockToggle(
                     role = Role.Switch,
                     onValueChange = viewModel::setBlocked,
                 )
-                .testTag(CIRCLE_BLOCK_BRING_TAG),
+                .testTag(setting.tag()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -64,6 +69,13 @@ internal fun CircleBringBlockToggle(
                 modifier = Modifier.weight(1f),
             )
             Switch(checked = state.blocked, onCheckedChange = null, enabled = !state.isSaving)
+        }
+        detail?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
         }
         if (state.failed) {
             LaunchedEffect(Unit) {
@@ -78,4 +90,9 @@ internal fun CircleBringBlockToggle(
             )
         }
     }
+}
+
+private fun RelationReceptionSetting.tag(): String = when (this) {
+    RelationReceptionSetting.BRING -> CIRCLE_BLOCK_BRING_TAG
+    RelationReceptionSetting.TALKIE -> CIRCLE_BLOCK_TALKIE_TAG
 }

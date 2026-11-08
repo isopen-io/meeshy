@@ -102,4 +102,41 @@ class RelationSocketEventsManagerTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `le talkie recu atteint ses trois flux, le fragment avec son binaire natif`() = runTest {
+        val (manager, handlers) = wired()
+        manager.talkieIncoming.test {
+            handlers.deliver(
+                SocketEventNames.TALKIE_INCOMING,
+                """{"talkieId":"t1","fromUserId":"u2","codec":"aac-adts","startedAt":"2026-11-08T05:00:00Z","maxDurationMs":30000}""",
+            )
+            assertThat(awaitItem().isPlayable).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+        manager.talkieChunk.test {
+            val payload = JSONObject().put("talkieId", "t1").put("fromUserId", "u2").put("seq", 0).put("data", byteArrayOf(7, 8))
+            handlers.getValue(SocketEventNames.TALKIE_CHUNK).invoke(arrayOf(payload))
+            scheduler.advanceUntilIdle()
+            val chunk = awaitItem()
+            assertThat(chunk.seq).isEqualTo(0)
+            assertThat(chunk.data.toList()).containsExactly(7.toByte(), 8.toByte()).inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+        manager.talkieEnded.test {
+            handlers.deliver(SocketEventNames.TALKIE_ENDED, """{"talkieId":"t1","fromUserId":"u2","toUserId":"me","reason":"cut","endedAt":"x"}""")
+            assertThat(awaitItem().silencesNow).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `un fragment sans son binaire ne se publie pas`() = runTest {
+        val (manager, handlers) = wired()
+        manager.talkieChunk.test {
+            handlers.deliver(SocketEventNames.TALKIE_CHUNK, """{"talkieId":"t1","fromUserId":"u2","seq":0,"data":"AAEC"}""")
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
