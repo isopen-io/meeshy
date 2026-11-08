@@ -593,7 +593,7 @@ struct ComposerCaptureChrome: View {
         ZStack(alignment: .topLeading) {
             if ComposerCaptureGrid.shows(enabled: gridEnabled, editing: session.phase.isEditing) {
                 ComposerCaptureGridOverlay()
-                ComposerCaptureHorizonLevel()
+                ComposerCaptureLevelLine()
             }
             focusRing
             ComposerCaptureCountdown(timer: session.selfTimer)

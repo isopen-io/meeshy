@@ -5,7 +5,7 @@ import SwiftUI
 /// seulement, un trait fin au centre paraît sous 10° d'inclinaison et passe à
 /// l'accent du viseur à ±1°, avec un tic de sélection en y entrant. Portrait comme
 /// paysage : l'écart se mesure à l'horizontale la plus proche. À plat, il se tait.
-nonisolated enum ComposerCaptureHorizon {
+nonisolated enum ComposerCaptureLevel {
     static let visibleWithin: Double = 10
     static let alignedWithin: Double = 1
     /// Une fois aligné, il le reste jusqu'à 1,5° : le capteur qui tremble au bord
@@ -43,16 +43,16 @@ nonisolated enum ComposerCaptureHorizon {
 
 /// Le capteur du niveau : il ne tourne que tant que le trait est monté.
 @MainActor
-final class ComposerCaptureHorizonSource: ObservableObject {
+final class ComposerCaptureLevelSource: ObservableObject {
     nonisolated deinit {}
 
-    @Published private(set) var reading: ComposerCaptureHorizon.Reading?
+    @Published private(set) var reading: ComposerCaptureLevel.Reading?
 
     private let manager = CMMotionManager()
 
     func start() {
         guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
-        manager.deviceMotionUpdateInterval = 1 / ComposerCaptureHorizon.rate
+        manager.deviceMotionUpdateInterval = 1 / ComposerCaptureLevel.rate
         manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
             guard let gravite = motion?.gravity else { return }
             let (x, y, z) = (gravite.x, gravite.y, gravite.z)
@@ -66,9 +66,9 @@ final class ComposerCaptureHorizonSource: ObservableObject {
     }
 
     private func receive(x: Double, y: Double, z: Double) {
-        let suivante = ComposerCaptureHorizon.reading(gravityX: x, gravityY: y, gravityZ: z,
+        let suivante = ComposerCaptureLevel.reading(gravityX: x, gravityY: y, gravityZ: z,
                                                       wasAligned: reading?.aligned == true)
-        if ComposerCaptureHorizon.ticks(from: reading, to: suivante) { ComposerCaptureHaptic.play(.levelled) }
+        if ComposerCaptureLevel.ticks(from: reading, to: suivante) { ComposerCaptureHaptic.play(.levelled) }
         reading = suivante
     }
 }
@@ -76,8 +76,8 @@ final class ComposerCaptureHorizonSource: ObservableObject {
 /// Le trait d'horizon, au centre du viseur : il suit l'horizon réel, blanc, puis
 /// jaune — l'accent du viseur, celui du flash et du retardateur — une fois droit.
 /// Muet à VoiceOver et transparent au toucher, comme la grille qu'il accompagne.
-struct ComposerCaptureHorizonLevel: View {
-    @StateObject private var source = ComposerCaptureHorizonSource()
+struct ComposerCaptureLevelLine: View {
+    @StateObject private var source = ComposerCaptureLevelSource()
 
     var body: some View {
         ZStack {
