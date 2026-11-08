@@ -30,6 +30,19 @@ const EXPECTED: Record<QueuedEventType, boolean> = {
   unpinned: false,
   'attachment-updated': false,
   translation: false,
+  // Les trois MARQUES PERSONNELLES du lecteur (#16688) : elles décrivent l'état
+  // d'un message DÉJÀ arrivé — étoilé, masqué « pour moi », rendu — pour les
+  // autres APPAREILS du même compte. Accuser réception d'une étoile
+  // affirmerait une remise qui n'a pas eu lieu : le message, lui, était arrivé
+  // depuis longtemps, et c'est son AUTEUR que l'accusé informerait.
+  //
+  // C'est ce `Record` qui a exigé le verdict : le lot qui a ajouté les trois
+  // familles à l'union ne compilait plus tant qu'elles n'avaient pas été
+  // tranchées ici — exactement la garde que ce fichier décrit, et la raison
+  // pour laquelle `link-message` ne pourrait plus se glisser en silence.
+  starred: false,
+  'hidden-for-me': false,
+  'restored-for-me': false,
 };
 
 describe('announcesMessageArrival', () => {
