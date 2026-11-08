@@ -302,9 +302,9 @@ final class ConversationRowListeningWiringTests: XCTestCase {
         }
     }
 
-    func test_bothListForms_carryTheBand_notTheGlyph() {
-        XCTAssertEqual(AvatarListeningBand.form(avatarSize: ConversationRowAvatar.Style.classic.context.size), .band)
-        XCTAssertEqual(AvatarListeningBand.form(avatarSize: ConversationRowAvatar.Style.lentille.context.size), .band)
+    func test_bothListForms_carryTheBand() {
+        XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: ConversationRowAvatar.Style.classic.context.size))
+        XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: ConversationRowAvatar.Style.lentille.context.size))
     }
 }
 
