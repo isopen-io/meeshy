@@ -15,10 +15,16 @@ import me.meeshy.sdk.model.relation.RelationLevelRaisedEvent
 import me.meeshy.sdk.model.relation.RelationRitualCompletedEvent
 import me.meeshy.sdk.model.relation.RelationRitualProgressEvent
 import me.meeshy.sdk.model.relation.RelationRitualStartedEvent
+import me.meeshy.sdk.model.relation.TalkieChunk
+import me.meeshy.sdk.model.relation.TalkieEnded
+import me.meeshy.sdk.model.relation.TalkieEvent
+import me.meeshy.sdk.model.relation.TalkieIncoming
 import me.meeshy.sdk.model.socket.SocketEventNames
+import org.json.JSONObject
 
 /**
- * Les quatre événements du LIEN entre deux personnes (#13933, #13938), et l'arrêt d'un Bring (#13936) — miroir de `MessageSocketManager+Relations.swift`.
+ * Les quatre événements du LIEN entre deux personnes (#13933, #13938), l'arrêt d'un Bring (#13936) et le talkie reçu
+ * (#16675) — miroir de `MessageSocketManager+Relations.swift` et `MessageSocketManager+Talkie.swift`.
  *
  * Tous serveur → client, tous sur la room `user:<id>` (`packages/shared/types/socketio-events/relation-event-names.ts`).
  * Chaque charge nomme `userId` = l'AUTRE personne, du point de vue du destinataire. Il n'existe AUCUN événement de baisse,
@@ -40,6 +46,7 @@ class RelationSocketEventsManager @Inject constructor(
     private val _ritualProgress = SocketInboundRoute.subject<RelationRitualProgressEvent>()
     private val _ritualCompleted = SocketInboundRoute.subject<RelationRitualCompletedEvent>()
     private val _bringStopped = SocketInboundRoute.subject<BringStoppedEvent>()
+    private val _talkie = SocketInboundRoute.subject<TalkieEvent>()
 
     /** `relation:level-raised` — le niveau effectif de la paire a monté (aux DEUX). */
     val levelRaised: SharedFlow<RelationLevelRaisedEvent> = _levelRaised.exposed()
@@ -59,6 +66,14 @@ class RelationSocketEventsManager @Inject constructor(
      */
     val bringStopped: SharedFlow<BringStoppedEvent> = _bringStopped.exposed()
 
+    /**
+     * Le talkie reçu (#16675), sur UN flux dans l'ordre du fil : `talkie:incoming` (une prise de parole commence, aucun
+     * nom ne voyage), `talkie:chunk` (un fragment, à jouer dès son arrivée — le son voyage en binaire Socket.IO natif, que
+     * la bibliothèque replace en `ByteArray` dans la charge) et `talkie:ended` (`sender` / `limit` laissent finir, `cut`
+     * fait taire).
+     */
+    val talkie: SharedFlow<TalkieEvent> = _talkie.exposed()
+
     override fun attach() {
         if (installed.compareAndSet(false, true)) router.install(routes())
     }
@@ -73,6 +88,26 @@ class RelationSocketEventsManager @Inject constructor(
         SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_PROGRESS, json, _ritualProgress),
         SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_COMPLETED, json, _ritualCompleted),
         SocketInboundRoute.decoding(SocketEventNames.BRING_STOPPED, json, _bringStopped),
+        SocketInboundRoute.decoding(SocketEventNames.TALKIE_INCOMING, json, TalkieIncoming.serializer()) {
+            publishTalkie(SocketEventNames.TALKIE_INCOMING, TalkieEvent.Opened(it))
+        },
+        SocketInboundRoute.raw(SocketEventNames.TALKIE_CHUNK) { raw ->
+            raw.talkieChunk()?.let { publishTalkie(SocketEventNames.TALKIE_CHUNK, TalkieEvent.Spoken(it)) }
+        },
+        SocketInboundRoute.decoding(SocketEventNames.TALKIE_ENDED, json, TalkieEnded.serializer()) {
+            publishTalkie(SocketEventNames.TALKIE_ENDED, TalkieEvent.Closed(it))
+        },
+    )
+
+    private fun publishTalkie(event: String, value: TalkieEvent) {
+        SocketInboundRoute.run { _talkie.emitOrLog(event, value) }
+    }
+
+    private fun JSONObject.talkieChunk(): TalkieChunk? = TalkieChunk.of(
+        talkieId = optString("talkieId").takeIf { it.isNotEmpty() },
+        fromUserId = optString("fromUserId").takeIf { it.isNotEmpty() },
+        seq = (opt("seq") as? Number)?.toInt(),
+        data = opt("data") as? ByteArray,
     )
 }
 

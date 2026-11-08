@@ -4,6 +4,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { eraseSharedTranslations, type SharedTranslationErasureClient } from './sharedTranslationErasure';
 import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
+import { getSharedDeliveryQueue } from '../delivery-queue-registry';
 import { computeViewOnceStates, type ViewOnceAudiencePrisma } from './viewOnceAudience';
 
 /**
@@ -153,6 +154,45 @@ async function writePurge(
   return false;
 }
 
+/**
+ * La copie du clair que la file de rejeu hors ligne garde — et, pour une vue
+ * unique, la SEULE défense qui existe (#16706).
+ *
+ * C'est ce qui distingue ce site de tous les autres sites de purge du lot. La
+ * garde de vivacité du drain (#16685) se prononce sur `deletedAt` et
+ * `expiresAt`, les deux seules preuves que `messageLivenessOf` connaît. **Une
+ * vue unique purgée n'en porte AUCUNE** : la bulle reste, c'est la raison d'être
+ * de ce module (« aucun `deletedAt`, la bulle reste »), et `viewOnceBurnedAt`
+ * n'est lu par aucune garde de remise.
+ *
+ * Un absent dont la file portait l'entrée `new` de ce message recevait donc son
+ * texte ENTIER à la reconnexion, après que le serveur en ait détruit le contenu,
+ * les fichiers et les traductions — et le drain, qui interroge bien la base, la
+ * trouvait parfaitement VIVANTE. Le gate ne pouvait pas le voir : il n'a rien à
+ * lire.
+ *
+ * Ici, donc, la purge du STOCKAGE n'est pas la seconde moitié d'une protection —
+ * elle est la protection. Et c'est l'inverse du cycle 124 : là, un champ
+ * DÉCLARAIT une restriction que rien n'appliquait ; ici, un module APPLIQUE une
+ * destruction qu'aucun champ ne déclare, donc qu'aucune garde en aval ne peut
+ * interroger.
+ */
+async function purgeQueuedCopies(
+  messageIds: readonly string[],
+  onError: PurgeViewOnceOptions['onError'],
+): Promise<void> {
+  if (messageIds.length === 0) return;
+  const queue = getSharedDeliveryQueue();
+  if (!queue) return;
+  for (const messageId of messageIds) {
+    try {
+      await queue.purgeMessage(messageId);
+    } catch (err) {
+      onError?.(messageId, err);
+    }
+  }
+}
+
 export async function purgeDueViewOnceContent(
   prisma: ViewOncePurgePrisma & Pick<PrismaClient, 'messageAttachment'> & SharedTranslationErasureClient,
   options: PurgeViewOnceOptions,
@@ -229,6 +269,7 @@ export async function purgeDueViewOnceContent(
     // EN MÉMOIRE de leurs traductions part avec elles (#16557).
     purgeTranslationCacheFor(purgedIds);
     await eraseSharedTranslations(prisma, { messageIds: purgedIds });
+    await purgeQueuedCopies(purgedIds, options.onError);
   }
 
   return { purged: firstPurges };

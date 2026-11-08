@@ -6583,6 +6583,100 @@
         }
       }
     },
+    "camera.photo.lost": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر التقاط الصورة. حاول مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Foto konnte nicht aufgenommen werden. Versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The photo couldn't be taken. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo hacer la foto. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La photo n'a pas pu être prise. Réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile scattare la foto. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível tirar a foto. Tente novamente."
+          }
+        }
+      }
+    },
+    "camera.recording.interrupted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمت مقاطعة الفيديو. تم الاحتفاظ بما صوّرته."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video unterbrochen. Das Gefilmte wurde behalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video interrupted. What you filmed has been kept."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo interrumpido. Lo grabado se ha conservado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vidéo interrompue. Ce qui a été filmé est gardé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video interrotto. Ciò che hai filmato è stato conservato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo interrompido. O que você filmou foi mantido."
+          }
+        }
+      }
+    },
     "circles.action.request": {
       "extractionState": "manual",
       "localizations": {
@@ -9634,6 +9728,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Localização ao vivo"
+          }
+        }
+      }
+    },
+    "circles.settings.shareListening.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عندما يعمل Apple Music على هذا الـ iPhone ويكون Meeshy مفتوحًا، يرى هذا الشخص أنك تستمع إلى الموسيقى؛ والعنوان فقط إذا منحته إياه في طقس الدم. لا تتم مشاركة رسائلك الصوتية أبدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn Apple Music auf diesem iPhone läuft und Meeshy geöffnet ist, sieht diese Person, dass du Musik hörst; den Titel nur, wenn du ihn ihr im Blut-Ritual gewährt hast. Deine Sprachnachrichten werden nie geteilt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When Apple Music is playing on this iPhone and Meeshy is open, this person sees that you’re listening to music; the title only if you granted it to them in the Blood ritual. Your voice messages are never shared."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuando Apple Music suena en este iPhone y Meeshy está abierto, esta persona ve que escuchas música; el título, solo si se lo concediste en el ritual de Sangre. Tus mensajes de voz nunca se comparten."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand Apple Music joue sur cet iPhone et que Meeshy est ouvert, cette personne voit que vous écoutez de la musique ; le titre, seulement si vous le lui avez accordé au rituel du Sang. Vos messages vocaux ne sont jamais partagés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando Apple Music è in riproduzione su questo iPhone e Meeshy è aperta, questa persona vede che stai ascoltando musica; il titolo solo se gliel’hai concesso nel rituale del Sangue. I tuoi messaggi vocali non vengono mai condivisi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando o Apple Music está tocando neste iPhone e o Meeshy está aberto, essa pessoa vê que você está ouvindo música; o título, só se você concedeu no ritual de Sangue. Suas mensagens de voz nunca são compartilhadas."
           }
         }
       }
@@ -32158,6 +32299,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vê um vídeo"
+          }
+        }
+      }
+    },
+    "listening.share.accessDenied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسمح بالوصول إلى Apple Music من الإعدادات لمشاركة ما تستمع إليه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erlaube in den Einstellungen den Zugriff auf Apple Music, um zu teilen, was du hörst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow access to Apple Music in Settings to share what you’re listening to."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite el acceso a Apple Music en Ajustes para compartir lo que escuchas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisez l’accès à Apple Music dans Réglages pour partager ce que vous écoutez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consenti l’accesso ad Apple Music in Impostazioni per condividere cosa ascolti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permita o acesso ao Apple Music em Ajustes para compartilhar o que você está ouvindo."
           }
         }
       }
@@ -73927,53 +74115,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rede fraca (contato)"
-          }
-        }
-      }
-    },
-    "call.status.peer.recording": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تسجيل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aufnahme"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recording"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grabación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrement"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registrazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gravação"
           }
         }
       }
@@ -330444,6 +330585,241 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alguém"
+          }
+        }
+      }
+    },
+    "call.capture.alert": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ يلتقط شاشة المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ nimmt den Bildschirm des Anrufs auf"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is capturing the call screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ está capturando la pantalla de la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ capture l’écran de l’appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ sta catturando lo schermo della chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ está capturando a tela da chamada"
+          }
+        }
+      }
+    },
+    "call.capture.journal.callRecordingStarted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بدأ تسجيل المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Aufnahme des Anrufs hat begonnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Call recording started"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La grabación de la llamada ha comenzado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’enregistrement de l’appel a commencé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La registrazione della chiamata è iniziata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A gravação da chamada começou"
+          }
+        }
+      }
+    },
+    "call.capture.journal.callRecordingStopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "توقّف تسجيل المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Aufnahme des Anrufs wurde beendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Call recording stopped"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La grabación de la llamada se ha detenido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’enregistrement de l’appel s’est arrêté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La registrazione della chiamata si è interrotta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A gravação da chamada parou"
+          }
+        }
+      }
+    },
+    "call.capture.journal.recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يسجّل الشاشة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nimmt den Bildschirm auf"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "is recording the screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "está grabando la pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enregistre l’écran"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sta registrando lo schermo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "está gravando a tela"
+          }
+        }
+      }
+    },
+    "call.capture.journal.screenshot": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقط صورة للشاشة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat einen Screenshot gemacht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "took a screenshot"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "capturó la pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a capturé l’écran"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ha catturato lo schermo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "capturou a tela"
           }
         }
       }

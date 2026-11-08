@@ -28,7 +28,8 @@ public actor CallTranscriptStore {
                 callId: transcript.callId,
                 conversationId: transcript.conversationId,
                 callStartedAt: existing.callStartedAt,
-                segments: byIdentity.values.compactMap(\.first).sorted { $0.capturedAt < $1.capturedAt }
+                segments: byIdentity.values.compactMap(\.first).sorted { $0.capturedAt < $1.capturedAt },
+                captures: Self.mergedCaptures(existing.captures, transcript.captures)
             )
         } else {
             merged = transcript
@@ -38,6 +39,13 @@ public actor CallTranscriptStore {
         } catch {
             logger.error("CallTranscriptStore.saveMerging failed: \(error.localizedDescription)")
         }
+    }
+
+    /// #16665 — une capture se garde une fois, par son identifiant.
+    static func mergedCaptures(_ existing: [CallTranscriptCapture], _ incoming: [CallTranscriptCapture]) -> [CallTranscriptCapture] {
+        let known = Set(existing.map(\.id))
+        return (existing + incoming.filter { !known.contains($0.id) })
+            .sorted { $0.capturedAt < $1.capturedAt }
     }
 
     public func transcript(for callId: String) async -> CallTranscript? {

@@ -103,6 +103,8 @@ const it = {
   'circles.settings.blockTalkie': 'Silenzia il suo talkie',
   'circles.settings.blockTalkie.detail': 'La sua voce non verrà più riprodotta direttamente sul tuo dispositivo: arriverà come messaggio vocale. Questa persona non viene avvisata.',
   'circles.settings.blockTalkie.failed': 'Non è stato possibile salvare l’impostazione',
+  'circles.settings.shareListening.detail': 'Quando Apple Music è in riproduzione sul tuo iPhone e Meeshy è aperta lì, questa persona vede che stai ascoltando musica; il titolo solo se gliel’hai concesso nel rituale del Sangue. I tuoi messaggi vocali non vengono mai condivisi.',
+  'circles.settings.shareListening.failed': 'Non è stato possibile salvare la condivisione',
   'talkie.send.explain': 'Tieni premuto e parla: la tua voce esce direttamente da {name}, senza rispondere.',
   'talkie.send.hold': 'Tieni premuto per parlare',
   'talkie.send.hold.a11y': 'Tieni premuto per parlare con {name} — da tastiera, tieni premuta la barra spaziatrice',

@@ -232,3 +232,57 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `Bring/BringRingView.swift` dans un littéral de dictionnaire (deux fusions de `dev`), ce qui piège à l'exécution.
   `dev` était rouge du même défaut (ses push ne lancent pas les tests). Doublon retiré dans ce lot ; diagnostic du
   réveil 12.
+
+## 2026-11-08 — réveil 15 : émettre son écoute depuis iOS (#16803 ⊂ #13934)
+
+- Reprise : #16757 (écoute reçue sur iOS) fusionnée ; #16778 (talkie reçu sur Android) est menée par le réveil 14,
+  encore actif (CI relancée à 06:47) : ce réveil ne la touche pas. Aucune branche n'écrivait l'émission de l'écoute.
+  Issue #16803 ouverte sous #13934 (milestone #215), branche `claude/cercles-ecoute-ios-emettre` réservée avant toute
+  écriture.
+- Lot : aucun client n'ÉMETTAIT et aucun n'ACCORDAIT `listeningCategoryShared` ; l'écoute partagée n'atteignait
+  personne. Livré dans la PR #16805 : « Ce que j'écoute » ACTIF dès Proche sur la fiche d'un lien (`CirclePersonSwitch`
+  généralise l'interrupteur des réceptions : blocage ou accord) ; `ListeningBroadcastLaw` (pure) + `ListeningBroadcaster`
+  (état complet une fois par changement, rafraîchi à 10 min, effacé à la pause, en arrière-plan et au retrait du choix) ;
+  source Apple Music après l'autorisation Médiathèque, demandée au premier accord ; SDK `NowPlayingUpdate`,
+  `NowPlayingSocketEmitter` (hors de `MessageSocketManager`, garde de cohésion), réglages lus.
+- Décision prise en chemin : les messages vocaux Meeshy ne sont JAMAIS une source d'écoute (message privé d'un tiers).
+- Gates locaux : règles maison (30 tenues, après retrait d'une date dans un commentaire et d'un `@unchecked Sendable`),
+  cohésion, localisation, inscription des tests verts ; `vitest packages/shared/__tests__/ci` 122/122. iOS par la CI.
+- Ce qui reste de l'écoute : interrupteur global dans les réglages de confidentialité, Spotify, arrière-plan, Android
+  (émettre + recevoir), accorder la catégorie depuis le web, rangée de liste (#16733), fantôme.
+- Prochain lot recommandé : accorder « Ce que j'écoute » depuis le web et Android (le web reçoit déjà), sinon
+  l'émission du talkie sur iOS.
+## 2026-11-08 — réveil 14 : la voix d'un Proche sort sur Android (`proche-talkie@android`, #16675)
+
+- Reprise : #16757 (écoute reçue sur iOS) était menée par le réveil 13, encore actif (elle a fusionné depuis) : ce
+  réveil ne l'a pas touchée. L'émission de l'écoute depuis iOS toucherait les mêmes fichiers ; il prend donc la réception
+  du talkie sur Android, qui n'en partage aucun. Branche `claude/cercles-talkie-android` réservée avant toute écriture.
+- Livré dans la PR (voir #16675) : `TalkieFloor` (loi pure, iso `TalkieCenter.swift`) et `TalkieAdts` (découpage des
+  trames, configuration du décodeur) dans `:core:model` ; les trois événements sur UN flux ordonné de
+  `RelationSocketEventsManager` (le fragment en binaire natif) ; `TalkieCenter`, `TalkieVoicePlayer` (MediaCodec →
+  AudioTrack en flux, silencieux respecté, rien pendant un appel) et l'indicateur `TalkieOverlay` dans `:app` ;
+  « Couper son talkie » actif dès Proche sur la fiche d'un lien, le réglage par personne généralisé
+  (`RelationReceptionSetting`, `CircleReceptionBlock*`, ex `CircleBringBlock*`). Libellés adoptés du catalogue iOS.
+- Gates : les 18 témoins de `:core:model` verts en local (kotlinc 2.1 + JUnit, hors Gradle) ; le reste se prouve par
+  `android.yml` sur la PR.
+- Ce qui reste du talkie : arrière-plan Android (FCM haute priorité + service au premier plan), émission iOS et
+  Android, copie en message vocal (#16698), Safari/Firefox (#16699).
+- Prochain lot recommandé : émettre l'écoute depuis iOS (#16757 est fusionnée), sinon l'émission du talkie sur iOS.
+
+## 2026-11-08 — réveil 16 : accorder « Ce que j'écoute » depuis le web (#16831 ⊂ #13934)
+
+- Reprise : #16805 (émettre son écoute depuis iOS) fusionnée ; aucune PR de la routine ouverte. Branches vivantes des
+  autres sessions (`cercles-16733-ios`, `cercles-16642-serveur`, `cercles-16643-android`, `cercles-16623-serveur`)
+  n'écrivent pas la fiche d'un lien web. Issue #16831 ouverte sous #13934 (milestone #215), branche
+  `claude/cercles-ecoute-web-accorder` réservée avant toute écriture.
+- Lot : la fiche d'un lien web montrait « Ce que j'écoute » désactivé alors que le serveur (#16686) et iOS (#16805) le
+  tiennent. `CircleReceptionBlockSwitch` (web) porte désormais un troisième champ, `listeningCategoryShared`, un ACCORD
+  refusé par défaut, actif dès Proche, optimiste avec retour arrière dit ; le décodeur lit le champ absent d'un ancien
+  serveur « non accordé ». Texte d'aide en 7 langues (l'iPhone, Apple Music, le titre au rituel du Sang seulement,
+  jamais les vocaux). Seule « Position en direct » reste montrée désactivée.
+- Gates locaux : `bun test` des fichiers touchés 132/132, `tsc --noEmit` vert ; suite web complète 30041 verts, 1 rouge
+  préexistant sur `dev` (`act-leak-guard.test.ts`, rouge aussi sans ce lot dans ce conteneur, bun 1.4).
+- Ce qui reste de l'écoute : accorder depuis Android, interrupteur global des réglages de confidentialité, Spotify,
+  arrière-plan iOS, Android (émettre + recevoir), rangée de liste (#16733, autre session), fantôme.
+- Prochain lot recommandé : accorder « Ce que j'écoute » depuis Android (fiche d'un lien, `RelationReceptionSetting`),
+  sinon l'émission du talkie sur iOS.

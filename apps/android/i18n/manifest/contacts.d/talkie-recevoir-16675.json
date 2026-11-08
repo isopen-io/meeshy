@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "circles.settings.blockTalkie",
+          "androidName": "circles_settings_block_talkie",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "circles.settings.blockTalkie.detail",
+          "androidName": "circles_settings_block_talkie_detail",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

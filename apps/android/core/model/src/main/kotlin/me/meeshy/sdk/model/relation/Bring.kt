@@ -65,15 +65,33 @@ public data class BringStoppedEvent(
 )
 
 /**
- * `GET|PUT /relations/:userId/settings` — les réglages que JE pose pour l'autre. Ce lot ne lit que `bringBlocked` ; les
- * autres réglages arrivent avec leur lot, un champ absent valant son défaut.
+ * `GET|PUT /relations/:userId/settings` — les réglages que JE pose pour l'autre. Android lit les deux préférences de
+ * RÉCEPTION, `bringBlocked` (#13936) et `talkieBlocked` (#13935) ; les autres arrivent avec leur lot, un champ absent
+ * valant son défaut (ouvert).
  */
 @Serializable
 public data class RelationPersonSettings(
     val userId: String,
     val bringBlocked: Boolean = false,
-)
+    val talkieBlocked: Boolean = false,
+) {
+    public fun isBlocked(setting: RelationReceptionSetting): Boolean = when (setting) {
+        RelationReceptionSetting.BRING -> bringBlocked
+        RelationReceptionSetting.TALKIE -> talkieBlocked
+    }
+}
+
+/**
+ * Une préférence de RÉCEPTION posée pour une personne (iso `RelationReceptionSetting`, SDK iOS) : ouverte par défaut, son
+ * réglage est un BLOCAGE de ce que JE reçois d'elle, qui n'en est pas prévenue. « Bloquer ses Bring » dès Ami, « Couper son
+ * talkie » dès Proche.
+ */
+public enum class RelationReceptionSetting { BRING, TALKIE }
 
 /** Le corps de `PUT /relations/:userId/settings` pour le Bring : écriture partielle et stricte, un seul champ. */
 @Serializable
 public data class BringBlockBody(val bringBlocked: Boolean)
+
+/** Le corps de `PUT /relations/:userId/settings` pour le talkie : écriture partielle et stricte, un seul champ. */
+@Serializable
+public data class TalkieBlockBody(val talkieBlocked: Boolean)

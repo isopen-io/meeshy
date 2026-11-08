@@ -31,9 +31,7 @@ final class UserProfileViewModelTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        if let previousOutbox {
-            await OfflineQueue.shared.configure(pool: previousOutbox)
-        }
+        await OfflineQueue.shared.configure(pool: previousOutbox)
         previousOutbox = nil
         outbox = nil
         mockAuthManager = nil

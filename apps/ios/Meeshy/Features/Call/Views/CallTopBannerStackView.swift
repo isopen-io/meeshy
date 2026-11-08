@@ -1,7 +1,7 @@
 import SwiftUI
 import MeeshyUI
 
-/// APP-1 — partage d'écran, enregistrement et cadre en direct : UNE pile sous
+/// APP-1 — partage d'écran, enregistrement, capture (R1) et cadre en direct : UNE pile sous
 /// la rangée d'en-tête de l'appel, dans l'ordre fixe de `CallTopBannerStack`,
 /// au lieu de trois décalages figés (60, 110, 160 pt) qui passaient sous le
 /// chevron « Réduire » et se chevauchaient. Vue à part : elle observe seule le
@@ -9,11 +9,14 @@ import MeeshyUI
 struct CallTopBannerStackView<LiveFrameStatus: View>: View {
     @ObservedObject var screenShare: CallScreenShareController
     @ObservedObject var recording: CallRecordingController
+    @ObservedObject var captureJournal: CallCaptureJournal
     let remoteName: String
     let chrome: CallChromeVisibility
     let hasLiveFrameStatus: Bool
     let topInset: CGFloat
     @ViewBuilder let liveFrameStatus: () -> LiveFrameStatus
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
@@ -21,6 +24,7 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
                 content(banner)
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: captureJournal.alert)
         .padding(.top, topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -29,6 +33,7 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
         var present: Set<CallTopBanner> = []
         if screenShare.isSharing || screenShare.isRemoteSharing { present.insert(.screenShare) }
         if recording.phase != .idle || recording.notice != nil { present.insert(.recording) }
+        if captureJournal.alert != nil { present.insert(.capture) }
         if hasLiveFrameStatus { present.insert(.liveFrame) }
         return present
     }
@@ -43,6 +48,10 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
         case .recording:
             CallRecordingOverlay(phase: recording.phase, notice: recording.notice, kind: recording.kind, requesterName: remoteName, onAnswer: { _ = recording.answer(accepted: $0) }, onStop: { _ = recording.stop() }, onDismiss: recording.dismissNotice, showsStatus: chrome.isVisible(.recordingStatus))
                 .equatable()
+        case .capture:
+            CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)
+                .equatable()
+                .padding(.horizontal, MeeshySpacing.lg)
         case .liveFrame:
             liveFrameStatus()
                 .padding(.horizontal, MeeshySpacing.lg)

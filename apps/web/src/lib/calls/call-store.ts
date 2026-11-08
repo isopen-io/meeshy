@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { CallCaption, CaptionsMode, TranscriptionState } from './call-captions';
 import type { CallFeedbackPrompt } from './call-feedback';
+import type { CallJournalNote } from './call-journal-notes';
 import type { SurvivalStage } from './call-survival';
 
 /**
@@ -93,6 +94,8 @@ export type ActiveCall = {
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
   /** Le journal des sous-titres de l'appel (#8048), les deux sens, borné. */
   readonly captions: readonly CallCaption[];
+  /** Les captures d'écran et les moments de l'enregistrement consenti, rangés à leur heure dans le journal (#16665). Absent : aucun. */
+  readonly journalNotes?: readonly CallJournalNote[];
   readonly captionsMode: CaptionsMode;
   /** Les pairs qui ont ouvert LEUR panneau (`call:transcription-active`) : mon micro est transcrit pour eux. */
   readonly captionPeers: readonly string[];

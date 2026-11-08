@@ -72,9 +72,10 @@ final class ComposerCaptureSession: ObservableObject {
     /// On vise, ou on retouche.
     @Published var phase = ComposerCapturePhase.capturing
     @Published var discardPrompt = ComposerCaptureDiscardPrompt()
-    /// Les proportions de la scène de retouche — ce qui partira ;
-    /// `nil` hors retouche.
+    /// Les proportions de la scène de retouche — ce qui partira ; `nil` hors retouche.
     @Published var editAspect: CGFloat?
+    /// Celles de l'ouverture : un écart est un recadrage de l'auteur (CAM-14).
+    var openingAspect: CGFloat?
     /// Ce qu'« Annuler » rend pendant le recadrage (#15355).
     var cropEntry: ComposerCropEntry?
     /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ;

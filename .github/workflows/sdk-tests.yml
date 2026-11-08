@@ -239,8 +239,15 @@ jobs:
       # (#6545) et ce workflow était le seul à ne pas le réciter.
       #
       # `-` et non un chemin de projet : c'est un PAQUET Swift.
+      #
+      # Même remède que `ios.yml` pour le TROISIÈME cas (#16859) : un
+      # téléchargement REFUSÉ se déguise en collision et l'entrée purgée
+      # réapparaît à chaque essai ; le script précharge alors l'artefact
+      # (`gh`, authentifié par GH_TOKEN) dans le cache que SwiftPM consulte.
       - name: Resolve SPM packages (purge une collision, retente une panne réseau)
         working-directory: packages/MeeshySDK
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           "$GITHUB_WORKSPACE/scripts/ci/resolve-spm-packages.sh" \
             - MeeshySDK-Package "$RUNNER_TEMP/DerivedData" "$RUNNER_TEMP/spm"

@@ -83,6 +83,87 @@
  * convergence des quatre chemins de sortie, AVANT que les sockets du partant ne
  * quittent la room : c'est par cette room que passe le seul signal capable de
  * couper son GPS.
+ *
+ * ─── LE BLOCAGE : un FILTRE D'ANNONCE, et rien d'autre (#16745) ────────────
+ *
+ * Deux signaux du MÊME salon filtrent déjà le blocage bidirectionnel, et le
+ * disent : la frappe (`StatusHandler._getBlockedSocketIdsInRoom` — « typing is
+ * a more sensitive, moment-to-moment signal than presence ») et le regard
+ * (`ConversationViewingHandler` — « exclut les pairs bloqués dans les deux
+ * sens »). Ce handler n'avait AUCUNE occurrence de `block` : ses quatre
+ * diffusions partaient au salon entier, et `replayLiveLocationsTo` rejouait
+ * spontanément la dernière position connue à tout socket qui entre.
+ *
+ * Un blocage ne retire personne d'une conversation — `routes/directory/blocks.ts`
+ * pousse l'id dans `User.blockedUserIds` et coupe NOMMÉMENT les canaux temps
+ * réel (`cancelAutoAcquaintanceOnBlock`, `stopBringsAfterUserBlock`,
+ * `cutTalkiesOnBlock`, `refreshNowPlayingAfter`). La position en direct n'était
+ * pas dans cette énumération, et c'est le plus révélateur des cinq.
+ *
+ * `LiveLocationSession.blockRelated` est un **FILTRE D'ANNONCE**. Il ne sert
+ * qu'aux deux événements qui RÉVÈLENT une coordonnée — `started` et `updated` —
+ * et il n'est JAMAIS utilisé autrement :
+ *
+ *   - comme liste d'EXCLUSION, jamais comme liste de DESTINATAIRES. La loi
+ *     partagée `getBlockRelatedUserIds` rend l'ensemble bidirectionnel ENTIER du
+ *     partageur, **à l'échelle du dépôt et sans notion de conversation** — son
+ *     doc-comment le dit : « an id in this set that owns no socket contributes
+ *     nothing to AN EXCLUSION LIST ». L'INVERSER en destinations adresserait des
+ *     gens qui ne sont pas dans le fil, et leur apprendrait l'existence d'un
+ *     identifiant de conversation et d'un partage. Une première version de ce
+ *     lot le faisait, pour retirer l'épingle d'un pair bloqué en cours de route ;
+ *     c'était une porte NEUVE, pire que le défaut fermé ;
+ *   - et **les RÉTRACTATIONS ne sont pas filtrées du tout.**
+ *
+ * ─── Pourquoi une rétractation ne se filtre pas ─────────────────────────────
+ *
+ * `location:live-stopped` ne porte aucune position : `{conversationId, userId,
+ * stoppedAt}`. Le filtrer coûterait beaucoup plus qu'il ne protège, et le
+ * raisonnement se tient en deux lignes.
+ *
+ * Qui porte l'épingle ? Ceux à qui un `started` est parvenu. Cet ensemble n'est
+ * PAS le complément de `blockRelated` : il dépend de l'instant de chaque
+ * annonce, d'un redémarrage de partage sur un second appareil, d'une
+ * reconnexion, d'un rafraîchissement arrivé entre-temps. Le serveur ne peut pas
+ * le connaître sans tenir une algèbre d'intersections à travers toutes les
+ * annonces de la session — et la moindre erreur, dans ce sens-là, LAISSE une
+ * position RÉELLE plantée sur la carte d'un pair bloqué jusqu'au terme, c'est-à-
+ * dire jusqu'à huit heures, sans aucun chemin de retrait.
+ *
+ * Le filtre inverse, lui, concède UN événement sans position à un
+ * CO-PARTICIPANT, qui apprend qu'un partage a eu lieu dans un fil qu'il partage
+ * déjà. Entre les deux, le choix n'est pas serré :
+ *
+ * | posture du retrait | ce qu'elle coûte |
+ * |---|---|
+ * | filtré | une épingle sur une position réelle, jusqu'à 8 h, chez un bloqué |
+ * | **non filtré** | un événement sans position, une fois par partage, à un membre du fil |
+ *
+ * Conséquence directe, et c'est la propriété qui rend le tout robuste : **aucun
+ * invariant d'état ne porte le retrait.** Il n'y a rien à tenir à jour, rien à
+ * rejouer si une émission se perd, rien à recalculer au redémarrage d'un
+ * partage, et rien à décider entre union et intersection quand un compte a deux
+ * appareils. Les quatre chemins de retrait du cycle de vie (arrêt explicite,
+ * terme, socket mort, clôture ou sortie du fil) diffusent au salon.
+ *
+ * Même principe au regard, #16752 : là-bas `SocketViewing.blockRelated` filtre
+ * `viewing:start`, l'instantané et `viewing:activity`, et les deux rétractations
+ * partent sans exclusion.
+ *
+ * ─── CE QUE CET INVARIANT NE COUVRE PAS (#16800) ────────────────────────────
+ *
+ * Il est LOCAL AU NŒUD. `userSockets` — d'où se compose la liste d'exclusion —
+ * est une `Map` en mémoire, par processus, alors que `io.to(room).emit(...)`
+ * traverse les instances : l'adaptateur Redis de Socket.IO est monté en
+ * production (`REDIS_URL` y est défini). Avec une SECONDE instance de
+ * passerelle, un pair bloqué attaché au nœud B recevrait donc une annonce
+ * émise depuis le nœud A, dont la carte ne contient pas son socket.
+ *
+ * Une seule instance tourne aujourd'hui, donc la garde est complète ; elle
+ * s'armerait par une opération d'INFRASTRUCTURE, sans qu'un témoin rougisse.
+ * Les deux jumeaux de salon (frappe, regard) ont exactement la même limite, et
+ * elle est dite ici parce qu'un invariant annoncé plus fort qu'il n'est vaut
+ * moins que pas d'invariant.
  */
 
 import type { MeeshySocket as Socket } from '../typed-socket';
@@ -112,6 +193,7 @@ import {
   SocketLocationLiveUpdateSchema,
   SocketLocationLiveStopSchema,
 } from '../../validation/socket-event-schemas.js';
+import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
@@ -124,6 +206,14 @@ export interface LocationHandlerDependencies {
   prisma: PrismaClient;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  /**
+   * `userId` → ses sockets, pour composer la liste d'exclusion d'un blocage
+   * (#16745). Même dépendance, même usage et même forme que chez les deux
+   * jumeaux de salon, `StatusHandler` et `ConversationViewingHandler` : un
+   * ensemble d'ids de comptes s'y traduit en ids de sockets en O(|bloqués|),
+   * jamais par un balayage de la population connectée.
+   */
+  userSockets: Map<string, Set<string>>;
   normalizeConversationId: (conversationId: string) => Promise<string>;
   /**
    * Le moteur d'engagement (#8959 `tool.location`, variante `live`). Absent ⇒
@@ -152,7 +242,45 @@ interface LiveLocationSession {
    * de date de naissance, et seulement pour ces partages-là).
    */
   readonly inGlobal: boolean;
+  /**
+   * LE FILTRE D'ANNONCE (#16745) — l'ensemble bidirectionnel du blocage, tel
+   * qu'il a été PROUVÉ au plus tard il y a `BLOCK_SET_REFRESH_MS`.
+   *
+   * Il ne gouverne que `started` et `updated`, les deux événements qui révèlent
+   * une coordonnée, et seulement comme liste d'EXCLUSION. Les rétractations ne
+   * le lisent pas (cf. l'en-tête : une rétractation ne se filtre pas).
+   */
+  readonly blockRelated: ReadonlySet<string>;
+  /** L'instant de la dernière TENTATIVE de lecture — échouée comprise. */
+  readonly blockRelatedAt: number;
 }
+
+/**
+ * Le pas de rafraîchissement de `blockRelated` sur le chemin chaud.
+ *
+ * Un partage vit jusqu'à huit heures (`durationMinutes` ≤ 480) : une lecture
+ * faite au seul départ laisserait un blocage POSTÉRIEUR sans effet pendant tout
+ * le reste — c'est-à-dire le symptôme même qu'on corrige, à un instant près.
+ * Relire à chaque `live-update` est l'autre extrême : une position par seconde
+ * et par partageur, sur le chemin que l'en-tête de `_readConversationGate`
+ * protège explicitement.
+ *
+ * Une minute borne l'exposition sans mettre la base sur le trajet du GPS, et
+ * une TENTATIVE échouée repousse l'horloge de la même façon : une base en
+ * difficulté est interrogée une fois par minute, pas à chaque point.
+ *
+ * CE QUE CETTE MINUTE VAUT, EN POINTS, parce qu'une borne de temps ne dit pas
+ * son coût : `LOCATION_LIVE_UPDATE` plafonne à **120 points par minute et par
+ * compte** (`socket-rate-limiter.ts`, « ~2 GPS updates/sec »). Un blocage qui
+ * tombe juste après un rafraîchissement laisse donc passer jusqu'à **120
+ * positions successives** — une trajectoire, pas un instant. Le jumeau de la
+ * frappe relit à CHAQUE `typing:start` ; ici ce serait 120 lectures par minute
+ * et par partageur. La seule façon de fermer la fenêtre sans la payer est de
+ * faire couper le partage par la ROUTE de blocage, comme `cutTalkiesOnBlock`
+ * coupe le talkie — c'est #16794, et cela exige un canal inter-instances que ce
+ * registre en mémoire n'a pas.
+ */
+const BLOCK_SET_REFRESH_MS = 60_000;
 
 // Préfixée par la longueur plutôt que jointe par un séparateur : les deux
 // moitiés sont des identifiants opaques (ObjectId, ou jeton de session pour
@@ -165,6 +293,7 @@ export class LocationHandler {
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private userSockets: Map<string, Set<string>>;
   private normalizeConversationId: (conversationId: string) => Promise<string>;
   private rateLimiter = getSocketRateLimiter();
   private sessions = new Map<string, LiveLocationSession>();
@@ -177,6 +306,7 @@ export class LocationHandler {
     this.prisma = deps.prisma;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.userSockets = deps.userSockets;
     this.normalizeConversationId = deps.normalizeConversationId;
     this.engagement = deps.engagement === undefined ? new EngagementService(deps.prisma) : deps.engagement;
     this.now = deps.now ?? (() => new Date());
@@ -242,6 +372,16 @@ export class LocationHandler {
         return;
       }
 
+      // LE BLOCAGE, FAIL-CLOSED (#16745) — une coordonnée vivante ne part pas
+      // sans audience PROUVÉE. Le refus se présente comme les quatre autres de
+      // ce verbe : l'appareil n'allume pas son GPS pour un partage que le
+      // serveur n'a pas ouvert.
+      const blockRelated = await this._blockRelatedOf(context);
+      if (blockRelated === null) {
+        this._sendError(callback, 'Unable to resolve sharing audience');
+        return;
+      }
+
       const expiresAt = new Date(now.getTime() + validated.durationMinutes * 60_000);
 
       const eventData: LocationLiveStartedEventData = {
@@ -266,6 +406,8 @@ export class LocationHandler {
         startedAt: now,
         expiresAt,
         inGlobal: conversation?.type === GLOBAL_CONVERSATION_TYPE,
+        blockRelated,
+        blockRelatedAt: now.getTime(),
       });
 
       callback?.({ success: true, data: eventData });
@@ -274,7 +416,8 @@ export class LocationHandler {
       // clients traitent tout LOCATION_LIVE_* reçu comme l'état d'un pair DISTANT
       // (cf. StatusHandler typing + CallEventsHandler media-toggle). Un self-echo
       // ferait apparaître le partageur comme un partageur distant sur sa carte.
-      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
+      this._fromSocketExcept(socket, ROOMS.conversation(normalizedId), blockRelated)
+        .emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
       this._creditLiveLocation(context, normalizedId);
     } catch (error: unknown) {
       logger.error('Error handling location:live-start', error);
@@ -330,11 +473,44 @@ export class LocationHandler {
         this._expireSessionNow(key, session, now);
         return;
       }
+      // LE BLOCAGE, RAFRAÎCHI PAR PAS D'UNE MINUTE (#16745). Trois états, et
+      // ils se nomment : `undefined` = pas l'heure de relire ; `null` = relu
+      // et RIEN PROUVÉ ; un ensemble = prouvé. Les deux premiers conduisent à
+      // la même action — garder l'ensemble retenu — et c'est voulu : on
+      // n'élargit JAMAIS l'audience d'une position sur un doute.
+      let hidden: ReadonlySet<string>;
       if (session) {
+        const dueForRefresh = now.getTime() - session.blockRelatedAt >= BLOCK_SET_REFRESH_MS;
+        const refreshed = dueForRefresh ? await this._blockRelatedOf(context) : undefined;
+        hidden = refreshed ?? session.blockRelated;
+
         // La dernière position connue est ce que le rattrapage rejouera : sans
         // ce rafraîchissement, un arrivant recevrait le point de DÉPART, qui
         // peut avoir des heures.
-        this.sessions.set(key, { ...session, latitude: validated.latitude, longitude: validated.longitude });
+        this.sessions.set(key, {
+          ...session,
+          latitude: validated.latitude,
+          longitude: validated.longitude,
+          blockRelated: hidden,
+          blockRelatedAt: refreshed === undefined ? session.blockRelatedAt : now.getTime(),
+        });
+      } else {
+        // Session INCONNUE (redémarrage, ou client qui n'a jamais démarré) :
+        // elle passe la même porte que le départ, pas un chemin plus large.
+        // Fail-closed — un point non relayé revient à la seconde suivante, une
+        // position servie à un pair bloqué ne se retire pas.
+        //
+        // COÛT ASSUMÉ, ET IL NE DATE PAS DE CE LOT : faute de session, il n'y a
+        // rien où amortir, donc cette lecture a lieu à CHAQUE point — jusqu'à
+        // 120 par minute et par partageur (`LOCATION_LIVE_UPDATE`). C'est
+        // exactement le régime que `refusesMinorInConversation`, dix lignes
+        // plus haut, paie déjà sur ce même chemin : ce lot double une dépense
+        // existante, il ne l'invente pas, et la situation est transitoire (un
+        // redémarrage, le temps que les partages en cours s'éteignent).
+        // Amortir les DEUX ensemble est le suivi #16791.
+        const fresh = await this._blockRelatedOf(context);
+        if (fresh === null) return;
+        hidden = fresh;
       }
 
       const eventData: LocationLiveUpdatedEventData = {
@@ -351,7 +527,8 @@ export class LocationHandler {
 
       // Aux autres participants uniquement — le partageur est la source des
       // updates, un self-echo n'aurait aucune valeur (cf. handleLiveLocationStart).
-      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_UPDATED, eventData);
+      this._fromSocketExcept(socket, ROOMS.conversation(normalizedId), hidden)
+        .emit(SERVER_EVENTS.LOCATION_LIVE_UPDATED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-update', error);
     }
@@ -387,7 +564,12 @@ export class LocationHandler {
         stoppedAt: new Date(),
       };
 
-      // Aux autres participants uniquement (cf. handleLiveLocationStart).
+      // Aux autres participants uniquement (cf. handleLiveLocationStart), et
+      // SANS exclusion de blocage : une rétractation ne se filtre pas (#16745,
+      // cf. l'en-tête). Ce verbe n'exige d'ailleurs pas qu'un partage ait jamais
+      // existé — ses quatre gardes sont Zod, le contexte, le débit et
+      // l'appartenance — si bien qu'une exclusion tirée d'une session absente
+      // n'aurait rien dit de vrai sur qui porte une épingle.
       socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STOPPED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-stop', error);
@@ -433,18 +615,64 @@ export class LocationHandler {
    * `LOCATION_LIVE_*` comme l'état d'un pair DISTANT, un self-echo le ferait
    * apparaître comme partageur distant sur sa propre carte (même raison que
    * `socket.to` plutôt que `io.to` dans les trois diffusions).
+   *
+   * ─── LE BLOCAGE SE LIT DU CÔTÉ DE L'ARRIVANT (#16745) ──────────────────────
+   *
+   * C'était la pire des cinq portes : sa seule exclusion était
+   * `session.userId === joiner.realUserId`, si bien qu'un pair bloqué qui
+   * OUVRAIT le fil recevait la dernière position connue du partageur sans avoir
+   * rien demandé.
+   *
+   * La question est par PAIRE, et l'ensemble bidirectionnel de l'ARRIVANT y
+   * répond pour TOUS les partageurs d'un coup — une lecture par jonction, jamais
+   * une par session, et l'ensemble retenu côté partageur n'y suffirait pas (il
+   * peut avoir jusqu'à une minute, cf. `BLOCK_SET_REFRESH_MS`, alors qu'une
+   * jonction n'est pas un chemin chaud).
+   *
+   * FAIL-CLOSED : sans ensemble prouvé, aucun rattrapage. Un rejeu perdu se
+   * rattrape au `live-update` suivant ; une position servie à un pair bloqué ne
+   * se retire pas. C'est aussi ce que le site d'appel accepte déjà — « un rejeu
+   * perdu ne doit de toute façon jamais faire échouer une jonction ».
    */
-  replayLiveLocationsTo(socket: Socket, conversationId: string): void {
+  async replayLiveLocationsTo(socket: Socket, conversationId: string): Promise<void> {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) return;
     const joiner = getConnectedUser(userIdOrToken, this.connectedUsers);
     if (!joiner) return;
 
-    const now = new Date();
-    for (const session of this.sessions.values()) {
-      if (session.conversationId !== conversationId) continue;
-      if (session.userId === joiner.realUserId) continue;
-      if (now >= session.expiresAt) continue;
+    const now = this.now();
+    const live = [...this.sessions.values()].filter(session =>
+      session.conversationId === conversationId
+      && session.userId !== joiner.realUserId
+      && now < session.expiresAt
+    );
+    // La lecture n'a lieu que s'il y a quelque chose à rejouer : une jonction
+    // dans un fil sans partage en cours — le cas de l'immense majorité — ne
+    // coûte pas une requête de plus.
+    if (live.length === 0) return;
+
+    const hidden = await this._blockRelatedOf({
+      userId: joiner.realUserId,
+      isAnonymous: joiner.user.isAnonymous,
+    });
+    if (hidden === null) return;
+
+    // L'APPARTENANCE SE REVÉRIFIE APRÈS L'`await` (#16745). Avant ce lot cette
+    // unité était synchrone : il n'y avait aucune fenêtre entre le contrôle
+    // d'appartenance du site d'appel et l'émission. La lecture de blocage en
+    // ouvre une, et `socket.emit` vise le SOCKET, pas la room — donc une
+    // éviction concurrente (bannissement, retrait par un modérateur, départ)
+    // ne le retiendrait pas, et l'ex-membre recevrait la dernière position d'un
+    // tiers dans un fil dont il vient d'être exclu.
+    //
+    // La room EST l'autorisation mise en cache de ce chemin (#5947), et
+    // `endConversationMembership` en évince le partant : la relire est le
+    // contrôle le moins cher qui couvre les quatre chemins de sortie, sans une
+    // requête de plus.
+    if (!socket.rooms.has(ROOMS.conversation(conversationId))) return;
+
+    for (const session of live) {
+      if (hidden.has(session.userId)) continue;
 
       const eventData: LocationLiveStartedEventData = {
         conversationId: session.conversationId,
@@ -597,10 +825,66 @@ export class LocationHandler {
       userId: session.userId,
       stoppedAt: new Date(),
     };
+    // AUCUNE exclusion : une rétractation ne se filtre pas (#16745, cf.
+    // l'en-tête). C'est aussi ce qui rend cette unité tenable là où elle est
+    // appelée — `handleSocketDisconnecting` est synchrone À DESSEIN (dernière
+    // fenêtre où le socket est dans ses rooms), et une seule `await` suffirait
+    // à laisser la diffusion partir après la sortie des rooms.
     this.io.to(ROOMS.conversation(session.conversationId)).emit(
       SERVER_EVENTS.LOCATION_LIVE_STOPPED,
       eventData
     );
+  }
+
+  /**
+   * L'ensemble bidirectionnel du blocage pour ce partageur, ou `null` quand la
+   * lecture N'A RIEN PROUVÉ (#16745) — trois états, jamais deux (cycle 127).
+   *
+   * Un `Set` vide se lirait « personne à exclure » : confondre les deux ferait
+   * d'une bascule de réplique une autorisation de diffusion. L'arbitrage du
+   * `unknown` se décide par ce qui est en jeu, et une coordonnée GPS vivante
+   * est un secret — chaque appelant qui RÉVÈLE se tait donc plutôt que
+   * d'élargir son audience.
+   *
+   * Un participant ANONYME n'a pas de ligne `User` : il ne peut ni bloquer ni
+   * être bloqué, et l'ensemble vide est alors une PREUVE, pas une ignorance.
+   */
+  private async _blockRelatedOf(
+    context: { userId: string; isAnonymous: boolean }
+  ): Promise<ReadonlySet<string> | null> {
+    if (context.isAnonymous) return new Set();
+    try {
+      return await getBlockRelatedUserIds(this.prisma, context.userId);
+    } catch (error: unknown) {
+      logger.error('live location block lookup failed', { error, userId: context.userId });
+      return null;
+    }
+  }
+
+  /** Les sockets des comptes à exclure — O(|bloqués|), comme chez les jumeaux. */
+  private _socketIdsOf(userIds: ReadonlySet<string>): string[] {
+    if (userIds.size === 0) return [];
+    return [...userIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
+  }
+
+  /**
+   * Le salon MOINS les pairs bloqués, depuis le socket du partageur — qui
+   * s'exclut déjà lui-même.
+   *
+   * L'UNIQUE composeur d'exclusion du fichier, et il n'a que deux appelants :
+   * `started` et `updated`, les deux ANNONCES. Il n'existe pas de jumeau côté
+   * serveur (`this.io.to(...)`) parce qu'aucune rétractation ne se filtre, et
+   * que les rétractations sont les seules émissions que ce handler fait depuis
+   * le serveur plutôt que depuis le socket du partageur.
+   *
+   * La forme conditionnelle est celle du voisin (`StatusHandler:385`) et elle
+   * n'est pas cosmétique : sans blocage — le cas de la quasi-totalité des
+   * partages — la chaîne d'émission est EXACTEMENT celle d'avant ce lot, donc
+   * aucune diffusion nominale ne change de forme.
+   */
+  private _fromSocketExcept(socket: Socket, room: string, hidden: ReadonlySet<string>) {
+    const excluded = this._socketIdsOf(hidden);
+    return excluded.length > 0 ? socket.to(room).except(excluded) : socket.to(room);
   }
 
   /**

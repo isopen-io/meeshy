@@ -1,348 +1,257 @@
-# Cycle 143 — une langue perdue pour toujours, une population sans reconnexion, deux portes muettes, et la CI du SDK par terre
+# Cycle 143 — le clair d'un message détruit restait 48 h dans Redis, et « Réessayer » doublait un téléversement en cours
 
-**Issues livrées** : #16751 (lot A, passerelle) · #16750 (lot B, SDK iOS) ·
-#16830 (lot C, passerelle) · #16837 (lot D, passerelle) · #16852 (lot E, CI) ·
-#16856 (lot F, passerelle).
-**Branche** : `claude/exciting-planck-zigx42`. **PR** : #16829.
-**Issues ouvertes en chemin** : #16838 (`décision-produit`), #16857, #16858.
+**Issues livrées** : #16706 (lot A, passerelle) et #16749 (lot B, iOS/SDK).
+**Branche** : `claude/exciting-planck-xdp7ig`. **PR** : #16769 vers `dev`.
 
-## Ce que ce cycle a cédé, et pourquoi c'est encore la première décision
+## Ce que ce cycle a repris, et pourquoi
 
-Le cycle 142 a déposé huit défauts. Trois ont été fermés par des sessions
-sœurs avant ce cycle (#16745, #16749, #16752) ; **#16688 est cédée pour la
-seconde fois** — ses deux fichiers (`offlineParticipantQueue.ts`,
-`MeeshySocketIOManager.ts`) sont écrits par `claude/exciting-planck-xdp7ig` et
-`claude/exciting-planck-4nctmx`. Le corollaire d'asymétrie tranche sans
-négociation : celui qui n'a rien écrit cède.
+Le cycle 142 a déposé huit issues et en a vérifié deux ligne à ligne. Ce cycle a
+pris **ces deux-là**, et la raison est une méthode : un rapport d'audit se reçoit
+comme une piste, pas comme un constat (leçon du cycle 142, où le seul volet non
+re-vérifié était aussi le seul faux). Les six autres restent déposées.
 
-Le relevé a été fait par la commande, pas par intuition — un `git diff
---name-only origin/dev...<branche>` sur les 45 branches touchées dans les douze
-dernières heures, filtré sur les chemins visés. Il a rendu **zéro contention**
-sur les fichiers des quatre lots retenus, et la réservation a été poussée avant
-la première ligne de logique.
+La PR #16720, à qui le cycle 142 avait cédé `offlineParticipantQueue.ts`, a
+fusionné : le cœur socket était libre. Relevé d'occupation avant d'écrire une
+ligne — aucune branche vivante des 48 h ne touchait les chemins visés.
 
-## La contrainte qui a décidé de la forme du cycle, à nouveau
+## Lot A — le clair d'un message détruit quitte la file (#16706)
 
-**Aucune chaîne Swift dans ce conteneur.** Un lot iOS n'est prouvable que par
-`sdk-tests.yml` (~40 min, `workflow_dispatch` avec `only_testing`) ; un lot
-passerelle se prouve sur place en quelques secondes. Trois des quatre lots sont
-donc côté passerelle, et le lot Swift est celui dont la preuve se construit
-PAR LECTURE : des gardes de source dont chaque prédicat a été **rejoué en
-Python sur les deux révisions**.
+### La forme du défaut
 
-## Lot A — un doublon du bus faisait perdre une langue DÉFINITIVEMENT (#16751)
+#16685 (cycle 140) a fermé la **REMISE** : le drain interroge la vivacité du
+message avant d'émettre. Il n'a rien changé au **STOCKAGE**, délibérément.
+`enqueueForOfflineParticipants` écrit `payload: body` VERBATIM dans
+`delivery:queue:<userId>` — Redis, persistance AOF, TTL 48 h. Quand
+`ExpiredMessagesCleanupService._burn` détruit la ligne, la copie enfilée RESTE.
 
-`triggerStoryTextTranslation` retirait son écouteur sur un COMPTEUR
-d'événements. Le bus relaie les doublons par conception : les deux `emit` de
-`ZmqTranslationClient.setupEventForwarding` sont INCONDITIONNELS (`settled ===
-null` ne gouverne que `retryCount.delete`), et le deadman de
-`sendTranslationRequest` redemande les langues manquantes **sous le même
-taskId**.
+L'invariant que `_burn` revendique dans son propre commentaire — « le contenu est
+détruit, c'est l'invariant qui compte » — tenait dans Mongo et pas là. Une
+sauvegarde AOF prise dans la fenêtre porte le clair.
 
-Audience `[fr, es, de]`, une langue lente-mais-vivante au passage du deadman
-de 30 s : `es` revient deux fois, le compteur atteint 3, l'écouteur part, et
-`de` arrive **sans écouteur**. `Post.translations.de` n'est jamais écrit. Aucune
-relance : le Prisme sert l'original, et aucun client ne refetche une traduction
-absente de la base. **Un lecteur germanophone voit la story dans la langue de
-l'auteur pour toujours.**
+### L'index inverse, et la mesure qui a renversé son coût
 
-Le suivi porte désormais sur l'ENSEMBLE des langues ATTENDUES, dont on retire
-la langue servie. Insensible au doublon — et insensible de même à un événement
-portant une langue que cette story n'a pas demandée, qui retirait l'écouteur
-aussi sûrement qu'un doublon. C'est le second témoin qui l'a montré, et il
-n'était pas dans l'énoncé de l'issue.
+La file est une LISTE PAR UTILISATEUR : rien ne permettait d'aller d'un
+`messageId` vers les files qui en gardent une copie. Le tableau de coûts de
+#16706 chiffrait cette piste à « une écriture Redis de plus par destinataire hors
+ligne, **sur le chemin le plus chaud** », et c'est ce chiffrage qui la rendait
+discutable.
 
-> Le consommateur FRÈRE du même événement scopé faisait déjà correct
-> (`call-transcription-relay.ts` monte un écouteur par langue). **Deux
-> consommateurs du même événement, un seul correct** — et le journal du site
-> fautif disait « all languages received » alors qu'il avait compté des
-> ÉVÉNEMENTS.
+Il est vrai d'une **COMMANDE** et faux d'un **ALLER-RETOUR**. L'index s'écrit
+comme deux `redis.call` de plus dans `ENQUEUE_DEDUP_LUA`, un script déjà en vol :
+zéro latence réseau supplémentaire. Un `sadd` séparé, lui, aurait DOUBLÉ le
+nombre d'allers-retours du chemin d'enfilage.
 
-### Le cliquet de taille a eu raison, et il a changé le lot
+> **Avant d'écarter une piste sur son coût, demander dans quelle UNITÉ le coût a
+> été compté.** « Une écriture de plus » et « un aller-retour de plus » se
+> ressemblent dans une phrase et diffèrent d'un ordre de grandeur.
 
-`PostService.ts` mesurait 2 225 lignes — hors budget, donc interdit d'ajout.
-La traduction du contenu d'une story est partie vers
-`services/posts/storyContentTranslation.ts` (195 lignes), où elle porte seule
-sa doctrine ; le fichier descend à 2 118. **Et son gel passe de 2 628 à 2 118** :
-les 403 lignes de marge que le gel portait sont rendues au dépôt, sans quoi un
-correctif pouvait grossir un fichier hors budget sans qu'aucun cliquet ne le
-voie. Un cliquet qui porte quatre cents lignes de marge ne garde rien.
+### Trois décisions de forme, dont une qui a failli casser le nettoyage
 
-## Lot B — « pas de JWT » n'est pas « pas de session » (#16750)
+- **L'index n'indexe que `TextBearingQueuedEvent`**, le MÊME cadrage que la garde
+  de vivacité. Ce qui doit être revérifié avant d'être REMIS est exactement ce
+  qui doit pouvoir être retrouvé pour être PURGÉ — et un second prédicat aurait
+  divergé au premier cas de mort de plus.
+- **Son préfixe est hors de `delivery:queue:`.** Le premier nom essayé,
+  `delivery:queue:msg:`, appariait le `SCAN MATCH delivery:queue:*` de
+  `cleanup()`, qui fait un `LRANGE` sur chaque clé trouvée. Un `SET` y répond
+  `WRONGTYPE`, l'exception tombe dans le `catch` du balayage, et **le nettoyage
+  de TOUTES les files s'arrête**. Un index posé pour empêcher le clair de
+  survivre 48 h aurait désarmé la seule unité qui le fait expirer. Attrapé par la
+  sonde contre un vrai Redis, pas par la lecture.
+- **L'index est écrit sur les TROIS issues du script**, dédoublonnage (`return 0`)
+  compris, où rien d'autre n'est écrit. `return 0` prouve que l'entrée EST en
+  file ; un index expiré pendant que son entrée survit est l'état exact où le
+  clair redevient introuvable.
 
-Les trois portes de reconnexion automatique de `MessageSocketManager` testaient
-`APIClient.shared.authToken != nil`. Un invité de lien partagé n'a pas de JWT :
-son identifiant VALIDE vit dans un champ distinct, et son transport est bâti
-par une autre porte.
+### La purge n'a pas de prédicat à elle
 
-La passerelle coupe les sockets invité PAR CONCEPTION et sans code d'erreur
-(`guestLinkWatch` fail-close à la revérification), ce qu'une erreur Mongo
-transitoire suffit à déclencher sur un lien parfaitement valide. Le lecteur
-`.error` ne trouve rien de terminal, `SocketDisconnectPolicy.retries` rend
-`true` — donc Socket.IO ne réessaie PAS lui-même — et l'échelle rendait la
-main. **« Reconnexion… » définitif, plus rien en temps réel, pour seule
-échappatoire de mettre l'app en arrière-plan.**
+`announcesMessageDeath` (`deleted` / `expired`) est la ligne du milieu du tableau
+de `carriesMessageText`, lue dans l'autre sens. `messageLivenessOf` rend `gone`
+sur exactement ces deux causes : **la purge applique au STOCKAGE le verdict que le
+drain applique déjà à la REMISE.**
 
-**Élargir le seul GARDE aurait été PIRE que le défaut.** `forceReconnect()`
-exécute `suspendTransport()` puis `establishTransport()`, qui ne savait bâtir
-qu'un transport d'INSCRIT : une échelle armée tuait une socket vivante sans
-rien rebâtir. C'est la RECONSTRUCTION qui apprend le credential —
-`APIClient.requestCredential`, dont le doc-comment décrit ce défaut d'avance :
-« un `String` nu oblige chaque appelant à SUPPOSER le protocole ».
+Et la condition est DOUBLE — `messageId` ET porteur de texte. `messageId` seul
+emporterait l'annonce de mort du même message, c'est-à-dire **le seul événement
+qui dit au client de retirer la bulle** : l'absent garderait un message détruit
+affiché pour toujours. C'est le défaut symétrique, et le plus cher des deux.
 
-### Deux constats de l'audit ne tenaient PAS, et c'est le résultat le plus utile
+### Le chokepoint n'était pas celui qu'on croit
 
-L'agent d'audit a rendu cinq sous-constats ; **deux sont faux**, et les avoir
-re-vérifiés a changé le lot :
+`broadcastMessageMutation` a l'air d'être l'unité partagée de toutes les
+mutations de message. Mesuré : **4 de ses 8 appels** portent une mort, et **six
+sites de destruction ne l'atteignent pas** — dont `MessageHandler`, le transport
+socket `message:delete`, qui open-code ses quatre audiences.
 
-| constat | verdict |
-|---|---|
-| `resumeFromBackground()` exclut les invités | **faux en FAIT** — l'app route une entrée sans compte vers `resumeWithoutSession()`. Le garde est élargi parce qu'il l'excluait en DROIT. |
-| les « jumeaux identiques » de `SocialSocketManager` sont le même défaut | **faux** — cette socket n'a AUCUN `connectAnonymous` (mesuré : zéro site), donc un invité n'en a aucune. Ses gardes `authToken` sont JUSTES. |
+`applyMessageRemovalEffects` en couvre cinq, et c'est la bonne adresse pour une
+raison plus forte que son taux de couverture : **elle balayait DÉJÀ trois copies
+résiduelles du texte** — le cache du traducteur (#16557), les traductions
+partagées (#9899), `Message.translations`. La file est leur JUMELLE.
 
-Le second aurait été une correction sans objet sur un sous-système entier. Une
-garde de source fige désormais l'asymétrie, pour qu'une prochaine passe ne la
-« corrige » pas par symétrie.
+> **La question du cycle 85 — *cette entité a-t-elle une jumelle ?* — se pose
+> aussi à un SUBSTRAT, pas seulement à une table voisine.** Les trois balayages
+> existants nettoient Mongo et le tas du processus. Aucun ne regardait Redis,
+> parce qu'aucun n'y avait de chemin — et l'absence de chemin se lit comme
+> l'absence de problème.
 
-> **Une symétrie LEXICALE n'est pas une symétrie de propriété.** C'est la faute
-> du cycle 107 (« le miroir client→serveur ») rejouée par un autre, et elle se
-> rattrape de la même façon : en ouvrant les deux côtés plutôt qu'en transposant
-> la conclusion.
+D'où le registre (`services/delivery-queue-registry.ts`) : les dix écrivains de
+`deletedAt` n'ont, pour la plupart, que `prisma`. Faire descendre l'instance
+jusqu'à chacun voudrait dire élargir six signatures et trois interfaces pour un
+canal best-effort — et surtout rendre la purge un PARAMÈTRE, donc une garde que
+son absence désactive. Le registre met la résolution DANS l'unité qui purge.
 
-### La cohésion a imposé une extraction, et l'extraction a fermé un défaut
+### La vue unique : le seul site où la purge du stockage EST la protection
 
-Le correctif portait le type de 1 928 à 1 959 lignes en unité : EN HAUSSE,
-refusé par le cliquet. La configuration de transport est donc partie vers
-`SocketTransportFactory` — et pas pour gagner des lignes : le gestionnaire en
-portait **DEUX copies**, celle d'un inscrit et celle d'un invité, qui ne
-différaient que par leurs EN-TÊTES. Une option ajoutée à une copie manquait
-silencieusement à l'autre. Le type descend à 1 909.
+`purgeViewOnceContent` efface le contenu **sans écrire `deletedAt`** — la bulle
+reste, c'est sa raison d'être, et le module le dit lui-même. Or
+`messageLivenessOf` ne connaît que `deletedAt` et `expiresAt`, et
+`viewOnceBurnedAt` n'est lu par aucune garde de remise.
 
-**Deux gardes de source ont dû suivre, et la seconde est une leçon.**
-`SocketCompressionSourceGuardTests` passe de 2 blocs à 1 (plus un test qui
-interdit au gestionnaire d'en reconstruire un chez lui — sans quoi une
-troisième copie reviendrait sans faire rougir le premier, qui ne lit plus ce
-fichier). Et `SocketTransportReplacementRetirementGuardTests` cherchait un nom
-de FABRIQUE (`manager = makeTransport(`) : il aurait cessé de voir ses sites
-**en silence**. Il cherche l'AFFECTATION (`manager = `), qui est ce qui relâche
-vraiment le transport.
+Un absent dont la file portait l'entrée `new` recevait donc **le texte entier
+d'une vue unique purgée**, et le drain, qui interroge bien la base, la trouvait
+VIVANTE. La garde ne pouvait pas le voir : elle n'a rien à lire.
 
-> **Chercher une forme fautive par le NOM de son helper, c'est manquer tous les
-> sites qui l'obtiennent autrement** — et, quand le helper est renommé, c'est
-> perdre les sites qu'on avait. Le discriminant juste est l'EFFET
-> (`manager = `), pas l'appelé. L'exclusion de `manager = nil` a été **mesurée**,
-> pas supposée : l'inclure portait le compte de 2 à 3 et faisait rougir la garde
-> sur la porte qui APPLIQUE la loi.
+> C'est l'inverse du cycle 124. Là, un champ **DÉCLARAIT** une restriction que
+> rien n'appliquait ; ici un module **APPLIQUE** une destruction qu'aucun champ ne
+> déclare — donc qu'aucune garde en aval ne peut interroger. **Devant une
+> destruction, demander ce qu'elle LAISSE DERRIÈRE comme preuve, et qui peut la
+> lire.** Une destruction muette ne protège que ce qu'elle touche elle-même.
 
-## Lot C — une garde de confidentialité ANNONCÉE à tous, APPLIQUÉE aux inscrits (#16830)
+### `peek` est RETIRÉ, pas gardé
 
-`announceSwitch` promettait, dans son propre doc-comment, « la room personnelle
-de CHAQUE membre actif ». Son code posait un `flatMap` qui JETTE tout
-participant sans compte. La loi est `userId ?? id`, et c'est l'un des endroits
-où le `CLAUDE.md` dit de ne jamais la réécrire.
+L'issue demandait de le gater. Il n'avait **aucun appelant de production** et
+servait les charges **en les DÉSCELLANT** sans la garde du drain.
 
-**Et la projection était la seconde moitié du défaut — que le rapport d'audit
-n'avait pas relevée** : `REGIME_SELECT.participants.select` ne chargeait pas
-`id`. La room d'un invité n'était donc pas seulement non adressée, elle était
-**INADRESSABLE**. C'est la forme des dix-sept sites du cycle 124.
+Le gater demandait un collaborateur `prisma` qu'une seule des 95 constructions
+câble : une garde que son absence désactive, exactement la forme que le dépôt
+condamne. On ne fuit pas par un lecteur qui n'existe pas. Son retrait rend
+**246 lignes** à un fichier de témoins hors budget, et retire une voie de
+déchiffrement sans appelant. `size()` reste — il ne porte aucun secret.
 
-Pire que silencieux : l'avis système part bien à la room de conversation, si
-bien que l'invité assis dans le fil **lisait « X a activé le chiffrement »
-pendant que son cache disait l'inverse**.
+> **Entre garder une porte et retirer la porte, la seconde option ne se discute
+> que si la porte sert à quelqu'un.** Un gate sur une méthode que personne
+> n'appelle est lui-même une loi sans appelant — le défaut que les cycles 139,
+> 140 et 142 ont trouvé trois fois.
 
-> **Un témoin de comportement ne peut pas voir un `select`.** Le double Prisma
-> rend ses participants quel que soit la projection : les deux témoins de
-> comportement de ce lot passeraient au VERT sur une requête qui oublie `id`.
-> D'où un troisième, de PROJECTION, qui assert sur la REQUÊTE.
+### Un double de test ment aussi par ce qu'il ACCEPTE
 
-## Lot D — deux portes d'arrivée sur trois n'annonçaient rien (#16837)
+Les quatre doubles Redis du dépôt lisaient la clé en 3e position et tout le reste
+comme des ARGV, en ignorant `numkeys`. L'enfilage déclarant désormais DEUX clés,
+ils rangeaient **la clé d'index DANS la file**, comme si c'était une entrée —
+21 témoins rouges, tous pour la bonne raison. Forme du cycle 112, et le correctif
+est un double qui respecte le contrat du vrai client.
 
-| porte | annonçait l'arrivée ? |
-|---|---|
-| `POST …/participants` (ajout par un hôte) | **oui** |
-| `POST …/invite` | **non** |
-| jointure par LIEN (`performLinkJoin`, 3 routes) | **non** |
+## Lot B — une relance manuelle ne réarme pas un envoi en vol (#16749)
 
-Le web n'invalide la feuille des membres QUE sur cet événement ; iOS invalide
-son cache PERSISTÉ sur `conversation:joined` et écrit l'effectif ABSOLU de
-`conversation:participant-joined`. **L'effectif ne pouvait DÉRIVER QUE VERS LE
-BAS** : départ −1, bannissement −1, arrivée par lien rien.
+La règle existait, NOMMÉE et motivée (`StuckPublicationRetry.retryableOutboxId`),
+et `OutboxFlusher` ne reréclame jamais un claim frais, avec son témoin. Le point
+d'entrée GÉNÉRIQUE — celui que « Publications non envoyées » et la bulle média en
+échec appellent — ne posait pas la question : son doc-comment DÉCLARAIT la
+restriction et l'`UPDATE` était inconditionnelle.
 
-La forme du défaut est celle que le `CLAUDE.md` nomme : `sharing-invite.ts`
-**CITAIT sa jumelle** — « mirrors POST /conversations/:id/participants » — sur
-la ligne de l'auto-join. La jumelle avait été ouverte, lue, et à MOITIÉ
-reprise : la question posée était « comment rattacher les sockets ? », et la
-réponse trouvée y répondait exactement.
+> **Forme du cycle 124 posée sur une phrase de DOCUMENTATION.** « Manually
+> retries an outbox row that has previously failed or exhausted its retry
+> budget » est une affirmation, pas une garde — et elle se relit comme une
+> propriété du code qu'elle surplombe.
 
-Honnêteté de gravité : `…/invite` est un **piège armé, pas une panne mesurée**
-(le web appelle `…/participants`, et le point d'entrée iOS n'a aucun appelant).
-**La porte de LIEN est vivante**, et c'est là qu'est l'impact.
+### Ce qui a décidé du correctif : ne pas refuser trop
 
-### Trois choses mesurées qui ont changé le lot
+Copier le prédicat du flusher serait une RÉGRESSION. Un `.inflight` PÉRIMÉ est un
+orphelin que `flush()` reprend déjà ; un `.pending` différé est l'utilisateur qui
+dit « maintenant ». Les refuser rendrait « Publications non envoyées » **inerte
+sur une ligne coincée** — exactement le piège que cet écran existe pour défaire.
 
-1. **Un invité ne peut pas être le SUJET de l'événement.** Le contrat déclare
-   `userId` et `displayName` NON optionnels et les décodeurs clients sont
-   stricts : une charge au `userId` nul ferait échouer le décodage de
-   l'événement ENTIER plutôt que d'annoncer un invité. Le contrat a été RELU,
-   pas supposé. Déposé en #16838 avec ses trois options — le précédent
-   `USER_PREFERENCES_COMMUNITY_REORDERED` dit qu'un nom NEUF coûte moins cher
-   qu'un élargissement. L'invité reste un DESTINATAIRE, et c'est
-   `differsOrUnset` qui le garde dedans.
-2. **Les 21 témoins de la porte conforme ont REFUSÉ ma clé d'exclusion**, et ils
-   avaient raison sur le fond : l'extraction employait `id: { not: … }`, quand
-   `differsOrUnset` existe précisément parce qu'un `NOT` nu perd les lignes sans
-   compte sous MongoDB. La clé TESTÉE est la bonne, et ces 21 verts sont la
-   preuve de non-régression de l'extraction.
-3. **`getManager()?.getIO()` faisait rendre 500 à trois suites de route.**
-   `getIO?.()` : l'éventail est ACCESSOIRE, et une adhésion déjà persistée ne
-   doit pas échouer pour lui.
+La décision est donc prise par SQLite DANS la transaction
+(`… WHERE id = ? AND (status <> ? OR updatedAt < ?)`), jamais sur l'instantané
+que l'appelant a lu — le motif de `claimPending`. Et la borne vient de
+`OutboxFlusher.staleInflightReclaimSeconds` **par RÉFÉRENCE** : deux bornes
+divergentes ouvriraient une plage où l'un reprend ce que l'autre refuse.
 
-### Le balayage, et l'erreur qui l'a rendu bon
+### Une garde qui refuse doit refuser TOUT ce que le chemin nominal fait
 
-Un témoin par porte ne dit rien de la QUATRIÈME — celle qu'un lot futur
-ajoutera sans savoir que cette loi existe ; le voisin
-`conversation-new-member-rights-parity.test.ts` écrit déjà pourquoi. D'où
-`member-arrival-door-sweep.test.ts`, qui gèle les cinq sites créant une ligne
-`Participant` sans être une porte d'arrivée, chacun avec sa raison, et vérifie
-d'abord qu'il TROUVE quelque chose : une sonde vide resterait verte sans rien
-garder.
+`forgetOutcome` passait AVANT l'écriture. Sous la garde, un refus aurait donc
+effacé le tombstone d'une mutation **encore en vol** : le dispatch aboutissait, et
+l'abonné qui attendait son `.applied` avait perdu le repère sur lequel il se
+recalait. Elle est passée après.
 
-> **Sa première version ne cherchait que `participant.create(` et manquait
-> `InitService`, qui emploie `createMany`.** Un balayage qui cherche UN idiome
-> mesure sa popularité, pas une propriété — cycle 107, retrouvé en écrivant le
-> cliquet. L'erreur commise en l'écrivant est le meilleur cas de test qu'il aura.
+Et la bulle restait « en échec » au-dessus d'un téléversement en cours, invitant à
+retaper — **le geste même qui doublait l'envoi**. Elle passe `.retrying` sur
+`itemInFlight`, un cas distinct d'`itemNotFound` parce que la suite est
+différente : il n'y a rien à redemander, ça part.
 
-## Lot E — la CI du SDK iOS était par terre sur TOUT le dépôt (#16852)
+### Le cliquet de cohésion a décidé de la STRUCTURE, deux fois
 
-Rencontré en cherchant la preuve du lot B, et c'est le lot le plus utile du
-cycle à tout le monde sauf à moi. `sdk-tests.yml` échouait à « Build SDK »,
-**avant toute compilation Swift**, sur `failed downloading … already exists in
-file system` (WebRTC, Lottie, SignalFfi). Mesuré : repo-WIDE depuis ~07:39 UTC,
-trois branches de sessions sœurs **et `dev` lui-même** (run 42463036975). Un
-`rerun_failed_jobs` rejoue la même collision.
+Rouge n°1 : `retryItem` à **95 lignes** (plafond 80). Rouge n°2, après extraction
+d'une sous-fonction : l'unité `OfflineQueue` **en hausse** (2 957 → 2 980, pour un
+plafond d'unité de 1 500 — dette antérieure).
 
-**Donc aucun lot iOS n'était prouvable, et un rouge de CI sur une PR iOS ne
-disait RIEN de son code.**
+La réponse n'est pas de relever la référence. `OutboxRetryAdmission` porte
+l'admission **et la traduction d'erreur** — ce second déplacement est ce qui
+retire le `do/catch` de sept lignes de l'unité hors budget et la ramène à sa
+référence. Et c'est le bon découpage de toute façon : « cette ligne peut-elle
+repartir ? » est UNE question, et ses trois appelants d'instantané
+(`OutboxUIItem`, `UnsentPublication`, le `deliveryStatus` de la bulle) ne peuvent
+aucun y répondre.
 
-C'est #6545, mot pour mot, sur un autre workflow — et **le dépôt portait déjà sa
-réparation** : `scripts/ci/resolve-spm-packages.sh`, dont le doc-comment décrit
-ce cas exact (« Une collision se corrige en PURGEANT l'entrée en cause avant
-l'essai suivant — jamais en attendant »). `ios.yml` l'appelle ; `sdk-tests.yml`
-lançait `build-for-testing` à cru.
+> **Un cliquet de cohésion n'est pas une taxe à payer : c'est une question sur le
+> découpage, et deux fois sur ce lot elle a eu raison.** La seconde fois en
+> désignant un déplacement — la traduction d'erreur — que rien d'autre n'aurait
+> suggéré.
 
-> **Un remède écrit, motivé, testé — et qui ne vaut que là où quelqu'un l'a
-> récité.** C'est la leçon 307 appliquée à un script de CI, et le coût s'est
-> mesuré en CI iOS à l'arrêt pour tout le dépôt. La garde qui l'aurait attrapé
-> existait aussi : `check-ios-spm-resolve-retry.mjs` vérifiait qu'**UN** workflow
-> appelle le script. Il en vérifie deux désormais, et c'est cette seconde
-> assertion qui est le correctif durable.
+### Un témoin écrit naïvement ne pouvait pas tomber
 
-Le script est GÉNÉRALISÉ, pas doublé — écrire une seconde boucle est exactement
-ce qu'il existe pour éviter. Il prenait un `-project`, et c'était la seule raison
-pour laquelle ce workflow ne l'appelait pas : `MeeshySDK-Package` est un PAQUET.
-Déréférencement par `${PROJECT_ARGS[@]+"${PROJECT_ARGS[@]}"}` : sous `set -u`, le
-bash 3.2 de macOS tue un script qui lit `"${vide[@]}"`.
+La garde de source cherche `OutboxFlusher.staleInflightReclaimSeconds` dans le
+fichier. **Mon propre doc-comment le NOMME sur deux lignes**, pour expliquer la
+décision : le `contains` passait au vert sur une recopie littérale de 1800. Elle
+ne lit donc que des lignes de CODE — même précaution, et pour la même raison, que
+`WireDateSourceGuardTests`.
 
-### Le premier témoin de la forme paquet NE POUVAIT PAS TOMBER
-
-Et c'est la leçon du lot. Avec l'ancien `-project "$PROJECT"` toujours en place,
-le garde restait **VERT** : un faux `xcodebuild` qui ignore ses arguments
-accepte `-project -` sans broncher. Le faux REFUSE désormais ce que le vrai
-refuse (un chemin de projet `-` n'existe pas), et le rouge est re-prouvé : deux
-défauts nommés, dont « a dormi (15,30,45,60s) au lieu de purger » — le symptôme
-de #6545 lui-même.
-
-> **Un double ment aussi par ce qu'il ACCEPTE** (cycle 112), et un faux
-> `xcodebuild` est le cas limite : il n'a aucune raison de regarder ses
-> arguments, donc il valide toutes les formes d'appel, y compris celles que le
-> vrai outil refuse. Un témoin de FORME D'APPEL exige un double qui lise ses
-> arguments.
-
-## Lot F — la règle n'était appliquée que par celui qui l'avait écrite (#16856)
-
-`PUT /user-preferences/communities/:communityId` upsertait depuis l'id d'URL
-sans AUCUNE vérification d'appartenance — pendant que son voisin du **même
-fichier**, vingt lignes plus bas, exige la règle en toutes lettres : « un lot
-non borné laisserait n'importe quel appelant authentifié fabriquer des lignes de
-préférences contre des ids arbitraires ». Et l'applique.
-
-> **Un commentaire ne documente que l'exemplaire qu'il touche** — avec la
-> circonstance aggravante que la jumelle est dans le MÊME fichier, et que c'est
-> le PUT qui **CRÉE** la ligne (le commentaire du réordonnancement le dit
-> lui-même). La règle manquait à son site le plus exposé.
-
-Borne de gravité vérifiée plutôt que supposée : `categoryId` est écrit sans
-contrôle lui aussi, mais il n'a aucune relation Prisma et la route ne fait aucun
-`include` de catégorie — c'est de la pollution de stockage, pas une fuite. Ce
-qui ne change rien au correctif, et tout au récit.
-
-Et le double de `community-preferences-broadcast.test.ts` a été **COMPLÉTÉ, pas
-contourné** : il n'exposait que `findMany` (le besoin du réordonnancement), donc
-le PUT y tombait sur un `findFirst` absent.
+> **Un lot qui documente richement sa décision ARME ce piège.** Plus un
+> doc-comment nomme précisément ce qu'il justifie, plus il ressemble au code que
+> la garde cherche. La question à poser à toute garde de source : *mon propre
+> commentaire la satisfait-il ?*
 
 ## Preuve
 
 | gate | résultat |
 |---|---|
-| `tsc --noEmit` gateway | **EXIT=0**, 0 ligne (lu HORS pipe) |
-| périmètre Post/story | **311 suites / 4 656 témoins verts** |
-| périmètre encryption/conversation | **243 suites / 3 675 témoins verts** |
-| périmètre participant/sharing/link/invite | **414 suites / 6 053 témoins verts** |
-| cliquet de taille gateway | vert ; `PostService.ts` 2 225 → 2 118, gel 2 628 → 2 118 |
-| cliquet de cohésion iOS | vert ; `MessageSocketManager` 1 928 → 1 909 |
-| rouge, lot A | 2 des 3 témoins tombent ; le 3e (non-régression) vert des deux côtés |
-| rouge, lot B | prédicats des gardes rejoués en Python sur les deux révisions : `authToken` lu 4 fois (attendu 0), 0 porte sur le credential (attendu 3), branche et signature absentes |
-| rouge, lot C | les 3 témoins tombent |
-| rouge, lot D | aucune des 3 portes ne contient `announceMemberArrival(` avant le lot |
-| rouge, lot E | garde rejoué contre la forme d'avant : 2 défauts nommés, dont « a dormi (15,30,45,60s) au lieu de purger » ; auto-test du garde vert (il retire la branche de purge et vérifie que le scénario l'attrape) |
-| rouge, lot F | 2 des 3 témoins tombent ; le 3e (un membre passe) vert des deux côtés |
-| garde SPM | **4/4 scénarios** verts (collision projet, collision paquet, panne réseau, échec permanent) |
-| preuve Swift | `workflow_dispatch` de `sdk-tests.yml`, débloqué par le lot E |
+| `tsc --noEmit` gateway | **EXIT=0** (lu HORS pipe) |
+| suite gateway COMPLÈTE | **2 529 / 2 535 suites, 39 752 témoins verts** |
+| sémantique Lua, vrai `redis-server` | **17 assertions, ALL PASS** |
+| la même sonde sur la révision d'AVANT | **4 tombent**, toutes sur l'index |
+| rouge lot A, crochets retirés | 3 témoins sur 5 |
+| rouge lot A, mutation du prédicat | « garde l'annonce de mort » tombe |
+| rouge lot A, mutation de l'ordre mémoire/Redis | les 2 témoins de la tranche mémoire tombent |
+| rouge lot B, prédicat rejoué sur les deux révisions | avant : les 2 formes absentes du CODE ; après : présentes |
+| `check_cohesion_budget.sh` | `OfflineQueue` n'est plus en hausse |
+| suites iOS/SDK | `workflow_dispatch` de `sdk-tests.yml` — pas de chaîne Swift dans ce conteneur |
 
-Les rouges du dépôt qui subsistent sont les **6 suites de codecs d'image**
-(HEIF, AVIF 10 bits, carte de gain HDR, orientation EXIF) — capacité libvips du
-conteneur, mesurée et documentée aux cycles 139 et 142, vertes en CI, étrangères
-aux quatre lots.
+Les 6 rouges de la suite gateway sont les suites de **codecs d'image** (HEIF,
+AVIF 10 bits, carte de gain HDR, orientation EXIF) : capacité libvips du
+conteneur, mesurée et documentée au cycle 139, vertes en CI. Étrangères aux deux
+lots, et les mêmes qu'au cycle 142.
+
+**Un vrai `redis-server` est disponible dans ce conteneur** (`/usr/bin/redis-server`),
+ce qu'aucun cycle précédent n'avait relevé. La CI, elle, n'a pas de service Redis :
+les témoins commités restent donc sur des doubles qui attestent la DÉCISION, et la
+sémantique du script Lua se prouve localement. C'est la combinaison la plus forte
+disponible — vrai moteur pour le script, double pour le câblage.
 
 ## Dimensions
 
-**Mûres** : 13 (Complétude — une langue ne disparaît plus ; une population
-entière n'est plus exclue de la reconnexion ; deux portes d'arrivée sur trois
-étaient muettes) · 11 (Maintenabilité — trois extractions, une configuration de
-transport au lieu de deux, un éventail d'arrivée au lieu d'un et deux silences,
-deux cliquets qui rendent leur marge) · 9 (Compatibilité — les invités de lien,
-deux fois) · 2 et 8 (plus de « Reconnexion… » définitif).
+**Mûres** : 1 (Sécurité — suppression sûre : le clair ne survit plus à la
+destruction, et une relance ne détruit plus une ligne sous son dispatcher),
+11 (Maintenabilité — un prédicat de mort partagé avec la garde de remise, un
+registre au lieu de six signatures, `OutboxRetryAdmission` extrait, 246 lignes de
+dette de témoins rendues), 13 (Complétude — la vue unique, que nulle garde de
+remise ne pouvait voir, est couverte).
 
-**Restantes, avec leur issue** : #16838 porte la décision produit de l'arrivée
-d'un invité ; `conversation:new` pour un inscrit entrant par lien reste à
-ouvrir ; et la recette sur appareil réel de #16750 revient au porteur (ouvrir un
-lien invité, couper la socket côté serveur, vérifier le retour du temps réel
-sans mise en arrière-plan).
+**Restantes, déposées en issues** : quatre sites de destruction hors de
+`applyMessageRemovalEffects` (stockage) ; les deux instances de
+`RedisDeliveryQueue` aux tranches mémoire divergentes ; `ConversationViewModel`
+à +3 lignes sur une unité à 2,6× son plafond.
 
-## Ce que ce cycle a déposé et n'a pas pris
+## Ce que ce cycle n'a pas pris
 
-| issue | sujet | vérifié par la session ? |
-|---|---|---|
-| #16838 | l'arrivée d'un INVITÉ ne peut pas être annoncée sous le contrat actuel | **oui** — contrat relu |
-| #16857 | les communautés n'ont AUCUNE surface temps réel (rename, avatar, membres, rôles : invisible chez les autres ; aucun nom `community:*` au contrat) | **oui** — c'est un LOT, pas un correctif : il faut d'abord un contrat et ses trois décodeurs |
-| #16858 | iOS jette la portée COMMUNAUTÉ de `user:preferences-updated` (`category` non optionnel au décodeur) | **oui** — piège armé : aucun consommateur iOS aujourd'hui |
-
-Et, intacte du cycle 140 : **#16688**, cédée pour la seconde fois.
-
-## Méthode, confirmée une fois de plus
-
-Les deux agents d'audit de ce cycle ont rendu **onze constats**. Les neuf
-re-vérifiés ligne à ligne ont tous tenu **sauf deux** (les deux du lot B), et la
-re-vérification a par ailleurs TROUVÉ ce que les rapports n'avaient pas vu : la
-projection manquante du lot C, et la limite de contrat du lot D. **Un rapport
-d'audit se reçoit comme une piste, pas comme un constat** — et la relecture ne
-sert pas seulement à écarter le faux, elle sert à trouver le reste.
-
-Et une leçon de forme, celle du lot E : **trois témoins de ce cycle ne pouvaient
-pas tomber tels qu'ils étaient d'abord écrits** — le témoin de projection du lot
-C (un double rend ses participants quel que soit le `select`), le balayage du lot
-D (il ne cherchait qu'un idiome sur trois), et le scénario paquet du lot E (le
-faux ignorait ses arguments). Dans les trois cas c'est en CHERCHANT le rouge,
-pas en relisant l'assertion, que le défaut du témoin est apparu. **Prouver le
-rouge n'est pas une formalité de clôture : c'est la seule mesure qui distingue
-un témoin d'une décoration.**
+Intacts du cycle 142 : **#16745**, **#16752**, **#16747** (lot sensible),
+**#16748**, **#16750**, **#16751**, **#16753**. Et **#16688**, désormais libre de
+la PR #16720.

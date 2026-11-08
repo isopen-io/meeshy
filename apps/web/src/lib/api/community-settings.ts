@@ -1,5 +1,8 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import * as communitiesEndpoints from '@meeshy/shared/api/endpoints/communities';
+import { isProfileImageReference } from '@meeshy/shared/utils/profile-image-reference';
+
+import { uploadProfileImage, type ProfileImageUploadDeps, type ProfileImageUploadOutcome } from '@/lib/profile/image-upload';
 
 import {
   COMMUNITIES_QUERY_PREFIX,
@@ -28,14 +31,34 @@ import type { ApiResult } from './http';
  * **Supprimer** retire la communauté de chaque liste et de chaque détail ; un
  * 404 est l'état visé (déjà supprimée ailleurs), un refus la rend à sa place.
  *
- * Ce que ce port ne porte pas encore : l'avatar et la bannière (seconde moitié
- * de #6377, motif du profil). L'emoji et la couleur d'iOS ne quittent pas
- * l'appareil (`UserDefaults`) : aucun champ serveur ne les porte.
+ * **L'avatar et la bannière** suivent `uploadCompressedAvatar` / `Banner`
+ * (iOS) : l'image choisie est recompressée et montée par le chemin du profil
+ * (`uploadProfileImage`, D-56), puis son adresse entre dans le BROUILLON — elle
+ * part avec « Enregistrer », comme le nom. Une image ne s'efface pas (iOS non
+ * plus : `nil` veut dire « inchangé » pour la passerelle). L'adresse obéit à la
+ * loi des images d'identité (`isProfileImageReference`), des deux côtés du fil
+ * (#16788).
+ *
+ * L'emoji et la couleur d'iOS ne quittent pas l'appareil (`UserDefaults`) :
+ * aucun champ serveur ne les porte.
  */
 
-export type CommunitySettingsDraft = { readonly name: string; readonly description: string; readonly isPrivate: boolean };
+export type CommunityImageKind = 'avatar' | 'banner';
+export type CommunitySettingsDraft = {
+  readonly name: string;
+  readonly description: string;
+  readonly isPrivate: boolean;
+  readonly avatar: string | null;
+  readonly banner: string | null;
+};
 export type CommunitySettingsField = 'name' | 'description';
-export type CommunitySettingsBody = { readonly name?: string; readonly description?: string; readonly isPrivate?: boolean };
+export type CommunitySettingsBody = {
+  readonly name?: string;
+  readonly description?: string;
+  readonly isPrivate?: boolean;
+  readonly avatar?: string;
+  readonly banner?: string;
+};
 
 export type SettingsChanges =
   | { readonly ok: true; readonly body: CommunitySettingsBody | null }
@@ -56,7 +79,7 @@ export function canEditSettingsOf(community: CommunitySummary, viewerId: string 
 }
 
 export function settingsDraftOf(community: CommunitySummary): CommunitySettingsDraft {
-  return { name: community.name, description: community.description ?? '', isPrivate: community.isPrivate };
+  return { name: community.name, description: community.description ?? '', isPrivate: community.isPrivate, avatar: community.avatar, banner: community.banner };
 }
 
 export function settingsChangesOf(community: CommunitySummary, draft: CommunitySettingsDraft): SettingsChanges {
@@ -68,6 +91,8 @@ export function settingsChangesOf(community: CommunitySummary, draft: CommunityS
     ...(name === community.name ? {} : { name }),
     ...(description === (community.description ?? '') ? {} : { description }),
     ...(draft.isPrivate === community.isPrivate ? {} : { isPrivate: draft.isPrivate }),
+    ...(draft.avatar === null || draft.avatar === community.avatar ? {} : { avatar: draft.avatar }),
+    ...(draft.banner === null || draft.banner === community.banner ? {} : { banner: draft.banner }),
   };
   return { ok: true, body: Object.keys(body).length === 0 ? null : body };
 }
@@ -163,6 +188,8 @@ const applyBody = (body: CommunitySettingsBody) => (community: CommunitySummary)
   ...(body.name === undefined ? {} : { name: body.name }),
   ...(body.description === undefined ? {} : { description: body.description === '' ? null : body.description }),
   ...(body.isPrivate === undefined ? {} : { isPrivate: body.isPrivate }),
+  ...(body.avatar === undefined ? {} : { avatar: body.avatar }),
+  ...(body.banner === undefined ? {} : { banner: body.banner }),
 });
 
 const served = (community: CommunitySummary) => (cached: CommunitySummary): CommunitySummary => ({
@@ -171,6 +198,8 @@ const served = (community: CommunitySummary) => (cached: CommunitySummary): Comm
   description: community.description,
   isPrivate: community.isPrivate,
   identifier: community.identifier,
+  avatar: community.avatar,
+  banner: community.banner,
 });
 
 const refusalOf = (status: number): UpdateSettingsOutcome => ({ status: status === 403 ? 'refused' : status === 404 ? 'gone' : 'error' });
@@ -223,4 +252,25 @@ export async function performDeleteCommunity({
   queryClient.removeQueries({ queryKey: communityConversationsQueryKey(community.id) });
   void queryClient.invalidateQueries({ queryKey: [...LIST_PREFIX], refetchType: 'none' });
   return { status: 'deleted' };
+}
+
+/**
+ * Téléverser l'avatar ou la bannière : le chemin du profil, jamais une jumelle
+ * (recompression 512 / 1500 px, `POST attachments.upload`). Rien ne touche la
+ * communauté ici : l'adresse rendue entre dans le brouillon de l'écran.
+ */
+export async function performCommunityImageUpload({
+  kind,
+  file,
+  signal,
+  deps,
+}: {
+  readonly kind: CommunityImageKind;
+  readonly file: Blob;
+  readonly signal?: AbortSignal;
+  readonly deps: ProfileImageUploadDeps;
+}): Promise<ProfileImageUploadOutcome> {
+  const outcome = await uploadProfileImage({ kind, file, deps, ...(signal === undefined ? {} : { signal }) });
+  if (outcome.status !== 'uploaded' || deps.source === 'fixtures' || isProfileImageReference(outcome.url)) return outcome;
+  return { status: 'refused', error: 'Adresse d’image refusée' };
 }

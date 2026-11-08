@@ -68,6 +68,14 @@ describe('selfRowsLayout', () => {
     expect(rows.camera?.y).toBe(frame.y + frame.height + 8);
   });
 
+  test('R1 — la capsule de capture montrée, la vignette et sa rangée du haut descendent sous elle', () => {
+    const inset = 56;
+    const frame = tile(128 + inset);
+    const rows = layout(frame, selfRowBounds({ width: 390, height: 844 }, inset));
+    expect(rows.effects?.side).toBe('above');
+    expect(rows.effects?.y ?? 0).toBeGreaterThanOrEqual(56 + inset);
+  });
+
   test('les rangées sont hors de la vignette, et centrées sur elle', () => {
     const frame = tile(300, 100);
     const rows = layout(frame);

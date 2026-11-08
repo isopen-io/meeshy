@@ -33,6 +33,13 @@
 //      les essais (comportement HISTORIQUE, à ne pas perdre) et réussir.
 //   3. échec PERMANENT (erreur de résolution réelle) — le script doit finir
 //      en échec après 4 essais, jamais boucler indéfiniment.
+//   4. téléchargement REFUSÉ (run 42466274659, 2026-11-08) — SwiftPM recrée
+//      l'entrée en collision à CHAQUE essai, purgée ou non, tant qu'il
+//      télécharge lui-même ; le script doit précharger l'artefact (faux
+//      `curl` ici) à l'emplacement du cache que SwiftPM consulte, et réussir.
+//   5. COLLISION en forme PAQUET (#16852) — `-` à la place du projet, comme
+//      l'appelle `sdk-tests.yml` ; le faux refuse `-project` comme le vrai, et
+//      le script doit purger et réussir comme en forme projet.
 //
 // `--self-test` rejoue le scénario 1 contre une variante du script où la
 // branche de collision (bornée par les commentaires sentinelles
@@ -95,6 +102,20 @@ fi
 echo "Resolved source packages"
 exit 0
 `,
+  // SwiftPM retélécharge et retombe en collision tant que l'artefact n'est
+  // pas dans son cache sous le nom attendu ; préchargé, il le copie.
+  refusedDownload: `#!/usr/bin/env bash
+set -euo pipefail
+KEY="https___github_com_stasel_WebRTC_releases_download_146_0_0_WebRTC_M146_xcframework_zip"
+if [ -f "$SWIFTPM_ARTIFACTS_ROOT/$KEY" ]; then
+  echo "Resolved source packages"
+  exit 0
+fi
+mkdir -p "$SWIFTPM_ARTIFACTS_ROOT"
+: > "$SWIFTPM_ARTIFACTS_ROOT/$KEY"
+echo "failed downloading 'https://github.com/stasel/WebRTC/releases/download/146.0.0/WebRTC-M146.xcframework.zip' which is required by binary target 'WebRTC': $SWIFTPM_ARTIFACTS_ROOT/$KEY already exists in file system"
+exit 1
+`,
   permanentFailure: `#!/usr/bin/env bash
 echo "xcodebuild: error: no such module 'Foo'" >&2
 exit 65
@@ -136,6 +157,16 @@ echo "$1" >> "$FAKE_SLEEP_LOG"
 exit 0
 `;
 
+// Faux curl : écrit un octet dans le fichier passé à -o, jamais de réseau.
+const FAKE_CURL = `#!/usr/bin/env bash
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2 ;; *) shift ;; esac
+done
+[ -n "$out" ] && printf x > "$out"
+exit 0
+`;
+
 const write = (path, content, mode = 0o644) => {
   writeFileSync(path, content);
   chmodSync(path, mode);
@@ -155,6 +186,7 @@ const runScenario = (
   mkdirSync(state, { recursive: true });
   write(join(bin, 'xcodebuild'), fakeXcodebuild, 0o755);
   write(join(bin, 'sleep'), FAKE_SLEEP, 0o755);
+  write(join(bin, 'curl'), FAKE_CURL, 0o755);
   if (seedStaleArtifact) {
     const stale = join(state, STALE_ARTIFACT_RELATIVE);
     mkdirSync(dirname(stale), { recursive: true });
@@ -202,6 +234,7 @@ const scenarioChecks = (scriptPath) => {
     project: '-',
     scheme: 'MeeshySDK-Package',
   });
+  const refused = runScenario(scriptPath, FAKE_XCODEBUILD.refusedDownload);
 
   return [
     packageCollision.status === 0
@@ -228,6 +261,12 @@ const scenarioChecks = (scriptPath) => {
     permanent.output.includes('SPM resolve failed after 4 attempts')
       ? []
       : ["échec permanent : le journal ne nomme pas « SPM resolve failed after 4 attempts »"],
+    refused.status === 0
+      ? []
+      : [`téléchargement refusé : devrait réussir après préchargement de l'artefact, code de sortie ${refused.status}`],
+    refused.sleptFor.length === 0
+      ? []
+      : [`téléchargement refusé : a dormi (${refused.sleptFor.join(',')}s) alors que le préchargement a réussi`],
   ].flat();
 };
 
@@ -283,7 +322,7 @@ const main = () => {
     return 1;
   }
   console.log(
-    'scripts/ci/resolve-spm-packages.sh distingue collision de cache et panne réseau, en forme projet ET paquet (4/4 scénarios).',
+    'scripts/ci/resolve-spm-packages.sh distingue collision de cache, téléchargement refusé et panne réseau, en forme projet ET paquet (5/5 scénarios).',
   );
   return 0;
 };

@@ -31,6 +31,7 @@ import { LocationHandler } from '../LocationHandler';
 import type { Socket, Server as SocketIOServer } from 'socket.io';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { findFirstHonouringWhere } from '../../../__tests__/helpers/find-first-honouring-where';
+import { noBlocksUserSurface } from '../../__tests__/helpers/no-blocks';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,7 @@ function makePrisma(rows: ReadonlyArray<Record<string, unknown>> = [INTRUDER_ROW
     conversation: {
       findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }),
     },
+    user: noBlocksUserSurface(),
   };
 }
 
@@ -118,6 +120,7 @@ function makeHandler({
       io: io as any,
       prisma,
       connectedUsers,
+      userSockets: new Map(),
       socketToUser,
       normalizeConversationId: mockNormalize,
     }),

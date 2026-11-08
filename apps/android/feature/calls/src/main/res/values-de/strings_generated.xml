@@ -15,6 +15,10 @@
     <string name="call_capture_faces">Jedes Gesicht</string>
     <string name="call_capture_faces_saved">%1$d Gesichter gespeichert</string>
     <string name="call_capture_failed">Die Aufnahme konnte nicht gespeichert werden</string>
+    <string name="call_capture_journal_call_recording_started">Die Aufnahme des Anrufs hat begonnen</string>
+    <string name="call_capture_journal_call_recording_stopped">Die Aufnahme des Anrufs wurde beendet</string>
+    <string name="call_capture_journal_recording">nimmt den Bildschirm auf</string>
+    <string name="call_capture_journal_screenshot">hat einen Screenshot gemacht</string>
     <string name="call_capture_no_video">Noch kein Bild zum Aufnehmen</string>
     <string name="call_capture_preview">Collage-Vorschau</string>
     <string name="call_capture_saved">Aufnahme gespeichert</string>
@@ -167,6 +171,7 @@
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_panel_back">Zurück zu den Aktionen</string>
     <string name="call_participants_more">%1$s +%2$d</string>
+    <string name="call_peer_screen_capturing">%1$s nimmt den Bildschirm des Anrufs auf</string>
     <string name="call_preview_camera_a11y">Kamera vor dem Annehmen</string>
     <string name="call_preview_camera_hint">Legt fest, ob %1$s Sie vor dem Annehmen sieht</string>
     <string name="call_preview_heard_and_seen_by">%1$s hört und sieht Sie vor dem Annehmen</string>

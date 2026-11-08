@@ -62,14 +62,20 @@ final class ConversationAudioCallSuspensionTests: XCTestCase {
     /// commodité du test : sans cette attente, un test « la carte est nil après
     /// suspension » passe au vert alors qu'aucune carte n'a jamais été publiée —
     /// il ne prouve rien du gate qu'il prétend couvrir.
+    ///
+    /// La condition se relit APRÈS l'échéance. Le premier `nowPlayingInfo =` du
+    /// processus ouvre la connexion à `mediaremoted` sur le fil principal : sur
+    /// un simulateur de CI froid, cette publication l'a tenu plus longtemps que
+    /// l'échéance (run 42423375370, test à 5 s), et la boucle concluait à
+    /// l'absence sans relire la carte qui venait d'être posée.
     @discardableResult
-    private func waitForNowPlayingCard(timeout: TimeInterval = 2.0) async -> Bool {
+    private func waitForNowPlayingCard(timeout: TimeInterval = 5.0) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if MPNowPlayingInfoCenter.default().nowPlayingInfo != nil { return true }
             try? await Task.sleep(for: .milliseconds(20))
         }
-        return false
+        return MPNowPlayingInfoCenter.default().nowPlayingInfo != nil
     }
 
     // MARK: - Suspension

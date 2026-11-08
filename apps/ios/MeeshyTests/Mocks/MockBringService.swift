@@ -15,6 +15,8 @@ final class MockBringService: BringProviding, @unchecked Sendable {
     private(set) var stopped: [String] = []
     private(set) var blockedWrites: [Bool] = []
     private(set) var blockedSettings: [RelationReceptionSetting] = []
+    private(set) var grantWrites: [Bool] = []
+    private(set) var grantedShares: [RelationShareGrant] = []
 
     func availability(userId: String) async throws -> BringAvailability {
         try availabilityResult.get()
@@ -37,6 +39,12 @@ final class MockBringService: BringProviding, @unchecked Sendable {
     func setReceptionBlocked(_ setting: RelationReceptionSetting, userId: String, blocked: Bool) async throws -> RelationPersonSettings {
         blockedSettings.append(setting)
         blockedWrites.append(blocked)
+        return try setBlockedResult.get()
+    }
+
+    func setShareGranted(_ grant: RelationShareGrant, userId: String, granted: Bool) async throws -> RelationPersonSettings {
+        grantedShares.append(grant)
+        grantWrites.append(granted)
         return try setBlockedResult.get()
     }
 }
