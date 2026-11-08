@@ -20,6 +20,7 @@ import {
 } from '../../services/conversations/conversationEntryAdmission';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { announceMemberArrival } from './memberArrivalFanOut';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
@@ -345,6 +346,24 @@ export function registerInviteRoute(
           (err: unknown) => logger.error('Failed to auto-join invited user to conversation room', err as Error)
         );
       }
+
+      // #16837 — l'éventail d'ARRIVÉE, par son site unique. Le commentaire
+      // ci-dessus annonçait « mirrors POST /conversations/:id/participants » :
+      // la jumelle avait donc été ouverte et à moitié reprise — l'auto-join en
+      // est venu, les trois diffusions sont restées derrière. La question juste
+      // n'était pas « que fait la jumelle pour mon problème ? » mais « que
+      // fait-elle, tout court, APRÈS cette écriture ? ».
+      await announceMemberArrival({
+        prisma: fastify.prisma,
+        io: inviteSocketManager?.getIO?.(),
+        conversationId,
+        arrival: {
+          userId,
+          displayName: invitedMemberFields.displayName,
+          joinedAt: newMember.joinedAt ?? new Date(),
+        },
+        onError: (error) => logger.warn('member arrival fan-out failed on invite', { userId, conversationId, err: error }),
+      });
 
       // Envoyer une notification à l'utilisateur invité
       const notificationService = opening.kind === 'direct' ? fastify.notificationService : undefined;

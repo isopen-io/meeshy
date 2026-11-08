@@ -186,14 +186,14 @@ describe('le balayage TOMBE sous la mutation qu’il nomme', () => {
 
 describe('chaque inventaire gelé PORTE quelque chose', () => {
   it('l’exemption de `link-admission` couvre un producteur RÉEL, et le dit', () => {
-    expect(Object.keys(EXEMPTIONS)).toContain('routes/conversations/link-admission.ts');
-    expect(EXEMPTIONS['routes/conversations/link-admission.ts']).toContain('AUCUNE ligne `User`');
+    expect(Object.keys(EXEMPTIONS)).toContain('routes/conversations/link-admission-guest.ts');
+    expect(EXEMPTIONS['routes/conversations/link-admission-guest.ts']).toContain('AUCUNE ligne `User`');
 
     // Retirée, le balayage nomme le site — et la valeur qu'il y trouve.
     const sansExemption = producteursHorsSite(SRC, {});
 
     expect(sansExemption).toEqual([
-      expect.stringContaining('routes/conversations/link-admission.ts'),
+      expect.stringContaining('routes/conversations/link-admission-guest.ts'),
     ]);
     expect(sansExemption[0]).toContain('profile.language');
   });

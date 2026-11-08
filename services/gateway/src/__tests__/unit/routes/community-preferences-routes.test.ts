@@ -96,6 +96,13 @@ function makePrisma({
       findMany: jest.fn().mockResolvedValue(
         memberships.map((communityId) => ({ communityId })),
       ),
+      // Le PUT garde une SEULE communauté (#16856) : il demande une ligne, pas
+      // un lot. Le double HONORE le `where` plutôt que de rendre une ligne
+      // quoi qu'on lui demande — sans quoi aucun témoin ne pourrait voir le
+      // refus d'un non-membre.
+      findFirst: jest.fn(async (args: any) =>
+        memberships.includes(args?.where?.communityId) ? { id: 'member-1' } : null,
+      ),
     },
   };
 }
@@ -451,6 +458,101 @@ describe('POST /user-preferences/communities/reorder — persistance réelle', (
     expect(res.statusCode).toBe(200);
     expect(prismaOf(app).communityMember.findMany).not.toHaveBeenCalled();
     expect(prismaOf(app).userCommunityPreferences.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// ─── PUT — la portée d'appartenance (#16856) ──────────────────────────────────
+
+describe('PUT /user-preferences/communities/:communityId — portée d\'appartenance (#16856)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  /**
+   * L'`upsert` FABRIQUE la ligne quand elle n'existe pas — et ce PUT est son
+   * UNIQUE créateur (le commentaire du handler de réordonnancement le dit).
+   * Sans filtre d'appartenance, n'importe quel appelant authentifié pouvait
+   * donc fabriquer des lignes de préférences contre des ids arbitraires, y
+   * compris des communautés inexistantes, puis les faire resservir par
+   * `GET /user-preferences/communities` — et faire DIFFUSER un
+   * `user:preferences-updated` pour elles.
+   *
+   * Le jumeau de ce fichier, vingt lignes plus bas, porte la raison écrite en
+   * entier : « un lot non borné laisserait n'importe quel appelant authentifié
+   * fabriquer des lignes de préférences contre des ids arbitraires ». Elle ne
+   * valait que pour l'exemplaire qui la portait.
+   */
+  it('refuse un non-membre, n\'écrit rien et ne diffuse rien', async () => {
+    const prisma = makePrisma({ memberships: [] });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma as unknown);
+    app.decorate('authenticate', async (req: FastifyRequest): Promise<void> => {
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID },
+      };
+    });
+    await app.register(communityPreferencesRoutes);
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/user-preferences/communities/${COMMUNITY_ID}`,
+      headers: AUTH,
+      payload: { isPinned: true },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(prisma.userCommunityPreferences.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('laisse passer un membre — la garde ne resserre que ce qu\'elle doit', async () => {
+    const prisma = makePrisma({ memberships: [COMMUNITY_ID] });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma as unknown);
+    app.decorate('authenticate', async (req: FastifyRequest): Promise<void> => {
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID },
+      };
+    });
+    await app.register(communityPreferencesRoutes);
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/user-preferences/communities/${COMMUNITY_ID}`,
+      headers: AUTH,
+      payload: { isPinned: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.userCommunityPreferences.upsert).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('la garde interroge l\'appartenance ACTIVE de CET appelant à CETTE communauté', async () => {
+    const prisma = makePrisma({ memberships: [COMMUNITY_ID] });
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma as unknown);
+    app.decorate('authenticate', async (req: FastifyRequest): Promise<void> => {
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID },
+      };
+    });
+    await app.register(communityPreferencesRoutes);
+    await app.ready();
+
+    await app.inject({
+      method: 'PUT',
+      url: `/user-preferences/communities/${COMMUNITY_ID}`,
+      headers: AUTH,
+      payload: { isPinned: true },
+    });
+
+    expect(prisma.communityMember.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: USER_ID, communityId: COMMUNITY_ID, isActive: true },
+      }),
+    );
     await app.close();
   });
 });

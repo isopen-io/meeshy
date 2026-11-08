@@ -41,12 +41,23 @@ final class SocketTransportReplacementRetirementGuardTests: XCTestCase {
     // MARK: - Le prédicat
 
     /// Une ligne qui BÂTIT le transport du gestionnaire, c'est-à-dire qui
-    /// relâche celui que `manager` tenait. `makeTransport`, qui rend un
-    /// `SocketManager` sans l'affecter, n'en est pas un.
+    /// relâche celui que `manager` tenait. `SocketTransportFactory.make`, qui
+    /// rend un `SocketManager` sans l'affecter, n'en est pas un — c'est
+    /// l'AFFECTATION qui relâche, et c'est elle qu'on cherche. Le préfixe
+    /// `manager = ` est donc le discriminant, quelle que soit la fabrique
+    /// appelée à droite (#16750 : `makeTransport` est devenue
+    /// `SocketTransportFactory.make`, et une garde qui nommait la fabrique
+    /// aurait cessé de voir ses sites en silence).
+    ///
+    /// `manager = nil` est EXCLU : il n'installe rien, c'est le démontage
+    /// lui-même (`suspendTransport()`). L'inclure gonflerait le compte des
+    /// sites de 2 à 3 et ferait rougir la garde sur la porte qui APPLIQUE la
+    /// loi — mesuré, sur les deux gestionnaires.
     private func isTransportBuild(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return trimmed.hasPrefix("manager = SocketManager(")
-            || trimmed.hasPrefix("manager = makeTransport(")
+        guard !trimmed.hasPrefix("//") else { return false }
+        guard trimmed != "manager = nil" else { return false }
+        return trimmed.hasPrefix("manager = ")
     }
 
     /// Les deux façons d'appliquer la loi : l'appeler, ou passer par la porte

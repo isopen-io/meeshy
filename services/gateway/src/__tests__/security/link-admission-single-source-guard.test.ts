@@ -68,7 +68,12 @@ const ADMISSION_COMPARISON = /currentUses\s*>=\s*[\w.]*maxUses|currentUses:\s*\{
 
 const ALLOWED = new Set([
   'services/conversations/linkAdmission.ts', // admitLinkEntry — LA loi
-  'routes/conversations/link-admission.ts', // claimLinkUse — sa réclamation atomique (critère 3)
+  // `claimLinkUse` a quitté `link-admission.ts` pour `link-admission-claim.ts`
+  // au lot #16837 : les DEUX admissions (invité et inscrit) consomment la même
+  // place, et les laisser dans le fichier de l'inscrit faisait de l'import du
+  // module invité un CYCLE de valeur. Le site reste UNIQUE, il a changé de
+  // fichier.
+  'routes/conversations/link-admission-claim.ts', // claimLinkUse — sa réclamation atomique (critère 3)
   'routes/anonymous.ts', // GET /anonymous/link/:identifier — aperçu public, n'admet personne
   // `routes/conversations/messages-list.ts` a été RETIRÉ par #4827 — cf. doc-tête.
 ]);
