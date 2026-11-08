@@ -299,6 +299,22 @@ export class LocationHandler {
   private sessions = new Map<string, LiveLocationSession>();
   private expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly engagement: Pick<EngagementService, 'recordActivity'> | null;
+  /**
+   * L'horloge du handler — `deps.now` en test, l'horloge murale en production.
+   *
+   * **Tous** les chemins de ce handler la lisent, et c'est un invariant, pas un
+   * goût : cinq sites appelaient `new Date()` en direct, dont les trois FINS DE
+   * VIE d'un partage (déconnexion, clôture du fil, sortie d'un membre) et les
+   * deux composeurs de `stoppedAt`. Un partage ouvert sous l'horloge injectée
+   * était donc jugé terminé sous l'horloge RÉELLE : `_expireSessionNow` sort
+   * sur `now >= session.expiresAt`, et c'est le témoin de l'EXPIRATION qui l'a
+   * montré — il ne voyait aucune rétractation partir au salon.
+   *
+   * En production les deux horloges sont la même, donc rien ne se voyait ; le
+   * coût était de rendre trois chemins de fin de vie INOBSERVABLES sous horloge
+   * contrôlée, c'est-à-dire exactement ceux dont le défaut laisse une épingle
+   * plantée jusqu'à huit heures.
+   */
   private readonly now: () => Date;
 
   constructor(deps: LocationHandlerDependencies) {

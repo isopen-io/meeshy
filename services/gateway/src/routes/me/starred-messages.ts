@@ -25,6 +25,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { MessageStarredEventData } from '@meeshy/shared/types/socketio-events';
 import type { CursorPaginationMeta } from '@meeshy/shared/types/api-responses';
 import {
   MESSAGE_STAR_ERROR_CODES,
@@ -38,6 +39,7 @@ import { isRegisteredUser, type UnifiedAuthRequest } from '../../middleware/auth
 import { MessageStarWriter } from '../../services/messaging/messageStars/MessageStarWriter';
 import { StarredMessagesReader } from '../../services/messaging/messageStars/StarredMessagesReader';
 import { broadcastToUser } from '../../utils/socket-broadcast';
+import { enqueueStarMark } from '../../socketio/enqueuePersonalMessageMark';
 import { logError } from '../../utils/logger';
 import {
   sendBadRequest,
@@ -194,6 +196,16 @@ export async function meStarredMessagesRoutes(
           starredAt: outcome.starredAt.toISOString(),
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.MESSAGE_STARRED, result);
+        // #16688 — la diffusion ci-dessus n'atteint que les appareils ALLUMÉS,
+        // et l'étoile était la marque personnelle SANS AUCUN recours temps
+        // réel : ni file (son test d'audience interroge la connexion du COMPTE,
+        // que l'appareil acteur fournit toujours), ni `GET /sync` (mesuré : zéro
+        // état d'étoile dans ses onze fichiers), ni état d'étoile sur une charge
+        // de message — les clients le tiennent de l'ENSEMBLE des favoris
+        // (`GET /me/starred-messages`, `starred-messages-cache.ts`) et de ce
+        // push, de rien d'autre. Un appareil resté éteint gardait donc le fil
+        // sans étoile jusqu'à ce que quelque chose relise cet ensemble.
+        await enqueueStarMark({ userId, state: result });
         return sendSuccess(reply, result);
       } catch (error) {
         logError(fastify.log, '[PUT /me/starred-messages/:messageId]', error);
@@ -236,12 +248,18 @@ export async function meStarredMessagesRoutes(
         const { messageId } = params.data;
         const { removed } = await writer.unstar(userId, messageId);
         if (removed) {
-          broadcastToUser(fastify, userId, SERVER_EVENTS.MESSAGE_STARRED, {
+          const cleared: MessageStarredEventData = {
             messageId,
             conversationId: removed.conversationId,
             starred: false,
             starredAt: null,
-          });
+          };
+          broadcastToUser(fastify, userId, SERVER_EVENTS.MESSAGE_STARRED, cleared);
+          // Jumelle de la pose (#16688). La file SUPPLANTE en place sous
+          // `messageId` : un retrait écrit après une pose remplace l'entrée de
+          // la pose, et l'appareil absent relit le seul état qui soit vrai —
+          // jamais une étoile qu'on a déjà retirée.
+          await enqueueStarMark({ userId, state: cleared });
         }
         const result: MessageStarRemovedResult = { messageId, starred: false };
         return sendSuccess(reply, result);
