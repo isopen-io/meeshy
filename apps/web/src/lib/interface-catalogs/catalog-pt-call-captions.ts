@@ -27,6 +27,10 @@ const ptCallCaptions = {
   'callTranscript.retry': 'Tentar novamente',
   'callTranscript.showOriginal': 'Ver o original',
   'callTranscript.showTranslated': 'Ver a tradução',
+  'callJournal.capture.screenshot': 'capturou o ecrã',
+  'callJournal.capture.recording': 'está a gravar o ecrã',
+  'callJournal.recording.started': 'A gravação da chamada começou',
+  'callJournal.recording.stopped': 'A gravação da chamada parou',
 } as const;
 
 export default ptCallCaptions;

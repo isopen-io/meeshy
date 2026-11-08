@@ -70,7 +70,13 @@ class CallCaptionsBandOverlay @Inject constructor(
         val lines = remember(state, labels) {
             captions.captionLines(state.journal.tail(BAND_LINES), state, labels)
         }
-        CallCaptionsBand(lines = lines, onToggleOriginal = captions::toggleReveal, onOpenJournal = captions::openJournal)
+        CallCaptionsBand(
+            lines = lines,
+            onToggleOriginal = captions::toggleReveal,
+            onOpenJournal = captions::openJournal,
+            captures = context.state.liveCaptures,
+            peerName = context.state.peerName,
+        )
     }
 }
 
@@ -88,8 +94,13 @@ internal fun CallCaptionsBand(
     onToggleOriginal: (String) -> Unit,
     onOpenJournal: () -> Unit,
     modifier: Modifier = Modifier,
+    /** #16665 — the dated captures, mixed with the sentences at their time (R1). */
+    captures: List<CallLiveCapture> = emptyList(),
+    peerName: String = "",
 ) {
     val title = stringResource(R.string.call_captions_title)
+    val you = stringResource(R.string.call_avatar_you)
+    val entries = remember(lines, captures) { CallBandEntries.last(lines, captures, BAND_LINES) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -104,14 +115,28 @@ internal fun CallCaptionsBand(
             modifier = Modifier.weight(1f).padding(vertical = MeeshySpacing.xs),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         ) {
-            if (lines.isEmpty()) {
+            if (entries.isEmpty()) {
                 Text(
                     text = stringResource(R.string.call_captions_waiting),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.6f),
                 )
             } else {
-                lines.forEach { line -> CallCaptionRow(line = line, showsTime = false, onToggleOriginal = { onToggleOriginal(line.key) }) }
+                entries.forEach { entry ->
+                    when (entry) {
+                        is CallBandEntry.Sentence -> CallCaptionRow(line = entry.line, showsTime = false, onToggleOriginal = { onToggleOriginal(entry.line.key) })
+                        is CallBandEntry.Capture -> {
+                            val capture = entry.capture
+                            CallCaptureLine(
+                                name = liveCaptureName(capture, selfId = null, youLabel = you, peerName = peerName),
+                                nameColor = hexColor(CallSpeakerColor.hex(capture.userId.ifBlank { peerName })),
+                                kind = capture.kind,
+                                elapsed = capture.elapsedLabel,
+                                ink = Color.White.copy(alpha = 0.75f),
+                            )
+                        }
+                    }
+                }
             }
         }
         IconButton(

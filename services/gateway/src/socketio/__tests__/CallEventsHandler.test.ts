@@ -4510,7 +4510,7 @@ describe('CallEventsHandler', () => {
         callId: CALL_ID,
         participantId: PARTICIPANT_ID,
         userId: USER_ID,
-        isCapturing: true,
+        isCapturing: true, kind: 'recording',
       });
     });
 
@@ -4528,7 +4528,7 @@ describe('CallEventsHandler', () => {
         callId: CALL_ID,
         participantId: PARTICIPANT_ID,
         userId: USER_ID,
-        isCapturing: false,
+        isCapturing: false, kind: 'recording',
       });
     });
   });

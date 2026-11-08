@@ -35,7 +35,7 @@ extension CallView {
                 callModeLayer
 
                 // APP-1 — partage, enregistrement, cadre : une pile sous l'en-tête.
-                CallTopBannerStackView(screenShare: callManager.screenShare, recording: callManager.recording, remoteName: callManager.remoteUsername ?? "", chrome: chromeVisibility, hasLiveFrameStatus: hasLiveFrameStatus,
+                CallTopBannerStackView(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, remoteName: callManager.remoteUsername ?? "", chrome: chromeVisibility, hasLiveFrameStatus: hasLiveFrameStatus,
                                        topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) { liveFrameStatus }
 
                 CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
@@ -403,9 +403,6 @@ extension CallView {
                 }
                 if !callManager.isRemoteAudioEnabled {
                     statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
-                }
-                if callManager.isRemoteScreenCapturing {
-                    statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
                 }
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)

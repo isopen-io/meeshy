@@ -27,6 +27,10 @@ const deCallCaptions = {
   'callTranscript.retry': 'Erneut versuchen',
   'callTranscript.showOriginal': 'Original anzeigen',
   'callTranscript.showTranslated': 'Übersetzung anzeigen',
+  'callJournal.capture.screenshot': 'hat einen Screenshot gemacht',
+  'callJournal.capture.recording': 'nimmt den Bildschirm auf',
+  'callJournal.recording.started': 'Die Anrufaufzeichnung hat begonnen',
+  'callJournal.recording.stopped': 'Die Anrufaufzeichnung wurde beendet',
 } as const;
 
 export default deCallCaptions;

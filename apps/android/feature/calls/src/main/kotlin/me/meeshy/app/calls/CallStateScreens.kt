@@ -31,8 +31,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * The peer block of the call screen over the VIDEO stage: the name, the status line, the
- * connection-quality bars and the notices about the other side (degraded network, screen
- * capture, muted mic, camera off). Pure glue — every show/hide decision is the [CallUiState]'s;
+ * connection-quality bars and the notices about the other side (degraded network, muted mic,
+ * camera off). The screen capture is the capsule under the header ([CallCaptureCapsule]). Pure glue — every show/hide decision is the [CallUiState]'s;
  * the [accent] is the peer's. The avatar is not here: on the video stage the picture is the peer,
  * and the audio stage shows the photo through [CallAudioStage] (#12569, one face per circle).
  */
@@ -54,27 +54,11 @@ internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolea
         if (state.isPeerQualityDegraded) {
             PeerNotice(stringResource(R.string.call_peer_quality_degraded, state.peerName), MeeshyTheme.tokens.warning)
         }
-        if (state.isPeerScreenCapturing) {
-            PeerNotice(stringResource(R.string.call_peer_screen_capturing, state.peerName), MeeshyTheme.tokens.error)
-        }
         if (state.isPeerMuted && !videoStage) {
             PeerNotice(stringResource(R.string.call_peer_muted, state.peerName), MeeshyTheme.tokens.textSecondary)
         }
         if (state.isPeerCameraOff && !videoStage) {
             PeerNotice(stringResource(R.string.call_peer_camera_off, state.peerName), MeeshyTheme.tokens.textSecondary)
-        }
-    }
-}
-
-/**
- * Sur la scène vidéo, ce que le pair fait subir à MON appareil — sa capture d'écran — reste dit, en
- * haut sous l'en-tête, jamais au centre de son image.
- */
-@Composable
-internal fun CallVideoPeerNotices(state: CallUiState, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (state.isPeerScreenCapturing) {
-            PeerNotice(stringResource(R.string.call_peer_screen_capturing, state.peerName), MeeshyTheme.tokens.error)
         }
     }
 }
