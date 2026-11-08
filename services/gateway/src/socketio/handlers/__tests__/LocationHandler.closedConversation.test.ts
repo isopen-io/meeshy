@@ -41,6 +41,7 @@ jest.mock('../../../utils/socket-rate-limiter.js', () => ({
 import { LocationHandler } from '../LocationHandler';
 import type { Socket } from 'socket.io';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { noBlocksUserSurface } from '../../__tests__/helpers/no-blocks';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,7 @@ function makeHandler(conversationRow: unknown = OPEN) {
   const prisma = {
     participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }) },
     conversation: { findUnique: jest.fn<any>().mockResolvedValue(conversationRow) },
+    user: noBlocksUserSurface(),
   };
   const handler = new LocationHandler({
     io,
@@ -102,6 +104,7 @@ function makeHandler(conversationRow: unknown = OPEN) {
       [SHARER_ID, { id: SHARER_ID, isAnonymous: false, displayName: 'Alice' }],
       [VIEWER_ID, { id: VIEWER_ID, isAnonymous: false, displayName: 'Bob' }],
     ]),
+    userSockets: new Map(),
     socketToUser: new Map<string, string>([
       [SHARER_SOCKET, SHARER_ID],
       [VIEWER_SOCKET, VIEWER_ID],

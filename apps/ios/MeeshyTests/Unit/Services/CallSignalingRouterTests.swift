@@ -60,7 +60,7 @@ final class CallSignalingRouterTests: XCTestCase {
             let router = CallSignalingRouter()
             router.start(routingTo: call)
             router.start(routingTo: call)
-            XCTAssertEqual(router.subscriptionCount, 18, "eighteen socket subjects, never subscribed twice")
+            XCTAssertEqual(router.subscriptionCount, 19, "nineteen socket subjects (the consented-recording journal, #16665), never subscribed twice")
         }
     }
 }

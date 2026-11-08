@@ -12,8 +12,13 @@ extension OfflineQueue {
     /// immediate retry on the flusher's next pass.
     ///
     /// Throws `OfflineQueueError.itemNotFound` if no row exists for
-    /// `outboxId`. Throws `OfflineQueueError.poolNotConfigured` if
+    /// `outboxId`. Throws `OfflineQueueError.itemInFlight` si un dispatcher la
+    /// porte EN CE MOMENT. Throws `OfflineQueueError.poolNotConfigured` if
     /// `configure(pool:)` was never called.
+    ///
+    /// #16749 — « previously failed or exhausted » était une DÉCLARATION que
+    /// rien ne faisait respecter. Qui a le droit d'être réarmé est dit par
+    /// `OutboxRetryAdmission`.
     public func retryItem(_ outboxId: String) async throws {
         guard let pool = outboxPool else {
             throw OfflineQueueError.poolNotConfigured
@@ -37,30 +42,20 @@ extension OfflineQueue {
                                          ownerId: CommentOwnership.userId(inToken: APIClient.shared.authToken))
             return
         }
-        // Le retry ré-arme la ligne avec le MÊME cmid : sans cette purge, un
-        // abonné post-retry (`outcomeStream(for:)`) recevait instantanément
-        // le tombstone `.exhausted` périmé pour une mutation encore en vol.
-        forgetOutcome(for: record.clientMessageId)
-
-        let now = Date()
-        do {
-            try await pool.write { db in
-                try db.execute(sql: """
-                    UPDATE outbox
-                    SET status = ?, attempts = 0, lastError = NULL,
-                        updatedAt = ?, nextAttemptAt = ?
-                    WHERE id = ?
-                    """, arguments: [
-                        OutboxStatus.pending.rawValue,
-                        now,
-                        now,
-                        outboxId
-                    ])
-            }
-        } catch {
-            logger.error("retryItem write failed: \(error.localizedDescription, privacy: .public)")
-            throw OfflineQueueError.writeFailed(underlying: error)
+        // Zéro ligne appariée ⇒ la ligne existe (on vient de la lire) et son claim
+        // est FRAIS. On ne réveille aucun flush et on ne touche à aucun outcome.
+        guard try await OutboxRetryAdmission.rearm(outboxId, in: pool) else {
+            logger.info("retryItem refused: a dispatcher holds \(outboxId, privacy: .public)")
+            throw OfflineQueueError.itemInFlight
         }
+
+        // Le retry ré-arme la ligne avec le MÊME cmid : sans cette purge, un
+        // abonné post-retry (`outcomeStream(for:)`) recevait instantanément le
+        // tombstone `.exhausted` périmé pour une mutation encore en vol. #16749
+        // l'a déplacée APRÈS l'écriture : posée avant, elle effaçait l'outcome
+        // d'une mutation que la garde vient de REFUSER de réarmer — une garde
+        // qui refuse doit refuser TOUT ce que le chemin nominal fait.
+        forgetOutcome(for: record.clientMessageId)
 
         await refreshPendingCount()
         // **Une ligne RÉ-ARMÉE est, pour le flusher, exactement une ligne

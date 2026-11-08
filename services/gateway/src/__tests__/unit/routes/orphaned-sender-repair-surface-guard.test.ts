@@ -164,6 +164,10 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // #11381 — la lecture de `translation:request` est partie dans `messaging/atRestTranslationSource.ts`.
   'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'deliverTextTranslation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16706 (cycle 143 bis) — la garde d'ADMISSION de la file hors ligne. Elle lit
+  // `MESSAGE_LIVENESS_SELECT` seul (`deletedAt`, `expiresAt`, `viewOnceBurnedAt`)
+  // et ne sert aucun expéditeur : rien à réparer, par construction.
+  'offlineParticipantQueue.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

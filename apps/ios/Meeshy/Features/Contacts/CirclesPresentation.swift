@@ -42,12 +42,14 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
         }
     }
 
-    /// La préférence de RÉCEPTION que ce réglage pose, quand son lot est livré ; `nil` ⇒ encore derrière son drapeau.
-    var receptionSetting: RelationReceptionSetting? {
+    /// Le réglage par personne que cet interrupteur pose, quand son lot est livré ; `nil` ⇒ encore derrière son
+    /// drapeau.
+    var personSwitch: CirclePersonSwitch? {
         switch self {
-        case .blockBring: return .bring
-        case .talkie: return .talkie
-        case .listening, .liveLocation: return nil
+        case .blockBring: return .reception(.bring)
+        case .talkie: return .reception(.talkie)
+        case .listening: return .share(.listeningCategory)
+        case .liveLocation: return nil
         }
     }
 
@@ -60,7 +62,9 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
                 defaultValue: "Sa voix ne sortira plus directement chez vous : elle arrivera en message vocal. Cette personne n’en est pas prévenue.",
                 bundle: .main
             )
-        case .blockBring, .listening, .liveLocation:
+        case .listening:
+            return ListeningShareCopy.detail
+        case .blockBring, .liveLocation:
             return nil
         }
     }
@@ -69,7 +73,7 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
         switch self {
         case .blockBring: return String(localized: "circles.settings.blockBring", defaultValue: "Bloquer ses Bring", bundle: .main)
         case .talkie: return String(localized: "circles.settings.blockTalkie", defaultValue: "Couper son talkie", bundle: .main)
-        case .listening: return String(localized: "circles.settings.listening", defaultValue: "Ce que j'écoute", bundle: .main)
+        case .listening: return ListeningShareCopy.title
         case .liveLocation: return String(localized: "circles.settings.location", defaultValue: "Position en direct", bundle: .main)
         }
     }

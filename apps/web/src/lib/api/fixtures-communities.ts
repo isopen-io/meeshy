@@ -179,6 +179,8 @@ export function fixtureUpdateCommunity(communityId: string, body: CommunitySetti
     ...(body.name === undefined ? {} : { name: body.name }),
     ...(body.description === undefined ? {} : { description: body.description === '' ? null : body.description }),
     ...(body.isPrivate === undefined ? {} : { isPrivate: body.isPrivate }),
+    ...(body.avatar === undefined ? {} : { avatar: body.avatar }),
+    ...(body.banner === undefined ? {} : { banner: body.banner }),
   };
   state.communities = state.communities.map((community) => (community.id === mine.id ? updated : community));
   return { ok: true, data: updated };

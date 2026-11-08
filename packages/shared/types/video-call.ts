@@ -7,6 +7,7 @@
  */
 
 import type { CallErrorCode } from './call-error-codes.js';
+import type { CallScreenCaptureKind } from './call-capture.js';
 
 export * from './call-analytics.js';
 
@@ -500,6 +501,12 @@ export interface CallScreenCaptureEvent {
    */
   readonly userId?: string
   readonly isCapturing: boolean
+  /**
+   * #16665 — `recording` (enregistrement d'écran, vrai puis faux) ou
+   * `screenshot` (capture ponctuelle, vrai seul). Absent chez un client
+   * d'avant : se lit `recording` (`screenCaptureKindOf`).
+   */
+  readonly kind?: CallScreenCaptureKind
 }
 
 export interface CallTranslationRequestedEvent {

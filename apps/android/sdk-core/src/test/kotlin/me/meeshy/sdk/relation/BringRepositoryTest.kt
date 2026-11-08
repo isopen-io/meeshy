@@ -18,6 +18,8 @@ import me.meeshy.sdk.model.relation.BringBlockBody
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.BringStoppedEvent
 import me.meeshy.sdk.model.relation.RelationPersonSettings
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
+import me.meeshy.sdk.model.relation.TalkieBlockBody
 import me.meeshy.sdk.net.api.BringApi
 import me.meeshy.sdk.net.api.BringStopResponse
 import me.meeshy.sdk.net.api.RelationsApi
@@ -142,9 +144,22 @@ class BringRepositoryTest {
             ApiResponse(success = true, data = RelationPersonSettings("u2", true))
 
         assertThat(repository.personSettings("u2")?.bringBlocked).isFalse()
-        assertThat(repository.setBringBlocked("u2", blocked = true)?.bringBlocked).isTrue()
+        assertThat(repository.setReceptionBlocked("u2", RelationReceptionSetting.BRING, blocked = true)?.bringBlocked).isTrue()
 
         coEvery { relations.setBringBlocked("u2", BringBlockBody(false)) } throws http(500)
-        assertThat(repository.setBringBlocked("u2", blocked = false)).isNull()
+        assertThat(repository.setReceptionBlocked("u2", RelationReceptionSetting.BRING, blocked = false)).isNull()
+    }
+
+    @Test
+    fun `couper le talkie d'une personne ecrit son seul champ, jamais celui du Bring`() = runTest {
+        val repository = repository()
+        coEvery { relations.setTalkieBlocked("u2", TalkieBlockBody(true)) } returns
+            ApiResponse(success = true, data = RelationPersonSettings("u2", bringBlocked = false, talkieBlocked = true))
+
+        val served = repository.setReceptionBlocked("u2", RelationReceptionSetting.TALKIE, blocked = true)
+
+        assertThat(served?.isBlocked(RelationReceptionSetting.TALKIE)).isTrue()
+        assertThat(served?.isBlocked(RelationReceptionSetting.BRING)).isFalse()
+        coVerify(exactly = 0) { relations.setBringBlocked(any(), any()) }
     }
 }

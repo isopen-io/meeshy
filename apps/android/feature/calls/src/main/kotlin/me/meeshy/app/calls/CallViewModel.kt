@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.group.GroupCallRoster
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
@@ -158,6 +159,7 @@ class CallViewModel @Inject constructor(
      * header, the pill and the ongoing-call notification all read it. Kept until the next [start], like iOS.
      */
     private var groupTitle: GroupCallTitle? = null
+    private var groupRoster: GroupCallRoster = GroupCallRoster(localUserId = "")
 
     /** The signalling socket's last known edge (`null` before the first), and the rejoin it started (#13765). */
     private var socketWasConnected: Boolean? = null
@@ -273,6 +275,15 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             coordinator.groupMesh.map { it.title }.distinctUntilChanged().collect(::onGroupTitle)
         }
+        viewModelScope.launch {
+            coordinator.groupMesh.map { it.roster }.distinctUntilChanged().collect(::onGroupRoster)
+        }
+    }
+
+    private fun onGroupRoster(next: GroupCallRoster) {
+        if (next == groupRoster) return
+        groupRoster = next
+        publish()
     }
 
     private fun onGroupTitle(title: GroupCallTitle?) {
@@ -853,12 +864,17 @@ class CallViewModel @Inject constructor(
 
     private fun publish() {
         val peer = peers.indicators
+        val roster = groupRoster
+        val captures = peer.liveCaptures.map { it.copy(name = CallCapturerName.resolve(it.userId, roster, config.peerName)) }
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
-            peer.qualityDegraded, peer.screenCapturing, peer.caption,
+            peer.qualityDegraded, peer.screenCapturing || peer.screenshotFlashing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
-            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice,
-        ).withGroupTitle(groupTitle?.text(groupTitleWording.current())).copy(isOnHold = hold.isOnHold.value)
+            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice, liveCaptures = captures,
+        ).withGroupTitle(groupTitle?.text(groupTitleWording.current())).copy(
+            isOnHold = hold.isOnHold.value,
+            peerScreenCapturerName = CallCapturerName.resolve(peer.capturerId, roster, config.peerName),
+        )
         syncPreview()
     }
 

@@ -113,9 +113,9 @@ export function selfRowsLayout({ tile, bounds, effectsWidth, cameraWidth }: Layo
 }
 
 /** L'en-tête tient 3,5 rem sous la zone sûre, la pilule 6,5 rem au-dessus d'elle ; 8 px de bord. */
-export const selfRowBounds = (viewport: { readonly width: number; readonly height: number }): Box => ({
+export const selfRowBounds = (viewport: { readonly width: number; readonly height: number }, topInset = 0): Box => ({
   x: 8,
-  y: 56,
+  y: 56 + topInset,
   width: Math.max(0, viewport.width - 16),
-  height: Math.max(0, viewport.height - 56 - 104),
+  height: Math.max(0, viewport.height - 56 - topInset - 104),
 });

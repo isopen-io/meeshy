@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualitySample
+import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentRef
@@ -103,6 +104,12 @@ class CallViewModelTest {
     private val screenRecordingDetector = object : ScreenRecordingDetector {
         override val states: Flow<Boolean> = screenRecordingFlow
     }
+
+    /** #16665 — test-driven screenshot window: emit once to clear a peer screenshot's capsule. */
+    private val screenshotResetFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+
+    /** #16665 — test-driven local screenshots (the activity's `ScreenCaptureWatcher`). */
+    private val screenshotFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
     /** Pinned wall clock: assign [clockNowMs] to move time for the analytics anchors. */
     private var clockNowMs = 0L
@@ -191,7 +198,13 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, appStatePresence,
-        CallPeerIndicatorsController(signalManager, qualityResetTimer, screenRecordingDetector),
+        CallPeerIndicatorsController(
+            signalManager, qualityResetTimer, screenRecordingDetector,
+            screenshotResetTimer = { screenshotResetFlow },
+            screenshotSignals = object : CallScreenshotSignals {
+                override val captures: Flow<Unit> = screenshotFlow
+            },
+        ),
         CallWaitingController(signalManager, waitingTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
         CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
@@ -789,6 +802,16 @@ class CallViewModelTest {
         screenRecordingFlow.emit(false)
 
         verify(exactly = 1) { signalManager.emitScreenCaptureDetected("call-9", "me", false) }
+    }
+
+    @Test
+    fun `a screenshot on this device during a connected call is relayed as a screenshot start (#16665)`() = runTest {
+        connectedIncomingAs("me")
+
+        screenshotFlow.emit(Unit)
+
+        verify(exactly = 1) { signalManager.emitScreenCaptureDetected("call-9", "me", true, CallCaptureKind.SCREENSHOT) }
+        verify(exactly = 0) { signalManager.emitScreenCaptureDetected("call-9", "me", false, any()) }
     }
 
     @Test
@@ -1774,8 +1797,8 @@ class CallViewModelTest {
     private fun qualityAlert(callId: String = "call-9") =
         CallQualityAlertPayload(callId = callId, participantId = "p2", metric = "rtt", value = 900.0, threshold = 500.0)
 
-    private fun captureAlert(callId: String = "call-9", capturing: Boolean = true) =
-        CallScreenCaptureAlertPayload(callId = callId, participantId = "p2", isCapturing = capturing)
+    private fun captureAlert(callId: String = "call-9", capturing: Boolean = true, kind: String? = null) =
+        CallScreenCaptureAlertPayload(callId = callId, participantId = "p2", isCapturing = capturing, kind = kind)
 
     private fun segment(callId: String = "call-9", text: String = "bonjour", translated: String? = "hello") =
         CallTranslatedSegmentPayload(
@@ -1818,6 +1841,36 @@ class CallViewModelTest {
 
         screenCaptureAlerts.emit(captureAlert(capturing = false))
         assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a peer screenshot shows the capsule, which clears itself after the window (#16665)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "screenshot"))
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+
+        screenshotResetFlow.emit(Unit)
+
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a screenshot end relayed for older clients never clears a peer recording (#16665)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "recording"))
+        screenCaptureAlerts.emit(captureAlert(capturing = false, kind = "screenshot"))
+
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+    }
+
+    @Test
+    fun `a peer capture enters the live journal once per window, between the sentences (#16665)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "screenshot"))
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "screenshot"))
+
+        assertThat(vm.state.value.liveCaptures.map { it.kind }).containsExactly(CallCaptureKind.SCREENSHOT)
+        assertThat(vm.state.value.liveCaptures.single().userId).isEqualTo("p2")
     }
 
     @Test

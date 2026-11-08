@@ -68,6 +68,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         segments
     }
 
+    /// #16665 — les captures d'écran et les bornes de l'enregistrement de
+    /// l'appel, gardées avec les phrases jusqu'à la fin de l'appel. Leurs
+    /// changements redessinent ceux qui lisent le journal des phrases.
+    let captureJournal = CallCaptureJournal()
+    private var captureForwarding: AnyCancellable?
+
     private let socket: any MessageSocketProviding
     private var callId: String?
     private var localUserId = ""
@@ -123,6 +129,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     init(socket: any MessageSocketProviding = MessageSocketManager.shared, gateResolver: (any CallCaptionsGateResolving)? = nil) {
         self.socket = socket
         self.gateResolver = gateResolver ?? CallCaptionsGateResolver()
+        captureForwarding = captureJournal.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     #if DEBUG
@@ -325,7 +332,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// key. `CallManager` — the sole caller, always at definite end-of-call —
     /// has every value in hand at its call site.
     func resetForCallEnd(callId: String?, conversationId: String, callStartedAt: Date?, localUserId: String, localSpeakerName: String, remoteSpeakerName: String) {
-        if let callId, !persistedSegments.isEmpty {
+        let captures = captureJournal.marks
+        if let callId, !persistedSegments.isEmpty || !captures.isEmpty {
             let snapshot = CallTranscript(
                 callId: callId,
                 conversationId: conversationId,
@@ -343,10 +351,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
                         language: seg.language,
                         capturedAt: seg.capturedAt
                     )
-                }
+                },
+                captures: captures
             )
             Task { await CallTranscriptStore.shared.saveMerging(snapshot) }
         }
+        captureJournal.reset()
         stopTranscribing()
         // Purge inconditionnelle — UNIQUE site (stopTranscribing conserve le
         // journal pour la réouverture du panneau en cours d'appel) : sans

@@ -317,6 +317,30 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.mute",
+          "androidName": "talkie_incoming_mute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.muteNamed",
+          "androidName": "talkie_incoming_mute_named",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.someone",
+          "androidName": "talkie_incoming_someone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.title",
+          "androidName": "talkie_incoming_title",
+          "status": "adopted"
+        },
+        {
           "catalog": "widgets",
           "iosKey": "widget.allRead",
           "androidName": "widget_all_read_label",

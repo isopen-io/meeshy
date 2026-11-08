@@ -170,7 +170,7 @@ export function fixturePhoneLookup(phone: string): { readonly id: string; readon
 export const FIXTURE_TRANSCRIPT_CALL_ID = 'call-1';
 
 export function fixtureCallTranscript(callId: string): CallTranscript | null {
-  if (callId !== FIXTURE_TRANSCRIPT_CALL_ID) return { callId, startedAtMs: null, segments: [] };
+  if (callId !== FIXTURE_TRANSCRIPT_CALL_ID) return { callId, startedAtMs: null, segments: [], captures: [] };
   const startedAtMs = Date.parse('2026-09-26T09:00:00.000Z');
   return {
     callId,
@@ -180,6 +180,7 @@ export function fixtureCallTranscript(callId: string): CallTranscript | null {
       { id: 't-2', speakerId: 'u-viewer', speakerDisplayName: null, text: 'Oui, très bien.', language: 'fr', capturedAtMs: startedAtMs + 9_000, translations: [{ targetLanguage: 'en', translatedText: 'Yes, very well.' }] },
       { id: 't-3', speakerId: 'u-kwame', speakerDisplayName: 'Kwame Mensah', text: 'Great, let’s go over the plan.', language: 'en', capturedAtMs: startedAtMs + 75_000, translations: [{ targetLanguage: 'es', translatedText: 'Genial, repasemos el plan.' }] },
     ],
+    captures: [{ id: 'cap-1', kind: 'screenshot', userId: 'u-kwame', name: 'Kwame Mensah', offsetMs: 12_000 }],
   };
 }
 

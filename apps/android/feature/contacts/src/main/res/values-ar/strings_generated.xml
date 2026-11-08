@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_settings_block_talkie">كتم التوكي الخاص به</string>
+    <string name="circles_settings_block_talkie_detail">لن يُسمع صوته مباشرةً على جهازك بعد الآن: سيصلك كرسالة صوتية. لن يتم إعلام هذا الشخص.</string>
     <string name="contacts_back">رجوع</string>
     <string name="contacts_blocked_empty">لا يوجد مستخدمون محظورون</string>
     <string name="contacts_blocked_unblock">إلغاء الحظر</string>
