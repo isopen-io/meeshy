@@ -372,7 +372,7 @@ readonly SHARED_BASELINE=0
 # Seule l'ATTRIBUTION a survécu de ce côté-ci, et c'est elle qui manquait : la
 # convention de ce fichier veut qu'une baisse dise QUEL lot l'a gagnée, sans quoi le
 # prochain à la relire ne peut pas vérifier qu'elle était méritée.
-readonly GATEWAY_BASELINE=491
+readonly GATEWAY_BASELINE=490
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
