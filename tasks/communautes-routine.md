@@ -15,7 +15,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web), et la passerelle ne les sert qu'à qui peut les lire | voir réveil 15 | #6379 | voir réveil 15 |
 | 2026-11-08 | L'onglet Publications du détail lit les publications (iOS) | #17061 | #16878 | fusionnée dans dev (réveil 20) |
 | 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | fusionnée dans dev (réveil 21) |
-| 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | voir réveil 21 | #6380 | voir réveil 21 |
+| 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
 
 ## 2026-11-07 — lot 1
 
@@ -183,3 +183,4 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Pas de revue adversariale : ni authentification, ni permission, ni migration (préférence d'affichage locale).
 - Témoins : `CommunityLocalAppearanceTests` (SDK, 5) et trois de plus dans `CommunityCreateViewModelTests`. iOS ne compile pas en conteneur : preuve par `ios.yml`.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 demandent une session de staging.
+- État en fin de run : PR #17152 ouverte, NON fusionnée. `ios.yml` sur la tête `5da395a14` : gardes texte et compilation vertes, les quatre tranches de tests rouges sur 14 échecs TOUS hors du diff (composer surtout, plus `MessageSearchResultRow`) — dev ne lance pas les tests à la fusion, ce rouge s'y est accumulé sans être vu : #17172. Le prochain réveil relance `ios.yml` quand #17172 est soldée, puis fusionne au vert.
