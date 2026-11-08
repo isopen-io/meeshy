@@ -1,6 +1,5 @@
 import UIKit
 import Combine
-@preconcurrency import UserNotifications
 import MeeshySDK
 import os
 
