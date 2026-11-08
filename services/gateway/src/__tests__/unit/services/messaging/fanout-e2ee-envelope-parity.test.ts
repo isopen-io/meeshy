@@ -103,7 +103,15 @@ function makePrisma(mode: string) {
   };
 }
 
-const message = (mode: string, envelope: string | null) => ({
+type Protection = {
+  isViewOnce?: boolean;
+  isBlurred?: boolean;
+  effectFlags?: number;
+  expiresAt?: Date | null;
+  ephemeralDuration?: number | null;
+};
+
+const message = (mode: string, envelope: string | null, protection: Protection = {}) => ({
   id: MSG_ID,
   messageType: 'text',
   replyToId: REPLIED_TO_MSG_ID,
@@ -113,8 +121,10 @@ const message = (mode: string, envelope: string | null) => ({
   isBlurred: false,
   effectFlags: 0,
   expiresAt: null,
+  ephemeralDuration: null,
   createdAt: new Date('2026-11-08T21:05:00Z'),
   encryptedContent: envelope,
+  ...protection,
 });
 
 /**
@@ -143,12 +153,12 @@ function captureFanOuts() {
   };
 }
 
-async function fanOut(mode: string, envelope: string | null) {
+async function fanOut(mode: string, envelope: string | null, protection: Protection = {}) {
   const { vus, service } = captureFanOuts();
   await notifyMessageRecipients({
     prisma: makePrisma(mode) as any,
     notificationService: service as any,
-    message: message(mode, envelope) as any,
+    message: message(mode, envelope, protection) as any,
     senderParticipantId: SENDER_PART_ID,
     conversationId: CONV_ID,
     processedContent: `bonjour @${MENTIONED}`,
@@ -289,5 +299,103 @@ describe.each(producteurs)('%s — l’enveloppe atteint le FIL, pas seulement l
     await run(service, ENVELOPPE);
 
     expect(pushData(sendToUser)).not.toHaveProperty('encryptedContent');
+  });
+});
+
+/**
+ * ─── Et la question que le lot avait oubliée : a-t-elle le DROIT d'être là ? ──
+ *
+ * En E2EE, `protectedPreview` rend TOUJOURS un placeholder, donc
+ * `notificationLocKey` est toujours posé. Mais sa préséance est *éphémère >
+ * vue unique > flouté > chiffré* : un message E2EE **et** à vue unique porte
+ * `notification.view_once_message`, pas `notification.encrypted_message`.
+ *
+ * L'enveloppe, elle, était calculée sans AUCUN prédicat de protection — et la
+ * NSE la déchiffre en écrasant le corps **sans jamais lire `locKey`**. Le texte
+ * intégral d'un message à vue unique, flouté, ou à flamme-œil s'affichait donc
+ * sur l'écran verrouillé, sans même consommer la vue unique.
+ *
+ * C'est la leçon 275 posée au bon moment : « la charge que ce site remet
+ * contient-elle autre chose que ce que je viens de garder ? » — l'enveloppe
+ * vivait littéralement ENTRE les deux champs que le second verrou retient
+ * (`pushMediaFields` au-dessus, `contentDetailPushFields` en dessous).
+ */
+describe('une protection AUTRE que le chiffrement retient l’enveloppe (#17080)', () => {
+  const protections: ReadonlyArray<readonly [string, Protection]> = [
+    ['vue unique', { isViewOnce: true }],
+    ['flouté', { isBlurred: true }],
+    ['éphémère MINUTÉ', { expiresAt: new Date('2099-01-01T00:00:00Z'), ephemeralDuration: 30 }],
+  ];
+
+  it.each(protections)('en E2EE, un message %s ne fait voyager AUCUNE enveloppe', async (_nom, protection) => {
+    const vus = await fanOut('e2ee', ENVELOPPE, protection);
+
+    expect(Object.keys(vus).sort()).toEqual(['mentions', 'regular', 'reply']);
+    expect(vus['regular']?.['encryptedContent']).toBeUndefined();
+    expect(vus['reply']?.['encryptedContent']).toBeUndefined();
+    expect(vus['mentions']?.['encryptedContent']).toBeUndefined();
+  });
+
+  /**
+   * Témoin NÉGATIF — vert des DEUX côtés : un message dont la SEULE protection
+   * est le chiffrement garde son enveloppe. C'est tout l'objet du lot, et sans
+   * ce témoin la porte ci-dessus se paierait en la retirant à tout le monde.
+   */
+  it('un message dont la seule protection est le chiffrement garde la sienne', async () => {
+    const vus = await fanOut('e2ee', ENVELOPPE);
+
+    expect(vus['regular']?.['encryptedContent']).toBe(ENVELOPPE);
+    expect(vus['reply']?.['encryptedContent']).toBe(ENVELOPPE);
+    expect(vus['mentions']?.['encryptedContent']).toBe(ENVELOPPE);
+  });
+});
+
+/**
+ * ─── Et à QUI la charge déchiffrable est-elle remise ? ───────────────────────
+ *
+ * L'éventail MENTION borne ses destinataires à `memberIds` (participations
+ * ACTIVES). L'éventail RÉPONSE résolvait l'auteur du message cité par un
+ * `participant.findUnique` **sans filtre `isActive`**, donc un membre PARTI ou
+ * BANNI — dont la ligne survit avec `isActive: false` — recevait la bannière.
+ * Le lot y a ajouté une enveloppe que sa NSE sait ouvrir : la clé de session
+ * est par EXPÉDITEUR, et rien ne la tourne quand quelqu'un quitte.
+ *
+ * Cycle 127, mot pour mot : « une garde qui protège la population la plus
+ * NOMBREUSE peut manquer la plus EXPOSÉE ».
+ */
+describe('l’éventail RÉPONSE ne sert pas un ex-membre (#17080)', () => {
+  it('un auteur cité qui n’est plus participant ACTIF ne reçoit rien', async () => {
+    const { vus, service } = captureFanOuts();
+    const prisma = makePrisma('e2ee');
+    // La conversation ne porte plus que l'expéditeur et les deux autres : le
+    // destinataire de la réponse a quitté, sa ligne survit avec isActive: false.
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
+      title: 'Le groupe scellé',
+      type: 'group',
+      encryptionMode: 'e2ee',
+      participants: [SENDER_USER_ID, MENTIONED, ORDINAIRE].map((userId) => ({ userId })),
+    });
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService: service as any,
+      message: message('e2ee', ENVELOPPE) as any,
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: `bonjour @${MENTIONED}`,
+      validatedMentionUserIds: [MENTIONED],
+    });
+
+    expect(vus['reply']).toBeUndefined();
+    // Les deux autres éventails partent : le refus est CIBLÉ, pas une panne.
+    expect(vus['regular']?.['encryptedContent']).toBe(ENVELOPPE);
+    expect(vus['mentions']?.['encryptedContent']).toBe(ENVELOPPE);
+  });
+
+  /** Témoin NÉGATIF : l'auteur cité TOUJOURS membre reçoit bien sa réponse. */
+  it('un auteur cité encore membre reçoit sa réponse', async () => {
+    const vus = await fanOut('e2ee', ENVELOPPE);
+
+    expect(vus['reply']).toBeDefined();
   });
 });

@@ -304,6 +304,35 @@ export function protectedPreview(input: {
 }
 
 /**
+ * **CE QUI A LE DROIT DE PARTIR DÉCHIFFRABLE** — #17080.
+ *
+ * Un message E2EE fait voyager l'enveloppe que son APPAREIL a scellée, et la
+ * NSE la déchiffre en ÉCRASANT le corps de la bannière — sans jamais lire
+ * `locKey`. Cette réécriture est le but quand la seule protection du message
+ * est son chiffrement. Elle est une FUITE dès qu'il en porte une autre.
+ *
+ * Et en E2EE il en porte toujours au moins une, puisque `protectedPreview`
+ * rend toujours un placeholder : la question n'est donc pas « y a-t-il une
+ * protection ? » — il y en a une — mais **laquelle a gagné la préséance**
+ * (*éphémère > vue unique > flouté > chiffré*). Un message E2EE ET à vue unique
+ * porte `notification.view_once_message`, et son texte intégral s'affichait sur
+ * l'écran verrouillé, sans même consommer la vue unique.
+ *
+ * `notificationLocKey` NU ne peut donc pas servir de porte ici, contrairement au
+ * média (cycle 125) : sa seule présence ne distingue pas les deux cas. C'est sa
+ * VALEUR qui décide, et cette fonction est l'endroit où on la lit — pas chez
+ * l'éventail, qui finirait par en porter une copie divergente.
+ *
+ * Fail-CLOSED : une clé inconnue retient l'enveloppe.
+ */
+export function protectionAllowsDecryptedBanner(
+  override: { readonly locKey?: string } | null | undefined,
+): boolean {
+  if (!override) return true;
+  return override.locKey === 'notification.encrypted_message';
+}
+
+/**
  * LE DOMICILE DE CETTE LOI EST `@meeshy/shared/utils/attachment-protection`
  * depuis #6189 — elle gouverne TROIS clients, donc elle ne pouvait pas rester
  * dans un service du gateway : `apps/web-v2` ne pouvait pas l'importer, et ne

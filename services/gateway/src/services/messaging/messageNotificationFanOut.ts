@@ -27,6 +27,7 @@ import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
 // double qui énumère ses clés à la main, et ce module est doublé partout.
 import { NOTIFICATION_FANOUT_CONCURRENCY } from '../notifications/notificationFanOutBudget';
 import { pendingRequestUserIds } from './pendingMessageRequests';
+import { protectionAllowsDecryptedBanner } from '../notifications/notification-preview';
 
 
 export type { NotificationActorProfile };
@@ -697,13 +698,43 @@ export async function notifyMessageRecipients(params: {
     // `createNotification` assemble). Une réponse et une mention restaient donc
     // « 🔒 💬 » à vie dans un groupe chiffré, pendant qu'un message ordinaire
     // arrivait en clair.
-    const deviceEnvelope = deviceEnvelopeForPush(message, conversation.encryptionMode);
+    //
+    // **ET SOUS LE SECOND VERROU** (#17080, audit adversarial). La NSE
+    // déchiffre l'enveloppe en ÉCRASANT le corps, sans lire `locKey` : elle ne
+    // doit donc partir que si la protection qui a GAGNÉ la préséance est le
+    // chiffrement lui-même. En E2EE, `protectedPreview` rend toujours un
+    // placeholder — la question n'est pas « y a-t-il une protection ? » mais
+    // « laquelle ? » —, et *éphémère > vue unique > flouté > chiffré* : sans
+    // cette porte, le texte intégral d'un message à VUE UNIQUE s'affichait sur
+    // l'écran verrouillé, sans même consommer la vue unique.
+    //
+    // La porte ferme aussi la fuite que `regular` portait DÉJÀ (#13114) : ce
+    // lot l'aurait étendue aux deux audiences les plus exposées — la personne
+    // visée par la réponse, et les mentionnés, dont la bannière perce la
+    // sourdine.
+    const deviceEnvelope = protectionAllowsDecryptedBanner(protectedOverride)
+      ? deviceEnvelopeForPush(message, conversation.encryptionMode)
+      : undefined;
 
     const owesReplyNotification =
       !!originalMessageAuthorUserId &&
       !silenced.has(originalMessageAuthorUserId) &&
       originalMessageAuthorUserId !== sender.actorId &&
-      !validatedMentionUserIds.includes(originalMessageAuthorUserId);
+      !validatedMentionUserIds.includes(originalMessageAuthorUserId) &&
+      // #17080 — **et il faut être encore MEMBRE.** L'auteur du message cité
+      // est résolu par un `participant.findUnique` sur l'`id` de l'expéditeur
+      // du message cité, SANS filtre `isActive` : quitter ou être banni laisse
+      // la ligne en place (`isActive: false`), donc un ex-membre recevait cette
+      // bannière. L'éventail MENTION borne la sienne à `memberIds` depuis
+      // toujours ; celui-ci ne le faisait pas.
+      //
+      // Ce qui en fait une fuite et plus une nuisance : la charge porte
+      // désormais l'enveloppe, et la clé de session de la NSE est par
+      // EXPÉDITEUR — rien ne la tourne quand quelqu'un part. Un exclu
+      // déchiffrait donc sur son écran verrouillé le texte d'un message écrit
+      // dans un groupe qu'il a quitté. Cycle 127 : « une garde qui protège la
+      // population la plus NOMBREUSE peut manquer la plus EXPOSÉE. »
+      memberIds.includes(originalMessageAuthorUserId);
 
     const reply = owesReplyNotification
       ? await runLot('reply', onError, false, async () => {

@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../../services/historyFloor';
+import { refuseExpiredShareLink, shareLinkHasExpired } from '../../services/shareLinkReadGate';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolveParticipantAvatar, serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { participantListUserSelect } from './utils/participant-projection';
@@ -173,9 +174,36 @@ export function registerParticipantReadRoutes(
         where: authRequest.authContext.participantId
           ? { id: authRequest.authContext.participantId, conversationId, isActive: true }
           : { conversationId, userId: authRequest.authContext.userId, isActive: true },
-        select: { id: true, role: true, userId: true }
+        // #17139 — les colonnes du PLANCHER s'ajoutent à une lecture qui
+        // existait déjà, pour le même lecteur et le même `where`. Appeler
+        // `loadReaderHistoryFloor` aurait relu la MÊME ligne : le dépôt a écrit
+        // la règle au cycle 127 (« avant de conclure qu'une garde coûterait une
+        // requête, regarder ce que le site lit déjà »), et l'audit l'a sortie
+        // contre la première version de ce lot, qui payait le doublon.
+        select: { id: true, role: true, userId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
       });
       const conversationRole = viewer?.role ?? null;
+
+      // #17139, suite de l'audit — **LA PORTE, et pas seulement le PLANCHER.**
+      // Le lien répond à DEUX questions sur cette ligne, et le lot n'en avait
+      // reprise qu'une de sa jumelle (`stats.ts`). Un lecteur dont le lien
+      // ÉCHU accordait l'historique a un plancher NUL : la porte est la seule
+      // chose qui l'arrête, et la révocation ne touche que les anonymes.
+      //
+      // Une lecture de lien, partagée par les deux questions — le patron du
+      // fil (`messages-list.ts`), qui tient la ligne et le lien.
+      const viewerShareLink = viewer?.shareLinkId
+        ? await prisma.conversationShareLink.findFirst({
+            where: { id: viewer.shareLinkId },
+            select: { id: true, allowViewHistory: true, expiresAt: true }
+          })
+        : null;
+      if (shareLinkHasExpired(viewerShareLink)) {
+        return refuseExpiredShareLink(reply);
+      }
+      const readerHistoryFloor = viewer
+        ? await loadHistoryFloor(prisma, viewer, { link: viewerShareLink })
+        : null;
 
       // Restriction top-99 : un USER plateforme (ou anonyme) qui n'est que
       // simple member de la conversation ne voit que les plus actifs — sauf
@@ -220,13 +248,11 @@ export function registerParticipantReadRoutes(
           cursor,
           pageLimit,
           // #17139 — le plancher du LECTEUR décide s'il a droit au classement
-          // par activité. Il propage ses erreurs, et le `catch` de la route en
-          // fait un 500 : une porte de confidentialité échoue en montrant
+          // par activité. Résolu plus haut, sur la lecture de participant que
+          // la route faisait DÉJÀ. Il propage ses erreurs, et le `catch` de fin
+          // en fait un 500 : une porte de confidentialité échoue en montrant
           // moins, jamais en servant le rang de toute la vie du fil.
-          readerHistoryFloor: await loadReaderHistoryFloor(prisma, {
-            conversationId,
-            reader: historyReaderFromAuthContext(authRequest.authContext),
-          })
+          readerHistoryFloor
         });
         paginatedParticipants = page.participants;
         hasMore = page.hasMore;

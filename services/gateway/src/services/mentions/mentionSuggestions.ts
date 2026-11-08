@@ -29,7 +29,8 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { loadReaderHistoryFloor } from '../historyFloor';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../historyFloor';
+import { shareLinkHasExpired } from '../shareLinkReadGate';
 import { mayRankByConversationActivity } from '../conversations/activityRankingGate';
 import { z } from 'zod';
 import type { CacheStore } from '../CacheStore';
@@ -284,13 +285,9 @@ export class MentionSuggestionFinder {
    */
   private async loadConversationActivity(
     conversationId: string,
-    readerUserId: string,
+    readerHistoryFloor: Date | null,
   ): Promise<ConversationActivity> {
-    const floor = await loadReaderHistoryFloor(this.prisma, {
-      conversationId,
-      reader: { kind: 'user', userId: readerUserId },
-    });
-    if (!mayRankByConversationActivity(floor)) return new Map();
+    if (!mayRankByConversationActivity(readerHistoryFloor)) return new Map();
 
     const statsRow = await this.prisma.conversationMessageStats.findUnique({
       where: { conversationId },
@@ -300,7 +297,15 @@ export class MentionSuggestionFinder {
     return lastMessageEpochByAuthor(statsRow.participantStats);
   }
 
-  private async resolveScope(conversationId: string, currentUserId: string): Promise<MentionableScope> {
+  /**
+   * La portée ET le plancher du lecteur, depuis UNE lecture de sa ligne : les
+   * deux questions que le lien pose sur la même ligne se répondent ensemble
+   * (#17139).
+   */
+  private async resolveScope(
+    conversationId: string,
+    currentUserId: string,
+  ): Promise<{ readonly scope: MentionableScope; readonly historyFloor: Date | null }> {
     // #14066 — quelle que soit la portée, un non-membre ne cite personne : une
     // conversation ouverte n'énumère pas ses membres (ni l'annuaire) à un tiers.
     // L'appartenance est une participation VIVANTE (active ET non bannie). Les
@@ -313,20 +318,43 @@ export class MentionSuggestionFinder {
       }),
       this.prisma.participant.findFirst({
         where: { conversationId, userId: currentUserId, ...PARTICIPATION_VIVANTE },
-        select: { id: true }
+        // #17139 — les colonnes du PLANCHER s'ajoutent à la lecture que cette
+        // porte faisait DÉJÀ, pour le même lecteur. Résoudre le plancher chez
+        // le classement aurait relu la même ligne à chaque préfixe nouveau, sur
+        // un chemin d'autocomplétion.
+        select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
       })
     ]);
     const scope = conversation ? mentionableScope(conversation.type) : null;
     if (!scope || !membership) throw new Error(ACCESS_DENIED);
-    return scope;
+
+    // #17139, suite de l'audit — **LA PORTE du lien, pas seulement le
+    // PLANCHER.** Un lecteur dont le lien ÉCHU accordait l'historique a un
+    // plancher NUL : la porte est la seule chose qui l'arrête, et la révocation
+    // d'un lien ne touche que les participations anonymes. Le refus emprunte
+    // celui des conversations fermées — ne pas distinguer « échu » de « non
+    // membre » est la posture de cette unité depuis #14066.
+    const link = membership.shareLinkId
+      ? await this.prisma.conversationShareLink.findFirst({
+          where: { id: membership.shareLinkId },
+          select: { id: true, allowViewHistory: true, expiresAt: true }
+        })
+      : null;
+    if (shareLinkHasExpired(link)) throw new Error(ACCESS_DENIED);
+
+    return { scope, historyFloor: await loadHistoryFloor(this.prisma, membership, { link }) };
   }
 
-  private async rankedMembers(conversationId: string, currentUserId: string): Promise<SuggestedUser[]> {
+  private async rankedMembers(
+    conversationId: string,
+    currentUserId: string,
+    readerHistoryFloor: Date | null,
+  ): Promise<SuggestedUser[]> {
     const members = await this.prisma.participant.findMany({
       where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { not: currentUserId } },
       include: { user: { select: USER_SELECT } }
     });
-    const activity = await this.loadConversationActivity(conversationId, currentUserId);
+    const activity = await this.loadConversationActivity(conversationId, readerHistoryFloor);
     return [...members]
       .sort(byConversationActivity(activity))
       .flatMap(member => (member.user ? [member.user] : []));
@@ -438,9 +466,10 @@ export class MentionSuggestionFinder {
   private async closedConversation(
     conversationId: string,
     currentUserId: string,
-    matches: (user: SuggestedUser) => boolean
+    matches: (user: SuggestedUser) => boolean,
+    readerHistoryFloor: Date | null
   ): Promise<MentionSuggestion[]> {
-    const members = (await this.rankedMembers(conversationId, currentUserId)).filter(matches);
+    const members = (await this.rankedMembers(conversationId, currentUserId, readerHistoryFloor)).filter(matches);
     const levels = await niveauxParmi(this.prisma, currentUserId, members.map(m => m.id));
     const knownFirst = new Map(
       [...levels].filter(([, level]) => isKnownLevel(level))
@@ -468,10 +497,11 @@ export class MentionSuggestionFinder {
     currentUserId: string,
     query: string,
     blocked: ReadonlySet<string>,
-    matches: (user: SuggestedUser) => boolean
+    matches: (user: SuggestedUser) => boolean,
+    readerHistoryFloor: Date | null
   ): Promise<MentionSuggestion[]> {
     const [members, ties] = await Promise.all([
-      this.rankedMembers(conversationId, currentUserId),
+      this.rankedMembers(conversationId, currentUserId, readerHistoryFloor),
       this.tiesOf(currentUserId)
     ]);
     const memberIds = new Set(members.map(m => m.id));
@@ -489,7 +519,7 @@ export class MentionSuggestionFinder {
   }
 
   async forConversation(conversationId: string, currentUserId: string, query: string): Promise<MentionSuggestion[]> {
-    const scope = await this.resolveScope(conversationId, currentUserId);
+    const { scope, historyFloor } = await this.resolveScope(conversationId, currentUserId);
 
     // #13350 — une conversation OUVERTE propose connaissances, membres, contacts et
     // annuaire : personne en relation de blocage avec l'appelant n'y figure, cache
@@ -501,8 +531,8 @@ export class MentionSuggestionFinder {
 
     const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
     const suggestions = scopeIsClosed(scope)
-      ? await this.closedConversation(conversationId, currentUserId, matches)
-      : await this.openConversation(conversationId, currentUserId, query, blocked, matches);
+      ? await this.closedConversation(conversationId, currentUserId, matches, historyFloor)
+      : await this.openConversation(conversationId, currentUserId, query, blocked, matches, historyFloor);
 
     await this.writeCache(key, suggestions);
     return suggestions;
