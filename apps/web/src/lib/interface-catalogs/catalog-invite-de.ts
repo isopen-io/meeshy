@@ -88,6 +88,7 @@ const de = {
   'invite.refusal.banned': 'Du kannst dieser Unterhaltung nicht mehr beitreten.',
   'invite.refusal.region': 'Diese Einladung ist aus deinem Netzwerk nicht erreichbar.',
   'invite.refusal.account-required': 'Für den Beitritt zu dieser Unterhaltung ist ein Meeshy-Konto nötig.',
+  'invite.refusal.members-only': 'Diese Unterhaltung ist den Mitgliedern ihrer Community vorbehalten.',
   'invite.refusal.session-expired': 'Deine Sitzung ist abgelaufen. Melde dich erneut an, um beizutreten.',
   'invite.refusal.rate-limited': 'Zu viele Versuche. Versuch es gleich noch einmal.',
   'invite.refusal.offline': 'Du bist offline. Die Einladung erscheint, sobald das Netz zurück ist.',

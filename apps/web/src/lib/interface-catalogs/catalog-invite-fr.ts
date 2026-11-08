@@ -95,6 +95,7 @@ const fr = {
   'invite.refusal.banned': 'Tu ne peux plus rejoindre cette conversation.',
   'invite.refusal.region': 'Cette invitation n’est pas accessible depuis ton réseau.',
   'invite.refusal.account-required': 'Un compte Meeshy est nécessaire pour rejoindre cette conversation.',
+  'invite.refusal.members-only': 'Cette conversation est réservée aux membres de sa communauté.',
   'invite.refusal.session-expired': 'Ta session a expiré. Reconnecte-toi pour rejoindre.',
   'invite.refusal.rate-limited': 'Trop de tentatives. Réessaie dans un instant.',
   'invite.refusal.offline': 'Tu es hors ligne. L’invitation s’affichera au retour du réseau.',
