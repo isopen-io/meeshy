@@ -87,6 +87,98 @@ final class ComposerSlideRailTests: XCTestCase {
     func test_uneSeuleScene_nOffrePasLaCorbeille() {
         XCTAssertFalse(
             ComposerHeaderTiles.showsDelete(sceneIndex: 0, currentIndex: 0, sceneCount: 1))
+        XCTAssertFalse(
+            ComposerHeaderTiles.showsDelete(sceneIndex: 0, currentIndex: 0, sceneCount: 1, isReordering: true))
+    }
+
+    // MARK: - #17111 : la rangée en overlay
+
+    /// **L'appui long arme la croix sur CHAQUE tuile** ; au repos, aucune.
+    func test_laCroix_paraitAuReordonnancement_surChaqueTuile() {
+        for index in 0..<3 {
+            XCTAssertTrue(ComposerHeaderTiles.showsDelete(sceneIndex: index, currentIndex: 1, sceneCount: 3,
+                                                          isReordering: true), "tuile \(index)")
+            XCTAssertFalse(ComposerHeaderTiles.showsDelete(sceneIndex: index, currentIndex: 1, sceneCount: 3,
+                                                           isReordering: false), "tuile \(index) au repos")
+        }
+    }
+
+    func test_items_lesScenesPuisPlusEnDernier() {
+        XCTAssertEqual(ComposerSlideRowGrammar.items(sceneCount: 3, canAdd: true),
+                       [.scene(0), .scene(1), .scene(2), .add])
+        XCTAssertEqual(ComposerSlideRowGrammar.items(sceneCount: 3, canAdd: false),
+                       [.scene(0), .scene(1), .scene(2)], "au plafond, (+) se retire")
+    }
+
+    func test_gestes_toucherChoisit_doubleToucherDuplique_appuiLongArmeLeReordonnancement() {
+        XCTAssertEqual(ComposerSlideRowGrammar.effect(.tap, onScene: 1, sceneCount: 3,
+                                                      isReordering: false, canDuplicate: true), .select(1))
+        XCTAssertEqual(ComposerSlideRowGrammar.effect(.doubleTap, onScene: 1, sceneCount: 3,
+                                                      isReordering: false, canDuplicate: true), .duplicate(1))
+        XCTAssertEqual(ComposerSlideRowGrammar.effect(.longPress, onScene: 1, sceneCount: 3,
+                                                      isReordering: false, canDuplicate: true), .beginReordering)
+    }
+
+    func test_gestes_auPlafond_leDoubleToucherNeDupliquePas() {
+        XCTAssertNil(ComposerSlideRowGrammar.effect(.doubleTap, onScene: 0, sceneCount: 10,
+                                                    isReordering: false, canDuplicate: false))
+    }
+
+    func test_gestes_uneSeuleScene_rienAReordonner() {
+        XCTAssertNil(ComposerSlideRowGrammar.effect(.longPress, onScene: 0, sceneCount: 1,
+                                                    isReordering: false, canDuplicate: true))
+    }
+
+    func test_gestes_enReordonnancement_leToucherNeNaviguePas() {
+        XCTAssertNil(ComposerSlideRowGrammar.effect(.tap, onScene: 0, sceneCount: 3,
+                                                    isReordering: true, canDuplicate: true))
+        XCTAssertNil(ComposerSlideRowGrammar.effect(.tap, onScene: 7, sceneCount: 3,
+                                                    isReordering: false, canDuplicate: true), "hors rangée : rien")
+    }
+
+    /// La destination suit `moveSlide(from:to:)` : un décalage d'`Array.move`.
+    func test_glisser_versLaDroite_rendUnDecalageApresLaCible() {
+        XCTAssertEqual(ComposerSlideRowGrammar.destination(from: 0, translation: 2 * 32, pitch: 32, count: 4), 3)
+        XCTAssertEqual(ComposerSlideRowGrammar.destination(from: 3, translation: -3 * 32, pitch: 32, count: 4), 0)
+        XCTAssertEqual(ComposerSlideRowGrammar.destination(from: 1, translation: 99 * 32, pitch: 32, count: 4), 4,
+                       "borné au bout de la rangée")
+        XCTAssertNil(ComposerSlideRowGrammar.destination(from: 1, translation: 10, pitch: 32, count: 4),
+                     "moins d'une demi-tuile : la scène reste à sa place")
+    }
+
+    /// **L'ordre de la rangée est celui de la publication** : déplacer une
+    /// tuile déplace la slide que la publication emporte.
+    @MainActor
+    func test_glisser_reordonneLesScenesDeLaPublication() {
+        let vm = StoryComposerViewModel()
+        vm.addSlide()
+        vm.addSlide()
+        let ids = vm.slides.map(\.id)
+        let destination = try? XCTUnwrap(ComposerSlideRowGrammar.destination(from: 0, translation: 2 * 32,
+                                                                            pitch: 32, count: ids.count))
+        vm.moveSlide(from: 0, to: destination ?? 0)
+        XCTAssertEqual(vm.slides.map(\.id), [ids[1], ids[2], ids[0]])
+        XCTAssertEqual(vm.slides.map(\.order), [0, 1, 2])
+    }
+
+    @MainActor
+    func test_doubleToucher_dupliqueLaSceneJusteApresElle() {
+        let vm = StoryComposerViewModel()
+        vm.addSlide()
+        let ids = vm.slides.map(\.id)
+        vm.duplicateSlide(at: 0)
+        XCTAssertEqual(vm.slides.count, 3)
+        XCTAssertEqual(vm.slides[0].id, ids[0])
+        XCTAssertEqual(vm.slides[2].id, ids[1])
+        XCTAssertEqual(vm.currentSlideIndex, 1, "la copie devient la scène regardée")
+    }
+
+    func test_leMeuble_brancheLesGestesDeLaRangee() throws {
+        let code = try ComposerSceneArrangementTests.source("MeeshyComposerHost+DocumentSurface.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(code.contains("onDuplicate:intent.origin.addsSlides?{viewModel.duplicateSlide(at:$0)}:nil"))
+        XCTAssertTrue(code.contains("onMove:{viewModel.moveSlide(from:$0,to:$1)}"))
+        XCTAssertTrue(code.contains("onAdd:intent.origin.addsSlides?{addSceneSlide()}:nil"))
     }
 
     /// Aucune scène ⇒ aucune rangée. Un rail vide occuperait la hauteur d'une

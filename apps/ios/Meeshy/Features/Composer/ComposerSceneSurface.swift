@@ -394,6 +394,10 @@ struct ComposerSceneSurface: View {
 
     @Environment(\.composerAnchoredSheetTop) var anchoredSheetTop
 
+    /// **L'état masqué** (#17111) : posé par l'hôte, il retire tout le chrome
+    /// et pose la scène en letterbox 9:16 sur le viewport entier.
+    @Environment(\.composerChromeIsConcealed) var chromeIsConcealed
+
     /// La largeur du DESSIN, mesurée par le canvas : la flèche du volet
     /// s'y proportionne. `0` avant la première passe ⇒ le volet se mesure seul.
     @State var sceneCardWidth: CGFloat = 0
@@ -437,12 +441,20 @@ struct ComposerSceneSurface: View {
         ZStack {
             sceneLetterbox
             sceneLayer
-            chromeLayer.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
-            if arrangement == .rails {
-                railsLayer.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
-            } else {
-                restChrome.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
+            if !chromeIsConcealed {
+                chromeLayer.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
+                if arrangement == .rails {
+                    railsLayer.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
+                } else {
+                    restChrome.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
+                }
+                ComposerLimitCapsuleView()
             }
+        }
+        .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion), value: chromeIsConcealed)
+        .adaptiveOnChange(of: chromeIsConcealed) { _, masque in
+            if masque { AdaptiveAccessibility.announce(ComposerPillCopy.concealedHint) }
+            UIAccessibility.post(notification: .screenChanged, argument: nil)
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
@@ -500,6 +512,18 @@ struct ComposerSceneSurface: View {
     // `description` et `descriptionPlaceholder` restent au contrat : la porte
     // est servie par le meuble, qui possède le texte. Les retirer obligerait
     // chaque site de montage à re-prouver qu'il n'en a pas besoin.
+}
+
+/// L'état masqué de la scène (#17111), que l'hôte pose et que la surface lit.
+struct ComposerChromeConcealedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var composerChromeIsConcealed: Bool {
+        get { self[ComposerChromeConcealedKey.self] }
+        set { self[ComposerChromeConcealedKey.self] = newValue }
+    }
 }
 
 /// Le coin haut-gauche de la scène DESSINÉE, dans la fenêtre : le 9:16 de la
