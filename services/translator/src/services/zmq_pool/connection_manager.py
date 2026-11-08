@@ -326,7 +326,7 @@ class ConnectionManager:
         if not self._late_refusal_announced:
             self._late_refusal_announced = True
             logger.warning(
-                f"[TRANSLATOR] Shutdown in progress, refusing incoming tasks from {task.task_id} on "
+                f"[TRANSLATOR] Shutdown in progress: late tasks are refused, first {task.task_id} "
                 f"(each one signaled, total in shutdown_rejections)"
             )
         logger.debug(f"[TRANSLATOR] Shutdown in progress, refusing task {task.task_id}")
