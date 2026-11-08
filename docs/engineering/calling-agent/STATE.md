@@ -613,6 +613,8 @@ socket jusqu'au client.
   - **Vert** : relancé par moi, `45 passed, 1 xfailed` sur les 4 fichiers d'arrêt.
   - **Suites voisines** (QA, `-k "zmq_pool or translation_processor or call_caption or batch or shutdown or pool or zmq or handler"`, sans `TestBatchTranslateEndpoint`) : 552 passés, 7 sautés et 7 erreurs sur la branche, contre 539 passés et les mêmes 7 erreurs sur `dev` (sacrebleu et soundfile absents, `TestRealTranslatorIntegration`).
   - **Mutations** : 12 sur 15 tuées, dont celle qui inverse « flush final puis vidange » (R5 de #17002). Les 3 survivantes sont équivalentes.
+- **CI** : deux runs `workflow_dispatch` (42507151398, puis la relance 42508176873) ont été **annulés** sans qu'aucun job échoue. Sur la même période, tous les runs dispatch de `ci.yml` du dépôt ont été annulés, toutes branches confondues : l'annulation est externe à la PR.
+- **Intégration** : PR #17065 ouverte, mais **non fusionnée**. Il faut une CI verte, ou le feu vert du porteur.
 - **QA** : favorable avec réserves. R1 → #17063, R2 → #17064. R3 (deux gardes sans effet observable aujourd'hui), R4 (le témoin « handler » du lot recopie la logique du handler, et la QA ajoute le vrai chemin) et R5 (la longueur des identifiants n'est pas bornée, ce qui est sans effet avec des UUID) sont consignées ici sans issue.
 
 ### Limites connues
@@ -623,6 +625,7 @@ socket jusqu'au client.
 
 ### Cycle suivant : par où reprendre
 
+0. **PR #17065** : relancer `workflow_dispatch` de `ci.yml` sur la branche, mise à jour sur `dev`, puis fusionner au vert.
 1. #17063 et #17064 : petits lots sur le même site (`connection_manager.py`), à grouper.
 2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
 3. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
