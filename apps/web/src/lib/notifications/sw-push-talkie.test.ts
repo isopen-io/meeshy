@@ -50,6 +50,21 @@ describe('un talkie d’urgence s’annonce quand personne ne regarde', () => {
     expect(worker.shown.map((shown) => (shown.options['data'] as { audioUrl: string }).audioUrl)).toEqual(['', '']);
   });
 
+  test('le push de suivi remplace la bannière et porte la voix gardée en pièce jointe', async () => {
+    const worker = mount({ credential: registered });
+    const kept = 'https://gate.meeshy.me/api/v1/talkie/c/audio?e=1&t=x';
+    await worker.dispatch('push', push(incoming({ phase: 'live', audioUrl: AUDIO })));
+    await worker.dispatch('push', push(incoming({ phase: 'ended', audioUrl: AUDIO, attachmentUrl: kept })));
+    expect(worker.shown.map((shown) => shown.options['tag'])).toEqual([`talkie:${TALKIE_ID}`, `talkie:${TALKIE_ID}`]);
+    expect((worker.shown[1]?.options['data'] as { audioUrl: string }).audioUrl).toBe(kept);
+  });
+
+  test('la pièce jointe du suivi passe la même garde d’origine', async () => {
+    const worker = mount({ credential: registered });
+    await worker.dispatch('push', push(incoming({ phase: 'ended', attachmentUrl: 'https://attaquant.example/faux.aac' })));
+    expect((worker.shown[0]?.options['data'] as { audioUrl: string }).audioUrl).toBe('');
+  });
+
   test('sans passerelle connue, aucun audio ne voyage (fail-closed)', async () => {
     const worker = mount();
     await worker.dispatch('push', push(incoming({ audioUrl: AUDIO })));

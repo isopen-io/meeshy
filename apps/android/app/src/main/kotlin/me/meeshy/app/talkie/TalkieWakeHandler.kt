@@ -17,6 +17,9 @@ import timber.log.Timber
 /** Ce qui réveille l'appareil pour un talkie : le service au premier plan en production, un enregistreur en test. */
 interface TalkieWaker {
     fun wake(push: TalkieWakePush)
+
+    /** Le suivi `phase: 'ended'` : personne n'a rejoint, la voix gardée attend sur la notification (« Lire »). */
+    fun voiceLeft(push: TalkieWakePush)
 }
 
 /**
@@ -36,6 +39,16 @@ class TalkieWakeState @Inject constructor() {
     fun wake(push: TalkieWakePush) {
         last = push
         waking.value = push
+    }
+
+    /**
+     * Garde le suivi de [push] pour « Lire » sans rien réveiller ; `true` quand le service suit encore ce talkie (il
+     * reposera la notification du suivi à son arrêt), `false` quand la notification est à poser maintenant.
+     */
+    fun keep(push: TalkieWakePush): Boolean {
+        last = push
+        val active = waking.value ?: return false
+        return active.talkieId == push.talkieId && waking.compareAndSet(active, push)
     }
 
     /** Termine [talkieId] s'il est celui qui réveille ; `false` sinon. */
@@ -61,12 +74,12 @@ class TalkieWakeHandler @Inject constructor(
     fun handle(data: Map<String, String>): Boolean {
         val route = synchronized(this) {
             val decision = TalkieWakePushRouter.route(data) { it in woken }
-            if (decision is TalkieWakeRoute.Wake) remember(decision.push.talkieId)
+            if (decision is TalkieWakeRoute.Wake) remember(decision.push.deliveryKey)
             decision
         }
         when (route) {
             TalkieWakeRoute.NotATalkieWake -> return false
-            is TalkieWakeRoute.Wake -> waker.wake(route.push)
+            is TalkieWakeRoute.Wake -> if (route.push.ended) waker.voiceLeft(route.push) else waker.wake(route.push)
             is TalkieWakeRoute.Ignore -> Timber.d("Talkie wake push ignored: %s", route.reason)
         }
         return true

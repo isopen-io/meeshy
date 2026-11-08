@@ -17,7 +17,15 @@ public data class TalkieWakePush(
      * sans ouvrir l'app. Absent, « Lire » redemande le rattrapage par la socket (`talkie:join`).
      */
     val audioUrl: String? = null,
+    /**
+     * Le push de SUIVI (`phase: 'ended'`) : la prise de parole a fini sans que personne la rejoigne, et la voix gardée
+     * voyage en pièce jointe (`attachmentUrl`). Il remplace la bannière, ne réveille rien, et « Lire » la joue.
+     */
+    val ended: Boolean = false,
 ) {
+    /** La clé de redélivrance : le réveil et son suivi sont deux pushes distincts du même `talkieId`. */
+    public val deliveryKey: String get() = if (ended) "$talkieId$ENDED_SUFFIX" else talkieId
+
     /** Le titre affiché : celui de la passerelle, sinon « X vous parle » (nom servi, ou « Quelqu'un »). */
     public fun displayTitle(fallback: (String) -> String, someone: String): String = title ?: fallback(fromName ?: someone)
 
@@ -30,6 +38,10 @@ public data class TalkieWakePush(
         return audioUrl.takeIf { audio == originOf(gateway) }
     }
 
+    private companion object {
+        const val ENDED_SUFFIX = "#ended"
+    }
+
     private fun originOf(url: String): String? = runCatching {
         val uri = java.net.URI(url)
         val scheme = uri.scheme?.lowercase() ?: return null
@@ -37,11 +49,6 @@ public data class TalkieWakePush(
         val port = if (uri.port == -1 && scheme == "https") 443 else uri.port
         "$scheme://$host:$port"
     }.getOrNull()
-}
-
-/** Le nom client → serveur du rattrapage (`talkie:join { talkieId }`, contrat de #17142). */
-public object TalkieWakeContract {
-    public const val JOIN_EVENT: String = "talkie:join"
 }
 
 /** Ce que le service FCM fait d'un push : exactement une issue, jamais d'exception. */
@@ -69,18 +76,27 @@ public object TalkieWakePushRouter {
         val talkieId = data["talkieId"].nonBlank()
         val fromUserId = data["fromUserId"].nonBlank()
         if (talkieId == null || fromUserId == null) return TalkieWakeRoute.Ignore(TalkieWakeRoute.Reason.MALFORMED)
-        if (alreadyWoken(talkieId)) return TalkieWakeRoute.Ignore(TalkieWakeRoute.Reason.DUPLICATE)
-        return TalkieWakeRoute.Wake(
-            TalkieWakePush(
-                talkieId = talkieId,
-                fromUserId = fromUserId,
-                fromName = (data["fromName"] ?: data["senderName"]).nonBlank(),
-                title = data["title"].nonBlank(),
-                body = data["body"].nonBlank(),
-                audioUrl = data["audioUrl"].nonBlank()?.takeIf { it.startsWith("https://") },
-            ),
+        val ended = data["phase"] == ENDED_PHASE
+        val push = TalkieWakePush(
+            talkieId = talkieId,
+            fromUserId = fromUserId,
+            fromName = (data["fromName"] ?: data["senderName"]).nonBlank(),
+            title = data["title"].nonBlank(),
+            body = data["body"].nonBlank(),
+            audioUrl = audioOf(data, ended),
+            ended = ended,
         )
+        if (alreadyWoken(push.deliveryKey)) return TalkieWakeRoute.Ignore(TalkieWakeRoute.Reason.DUPLICATE)
+        return TalkieWakeRoute.Wake(push)
     }
+
+    /** Le suivi porte la voix en pièce jointe (`attachmentUrl`) ; le réveil en direct, sa capacité `audioUrl`. */
+    private fun audioOf(data: Map<String, String>, ended: Boolean): String? {
+        val candidates = if (ended) listOf(data["attachmentUrl"], data["audioUrl"]) else listOf(data["audioUrl"])
+        return candidates.firstNotNullOfOrNull { it.nonBlank()?.takeIf { url -> url.startsWith("https://") } }
+    }
+
+    private const val ENDED_PHASE = "ended"
 
     private fun String?.nonBlank(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 }

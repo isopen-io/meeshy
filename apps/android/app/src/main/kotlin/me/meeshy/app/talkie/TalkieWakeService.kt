@@ -22,9 +22,9 @@ import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
-import me.meeshy.sdk.model.relation.TalkieWakeContract
 import me.meeshy.sdk.model.relation.TalkieWakeProgress
 import me.meeshy.sdk.model.relation.TalkieWakePush
+import me.meeshy.sdk.model.socket.SocketEventNames
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.playback.AudioEngineEvent
 import me.meeshy.sdk.playback.AudioPlaybackEngine
@@ -67,6 +67,7 @@ class TalkieWakeService : Service() {
     private var following: String? = null
     private var watch: Job? = null
     private var lastStartId: Int = 0
+    private var played: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -103,6 +104,7 @@ class TalkieWakeService : Service() {
     private fun playServed(push: TalkieWakePush, url: String) {
         val attachmentId = PLAYED_PREFIX + push.talkieId
         following = push.talkieId
+        played = push.talkieId
         watch?.cancel()
         watch = scope.launch {
             if (engine.play(attachmentId, url, PlaybackCommandOrigin.LockScreen, isProtected = true)) {
@@ -155,7 +157,7 @@ class TalkieWakeService : Service() {
     private fun progress(talkieId: String): TalkieWakeProgress = TalkieWakeProgress.of(center.floor.value, talkieId)
 
     private fun join(talkieId: String) {
-        sockets.emit(TalkieWakeContract.JOIN_EVENT, JSONObject().put("talkieId", talkieId))
+        sockets.emit(SocketEventNames.TALKIE_JOIN, JSONObject().put("talkieId", talkieId))
     }
 
     private fun foregroundType(): Int =
@@ -166,9 +168,16 @@ class TalkieWakeService : Service() {
         watch?.cancel()
         watch = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        // Le suivi arrivé pendant le réveil (personne n'a rejoint) reste sur l'écran : sa voix se joue par « Lire ».
+        state.last?.takeIf { it.ended && it.talkieId != played && state.current.value == null }?.let(::repost)
         // Le DERNIER démarrage seulement : un second réveil arrivé pendant l'arrêt a déjà demandé un démarrage au premier
         // plan ; `stopSelf()` le tuerait avant sa promotion.
         stopSelfResult(lastStartId)
+    }
+
+    private fun repost(push: TalkieWakePush) {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        runCatching { manager.notify(TalkieWakeNotification.NOTIFICATION_ID, TalkieWakeNotification.build(this, push)) }
     }
 
     private companion object {

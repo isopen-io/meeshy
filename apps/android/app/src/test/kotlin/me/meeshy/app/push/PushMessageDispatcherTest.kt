@@ -54,6 +54,7 @@ class PushMessageDispatcherTest {
     private class RecordingWaker : me.meeshy.app.talkie.TalkieWaker {
         val woken = mutableListOf<String>()
         override fun wake(push: me.meeshy.sdk.model.relation.TalkieWakePush) { woken += push.talkieId }
+        override fun voiceLeft(push: me.meeshy.sdk.model.relation.TalkieWakePush) { woken += push.deliveryKey }
     }
 
     @Test

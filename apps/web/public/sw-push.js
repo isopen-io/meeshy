@@ -781,8 +781,16 @@ async function annoncerTalkie(data) {
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
     actions: [{ action: TALKIE_LISTEN_ACTION, title: texte(data.listenLabel) || TALKIE_LISTEN_LABELS[langue] }],
-    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(data.audioUrl, stocke && stocke.apiBase) },
+    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(voixDuTalkie(data), stocke && stocke.apiBase) },
   });
+}
+
+/* Le push de SUIVI (`phase: 'ended'`, même étiquette : il remplace la
+   bannière) porte la voix gardée en pièce jointe, `attachmentUrl` ; le réveil
+   en direct, sa capacité `audioUrl`. Les deux passent la même garde d'origine. */
+function voixDuTalkie(data) {
+  if (data.phase === 'ended') return texte(data.attachmentUrl) || data.audioUrl;
+  return data.audioUrl;
 }
 
 async function ouvrirTalkie(data, action) {

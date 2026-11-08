@@ -106,4 +106,30 @@ class TalkieWakeTest {
         assertThat(push("https://gate.meeshy.me:8443/faux.aac").playableAudio(gateway)).isNull()
         assertThat((TalkieWakePushRouter.route(wake()) as TalkieWakeRoute.Wake).push.playableAudio(gateway)).isNull()
     }
+
+    @Test
+    fun `le suivi d'une prise de parole close porte la voix en piece jointe et passe la redelivrance du reveil`() {
+        val ended = wake(
+            "phase" to "ended",
+            "audioUrl" to "https://gate.meeshy.me/api/v1/talkie/t1/audio?e=1&t=a",
+            "attachmentUrl" to "https://gate.meeshy.me/api/v1/talkie/t1/audio?e=1&t=b",
+        )
+
+        val route = TalkieWakePushRouter.route(ended) { it == "t1" }
+        val push = (route as TalkieWakeRoute.Wake).push
+
+        assertThat(push.ended).isTrue()
+        assertThat(push.audioUrl).isEqualTo("https://gate.meeshy.me/api/v1/talkie/t1/audio?e=1&t=b")
+        assertThat(push.deliveryKey).isNotEqualTo("t1")
+        assertThat(TalkieWakePushRouter.route(ended) { it == push.deliveryKey }).isEqualTo(TalkieWakeRoute.Ignore(TalkieWakeRoute.Reason.DUPLICATE))
+    }
+
+    @Test
+    fun `le reveil en direct ignore une piece jointe et n'est pas un suivi`() {
+        val push = (TalkieWakePushRouter.route(wake("phase" to "live", "attachmentUrl" to "https://gate.meeshy.me/x")) as TalkieWakeRoute.Wake).push
+
+        assertThat(push.ended).isFalse()
+        assertThat(push.audioUrl).isNull()
+        assertThat(push.deliveryKey).isEqualTo("t1")
+    }
 }

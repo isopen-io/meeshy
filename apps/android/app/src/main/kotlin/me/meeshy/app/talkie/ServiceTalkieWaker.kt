@@ -27,8 +27,17 @@ class ServiceTalkieWaker @Inject constructor(
             ContextCompat.startForegroundService(context, Intent(context, TalkieWakeService::class.java))
         }.onFailure { failure ->
             Timber.w("Talkie wake service refused (%s): notification only", failure.javaClass.simpleName)
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(TalkieWakeNotification.NOTIFICATION_ID, TalkieWakeNotification.build(context, push))
+            post(push)
         }
+    }
+
+    override fun voiceLeft(push: TalkieWakePush) {
+        if (!state.keep(push)) post(push)
+    }
+
+    private fun post(push: TalkieWakePush) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        runCatching { manager.notify(TalkieWakeNotification.NOTIFICATION_ID, TalkieWakeNotification.build(context, push)) }
+            .onFailure { Timber.w("Talkie wake notification refused: %s", it.javaClass.simpleName) }
     }
 }

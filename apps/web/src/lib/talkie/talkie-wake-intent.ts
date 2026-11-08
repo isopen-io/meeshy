@@ -1,3 +1,4 @@
+import { TALKIE_CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/talkie-event-names';
 import { TALKIE_MAX_TOTAL_BYTES } from '@meeshy/shared/types/talkie-constants';
 
 import { apiConfig } from '@/lib/api/config';
@@ -32,7 +33,7 @@ import type { TalkieSink } from './talkie-player';
 export const TALKIE_PARAM = 'talkie';
 export const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
 /** Le nom client → serveur du rattrapage (contrat de #17142). */
-export const TALKIE_JOIN_EVENT = 'talkie:join';
+export const TALKIE_JOIN_EVENT = TALKIE_CLIENT_EVENTS.TALKIE_JOIN;
 /** 30 s de prise de parole + 60 s de rattrapage servi. */
 export const TALKIE_WAKE_TTL_MS = 90_000;
 
