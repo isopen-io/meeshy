@@ -38,7 +38,9 @@ final class QRCodeCameraController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        let layer = AVCaptureVideoPreviewLayer(session: scanner.session)
+        // Née sans session : `init(session:)` validerait une configuration sur
+        // le fil principal, qui attendrait la file du lecteur (#17041).
+        let layer = AVCaptureVideoPreviewLayer()
         layer.videoGravity = .resizeAspectFill
         view.layer.addSublayer(layer)
         previewLayer = layer
@@ -54,12 +56,14 @@ final class QRCodeCameraController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        if let previewLayer { scanner.attach(previewLayer) }
         scanner.start()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         scanner.stop()
+        if let previewLayer { scanner.detach(previewLayer) }
     }
 
     private func deliver(_ code: String) {
@@ -71,16 +75,19 @@ final class QRCodeCameraController: UIViewController {
     }
 }
 
-/// La session de capture, configurée, démarrée et arrêtée sur SA file.
-/// unchecked: `session` et la sortie ne sont touchées que sur `queue` après la
-/// construction ; le délégué est rappelé sur cette même file.
+/// La session de capture, configurée, démarrée, arrêtée — et sa couche
+/// d'aperçu rattachée (#17041) — sur SA file, dans cet ordre.
+/// unchecked: `session` et la sortie ne sont touchées que sur `sessionQueue`
+/// après la construction ; `onCode` est posé avant que la sortie n'existe, et
+/// lu ensuite par le délégué, sur `codeQueue`.
 nonisolated final class QRCodeCaptureSession: NSObject, AVCaptureMetadataOutputObjectsDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
-    private let queue = DispatchQueue(label: "me.meeshy.e2ee.pairing-scanner")
+    private let sessionQueue = ComposerCaptureSessionQueue()
+    private let codeQueue = DispatchQueue(label: "me.meeshy.e2ee.pairing-scanner")
     private var onCode: (@Sendable (String) -> Void)?
 
     func configure(onCode: @escaping @Sendable (String) -> Void) {
-        queue.async { [self] in
+        sessionQueue.perform { [self] in
             self.onCode = onCode
             guard let camera = AVCaptureDevice.default(for: .video),
                   let input = try? AVCaptureDeviceInput(device: camera),
@@ -90,19 +97,29 @@ nonisolated final class QRCodeCaptureSession: NSObject, AVCaptureMetadataOutputO
             let output = AVCaptureMetadataOutput()
             if session.canAddOutput(output) {
                 session.addOutput(output)
-                output.setMetadataObjectsDelegate(self, queue: queue)
+                output.setMetadataObjectsDelegate(self, queue: codeQueue)
                 output.metadataObjectTypes = output.availableMetadataObjectTypes.contains(.qr) ? [.qr] : []
             }
             session.commitConfiguration()
         }
     }
 
+    /// La couche d'aperçu se rattache sur la file, après la configuration.
+    func attach(_ layer: AVCaptureVideoPreviewLayer) {
+        sessionQueue.attach(layer, to: session)
+    }
+
+    /// Et s'en détache sur la file, après l'arrêt.
+    func detach(_ layer: AVCaptureVideoPreviewLayer) {
+        sessionQueue.attach(layer, to: nil)
+    }
+
     func start() {
-        queue.async { [self] in if !session.isRunning { session.startRunning() } }
+        sessionQueue.setRunning(true, session)
     }
 
     func stop() {
-        queue.async { [self] in if session.isRunning { session.stopRunning() } }
+        sessionQueue.setRunning(false, session)
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

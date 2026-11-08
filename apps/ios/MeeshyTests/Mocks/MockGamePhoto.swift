@@ -10,6 +10,7 @@ final class MockGamePhotoCamera: GamePhotoCameraProviding {
     nonisolated deinit {}
 
     let session = AVCaptureSession()
+    let sessionQueue = ComposerCaptureSessionQueue()
     var startResult: CameraFailure?
     var shot: UIImage? = MockGamePhotoCamera.pixel()
     private(set) var startCount = 0
