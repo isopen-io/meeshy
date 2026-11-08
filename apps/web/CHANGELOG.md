@@ -1,5 +1,1959 @@
 # @meeshy/web-v2
 
+## 2.29.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - chaque refus du talkie laisse une ligne de journal qui nomme sa cause
+  - une seule deinit non isolée pour le coordinateur des boutons matériels
+  - le projet déclare le style de verre partagé et sa garde, et la garde de flamme lit la grappe d'appel
+  - un refus de communauté privée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (#7816)
+  - deinit non isolée pour le coordinateur des boutons matériels (CAM-6)
+  - le talkie se tient depuis l'en-tête d'un direct, enfoncé et vibrant dès l'appui, animé quand la voix part
+  - une date de naissance déclarée ou réécrite oublie aussitôt les cercles de l'équipe, et le bouclier des mineurs se lit sans délai
+  - les icônes de l'en-tête de conversation répondent au doigt comme le bouton d'appel
+  - la sortie se prépare dès l'annonce, et chaque fragment se décode en mémoire sans creux aux jointures
+  - on invite un Proche à regarder ou écouter ensemble, il rejoint d'un geste et la lecture reste synchronisée (#17097) [xcodegen]
+  - talkie:start part avant l'ouverture du micro, et l'émission écrit ses temps au journal
+  - un fragment part toutes les ~120 ms, et les temps d'une prise de parole se comptent depuis l'appui
+  - le contrat « ensemble », sa loi de synchronisation et l'état de séance, lus en Swift (#17097)
+  - les témoins de la file de session écoutent leur propre centre de notifications
+  - le coordinateur des boutons matériels a une deinit non isolée (#9694)
+  - le chiffrement de la paire et la présence servie se lisent ensemble à l'ouverture
+  - un accusé d'envoi nomme le message SOUMIS, sur les deux transports
+  - le cache des publications se lit par await sur l'acteur CacheCoordinator
+  - la voix sort sur le haut-parleur avec un gain ×2, jamais avec des écouteurs
+  - second passage de l'audit — un commentaire qui disait faux de la ligne au-dessus, et deux défauts latents de mon cliquet
+  - le témoin du centre d'écoute remet son publisher à la tâche détachée dans une boîte Sendable
+  - l'onglet Publications reçoit ses singletons de sa vue, passe par routerCommands et décode sans Task.detached (#16878)
+  - ouvrir un direct avec un Proche ou un Sang n'arrête plus l'app
+  - l'audit adversarial trouve un 8e site, et que mon cliquet voyait 3 sites sur 7
+  - grammaire haptique de la prise au viseur (CAM-7)
+  - l'onglet Publications du détail lit les publications de la communauté (#16878)
+  - une traduction reçue pendant l'arrêt est refusée et signalée, un refus en masse tient en lignes bornées (#17002, #17003)
+  - la fiche lit la galerie servie de la conversation, sans tirer l'index des médias dans son chunk (#17055)
+  - inviter depuis la fiche d'un Proche, rejoindre d'un geste, lire synchronisé (#17055)
+  - la séance « ensemble » se suit sur l'onglet — loi de synchronisation, store et gestes (#17055)
+  - une émission vivante n'emporte plus l'enfilage durable qui la suit — sept sites, un site unique, un cliquet
+  - les noms des témoins du cadre en direct ne portent plus de deux-points
+  - la session audio se configure sur la file du coordinateur, plus sur le fil principal
+  - ouvrir une conversation directe ne plante plus, et l'aperçu flouté est un voile diffus
+  - une build Debug sur un vrai iPhone propose le choix du serveur
+  - les boutons de volume et Action déclenchent au viseur (CAM-6)
+  - les QUATRE transports d'édition gardent la mention, et une audience irrésolvable la retient au lieu de l'ouvrir
+  - la bannière d'une mention respecte aussi le plancher d'historique
+  - démarrer une vidéo du fil n'envoie plus qu'une commande de débit au serveur média
+  - le manifeste des chaînes ne déclare plus email_check_spam deux fois, la génération repasse
+  - la garde du plancher d'historique couvre les DEUX transports de l'édition, et la mention qui part à côté
+  - l'étincelle de la ligne d'aperçu passe par MeeshyIcons
+  - l'aperçu de ligne prend ✨ chez MeeshyIcons — rouge hérité de dev (DirectIconUsageRatchetTest)
+  - le talkie relaie ses trames par un AsyncStream ordonné, et deux gardes lisent le type découpé entier
+  - le cliquet des animations de géométrie perd les trois copies de l'interrupteur ; journal du réveil 18 (#10622)
+  - un démarrage perdant retire aussi la session déplacée, et une panne au retrait ne dément pas l'arrêt (#16980)
+  - la date du cadre suit le jour et se fige à la prise (CAM-16)
+  - une session posée par un geste concurrent est retirée en prévenant ceux qui la voyaient (#16980)
+  - le pointeur de session vit sous la génération d'arrêt, et rejeux et rattrapages relisent la session (#16980)
+  - email_check_spam n'est plus déclaré deux fois — le fragment android-only est remplacé par l'adoption de emailSent.checkSpam (8d60de9a5)
+  - le texte d'une édition ne part qu'à ceux qui ont le droit de LIRE le message
+  - un geste en vol n'écrit que dans le partage qu'il a lu, et un débit muet se replie sur un compteur local (#16980)
+  - les trois interrupteurs privés adoptent IosSwitch (#10622)
+  - une séance « ensemble » coupée ne dit rien de plus au bloqué, et une coupure l'emporte sur un geste en vol (#17012)
+  - la Session de TalkieSender a une deinit non isolée — dev compile de nouveau
+  - deux Proches regardent ou écoutent ensemble — le serveur relaie la séance (#17012)
+  - baisser le lien d'un collègue de l'équipe ne fait plus clignoter ses blocages, et une relecture en panne garde ceux déjà peints — Refs #16643
+  - une entrée de file dont la date est illisible expire, au lieu d'être éternelle
+  - le plafond du chunk « zod » passe à 20 Ko, sur décision du porteur (Closes #17014)
+  - une socket qui ne sait pas quelles rooms elle a manquées le DIT, au lieu d'affirmer que tout va bien
+  - email_check_spam n'est plus déclaré deux fois, le manifeste « android-only » périmé part
+  - la liste par défaut (Lentille) montre et dit ce qu'écoute un Proche ou un Sang
+  - GET /relations/locations n'est pas « à porter », et l'aperçu tire son étincelle de MeeshyIcons
+  - la palette arc-en-ciel se convertit en couleurs à un seul endroit
+  - une lecture qui tombe ne fait plus disparaître l'édition des pairs en ligne, ni l'accusé de remise
+  - le compteur d'échecs vit dans un label posé par la routine, et la lecture des commentaires est paginée
+  - le texte des issues est une donnée, et seuls les auteurs de confiance comptent
+  - deux cliquets que dev rougissait, résorbés au site fautif
+  - l'accusé de remise nomme le message acquitté, et restaurer une conversation rebranche ses sockets
+  - email_check_spam n'est classé qu'une fois, adopté d'iOS
+  - le délégué d'enregistrement vit dans CameraModel+Video seul, et la garde des écritures du brut lit les trois fichiers
+  - le cliquet des couleurs en dur revient à sa référence (rouge de dev)
+  - le viseur et l'appel proposent les huit ambiances Meeshy
+  - à l'arrêt, chaque tâche restée en accumulateur ou en file est signalée à la passerelle (#16819)
+  - CameraModel se découpe par responsabilité (1029 → 764 lignes)
+  - la clé de lot sépare « any » et conversation ordinaire, chaque lot va dans la file de ses tâches (#16820)
+  - les glyphes de l'appel entrant passent par MeeshyIcons
+  - la garde de la recette d'export suit l'appel qui emporte le recadrage (CAM-14)
+  - le chunk zod repasse sous son plafond (18,86 → 8,69 Ko)
+  - la garde du rendu final suit l'argument cropChosen ajouté à l'export (#16912)
+  - la palette de l'arc-en-ciel se construit en un seul lieu, le cliquet des couleurs inconnues repasse à 475
+  - les fins de partage lisent l'horloge injectée, pas new Date()
+  - la ligne de résultat de recherche teinte par foregroundStyle, le cliquet foreground-color repasse à 2294
+  - un arrêt l'emporte sur un geste en vol, arrêter n'est jamais limité, et ce qui ne change pas ne part pas (#16980)
+  - CameraModel repasse sous 1 000 lignes, et le témoin du rendu composer suit l'appel d'export (run test)
+  - le partage temporaire par personne est relayé, scellé au repos et tronqué destinataire par destinataire (#16980)
+  - la loi ouvre « position temporaire » dès Ami, et le contrat du partage par personne est posé (#16980)
+  - l'avatar du Bring qui sonne retrouve son exemption de contour (#16912)
+  - un seul avatar et un seul horodatage pour les deux rangs de conversation (#16911)
+  - retire les écrans profil vocal morts de MeeshyUI (#16911)
+  - l'avatar sans contour du Bring retrouve son unique exemption
+  - StoryCanvasUIView sort ses constantes et RiverBubbleView se découpe par responsabilité (repris de #16916)
+  - lockfiles réalignés sur la vague dependabot du 2026-11-08, override protobufjs 7.6.6
+  - le câblage de la colonne du journal sort de CallScreen
+  - C1, l'option du cadre en direct est une capsule légendée « Cadre »
+  - NotificationActionHandler se découpe par action (997 → 421 lignes)
+  - ReelPageView et ReelAudioLanguageResolver quittent ReelsPlayerView.swift (996 → 448 lignes)
+  - la ligne d'aperçu applique l'effet du dernier message, figé et économe
+  - inscrire EmailSpamFolderHintTests au project.pbxproj
+  - P17, décrocher ferme l'aperçu d'abord, la barre dit le prénom, « Répondre » et ma vignette « moi »
+  - un chunk du cadre en direct qui ne se charge pas ne laisse aucun rejet
+  - la session du cadre en direct se compose d'étapes de moins de 80 lignes
+  - le verre ne s'assombrit que sur un écran reçu qui tient la scène
+  - le liseré de ma vignette prend le jeton MeeshyBorder.strong
+  - « Sans vidéo » est un combiné blanc sur verre neutre, comme la vue P17
+  - W1, la scène se prolonge sous la colonne et le journal a sa bascule Traduit / Original
+  - la clôture, la sortie et la déconnexion lisent l'horloge injectée
+  - les trois leçons prennent la forme d'une entrée, et la dette `any` enregistre sa baisse
+  - l'appel vidéo entrant suit la hiérarchie de la vue P17, l'écran audio garde la sienne
+  - un résultat de recherche flouté est voilé, une transcription s'affiche avec son icône
+  - routes/posts/comments.ts repasse sous 1000 lignes (999)
+  - le conseil des spams suit iOS, une ligne visible partout
+  - décrocher un appel vidéo en voyant ce qui part
+  - le cadre en direct d'un appel à deux, sur le protocole iOS
+  - la couleur du liseré se lit sans référence de fonction surchargée
+  - l'appel réduit teinte l'avatar du pair par son identifiant, pas par son nom
+  - l'appel vidéo entrant offre « Sans vidéo »
+  - le libellé « Rien reçu ? » est classé dans le manifeste des chaînes
+  - un rôle retiré ou un compte désactivé perd aussitôt les cercles de l'équipe, au fil comme au temps réel
+  - un collègue adulte sans lien ne pousse ni ses publications ni son entourage vers un mineur déclaré, et les miroirs Swift et Kotlin suivent la loi ouverte
+  - email_check_spam classé au manifeste de :sdk-ui (rouge hérité de dev)
+  - le cadre en direct tombe quand l'appel passe à trois
+  - le verre de l'appel s'assombrit sur un écran partagé reçu
+  - ma vignette du duo porte ma couleur, celle de l'autre après permutation
+  - sur grand écran, le journal se pose en colonne de verre à droite
+  - CameraRecordingClock porte une deinit non isolée (#16911)
+  - avant de décrocher un appel vidéo, je choisis micro et caméra et l'écran dit ce que l'autre verra (P17)
+  - chaque e-mail parti dit de regarder les spams, en une ligne visible
+  - le plafond du premier affichage passe à 97 Ko — dev le dépassait déjà (96,10 Ko), le correctif du lien magique n'ajoute que 0,02 Ko
+  - « Modifier » quitte le menu d'un commentaire quand le fil est fermé (#16930)
+  - CameraModel+Video écrit recordingId, segmentTokens et stopIsRequested — leur setter n'est plus privé
+  - chaque e-mail envoyé dit de regarder les spams
+  - un commentaire d'un fil fermé ne se modifie plus (#16930)
+  - une tâche régulière est prise au plus tard après N tâches rapides, et le débordement des sous-titres se compte (#16782, #16783)
+  - le panneau d'onglet des publications est posé par le détail (#6379)
+  - inscrire MessageSwipeClaim et SheetKeyboardDismissal au project.pbxproj
+  - on maintient et on parle à un Proche depuis l'iPhone
+  - les deux suites de test arrivées avec dev sont inscrites au pbxproj, et le cliquet des commentaires datés reprend la valeur de dev
+  - les deux entrées du cycle 145 prennent la forme qu'un fichier d'entrée doit avoir
+  - un toucher qui n'aboutit pas et un rendu impossible se disent (CAM-15)
+  - le premier affichage repasse sous son plafond (#6379)
+  - ComposerSceneSurface passe de 999 à 510 lignes, découpé par responsabilité
+  - balayer une bulle pour répondre ou transférer n'ouvre plus le profil, et toute feuille baisse le clavier
+  - ComposerSceneSurface (999 → 699) et RiverBubbleView (992 → 675) se découpent par responsabilité
+  - MeeshyImageEditorView se compose de vrais types — la géométrie du recadrage est pure et testée, chaque panneau est une sous-vue
+  - les jumelles d'utilitaires rejoignent leur source unique (haptique, backoff, langue initiale, dates, durées)
+  - MeeshyImageEditorView sort ses panneaux d'outils (992 → 699) et StoryCanvasUIView ses constantes (999 → 942)
+  - la géométrie des cadres de StoryTextLayer a son propre fichier, et la référence de cohésion verrouille les baisses (#16912)
+  - aucun fichier iOS au-delà de 1 000 lignes (#16911)
+  - un seul observateur d'issue outbox, un seul emplacement de file (#16911)
+  - CameraModel repasse sous 800 lignes — l'enregistrement vidéo part dans CameraModel+Video
+  - CameraModel repasse sous 1 000 lignes — la prise photo et les délégués AVFoundation ont leur fichier
+  - OutboxDispatcher se découpe par responsabilité (996 → 161 lignes)
+  - AuthManager et le chargement du moteur de synchro se découpent par responsabilité (#16912)
+  - l'éditeur d'image et le lecteur audio sortent leurs panneaux et leurs règles pures (#16912)
+  - une seule source pour les initiales, le FlowLayout, l'observation d'outbox et meeshy_cache
+  - toasts par une porte typée, avatar de conversation par le chemin d'image d'identité (run test)
+  - ComposerToolPanelHost délègue ses panneaux Son et Fond et sa rangée de texte à trois sous-vues (#16912)
+  - neuf enveloppes privées de MediaFormat.duration cèdent la place à l'appel direct (#16912)
+  - les six rendus de story lisent l'hexadécimal par HexColor, et un RRGGBBAA y garde son alpha
+  - OutboxDispatcher découpé par responsabilité, jumeaux QuotedPostMediaAnchor et ProgressSinkBox fusionnés
+  - la langue gravée à l'export descend le Prisme par PrismTranslationResolver
+  - les jumelles d'haptique, de backoff, de langue initiale et de date passent par leur source unique (#16912)
+  - publier dans une communauté est réservé à ses membres ; la caisse des publications suit l'adhésion, et le hors-ligne se dessine (#6379)
+  - lockfiles réalignés après la vague dependabot, zod reste en 4.4.3
+  - un lien d'e-mail ouvre sa validation, jamais « Cette adresse n'existe pas » — le routeur relit l'adresse au rendu
+  - le détail d'une communauté porte deux onglets, et Publications lit ses publications avec la carte du Flux (#6379)
+  - les publications d'une communauté suivent la loi de son détail — privée réservée à ses membres, désactivée muette, blocage respecté (#6379)
+  - la fiche d'un collègue lié sous son niveau d'outils propose aussi le blocage de son talkie, et une rétrogradation ne laisse pas un blocage périmé — Refs #16643
+  - bun.lock revient au format 1 que lit bun 1.3.14 de la CI
+  - l'admission d'un invité par lien a son propre fichier
+  - une vidéo recadrée part recadrée (CAM-14)
+  - le pair d'une ligne se résout hors de l'acteur principal, comme tout calcul pur (Refs #16733)
+  - un téléchargement d'artefact SPM refusé ne se déguise plus en collision de cache
+  - une préférence de communauté ne s'écrit que pour une communauté dont on est membre
+  - la CI du SDK se relève d'une collision du cache d'artefacts SPM
+  - une arrivée de membre atteint toutes les listes, par les trois portes
+  - « Ce que j'écoute » s'accorde et se retire à un Proche depuis la fiche d'un lien (#16831)
+  - une bascule de régime s'annonce aussi aux invités de lien partagé
+  - le délégué Camera Control est Sendable sans @unchecked (OPUS-9)
+  - un invité de lien partagé que le serveur coupe se reconnecte
+  - la traduction d'une story compte les LANGUES, jamais les événements
+  - le glyphe de la pastille suit la taille de texte du système (Refs #16733)
+  - la fiche d'un collègue de l'équipe sans lien propose de bloquer ses Bring et son talkie, sans cercle fabriqué — Refs #16643
+  - la file sait revenir à « pas de base configurée », et le registre sait oublier
+  - une tâche refusée par une file pleine libère sa réserve en vol (#16781)
+  - le bouton Camera Control règle zoom et exposition [xcodegen] (OPUS-9)
+  - la vidéo du viseur est stabilisée et aidée en basse lumière (OPUS-10)
+  - un lot refusé par une file pleine se compte, se journalise et se dit à la passerelle (#16781)
+  - CameraRecordingEnding hors acteur, la règle pure se teste sans MainActor
+  - la liste montre qu'un Proche écoute, en bandeau à 52 pt et en glyphe sous 40 pt (Refs #16733)
+  - l'émetteur de l'écoute importe SocketIO (statut de la socket) — run test (#16803)
+  - une image téléversée se pose sur la fiche courante, et un envoi s'abandonne au démontage ; journal du réveil 14 (#6377)
+  - la prise par le cadre rend une prise paysage en paysage (CAM-13)
+  - le créateur change l'avatar et la bannière de sa communauté (#6377)
+  - l'avatar et la bannière suivent la loi des images d'identité — le chemin d'un téléversement passe, javascript:/data: sont refusés (#16788)
+  - une vidéo interrompue garde ce qui a été filmé (OPUS-11)
+  - un collègue de l'équipe lit les publications Connaissances, Proches et Sang d'un collègue sans lien, et est prévenu par son entourage
+  - la loi ouvre toutes les features de cercle entre deux comptes de l'équipe, sauf la Connaissance automatique
+  - la retenue de tête se lit à la projection, le flux du cache garde son ordre
+  - ce que j'écoute sur Apple Music part vers les Proches et les Sangs à qui je l'ai accordé (#16803)
+  - la bande du haut et la carte Now Playing ne dépendent plus de l'ordre des tranches
+  - les délais de la feuille du post passent par cancellableSleep, sans date dans les commentaires
+  - la disparition du fil passe par son modificateur de rétention, le cliquet de cohésion reste tenu après la fusion de dev
+  - le blocage filtre les ANNONCES du salon, et jamais les rétractations
+  - le POURQUOI de `itemInFlight` vit sur l'erreur, pas en bout de ligne
+  - un pair bloqué ne suit pas une position en direct, et la garde du regard échoue FERMÉ
+  - exempter l'art baké du sticker Mee/Meo du gate d'harmonie (81w) (#16792)
+  - un nom servi échappé se lit à sa lettre, un refus ne rend que cette communauté (#6377)
+  - le Flux quitté se met de côté, il revient à la même place
+  - ce qui arrive en tête attend le lecteur, le post lu ne bouge plus
+  - le créateur règle sa communauté depuis le web — nom, description, confidentialité, suppression (#6377)
+  - l'indicateur prend son icône dans MeeshyIcons (garde DirectIconUsageRatchet, #16675)
+  - un worker au repos prend la voie rapide dès son arrivée, et un sous-titre d'appel n'attend plus de lot (#16780)
+  - les filtres vidéo reprennent les chaînes propres à Android de dev
+  - le fil garde sa place quand on le quitte, et rien n'arrive au-dessus de la lecture
+  - une seule entrée BringRingView dans avatarsWithoutRing
+  - la carte d'un réel dans le fil porte la baguette « Imager »
+  - la voix d'un Proche sort dès qu'il parle, et « X vous parle · Couper » (#16675)
+  - les trois événements du talkie sur la socket et « Couper son talkie » sur la fiche d'un lien (#16675)
+  - la loi pure des prises de parole reçues et le découpage ADTS (#16675)
+  - sortir l'`await` des assertions XCTest — la compilation Swift le refuse
+  - un envoi confirmé après la fermeture de la feuille ne retire plus le focus rendu (#16762)
+  - retardateur 3 s / 10 s dans le menu ⋯ (CAM-4) (#16760)
+  - `OutboxRetryAdmission` journalise par `MeeshyLog`, pas par un `Logger` nu
+  - le `catch` de #16749 tient le cliquet de cohésion à zéro hausse
+  - une relance manuelle ne réarme pas un envoi qu'un dispatcher porte
+  - sortir le retrait temps réel des demandes d'ami de MessageSocketManager
+  - une publication d'erreur ne rattache jamais l'exception d'un lot qui cite un sous-titre (#16735)
+  - ramener CallManager sous son budget de cohésion (#16759)
+  - la publication et le lot ZMQ tournent sous le régime de leurs tâches (#16735, #16716)
+  - le rattrapage écrit son isolement (@concurrent), lisible sur iOS 16 et 17 (#16755)
+  - la création propose l'ajout de membres, comme iOS (#6376)
+  - menu ⋯ du viseur et grille des tiers (CAM-2) (#16734)
+  - sur iOS, ce qu'écoute un Proche ou un Sang défile sur son avatar (#16755)
+  - un rattrapage ne déclare lus que les messages jusqu'à SA frontière (#16746)
+  - un transport remplacé retire le précédent, sinon l'envoi reste sur l'horloge (#16744)
+  - dev revient au vert après OPUS-5 — tests inscrits, CallManager ne grandit plus
+  - la bascule en privée ne réinscrit pas un ancien membre, ni un banni, et rattrape les retardataires (#16723)
+  - une communauté qui devient privée ne laisse plus de non-membres dans ses salons (#16723)
+  - sous un régime silencieux, l'erreur d'inférence ne rattache plus l'exception du pipeline (#16715)
+  - ce qu'écoute un Proche ou un Sang défile sur son avatar (#16729)
+  - la photo en cours d'envoi ne saute plus de côté à la confirmation
+  - l'indicateur se pose par son modificateur, sans extension View
+  - l'astuce du geste de capture suit la clé commune du viseur iOS
+  - le mode capture suit la clé du viseur que l'iOS lit désormais
+  - le nom de l'auteur d'une capture lit le roster par son flux
+  - la porte de joignabilité était MORTE sur les quatre chemins média (#16687)
+  - revue adversariale — l'admission s'écrit avant le rattachement, témoins resserrés ; journal réveil 9 (#16703)
+  - débannir, rattacher ou restaurer suivent la loi de la communauté privée (#16703)
+  - les filtres vidéo redeviennent adoptés du catalogue iOS, et une exemption Bring en double est retirée
+  - la leçon du cycle 141 respecte « un fichier = une entrée » (#7711)
+  - imports de la couleur d'auteur dans la feuille Journal (#16665)
+  - ci.yml épinglé sur ubuntu-24.04 — ubuntu-latest a basculé sur 26.04 et rougit des jobs hors de tout lot (#16713)
+  - la capture nommée par son auteur en groupe, et gardée dans le Journal (#16665)
+  - une socket dont la room a échoué ne DÉSARME plus la file hors ligne (#16687)
+  - la pastille de non-lus part aussi pour un message SANS expéditeur (#16691)
+  - `message:edited` ne transporte plus le clientMessageId de son auteur (#16689)
+  - le mode capture dit le geste avec la phrase et la clé du viseur (APP-4) (#16645)
+  - les threads d'inférence NLLB reçoivent le régime de la tâche (#16701)
+  - bun.lock rendu à dev — le lockfile réécrit par un bun local n'avait rien à faire dans le lot (#16641)
+  - une seule pile de bannières sous le chrome du haut (APP-1) (#16629)
+  - revue adversariale — salons clos compris, accès coupé d'une écriture, annonces en arrière-plan (#16704)
+  - retiré ou parti d'une communauté privée, on sort de ses salons (#16704)
+  - la loi des sous-titres reste hors du moteur, les lignes de capture en quatre clés (#16665)
+  - sorte de capture sur le fil et captures au journal d'après l'appel (#16665)
+  - la capture dite dans le bandeau, le Journal et le journal d'après l'appel (#16665)
+  - capture d'écran vue et gardée au journal, R1 en audio comme en vidéo (#16665)
+  - le moteur d'appel inscrit les captures au journal vivant (#16665)
+  - sorte de capture sur le fil et captures du journal d'appel (#16665)
+  - CAM-1 Task.sleep(for:) dans la capture (#16626)
+  - une audience de diffusion lit l'appartenance VIVANTE, jamais `isActive` nu (#16690)
+  - le rejeu hors ligne ne remet plus le contenu d'un message DÉTRUIT (#16685)
+  - lancer un partage d'écran replie l'appel dans une capsule rouge « Arrêter »
+  - revue adversariale — une communauté désactivée se garde comme une privée (#16695)
+  - un salon d'une communauté privée n'accueille que ce que la communauté admet (#16695)
+  - le texte d'un sous-titre d'appel ne se journalise jamais (#16682)
+  - on appuie et on parle à un Proche — le talkie part du navigateur (#16641)
+  - un compte vivant se lit par identifiant ; doubles de conversation-core alignés (#16639)
+  - déclare relations.nowPlaying en attente de son client web (#13934)
+  - revue adversariale — ligne active prioritaire, vérification groupée, témoin du 404 ; journal réveil 6 (#16639)
+  - créer une conversation n'admet dans la communauté que ce que l'appelant peut admettre (#16639)
+  - l'extraction de la fenêtre `around` déclare ses surfaces (#16684)
+  - revue adversariale — un effacement ne part que vers qui voyait l'écoute (#16686)
+  - le serveur relaie ce que j'écoute, tronqué pour chaque Proche et chaque Sang (#16686)
+  - les actions de capture du carrousel sont typées une fois — dev ne compilait plus (CallModeControls.swift:122)
+  - le curseur du fil ordonne TOTALEMENT — plus aucun message perdu à une frontière de page (#16684)
+  - l'indice de format ADTS passe par son UTI — AVFileType n'a pas de membre aac (#16673)
+  - un sous-titre d'appel ne se lit ni ne se range dans le cache de traduction
+  - les chaînes des filtres vidéo deviennent propres à Android
+  - contre-audit — réglage jugé dans les deux sens, un compte parti n'a plus de rôle pour la loi
+  - type explicite pour l'analytique de la feuille, glyphe de tête isolé MainActor
+  - le détail d'un post s'ouvre en feuille, comme sur iOS
+  - dev repasse au vert après le retrait du panneau de filtres iOS (OPUS-4)
+  - le détail d'un post s'ouvre en feuille, plus jamais en écran empilé
+  - la voix d'un Proche sort dès qu'il parle, et on coupe son talkie depuis la fiche du lien [xcodegen] (#16673)
+  - le talkie lu par le SDK iOS — trois événements, fragment binaire dans la voie ordonnée, réglage « couper son talkie » (#16673)
+  - revue adversariale — un compte supprimé n'est plus ajouté, la route de l'administrateur garde les mêmes personnes, et la liste paginée ne dédouble plus (#6376)
+  - avant la connexion, « Effets » ouvre le carrousel de l'appel établi (OPUS-4)
+  - le partage qui réduit l'appel ne fait pas grandir CallManager
+  - vignette de ma caméra et « Répondre sans vidéo » sur appel entrant (OPUS-5)
+  - la feuille « Inviter » se charge à la demande, sert les amis en recette et peint la présence servie (#6376)
+  - lancer un partage d'écran réduit l'appel en capsule « Arrêter »
+  - le texte alternatif du fil descend le Prisme, et sa traduction arrive en direct
+  - on invite quelqu'un dans sa communauté depuis le web (#6376)
+  - un toucher range tout et ma vignette passe à sa petite taille
+  - l'invitation n'ajoute plus un compte désactivé ni une personne bloquée dans un sens ou dans l'autre (#6376)
+  - le pseudo prend la couleur de l'auteur, la phrase seulement quand elle est traduite
+  - un membre retiré d'un fil n'y est plus « ici », et n'y annonce plus son activité
+  - le cadran d'exposition vit dans le chrome, pas dans la machine de capture [xcodegen]
+  - un soleil à côté de l'anneau éclaircit ou assombrit l'image (OPUS-5)
+  - le délai sans renvoi reste journalisé en error, pour les pipelines vocaux (#16625)
+  - une traduction de sous-titre ne passe plus par le chemin de persistance des messages (#16625)
+  - la voix d'un Proche sort dès qu'il parle, et « Couper son talkie » sur la fiche d'un lien (#16638)
+  - le privilège d'équipe lit l'âge partout où il lit le rôle ; accessLevel ne dit ni blocage ni âge
+  - faire sonner un ami depuis sa fiche, et bloquer ses Bring depuis la fiche d'un lien (#16617)
+  - le créateur rétrogradé se répare, un 404 au retrait se relit, deux témoins de plus (revue adversariale #16636)
+  - le journal d'après l'appel garde la couleur de chaque auteur
+  - chaque auteur garde sa couleur dans le journal, pendant et après l'appel, et ma vignette porte la mienne
+  - les membres d'une communauté se lisent et se gèrent sur le web (#6375)
+  - « Tout effacer » rouvre les commentaires, et un brouillon rouvert garde le refus de la reprise du son
+  - la puce vue unique de l'expéditeur porte son statut d'envoi
+  - iOS et Android lisent accessLevel ; décision et loi de présence de l'équipe
+  - la fiche propose le Bring à un collègue de l'équipe sans lien
+  - les instants du Bring se lisent par WireDate, jamais par un formateur local (#13936)
+  - un membre ne se gère plus dans une communauté désactivée, ni le créateur par un admin, ni un ancien membre (#6375)
+  - la loi d'accès ouvre les outils de cercle entre deux comptes de l'équipe
+  - un sous-titre abandonné par le relais n'est plus re-poussé au traducteur (#16622)
+  - l'écran du Bring montre la présence connue de l'expéditeur et compte son avatar sans contour (#13936)
+  - la fermeture des commentaires voyage sur la ligne de la file et revient avec le brouillon
+  - une seule couleur d'auteur par ligne de sous-titre, pour garder le cliquet des couleurs en dur à sa référence (#16614)
+  - revue adversariale — l'horloge de l'appareil ne fait plus taire un Bring, un second Bring survit à l'arrêt du premier (#13936)
+  - un sous-titre porte la couleur de son auteur, texte compris, tirée de la fonction partagée (#16614)
+  - le Bring sonne sur Android — flux alarme, écran plein, arrêt d'un geste (#13936)
+  - un sous-titre final part en original à toute la salle avant sa traduction (#16613)
+  - l'arrêt d'un Bring atteint l'Android natif 3.1.0 — jeton identifié, plancher, DELETE porté (#13936)
+  - la création d'un salon, la recherche, les réglages et le tableau de bord ne lisent plus un ancien membre comme membre (#16603)
+  - un ancien membre ne voit plus une communauté privée nulle part, et le compteur ne compte que les membres actifs partout
+  - le Bring sur iOS — sonner, arrêter d'un geste, envoyer depuis la fiche d'un ami, bloquer par personne [xcodegen] (#13936)
+  - le Bring lu par le SDK iOS — service, ring/stopped sur la socket, pushes ramenés à la même forme (#13936)
+  - la surcharge ciblée de la loi de lecture couvre les DEUX portes, celle du favori comprise (#16604)
+  - le fichier de leçon est UNE entrée — titre `## ` en première ligne, sous-titres en `###`
+  - la clé de lecteur par conversation est une unité nommée, et la coupure part en parallèle des pairs
+  - le favori juge l'éphémère sur l'horloge de SON lecteur, et hérite de la mort de ce qu'il cite (#16604)
+  - les libellés d'adhésion quittent le catalogue d'interface pour un catalogue chargé avec le détail
+  - une jonction déjà faite (409) ne gonfle plus le compteur, et le témoin prouve la communauté désactivée
+  - on rejoint ou quitte une communauté depuis son détail sur le web, et le détail dit au lecteur ce qu'il y est
+  - le canal retour du traducteur se vide au lieu d'être lu un résultat par tick de 100 ms (#16599)
+  - l'aperçu du tableau de bord obéit aux lois de la ligne de liste
+  - l'indigo de marque du repli d'accent a UNE source, plus trois jumelles (iter-80w)
+  - /sync ne sert plus un éphémère échu chez son lecteur, et lui sert SON échéance
+  - l'écran de sonnerie et le bouton peignent par jetons (harmonie), journal de la routine à jour (#13936)
+  - le Bring sonne sur l'onglet ouvert, part de la fiche d'une personne et se bloque par personne (#13936)
+  - CameraModel repasse sous le seuil de découpe, les réglages de l'objectif rejoignent CameraModel+Lens
+  - les écrans de la boutique tiennent les gardes de présence, de contour et de format de taille
+  - le type de fonction de la vitrine écrit son isolement, Meeshy ne s'arrête plus sur iOS 16 et 17
+  - la lecture de participation est BORNÉE, et sa borne est exacte (#4165)
+  - GET /mentions/me ne sert plus un éphémère échu chez son lecteur
+  - le cliquet de dette `any` tombe sur une annotation que l'inférence tient
+  - GET /messages/:messageId ne ressuscite plus un éphémère expiré chez son lecteur
+  - la liste des épinglés sert la protection DU LECTEUR, pas la colonne
+  - un sous-titre final lit locuteur, admission et auditeurs en parallèle, et n'est plus perdu quand les auditeurs ne se lisent pas (#16575)
+  - ma tuile à la une en groupe porte le zoom de ma caméra, comme iOS (#9182) (#16566)
+  - la route de bascule des commentaires déclare une réponse FERMÉE et type son hook d'authentification
+  - la bascule des commentaires diffuse le lieu et ne rejoue rien quand rien ne change ; le détail iOS n'ajoute pas de toast [xcodegen]
+  - le témoin d'admission n'emploie plus de bouchon de schéma partagé
+  - l'inventaire des include nus perd son entrée reactions.ts, le site est réparé
+  - la lecture des réactions n'admet qu'un participant admis
+  - en groupe, toucher une vignette rend le chrome masqué au lieu de la mettre à la une (#16560)
+  - GET /mentions/me sert les drapeaux de protection du message qui mentionne
+  - une page qui ne montre rien rend la suite au geste, et un verrou posé retire aussitôt ses résultats
+  - un appel manqué sans conversation ouvre le profil
+  - un worker d'effets qui meurt en appel rend la caméra brute (#9187) (#16545)
+  - translation:request garde la vivacité du message et le plancher de l'appelant
+  - une pièce masquée ne se dénonce plus parce qu'une pièce ordinaire la précède
+  - une session cloud ne réécrit plus bun.lock à son démarrage
+  - le temps de traduction d'un sous-titre d'appel se mesure (p50, p95, p99)
+  - le témoin de fin de section ne demande plus une page pour aussitôt l'annuler
+  - la section Messages de la liste suit le curseur, tait les conversations verrouillées, et un toucher ouvre toujours le fil sur le message
+  - un worker d'effets qui meurt en appel rend la caméra brute
+  - fermer les commentaires d'une publication, bandeau à la place de la barre, Imager hors du menu, drapeaux sur les vocaux
+  - fermer les commentaires d'une publication, barre masquée, Imager hors du menu, drapeau du Prisme sur les commentaires
+  - fermer les commentaires d'une publication, barre masquée, Imager en icône, drapeaux du Prisme sur les commentaires
+  - retirer la propriété zoom morte de StreamVideo (#16535)
+  - une bulle retombée dans la file redevient en cours d'envoi à sa reprise, et la file seule tient le budget d'essais
+  - une ligne d'outbox sans clientMessageId ne fait plus tomber le démarrage à froid, sa charge désigne encore sa copie
+  - l'auteur ou un modérateur ferme les commentaires d'une publication
+  - corrige deux cliquets cassés par #16517 — cohésion CallView et baisse sleep-nanoseconds
+  - l'invite de salut reçoit l'accent sous le nom admis accentColor, le cliquet des couleurs revient à 473
+  - la progression d'une bulle survit à la sortie de la conversation, et la reprise par la file durable la publie sous le même identifiant
+  - au démarrage à froid, une copie d'envoi que plus rien ne désigne quitte le disque, jugée contre les bases de tous les comptes de l'appareil
+  - une prise ne demande jamais une définition que le format actif refuse, et la caméra gardée n'allume rien sans viseur
+  - retirer la propriété zoom morte de StreamVideo
+  - le cliquet des couleurs compte l'invite de salut à l'accent de la conversation (473 -> 474)
+  - la barre du mode sélection flotte au-dessus de l'indicateur d'accueil, en Liquid Glass
+  - la référence des règles maison verrouille la baisse de unchecked-sendable (120 -> 117), dev redevient vert
+  - un son importé par la feuille audio du composeur garde son nom choisi, une publication ne sert plus 0.m4a
+  - le nom choisi tient dans le budget de cohésion, aucune fonction de la file ne grandit
+  - un fichier importé garde son nom choisi par toutes les portes — audio hors ligne, composeur du fil, publication en file, collage et dépôt
+  - une pochette ne compte plus dans le débit d'un audio, un m4a de 1,5 s n'est plus servi à 6,6 s
+  - un vocal à faible débit garde la durée que son conteneur déclare, un ogg vorbis de 3,5 s n'est plus servi à 1,3 s
+  - un rejeu d'idempotence ne renotifie, ne repousse ni ne rallonge le cool-down
+  - une prise tenue en paysage reste en paysage du déclenchement à l'enregistrement, vidéo comprise, et garde le cadrage vu au viseur
+  - la deinit du strip de photos lit un verrou plutôt qu'un état nonisolated(unsafe), le cliquet revient à 107
+  - le viseur rouvre à chaud — caméra gardée, micro seulement pour filmer, plan de photo dans la transaction initiale, ouverture et obturateur mesurables
+  - les témoins de la remontée du fil sont inscrits au projet — OlderHistoryPaginationTests et OlderHistoryFlight
+  - la grille de stickers suit mes autres appareils, sans relire
+  - sonnerie, connexion et appel entrant ancrent leurs boutons sur chromeBottomInset, comme la pilule
+  - déplier un message long l'affiche en entier comme un message ordinaire, sans repli jusqu'à la réouverture
+  - en mode Bulles aussi, un long message s'ouvre sur son extrait et « Lire la suite » le déplie pour de bon, et l'aperçu de l'appui long le montre comme le fil
+  - la prise part vite et se sent — sortie photo réglée, flash du cadre à l'obturateur, bouton qui se contracte, plus de rotation ni de phrase parasites
+  - le salut d'un arrivant se touche aussi en Focal et Script, dans la couleur de la conversation
+  - une remontée rapide sert la page du cache sans attendre le réseau
+  - la vidéo voisine glisse en place sur sa première image, sans lecture disque sous le doigt
+  - un fichier importé part avec le nom choisi, jamais celui de sa copie temporaire file*<UUID>* — en ligne comme à la reprise hors ligne
+  - sous iOS 27, le rendu asynchrone de SwiftUI n'arrête plus Meeshy — les scènes de l'App ne reçoivent plus que des fonctions non isolées
+  - les deux dernières deinit écrites sans nonisolated ne s'exécutent plus sur le main actor — plus aucune double libération au démontage du strip de photos ni du moteur de timeline
+  - comparer deux StoryEffects ne sérialise plus deux documents JSON sur le fil principal — égalité champ à champ, verdict identique à l'encodage
+  - corrections d'audit de la garde de domaine d'e-mail
+  - une adresse réservée ou jetable n'ouvre plus de compte
+  - un message trouvé par la route unifiée garde la conversation que l'appareil connaît, titre et photo élus contre le lecteur
+  - l'invite « dis-lui salut » s'affiche en gras dans la couleur de la conversation, sur l'avis d'arrivée comme sur la ligne d'arrivées groupées
+  - la recherche générale trouve les messages de toutes mes conversations par la route unifiée, montre la photo servie et tait les conversations verrouillées, comme iOS
+  - un panneau du composeur caché par le repli de la plaque ne fige plus la story, et l'état des panneaux survit au changement de story
+  - déplier un message long l'affiche en entier comme un message ordinaire, sans repli jusqu'à la réouverture, comme iOS
+  - sous l'API 31, un commentaire, un message ou un média flouté ne transparaît plus sous son voile
+  - la story reste figée tant qu'un panneau du composeur de commentaire est ouvert ou qu'un lieu attend, comme iOS StoryComposerHold
+  - le composeur, les réels et la bande du haut ne lisent plus les marges de la fenêtre pendant le rendu d'un fullScreenCover
+  - le lecteur vidéo et l'éditeur d'image plein écran ne lisent plus les marges de la fenêtre pendant leur rendu
+  - une photo dont le processus est mort avant l'enfilage de son message repart au démarrage derrière son téléversement survivant (Refs #16168)
+  - la recherche de messages trouve dès la première page un message plus ancien que les deux cents derniers messages traduits
+  - déplier un message long l'affiche en entier comme un message ordinaire, sans repli
+  - le rattrapage de la liste garde son Task de front montant et ne porte plus de deinit isolée
+  - le fil apprend son estimation de hauteur une fois, il ne la réadopte plus au repos
+  - « près du bas » se mesure depuis le bas visuel, plus depuis l'offset brut
+  - après un redémarrage, la liste rattrape ce qui est arrivé appareil éteint
+  - la boutique lit le 9:16 dans SceneShape et PackInstallRecency déclare sa deinit
+  - un même en-tête pour toutes les pages d'accès, les indésirables dits en clair, les applis en pied du web
+  - une décoration d'événement revient chaque année sans réécrire ses dates
+  - Noël et le Nouvel An s'ouvrent par la règle de l'événement, sans date écrite
+  - une décoration d'événement sans date s'ouvre deux mois avant l'événement et se referme un mois après
+  - le site d'un compte masqué ne dépend d'aucune relation avec le lecteur — le blocage posé par le titulaire ne le fait plus disparaître, sans quoi le lecteur bloqué apprenait qui l'a bloqué (Refs #16440)
+  - dev vert après la boutique — deinit, cliquets maison, routes Kotlin
+  - Mes packs et la boutique en accès direct, la fiche peint les cadres du jeu
+  - la fiche nomme son éditeur, la page éditeur montre tout son catalogue, Mes packs se range
+  - l'éditeur de chaque pack, sa page et son catalogue ; Mes packs rangés par catégorie et triés
+  - la page éditeur ne nomme le compte que s'il a publié, se laisse trouver, porte seul l'adresse et un nom non neutralisé
+  - la page d'un éditeur tait le profil qui l'édite à un lecteur bloqué, dans un sens comme dans l'autre
+  - fiche et plein écran pour les packs servis, les stickers de tiers et le composer — un pack en route se dit en chargement
+  - la page d'un éditeur nomme le profil Meeshy qui l'édite — GET /publishers/:slug/page
+  - le témoin de la frappe en cours lit l'élément de l'action — les sous-vues recyclées du ProgressView gardaient le libellé d'un écran antérieur (reproduit 3/3 selon l'ordre des classes, vert 3/3 après)
+  - les chaînes générées rattrapent le catalogue iOS (i18n --check vert)
+  - les deux gestes de session des réglages sortent de SettingsView (1020 → 949 lignes, seuil de découpe de 1000 rouvert par #16418) [xcodegen]
+  - le témoin de la frappe en cours juge l'arbre d'accessibilité posé, sous une borne — un nœud composite transitoire ne le fait plus tomber, une offre réellement rendue le garde rouge
+  - les routes du Jeu quittent le gestionnaire pour la table — MessageSocketManager ne grossit pas
+  - les défis du jour et les succès se relisent en direct — game:missions-updated, retour au premier plan, retour sur le Jeu, tirer-pour-rafraîchir des pages de la vague 2
+  - les défis du jour se propagent en temps réel (game:missions-updated)
+  - un nouvel inscrit vérifié compte comme un pair dans les défis
+  - l'égalité de la barre d'actions du fil et le signet des réels ne lèvent plus d'avertissement d'isolation
+  - le registre des contours suit le déplacement de l'avatar de la liste des vues vers le détail d'une personne (#16386) — PublicationViewersSheet 2 → 1
+  - chaînes générées régénérées après #16423 — « Configurer ma voix » suit le catalogue xcstrings (xcstrings_to_android --check vert)
+  - la clé « Depuis le début » sort du catalogue avec la vue Imager de scène
+  - les sept rouges de dev c6c34a7207 — chevron qui se retourne, détail d'une personne compté au registre des contours, plan du rail sorti du fichier du rail, la loi de la barre range Imager parmi les rappels conditionnels avec sa preuve, le menu de story image par l'atelier de carte, le témoin iPad du routeur lit l'événement [xcodegen]
+  - VoiceConsentRefresher s'initialise sur l'acteur principal
+  - les témoins du lot Imager suivent l'atelier unique, le rail de story repasse sous 1000 lignes [xcodegen]
+  - chaque indicateur de consentement vocal ouvre la configuration de la voix
+  - miroir Swift de la Gloire du coffre (base sur l'effort, précocité sur l'heure)
+  - miroir Kotlin de la Gloire du coffre (base sur l'effort, précocité sur l'heure)
+  - la passerelle grave la Gloire du coffre à l'heure serveur de la réclamation
+  - la Gloire du coffre suit l'effort (1 250 à 3 000) et l'heure d'ouverture (+2 800 à 0)
+  - dev recompile ses témoins et retient ses règles maison
+  - badges côte à côte en face du titre, « Télécharger » à côté de la marque sur téléphone
+  - les témoins Imager attendent le rendu hors de l'autoclosure de XCTUnwrap (ios.yml 42104445324)
+  - les routes /publishers de #16378 attendent leur client iOS (cliquet Swift dead-entries 332 > 329) (Refs #16389)
+  - StoryImagerTests compile — le rendu attendu sort de l'autoclosure de XCTUnwrap (Refs #16389)
+  - StoryVideoExportStagesTest compile de nouveau (accolade fermante en trop)
+  - badges des boutiques face au titre, lien « Télécharger » dans l'en-tête
+  - le témoin du menu de scène offre Imager par son hôte, l'atelier de carte (#16393)
+  - les témoins du préparateur d'export ne passent plus decideImager, retiré avec la vue Imager (run 42111416114)
+  - l'installation apt de la passerelle échoue vite et se retente
+  - la gate des Réels compte la baguette « Imager » sur tout réel qui s'image
+  - la gate du lecteur de story suit la feuille détail imbriquée de « Vues »
+  - le témoin des étapes d'export perd l'accolade orpheline (run 42105338211)
+  - la règle maison redevient verte sur dev — délais par DelayedUI, liste des posts d'un profil construite en un seul site, foregroundStyle dans les vues de « Mes stories » (Refs #16389)
+  - la mémoire du repli du compositeur a une deinit non isolée — xctest ne meurt plus au démontage (#16384, Refs #16389)
+  - « Imager » ouvre l'atelier de carte pour un post, un réel, une story et un média de commentaire
+  - la baguette Imager sur la carte de post, le détail et le commentaire, et un seul atelier, celui de la carte [xcodegen]
+  - une carte demandée pendant un export en cours se dit échouée au lieu d'attendre
+  - réel, story et commentaire passent par l'atelier de carte, baguette sur la rangée du commentaire
+  - la liaison de l'éditeur Meeshy trace par logWarn et logError
+  - « Imager » d'un post ouvre l'atelier de carte, la vue Imager de scène disparaît
+  - les routes /publishers de #16378 sont classées — admin en console, :slug et me à porter (plafond 126 → 128) (Refs #16389)
+  - la loi d'« Imager » d'une publication — hidden | card, gardes de sortie, texte servi
+  - plus aucun test du module app ne démarre MeeshyApplication — l'exception fuyante de WorkManager disparaît
+  - le détail d'une personne qui a vu s'ouvre en feuille plein écran avec (<) (#16386)
+  - les routes Kotlin générées inscrivent /publishers de #16378 (garde « Routes Android générées à jour » rouge sur dev, run 42094970565)
+  - « Mes stories » — le (…) revient sur la vignette, la liste des vues dit vues, réactions, commentaires et impressions, et le détail d'une personne s'ouvre en plein écran (#16386)
+  - les routes /publishers de #16378 attendent leur client web (cliquet dead-entries 279 > 276, CI 42094838455)
+  - le pbxproj inscrit les sources et témoins des lots du 2026-11-05 (xcodegen) — check_test_registration rouge sur ed2d20990e
+  - chaque conversation se souvient si sa barre de composition est repliée
+  - le fil mesure 50,12 Ko avec « dis-lui salut » et le repli retenu — plafond 51 Ko (CI 42090652503)
+  - une invite de réglage mène au réglage et le met en évidence
+  - un nom hors liste garde des jokers illimités, sauf un profil hérité marqué par le rattrapage
+  - CI de dev 42087406447 — témoin « dis-lui salut » strict, rail auteur de story avec Imager, ⌄ de repli absent sous 360 px
+  - re-audit 3 #16274 — un alphabet absent n'est plus lu comme Meeshy (budget de jokers fixe, tables cherokee et lisu), sosies latins à crochet ou barre refusés et lus, leet hors de la clé de nom, ancien nom hors liste servi et crédité tel quel, nameDisputedAt dans adminList ; une variable vide coupe la liaison officielle
+  - l'invite « dis-lui salut » d'un avis d'arrivée écrit les @mentions des arrivants
+  - la baguette du plein écran suit la loi de sortie du message porteur
+  - le registre des destinations compte SETTINGS_FOCUS (run 42085402901)
+  - un ancien nom qui se lit comme Meeshy est servi neutre ET non vérifié ; proposer sous le nom que son profil porte déjà n'est jamais un nom pris, l'arbitrage de l'homonyme se fait au commit (vérifié, puis plus ancien)
+  - la traduction d'un vocal se lit même quand sa voix n'a pas pu naître
+  - le module du contrôleur de repli porte un nom distinct de celui du stockage
+  - re-audit #16274 — aucun profil existant renommé ni dévérifié (à arbitrer), latin africain et latin+arabe admis, leet lu comme Meeshy, nom pris seulement au commit, auteur servi = éditeur, 503 Retry-After sur un doute ; compte officiel Meeshy Sama
+  - une invite de réglage ouvre les Réglages sur son réglage, mis en évidence
+  - un arrivant de la ligne d'arrivées peut porter son pseudo
+  - la baguette IMAGE sur les rails, l'icône de post COMPOSE
+  - la barre d'une conversation se replie, et chaque conversation s'en souvient
+  - le témoin de la baguette Imager importe assertCountEquals (run 42077897694)
+  - « Activez … dans les réglages » ouvre les réglages sur la bascule et l'allume
+  - la barre de composition retient, par conversation, qu'on l'a repliée ou dépliée
+  - « dis-lui salut » écrit les @pseudos des arrivants dans le composeur et lui donne le focus
+  - « dis-lui salut » écrit les @mentions des arrivants dans le composeur
+  - la ligne d'arrivées garde le pseudo de chaque arrivant
+  - la baguette des rails lance Imager, l'icône de post ouvre la composition
+  - la baguette lance Imager sur les rails (plein écran audio, réel, story), l'icône de post ouvre la composition
+  - la galerie du post lit le fil chargé dans l'environnement des commentaires
+  - le doc du témoin porte la raison, pas un commentaire dans la galerie
+  - la règle de l'indicateur d'un réel est nonisolated, sans date en commentaire
+  - le plein écran d'un post est une seule suite, ouverte depuis le post ou un commentaire
+  - feuilleter le plein écran d'un post ne vibre plus
+  - un réel à plusieurs médias montre ses points, plus le compteur « n / M »
+  - en direct un ancien profil détient son nom quel que soit son âge, le balayage exclut neutres et officiel, un doute ne neutralise pas, la précondition de la migration suit le code
+  - un ancien profil sans clé détient son nom (clé recalculée à la lecture, balayage borné, le plus ancien garde le nom) ; la migration ne pose l'index de nameKey qu'après le rattrapage des clés
+  - un seul site décide du nom d'un éditeur (PublisherNames) — proposition, profil lens créé ou renommé, ancien profil rendu servable et rattrapage ; nom réservé refusé, nom pris refusé y compris sous la course (P2002 de nameKey, course relue) ; le compte officiel garde Meeshy et sa vérification ; les crédits de lens appliquent la réserve
+  - un nom de boutique déjà pris rend 409 PUBLISHER_NAME_TAKEN ; une lecture des propositions ne crée aucun éditeur
+  - la boutique lit sans écrire, l'unicité ne suppose plus d'index — upsert sur userId, doublons résorbés au plus ancien, adresse vérifiée avant et après écriture, nom unique par clé (409), rattrapage explicite, liaison officielle journalisée, auteur refusé seulement s'il imite Meeshy
+  - un joker vaut une lettre ou rien, et le socle « [a-z0-9] puis meeshy » reste : le contrôle ne fait jamais moins bien que l'ancien
+  - l'imitation de Meeshy se lit FERMÉE PAR DÉFAUT — tout caractère visible inconnu devient un joker (deux au plus dans la fenêtre), rien n'est effacé avant la comparaison ; une lettre latine n'est valide que repliable en ASCII ou listée parmi les lettres étendues légitimes
+  - la réserve vise Meeshy et ses sosies, pas les noms légitimes — Latin étendu, symboles, emoji et mélanges Highly Restrictive admis, sosies latins refusés ; squelette à séquences (rn, vv, cl, l/i) ; clé de nom unique ; Meeshy au seul officiel dans le profil et les crédits de lens ; slug sans @unique, nameKey
+  - index uniques des éditeurs — PartnerProfile.userId, slug et nameKey partiels, doublons relevés avant d'écrire, rejouable, sans db push
+  - ouvrir une vidéo en plein écran ne fige plus la galerie
+  - frame(of:) retrouve la UIScrollView qui porte l'identifiant par les sous-vues — l'arbre d'accessibilité ne la rendait pas (#16246)
+  - la puce son prend son onde dans MeeshyIcons
+  - le magasin des contrats servis garde son état sous Locked — ni NSLock ni @unchecked Sendable
+  - le catalogue des packs de stickers passe à 17 Ko — fiche et plein écran de la boutique, offres de Noël (15,97 Ko mesurés par la CI de dev e97adfe4d4)
+  - le chrono de la puce son passe par MediaFormat.duration, ses témoins compilent, le cliquet narratif est verrouillé
+  - la puce son compile — la position du lecteur passe par ComposerLivePlayerState
+  - la fiche de profil du SDK ne lit plus de singleton — le magasin servi par défaut est donné par ServedAppearanceRefresh.store
+  - les rouges de dev af8fbae2af — fonction async du contrat servi isolée, peau de bulle relue sous son nom, colonne du compositeur lue sur son nœud posé
+  - les libellés de la fiche et du plein écran dans leur propre catalogue chargé à la demande ; l'avatar d'aperçu est le mien (garde de présence)
+  - la bulle de plusieurs pièces monte d'un seul pourcentage — les pièces atterries comptent, une vidéo ne pèse qu'une fois, le pont est écrit avant que le registre l'oublie (Refs #16133)
+  - le type-check web de la boutique repasse, et les témoins Android comptent le catalogue des offres de Noël
+  - la puce son affiche un chrono qui boucle, se tourne comme tout objet et dit son nom et sa durée
+  - la puce son a un chrono qui boucle et se pince, se zoome et se tourne comme un sticker
+  - la fiche d'un pack et le plein écran de ses éléments, posés sur ce qu'ils décorent, zoomables, paginés, équipables
+  - les trois témoins du compositeur sur petit écran lisent la colonne qui défile, à sa vraie place
+  - les fonds, contours, bannières et cadres d'un pack téléchargé se peignent depuis son contrat servi
+  - l'éditeur sert l'apparence, les lens et les cadres, routes /publishers et note de décision
+  - le chemin du téléversement se lit par segments, un sticker ou un lieu n'attend aucune pièce à la relance (Refs #16168)
+  - la puce son de la scène a un chrono qui boucle et se pince, se zoome et se tourne comme un sticker
+  - relancer une photo en échec garde sa pièce (téléversements retrouvés par bulle, jamais de message vide) et le téléversement multipart attend sa réponse (Refs #16168)
+  - la proposition d'un pack de stickers exige l'éditeur du compte connecté (403 sinon), la boutique sert l'éditeur de chaque pack, Meeshy pour les intégrés
+  - le nom d'éditeur passe une liste blanche UTS #39 Highly Restrictive — un seul alphabet, latin ASCII accentué seulement, chiffres et ponctuation courante, lu en NFC
+  - chaque bulle en cours d'envoi montre sa propre progression, anneau et pourcentage à la place de l'horloge
+  - les offres Meeshy de Noël et du Nouvel An — quatre catégories statiques et animées, offertes dans leur fenêtre
+  - un slug réservé sur un compte non officiel est remplacé et perd sa vérification, ensureOfficial retire « meeshy » à l'ancien détenteur, « meeshy » ne se revendique que par le compte officiel
+  - la rangée lit le geste du pack au même site que la fiche et le plein écran
+  - la fiche d'un pack et le plein écran de chaque élément — posé sur ce qu'il décore, zoom ×1 à ×4, n / N, autres propositions, Équiper optimiste
+  - la réserve Meeshy lit le squelette de confusables (UTS #39, cyrillique, grec, pleine largeur) et refuse les noms qui mêlent deux alphabets
+  - la fiche d'un pack de décor et son branchement dans la vitrine, chargés par import()
+  - le plein écran d'une décoration — posée sur mon avatar, ma bannière ou une conversation, n / N, zoom, Équiper optimiste, autres propositions
+  - un pack d'apparence non embarqué se peint depuis son contrat servi, vérifié et gardé pour le hors-ligne
+  - PackPublishers — publier exige un compte vérifié propriétaire de l'éditeur, Meeshy au seul compte officiel configuré
+  - l'éditeur d'un pack est un compte Meeshy — PartnerProfile généralisé, slug, relation owner, identité Meeshy réservée
+  - la rangée s'ouvre sur la fiche du pack, la couverture sur le plein écran ; le geste du pack est partagé
+  - charger les éléments d'un pack, libellés de la fiche et du plein écran en sept langues ; témoin rouge de l'ouverture depuis la boutique
+  - le zoom du plein écran ; témoin rouge du chargement des éléments d'un pack
+  - les éléments d'un pack de décor, embarqués ou servis ; témoin rouge du zoom du plein écran
+  - la consigne d'appui long de la transcription est classée au manifeste, les témoins d'écoute pilotent l'horloge image par image
+  - la porte du fil ouvre le post sur la même scène au repos que la story, sans clavier levé
+  - revue — l'offre de langues du plein écran se calcule une fois par vocal, plus à chaque tic de lecture
+  - revue — une pastille touchée fait jouer la piste choisie (iOS selectLanguage), un changement venu d'ailleurs ne la relance qu'en cours d'écoute
+  - revue — une langue choisie à l'arrêt ne relance plus la lecture, Lire joue la piste choisie, l'appareil reconnaît la langue que la piste parle
+  - le témoin de page lit l'arbre non fusionné
+  - nom de témoin sans caractère interdit
+  - TalkBack nomme le format composé, le bandeau d'activation s'efface sous le compositeur, la feuille Son prend la hauteur de son contenu
+  - les rouges de dev 5a35e5c43d hors Hilt — icônes par MeeshyIcons, ligne « toutes les langues » activable, currentTime importé, chaînes déclarées au manifeste
+  - chaînes du plein écran audio, témoins sdk-ui et feature:chat de la transcription et des langues
+  - le plein écran audio défile ses paroles, transcrit et change la langue de la piste
+  - lois pures des paroles du plein écran, de la transcription servie et de la piste périmée
+  - ContactsViewModel n'a plus qu'un constructeur, Hilt le compile de nouveau
+  - la piste traduite se joue depuis l'adresse complète que sert la passerelle
+  - la piste parlée d'une traduction se joue protégée quand le message l'est
+  - une attente du chantier se tient dans le tour, jamais par tâche planifiée
+  - cinq gardes de source re-pointées après les extractions — la scène libre et ses étages, cancelAll et sendDTMF
+  - mes demandes d'amis reçues et envoyées s'acceptent, se refusent et s'annulent instantanément, même hors ligne
+  - les libellés d'accessibilité déplier/replier de la transcription sont classés au manifeste des chaînes
+  - fermer la fiche n'arrête le moteur audio que si elle y a joué une piste
+  - les témoins des états du bloc de transcription compilent
+  - la carte plein écran de la transcription compile (import de dp)
+  - les réglages se recadrent, se quittent et la feuille de channels défile par vingt
+  - le @ViewBuilder de composingFloors reste avec elle dans ComposerSceneSurface
+  - la transcription karaoké du plein écran rejoint la page à portrait et à rail de dev
+  - 24 des 26 rouges des tranches de tests unitaires de dev, chacun pour sa raison ; les deux de disposition sont suivis par #16246
+  - la fiche Transcription joue la piste d'une traduction audio au toucher, annonce les durées en toutes lettres et vibre au lancement, au succès et à l'échec
+  - un même événement enfilé par deux comptes garde une ligne pour chacun, et l'envoi social ignore ce qui a plus de 72 h
+  - les images d'une communauté suivent les plafonds iOS et la feuille d'ajout se pagine par vingt
+  - le refus du droit de pièce jointe est définitif et expliqué sur la bulle (#16053)
+  - un vocal est transcrit sur l'appareil dès l'arrêt, attente à l'envoi bornée à 700 ms, sélecteur de langue de reconnaissance
+  - le témoin de la fiche carte de visite attend la lecture de la carte jusqu'à 20 s
+  - un seul menu « … » et l'edition en place d'un commentaire
+  - l'onglet Appels est embarquable — ligne lue en entier par TalkBack, rappel rond de 44 dp, vide « Aucun appel récent », balayage avec haptique medium
+  - un lieu en attente part à l'instant de l'envoi et ne revient qu'en cas d'échec
+  - loi du menu et de l'edition d'un commentaire (squelette)
+  - la pellicule lit l'index courant à jour au calage (pas de rafale d'onSelect/haptique)
+  - la recherche du journal interroge la passerelle 250 ms après la dernière frappe et ignore une réponse périmée
+  - lois de la transcription locale d'un vocal — retenue, rekey vers l'id serveur, liste de langues de reconnaissance
+  - l'icône Inviter de l'écran Membres suit la palette Meeshy, et les parcours membres/invitation gagnent leurs témoins
+  - les deux témoins du fil suivent le contrat livré par le Flux superposé (#16155)
+  - la pellicule réserve 80 dp, tête de lecture à droite, vignettes de 54 dp, snap et haptique
+  - la garde du répartiteur principal répare la fuite au lieu d'en subir la cascade, et couvre les douze modules Compose qui ne l'avaient pas
+  - modifier un post enregistre aussi ce qu'on change sur sa scène — canevas, nouveaux médias, références, « Enregistrer »
+  - retirer les dix références iOS27 BLANCHES de ClipInspector entrées avec #16122
+  - retirer `mediaAltPayload()` et `allowSoundExtractionPayload()`, orphelines depuis la sortie de l'atelier, avec leurs témoins
+  - le témoin des actions du plein écran n'importe plus deux fois MockKMatcherScope — résidu de la fusion de #16213, refusé par Kotlin (run 41945636482)
+  - le gardien du brouillon de « Mes stories » a une deinit non isolée, et le cliquet des couleurs descend à 472
+  - audit — le témoin des actions du plein écran compile de nouveau, l'import de MockKMatcherScope n'y figure plus qu'une fois
+  - le témoin des actions du plein écran compile — sendAny vit dans la portée des matchers MockK, où any() existe
+  - revue — le témoin du portrait reprend l'arbre non fusionné, et TalkBack ne dit plus qu'une fois le nom de l'auteur
+  - trois rouges de dev — le plafond de zoom du test suit les 4× voulus (#16156), le portrait du plein écran audio ne dit plus deux fois le nom de l'auteur, et community_create_identifier_unavailable entre au manifeste
+  - chaque bulle de pièce jointe en cours d'envoi montre sa propre progression
+  - choisir un son puis OK le pose sur la scène
+  - un média qui entre montre dès le choix sa vignette et dit s'il est une vidéo
+  - l'invite et l'aide du viseur se lisent l'une sous l'autre sur la scène vide
+  - la porte du fil ouvre le post sur la même scène au repos que la story
+  - le glisser-déposer d'une conversation compile — la position du doigt vient de l'événement Android, scrollBy est importé
+  - la reprise d'un brouillon et la modification d'une story ouvrent la scène du compositeur unique — l'ancien atelier quitte le dépôt
+  - lois de cadrage, d'immersion, de seek et de pellicule de la galerie
+  - MeeFigureTest remplit les caches du film avant la composition — plus aucun chargement en vol au démontage
+  - le témoin des actions du plein écran compile — les matchers MockK vivent dans la portée du coEvery
+  - revue — les témoins du drapeau de langue compilent, leur nom ne porte plus de deux-points
+  - les comptages et événements sociaux en attente survivent à la fermeture de l'application, séparés par compte
+  - la bannière hors ligne de la liste des communautés entre au manifeste — StringManifestIntegrityTest rouge sur dev (run 41919755444)
+  - revue — le témoin des pages du fil suit la loi du contour élu, une page sans contour prend celui que le fil sert pour son auteur
+  - la copie nette d'une photo en attente se refait au démarrage si le processus est mort avant
+  - un vocal reste jouable hors ligne juste après son envoi, quel que soit l'ordre entre message:new et l'accusé
+  - la timeline reste liée à ma slide — sélection/inspection, glissé aimanté avec haptique, rognage borné, volume, fondus, scission, +10 s, annulable
+  - le plein écran audio réagit, répond sur place et transfère le vocal, la lecture continue
+  - la passerelle refuse le bout en bout d'un groupe à la bascule
+  - l'offre d'actions du plein écran audio, le brouillon par pièce, la garde d'envoi et la citation d'un vocal
+  - le test du héros compte le portrait dans l'arbre fusionné, où il n'est qu'un nœud
+  - le flux d'enregistrement n'utilise pas de paramètre de capture anonyme
+  - le test du héros n'attend plus l'inactivité d'un cadran qui respire
+  - la création vérifie l'identifiant et garde l'aperçu fidèle à iOS
+  - on glisse une conversation sur un en-tête pour la ranger ou l'épingler
+  - les lois du repos mémorisé et de l'offre d'enregistrement du plein écran audio
+  - le plein écran audio du fil — repos mémorisé par page, présence vivante de l'auteur, Télécharger et retour au message
+  - le doc-comment de TypingIndicatorBubble perd sa date — le cliquet narrative-comment repasse à 2412
+  - un repeint du carnet d'amis ne s'écrit jamais dans le cache d'un autre compte
+  - l'explorateur de langues montre chaque traduction, texte et voix, et sait en demander une
+  - un vocal cité porte la décoration de profil que le fil a servie pour son auteur
+  - le héros du plein écran sort de la page et lit sa géométrie dans la loi
+  - la loi du héros plein écran — décor sous l'anneau, butée tenue, contour de l'auteur élu
+  - la transcription d'un vocal se lit mot à mot, au rythme de la voix — flux tappable, voir plus, plein écran
+  - MeeshyAvatar.body repasse sous 80 lignes — le badge de présence devient sa propre vue
+  - les pièces montent par groupes en parallèle, survivent au hors ligne et gardent leur bulle
+  - l'ordre des langues de l'explorateur est tranché — configurées d'abord, puis candidates
+  - le lot de pièces jointes se découpe en groupes, avec ses règles de refus et sa progression globale
+  - lois pures des demandes en attente (pagination sans doublon, retour d'une ligne, repeinture)
+  - le plein écran zoome jusqu'à 4×, s'annonce « n sur N » et s'ouvre au menu par appui long
+  - le Flux se superpose à la liste depuis le bas, sur un fond à deux halos
+  - l'état de sélection de la timeline distingue surlignage, inspection et glissé
+  - le journal d'appels garde en local participants, réactions, journal réseau et transcriptions
+  - l'apparence du Flux en surcouche (halos, dérive, dégagement, mouvement) en loi pure
+  - la loi des lignes de transcription et la coupe du karaoké — phrases, ligne active, 30 mots, 255 caractères
+  - catalogue d'emojis et identifiant en minuscules pour la création
+  - segmentsLanguage sans smart cast dans une lambda de chaîne sûre
+  - la section passe par MeeshyIcons — la garde des icônes Material directes reste verte
+  - le témoin du blocage depuis la fiche importe kotlinx.coroutines.plus — backgroundScope + dispatcher compile
+  - le disque du point de la cellule d'avatar porte le repère presence-dot-<état>, comme la variante historique — les témoins de Contacts et Découvrir le retrouvent
+  - les témoins de la liste en sections montent une fenêtre assez haute pour les lignes agrandies — la fenêtre par défaut de Robolectric (470 dp) n'en laissait plus que trois à l'écran
+  - les témoins de Nouvelle conversation stubent ticket() et persist() du cache d'amis — AcceptedContactsSource les appelle à chaque rafraîchissement
+  - section Gestion des membres des réglages de conversation
+  - type explicite du flux de citation vide, l'inférence de l'elvis n'est pas sûre
+  - les témoins du blocage depuis la fiche collectent sur le dispatcher immédiat — la collecte d'arrière-plan standard n'avait jamais démarré
+  - ContactsListTabTest n'importe plus assertExists/assertDoesNotExist, membres de SemanticsNodeInteraction
+  - l'en-tête WAV du témoin du vocal en attente s'assemble par morceaux — le compilateur ne renonce plus à le typer
+  - la capacité canMakeObsolete suit le rang du lecteur
+  - les trente-trois chaînes du blocage et de l'annuaire d'amis entrent au manifeste — StringManifestIntegrityTest ne trouve plus d'orphelin
+  - joindre des pieces sous le plafond du serveur et citer un media du post
+  - le clavier numérique passe par MeeshyIcons — la garde des icônes Material directes repasse au vert
+  - rétablit segments et speakerCount des charges de transcription écrasés par aa8d601276
+  - le vocal en attente se lit depuis sa copie sur l'appareil
+  - politique pure des actions de gestion d'un membre
+  - revue — seule la page jouée du plein écran suit le moteur, les voisines et l'écran ne se refont plus à chaque tic
+  - les icônes du bandeau audio passent par MeeshyIcons (cliquet des imports directs)
+  - le décor de profil s'affiche entier partout ; l'indicateur de frappe, sans présence, garde l'anneau seul (#16114)
+  - la lecture du fichier d'une prise passe par un dispatcher injectable, le témoin n'applique plus la composition sur un fil d'E/S
+  - le témoin des en-têtes de section compile — assertExists et assertDoesNotExist sont des membres, getOrNull vient de semantics
+  - le décor de profil s'affiche entier à toutes les tailles ; la cellule de frappe, sans présence, porte l'anneau seul (#16114)
+  - la bulle en attente garde son aperçu quand le conteneur change et jusqu'à l'écho du rejeu
+  - un modérateur monte le chiffrement d'un groupe existant, le bout en bout se confirme, et chaque refus se lit dans sa langue
+  - annuaire d'amis complet, légende de présence, filtres défilants et repeinture
+  - feuille Traduire l'audio (spinner par langue, consentement, refus de chiffrement) ouverte depuis l'explorateur de langues
+  - langues offertes à la feuille de traduction audio et résumé d'état de plusieurs vocaux
+  - suivi des demandes de traduction audio par pièce et par langue, consentement distinct de l'échec
+  - Re-transcrire redemande la transcription de force par le suivi unique des transcriptions
+  - bandeau de langues du lecteur vocal, bouton Re-transcrire et libellés iOS adoptés
+  - la voix en cours suit le drapeau de langue, au même point, et le pont de bulle route les drapeaux de piste
+  - le drapeau d'un vocal change voix, texte et karaoké d'une seule descente, et le pied d'un vocal seul porte les langues de ses pistes
+  - lois pures de la langue de piste d'un vocal, du bandeau, du routage de drapeau et de la demande de traduction
+  - le paquet des catalogues passe à 215 Ko — refus de pièce jointe expliqué (#16053) et descente hybride → serveur (#14648)
+  - DiscoverViewModel restauré (le fichier avait été commité vide), suggestions relancées à l'effacement de la requête
+  - les cinq fichiers fusionnés passent par MeeshyIcons au lieu d'importer Material
+  - la feuille des membres riche déclare ses seize chaînes au manifeste
+  - le titre plafonné des membres porte la quantité many en fr, es, pt
+  - la KDoc de PersonAvatar ne cite plus l'appel MeeshyAvatar(
+  - le test du clavier touche la ligne par son libellé TalkBack (clearAndSetSemantics masque le texte)
+  - Découvrir à parité iOS (invitations en verre, toasts, refresh, cascade)
+  - l'onglet Clavier retrouve une personne par numéro ou nom et l'appelle
+  - compteurs Répertoire et Affiliés injectables et légende de présence du carnet
+  - le transport du plein écran passe par MeeshyIcons, pas par un import direct des icônes Material
+  - un 403 ATTACHMENT_RIGHT_NOT_PERMITTED dit que ce type de pièce jointe ne passe pas encore ici
+  - hybride → serveur se propose de nouveau, tête-à-tête et groupe, au droit servi
+  - un vocal s'ouvre en plein écran depuis sa bulle ou sa citation, une seule présentation à la fois
+  - libellés Découvrir adoptés du catalogue iOS
+  - bloquer ou débloquer depuis le profil et la fiche d'un participant, avec confirmation
+  - le champ du clavier numérique classe numéro ou nom
+  - l'écran plein écran audio — pages balayables triées par réception, portrait au cœur du cadran, transport et chrome qui s'efface
+  - loi des entrées Bloquer / Débloquer et nom de la confirmation
+  - revue — un vocal déjà transcrit ne tient plus de collecteur de demande, et « Transcrire » dit ses deux usages
+  - lois du plein écran audio — paliers de vitesse iOS, chrome muet sous TalkBack, départ d'une page, progression par page, amorçage servi de la file
+  - actions d'en-tête en cercles de verre 44 dp et bande épinglée à six entrées
+  - un commentaire avec média part en entier, ou reprend où il s'est arrêté
+  - la cible d'image se calcule en pixels arrondis au supérieur et les médias de post portent leurs variantes
+  - la capacité canMakeObsolete suit le rang du lecteur, liste ouverte ou non
+  - la règle de propriété et le plan de reprise d'un commentaire à pièces
+  - une réponse dans un tête-à-tête vaut accord et rouvre les médias de l'expéditeur
+  - une seule bulle d'humeur à la racine, ancrée au badge touché et fermée à toute navigation
+  - la ré-application des likes et favoris en file sort de FeedViewModel — garde de cohésion verte
+  - une session close en mémoire purge la base disque avant sa réouverture, le registre suit les renvois, un comptage en échec refuse la copie
+  - revue — les témoins de la citation vocale et de la langue entendue décrivent la charge servie
+  - import de IntOffset.VisibilityThreshold pour le ressort de remontée
+  - l'avis « mot de passe changé » ne dit plus « réinitialiser » — chaîne propre à Android, sept langues
+  - l'API de relocalisation est expérimentale — opt-in sur le registre d'ancres
+  - la coalescence d'outbox et la règle du rejeu de déblocage vivent hors des types hors budget
+  - imports et barre d'accent du bandeau de réponse
+  - revue — le ▶/⏸ de la citation et de la pastille passent par MeeshyIcons
+  - une traduction demandée depuis les favoris, « À proximité », un membre ou un hashtag arrive sur la carte
+  - le bouton Fond sélectionne le fond média, TalkBack nomme la sélection et la colonne comme iOS
+  - revue — le témoin TalkBack pose un contour réellement dessiné
+  - retire le renvoi d'e-mail de vérification sans corps, voué au 400
+  - participant:role-updated remet à la cible sa capacité canMakeObsolete recalculée
+  - rejouer un déblocage déjà appliqué aboutit au lieu d'échouer
+  - une ligne remplacée par une intention plus récente termine les flux qui l'observent
+  - la publication citée d'une republication sert le texte du Prisme — témoins au rang 2
+  - l'avatar d'une conversation directe montre le contour que le pair a équipé
+  - la feuille des membres importe getValue/setValue pour ses délégués by
+  - revue — une arrivée livrée hors d'ordre rejoint la file : la borne de l'historique est le plus ancien vu
+  - revue — la langue entendue d'une voix d'origine est la sienne, pas celle du texte traduit
+  - revue — le témoin « l'arriéré ne rejoint pas la file » attend ce que la file sert vraiment
+  - on monte le mode d'une conversation, groupe compris, sans jamais redescendre — l'affichage est optimiste, le cache attend la passerelle
+  - une capture déclarée hors ligne est rejouée jusqu'au jugement de la passerelle
+  - les VM de toasts sont publics, les écrans publics les exposent en paramètre
+  - le suivi des demandes de transcription nomme son appel serveur « fetch »
+  - libellé « Transcription… » du vocal généré depuis le catalogue iOS (Refs #16034)
+  - le balayage d'une notification révèle Supprimer puis Lu côté fin, et la suppression ratée remet la ligne à sa place
+  - la transcription d'un vocal arrive seule — relecture unique à 5 s, rekey à l'accusé, segments, demande « Transcrire » avec plafond de 90 s (Refs #16034)
+  - répondre garde le commentaire en vue, la barre se replie et la feuille s'agrandit seule
+  - toucher la citation d'un vocal le joue seul, avec la piste du Prisme
+  - le SDK ferme la session révoquée ou expirée, gardé sur l'identité, et la racine relit l'état
+  - lois pures de la transcription d'un vocal — attente 90 s, relecture unique, fusion de pièce, rekey, défauts de piste, segments (Refs #16034)
+  - la pastille de retour en bas propose le play du dernier vocal non lu
+  - la file du fil se pose sur des lois pures — piste jouée du Prisme, consommé servi, arrivées en direct
+  - supprimer le message ou la conversation qui joue ferme la lecture, la langue entendue part avec le rapport
+  - audit — l'onde d'une bulle se mesure sur une copie déjà sur l'appareil, un vocal protégé du hub se lit sans cache ni carte complète
+  - la liste défile ligne par ligne sous des en-têtes de section épinglés
+  - le suivi d'une capture, sa visibilité et l'issue d'un essai de déclaration
+  - feuille des membres riche — balayage Retirer, menu contextuel confirmé, Quitter le groupe, squelette, haptiques
+  - la migration tourne sur le vrai moteur, aucun échec avalé, outbox réglée en mémoire, report en clair borné
+  - hors ligne, « Enregistrer » part en file et ne se défait pas
+  - un accusé d'écriture se lit comme une réussite, quelle que soit sa charge
+  - tirer-pour-rafraîchir de marque, toasts communs et états vides sur conversations, notifications et appels
+  - lois pures du composeur de commentaire — garde d'envoi, ancre de réponse, repli, ajustement de la feuille
+  - les gestes de rangée reconnaissent la clé d'axe servie (social.invite_joined)
+  - les humeurs du badge d'avatar se lisent au toucher, pas dans l'hôte des lignes
+  - la liste ouvre la fiche, la story et la bulle d'humeur depuis l'avatar d'une ligne
+  - la fiche Conversation s'ouvre hors de son fil, avec les mêmes onglets
+  - revue — la bulle ne télécharge plus en douce un vocal « à télécharger » pour dessiner son onde
+  - l'avatar d'une ligne a ses gestes — profil ou détails, story, humeur, menu, TalkBack
+  - libellés TalkBack de l'avatar d'une ligne adoptés du catalogue iOS
+  - l'humeur peinte sur l'avatar d'une ligne compte sur la surface mood_avatar
+  - la cible du toucher d'avatar d'une ligne vient d'une loi pure, et le ViewModel la route
+  - le test du direct en un toucher suit la nouvelle signature du modèle de vue
+  - revue — câblage de core-list resserré à un hunk de cinq lignes
+  - une pause ou un saut pendant le reciblage du vocal accusé est respecté à la reprise
+  - le témoin NotificationRowSemanticsTest compile — getOrNull importé
+  - l'avis de consentement vocal ne se pose que sous mon propre vocal
+  - la bulle d'un vocal reçu sans transcription garde la place de son texte — trois lignes qui pulsent, puis le texte, sans saut
+  - la bulle d'un vocal reçu réserve la hauteur de sa transcription pendant la fenêtre nominale de 90 s
+  - un vocal joué pendant son accusé continue sans coupure sur le moteur partagé, et reprend au même point sur l'adresse servie
+  - la jumelle accusée d'un vocal en cours est reconnue — la bulle la montre au même point, un toucher la met en pause, la file et l'état moteur prennent son id serveur
+  - l'amorce pose ready.py, que track-v2 appelle, et réécrit l'URL de session sans sed -i (macOS)
+  - le vrai moteur tourne sur émulateur, un disque plein ne coûte plus la base, aucune copie en clair ne reste
+  - l'accessoire de ligne sort de userRow — la fonction repasse sous 80 lignes et la garde de cohésion reverdit
+  - la photo d'une bulle en attente s'ouvre nette en plein écran, depuis une copie assainie
+  - un vocal joue sans coupure pendant son accusé et rejoue hors ligne juste après
+  - les favoris, « À proximité » et les publications d'un membre portent la rangée d'actions du fil
+  - un toucher sur une personne ouvre le direct
+  - un Keystore passager ne purge plus la base, une cle inutilisable ne garde plus la base en clair
+  - une pièce en attente n'est téléversée qu'une fois, même quand deux vidages lisent la file ensemble
+  - l'aperçu de la publication citée sert le texte du Prisme, comme sa carte
+  - conversation:new par la porte typee, capacites hors cycle, budgets tenus
+  - les choix de téléchargement automatique s'écrivent en 16 px — Safari iOS ne zoome plus au focus
+  - « Repartager » et « Citer » agissent depuis les favoris
+  - le Repost d'un post ou d'un réel offre le même choix Repartager / Citer partout
+  - aucune action de carte sans effet — « Enregistrer » enregistre depuis un hashtag, un seul écrivain du favori
+  - la capacité canMakeObsolete servie au lecteur décide seule de « Rendre obsolète »
+  - bun.lock revient au format 1 que lit bun 1.3.14 — l'installation de la CI tombait sur « Unknown lockfile version »
+  - « Repartager » d'une liste passe par ListedPostReposter, et dev est rapatrié
+  - le préchargeur de stories et la relecture des fils avancent l'horloge — advanceUntilIdle ignore le travail de backgroundScope
+  - le chantier « liste iso iOS » se reprend depuis n'importe quelle session, et son registre des fusions ne devient plus superficiel
+  - le chantier audio se reprend dans une autre session, là où il s'est arrêté
+  - viewerCapabilities.canMakeObsolete servi par lecteur
+  - une seule présentation de l'erreur de création (alerte), plus de doublon inline
+  - le témoin de la demande de départ ne dépend plus de l'ordre des fichiers
+  - le démarrage chiffré ne plante plus en boucle et ne se replie jamais en clair (#15880)
+  - moteur d'aperçu multi-pistes, mixeur à l'heure hôte et fondus enchaînés
+  - le chantier « liste iso iOS » survit à un agent muet, attend par tranches et reconnaît ses branches resynchronisées
+  - MeeshCoinTest vide la boucle principale après la règle Compose, et les pastilles audio de story entrent au manifeste
+  - chaque ligne dit qui, quoi, quand — médaillon, pied riche, vignette et lecteur d'écran
+  - la liste dit « hors ligne » sans effacer le cache, la carte tourne l'avatar à l'appui, un 404 ramène à la liste
+  - une feuille explique pourquoi la session a ete fermee avant de redemander la connexion
+  - la carte de concept du jeu importe getOrNull — feature:game recompile ses témoins
+  - briques communes des écrans Personnes (recherche, pastilles, squelette, ligne d'annuaire)
+  - Nouvelle conversation s'ouvre sur mes contacts, avec échec de recherche distinct, blocage en direct et haptique
+  - un vocal en attente se lit depuis l'appareil, et rejoue hors ligne juste après l'accusé
+  - depuis un hashtag et les favoris, « Repartager » republie au lieu de ne rien faire
+  - la remontée en tête obéit à une loi pure (ressort, défilement, reduce motion)
+  - ancre commune de l'aperçu (vidéo, audio, horloge interne)
+  - le motif de fermeture de session se decode sans jamais echouer
+  - le mode Montage range ses puces d'ambiance et son carrousel de styles dans leurs fichiers, avec leurs témoins
+  - le mixeur de la scène importe getValue et le refus de suppression hors ligne est classé — le lot de 06 h compile
+  - une story citée retirée, une file rejouée et une mention arrivent même fil fermé
+  - « Rendre obsolète » se balaie au bord de FIN, en dernier, en rouge — comme iOS
+  - le ViewModel simulé de la liste sert ses sections retenues — les cinq témoins de défilement ne plantent plus
+  - le fil de l'enregistreur du film est un démon, il ne retient pas le processus
+  - import explicite de decodeFromString dans le retrait de conversation
+  - le mixeur garde le focus pendant une perte temporaire et le redemande après une pause définitive
+  - plusieurs pistes sonores jouent ensemble depuis une ancre commune au playhead
+  - revue — le témoin du mux de rang suit la route d'avatar passée aux deux branches
+  - le téléchargement automatique se règle par type, et la bulle demande au-delà — un média de moins de 100 Ko part toujours seul
+  - le film du montage a son enregistreur de la couche SDK — micro AudioRecord indépendant de WebRTC, horloge hôte commune, MediaCodec et MediaMuxer, dépôt en galerie
+  - garde RepostIntent.quoted, extrait les rappels qui allongeaient les corps longs
+  - toute écriture d'une ligne rescelle la vue unique ouverte par soi (#15897)
+  - la carte de lien ne plante plus — un slot de FitsHorizontally n'est composé qu'une fois par passe
+  - TalkBack entend le texte trouvé, l'heure et le drapeau « Traduction » d'un résultat
+  - unreadAtOpening et viewerRole quittent ChatUiState — l'instantané revient à cinquante champs
+  - lois du mixeur multipistes (enveloppe, boucle, focus, propriété du son)
+  - quitter ou supprimer une conversation hors ligne tombe à l'instant et part au retour du réseau
+  - « Citer » ouvre la porte de citation depuis un profil, le détail, un hashtag et les favoris
+  - la feuille de création suit iOS — interrupteur « Nouveau groupe », aucune description, groupe à soi seul
+  - le pont d'une conversation distingue absent, effacé et remplacé
+  - toucher l'avatar d'une ligne ouvre toujours un profil ou des détails, et VoiceOver l'annonce comme un bouton à part [xcodegen]
+  - « Rendre obsolète » au balayage de fin, et le refus d'une demande non acceptée dit pourquoi
+  - keep the sound button for stories with a background video
+  - une vue unique ouverte reste scellée quelle que soit la page servie (#15897)
+  - le bloc des compagnons ne dessine rien quand aucune vignette ne tient
+  - le cube d'auteurs montre le groupe voisin et suit le doigt
+  - les stories du plateau s'ouvrent sans attente et se relisent hors ligne jusqu'à leur expiration
+  - géométrie pure du cube inter-groupes et loi du relâchement en fichiers propres
+  - couper le son d'une piste au toucher de sa pastille et masquer le bouton Son d'une story muette
+  - l'apostrophe du message d'échec d'un commentaire est échappée — :app:mergeDebugResources recompile
+  - l'expéditeur d'une demande non acceptée lit pourquoi « Rendre obsolète » est refusé, et ne se le voit plus proposer
+  - lois du mute local, des pastilles audio et de la sonde de piste
+  - la cible du toucher d'avatar d'une ligne se décide par une loi pure, et le compte fermé du pair est décodé
+  - une vue unique ouverte par moi se scelle dans Room, iso iOS
+  - tolérer le grain déterministe du noir dans le témoin du trou
+  - la carte de lien élit sa variante par largeur intrinsèque, sans copie fantôme, et un bouton garde 64 dp minimum
+  - le test du prechargement muet s'abonne aux evenements avant de lancer
+  - escape quotes of the raw key phrase in ATTACH ... KEY
+  - les classiques du Montage se peignent en couches — décor et dessus une seule fois avec un trou, la vidéo se pose dans le trou
+  - le lot de 05 h suit les gardes — icônes de catégorie et d'échec du plateau par MeeshyIcons, chaînes des commentaires en attente classées
+  - une même carte de message n'entre qu'une fois dans la galerie
+  - le badge « Translation » d'un résultat de recherche se lit dans l'arbre non fusionné
+  - les pluriels arabes du fil comptent six formes et suivent les chiffres de la locale
+  - le mode Effets garde les autres participants dans un bloc déplaçable en haut
+  - le garde des champs de ChatUiState compte unreadAtOpening et viewerRole, et le témoin du séparateur lit « Unread Messages »
+  - les échecs de traduction et le tampon des demandes par socket
+  - « Enregistrer dans Photos » aussi dans Réglages › Médias, sur la même préférence serveur
+  - sur iPhone, le Repost d'un réel propose Repartager / Citer, comme un post
+  - « Rendre obsolète » se balaie en un geste, au bord de début de la ligne
+  - l'expéditeur d'une demande non acceptée lit pourquoi « Rendre obsolète » est refusé
+  - le cliquet des couleurs en dur enregistre la baisse à 479 variables inconnues
+  - « Rendre obsolète » en un geste au balayage de fin, avec sa confirmation
+  - ADR-013 amendé, classification des échecs SQLCipher et correctifs de compilation
+  - la base locale est chiffrée au repos et illisible sans la clé de l'appareil
+  - « Réel » du fil suit content.type.reel — la clé du compositeur iOS a quitté le catalogue
+  - nommer la couture des conversations ouvertes sans mot-clé
+  - le fil joue ses vocaux par le coordinateur partagé — quitter la conversation laisse jouer, le mini-lecteur et l'enchaînement prennent le relais
+  - drop duplicate GloryFrameFonts, sdk-ui already ships it
+  - la carte partagée porte le bandeau de parrainage et la plaque d'auteur, et les polices d'apparat se chargent à la demande
+  - « Citer » ouvre le compositeur unifié, la publication citée y est affichée
+  - la bulle joue son vocal par le lecteur complet — onde, écoulé/total, vitesse, karaoké — et un message à plusieurs vocaux s'empile
+  - mes réactions de pièces, mes masqués et mes favoris suivent mes autres appareils
+  - le coordinateur joue un vocal pas encore envoyé depuis son fichier local et se place à la fraction glissée
+  - « Plus dans la boutique » depuis le choix du fond, et le selecteur relit les packs apres une installation
+  - la bulle vocale projette l'état du moteur partagé par pièce, la pile dit sa place et l'union de ses langues
+  - les témoins qui pilotent un état Compose sans setContent vident la boucle principale — fin de la cascade AppNotIdle de sdk-ui et feature:chat
+  - une capture pendant une vue unique est déclarée à tous, et les événements éphémères s'écrivent en Room fil fermé
+  - un appel entrant baisse le vocal ou la vidéo en cours, les arrête au décroché et les rend à la fin
+  - le cadre de la photo porte bandeau, QR et plaque d'auteur, retournés en arabe
+  - les témoins de sdk-core suivent les signatures des applicateurs temps réel, du partage en attente et de la reprise d'un envoi bloqué
+  - import de WindowInsets.ime et manifeste i18n de la scène du détail suivi par git
+  - la scène du détail se voit entière au-dessus du composer, son actif et pause hors écran
+  - les contrôles du compositeur portent les noms d'iOS
+  - toucher un badge, un succès, un trophée, un tampon ou une étape de saison dit comment l'obtenir
+  - les capture et événements éphémères se déclarent et s'appliquent en Room
+  - une demande d'ami annulée ou refusée par l'autre partie fait revenir le bouton Ajouter — friend-request:cancelled / rejected décodés, cache d'amitié rétabli et rosters invalidés, infos du participant et raison de fermeture décodées
+  - ConceptCardTest — gameString est @Composable, tag lu dans l'arbre non fusionné
+  - drapeau d'abonnement social avant init, KDoc du plateau
+  - les cartes de la première page entrent en scène une fois, décalées de 0,04 s
+  - les stories voisines se préparent à travers les groupes, dans le sens du geste
+  - type de retour explicite du brouillon
+  - un commentaire écrit hors ligne apparaît tout de suite et ne se perd jamais
+  - la reprise d'un envoi bloqué élit parmi les candidats, sans leurs requêtes — sdk-core recompile
+  - la géométrie des emblèmes Étincelles et Élans et la loi d'entrée décalée vivent dans le modèle
+  - les badges de l'étagère s'allument avec une matière qui monte
+  - les sections gardent leur état replié pour la session et portent la couleur et l'icône de leur catégorie
+  - la réserve basse du fil reçoit sa nouvelle cible appliquée — fin de la cascade AppNotIdle de feature:chat
+  - le témoin des détails dits à VoiceOver compile, le type de conversation est qualifié
+  - le lot de 04 h compile et suit les gardes, et le job Android a le temps de faire tourner tous ses modules
+  - la matière d'un badge remonte du bas en 0,7 s à l'allumage
+  - une traduction socket plus récente remplace celle de la charge, une page REST qui en sert une nouvelle reprend la main
+  - le plateau se met à jour par delta et en direct, sans story fantôme
+  - import manquant de Flow.first dans la reprise d'un envoi bloque
+  - l'avancement d'un envoi long s'observe dans le SDK et alimente la notification
+  - rouvrir un fil rafraichit ses reponses au lieu de servir l'etat garde par le ViewModel
+  - le commentaire du contour ne se lit plus comme un appel d'avatar sans photo
+  - un partage lancé depuis une autre app arrive à coup sûr, app tuée ou réseau coupé
+  - le fil de discussion d'un message s'ouvre en plein écran avec ses réponses paginées
+  - le détail joue une scène qui bouge (test aligné sur la règle de lecture)
+  - le reel republie s'affiche en carte compacte et le post cite a ses drapeaux
+  - la loi pure du fil de réponses ne écrase jamais une réponse optimiste
+  - le post cite d'un repost a ses propres drapeaux de langue
+  - dédoublonne les bindings Hilt et imports du relais permanent
+  - une scène fixe ne joue jamais dans la carte élue du fil
+  - la liste suit en direct conversations, participants, réactions et traductions
+  - le statut d'un envoi se voit, se relance et s'annule depuis la carte
+  - la liste de conversations suit en direct conversation, participants, réactions et traductions
+  - le test de la galerie fixe le SDK Robolectric comme ses voisins
+  - la loi de voisinage du lecteur, sa file et son pool de lecteurs
+  - un envoi bloque revient en brouillon dans un composer vierge
+  - publier une humeur hors ligne, l'ancrer en post et la retrouver si elle reste bloquée
+  - le test de la galerie ne présume pas du codec JPEG de Robolectric (rendu legacy)
+  - une cible refusée quitte la fiche de reprise sans perdre l'origine des pièces
+  - la règle de lecture des scènes d'un post (page courante, élue, qui bouge)
+  - le boost basse lumière éclaircit la vidéo envoyée sur image sombre mesurée
+  - la scène sombre est éclaircie automatiquement dans la vidéo envoyée, comme sur iOS
+  - le bandeau de parrainage se teste à la densité d'un téléphone — son carré QR y est monté
+  - le poids dit à VoiceOver passe par un style Foundation, sans cache nonisolated(unsafe)
+  - le bouton d'avatar du chrome et la rivière portent le contour équipé, comme iOS
+  - l'avatar de l'auteur, dans la puce élue et l'en-tête plat, porte le contour qu'il a équipé
+  - la loi du contour posé — l'hôte prime, la personne porte son contour équipé, une entité jamais
+  - la porte du document envoie par un publieur durable sans fil
+  - le reporter de vues garde un constructeur injectable sans horloge
+  - la capture d'un appel sait qui est qui — moi marqué avec mon pseudo, duo dans l'ordre de l'écran, groupe une case par tuile, caméra coupée gardant sa case (CallCaptureIdentity, miroir iOS)
+  - le document part par une seule loi d'envoi et emporte son et sticker de scène
+  - dans la Rivière, la citation montre son média, la story citée est une carte, l'emoji seul grossit et les pièces s'ouvrent
+  - le partage entrant ne peut plus remplir le disque ni garder les originaux
+  - l'anneau d'une story vue reste gris, même hors ligne, jusqu'à une édition
+  - le panneau Filtres vidéo importe getOrNull — feature:calls recompile ses témoins
+  - le schéma Room 26 exporté redevient lisible par Room, et la cascade se réinstalle à chaque ouverture
+  - la Rivière ne reconstruit son rendu que quand l'empreinte de son entrée change
+  - la fiche de participant compile ses tests, passe par MeeshyIcons et ne garde rien après fermeture
+  - les chaînes du dépôt dans le composeur et de la fiche d'un élément du jeu sont classées au manifeste
+  - revue — le formateur des poids dits se construit une fois par locale, la garde de la rangée suit le préfixe d'auteur partagé
+  - une publication rouverte ne bascule jamais d'elle-même en réel
+  - le préfixe AUTO du mode de lecture se vérifie par l'état que la puce annonce
+  - la base rend l'orphelin impossible — un message supprimé par n'importe quelle porte emporte ses traductions
+  - VoiceOver dit les dimensions et le poids d'une pièce en mots
+  - revue — le mini-lecteur s'efface sur l'écran d'appel au lieu de pousser la scène
+  - la couche animée d'un fond de pack se fige en économie d'énergie
+  - une édition rend l'original jusqu'à l'arrivée de la nouvelle traduction
+  - feature:chat recompile ses témoins — la feuille de partage importe studioCanEdit
+  - les traductions retenues partent avec le message et ne reviennent jamais sur un contenu protégé
+  - revue — une entrée sans destination avance sans promettre d'ouverture à VoiceOver
+  - « Chaque visage » attend l'issue de la prise, pas la seule inactivité de Compose
+  - copier et partager un message passent par le second verrou des sorties
+  - toucher une entrée de la pastille mène toujours quelque part
+  - la bannière se balaie et s'ouvre de nouveau en aperçu à l'appui long
+  - « Supprimer » une publication suit le contrat d'annulation d'iOS
+  - la fenetre de prelecture ne mute plus la carte en cours d'eviction
+  - tenir le fond le sélectionne de nouveau — la manipulation n'agit qu'au-delà du seuil de toucher
+  - la feuille « Validez votre compte » se touche par son action, et le témoin des formes n'attend aucune image
+  - une fiche de participant ne peint plus ni ne cache la réponse d'un autre
+  - la balise de l'emplacement QR vit dans la sémantique effacée
+  - je dépose des fichiers sur la bande du composeur avec une indication Déposer ici
+  - le témoin de la scène vide sans caméra est inscrit au pbxproj
+  - lambda explicite pour getString (référence surchargée ambiguë)
+  - le mini-lecteur prend ses icônes par MeeshyIcons (cliquet des imports directs)
+  - le carnet « Comment ça marche » s'ouvre sur la règle visée, qui défile à 18 % du haut puis se teinte un instant
+  - la rangée se rend hors Hilt — 39 témoins de feature:conversations repassent au vert
+  - un glissé sur l'interlude d'identité n'est plus un toucher
+  - l'étape du code de l'inscription reçoit son ViewModel, et le témoin « Ce n'est pas moi » la rend
+  - le code refusé de « Validez votre compte » est celui que la passerelle renvoie
+  - toucher une tuile du fil vise la tuile, pas son bouton « Réessayer »
+  - le témoin de l'élection du fil laisse passer le débounce de backgroundScope
+  - la rangée de conversation se rend hors Hilt, avec l'instantané servi
+  - le curseur du zoom ajustable ne déclare jamais de pas négatif
+  - partager plusieurs photos, vidéos ou documents depuis n'importe quelle app vers Meeshy
+  - modifier un post multi-médias, multi-scènes ou un repost ouvre le compositeur unifié
+  - le zoom de ma caméra est un élément ajustable pour TalkBack
+  - les règles pures de la copie d'un partage entrant (tranches de 64 Kio, marge disque, orphelins)
+  - routage, détection file:// et sonde de durée du collage et du dépôt
+  - une puce, une feuille et un sous-menu pour le même mode de lecture
+  - la liste et la fiche servent accountClosed pour un interlocuteur au compte fermé
+  - le panneau Filtres vidéo règle teinte, flou et colorimétrie, avec l'indicateur de performance
+  - les traductions, transcriptions et pistes audio déjà reçues s'affichent dès la réouverture
+  - supprimer une publication en file, en vol ou échouée
+  - les chaînes du mini-lecteur viennent du catalogue iOS (7 langues)
+  - le mini-lecteur est monté sous la pastille d'appel, pousse la destination et peint la bande
+  - la fiche d'un participant s'ouvre instantanément, règle un droit à la fois et suit le direct
+  - la loi de visibilité du mini-lecteur et son présentateur
+  - le fil peint son fond Signature par type avec chiffrement et drapeaux
+  - la bande de puces de l'élu, son verre et son identité vivent chacun dans leur fichier, appui long de 0,4 s sur une réaction
+  - le coordinateur garde la grâce en fin de file et le mini-lecteur existe en composant
+  - le menu des modes de lecture a un catalogue pur unique
+  - chaînes du panneau Filtres vidéo adoptées du catalogue iOS
+  - les actions des textes de la scène quittent le view model du composeur
+  - le témoin de la forme des champs monte un vrai champ — une composition sans aucun nœud ne devenait jamais inactive sous Robolectric (AppNotIdleException à 60 s)
+  - le cache de vignettes compte ses vignettes et ne se vide plus quand l'écran se cache
+  - le témoin de conversation restaurée attend en temps réel la relecture bornée
+  - éditer, supprimer, épingler et désépingler rendent Success, pas SuccessWithId
+  - la « vieille ligne » d'outbox du témoin de SendMessageRequest porte ses clés obligatoires
+  - une PR du chantier reste en brouillon jusqu'à sa preuve, et une fusion par un tiers est prouvée après coup
+  - écrire le texte du post ou la légende n'ouvre plus la caméra (#15674)
+  - une seule compilation locale à la fois, et rien de non poussé ne survit à un redémarrage
+  - decalage zero positif pour la bande epinglee
+  - la bande de l'élu garde la langue active parmi ses cinq drapeaux
+  - toucher un élément du jeu ouvre une feuille qui dit ce que c'est, où j'en suis et comment l'obtenir
+  - les départs, bannissements et changements de rôle se plient dans la ligne de liste
+  - conversation:updated ne sert plus aucun détail d'une pièce masquée ou d'un éphémère
+  - les témoins du partage passent un clientMessageId, le harnais des réglages vise sa liste, et la pastille mesure sa cible tactile
+  - la liste REST ne sert plus aucun détail d'une pièce masquée ou d'un éphémère
+  - la notification du vocal en cours montre la conversation et le niveau du micro
+  - le workflow audio peut sauter le rapprochement des issues déjà fait
+  - une branche abandonnée ne réserve plus ses fichiers, et une erreur de compilation n'est jamais une preuve
+  - une ligne n'est envoyée que par la passe qui la réserve — une story ne part qu'une fois
+  - un seul écran de partage assemble les quatre zones, la carte bloquée, la fermeture automatique et le toast
+  - l'empreinte de scène de la modification d'un post se compile, et ses trois fichiers sont inscrits au pbxproj
+  - ma carte partagée porte un bandeau « Rejoins-moi sur Meeshy » avec mon lien de parrainage en QR
+  - la loi de projection des traductions retenues et la relance bornée des transcriptions
+  - la feuille de partage reçoit une demande unique (ShareRequest)
+  - le vocal en cours porte le titre de la conversation et un niveau quantifié au plus une fois par seconde
+  - la fiche d'un participant décide ses droits, ses lignes et son direct
+  - la story suivante est prête avant le geste et la surface de lecture se monte ailleurs
+  - lois pures de la publication durable (fenêtre des médias, reprise des commentaires, bulle optimiste)
+  - le cadre en direct suit la chaleur, respecte les bandes de 52 et 84 dp et se compose à 30 images/s
+  - la répétition du composeur reste interne — :feature:stories recompile sur dev
+  - feature:stories compile de nouveau — les répétitions de transitions restent internes au module
+  - le modèle des précisions d'un élément du jeu et ses vingt-et-une familles fermées
+  - la fenêtre de prélecture, les règles de mode du lecteur et la mémoire de position sont posées
+  - en faisant défiler, le plateau devient une bande compacte qui prend la place du titre
+  - expired and hidden messages also leave the media index
+  - sdk-ui compile de nouveau et le témoin des anneaux compte les 77 du catalogue
+  - le badge d'un média posé suit chaque part envoyée — les cadres se recalculent sur la progression (#15598)
+  - stub consents refresh in preferences manager harness
+  - la révélation de la bande épinglée suit la courbe de l'en-tête repliable
+  - la liste s'endort sous le Résumé et la Rivière et se réveille sans perte
+  - les vignettes de cadres du Montage passent par le cache borne et se purgent sous pression memoire
+  - les chaînes de la file de Mes stories et du lecteur d'écran des stories sont classées au manifeste
+  - le cache de vignettes des cadres reste borne et se purge sous pression memoire
+  - revue — une carte de visite légendée garde le nom du contact, et le Prisme est témoigné au rang 2
+  - les faux ConversationApi déclarent l'accusé nommé, et trois témoins de sdk-ui mesurent ce qu'ils disent
+  - profils, participants et recherche d'utilisateurs se rouvrent depuis le disque, présence jamais rejouée
+  - les faux ConversationApi de :sdk-core implémentent markReadDeclaring — les tests unitaires recompilent
+  - la porte d'édition compile, lit le routeur sans EnvironmentObject et figure parmi les portes du meuble
+  - profils, participants et recherche d'utilisateurs sur le CacheStore générique (squelette)
+  - l'écran partagé par le pair s'ajuste en entier dans l'appel — ScreenShareCapturePolicy (ajustement fit quand le pair partage, caméra restaurée seulement si voulue et émettait)
+  - root.pending_stories et root.publish_on_reconnect quittent le catalogue iOS — le bandeau Android qui les adoptait est retiré
+  - une pièce partagée n'est téléversée qu'une fois, les autres cibles la copient
+  - canal d'engagement et applicateur de l'état du jeu en direct
+  - audit — la protection d'un vocal naît dans la file et n'a plus de défaut false
+  - décodage des événements de récompense, de jeu et de décor
+  - « Modifier » un post ou un réel ouvre le compositeur unifié pré-rempli
+  - le libellé d'usage d'un cadre n'a plus de `return` dans un corps d'expression — `:app` recompile
+  - le menu d'appui long montre six entrées puis « Plus… »
+  - mes réglages suivent mes appareils, modifiés hors ligne sans jamais être écrasés
+  - derrière la frise la scène montre l'instant de la tête, et choisir une transition la rejoue
+  - les fonds de conversation de Noël — un pack de motifs et un pack animé, assortis aux trois thèmes
+  - l'ajout ne retient l'écran que le temps de sa préparation ; sticker image en cours d'ajout voilé, annulable, à réessayer
+  - file de publication et brouillons — Reprendre, Réessayer, Annuler en un geste
+  - toucher l'auteur d'un réel est typé `(String) -> Unit` — `:feature:reels` recompile
+  - openAuthor est typé (String) -> Unit — :feature:reels recompile
+  - « Répondre par message » dans la notification d'appel entrant, comme le refus avec message d'iOS
+  - dans un appel de groupe, perdre la liaison au plafond de reconnexion quitte l'appel au lieu de le raccrocher pour tout le monde, comme iOS
+  - l'éclat du contour « scintillement » se lit sur iOS, et chaque film du catalogue passe la structure que lottie-ios décode
+  - aimer ou supprimer un commentaire hors ligne change l'affichage à l'instant et part au retour du réseau
+  - le plan de répétition des transitions et la sémantique de l'aperçu de frise
+  - reprendre un échec de publication en brouillon et unifier la bibliothèque de brouillons
+  - les catégories en attente et le décalage UTC se lisent comme sur iOS
+  - le lot de 23 h 40 compile et suit iOS — pas de bandeau des stories en attente, icônes par MeeshyIcons, chaînes classées
+  - root.pending_stories et root.publish_on_reconnect reviennent au catalogue iOS — la pastille Android les adopte
+  - les kinds sociaux (vu de story, coeur et suppression de commentaire, repost privé) entrent en file
+  - les têtes de fiche, paires d'Étincelles et « Comment gagner » ont leur loi et leurs témoins
+  - le lecteur de story s'annonce et se pilote au lecteur d'écran
+  - l'index des médias d'une conversation est gardé sur disque, genre par genre
+  - rename link-copier ctor param to avoid same-name member ambiguity
+  - les témoins du badge de défilement rejoignent leur classe, et seize routes portées quittent « à porter »
+  - les motifs cannage et terrazzo de meeshy-fonds tracent à 6 % au moins, le plancher d'Android
+  - audio routé par mode, notice d'appel et rangées spéciales dans la rangée plate
+  - lois de l'overlay d'appui long (réduction, cadres LRU, barre rapide)
+  - retire la double déclaration de reelsNow dans ReelsScreen
+  - l'étagère des cadres et l'onglet boutique passent par MeeshyIcons — le cliquet d'icônes ne rougit pas
+  - l'éditeur audio transcrit, et s'ouvre depuis l'aperçu de l'enregistreur
+  - le pompon du bonnet se balance vraiment, et le web compte les bannières assorties
+  - lambdas instead of bound member references in the draft store
+  - chaque pack de contours illustrés a sa bannière assortie, et trois packs de Noël animés
+  - le canvas de la story se décrit en une phrase au lecteur d'écran
+  - « Ce n'est pas moi » pose la session d'un compte créé, et l'attente du code prime sur une identité servie
+  - importe withTimeoutOrNull du geste de la pastille
+  - miroir Swift de l'aperçu qui détaille toujours une pièce jointe
+  - ce qu'on colle part en pièce, et un secret copié s'efface après 30 s
+  - Non lus en dégradé, réponse rapide bilingue et favoris en grille comme iOS
+  - l'aperçu détaille toujours une pièce jointe, même légendée, et tait celle d'un éphémère
+  - le fond attendu par la barre devient SceneReadinessKind — :core:model ne déclare plus deux SceneBackgroundKind
+  - notices d'appel et rangées spéciales de la rangée plate (logique pure)
+  - dessin des bannières assorties de la vitrine et des familles asiatique, africaine, celte, nordique
+  - chaque catégorie de la cloche pagine par son propre curseur
+  - le tableau de bord importe `getValue` — `:feature:chat` recompile
+  - la liste applique les événements de conversation en place avec une seule règle de fusion
+  - « Envoyer » obéit au plan du rail, absent d'une story en attente
+  - la règle de collage et l'expiration du presse-papiers sensible
+  - mark-as-read déclare ce qui a été lu et dans quelle langue
+  - explicit public visibility on InlineEdit model members
+  - lois de l'éditeur audio — acquisition de piste et états de transcription
+  - une pastille globale dit hors ligne, reconnexion, envois et frappes sur tous les écrans
+  - l'étagère des cadres d'un pack installé avec la condition d'usage de chacun
+  - chaque geste du Jeu part au serveur sans jamais s'appliquer deux fois
+  - l'onglet Postes réagit au toucher — j'aime, enregistre, repartage, partage, épingle, supprime, signale
+  - le faux transport du repli socket reçoit le rappel d'accusé, le test compile
+  - la loi ReadStatusReceipt et la langue lue d'un accusé sont posées dans core:model
+  - « Lire la suite » à l'encre, souligné, cible 48 dp, et résolveur vidéo iso iOS
+  - je tape mon texte directement sur la scène, recentré dans la bande libre
+  - les surcharges optimistes de l'onglet Postes se calculent en pur Kotlin
+  - le chantier « liste iso iOS » a son workflow autonome et un registre qui ordonnance des lots Android, iOS et partagés
+  - feature:chat depends on :core:common for @DefaultDispatcher
+  - le journal HTTP debug ne lit plus le corps d'un téléversement
+  - le service de WorkManager redit son type dataSync dans le manifeste de l'app — le lint vital de la release bloquait l'assemblage
+  - le budget d'écriture du journal d'envoi se compte en temps réel, pas sur l'horloge virtuelle de l'appelant
+  - la composition de la pastille globale et les comptes des bandeaux ambre
+  - le pré-chargement de l'interlude teste la CLÉ du cache, pas ses valeurs
+  - la preuve du rendu attend le fond d'une vidéo posée sous le filtre de diapo
+  - toucher l'auteur d'un post, d'une story, d'un réel ou d'un commentaire ouvre sa fiche
+  - revue — la date de la carte partagée ne se formate plus à chaque tic, l'index de l'ancien cache se referme
+  - feature:stories compile de nouveau — l'interlude cherche une clé, pas une valeur
+  - lever l'ambiguïté de nom des étiquettes de section du tableau de bord
+  - un seul tableau de bord pour les stats et l'analyse IA de la conversation
+  - une story en attente ne s'annonce que par l'horloge, et le lecteur l'annule par la file
+  - « Validez votre compte » — prouver mon e-mail et ajouter mon numéro sans quitter l'app
+  - les témoins et les gardes cassés par les fusions de 21 h 40 repassent au vert
+  - la barre attend le contenu, se fige au buffering et se parcourt au doigt
+  - la rangée plate montre les photos et vidéos en grille protégée
+  - corps d'erreur de la passerelle dans les témoins du repli socket
+  - identité d'auteur cliquable pour les surfaces sociales
+  - la migration des brouillons ne vide plus l'ancien emplacement que ses lecteurs lisent encore, copie les médias, et la déconnexion vide le magasin
+  - lambdas explicites pour les listes JSON du repli socket
+  - la bande libre et la politique de touche de la saisie en place
+  - pr-verte --rest accepte le statut combiné de get_status tel quel
+  - lois pures du voile de case et de l'offre de réaction sur une pièce
+  - un bref interlude d'identité annonce le changement d'auteur
+  - glisser un commentaire pour y répondre, et lire les premiers sous la carte
+  - le Prisme se lit dans le pied, drapeaux et panneau secondaire sous le texte
+  - le test de la citation cible le texte cité lui-même, pas le nœud fusionné de la rangée
+  - le moteur partagé publie sa carte système, lit par le cache du compte et ne laisse rien après la déconnexion
+  - « Est-ce vous ? » quand l'adresse d'inscription est déjà utilisée
+  - les cinq derniers témoins rouges de dev repassent au vert
+  - les tests de la carte et de la fiche code mesurent le texte en mode graphique natif
+  - le contour d'avatar équipé se voit sur la fiche des autres et sur ma page
+  - la règle de composition du décor de profil — photo avant design, cadre qui ne capte pas le doigt, rien si la cible m'a bloqué
+  - le composeur de commentaire se replie en bulle et la saisie fait le silence
+  - règles pures du tableau de bord unifié de la conversation
+  - conversations récentes en trois faces avec coche « Marquer comme lu »
+  - le lecteur muet n'active plus sa piste audio et le pool de lecteurs prepares existe
+  - la loi de l'interlude d'identité entre deux auteurs
+  - mes appareils connectés restent lisibles hors ligne et se déconnectent avec confirmation
+  - l'export porte le filtre de diapo et couvre toute la vidéo d'une diapo nue
+  - lois pures du repli du composeur et du silence de saisie
+  - la loi des états de l'écran Sessions actives
+  - la page d'une humeur se lit en un bloc TalkBack, en sombre forcé, avec squelette et toasts globaux
+  - le chantier audio a son workflow autonome, et le vert d'une PR se juge sans GraphQL
+  - un message dont l'envoi REST échoue part par la socket sans doublon
+  - contrôleur pur du toucher de drapeau et panneau secondaire
+  - la loi du glissé « répondre » d'un commentaire
+  - lois pures des gouverneurs thermiques, du pool et de la reprise
+  - LegacyDraftMigrator default id factory uses a lambda (companion member ref does not compile)
+  - les deux chaînes de « Valider mon compte maintenant » entrent au manifeste
+  - joindre une photo, un fichier, un lieu ou une voix à un commentaire de story
+  - import explicite de decodeFromString pour le cache des publications
+  - l'onglet Postes se branche sans ambiguïté de nom ni d'appel
+  - lancer ou décrocher un appel explique le micro (et la caméra) avant la demande système, et une caméra refusée continue en audio
+  - « À proximité » ne demande la position qu'au geste, et un refus dessine l'état vide avec son chemin vers les Réglages
+  - les fusions de 20 h 50 passent les gardes d'imports de test et de chaînes
+  - une humeur déjà vue dans les barres amis ou découverte s'ouvre sans attente
+  - une notification reçue en direct entre une seule fois, naît lue sur le contenu ouvert, et tout se recale seul après une coupure
+  - le témoin de l'échec réseau pilote le planificateur avec runCurrent
+  - la garde du splash lit aussi strings_generated.xml, et les écarts :feature:calls comblés quittent le cliquet
+  - mon message remonte la liste à l'envoi, un envoi orphelin se rattrape au démarrage
+  - type the viewport-pinch lambda explicitly
+  - régler le dessin depuis des bulles et une liste des traits
+  - le fil charge l'historique à 4 écrans d'avance et la réserve basse suit le composeur
+  - ne pas appeler un composable depuis joinToString (non inline)
+  - le séparateur « Nouveaux messages » suit la loi du premier non lu et annonce le compte serveur
+  - une réponse affiche sa citation avec un rail, saute à l'origine au tap et traite une story citée comme une scène
+  - la loi d'arrivée d'une notification en direct (doublon 2 s, née lue sur le contenu ouvert)
+  - declare the linkDevice dependency of AuthRepository
+  - let the grace-period test outlast the 9-minute hold window
+  - la frise lit ses mesures (colonne, poignée, pas) d'une loi unique
+  - import assertDoesNotExist dans le test, gouttière visible dans la fiche code
+  - la citation de la rangée plate suit la règle de présentation iOS
+  - les actions de message faites hors ligne partent à la reconnexion et se défont si le serveur refuse
+  - le lecteur joue l'ouverture et la fermeture de la slide, les puces vibrent
+  - connexion par e-mail en feuille avec saisie du code, empreinte d'appareil et durée parlée
+  - colore les fichiers de code joints et les ouvre avec numéros de ligne
+  - feature:chat compile de nouveau — l'état « déplié visible » ne heurte plus son setter public
+  - la porte d'e-mail ne s'ouvre jamais par-dessus l'onboarding
+  - la vignette d'une story en file passe par ImageDownsampler, et le cliquet narrative-comment descend à 2421
+  - toucher le centre d'une vignette ouvre sa retouche, seul le ✕ à cheval sur le coin retire la pièce
+  - capturer la pression et gommer par trait
+  - les chaînes de la bande de renvoi et de la bannière de notification entrent au manifeste
+  - garder plusieurs brouillons de story et les reprendre intacts avec leurs médias
+  - les routes REST du chat sont typées (accusés, masquage, fil, épinglés, capture)
+  - le retour arrière optimiste défait son geste et rien d'autre
+  - la bulle d'un message en attente montre déjà son média
+  - sdk-ui compile de nouveau — import de dp dans la pilule d'heure au défilement
+  - les lois du premier non lu, des vus accumulés et du repère de synchronisation
+  - réactions confirmées par le serveur, fil et salles de post rejoués à chaque reconnexion
+  - l'onglet Postes montre les publications de la personne, filtrées par Postes, Réels et Stories
+  - réserve le lot visionneuse de code (libellés iOS adoptés)
+  - les trois chaînes de réaction à une story entrent au manifeste
+  - TalkBack décrit la scène et le menu d'objet sert un plan sans action grisée
+  - la caméra du composeur s'arme préchauffée, bascule sans écran noir et sort en miroir à l'avant
+  - lois pures du menu d'objet, du badge de sélection et de l'accessibilité de la scène
+  - les six témoins rouges de sdk-ui repassent au vert
+  - « Valider mon compte maintenant » montre le code dans la carte, puis fête l'arrivée
+  - les raccourcis et l'assistant construisent des liens meeshy:// sans troncature
+  - le réel suivant joue dès la moitié du geste, le reste une fois posé
+  - le brouillon sait se ranger sur disque par compte et environnement
+  - la fiche de conversation affiche son héros (bannière, genre, effectif, muet, date de création)
+  - le detail d'un post montre ses images, videos, audios et documents
+  - le lien de connexion se lie à l'appareil demandeur (empreinte, secret gardé au coffre)
+  - fenêtre de préchargement adaptative et clé de page par primitives
+  - l'inscription peut créer le compte en tenant sa session
+  - salles de post comptées par référence et issue d'une réaction avec accusé
+  - la bannière dit exactement ce qui s'est passé (détail, vignette, jeu, protection)
+  - les huit fusions de 19 h passent les gardes d'icônes, d'imports et de chaînes
+  - bande orange de renvoi 32 dp avec spinner et clignotement doux
+  - le rail du reel se teinte selon la luminance, signale avec un motif et compte les commentaires envoyes
+  - « Partager vers Meeshy », menu flottant au pluriel et libellés de widgets comme iOS
+  - la bannière in-app s'affiche même push coupé ou Ne pas déranger
+  - les appels, notifications et widgets adoptent le texte iOS en sept langues
+  - règles pures de la caméra intégrée (bascule, miroir, horloge, file série, échange d'entrée)
+  - les coches de remise et de lecture ne reculent jamais et se règlent message par message
+  - un refus serveur annule exactement la réaction de sa story, une panne la garde en file
+  - le menu du reel propose Modifier et le rail a sa loi d'etats
+  - import CommentVeilRules, drop unused MessageEffectFlags import
+  - toasts et haptiques de l'envoi de ma photo et de ma bannière
+  - la description du double facteur avec code de secours entre au manifeste
+  - un seul réel ou une seule scène joue dans le fil, le plus centré
+  - reference the real expandedOnScreen field in the long-message alpha
+  - la liste prend ma couleur d'accent personnelle et les réglages la proposent
+  - le modificateur d'escamotage ne duplique plus la chaîne de l'hôte
+  - une réaction de story posée hors ligne part en file au retour du réseau
+  - le relevé des appareils et son instant se lisent ensemble
+  - le tap sur Moi mène à Mes stories ou au composeur, libellé TalkBack nommant la destination
+  - mes appareils connectés s'affichent depuis le cache et une révocation échouée se défait
+  - sdk-core compile de nouveau — le reste rendu à la fermeture est lu une fois
+  - répondre à une story trouve ou crée le direct de son auteur
+  - le bandeau d'outils affiche le compteur n/max et une pastille de langue qui se replie sur le drapeau
+  - la règle du tap sur Moi (gérer ou créer) et son libellé
+  - une réponse à une story n'est admise que dans le direct de son auteur
+  - une grosse photo n'est plus refusée avant compression
+  - le voile d'un commentaire suit la loi CommentVeilRules
+  - la feuille 'Vérifiez votre email' avec saisie du code, renvoi et veille
+  - les quatorze fusions de 18 h passent les gardes d'icônes et d'imports de test
+  - rétablit le script jvm-check modifié localement
+  - lois du bandeau d'outils (compteur n/max, ordre des portes)
+  - toucher, double-toucher et appui long sur le fond, pincement à trois doigts qui zoome la scène
+  - la palette affichée décline l'accent personnel à plus ou moins 30 degrés
+  - type explicite du local d'expansion de rangée (explicitApi)
+  - un nom ou un pseudo vidé montre en filigrane la valeur qui part, comme iOS
+  - release the hold host when the call view model is cleared
+  - un long message se déplie et se replie sur place sans faire sauter le défilement
+  - les tests de feature:auth compilent de nouveau — import de getOrNull
+  - le clavier du système n'envoie ses tonalités que sur un appel connecté
+  - l'inscription envoie exactement le nom et le pseudo que l'écran montre
+  - un code de secours ouvre la connexion à double facteur
+  - les rafales de traductions sont regroupées en 80 ms et rien ne bouge pendant un geste
+  - l'en-tête et la barre de saisie s'effacent pendant le geste, une pilule indique jour et heure, le clavier part d'abord
+  - import encodeToString/decodeFromString du registre persisté
+  - états de la pilule jour·heure et du clavier d'abord (squelette testé)
+  - règles pures de la vérification d'e-mail par code
+  - accessoryRequestAnswered rend un Boolean, sûr sous mockk relaxed
+  - majorité calculée en années révolues (29 février)
+  - Robolectric runner for card presentation test (android.icu), dedupe import
+  - keep the image tile's TalkBack description and open gesture when the load fails
+  - le badge dit la vérité sur tous les chemins, et Android envoie enfin ses accusés de réception
+  - l'assistant de création du profil vocal s'ouvre en feuille et envoie les échantillons n/N
+  - lois pures des gestes du fond et du zoom de la scène
+  - le différé de liste et la table serverId vers localId — les rafales ne secouent pas la liste
+  - feature:auth compile de nouveau après les fusions de 17 h
+  - la carte de document par famille, sa fiche protégée et l'appel depuis une vCard
+  - la grappe d'en-tête rend l'appel, le retour à l'appel, le partage et la barre invité
+  - le témoin « coupe ou calme » arme le calme avant de se placer dans sa fenêtre
+  - le témoin du groupe attend le marqueur de type que la bannière pose devant le nom
+  - un appel GSM ou une alarme met mon appel en attente et la vidéo se coupe proprement
+  - l'assistant de création du profil vocal, ses étapes, ses règles d'âge et son écran
+  - la base de repli ne perd ni ne rejoue aucune ligne, et un marqueur périmé s'efface après la purge (#15292)
+  - la loi de mise en attente coupe la vidéo sortante et garde l'intention
+  - les lois de la fiche de document — famille, aperçu, sortie protégée, rapport d'ouverture
+  - un cadre d'avatar illustré se pose à la bonne taille sur iOS, l'avatar intact au profil et dans la rangée des stories
+  - commenter depuis la barre unique, brouillon par story, envoi optimiste par la file
+  - la carte du fil rend videos, audios, documents et carrousel de tous les medias
+  - l'adresse confirmée fête l'arrivée d'un feu d'artifice pendant que l'app prépare le fil
+  - « Mes stories » a quatre onglets segmentés, des cartes 9:16 à bande de glyphes, la file et le brouillon
+  - une corruption découverte en usage est réparée au lancement suivant, et la base de repli ne rejoue rien (#15279)
+  - la bulle en attente garde l'aperçu de son média hors ligne et après une relance
+  - un refus d'accessoire d'appel ne raccroche plus, la fin d'appel part une seule fois
+  - le canvas joue l'ouverture et la fermeture de slide à la racine
+  - fait défiler jusqu'aux boutons avant de les toucher dans les tests de phases
+  - les réglages n'offrent que ce que mon rôle permet et un fil fermé en écriture me dit pourquoi
+  - un fil vide dit pourquoi dans la langue de l'app, jamais l'exception brute
+  - les témoins de la visionneuse et de l'enregistreur vocal repassent au vert
+  - un compte protégé par 2FA se connecte avec son code à 6 chiffres
+  - le refus 403 d'un réglage de compte porte l'enveloppe de la passerelle
+  - une legende de media du fil s'abrege a vingt mots
+  - la sonde de session d'invité part en PATCH, le verbe que sert la passerelle
+  - l'historique d'envoi d'un message liste chaque tentative avec son transport et son issue
+  - courbe de pose pure des transitions d'ouverture et de fermeture de slide
+  - la restauration de session et la purge de lancement sont sérialisées
+  - les quarantaines sont bornées aux deux plus récentes
+  - Room ne supprime plus le fichier corrompu avant le sauvetage
+  - la sonde ne met en quarantaine qu'une vraie corruption
+  - l'entretien pose auto_vacuum=INCREMENTAL depuis FULL et ne tait plus ses échecs
+  - le panneau des choix d'invitation suit la largeur de la colonne de formulaire
+  - les témoins d'envoi de médias et de déconnexion repassent au vert
+  - le test de graine ne masque plus l'usine de magasin par un local homonyme (Refs #13321)
+  - lire une story dans une autre langue — barre qui défile, tuile +, Retraduire avec délai
+  - dev compile et passe ses gardes après les seize fusions de 16 h 30
+  - je vois ma serie, mes points par conversation et ceux d'un post en direct
+  - le registre de lecture pur dit une seule vérité du non-lu
+  - s'inscrire par phases, le téléphone d'abord puis l'adresse puis la carte du compte
+  - lois de la grappe d'en-tête, appel (retour, rejoindre) et lien public à partager
+  - call_incoming est aussi un appel pour la politique de présentation
+  - import manquant onAllNodesWithTag dans le test de l'écran de capture
+  - les étapes de la connexion à double facteur sont une loi pure
+  - état pur de la barre de saisie unique (accent, bannière, annulation)
+  - un partage en cours survit à la mort du processus
+  - l'accueil lit « Meeshy » dans le catalogue iOS et les chaînes écrites à la main entrent au manifeste
+  - les callbacks du geste de la bannière restent à jour quand la bannière change
+  - épinglé et transféré se disent au-dessus de la bulle
+  - la feuille de traduction montre les langues demandees, en echec, et lit la confiance
+  - la photo d'avatar ou de bannière est compressée hors du fil principal avant l'envoi
+  - la fiche de reprise d'un partage est un modèle pur
+  - les deux derniers tests rouges de dev reverdissent
+  - chaque fait d'une carte de concept a son identité et chaque fiche sa sous-page, comme sur iOS
+  - la legende d'un media de commentaire recoit sa traduction en direct
+  - la carte de navigation du jeu, ses liens et ses cibles de guide
+  - la carte de lien tient sur une ligne ou s'empile, langues 4 puis 2 puis 0, lien expiré en gris
+  - toBitmap du sticker reçu s'appelle sur le Drawable
+  - écran de capture des échantillons de voix à lire
+  - la purge de lancement relit la session sous la barriere de compte
+  - les copies non chiffrees de la base quittent le disque avec la session
+  - une migration ratee remonte au lieu d'effacer la base, et la reprise ne perd plus ni clairs a effacer ni identifiants en attente
+  - budget d'octets, géométrie de recadrage et copie propre pour les photos d'avatar et de bannière
+  - la liste du fil reutilise ses compositions par type et calcule ses entrees de cellule une fois
+  - les noms de tests ne contiennent plus « : » ni « ; »
+  - le mode auto_vacuum incremental se pose vraiment, une seule fois
+  - la rangée de la vitrine décide son geste hors de l'écran
+  - les dix PR fusionnées à 15 h passent les gardes d'icônes et de chaînes
+  - la permission de notification est demandée au bon moment
+  - un cadre d'avatar illustré se pose à la bonne taille sur Android, sans déborder sur ses voisins
+  - un cadre d'avatar illustré se pose à la bonne taille sur le web, sans couvrir le nom ni l'avatar voisin
+  - la carte en attente ne précharge pas ses commentaires sous un cmid
+  - retirer les imports de premier niveau assertDoesNotExist et onNode, méthodes d'instance
+  - la notification système respecte Aperçu et Nom, montre le substitut des messages protégés et son accent
+  - la bannière se balaie vers le haut, un appui long ouvre l'aperçu de la conversation
+  - les tests de core:model, sdk-ui et feature:profile compilent de nouveau
+  - la bannière dit « Nom dans Groupe », respecte Aperçu et Nom, et la politique distingue premier plan et arrière-plan
+  - #15172 ne garde que ce que dev n'a pas encore corrigé
+  - la décision du geste sur la bannière (fermer, aperçu, revenir)
+  - enregistrer un sticker reçu dans Mes stickers depuis une story
+  - page d'invitation, feuille de commentaires et pellicule passent par MeeshyIcons
+  - les tests du relais temps réel rendent Unit, JUnit refusait la classe
+  - use MeeshyIcons in the new login files (DirectIconUsageRatchetTest)
+  - manifeste i18n des chaînes orphelines et icônes Material migrées vers MeeshyIcons
+  - les vignettes de scènes se bornent à 40 entrées / 4 Mo, se purgent sous pression mémoire et au retrait d'une scène
+  - feature:auth compile de nouveau — la page d'invitation n'enchaîne plus append sur l'AnnotatedString.Builder
+  - une requête d'envoi porte UNE relation (miroir d'iOS), le test ne combine plus réponse, story et transfert
+  - l'écran de connexion prend l'identité visuelle Meeshy et une saisie agréable
+  - plus aucun test n'importe `assertDoesNotExist`
+  - notifications et liens de partage se rouvrent depuis le disque, rétention 24 h et déconnexion propre
+  - sdk-ui compile de nouveau — le repli « ouvrir les réglages » de l'enregistreur rend Unit
+  - l'écran de refus d'âge porte la main levée en dégradé de marque
+  - feature:auth compile de nouveau — la carte des droits d'invité n'enchaîne plus deux append
+  - vocaux de commentaires, de réels et de posts dans la piste du lecteur
+  - sdk-ui compile de nouveau — le repli « Réglages » de l'enregistreur rend Unit
+  - collections « par Meeshy » de la boutique — contours, fonds et cadres de bannière
+  - une story en attente ne vit que dans la file de « Mes stories »
+  - la carte du fil d'une publication en attente n'envoie ni impression ni engagement
+  - le PUT titre/description/avatar vit dans son interface Retrofit
+  - créer, renommer une conversation et régler son compte hors ligne
+  - tests de la rangée du document alignés sur ses neuf outils
+  - mes préférences audio, messages, vidéo, documents et application se lisent et s'écrivent sur le serveur sans perdre de clé
+  - les cinq PR fusionnées après coup passent les mêmes gardes
+  - textes à lire et règles des échantillons de voix
+  - la piste audio sociale suit la loi du fil
+  - trois gardes de dev reverdissent après les fusions du 2026-11-03
+  - un seul recalage de dérive vidéo réellement en vol
+  - le plan d'envoi réutilise le média local du brouillon existant
+  - pied de bulle complet avec coche, marque modifié et renvoi
+  - enregistreur plein écran et feuille partagée avec langue parlée et aperçu
+  - ListFormatter ICU absent avant API 29 sur la page d'invitation
+  - le lambda onCommentMedia de la galerie sociale est un lambda, pas un bloc else
+  - l'accueil de premier lancement propose Creer un compte ou Se connecter
+  - le bandeau de lien en attente passe par MeeshyIcons.Link
+  - replace onCommentSent next to its own KDoc, not toggleLike's
+  - fusion champ par champ, cibles sentinelles et bornes de liste de lecture
+  - les tests de sdk-ui compilent de nouveau
+  - l'écran de conversation obéit au routeur, se referme si l'accès est retiré et met son brouillon à l'abri
+  - loi d'eligibilite de l'accueil et magasin du drapeau solde
+  - rendre la sérialisation de la transcription TUS sans ambiguïté de surcharge
+  - lois du document — rangée à effet déclaré, plafond de 10 médias, plan d'envoi et refus dits en clair
+  - un gros média monte par tronçons depuis le disque et reprend là où le serveur s'est arrêté
+  - loi du pied de bulle et de la coche de livraison
+  - manipulation du canevas au doigt, aimantation iOS et repères seulement pendant le geste
+  - les tests unitaires de sdk-ui compilent de nouveau sur dev
+  - le test de renvoi utilise discard (markSucceeded n'existe pas)
+  - purge de deconnexion avertissant des envois perdus, entretien de la base et bandeau de stockage indisponible
+  - la page d'invitation montre qui m'invite, le groupe, ce qu'on y parle, mes droits d'invité et mes choix ancrés en bas
+  - ouverture resiliente de la base avec quarantaine, repli et diagnostics
+  - le rail de portes dit ce qu'il porte et ce que l'outil ouvert remplace
+  - transferts d'intention vers la connexion (e-mail d'inscription, ajouter un compte, adresse de récupération)
+  - loi de purge de deconnexion avec avertissement des envois perdus
+  - registre de canvas actif, pause d'un geste et recalage des vidéos
+  - type explicite de la liste vide de l'aperçu
+  - un envoi transporte réponse, lieu, sticker et pièces transférées, et dit pourquoi il échoue
+  - les stories du haut de liste se préchargent par lots, sans vidéo hors Wi-Fi ni économie de données
+  - l'aperçu d'appui long charge par intentions, scelle les chiffrés et sert le Prisme par message
+  - sdk-core compile de nouveau — un repost en file a sa formulation de pastille
+  - core:network compile de nouveau — `/voice/*` ouvrait un commentaire imbriqué
+  - une galerie plein écran unique pour les médias d'un post et de ses commentaires
+  - libellés de l'enregistreur vocal adoptés du catalogue iOS
+  - un tronçon en cours d'écriture quitte le disque avec la purge du compte, et le rôle média ne s'emprunte plus
+  - messages supprimés, avis système et arrivées se distinguent d'un tour de parole
+  - une seule feuille de commentaires, ouverte depuis la carte du fil sans quitter l'ecran
+  - lois pures d'horloge, de dérive vidéo et de cadence de lecture
+  - la feuille de commentaires derive un seul etat du fil (squelette seulement a froid)
+  - composer la galerie d'un post en pages typées servies par le Prisme
+  - lois de l'aperçu (phases, intentions, provenance, empreinte, Prisme par message)
+  - dedupe the pending counter so unrelated row writes do not re-emit
+  - poignée du panneau de pièces et tuiles en cascade
+  - libellé de montée stable d'une JDK à l'autre, démarrage différé du job de pré-montée
+  - loi de la poignée du panneau de pièces et cascade des tuiles
+  - feature:chat compile de nouveau — import de withStyle dans ChatSearchResultsSheet
+  - rendu des pixels du visuel de lecture en mode graphique natif
+  - au retour au premier plan, seul ce qui a changé est rechargé et une conversation supprimée ailleurs disparaît
+  - anneau de completude partage et champs categorie et etiquettes
+  - la carte de lecture montre l'avatar de l'auteur avec l'icône de l'app en badge
+  - la clé de reprise TUS dérive du contenu et l'en-tête déclare aperçu, capture et transcription plafonnée
+  - la carte de lecture d'un vocal a son plan d'image et sa loi d'activité
+  - sdk-ui compile de nouveau — PillButton du menu d'actions et import de addPointerInputChange
+  - la pastille hors ligne sans file reste un état hors ligne, comme sur iOS
+  - l'onglet Conversations liste nos conversations en commun et propose Message en un geste
+  - règles pures du rattrapage de conversations (tombstones, 24 h, anti-rafale)
+  - une publication en attente ne se signale que par l'horloge d'envoi, et s'annule depuis sa carte ou son détail
+  - les médias gardent l'épinglage et ne portent aucun jeton au-delà de la route des sons, et la purge du compte ne laisse aucun tronçon
+  - les conversations en commun d'une personne se chargent depuis la passerelle
+  - sdk-core compile de nouveau — distinctUntilChanged sur un StateFlow est une erreur
+  - /download et la landing mènent aux fiches App Store et Google Play
+  - la rangée plate a son identité, sa colonne méta et son début de conversation
+  - hors ligne, une conversation s'ouvre sur ses messages en cache, jamais sur l'écran d'erreur
+  - la bulle d'un envoi en attente montre la première image et la durée de sa vidéo, et la durée de son audio
+  - chaînes orphelines classées et icônes de l'identité passées par MeeshyIcons
+  - le view model du composer repasse sous son budget de 800 lignes
+  - un post en attente montre sa photo, et une story en attente ou en échec a sa vignette
+  - le détail d'une publication en attente n'envoie aucun engagement au serveur
+  - une humeur encore en attente s'annule dans la file, jamais par DELETE
+  - un lien se gère par des libellés impératifs, un par cercle visé
+  - le mux de rendu du fil (rangée plate ou bulle) et la clé du début de conversation
+  - registre des pré-montées et libellé de montée
+  - je vois ce qui occupe mon stockage et je vide par type et par domaine
+  - drop unused import, merge stacked KDoc
+  - les gardes et les témoins cassés par la vague de 12 h 55 repassent au vert
+  - tests JUnit rendus void (runBlocking<Unit>) pour que JUnit4 les accepte
+  - chaînes de la purge sélective du cache
+  - le cadre portrait garde sa hauteur pleine, seul le paysage se cale sur la largeur
+  - un message reçu conversation fermée met à jour la liste, l'aperçu et le non-lu
+  - la vidéo de bulle a son poster, son ratio, sa barre de reprise et ses états
+  - un fond paysage passe la scène en 16:9 et un repost repositionne ses éléments
+  - lois de la pré-montée (PRÊT / MONTÉE EN COURS · 34 %)
+  - un seul état de connexion et les règles de la pastille de synchronisation
+  - rejeu des vecteurs de présence, index et reprise bornée des téléchargements
+  - la vague de fusions de 12 h 55 compile de nouveau, sources et tests
+  - lois pures du relais temps réel (mutations de message, pli du non-lu)
+  - déconnexion non annulable par la bascule de la racine
+  - republier une story d'un tap, en story, en post ou en réel, hors ligne comprise
+  - les formes du profil vocal et du consentement suivent la passerelle
+  - je me déconnecte après confirmation, sous un écran de progression bloquant
+  - les lois pures de la vidéo de bulle (ratio, contrôles, disponibilité)
+  - les tests unitaires repassent au vert après les lots fusionnés du 3 novembre
+  - la recherche dans la conversation interroge le serveur et charge la suite
+  - a first network page drops disk rows the server no longer serves
+  - vitrine fraîche une minute, servable sept jours, clé par domaines
+  - le format du cadre se lit et se persiste (9:16 par défaut, 16:9 si fond paysage)
+  - la capsule Publier arme un choix composite et le menu refuse avec sa raison
+  - le fil dit les mots d'iOS, avec de vrais pluriels
+  - les fichiers de packs se téléchargent vérifiés, une seule fois, et s'effacent sans casser un autre pack
+  - MessageRepository.searchMessages, pages par curseur fusionnées dans Room
+  - résultats typés de la recherche serveur (contenu ou traduction)
+  - destinations et refus nommés d'une republication directe
+  - l'état de la vitrine et ses refus (solde insuffisant, 403, hors ligne)
+  - un mode forcé reste borné aux vues livrées
+  - résoudre StickerUsageEntry.emoji (membre du companion) par lambda
+  - ouvrir une conversation, un post ou une catégorie marque ses notifications lues partout
+  - indentation de dragStartPx dans ZoomableImagePage
+  - une photo retouchée d'un commentaire se rouvre avec son filtre, son cadre, son recadrage et ses textes
+  - les commentaires se rouvrent depuis le disque et le coeur part par le socket
+  - les sources et les tests unitaires de tous les modules compilent de nouveau
+  - le ⋯ n'existe que s'il sert une entrée, avec lois d'export et d'habillage
+  - un sticker part avec son descripteur, sa rastérisation planifiée et son pont favori
+  - le mode forcé reste éphémère, la Rivière suit les modes de lecture et les préférences se vident au changement de compte
+  - un toucher de notification ou de lien ouvre le bon lecteur de contenu
+  - roll back an optimistic toggle even when the caller is cancelled
+  - les commentaires se lisent par-dessus la scène, avec réponses, j'aime, traductions et menu par ligne
+  - les lois d'état des commentaires vivent dans :core:model
+  - la liste de notifications dessine ses états (squelette, erreur, vide par catégorie)
+  - le reel video s'ouvre sur son poster, se parcourt d'un glisse et se ferme par le bord
+  - l'en-tête d'identité compose nom, rôle, heure, statut et actions comme sur iOS
+  - la liste se rafraîchit 0,5 s après l'arrivée d'une notification
+  - portées de consommation, registre d'auto-lecture et cadence (loi pure)
+  - les avatars des autres affichent le contour qu'ils ont équipé
+  - remettre au vert les tests appels, enregistreur et socket
+  - lois du chrome du lecteur de reels (immersif, retour par le bord, barre, autostart)
+  - remettre au vert les gardes et cliquets cassés par les lots fusionnés
+  - cinq tests unitaires médias rouges sur dev
+  - SocketAckEmitterTest sous Robolectric pour un org.json réel
+  - la purge sélective sait à quel domaine appartient chaque octet de cache
+  - les témoins de routes lisent aussi ChatDestination, et le menu de conversation reprend le chevron iOS
+  - le texte d'une carte du fil se lit en texte riche, abrégé avec Voir plus, mentions et liens cliquables
+  - un compte supprimé ou un mineur ramène l'utilisateur à l'écran qui le dit
+  - la légende se déplie en bas de scène et la transcription vocale se lit à la demande
+  - donner un tas de 2 Go a la JVM des tests unitaires
+  - les tests de la racine collectent l'état sans attendre le planificateur
+  - la visionneuse d'image se ferme par glissement progressif, annulable et lancé
+  - un success textuel n'est pas un accusé accepté
+  - lois pures du menu de ligne, de l'édition et de la zone des commentaires de story
+  - les packs de chaque domaine s'installent, se retirent et s'achètent par un seul moteur
+  - les lois qui lisent un compte supprimé et un refus d'âge
+  - les dates d'un lien passent par WireDate, jamais par un formateur local
+  - gérer mon code PIN principal et mes verrous depuis Sécurité
+  - les couvertures de mes stories montrent la scène composée, rendue hors écran
+  - le moteur des packs connaît ses domaines et son étagère optimiste
+  - les émissions à réponse attendent l'accusé et savent lire un refus
+  - la bulle porte vidéos, mise en page des pièces, protection, appel et vue unique scellée
+  - la clé et le cache disque des couvertures locales story-cover:<id>
+  - la bande de réactions déborde de la bulle avec comète, + rapide et libellés TalkBack
+  - règle de visibilité de la section Conversations verrouillées
+  - le sélecteur d'audience attend 350 ms de saisie et Publier dit pourquoi une audience nominative vide bloque
+  - changement de mot de passe, décider sur le code de la passerelle
+  - les filtres de la liste se combinent et se retirent d'un second appui
+  - le cliquet des entrées mortes ne garde plus RelationsEndpoint.byUserIdLevel, qui a désormais un appelant
+  - la pastille de lieu se pose sur la scène comme un sticker
+  - la dérivation d'attribution des médias par domaine (messages, stories, fil)
+  - fond du badge de disponibilite sans symbole inexistant
+  - loi du portail d'animation et de la pose de la bande de réactions
+  - implement new TranslationApi members in test fakes, loop job polling, code in consent test
+  - un envoi de média survit au passage en arrière-plan sous une notification « Envoi en cours… »
+  - loi de composition des filtres de la liste
+  - un vocal, une vidéo ou une image se télécharge seul quand le réseau et les préférences le permettent
+  - effectif « 199+ », nom de ligne, empreinte de rendu et ordre par rang servi
+  - je relance ou j'annule mes envois en échec et la file reste bornée
+  - le faux port vidéo ne heurte plus setListener/setMuted (Platform declaration clash)
+  - les tests de dev compilent de nouveau après la fusion
+  - classes de pièces, mise en page, protection et vue unique scellée dans :core:model
+  - un abonné tardif reçoit l'issue d'un envoi déjà livré
+  - restaurer les trois fichiers vidés du lot et brancher les pluriels
+  - mon envoi part vers chaque destinataire avec une issue par ligne, même hors ligne
+  - le lecteur de story annonce son son d'arrière-plan et permet de le couper
+  - les composants partagés parlent la langue de l'interface, avec de vrais pluriels
+  - ne pas escalader un appel audio en vidéo au palier thermique critique
+  - l'annonce du son d'arrière-plan (aucune, originale, crédit) est résolue en une loi pure
+  - la vidéo se fige sans couper l'appel et la chaleur réduit l'image
+  - mesures et cadre tapable de la pastille de lieu, projetés par la géométrie de scène
+  - importer l'invite de scène vide dans StoryComposerBody
+  - les pièces choisies se préparent en tuiles de 56 dp avec étapes, annulation et réessai
+  - le hub Réglages se lit comme sur iOS, en-tête repliable et une section par fichier
+  - une vidéo montre tout de suite une affiche nette avec lecture et durée, un lien vidéo une façade cliquable
+  - retire les override invalides de l'interface CallRingGuarding
+  - MA ligne optimiste se dresse du résumé d'avant le décalage, et l'écho se lit sans ambiguïté d'elvis
+  - les lois d'entrée d'un média (porte, rôle, série, rétraction) et le magasin des porteurs
+  - un avatar ouvre le bon lecteur, tourne son anneau de story et lit l'humeur du chrome social, comme iOS
+  - le widget des favoris valide aussi l'identifiant de son lien profond
+  - plan thermique et projection 5→4 paliers pour la survie vidéo
+  - la rangée récente ouvre sa conversation par le lien validé
+  - glisser vers le bas ferme, vers le haut passe en plein écran
+  - loi pure de disponibilité d'une pièce média (prête, à télécharger, en cours, échec)
+  - un envoi de partage rejoué retrouve la même identité de message
+  - demander transcription et traduction d'une pièce, consentement typé, suivi de job
+  - l'invite d'une scène vide guide le premier geste
+  - un seul étage bas à la fois sous la scène
+  - sdk-core compile — MessageEntity.isGone lit expiresAt par let, le smart cast d'une propriété d'un autre module étant impossible
+  - catalogue pur du hub Réglages dans l'ordre iOS
+  - le fil a sa carte d'erreur, son état vide illustré, son composeur avec menu plus et sa capsule de nouveaux posts
+  - KDoc du detail du post rattachee a son etat
+  - les commandes de ma caméra suivent la vignette et se replient en un bouton quand elle est petite
+  - pose le dispatcher Main dans ReelsScreenCloseTest
+  - fermeture du lecteur en fonction anonyme explicite
+  - le detail d'un post a son en-tete flottant, son menu complet et une barre d'actions a 48 dp
+  - les Réels s'ouvrent par un dévoilement circulaire depuis le bouton Flux
+  - la bande d'en-tête déplie sa pastille d'engagement et bascule au ressort iOS
+  - décisions du glissé vertical et cession des gestes du lecteur
+  - les widgets se mettent à jour sans ouvrir l'app
+  - le bouclier de succès passe par MeeshyIcons (cliquet des imports Material directs)
+  - retire les lois de racine sans appelant et le verrou de bascule sans producteur, remet le voile de déconnexion au-dessus des toasts
+  - le detail d'un post se resynchronise a la reconnexion et applique editions et traductions en direct
+  - la barre Envoyer dit la légende, Ensemble ou Séparément, le coût du chiffrement et le poids avant d'envoyer
+  - le fil compte chaque apparition et vide son lot à la sortie, l'en-tête replie par état pur
+  - géométrie du dévoilement circulaire et masque partagé
+  - le panneau compact d'effets remplace la feuille modale, avec « Tout effacer » qui garde les protections
+  - le pool de lecteurs suit l'application qui le crée
+  - un texte de story se met en lignes à 88 % et s'encadre avec l'encre réservée
+  - les tests unitaires compilent et suivent les lots livrés, et une garde refuse les commentaires imbriqués
+  - testDebugUnitTest recompile — nom de test illégal et import erroné
+  - qui a réagi se lit hors-ligne, et ma réaction reste juste après l'écho comme après un refus
+  - l'adoption à l'ACK reconnaît les deux écritures d'une adresse file:
+  - toucher la notification d'un vocal ramene a sa bulle
+  - le panneau d'effets compact a ses deux rangées et son « Tout effacer » sans toucher aux protections
+  - la scène du composeur expose les gestes, la prêteté et les coins du lecteur
+  - je vois exactement ce qui part et je peux le réordonner ou en retirer une partie
+  - publier, enregistrer, copier ou partager hors de Meeshy depuis la feuille de partage
+  - changer ou définir mon mot de passe avec confirmation animée et fermeture automatique
+  - feuille de partage unique pilotée par son contenu, loi du repli du Flux, ouverture d'un post depuis la fiche
+  - gérer un lien depuis le profil — rétrograder d'un cran, annuler le lien, promouvoir si possible
+  - SettingsViewModelLanguageTest passes the new applicationSync dependency
+  - micro demandé d'abord et refus dit, appel déjà en cours signalé, sonnerie sans réponse rangée en manqué, Réessayer rejoue le contexte sortant
+  - « Promouvoir » suit canRaise servi par GET /relations/:userId
+  - la loi du registre des réactions (identité, borne, écho sans double comptage)
+  - toucher une notification de story mène à la story ou à un écran clair
+  - le thème et les réglages vocaux suivent mon compte sur tous mes appareils
+  - lois pures du départ d'appel — permissions, garde de sonnerie, admission
+  - StoryCommentsCache n'utilise plus l'opérateur in ambigu sur un ConcurrentHashMap
+  - éviter l'ombre de l'infixe to dans le catalogue du menu
+  - le port Exo reste interne à sdk-core
+  - ids() du test de persistance tolere Syncing(null)
+  - moteur vidéo partagé, pool de lecteurs, amorçage par paliers et bouton son
+  - le changement de compte en cours est relu a chaque evenement d'authentification
+  - une publication en attente s'annule depuis le détail et survit à une relance
+  - la loi de la zone « ce qu'on peut en faire » de la feuille de partage
+  - rétrograder d'un cran ou annuler le lien depuis le profil, Promouvoir seulement quand c'est possible
+  - gérer un lien depuis le profil — promouvoir si possible, rétrograder d'un cran, annuler le lien à Connaissance
+  - lois pures du moteur vidéo partagé (montage, boucle, mute)
+  - le mini-lecteur reste 5 s après le dernier vocal et la croix le ferme
+  - ne pas injecter la locale JVM dans la liste des langues traduisibles
+  - la liste des notifications s'affiche au premier cadre après un redémarrage à froid ou hors ligne
+  - le module app compile de nouveau — distinctUntilChanged sur un StateFlow est une erreur
+  - mes pièces choisies attendent dans un plateau de 100 dp teinté de l'accent, que j'aperçois, édite ou retire avant d'envoyer
+  - feature:calls, conversations et settings compilent de nouveau
+  - la bulle envoyée prend l'indigo de marque ou l'accent personnel, coins de 18
+  - le canvas sait quand une slide change vraiment
+  - like/unlike/delete comment use apiCallUnit (envelope has no data)
+  - SceneLetterboxFill n'appelle plus Image(painter) avec filterQuality
+  - au retour du réseau, l'envoi posé hors ligne part seul — le garde l'exige au lieu d'attendre un « Réessayer »
+  - le KDoc de SkeletonGeometry n'ouvre plus de commentaire imbriqué
+  - les gestes sur la liste des notifications sont des fonctions pures et idempotentes
+  - une limite du jour ou le mode lent se dit à l'écran, un refus définitif n'est plus rejoué
+  - le KDoc de GameVersionInterceptor n'ouvre plus de commentaire imbriqué — « /me/game/_ » ouvrait un /_ dans le commentaire et cassait la compilation de :core:network
+  - un message part pendant qu'une pièce jointe se téléverse, sans relancer ce téléversement
+  - un seul nombre de non lus pour la cloche, la pastille et le widget
+  - on voit qui regarde la conversation et qui écrit, sans fabriquer de présence
+  - les refus typés disent le champ, la limite du jour et le mode lent
+  - l'ancienne route story_composer ouvre l'hôte unique, le canevas de story et la feuille unique ont leurs lois
+  - le module core:model compile de nouveau — deux GameState déclarés dans le même paquet, et un test qui n'importait pas AttachmentProtection
+  - enregistrer ou partager une story à vidéo réglée n'encode plus chaque vidéo avant le rendu
+  - registre unique des téléchargements de médias, cache typé en flux, badge à trois états
+  - le menu d'une conversation offre rechercher, appeler, détails, inviter, bloquer, signaler et l'administration
+  - les commentaires d'une story se lisent en cache puis réseau, avec fils, cœurs et temps réel
+  - corps de synchronisation des blocs audio complet et application (thème seul)
+  - une conversation verrouillée par code demande son code quel que soit le chemin d'ouverture
+  - image unique instantanee, decodee a la bonne taille et soumise a la politique de telechargement
+  - un vocal s'enregistre par un moteur unique, gardé sous appel, refus de micro expliqué
+  - le fil de commentaires d'une story a ses réponses, ses cœurs et sa chasse de cible
+  - les envois en attente repartent seuls au retour du réseau sans brûler leurs tentatives
+  - la racine attend la session vérifiée, affiche le lien en attente et héberge les toasts au sommet
+  - registre pur des non-lus et politique du nombre d'icone
+  - le fil se rouvre autour d'un message depuis le disque, puis le serveur
+  - bandes 30/40/30, tolérance 14 dp, surface ouverte refermée au premier toucher
+  - lois pures du téléchargement de médias (cadence, profil, badge, directive)
+  - la bulle, la piste vocale et le bandeau de langues servent la même langue
+  - le lecteur s'ouvre en grandissant, se ferme au fondu et libère tout en quittant
+  - modes de fenêtre du fil et transitions pures
+  - lois de decodage et de politique d'image (DecodeBudget, ImageLoadPolicy)
+  - un build lancé sur dev va jusqu'au déploiement du staging, la poussée suivante attend son tour
+  - la garde audio du brouillon repris quitte FeedViewModel, la cohésion ne régresse plus
+  - la recherche de messages ne plante plus sur iOS 16 et 17, et la clé orpheline du nom de groupe quitte le catalogue
+  - les envois du fil posés hors ligne survivent au redémarrage et partent dans l'ordre au retour du réseau
+  - une conversation obsolète visée par un signalement ouvert est quand même détruite à 48 h
+  - l'aperçu et l'export d'une vidéo réglée montrent son filtre, son cadre et son cadrage, comme la scène
+  - une publication en attente d'envoi s'annule depuis la pastille de synchronisation
+  - un média déjà dans la galerie n'y rentre pas après une réinstallation ; une petite vidéo en ligne de fichier se télécharge seule
+  - un menu ou une fenêtre parle la langue d'interface choisie, pas celle de l'appareil
+  - poser, changer ou retirer le look d'une vidéo garde sa position de lecture
+  - l'annulation d'une publication en vol coupe toujours sa requête
+  - identifiant de reprise lu avant le premier séparateur, témoins d'arrière-plan à temps virtuel
+  - une photo supprimée de la galerie de la coque Android peut être réenregistrée
+  - la photo d'un succès, d'un rang ou d'une mission porte une plaque gravée au pseudo de l'auteur
+  - les témoins de budget lisent la loi au même instant et sur le même déroulé que le témoin du modèle
+  - la scène de frappe se découpe en forge, couches et UN canvas de particules, forcée LTR, avec ses témoins d'échelle, de palette et de budget
+  - la scène d'une story republiée zoome vers le plein écran et s'annonce avec son astuce d'ouverture
+  - un seul setContent par test Robolectric de la scène de texte
+  - la scène lit les 18 styles de texte avec poids, contour, effets et cadres
+  - tests de rendu sans dépendance aux ombres graphiques legacy
+  - clés du coffre sans point, et témoin de fermeture en arrière-plan qui avance le temps
+  - le filtre et le cadre d'une vidéo se voient en direct dans la scène, puis sont cuits par Media3 à la publication
+  - le libellé de Publier tient sur une ligne entière, même sur une scène étroite
+  - le trait dessiné s'affiche en ruban à largeur variable, lissé, marqueur à 45 % et halo de sélection
+  - le lecteur montre la scène en carte 9:16 sur un sol flou, et la sentinelle d'un format plus récent
+  - catalogue des 18 styles de texte et poids d'auteur
+  - l'en-tête du lecteur sans X, menu ⋮ en sections, suppression optimiste, signalement avec détail
+  - les lois de la carte 9:16, du sol, du chargement et de la sentinelle
+  - le menu ⋮ du lecteur se compose par sections, Fermer en dernier
+  - les stickers s'affichent nets et bougent quand ils sont animés
+  - « Autoriser la reprise du son » d'une vidéo se choisit dans ⋯ et part avec la publication
+  - le rejeu d'une story interrompue renvoie chaque slide sous la clé du premier passage
+  - une publication en attente d'envoi le dit, et s'annule depuis le détail et Mes stories
+  - retire le projet Gradle temporaire jvm-model-tmp commité par erreur
+  - le témoin du focus rendu au silence laisse la recomposition atteindre le lecteur
+  - taille rendue et filtre des stickers animés
+  - reference de fonction explicite remplacee par un lambda dans l'identite du fond
+  - référence de fonction explicite pour la lecture des éléments bruts
+  - la fermeture serveur en attente survit à la fermeture de session suivante
+  - silence NewApi lint on the ProgressStyle gate
+  - médias de premier plan cadrés, rognés, animés et vidéo avec affiche
+  - une notification en cours s'ouvre, se met à jour et se ferme dans l'ordre, avec ses boutons — hôte sérialisé, service de premier plan unique typé, récepteur unique de commandes
+  - « Rendre obsolète » est proposé à l'un OU l'autre membre d'un tête-à-tête ouvert
+  - le brouillon d'un raccourci voyage par l'adresse meeshy://conversation/<id>?draft=
+  - raccourcis d'entrée du lanceur sans conflit de nom et doc des App Links
+  - lois pures des notifications en cours — ordre sérialisé, types de premier plan selon permissions, plans d'envoi, vocal, lecture et appel
+  - read skeleton rows in the unmerged tree
+  - le lecteur s'ouvre sur la bonne story, saute le vide et l'expiré, et répond aux notifications par id
+  - le profil part avec les jetons, quel que soit le chemin, et la course est testée
+  - les liens de contenu, de lien suivi et de raccourci ouvrent la bonne destination
+  - la zone « À qui » — récents cochables, groupe, communautés dépliables, squelette et états vides
+  - le fond de scène s'ajuste, se cadre et habille ses bandes
+  - le menu de la carte ouvre, copie le lien suivi, supprime et épingle avec retour immédiat
+  - le profil gardé dans le coffre s'efface à la déconnexion
+  - le menu d'une carte se compose par une politique pure (auteur, rôle, type)
+  - lois pures du lecteur (position par identité, saut des slides vides ou expirées, portée)
+  - sous-titres d'appel — panneau audio, bandeau et journal accessibles
+  - lois du fond de scène (ajustement, identité, bandes)
+  - se déconnecter ferme aussi la session côté serveur, avec trois essais puis reprise
+  - la zone « À qui » a sa loi pure — squelette, vide, groupe dès deux personnes, canaux de communauté
+  - serializer<String>() du test de purge vient de kotlinx.serialization
+  - les listes déjà vues s'ouvrent depuis la mémoire et le cache se vide proprement
+  - l'historique local reste léger, purge des vieux messages, éphémères échus et lignes mortes
+  - sur un iPhone SE, ✕ et ↶ ↷ se posent sous le haut de la scène, et l'invite de la scène vide laisse la colonne libre
+  - plugin serialization dans :app et JvmName pour les surcharges de consume
+  - fluidité, mémoire, démarrage et sorties d'arrière-plan mesurés en local
+  - l'apercu avant decroche retient le choix de l'appelant par compte et correspondant dans un DataStore
+  - send the in-band bye before the Ended edge tears the media down
+  - raccrocher hors ligne ne laisse plus le pair dans un appel zombie, et la qualité est journalisée
+  - un média choisi se charge hors fil, borné à 1080 px, avec « Chargement de l'image/vidéo… » et sa forme mesurée
+  - le registre des fins d'appel différées et l'instantané d'analytique in_progress
+  - la publication suit le format ciblé et une seule loi arme Publier
+  - evite l'ambiguite de ::apply avec la fonction de portee
+  - build RtpParameters test doubles through the org.webrtc fixture
+  - la loi de chargement des médias — décodage borné à 1080 px et mesure vidéo debout
+  - une seule loi décide quelle slide mérite un post
+  - un glyphe de signal et une puce de durée ouvrent le détail chiffré de la qualité de l'appel
+  - l'appel s'encode selon le réseau : Opus voix, H264 d'abord, débit piloté par le profil de données
+  - lever deux ambiguïtés de résolution dans les lois Photo
+  - les grands moments se photographient dans l'ordre, avec alertes mesurées et cadres proposés selon l'atmosphère
+  - reuse the existing GameBlock.levelStepFacts instead of redeclaring it
+  - sur un iPhone SE, ✕ et la colonne se posent DANS la scène dessinée — l'écart compte la réduction que le socle lui applique dès le repos
+  - les lois pures de la demande « Imagine » (texte servi par le Prisme, médias, piste servie, fenêtre de discussion)
+  - documents légaux dans la langue choisie et une carte de licence par bibliothèque
+  - le profil de données, les règles SDP et l'ordre des codecs d'un appel
+  - choisir à qui envoyer — conversations du cache d'abord, amis, communautés, recherche locale puis serveur
+  - langue initiale des documents légaux par le Prisme et une carte par bibliothèque
+  - la couleur d'un locuteur de sous-titres est une loi unique dérivée de son identifiant, comme iOS
+  - squelette des gestes optimistes du Jeu (lois, ordre des lectures, niveau gagné)
+  - ouvrir une notification affiche le message sans attendre le réseau
+  - update stale ChangePasswordViewModel constructor call sites in tests
+  - la caméra locale s'allume après une escalade vidéo du pair
+  - À propos copie chaque valeur, affiche le profil média et huit liens ; l'Aide permet de noter l'app
+  - rogner un son sous un curseur fixe, avec poignées larges et aperçu borné du segment
+  - je passe de l'audio à la vidéo en plein appel, et une caméra refusée bascule en audio, comme iOS
+  - huit liens, profil média et action Noter l'app dans les modèles
+  - lois pures du rognage audio (pas de lecture, placement des poignées) et libellés
+  - budget de particules mesure sur tissage et poussieres, lots groupes
+  - sur un iPhone SE, l'écart de ✕, ↶ ↷ et de la colonne se lit sur la couche de scène, avant toute réduction — il restait à 0
+  - un fond photo ne retombe sur Signature que si la pièce a disparu ou est refusée
+  - ne pas boucler à vide quand l'onde est désactivée
+  - la feuille de profil ne lit plus la demande d'ami qu'un témoin précédent a envoyée — les demandes simulées se remettent à zéro après chaque cas
+  - tests de coordination - references fortes aux lecteurs (registre faible)
+  - définir un premier mot de passe depuis les réglages sans mot de passe actuel
+  - aimer, enregistrer et republier se disent à voix haute, et un geste perdu s'annonce
+  - un vocal a un vrai lecteur — bouton rond, onde scrubbable, vitesse et progression
+  - la loi de préchargement d'un push et l'insertion sans remplacement
+  - les lois du miroir de ma caméra, du repli audio et de la suspension en arrière-plan, comme iOS
+  - ordre des imports de SocketManager
+  - la légende de story ne garde pas la hauteur d'un composeur retiré
+  - Retour envoie sans accident et la sélection se met en gras, italique, souligné ou barré
+  - les appels jouent les sons de la marque, sans ToneGenerator
+  - l'engagement du fil tient en un seul état pur, amorcé et réconcilié sans muter le post
+  - le coffre ouvert pose son couvercle à 0 exact et le test de flamme ne dépend plus de la fenêtre Robolectric
+  - Flamme, coffre, coupe, gemme de ligue, tampon d'Atlas et liseré de rareté dessinés
+  - le compteur de Meeshes porte la pièce d'argent d'iOS, teintée meeshSilver
+  - toucher une personne dans les conversations, les appels et les contacts ouvre sa fiche
+  - le texte riche se rend en blocs et la légende d'un reel ou d'une story se lit à l'ombre
+  - les doubles MessageSocketManager de la liste servent messageEdited et messageDeleted
+  - le squelette du fil ne bloque que le chargement a froid
+  - lois de la touche Retour, du champ après envoi et de la mise en forme
+  - la loi du toucher d'une personne distingue compte et participation
+  - chaque bulle dit qui parle, fantôme pour un invité sans compte et source reconnue
+  - types de retour explicites sur la colle de reprise d'interruption
+  - une push d'appel livrée après la fin de l'appel ne fait plus sonner
+  - l'identité de l'expéditeur et la source du message se décident par le type, jamais par le pseudo
+  - la socket se rattrape seule après une coupure, mesure sa latence et revient dès le retour au premier plan
+  - un changement de compte pendant la relecture du régime ne retire rien, et un fichier de fiches corrompu guérit
+  - un refus typé dit s'il porte l'enveloppe de la passerelle, et le double d'API lit la politique demandée
+  - des squelettes aux dimensions d'iOS, avec reflet, au froid du fil, du profil, des stories et des liens
+  - sur un iPhone SE, ✕, ↶ ↷ et la colonne se posent sur la carte DESSINÉE de la scène, et gardent cet écart quand la scène se réduit
+  - un appel, une autre appli ou un enregistrement met le son en pause ou le baisse, puis le rend sans perte
+  - phase de chargement du fil, un seul chargement bloquant
+  - supprimer ou éditer le dernier message remet la ligne de liste d'aplomb
+  - le rail d'actions propose Son, Enregistrer et le contour de ce qui est fait, et se resserre avant de défiler
+  - les journaux de salles citent le catalogue d'événements
+  - ouvrir une conversation rejoint sa salle, une reconnexion rejoint d'abord celle que l'on lit
+  - la langue d'interface s'applique au process avant le premier écran
+  - lois pures de l'onde et du scrub du lecteur vocal
+  - la langue effective de l'interface descend du profil
+  - le lecteur de stories lit dans la langue du prisme strict, sinon l'original
+  - ouvrir ou fermer une session exécute toujours les mêmes étapes, dans le même ordre
+  - invite sheet VM keyed per conversation, scroll before asserting in sheet tests
+  - la story boucle ou se fige selon ce que fait l'utilisateur et reprend là où elle était
+  - la ligne de liste reconnaît « après lecture » et fusionne l'auteur « Toi » à l'événement
+  - lois de reconnexion, de coupure, d'état de lien et de RTT du heartbeat
+  - la vignette d'une diapo, l'aperçu et l'export montrent le filtre, l'effet et le cadre posés sur un média, comme la scène
+  - lois pures des salles de conversation et du registre d'ouverture
+  - lois pures de la lecture d'une story (retenue, horloge, interruption)
+  - feuille « Inviter » avec lien prêt à copier ou partager
+  - lambdas pour les surcharges setLargeIcon, pas d'avatar sans budget
+  - Menu est réellement annoncé à TalkBack, la liste des actions de la rangée l'ajoutait seulement à la clé du remember
+  - ce qu'une autre app remet est trié, borné et nommé sans risque
+  - plan pur d'ouverture et de fermeture de session
+  - la loi des squelettes et du reflet n'anime qu'un vrai chargement
+  - SceneCanvas, la surface unique de la scène en lecture, avec stickers, textes et médias du plan de rendu
+  - une demande de traduction ne livre plus de clair au serveur pour un message chiffré, et son échec se dit sur la ligne
+  - la feuille de création reprend la disposition iOS — interrupteur « Nouveau groupe », titre obligatoire, chiffrement replié
+  - le contour du rail dit ce qui est ouvert et ce que le lecteur a déjà fait
+  - une notification montre la grande image, la vignette de vidéo ou le libellé du vocal, rien pour un message protégé
+  - retire l'import onAllNodes inexistant du test des actions TalkBack
+  - la feuille « Ajoute ton numéro » s'ouvre avant la recherche de contacts sans jamais bloquer
+  - imports obsolètes de GamePageScaffold et chemin de preuve du retour déplacés avec le gabarit
+  - corrige trois tests de lois de progression qui échouaient
+  - un média en file ne vit plus en BLOB — migration au démarrage, balayage des envois sans fichier, disque plein typé
+  - tirer-pour-rafraichir de marque (logo, seuil 90 dp, haptique)
+  - retirer du classement à porter les 12 routes que le lot déclare
+  - une vidéo de story part compressée, ou en source avec un mime vidéo si la compression échoue
+  - le gabarit des pages du jeu, la barre de palier et les rangées de dépense partagent un socle commun
+  - la carte d'une conversation se sert de la mémoire puis se rafraîchit, et se périme quand on rejoint ou quitte depuis une autre carte
+  - la politique d'offre du numéro ne propose l'ajout qu'à un compte non anonyme sans numéro
+  - un pair renommé se repeint dans ses messages, citations et transferts hors-ligne, une citation de post retiré s'écrit d'un coup, la citation se grave à l'ingestion et une étoile d'un autre appareil refuse le supprimé et la vue unique
+  - les libellés des succès générés vivent dans AchievementCopy, et les lois de concept et de catalogue sont prouvées
+  - loi de phases du tirer-pour-rafraichir de marque
+  - l'enregistrement d'un appel capte les deux voix (et l'écran en vidéo) et le dépose dans la conversation
+  - le hub de repli de Progression compose ses blocs comme sur iOS
+  - la charge push décrit son média — image, vignette de vidéo, vocal — et nul pour un message protégé
+  - glisser une bulle répond ou transfère, avec le Menu nommé pour TalkBack et la cellule effacée sous l'overlay d'appui long
+  - le refus d'une traduction serveur se publie sur la ligne de la langue
+  - les notifications détaillées ont leur propre écran et leur propre ViewModel, Réglages ne garde que push, sons, vibrations et « Plus d'options »
+  - le panneau d'actions révélées d'une rangée a un modèle pur et un hôte dédiés
+  - la citation gravée (humeur, story, message au prisme ordonné) et la repeinture d'auteur ont leurs lois
+  - la taille de la vidéo d'un appel enregistré suit les images captées
+  - le profil se rouvre à froid depuis le coffre et une édition non confirmée survit au redémarrage
+  - les routes du Jeu partent avec l'en-tête de version 2, et la fusion d'un état ignore une révision plus ancienne
+  - lois pures de l'envoi des médias de story (stickers, texte alternatif, progression, vidéo)
+  - lois du moniteur de fiabilité — lien à moitié ouvert par époque, rattrapage « connecté », recul exponentiel, arêtes réseau
+  - noms de clés de session, profil sans image data: et garde du profil optimiste, comme l'iOS
+  - le retrait laisse `translations: null` à son appelant, et son harnais a une maison
+  - l'édition purge aussi le TEXTE d'avant du contexte persisté, pas seulement sa traduction
+  - le rattrapage REST marque aussi les messages reçus d'un invité de lien
+  - reposer le même rang n'écrit rien, ne diffuse rien, ne notifie rien
+  - deux suppressions concurrentes ne décomptent plus deux fois
+  - une demande en attente ne sonne pas, même si on ÉDITE le message pour y nommer sa cible
+  - le budget de mention vaut bien 5 par minute, et une personne nommée deux fois ne l'est qu'une
+  - rentrer dans une conversation supprimée POUR SOI ne crée plus une appartenance invisible
+  - les trois diffusions d'adhésion ont un site unique, et l'invitation les émet
+  - un rejeu de pin/unpin n'est pas un geste
+  - l'index du compte garde la durée de la séance, l'index de paire se recrée et se libère de façon gardée
+  - la séance ensemble réindexe à chaque écriture, ferme en indisponible, ne reprend plus l'index de paire et attend 20 s avant de finir à la déconnexion
+  - la séance ensemble ferme sans limiteur, rejuge avant d'inviter, tient une séance par paire et finit à la déconnexion
+  - la fin d'un partage ne part qu'à qui l'a vu, et n'est jamais perdue (#16980)
+  - magasin Redis strict et atomique du partage de position (#16980)
+  - les gardes de surfaces comptent la troisième lecture de la recherche (transcriptions)
+  - la charge d'une marque personnelle est typée par le CONTRAT, pas par une assertion
+  - la recherche de messages sert le flou avec le résultat, et cherche les transcriptions
+  - LocationHandler lit son horloge injectée partout, dont ses trois fins de vie
+  - une réaction de pièce jointe persistée est accusée, quoi qu'il arrive ensuite
+  - la sortie d'un invité de lien est annoncée, et le sortant est sorti
+  - rejoindre par lien admet le compte dans la room du fil
+  - réagir à une pièce jointe remonte la conversation, comme réagir au message
+  - une étoile posée sur un appareil atteint ceux qui étaient éteints
+  - la garde d'admission ne change pas la profondeur d'attente d'un canal non attendu
+  - retirer `announcesMessageDeath`, et couvrir la purge d'une entrée SCELLÉE
+  - la vivacité connaît la vue unique brûlée, et la garde passe à l'ADMISSION
+  - le clair d'un message détruit quitte la file de rejeu hors ligne
+  - les lots du cycle 141 rentrent dans les budgets de taille (#16687, #16691)
+  - la capture d'écran et l'enregistrement consenti gardés au journal (#16665)
+  - le rafraîchissement d'écoute après un blocage garde son rejet au site (#13934)
+  - une seule loi de lecture garde les trois portes de la traduction demandée
+  - les orchestrateurs de la loi lisent le rôle des deux côtés
+  - chaque écriture de « Mes stickers » atteint les autres appareils du compte
+  - le site d'un éditeur masqué n'est plus un oracle, et le choix ne se coerce pas
+  - la page éditeur ne nomme le compte Meeshy que si l'éditeur l'a choisi
+  - la page éditeur lit le sceau et le site dans la même lecture
+  - changer le site d'un éditeur vérifié retire sa vérification
+  - le site d'un éditeur ne part que vérifié, et avec son compte
+  - le pseudo des anciennes arrivées se complète à la lecture
+  - modifier une story publiée garde ses vues, réactions et impressions (#16386)
+  - la recherche de conversations ne sert plus le détail d'une pièce masquée ou d'éphémère
+  - le changement de mot de passe porte un code par refus
+  - GET /relations/:userId sert la vue du lien et canRaise ; une baisse sous le Sang éteint les partages du rituel
+  - le changement de mot de passe n'exige plus confirmPassword
+  - la synthèse vocale écrit sa piste sans torchaudio.save, speechbrain revient à 1.1.1
+  - le composeur d'aperçu décrit l'effet à appliquer à la ligne 2
+  - MessageSearchHit porte le voile du flou et la transcription qui a répondu
+  - contrat de la capture gardée au journal d'appel (#16665)
+  - déclare sticker:library-updated, la bibliothèque de stickers d'un compte
+  - les adresses Swift et Kotlin générées suivent les routes /publishers de #16378
+  - l'audit des littéraux d'endpoint ignore les chemins de fichier (première lettre majuscule)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.47.0
+
 ## 2.28.0
 
 ### Minor Changes
@@ -637,7 +2591,7 @@
   - la feuille « Son de la story » enregistre, importe et emprunte un son, règle son rôle, son volume, sa langue et l'atténuation des vidéos, et le transcrit sur l'appareil — la transcription voyage avec la piste en mobileTranscription
   - la feuille de stickers du compositeur reçoit toutes ses capacités — Mee & Meo, packs, Personnalisés, Boutique, Mes stickers et détourage
   - depuis « ⋯ », Mentionner, Hashtags et Lieu nomment la publication à parité d'iOS — Mentionner ouvre une feuille sombre (recherche de personnes, mode Sur la scène · Dans « Avec … » · En silence) qui retrouve en tête les personnes déjà nommées (« Déjà référencées », StoryComposerUiState.referenced : pastilles épinglées puis le reste, même loi declaredFor que l'envoi), chacune avec son mode qu'un toucher change et une croix de 48 dp qui la retire, pastille comprise, avec l'avertissement d'audience d'iOS ; Annuler ne touche à rien, OK reste grisé tant que personne n'est choisi et que rien n'a changé (StoryComposerReferencesReducer.referencesEdited, miroir d'applyReferences) ; une mention épinglée est une pastille « @pseudo » posée sur la scène (texte qui porte referenceUserId, fond de marque, taille iOS 64, en cascade, une seule par personne) et déclarée PINNED à l'envoi, plus déclarée si on la retire ; « Avec » et « En silence » nomment la publication sans rien poser (plafond de 50) ; Hashtags n'a qu'une validation (Retour ajoute, OK ferme, Annuler rend exactement ce que la feuille a trouvé), écrit la balise dans le texte de la diapo sans en faire un objet de scène, et propose les tendances du serveur (vides si l'appel échoue) ; Lieu cherche par nom, propose autour de moi l'endroit exact puis jusqu'à 5 lieux nommés à moins de 400 m (StoryNearbyPlaces, géocodeur de l'appareil, un relevé unique), ne choisit rien d'office, et après un refus ne propose aucun lieu, grise OK et dit pourquoi (StoryPlaceSheetState) ; la liste des lieux ne plante plus sur deux résultats identiques (clé indexée) ; la pastille de lieu se pose sur la scène, se touche, se glisse en un cran d'annulation, se retire par la barre de sélection, part en storyEffects.locationObjects et se lit dans le lecteur à son rang ; un pied de scène sous la scène montre les hashtags et « Avec @… » pour les seules mentions référencées, absent s'il ne porte rien, jamais une mention silencieuse ou épinglée ; ses hashtags rouvrent la feuille Hashtags et son « Avec … » la feuille Mentionner, comme iOS (et non plus la feuille d'audience) ; brouillon et modification d'une story gardent pastilles et lieux ; chaînes en 7 langues (strings_references_13846.xml) ; témoins : ComposerSceneReferencesTest, StoryNearbyPlacesTest, StoryPlaceSheetStateTest, StoryTextObjectReferenceTest, ComposerSceneToolsTest, StoryComposerReferencesTest (12), StoryMentionAlreadyReferencedTest (2), StoryPlaceSheetViewModelTest (3), StoryHashtagSheetViewModelTest (2), ComposerSceneReferenceFooterTest ; :core:model, :sdk-core, :sdk-ui et :feature:stories verts (--rerun), :app:compileDebugKotlin vert ; reste : onglet Stickers › Lieu (lot stickers), rangée « Avec … » du lecteur, recette S8 des trois feuilles
-  - le menu ⋯ du compositeur sert Aperçu, Choisir un fond, Retirer le fond de la scène et Tout effacer, et l'appui long sur Média propose la photothèque ou les fichiers, à parité d'iOS (ComposerOverflowPolicy, ComposerRailDoorLongPress) — ComposerMoreEntry gagne PREVIEW (en tête, si une diapo a du contenu), PICK_BACKGROUND (si la porte Média n'atteint plus le fond : la diapo a déjà un média et une place reste), REMOVE_BACKGROUND (couleur ou média de fond posé) et CLEAR_ALL (destructif, toujours dernier, jamais sur une composition vierge) ; l'aperçu rejoue chaque diapo publiable par la charge de publishPlans, StorySlideProjector et StoryScenePlayer (loi 6, aucune copie de rendu), plein écran, toucher gauche/droite pour changer de diapo, ✕ ou retour pour fermer ; « Choisir un fond » désigne le média choisi comme fond, envoyé ou hors ligne sous son cmid ; « Retirer le fond de la scène » retire couleur et média de fond en un cran ; « Tout effacer » demande confirmation (message, Annuler) puis laisse une diapo vierge sur le fond neutre, en gardant l'identifiant de la diapo sélectionnée, et retire les personnes mentionnées comme iOS (#5013 : la publication suivante ne notifie personne qu'aucune scène ne montre) ; l'audience reste ; les envois hors ligne sont mis de côté (reduceBurying, partagé avec la suppression de diapo, déplacée dans StoryComposerEraseReducer) et ↶ Défaire rétablit diapos et médias, ce que dit le message de confirmation ; l'appui long sur Média (colonne de scène et rail du grand écran) propose « Photothèque » ou « Depuis les fichiers » (OpenMultipleDocuments image/_ video/_), sous le même plafond que le toucher, annoncé à TalkBack avec une action nommée par source ; ComposerConfirmationDialog accepte un message facultatif ; 13 chaînes en 7 langues ; témoins : ComposerSceneToolsTest (6 rouges puis verts), StoryComposerMoreActionsTest (9 rouges par mutation puis verts : effacer puis défaire, mentions retirées, envoi hors ligne mis de côté puis rendu, fond retiré en un cran, fond choisi en ligne et hors ligne, conditions, aperçu par la projection du lecteur), StoryComposerMoreMenuUiTest (Robolectric : menu vierge sans Aperçu ni Tout effacer, confirmation puis ↶, aperçu ouvert puis fermé, appui long photothèque ou fichiers) ; Gradle :core:model, :sdk-ui, :feature:stories testDebugUnitTest --rerun et :app:compileDebugKotlin verts
+  - le menu ⋯ du compositeur sert Aperçu, Choisir un fond, Retirer le fond de la scène et Tout effacer, et l'appui long sur Média propose la photothèque ou les fichiers, à parité d'iOS (ComposerOverflowPolicy, ComposerRailDoorLongPress) — ComposerMoreEntry gagne PREVIEW (en tête, si une diapo a du contenu), PICK*BACKGROUND (si la porte Média n'atteint plus le fond : la diapo a déjà un média et une place reste), REMOVE_BACKGROUND (couleur ou média de fond posé) et CLEAR_ALL (destructif, toujours dernier, jamais sur une composition vierge) ; l'aperçu rejoue chaque diapo publiable par la charge de publishPlans, StorySlideProjector et StoryScenePlayer (loi 6, aucune copie de rendu), plein écran, toucher gauche/droite pour changer de diapo, ✕ ou retour pour fermer ; « Choisir un fond » désigne le média choisi comme fond, envoyé ou hors ligne sous son cmid ; « Retirer le fond de la scène » retire couleur et média de fond en un cran ; « Tout effacer » demande confirmation (message, Annuler) puis laisse une diapo vierge sur le fond neutre, en gardant l'identifiant de la diapo sélectionnée, et retire les personnes mentionnées comme iOS (#5013 : la publication suivante ne notifie personne qu'aucune scène ne montre) ; l'audience reste ; les envois hors ligne sont mis de côté (reduceBurying, partagé avec la suppression de diapo, déplacée dans StoryComposerEraseReducer) et ↶ Défaire rétablit diapos et médias, ce que dit le message de confirmation ; l'appui long sur Média (colonne de scène et rail du grand écran) propose « Photothèque » ou « Depuis les fichiers » (OpenMultipleDocuments image/* video/\_), sous le même plafond que le toucher, annoncé à TalkBack avec une action nommée par source ; ComposerConfirmationDialog accepte un message facultatif ; 13 chaînes en 7 langues ; témoins : ComposerSceneToolsTest (6 rouges puis verts), StoryComposerMoreActionsTest (9 rouges par mutation puis verts : effacer puis défaire, mentions retirées, envoi hors ligne mis de côté puis rendu, fond retiré en un cran, fond choisi en ligne et hors ligne, conditions, aperçu par la projection du lecteur), StoryComposerMoreMenuUiTest (Robolectric : menu vierge sans Aperçu ni Tout effacer, confirmation puis ↶, aperçu ouvert puis fermé, appui long photothèque ou fichiers) ; Gradle :core:model, :sdk-ui, :feature:stories testDebugUnitTest --rerun et :app:compileDebugKotlin verts
   - la corbeille du rail de scènes teste la présence de onDelete sans la lier — l'avertissement « Immutable value 'onDelete' was never used » (ComposerSlideRail.swift:107, relevé par Xcode Cloud sur le build 1965) disparaît ; même condition, aucun changement de comportement
   - la table des invisibles d'un nom se type en sous-expressions — la CI iOS de dev ne compilait plus
   - un refus définitif du serveur (400, 413, 422) se dit « Le serveur a refusé cette publication telle quelle » au lieu de « L'envoi a échoué »
