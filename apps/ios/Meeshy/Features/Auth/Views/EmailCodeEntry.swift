@@ -10,6 +10,10 @@ import MeeshyUI
 /// modèle tient en mémoire, et la vérification ouvre la session.
 struct EmailCodeEntry: View {
     @ObservedObject var viewModel: EmailVerificationViewModel
+    /// « Rien reçu ? Regardez aussi dans vos spams… » sous le champ (#16937) :
+    /// le code vient d'un e-mail. Un hôte qui pose déjà la ligne sous son
+    /// annonce la tait ici.
+    var showsSpamFolderHint = true
     @State private var code = ""
     @FocusState private var isFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
@@ -27,6 +31,10 @@ struct EmailCodeEntry: View {
         VStack(spacing: MeeshySpacing.xl) {
             proofBanner
             codeField
+            if showsSpamFolderHint {
+                EmailSpamFolderHint()
+                    .padding(.horizontal, MeeshySpacing.xxl)
+            }
             errorView
             verifyButton
         }

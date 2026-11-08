@@ -190,9 +190,4 @@ enum EmailVerificationLead: Equatable {
             String(localized: "emailVerification.subtitle", defaultValue: "Entrez le code à 6 chiffres envoyé à **\(email)**")
         }
     }
-
-    var inboxHint: String? {
-        guard self == .activationRequired else { return nil }
-        return String(localized: "emailVerification.inboxHint", defaultValue: "Ouvrez votre boîte mail, et pensez à regarder dans les indésirables.")
-    }
 }
