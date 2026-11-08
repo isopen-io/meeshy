@@ -17,6 +17,10 @@ enum WebRTCSenderEncoding {
     // still, legible image beats fluid mush.
     // Called once at capture start (720p30 / 2.5 Mbps) and again by the adaptive
     // quality loop (WebRTCService.adjustBitrate) with throttled targets.
+    //
+    // #17039 — lire et écrire `sender.parameters` attend le fil de travail de
+    // libwebrtc (jusqu'à 6,37 s sur le fil principal, HangTracer) : l'écriture
+    // part sur la file du moteur, série, donc dans l'ordre des demandes.
     static func applyVideo(
         to sender: RTCRtpSender,
         maxBitrateBps: Int,
@@ -24,24 +28,27 @@ enum WebRTCSenderEncoding {
         scaleResolutionDownBy: Double,
         degradationPreference: VideoDegradationPreference
     ) {
-        let params = sender.parameters
-        params.degradationPreference = NSNumber(value: degradationPreference.rtcPreference.rawValue)
-        for encoding in params.encodings {
-            encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
-            encoding.maxFramerate = NSNumber(value: maxFramerate)
-            encoding.scaleResolutionDownBy = NSNumber(value: max(1.0, scaleResolutionDownBy))
-            // networkPriority = .high → DSCP AF41 (Assured Forwarding, 34) for real-time video.
-            // Signals to WebRTC pacer and OS that this stream deserves elevated QoS.
-            encoding.networkPriority = .high
-        }
-        sender.parameters = params
-        let count = params.encodings.count
-        if count > 0 {
-            let scaleStr = String(format: "%.2f", scaleResolutionDownBy)
-            let degradationStr = degradationPreference.rawValue
-            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=\(degradationStr, privacy: .public) priority=high encodings=\(count, privacy: .public))")
-        } else {
-            Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
+        let rtcPreference = degradationPreference.rtcPreference.rawValue
+        let degradationStr = degradationPreference.rawValue
+        CallEngineQueue.run {
+            let params = sender.parameters
+            params.degradationPreference = NSNumber(value: rtcPreference)
+            for encoding in params.encodings {
+                encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
+                encoding.maxFramerate = NSNumber(value: maxFramerate)
+                encoding.scaleResolutionDownBy = NSNumber(value: max(1.0, scaleResolutionDownBy))
+                // networkPriority = .high → DSCP AF41 (Assured Forwarding, 34) for real-time video.
+                // Signals to WebRTC pacer and OS that this stream deserves elevated QoS.
+                encoding.networkPriority = .high
+            }
+            sender.parameters = params
+            let count = params.encodings.count
+            if count > 0 {
+                let scaleStr = String(format: "%.2f", scaleResolutionDownBy)
+                Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=\(degradationStr, privacy: .public) priority=high encodings=\(count, privacy: .public))")
+            } else {
+                Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
+            }
         }
     }
 
@@ -51,16 +58,18 @@ enum WebRTCSenderEncoding {
     /// The min bitrate floor (16 kbps) set in `applyAudioCodecPreferences`
     /// is preserved — only the ceiling is modified.
     static func applyAudio(to sender: RTCRtpSender, maxBitrateBps: Int) {
-        let params = sender.parameters
-        for encoding in params.encodings {
-            encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
-        }
-        sender.parameters = params
-        let count = params.encodings.count
-        if count > 0 {
-            Logger.webrtc.info("[WEBRTC] audio encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps encodings=\(count, privacy: .public))")
-        } else {
-            Logger.webrtc.warning("[WEBRTC] audio encoding NOT applied — encodings array empty")
+        CallEngineQueue.run {
+            let params = sender.parameters
+            for encoding in params.encodings {
+                encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
+            }
+            sender.parameters = params
+            let count = params.encodings.count
+            if count > 0 {
+                Logger.webrtc.info("[WEBRTC] audio encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps encodings=\(count, privacy: .public))")
+            } else {
+                Logger.webrtc.warning("[WEBRTC] audio encoding NOT applied — encodings array empty")
+            }
         }
     }
 }

@@ -75,9 +75,17 @@ final class CameraPreviewLayerUpdateUIViewSourceGuardTests: XCTestCase {
         // NÉGATIVE ci-dessus : pas de `DispatchQueue.main.async` brut. Elle vaut
         // toujours, et elle vaudra encore si un hop redevient nécessaire.
         XCTAssertTrue(
-            body.contains("previewLayer.session"),
+            body.contains("context.coordinator.bind(uiView.previewLayer, to: session, on: sessionQueue)"),
             "updateUIView doit rester le site qui réassigne la SESSION : c'est la seule chose qui change " +
             "après le montage, et la perdre laisserait le viseur sur une session morte au ré-armement."
+        )
+        // **Mais il ne l'AFFECTE plus lui-même** (#17041) : `previewLayer.session = …`
+        // valide une configuration de la session sur le fil qui l'écrit — le
+        // fil principal, ici —, et l'iPhone du porteur l'a vu attendre la file
+        // de capture. Le rattachement part sur la file de la session.
+        XCTAssertFalse(
+            body.contains("previewLayer.session ="),
+            "updateUIView n'affecte jamais la session de la couche sur le fil principal (#17041)."
         )
         XCTAssertFalse(
             body.contains(".frame ="),

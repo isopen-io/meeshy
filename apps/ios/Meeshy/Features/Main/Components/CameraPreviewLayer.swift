@@ -3,6 +3,10 @@ import AVFoundation
 
 struct CameraPreviewLayer: UIViewRepresentable {
     let session: AVCaptureSession
+    /// La file qui configure la session (#17041) : la couche s'y rattache, et sa
+    /// connexion s'y règle, dans l'ordre des configurations — jamais sur le fil
+    /// principal, qui attendrait la fin de ce que la file exécute.
+    let sessionQueue: any CameraSessionPerforming
     /// Le pont qui convertit un toucher en point du capteur (#9295) — `nil`
     /// pour un aperçu qui ne vise pas.
     var focusPoints: CameraPreviewFocusPoints? = nil
@@ -42,33 +46,34 @@ struct CameraPreviewLayer: UIViewRepresentable {
     func makeUIView(context: Context) -> PreviewHost {
         let view = PreviewHost()
         view.backgroundColor = .black
-        view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
+        context.coordinator.bind(view.previewLayer, to: session, on: sessionQueue)
         focusPoints?.attach(view)
-        applyConnection(to: view, sync: context.coordinator)
+        applyConnection(to: view, holder: context.coordinator)
         return view
     }
 
     func updateUIView(_ uiView: PreviewHost, context: Context) {
         // La SESSION peut changer (le meuble en remet une au ré-armement) ;
         // la frame, elle, n'a plus à être posée — `layerClass` s'en charge.
-        if uiView.previewLayer.session !== session {
-            uiView.previewLayer.session = session
-            context.coordinator.sync = CameraPreviewConnectionSync()
-        }
+        context.coordinator.bind(uiView.previewLayer, to: session, on: sessionQueue)
         focusPoints?.attach(uiView)
-        applyConnection(to: uiView, sync: context.coordinator)
+        applyConnection(to: uiView, holder: context.coordinator)
     }
 
-    /// **La connexion ne se touche que quand elle change** (#10308). Chaque
-    /// passe SwiftUI la relisait et la réécrivait — celles que la bascule
-    /// déclenche elle-même comprises : le fil principal attendait alors la fin
-    /// de la reconfiguration de la session, l'écran figé, et chaque écriture
-    /// sur une session en marche en relançait une.
-    private func applyConnection(to view: PreviewHost, sync: CameraPreviewConnectionHolder) {
+    /// Le viseur se ferme : la couche quitte la session sur la file, pas dans
+    /// la libération de la vue sur le fil principal (#17041).
+    static func dismantleUIView(_ uiView: PreviewHost, coordinator: CameraPreviewConnectionHolder) {
+        coordinator.unbind(uiView.previewLayer)
+    }
+
+    /// **La connexion ne se touche que quand elle change** (#10308), et
+    /// **jamais depuis le fil principal** (#17041) : une écriture sur une
+    /// session en marche la reconfigure, et le fil qui écrit attend la fin de
+    /// la reconfiguration — 9 s mesurées sur l'iPhone du porteur.
+    private func applyConnection(to view: PreviewHost, holder: CameraPreviewConnectionHolder) {
         view.isHidden = !mirrorsFrames
-        guard sync.sync.needsWrite(enabled: mirrorsFrames, epoch: connectionEpoch) else { return }
-        view.previewLayer.connection?.isEnabled = mirrorsFrames
+        holder.applyConnection(to: view.previewLayer, enabled: mirrorsFrames, epoch: connectionEpoch)
     }
 }
 
@@ -87,10 +92,48 @@ nonisolated struct CameraPreviewConnectionSync: Equatable, Sendable {
     }
 }
 
+/// Ce qui rattache la couche d'aperçu et règle sa connexion, dans l'ordre, sur
+/// la file de la session de capture (#17041) — jamais sur le fil appelant.
+nonisolated protocol CameraSessionPerforming: AnyObject, Sendable {
+    func attach(_ layer: AVCaptureVideoPreviewLayer, to session: AVCaptureSession?)
+    func enableConnection(of layer: AVCaptureVideoPreviewLayer, _ enabled: Bool)
+}
+
+nonisolated extension ComposerCaptureSessionQueue: CameraSessionPerforming {}
+
 /// La mémoire de la couche d'aperçu — une référence, qu'écrire n'invalide pas.
+/// Elle retient la session DEMANDÉE (la couche ne la porte qu'une fois la file
+/// passée) et la file qui l'exécute.
 final class CameraPreviewConnectionHolder {
-    var sync = CameraPreviewConnectionSync()
+    private(set) var sync = CameraPreviewConnectionSync()
+    private weak var requestedSession: AVCaptureSession?
+    private var sessionQueue: (any CameraSessionPerforming)?
     nonisolated deinit {}
+
+    /// Une session neuve se rattache sur sa file ; la même ne relance rien.
+    func bind(_ layer: AVCaptureVideoPreviewLayer, to session: AVCaptureSession,
+              on queue: any CameraSessionPerforming) {
+        guard requestedSession !== session || sessionQueue !== queue else { return }
+        requestedSession = session
+        sessionQueue = queue
+        sync = CameraPreviewConnectionSync()
+        queue.attach(layer, to: session)
+    }
+
+    /// La connexion s'écrit à un changement de vœu ou d'entrée, sur la file.
+    func applyConnection(to layer: AVCaptureVideoPreviewLayer, enabled: Bool, epoch: Int) {
+        guard let queue = sessionQueue, sync.needsWrite(enabled: enabled, epoch: epoch) else { return }
+        queue.enableConnection(of: layer, enabled)
+    }
+
+    /// Le viseur se ferme : la couche se détache sur la file.
+    func unbind(_ layer: AVCaptureVideoPreviewLayer) {
+        guard let queue = sessionQueue else { return }
+        requestedSession = nil
+        sessionQueue = nil
+        sync = CameraPreviewConnectionSync()
+        queue.attach(layer, to: nil)
+    }
 }
 
 /// **Le pont entre un toucher et le capteur** (#9295).
