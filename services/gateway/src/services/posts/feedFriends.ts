@@ -2,6 +2,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from '../CacheStore';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
 import { amisAcceptes, comptesLies } from '../friendship';
+import type { PairAccessDb } from '../relations/pairAccess';
+import { teamPeersAdmitted } from '../relations/teamPeers';
 import { NO_POST_CIRCLES, type PostCircles } from './postVisibility';
 
 /**
@@ -69,11 +71,15 @@ const idsAtLeast = (linked: ReadonlyArray<{ readonly id: string; readonly niveau
  * ensemble `friendIds`. Une lecture (`comptesLies`, la même loi que partout), un
  * cache `feed:circles:<id>` de 5 minutes invalidé avec `feed:friends:<id>`.
  *
+ * Un lecteur de l'ÉQUIPE y range en plus ses collègues, dans les trois cercles, sans
+ * lien (#16623) : l'ensemble vient de la loi (`teamPeersAdmitted`). Un changement de
+ * rôle se lit donc au plus 5 minutes plus tard, comme un changement de lien.
+ *
  * Une lecture en échec rend des cercles VIDES et ne les met pas en cache : une
  * panne ne sert aucune audience de cercle, elle n'ouvre jamais.
  */
 export async function loadFeedCircles(params: {
-  readonly prisma: Pick<PrismaClient, 'friendRequest' | 'userRelation'>;
+  readonly prisma: PairAccessDb;
   readonly cache?: CacheStore;
   readonly userId: string;
 }): Promise<PostCircles> {
@@ -85,11 +91,15 @@ export async function loadFeedCircles(params: {
     if (circles) return circles;
   }
   try {
-    const linked = await comptesLies(prisma, userId, { limit: FEED_CIRCLES_LIMIT });
+    const [linked, colleagues] = await Promise.all([
+      comptesLies(prisma, userId, { limit: FEED_CIRCLES_LIMIT }),
+      teamPeersAdmitted(prisma, { feature: 'audience.blood', subjectId: userId, subjectIs: 'viewer' }),
+    ]);
+    const withColleagues = (ids: string[]): string[] => [...new Set([...ids, ...colleagues])];
     const circles: PostCircles = {
-      acquaintance: idsAtLeast(linked, 'ACQUAINTANCE'),
-      close: idsAtLeast(linked, 'CLOSE'),
-      blood: idsAtLeast(linked, 'BLOOD'),
+      acquaintance: withColleagues(idsAtLeast(linked, 'ACQUAINTANCE')),
+      close: withColleagues(idsAtLeast(linked, 'CLOSE')),
+      blood: withColleagues(idsAtLeast(linked, 'BLOOD')),
     };
     if (cache) await cache.set(key, JSON.stringify(circles), FEED_FRIENDS_CACHE_TTL_SECONDS).catch(() => undefined);
     return circles;

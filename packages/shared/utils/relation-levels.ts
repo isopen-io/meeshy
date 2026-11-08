@@ -97,6 +97,15 @@ export type PostCircleVisibility = keyof typeof POST_CIRCLE_AUDIENCE_FEATURE;
 export const POST_CIRCLE_VISIBILITIES = Object.keys(POST_CIRCLE_AUDIENCE_FEATURE) as readonly PostCircleVisibility[];
 
 /**
+ * La feature de la matrice que juge une audience de cercle, `null` pour toute autre
+ * valeur (historique, inconnue, absente) : c'est elle qu'on passe à `resolveRelationAccess`.
+ */
+export const postCircleAudienceFeature = (visibility: unknown): RelationFeature | null =>
+  typeof visibility === 'string' && Object.prototype.hasOwnProperty.call(POST_CIRCLE_AUDIENCE_FEATURE, visibility)
+    ? POST_CIRCLE_AUDIENCE_FEATURE[visibility as PostCircleVisibility]
+    : null;
+
+/**
  * Le niveau EFFECTIF minimal qu'exige une audience de cercle, `null` pour toute
  * autre valeur (historique, inconnue, absente) : l'appelant garde alors son
  * chemin, et une valeur inconnue ne devient jamais un cercle.
