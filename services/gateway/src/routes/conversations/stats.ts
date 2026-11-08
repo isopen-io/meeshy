@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -146,7 +147,27 @@ export function registerStatsRoutes(
         return refuserCommeIntrouvable(reply);
       }
 
-      const stats = await conversationMessageStatsService.getStats(prisma, conversationId);
+      // #17076 — le plancher du LECTEUR, la même loi que le fil, la recherche,
+      // les fils de réponses et les traductions partagées appliquent déjà.
+      //
+      // Cette porte n'avait que ses deux gardes d'ACCÈS, et ce qu'elle sert
+      // décrit l'historique message par message : `dailyActivity` (une ligne par
+      // jour depuis la création) et `participantStats`, NOMMÉ, DATÉ et ATTRIBUÉ.
+      // Un inscrit entré par un lien `allowViewHistory: false` y lisait quand la
+      // conversation a commencé, qui a écrit combien, et le volume de chaque
+      // journée passée.
+      //
+      // `loadReaderHistoryFloor` PROPAGE ses erreurs, et c'est voulu : « un
+      // plancher illisible est un CONTRÔLE D'ACCÈS illisible, et la seule
+      // dégradation sûre est de ne rien servir » (`services/historyFloor.ts`). Le
+      // `catch` de cette route rend donc 500 — jamais l'agrégat complet, qui
+      // ferait de la panne la porte la plus ouverte du dépôt.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authContext),
+      });
+
+      const stats = await conversationMessageStatsService.getStats(prisma, conversationId, { historyFloor });
 
       const participantStats = (stats.participantStats ?? {}) as Record<string, unknown>;
       const participantIds = Object.keys(participantStats);

@@ -55,6 +55,19 @@ function makePrisma(overrides: any = {}) {
       findMany: jest.fn<any>().mockResolvedValue([]),
       ...overrides.user,
     },
+    // #17076 — la route résout désormais le plancher d'historique du LECTEUR.
+    // `null` = aucune ligne de participation trouvée, donc rien qui borne : le
+    // régime de ces témoins, qui décrivent tous un lecteur nominal. Posé ici
+    // plutôt que laissé absent — un double partiel aurait rendu 500 sur une
+    // route que ces témoins croient exercer en 200.
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      ...overrides.participant,
+    },
+    conversationShareLink: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+      ...overrides.conversationShareLink,
+    },
     ...overrides,
   };
 }
