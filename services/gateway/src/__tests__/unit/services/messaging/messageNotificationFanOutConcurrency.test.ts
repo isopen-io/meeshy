@@ -15,10 +15,10 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 
-import {
-  MESSAGE_FANOUT_CONCURRENCY,
-  notifyMessageRecipients,
-} from '../../../../services/messaging/messageNotificationFanOut';
+import { notifyMessageRecipients } from '../../../../services/messaging/messageNotificationFanOut';
+// La borne vit avec le coût qu'elle borne depuis #17081 — un seul chiffre pour
+// l'éventail `regular` et pour le lot de mentions.
+import { NOTIFICATION_FANOUT_CONCURRENCY } from '../../../../services/notifications/notificationFanOutBudget';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439051';
@@ -92,11 +92,11 @@ function trackingService(outcome: (recipientUserId: string) => Promise<unknown>)
 
 describe('notifyMessageRecipients — un éventail BORNÉ (#10819)', () => {
   it('la borne laisse respirer la passerelle sans ralentir un petit groupe', () => {
-    expect(MESSAGE_FANOUT_CONCURRENCY).toBeGreaterThanOrEqual(4);
-    expect(MESSAGE_FANOUT_CONCURRENCY).toBeLessThanOrEqual(32);
+    expect(NOTIFICATION_FANOUT_CONCURRENCY).toBeGreaterThanOrEqual(4);
+    expect(NOTIFICATION_FANOUT_CONCURRENCY).toBeLessThanOrEqual(32);
   });
 
-  it('370 destinataires : jamais plus de MESSAGE_FANOUT_CONCURRENCY créations en vol, et chacun notifié une fois', async () => {
+  it('370 destinataires : jamais plus de NOTIFICATION_FANOUT_CONCURRENCY créations en vol, et chacun notifié une fois', async () => {
     const members = memberIds(370);
     const { state, service } = trackingService(async (id) => ({ id }));
     const summaries: Array<{ regular: number }> = [];
@@ -111,7 +111,7 @@ describe('notifyMessageRecipients — un éventail BORNÉ (#10819)', () => {
       onFanOut: (summary) => summaries.push(summary),
     });
 
-    expect(state.peak).toBe(MESSAGE_FANOUT_CONCURRENCY);
+    expect(state.peak).toBe(NOTIFICATION_FANOUT_CONCURRENCY);
     expect([...state.recipients].sort()).toEqual(members);
     expect(summaries).toEqual([{ mentions: 0, regular: 370, reply: false }]);
   });
