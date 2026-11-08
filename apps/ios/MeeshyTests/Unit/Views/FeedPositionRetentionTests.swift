@@ -60,7 +60,7 @@ final class FeedPositionRetentionTests: XCTestCase {
         let host = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootViewComponents.swift"))
 
         XCTAssertTrue(host.contains("frames: feedIsShown ? frames : []"))
-        XCTAssertTrue(host.contains(".modifier(FeedRetentionHooks(relay: scrollRelay, onHidden: feedDidHide, onHoldingHead: holdFeedHead))"))
+        XCTAssertTrue(host.contains(".modifier(FeedRetentionHooks(relay: scrollRelay, onHidden: feedDidHide, onGone: feedDidDisappear, onHoldingHead: holdFeedHead))"))
         XCTAssertTrue(host.contains("reelAutoplay.clear()"))
     }
 

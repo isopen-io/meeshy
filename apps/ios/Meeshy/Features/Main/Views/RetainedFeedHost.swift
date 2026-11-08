@@ -94,6 +94,8 @@ struct FeedRetentionHooks: ViewModifier {
     @Environment(\.feedIsShown) private var isShown
     let relay: ScrollOffsetRelay
     let onHidden: () -> Void
+    /// La vue quitte vraiment l'écran (`onDisappear`) — un plein écran par-dessus, le démontage.
+    let onGone: () -> Void
     let onHoldingHead: (Bool) -> Void
 
     func body(content: Content) -> some View {
@@ -102,6 +104,7 @@ struct FeedRetentionHooks: ViewModifier {
             .adaptiveOnChange(of: isShown) { _, shown in
                 if !shown { onHidden() }
             }
+            .onDisappear(perform: onGone)
     }
 }
 

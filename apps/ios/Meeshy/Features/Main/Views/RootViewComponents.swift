@@ -53,6 +53,14 @@ struct ThemedFeedOverlay: View {
         ListingScrollTracker.feed.finish()
     }
 
+    /// Le fil quitte vraiment l'écran (un plein écran par-dessus, le démontage) :
+    /// la salle du fil est quittée, et la lecture comptée s'arrête.
+    private func feedDidDisappear() {
+        viewModel.unsubscribeFromSocketEvents()
+        Task { await impressions.flushNow() }
+        ListingScrollTracker.feed.finish()
+    }
+
     /// Lu plus bas que sa tête, ou caché, le fil TIENT sa tête : ce qui arrive
     /// en haut attend que le lecteur y remonte (`FeedHeadHold`).
     private func holdFeedHead(_ holds: Bool) {
@@ -727,12 +735,7 @@ struct ThemedFeedOverlay: View {
                 postLikedIds.remove(event.postId)
             }
         }
-        .modifier(FeedRetentionHooks(relay: scrollRelay, onHidden: feedDidHide, onHoldingHead: holdFeedHead))
-        .onDisappear {
-            viewModel.unsubscribeFromSocketEvents()
-            Task { await impressions.flushNow() }
-            ListingScrollTracker.feed.finish()
-        }
+        .modifier(FeedRetentionHooks(relay: scrollRelay, onHidden: feedDidHide, onGone: feedDidDisappear, onHoldingHead: holdFeedHead))
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external
             // touchpoint funnels through `meeshy.me/l/<token>`.
