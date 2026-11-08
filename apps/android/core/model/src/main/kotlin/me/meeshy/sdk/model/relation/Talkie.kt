@@ -84,3 +84,15 @@ public data class TalkieEnded(
     /** `cut` fait taire SUR-LE-CHAMP ; toute autre fin laisse finir ce qui est déjà en file. */
     public val silencesNow: Boolean get() = servedReason == TalkieEndReason.CUT
 }
+
+/**
+ * Les trois événements du talkie sur UN flux, dans l'ordre d'arrivée : un fragment n'est jamais traité avant l'annonce
+ * qui le précède sur le fil — trois flux séparés, collectés en parallèle, ne le garantiraient pas.
+ */
+public sealed interface TalkieEvent {
+    public data class Opened(val incoming: TalkieIncoming) : TalkieEvent
+
+    public data class Spoken(val chunk: TalkieChunk) : TalkieEvent
+
+    public data class Closed(val ended: TalkieEnded) : TalkieEvent
+}
