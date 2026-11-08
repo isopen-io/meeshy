@@ -50,6 +50,8 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     var requestMethods: [String] = []
     /// Les paramètres d'URL de chaque `request`, dans l'ordre d'appel.
     var requestQueryItems: [[URLQueryItem]] = []
+    /// Les en-têtes de la dernière `requestWithHeaders`.
+    var lastRequestHeaders: [String: String]?
     var postCount = 0
     var putCount = 0
     var patchCount = 0
@@ -103,8 +105,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
 
     /// Le repli par défaut du protocole a été retiré (#4282) : un double doit
     /// désormais implémenter aussi la variante à en-têtes. Elle délègue à
-    /// `request`, comme le faisait ce repli — les en-têtes ne sont pas
-    /// enregistrés ici, et ce double n'en assertait aucun.
+    /// `request` après avoir noté les en-têtes posés.
     func requestWithHeaders<T: Decodable>(
         _ typedEndpoint: any MeeshyEndpoint,
         method: String,
@@ -112,7 +113,8 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         queryItems: [URLQueryItem]?,
         headers: [String: String]?
     ) async throws -> T {
-        try await request(typedEndpoint, method: method, body: body, queryItems: queryItems)
+        lastRequestHeaders = headers
+        return try await request(typedEndpoint, method: method, body: body, queryItems: queryItems)
     }
 
     func paginatedRequest<T: Decodable>(
@@ -259,6 +261,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestCount = 0
         requestEndpoints.removeAll()
         requestMethods.removeAll()
+        lastRequestHeaders = nil
         postCount = 0
         putCount = 0
         patchCount = 0

@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.preview.PreviewEffect
+
 /**
  * The resolved preview line for a conversation row plus whether it renders in the
  * conversation accent colour and its message-summary [kind]. Priority mirrors iOS
@@ -17,6 +19,10 @@ data class RowPreview(
     val kind: MessageSummaryKind = MessageSummaryKind.STANDARD,
     /** Set for a draft line: painted in the error colour before [text] (iOS `draftLine`). */
     val draftLabel: String? = null,
+    /** The last message's applied effect (#16975) — only on the last-message line, never typing/draft. */
+    val effect: PreviewEffect? = null,
+    /** The last message id, keying the one-shot entrance of [effect]. */
+    val messageId: String? = null,
 )
 
 private fun DraftPreview.asRowPreview(): RowPreview =
@@ -63,5 +69,11 @@ fun conversationRowPreview(
 ): RowPreview = when {
     typingLine != null -> RowPreview(typingLine, isAccent = true, kind = MessageSummaryKind.STANDARD)
     draft != null -> draft.asRowPreview()
-    else -> RowPreview(summary.text, isAccent = false, kind = summary.kind)
+    else -> RowPreview(
+        summary.text,
+        isAccent = false,
+        kind = summary.kind,
+        effect = summary.effect,
+        messageId = summary.messageId,
+    )
 }

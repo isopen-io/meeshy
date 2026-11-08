@@ -22,6 +22,9 @@ import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.search.GlobalMessageSearchConversation
 import me.meeshy.sdk.model.search.GlobalMessageSearchHit
 import me.meeshy.sdk.model.search.GlobalMessageSearchSender
+import me.meeshy.sdk.model.search.GlobalMessageSearchTranscript
+import me.meeshy.sdk.model.search.SearchExcerpt
+import me.meeshy.sdk.model.search.SearchMediaKind
 import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.HttpException
 import retrofit2.Response
@@ -293,5 +296,44 @@ class GlobalSearchRepositoryTest {
         val found = repository(remote, FakeLocal(cached = listOf(cachedGroup))).search("bonjour").toList().last().messages.items.single()
 
         assertThat(found.conversation).isEqualTo(cachedGroup)
+    }
+
+    @Test
+    fun `a blurred unified hit is veiled and a transcript hit carries its media`() = runTest {
+        val remote = Remote().apply {
+            serving()
+            servingUnified(
+                GlobalMessageSearchHit(id = "blur", conversationId = "c1", createdAt = "2026-01-02T00:00:00Z", content = "secret plan", isBlurred = true),
+                GlobalMessageSearchHit(
+                    id = "voice",
+                    conversationId = "c1",
+                    createdAt = "2026-01-01T00:00:00Z",
+                    match = "transcript",
+                    transcript = GlobalMessageSearchTranscript(attachmentId = "a1", mediaKind = "audio", text = "on se voit demain"),
+                ),
+            )
+        }
+
+        val hits = repository(remote).search("se").toList().last().messages.items
+
+        assertThat(hits.map { it.message.id }).containsExactly("blur", "voice").inOrder()
+        assertThat(hits[0].excerpt).isEqualTo(SearchExcerpt.Veiled(media = null))
+        assertThat(hits[0].message.content).isEmpty()
+        assertThat(hits[1].excerpt).isEqualTo(SearchExcerpt.Shown(text = "on se voit demain", media = SearchMediaKind.AUDIO))
+    }
+
+    @Test
+    fun `a blurred message from the per-conversation search is veiled by default`() = runTest {
+        val remote = Remote().apply {
+            serving(
+                conversations = listOf(conversation("c1")),
+                messages = listOf(ApiMessage(id = "blur", conversationId = "c1", content = "secret plan", isBlurred = true)),
+            )
+        }
+
+        val hits = repository(remote).search("secret").toList().last().messages.items
+
+        assertThat(hits.single().isVeiled).isTrue()
+        assertThat(hits.single().excerpt).isEqualTo(SearchExcerpt.Veiled(media = null))
     }
 }

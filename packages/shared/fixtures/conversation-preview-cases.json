@@ -1757,7 +1757,12 @@
             "kind": "label",
             "text": "ouvrir pour lire"
           }
-        ]
+        ],
+        "effect": {
+          "veil": true,
+          "finish": null,
+          "entrance": null
+        }
       },
       "text": "Alice : 🙈 Message masqué · ouvrir pour lire"
     },
@@ -2178,7 +2183,12 @@
             "kind": "label",
             "text": "Zoom"
           }
-        ]
+        ],
+        "effect": {
+          "veil": false,
+          "finish": null,
+          "entrance": "pop"
+        }
       },
       "text": "Alice : ✨ Surprise · Zoom"
     },
@@ -2223,9 +2233,215 @@
             "kind": "label",
             "text": "2 effets"
           }
-        ]
+        ],
+        "effect": {
+          "veil": false,
+          "finish": "pulse",
+          "entrance": "pop"
+        }
       },
       "text": "Alice : ✨ Surprise · 2 effets"
+    },
+    {
+      "id": "effect-finish-glow-entrance-shake",
+      "matrix": "Effet — lueur figée et secousse jouée une fois",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Surprise",
+          "effectFlags": 65792
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "effect",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Surprise",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "2 effets"
+          }
+        ],
+        "effect": {
+          "veil": false,
+          "finish": "glow",
+          "entrance": "shake"
+        }
+      },
+      "text": "Alice : ✨ Surprise · 2 effets"
+    },
+    {
+      "id": "effect-finish-rainbow",
+      "matrix": "Effet persistant seul — arc-en-ciel figé, aucune apparition",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Surprise",
+          "effectFlags": 262144
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "effect",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Surprise",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "Arc-en-ciel"
+          }
+        ],
+        "effect": {
+          "veil": false,
+          "finish": "rainbow",
+          "entrance": null
+        }
+      },
+      "text": "Alice : ✨ Surprise · Arc-en-ciel"
+    },
+    {
+      "id": "effect-heavy-entrance-becomes-pop",
+      "matrix": "Confettis réduits à un pop, paillettes figées",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Surprise",
+          "effectFlags": 526336
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "effect",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Surprise",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "2 effets"
+          }
+        ],
+        "effect": {
+          "veil": false,
+          "finish": "sparkle",
+          "entrance": "pop"
+        }
+      },
+      "text": "Alice : ✨ Surprise · 2 effets"
+    },
+    {
+      "id": "effect-under-ephemeral-not-applied",
+      "matrix": "Un éphémère qui brille ne brille pas dans la liste : la protection prime",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Rendez-vous à 18h",
+          "ephemeralDuration": 300,
+          "effectFlags": 65537
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "countdown",
+            "text": "4 min",
+            "expiresAt": 1790157840000
+          },
+          {
+            "kind": "text",
+            "text": "Rendez-vous à 18h",
+            "language": null
+          }
+        ],
+        "live": {
+          "expiresAt": 1790157840000
+        }
+      },
+      "text": "Alice : 🔥 4 min · Rendez-vous à 18h"
     },
     {
       "id": "view-once",
@@ -3006,7 +3222,12 @@
             "kind": "label",
             "text": "ouvrir pour lire"
           }
-        ]
+        ],
+        "effect": {
+          "veil": true,
+          "finish": null,
+          "entrance": null
+        }
       },
       "text": "Alice : 🙈 Message masqué · ouvrir pour lire"
     },
@@ -3177,7 +3398,12 @@
             "kind": "label",
             "text": "ouvrir pour lire"
           }
-        ]
+        ],
+        "effect": {
+          "veil": true,
+          "finish": null,
+          "entrance": null
+        }
       },
       "text": "Alice : 🙈 Message masqué · ouvrir pour lire"
     },

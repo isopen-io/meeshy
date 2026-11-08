@@ -58,6 +58,16 @@ const deCommunityMembership = {
   'community.create.members.title': 'Mitglieder hinzufügen',
   'community.create.members.search': 'Nach Name oder Benutzername suchen…',
   'community.create.members.remove': '{name} entfernen',
+  'community.posts.tabs.label': "Inhalte der Community",
+  'community.posts.tab.channels': "Unterhaltungen",
+  'community.posts.tab.posts': "Beiträge",
+  'community.posts.loading': "Beiträge werden geladen",
+  'community.posts.empty.title': "Noch keine Beiträge",
+  'community.posts.empty.body': "Die Beiträge der Community erscheinen hier.",
+  'community.posts.error.title': "Die Beiträge konnten nicht geladen werden",
+  'community.posts.error.offline': "Offline: Die Beiträge erscheinen, sobald das Netz zurück ist.",
+  'community.posts.retry': "Erneut versuchen",
+  'community.posts.loadingMore': "Weitere werden geladen",
 } as const satisfies CommunityMembershipCatalog;
 
 export default deCommunityMembership;

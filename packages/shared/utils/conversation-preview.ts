@@ -105,7 +105,39 @@ export type ConversationPreview = {
   readonly live?: { readonly expiresAt: number };
   readonly action?: 'join';
   readonly direction?: 'incoming' | 'outgoing';
+  /** Présent ⇒ la ligne APPLIQUE l'effet du dernier message (#16975), voir {@link PreviewEffect}. */
+  readonly effect?: PreviewEffect;
 };
+
+/**
+ * L'EFFET APPLIQUÉ À LA LIGNE 2 (#16975) — une description, jamais un rendu :
+ * chaque client le peint avec son système, sous la MÊME loi d'énergie.
+ *
+ * - `veil` : la ligne d'un message flouté se peint en substitut voilé. Le texte
+ *   n'est jamais là (le serveur ne l'envoie pas) : le voile se dessine sur un
+ *   substitut, comme la bulle voilée du fil.
+ * - `finish` : l'effet PERSISTANT, peint FIGÉ — une liste ne fait jamais tourner
+ *   d'animation en boucle. Le premier dans l'ordre des bits gagne.
+ * - `entrance` : l'effet d'APPARITION, joué UNE fois quand ce message ARRIVE sur
+ *   une ligne visible (jamais au défilement ni au premier rendu), au plus
+ *   {@link PREVIEW_ENTRANCE_MAX_MS}, transformation seule. Confettis, feu
+ *   d'artifice, explosion, zoom et waouh se réduisent à `pop` : une liste
+ *   n'émet pas de particules.
+ *
+ * Rien ne s'anime sous « réduire les animations », en économie d'énergie, ni
+ * hors écran. Un effet comportemental ne s'applique qu'à un message non protégé.
+ */
+export type PreviewFinish = 'glow' | 'pulse' | 'rainbow' | 'sparkle';
+
+export type PreviewEntrance = 'shake' | 'pop';
+
+export type PreviewEffect = {
+  readonly veil: boolean;
+  readonly finish: PreviewFinish | null;
+  readonly entrance: PreviewEntrance | null;
+};
+
+export const PREVIEW_ENTRANCE_MAX_MS = 450;
 
 type Instant = Date | string | number;
 
@@ -347,6 +379,7 @@ function messageLine(message: ConversationPreviewMessage, input: ConversationPre
         author,
         icon: 'hidden',
         segments: [label(str('protection.hidden')), label(str('protection.hidden.hint'))],
+        effect: VEILED,
       });
     case 'encrypted':
       return preview({ kind: 'message', author, icon: 'encrypted', segments: [label(str('protection.encrypted'))] });
@@ -369,9 +402,11 @@ function messageLine(message: ConversationPreviewMessage, input: ConversationPre
     }
     case 'none': {
       const body = bodyOf(message, input, str);
-      const effects = effectSegments(behavioralEffects(message.effectFlags), str);
+      const behavioral = behavioralEffects(message.effectFlags);
+      const effects = effectSegments(behavioral, str);
       const icon = body.icon ?? (effects.length > 0 ? 'effect' : message.isForwarded === true ? 'forward' : null);
-      return preview({ kind: 'message', author, icon, segments: [...body.segments, ...effects] });
+      const effect = appliedEffect(behavioral);
+      return preview({ kind: 'message', author, icon, segments: [...body.segments, ...effects], ...(effect ? { effect } : {}) });
     }
   }
 }
@@ -579,6 +614,30 @@ const EFFECT_KEY: Readonly<Record<BehavioralEffect, ConversationPreviewStringKey
   RAINBOW: 'effect.rainbow',
   SPARKLE: 'effect.sparkle',
 };
+
+const VEILED: PreviewEffect = { veil: true, finish: null, entrance: null };
+
+const FINISH_OF: Partial<Readonly<Record<BehavioralEffect, PreviewFinish>>> = {
+  GLOW: 'glow',
+  PULSE: 'pulse',
+  RAINBOW: 'rainbow',
+  SPARKLE: 'sparkle',
+};
+
+const ENTRANCE_OF: Partial<Readonly<Record<BehavioralEffect, PreviewEntrance>>> = {
+  SHAKE: 'shake',
+  ZOOM: 'pop',
+  EXPLODE: 'pop',
+  CONFETTI: 'pop',
+  FIREWORKS: 'pop',
+  WAOO: 'pop',
+};
+
+function appliedEffect(effects: readonly BehavioralEffect[]): PreviewEffect | null {
+  const finish = effects.map((effect) => FINISH_OF[effect]).find((value) => value !== undefined) ?? null;
+  const entrance = effects.map((effect) => ENTRANCE_OF[effect]).find((value) => value !== undefined) ?? null;
+  return finish === null && entrance === null ? null : { veil: false, finish, entrance };
+}
 
 function effectSegments(effects: readonly BehavioralEffect[], str: Str): readonly PreviewSegment[] {
   const [only] = effects;

@@ -25,6 +25,7 @@ const es = {
   'type.reel': 'Reel',
   'type.story': 'Historia',
   'translated': 'Traducido',
+  'message.blurred': 'Mensaje difuminado',
 } as const satisfies GlobalSearchCatalog;
 
 export default es;

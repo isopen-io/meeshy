@@ -39,7 +39,9 @@
  *  9. les réglages (#6377) : le créateur seul y entre, renomme sa communauté
  *     (le détail le lit au retour), la supprime confirmée — un autre lecteur
  *     n'a que le refus ;
- * 10. aucune erreur de page.
+ * 10. les publications (#6379) : l'onglet « Publications » peint la carte du
+ *     Flux, un seul panneau à la fois, onglets AA et de 44, flèches au clavier ;
+ * 11. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -362,6 +364,32 @@ try {
       check(true, `${label} : une conversation ouvre son fil`);
       await page.goBack();
       await page.waitForSelector('[data-community-hero]');
+      // LES PUBLICATIONS (#6379) : deux onglets, « Publications » peint la carte du Flux depuis
+      // le port de la communauté, et les flèches rendent « Conversations » au clavier.
+      check(
+        (await page.getAttribute('[data-community-tab="channels"]', 'aria-selected')) === 'true',
+        `${label} : le détail s'ouvre sur l'onglet Conversations`,
+      );
+      await page.click('[data-community-tab="posts"]');
+      await page.waitForSelector('[data-community-posts] [data-feed-card-id]');
+      const communityCards = await page.$$eval('[data-community-posts] [data-feed-card-id]', (els) => els.map((el) => el.getAttribute('data-feed-card-id')));
+      check(communityCards.length === 2, `${label} : l'onglet Publications peint les deux publications de la communauté (${JSON.stringify(communityCards)})`);
+      check((await page.$('[data-community-conversation]')) === null, `${label} : un seul panneau à la fois`);
+      const tabInks = {
+        choisi: await contrastOf(page, '[data-community-tab="posts"]'),
+        autre: await contrastOf(page, '[data-community-tab="channels"]'),
+      };
+      check(Object.values(tabInks).every((ratio) => ratio !== null && ratio >= WCAG_AA), `${label} : les deux onglets tiennent AA — ${JSON.stringify(tabInks)}`);
+      const tabHeights = await page.$$eval('[data-community-tab]', (els) => els.map((el) => el.getBoundingClientRect().height));
+      check(tabHeights.every((h) => h >= TAP_FLOOR), `${label} : chaque onglet fait au moins ${TAP_FLOOR} de haut (${JSON.stringify(tabHeights)})`);
+      await capture(page, `communaute-publications-${slug}`);
+      await page.focus('[data-community-tab="posts"]');
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForSelector('[data-community-conversation]');
+      check(
+        (await page.evaluate(() => document.activeElement?.getAttribute('data-community-tab'))) === 'channels',
+        `${label} : la flèche rend « Conversations », focus compris`,
+      );
       // LES MEMBRES (#6375) : le détail y mène, les rôles se lisent AA, et un administrateur
       // (le lecteur a créé « Équipe déploiement ») change un rôle et retire un membre, au geste.
       await page.click('[data-community-members-link]');

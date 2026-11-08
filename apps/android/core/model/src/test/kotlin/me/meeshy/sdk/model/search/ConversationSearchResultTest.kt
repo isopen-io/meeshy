@@ -70,4 +70,19 @@ class ConversationSearchResultTest {
 
         assertThat(merged).containsExactly("a", "b", "c", "d").inOrder()
     }
+
+    @Test
+    fun `un message floute trouve dans la conversation est voile, sans aucun caractere lisible`() {
+        val blurred = message(content = "secret hello", translations = listOf(translation("fr", "secret bonjour"))).copy(isBlurred = true)
+        val byBit = message(content = "secret hello").copy(effectFlags = me.meeshy.sdk.model.MessageEffectFlags.BLURRED.toInt())
+
+        listOf(ConversationSearchResults.from(blurred, "hello"), ConversationSearchResults.from(byBit, "hello")).forEach { result ->
+            assertThat(result.isVeiled).isTrue()
+            assertThat(result.content).isEmpty()
+            assertThat(result.matchedText).isEmpty()
+            assertThat(result.matchType).isEqualTo(SearchMatchType.CONTENT)
+            assertThat(result.id).isEqualTo("m1")
+        }
+        assertThat(ConversationSearchResults.from(message(), "hello").isVeiled).isFalse()
+    }
 }
