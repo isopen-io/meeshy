@@ -8,12 +8,13 @@
  * limité. Le journal ne porte jamais la séance : seulement l'erreur.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { TOGETHER_ERROR_CODES, type TogetherErrorCode } from '@meeshy/shared/types/together';
 import { getCacheStore } from '../../services/CacheStore';
-import { inviteTogether, joinTogether, leaveTogether, syncTogether, type TogetherIo } from '../../services/together/togetherRelay';
+import { endTogetherOf, inviteTogether, joinTogether, leaveTogether, syncTogether, type TogetherIo } from '../../services/together/togetherRelay';
+import type { ServerEmitIOWithRooms } from '../serverEmit';
 import { togetherRelayDepsOf } from '../../services/together/togetherDeps';
-import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
+import { createCustomRateLimiter, rateLimitDisabled, type RateLimiter } from '../../utils/rate-limiter.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TogetherHandler' });
@@ -30,8 +31,14 @@ type Relayed = (userId: string, data: unknown) => Promise<unknown>;
 
 export type TogetherHandlerDeps = {
   readonly callerOf: (socketId: string) => { readonly userId: string; readonly isAnonymous: boolean } | null;
-  /** `true` dans le débit, `false` au-delà, `null` quand le limiteur ne sait pas juger (on laisse passer). */
+  /**
+   * `true` dans le débit ; `false` au-delà ; `null` quand le limiteur ne sait pas juger — la
+   * porte FERME alors (une panne de Redis ne doit pas ouvrir six lectures Mongo par geste).
+   * La désactivation volontaire par configuration est tranchée avant, dans `togetherHandlerDeps`.
+   */
   readonly withinRate: (userId: string) => Promise<boolean | null>;
+  /** La dernière socket du compte s'est fermée : ses séances finissent chez les deux. */
+  readonly userGone: (userId: string) => Promise<void>;
   readonly invite: Relayed;
   readonly join: Relayed;
   readonly sync: Relayed;
@@ -58,7 +65,7 @@ export function listenTogether(socket: TogetherSocket, deps: TogetherHandlerDeps
       if (!userId) return reply(NOT_ALLOWED);
       const within = limited ? deps.withinRate(userId) : Promise.resolve(true);
       within
-        .then((ok) => (ok === false ? RATE_LIMITED : relayed(userId, data)))
+        .then((ok) => (ok !== true ? RATE_LIMITED : relayed(userId, data)))
         .then(reply, (error: unknown) => {
           logger.error(`[${event}] Error`, { error: error instanceof Error ? error.message : 'unknown' });
           reply(UNAVAILABLE);
@@ -70,6 +77,14 @@ export function listenTogether(socket: TogetherSocket, deps: TogetherHandlerDeps
   route(CLIENT_EVENTS.TOGETHER_JOIN, deps.join, true);
   route(CLIENT_EVENTS.TOGETHER_SYNC, deps.sync, true);
   route(CLIENT_EVENTS.TOGETHER_LEAVE, deps.leave, false);
+
+  socket.on('disconnect', () => {
+    const userId = registered();
+    if (!userId) return;
+    deps.userGone(userId).catch((error: unknown) => {
+      logger.error('[together disconnect] Error', { error: error instanceof Error ? error.message : 'unknown' });
+    });
+  });
 }
 
 let limiter: { readonly client: unknown; readonly limiter: RateLimiter } | null = null;
@@ -85,7 +100,7 @@ const rateLimiter = (): RateLimiter => {
 
 export function togetherHandlerDeps(params: {
   readonly prisma: PrismaClient;
-  readonly io: TogetherIo;
+  readonly io: TogetherIo & Pick<ServerEmitIOWithRooms, 'in'>;
   readonly socketToUser: ReadonlyMap<string, string>;
   readonly connectedUsers: ReadonlyMap<string, { readonly isAnonymous: boolean }>;
 }): TogetherHandlerDeps {
@@ -98,7 +113,13 @@ export function togetherHandlerDeps(params: {
     },
     withinRate: async (userId) => {
       const info = await rateLimiter().consume(userId, 1);
-      return info === null ? null : info.retryAfter === undefined;
+      if (info !== null) return info.retryAfter === undefined;
+      return rateLimitDisabled() ? true : null;
+    },
+    // À `disconnect`, socket.io a déjà fait quitter ses rooms à cette socket : la room `user:<id>`
+    // ne compte que les AUTRES appareils (de toutes les instances, par l'adaptateur).
+    userGone: async (userId) => {
+      if ((await params.io.in(ROOMS.user(userId)).fetchSockets()).length === 0) await endTogetherOf(relay, userId);
     },
     invite: (userId, data) => inviteTogether(relay, userId, data),
     join: (userId, data) => joinTogether(relay, userId, data),

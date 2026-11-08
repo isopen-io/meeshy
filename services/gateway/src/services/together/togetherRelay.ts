@@ -35,12 +35,17 @@ import {
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { judgeTogether, type TogetherGateDb, type TogetherVerdict } from './togetherGate';
 import {
+  claimPairThroughCache,
   clearTogether,
+  indexTogetherUsers,
   isTogetherEnded,
   markTogetherEnded,
   readPairTogether,
   readTogether,
+  readUserTogether,
   storeTogether,
+  togetherPairKey,
+  type PairClaim,
   type TogetherCache,
   type TogetherSession,
 } from './togetherStore';
@@ -52,6 +57,8 @@ export type TogetherRelayDeps = {
   readonly cache: TogetherCache;
   readonly io: TogetherIo | undefined;
   readonly now: () => number;
+  /** La prise atomique de l'index de paire ; absente, le cache la simule (un seul processus). */
+  readonly claimPair?: PairClaim;
   readonly newSessionId?: () => string;
 };
 
@@ -87,11 +94,16 @@ const ttlOf = (session: TogetherSession): number => (session.joined ? TOGETHER_S
 /**
  * Écrit la séance, puis relit sa pierre tombale : une coupure survenue entre le jugement et
  * l'écriture l'emporte — ce qui vient d'être écrit est effacé, et rien ne sera émis (`null`).
+ * La durée de vie est PLAFONNÉE à `TOGETHER_SESSION_TTL_SECONDS` depuis la création : une
+ * synchronisation prolonge la séance, jamais au-delà.
  */
-async function save(deps: TogetherRelayDeps, session: TogetherSession): Promise<TogetherSession | null> {
-  const ttl = ttlOf(session);
-  const kept = { ...session, expiresAt: deps.now() + ttl * 1000 };
-  await storeTogether(deps.cache, kept, ttl);
+async function save(deps: TogetherRelayDeps, session: TogetherSession, options: { readonly pairClaimed?: boolean } = {}): Promise<TogetherSession | null> {
+  const now = deps.now();
+  const expiresAt = Math.min(now + ttlOf(session) * 1000, session.createdAt + TOGETHER_SESSION_TTL_SECONDS * 1000);
+  const ttl = Math.max(1, Math.ceil((expiresAt - now) / 1000));
+  const kept = { ...session, expiresAt };
+  await storeTogether(deps.cache, kept, ttl, options);
+  if (options.pairClaimed) await indexTogetherUsers(deps.cache, kept, ttl);
   if (!(await isTogetherEnded(deps.cache, kept.sessionId))) return kept;
   await clearTogether(deps.cache, kept);
   return null;
@@ -145,18 +157,46 @@ export async function inviteTogether(deps: TogetherRelayDeps, hostId: string, da
   }
   if (!verdict.ok) return NOT_ALLOWED;
 
-  const previous = await readPairTogether(deps.cache, hostId, payload.toUserId, deps.now());
-  if (previous) await end(deps, previous, 'replaced');
+  const sessionId = (deps.newSessionId ?? randomSessionId)();
+  const pairKey = togetherPairKey(hostId, payload.toUserId);
+  try {
+    const displacedId = await (deps.claimPair ?? claimPairThroughCache(deps.cache))(
+      pairKey,
+      sessionId,
+      TOGETHER_INVITE_TTL_SECONDS,
+    );
+    const displaced = displacedId && displacedId !== sessionId ? await readTogether(deps.cache, displacedId, deps.now()) : null;
+    if (displaced) await end(deps, displaced, 'replaced');
+  } catch {
+    return UNAVAILABLE;
+  }
 
-  const session = await save(deps, {
-    ...subject,
-    sessionId: (deps.newSessionId ?? randomSessionId)(),
-    media: verdict.media,
-    joined: false,
-    playback: { playing: false, positionMs: 0, at: deps.now(), rev: 0, byUserId: hostId },
-    expiresAt: 0,
-  });
+  const session = await save(
+    deps,
+    {
+      ...subject,
+      sessionId,
+      media: verdict.media,
+      joined: false,
+      playback: { playing: false, positionMs: 0, at: deps.now(), rev: 0, byUserId: hostId },
+      createdAt: deps.now(),
+      expiresAt: 0,
+    },
+    { pairClaimed: true },
+  );
   if (!session) return UNAVAILABLE;
+  /*
+   * Une invitation concurrente a pu prendre l'index de la paire avant que celle-ci soit écrite :
+   * elle n'a alors rien trouvé à terminer, et c'est à celle-ci, qui n'est plus la séance de la
+   * paire, de se retirer — sans rien émettre.
+   */
+  const stillPairs = (await deps.cache.get(pairKey).catch(() => null)) === session.sessionId;
+  const stillAllowedNow = stillPairs && (await judge(deps, subject).then((again) => again.ok, () => false));
+  if (!stillAllowedNow) {
+    await markTogetherEnded(deps.cache, session.sessionId, TOGETHER_SESSION_TTL_SECONDS);
+    await clearTogether(deps.cache, session);
+    return stillPairs ? NOT_ALLOWED : UNAVAILABLE;
+  }
   const expiresAt = new Date(session.expiresAt).toISOString();
   emitTo(deps.io, [session.guestId], SERVER_EVENTS.TOGETHER_INVITED, {
     sessionId: session.sessionId,
@@ -204,6 +244,15 @@ export async function leaveTogether(deps: TogetherRelayDeps, userId: string, dat
   if (!session || !membersOf(session).includes(userId)) return NOT_FOUND;
   await end(deps, session, !session.joined && userId === session.guestId ? 'declined' : 'left');
   return { success: true };
+}
+
+/**
+ * À appeler quand la DERNIÈRE socket d'un compte se ferme : ses séances en cours (invitations
+ * comprises) finissent chez les deux, comme un départ — ou un refus s'il n'avait pas rejoint.
+ */
+export async function endTogetherOf(deps: TogetherRelayDeps, userId: string): Promise<void> {
+  const sessions = await readUserTogether(deps.cache, userId, deps.now());
+  await Promise.all(sessions.map((session) => end(deps, session, !session.joined && userId === session.guestId ? 'declined' : 'left')));
 }
 
 /** À appeler APRÈS un blocage, une baisse ou un retrait : la séance de la paire est rejugée, coupée si refusée. */

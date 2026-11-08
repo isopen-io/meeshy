@@ -10,7 +10,7 @@
  * séance prolongée à chaque synchronisation), et la fin efface les deux clés. Une valeur
  * illisible, expirée ou scellée pour une autre séance vaut « rien ».
  */
-import { TOGETHER_MEDIA_KINDS, type TogetherMediaKind, type TogetherPlayback } from '@meeshy/shared/types/together';
+import { TOGETHER_MEDIA_KINDS, TOGETHER_SESSION_TTL_SECONDS, type TogetherMediaKind, type TogetherPlayback } from '@meeshy/shared/types/together';
 import { createHash, createHmac } from 'node:crypto';
 import type { CacheStore } from '../CacheStore';
 import { SECRETS_AT_REST_KEY_ENV, hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
@@ -24,6 +24,8 @@ export type TogetherSession = {
   readonly media: TogetherMediaKind;
   readonly joined: boolean;
   readonly playback: TogetherPlayback;
+  /** Horloge du serveur (ms epoch) à l'invitation : le plafond de durée se compte d'ici, jamais d'une synchronisation. */
+  readonly createdAt: number;
   readonly expiresAt: number;
 };
 
@@ -47,6 +49,14 @@ export const togetherPairKey = (a: string, b: string): string => {
   return `together:pair:${digest.digest('hex')}`;
 };
 
+/** L'index d'un compte (ses séances en cours, pour les couper à sa déconnexion) : même discrétion que l'index de paire. */
+export const togetherUserKey = (userId: string): string => {
+  const material = `Together.user:${userId.toLowerCase()}`;
+  const key = hasValidSecretsKey() ? process.env[SECRETS_AT_REST_KEY_ENV]?.trim() : undefined;
+  const digest = key ? createHmac('sha256', Buffer.from(key, 'base64')).update(material) : createHash('sha256').update(material);
+  return `together:user:${digest.digest('hex')}`;
+};
+
 const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
@@ -64,7 +74,7 @@ function parseSession(raw: string, sessionId: string): TogetherSession | null {
   const playback = parsePlayback(row.playback);
   const media = TOGETHER_MEDIA_KINDS.find((kind) => kind === row.media);
   const texts = [row.hostId, row.guestId, row.conversationId, row.attachmentId];
-  if (row.sessionId !== sessionId || !playback || !media || !texts.every(isText) || typeof row.joined !== 'boolean' || !isCount(row.expiresAt)) {
+  if (row.sessionId !== sessionId || !playback || !media || !texts.every(isText) || typeof row.joined !== 'boolean' || !isCount(row.createdAt) || !isCount(row.expiresAt)) {
     return null;
   }
   return {
@@ -76,15 +86,91 @@ function parseSession(raw: string, sessionId: string): TogetherSession | null {
     media,
     joined: row.joined,
     playback,
+    createdAt: row.createdAt,
     expiresAt: row.expiresAt,
   };
 }
 
-/** Range la séance scellée et son index de paire. Sans clé de scellement dans un environnement servi, LÈVE. */
-export async function storeTogether(cache: TogetherCache, session: TogetherSession, ttlSeconds: number): Promise<void> {
+/**
+ * Range la séance scellée et, sauf `pairClaimed`, son index de paire. Sans clé de scellement
+ * dans un environnement servi, LÈVE. Une invitation a déjà pris l'index par {@link PairClaim} :
+ * le réécrire ici effacerait la prise d'une invitation concurrente.
+ */
+export async function storeTogether(
+  cache: TogetherCache,
+  session: TogetherSession,
+  ttlSeconds: number,
+  options: { readonly pairClaimed?: boolean } = {},
+): Promise<void> {
   const sealed = sealSecret(JSON.stringify(session), contextOf(session.sessionId));
-  await cache.set(togetherPairKey(session.hostId, session.guestId), session.sessionId, ttlSeconds);
+  if (!options.pairClaimed) await cache.set(togetherPairKey(session.hostId, session.guestId), session.sessionId, ttlSeconds);
   await cache.set(sessionKey(session.sessionId), sealed, ttlSeconds);
+}
+
+/**
+ * Prend l'index d'une paire d'un seul geste ATOMIQUE et rend l'identifiant qu'il portait
+ * (`null` : aucun) — deux invitations simultanées ne peuvent pas toutes deux croire l'index
+ * vide. En production c'est `SET … EX … GET` sur le client Redis natif (`togetherDeps.ts`),
+ * qui ÉCHOUE plutôt que de basculer en mémoire locale : une prise locale ne vaut rien entre
+ * instances.
+ */
+export type PairClaim = (pairKey: string, sessionId: string, ttlSeconds: number) => Promise<string | null>;
+
+let exclusiveChain: Promise<unknown> = Promise.resolve();
+/** Sérialise, dans CE processus, une lecture-puis-écriture du cache (sans Redis : un seul processus). */
+const exclusive = <T>(task: () => Promise<T>): Promise<T> => {
+  const run = exclusiveChain.then(task, task);
+  exclusiveChain = run.catch(() => undefined);
+  return run;
+};
+
+/** La prise pour un cache sans commande atomique (développement et test, un seul processus). */
+export const claimPairThroughCache =
+  (cache: TogetherCache): PairClaim =>
+  (pairKey, sessionId, ttlSeconds) =>
+    exclusive(async () => {
+      const previous = await cache.get(pairKey);
+      await cache.set(pairKey, sessionId, ttlSeconds);
+      return previous;
+    });
+
+const parseIds = (raw: string | null): readonly string[] => {
+  if (raw === null) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    return Array.isArray(value) ? value.filter(isText) : [];
+  } catch {
+    return [];
+  }
+};
+
+const USER_INDEX_MAX = 20;
+
+/** Inscrit la séance à l'index de ses deux comptes : de quoi la couper quand l'un d'eux disparaît. */
+export async function indexTogetherUsers(cache: TogetherCache, session: TogetherSession, ttlSeconds: number): Promise<void> {
+  await Promise.all(
+    [session.hostId, session.guestId].map((userId) =>
+      exclusive(async () => {
+        const key = togetherUserKey(userId);
+        const ids = parseIds(await cache.get(key)).filter((id) => id !== session.sessionId);
+        await cache.set(key, JSON.stringify([...ids, session.sessionId].slice(-USER_INDEX_MAX)), ttlSeconds);
+      }),
+    ),
+  );
+}
+
+const unindexTogetherUser = (cache: TogetherCache, userId: string, sessionId: string): Promise<void> =>
+  exclusive(async () => {
+    const key = togetherUserKey(userId);
+    const kept = parseIds(await cache.get(key)).filter((id) => id !== sessionId);
+    if (kept.length === 0) await cache.del(key);
+    else await cache.set(key, JSON.stringify(kept), TOGETHER_SESSION_TTL_SECONDS);
+  });
+
+/** Les séances en cours d'un compte (invitations comprises) ; une entrée expirée ne compte pas. */
+export async function readUserTogether(cache: TogetherCache, userId: string, now: number): Promise<readonly TogetherSession[]> {
+  const sessions = await Promise.all(parseIds(await cache.get(togetherUserKey(userId))).map((id) => readTogether(cache, id, now)));
+  return sessions.filter((session): session is TogetherSession => session !== null);
 }
 
 /** La séance, ou `null` (absente, expirée, illisible, scellée pour une autre). */
@@ -124,4 +210,5 @@ export async function clearTogether(cache: TogetherCache, session: TogetherSessi
   const pair = togetherPairKey(session.hostId, session.guestId);
   if ((await cache.get(pair)) === session.sessionId) await cache.del(pair);
   await cache.del(sessionKey(session.sessionId));
+  await Promise.all([session.hostId, session.guestId].map((userId) => unindexTogetherUser(cache, userId, session.sessionId)));
 }
