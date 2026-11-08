@@ -82,4 +82,15 @@ class TalkieWakeTest {
         assertThat(TalkieWakeProgress.of(reopened, "t1")).isEqualTo(TalkieWakeProgress.PLAYING)
         assertThat(TalkieFloor.forget(playing, "t1")).isEqualTo(playing)
     }
+
+    @Test
+    fun `l'audio porte par le push n'est retenu qu'en HTTPS`() {
+        val served = (TalkieWakePushRouter.route(wake("audioUrl" to "https://gate.meeshy.me/a/t1.aac")) as TalkieWakeRoute.Wake).push
+        val clear = (TalkieWakePushRouter.route(wake("audioUrl" to "http://evil.example/a.aac")) as TalkieWakeRoute.Wake).push
+        val absent = (TalkieWakePushRouter.route(wake()) as TalkieWakeRoute.Wake).push
+
+        assertThat(served.audioUrl).isEqualTo("https://gate.meeshy.me/a/t1.aac")
+        assertThat(clear.audioUrl).isNull()
+        assertThat(absent.audioUrl).isNull()
+    }
 }

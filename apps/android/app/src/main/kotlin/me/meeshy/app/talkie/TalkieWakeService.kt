@@ -21,9 +21,12 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
 import me.meeshy.sdk.model.relation.TalkieWakeContract
 import me.meeshy.sdk.model.relation.TalkieWakeProgress
 import me.meeshy.sdk.model.relation.TalkieWakePush
+import me.meeshy.sdk.playback.AudioEngineEvent
+import me.meeshy.sdk.playback.AudioPlaybackEngine
 import me.meeshy.sdk.socket.RelationSocketEventsManager
 import me.meeshy.sdk.socket.SocketManager
 import org.json.JSONObject
@@ -34,7 +37,8 @@ import timber.log.Timber
  * démarre ce service au premier plan (`mediaPlayback`, type DÉJÀ déclaré : aucune nouvelle déclaration Play) : il pose
  * « X vous parle », connecte la socket, émet `talkie:join { talkieId }`, et la passerelle rejoue la prise de parole dans
  * l'ordre. La voix sort par le chemin du talkie reçu ([TalkieCenter] → [TalkieVoicePlayer]), d'elle-même, sans ouvrir
- * l'app. « Lire » sur la notification la rejoue (fenêtre de rattrapage servie). Le service s'arrête à la fin servie
+ * l'app. « Lire » sur la notification joue l'audio porté par le push (`audioUrl`) avec le lecteur des vocaux EXISTANT
+ * ([AudioPlaybackEngine]) — aucun nouveau lecteur — et, sans audio servi, redemande le rattrapage. Le service s'arrête à la fin servie
  * (`talkie:ended`, laissée finir de sonner), à « Couper », ou si aucune annonce n'arrive dans le temps imparti.
  */
 @AndroidEntryPoint
@@ -51,6 +55,9 @@ class TalkieWakeService : Service() {
 
     @Inject
     lateinit var relations: RelationSocketEventsManager
+
+    @Inject
+    lateinit var engine: AudioPlaybackEngine
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var following: String? = null
@@ -74,12 +81,32 @@ class TalkieWakeService : Service() {
             finish()
             return START_NOT_STICKY
         }
+        if (replay && push.audioUrl != null) {
+            runCatching { promoteOnly(push) }
+            playServed(push, push.audioUrl)
+            return START_NOT_STICKY
+        }
         if (replay) {
             center.forget(push.talkieId)
             following = null
         }
         promote(push)
         return START_NOT_STICKY
+    }
+
+    /** « Lire » avec l'audio du push : le lecteur des vocaux le joue ; le service tient jusqu'à sa fin (bornée). */
+    private fun playServed(push: TalkieWakePush, url: String) {
+        val attachmentId = PLAYED_PREFIX + push.talkieId
+        following = push.talkieId
+        watch?.cancel()
+        watch = scope.launch {
+            if (engine.play(attachmentId, url, PlaybackCommandOrigin.LockScreen, isProtected = true)) {
+                withTimeoutOrNull(TalkieWakeProgress.JOIN_TIMEOUT_MS) {
+                    engine.events.first { it is AudioEngineEvent.Finished && it.attachmentId == attachmentId }
+                }
+            }
+            if (!state.finish(push.talkieId) && state.current.value == null) finish()
+        }
     }
 
     private fun follow(current: TalkieWakePush?) {
@@ -137,6 +164,10 @@ class TalkieWakeService : Service() {
         // Le DERNIER démarrage seulement : un second réveil arrivé pendant l'arrêt a déjà demandé un démarrage au premier
         // plan ; `stopSelf()` le tuerait avant sa promotion.
         stopSelfResult(lastStartId)
+    }
+
+    private companion object {
+        const val PLAYED_PREFIX = "talkie:"
     }
 
     override fun onDestroy() {

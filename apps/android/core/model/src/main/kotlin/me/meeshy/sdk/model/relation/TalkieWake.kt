@@ -12,6 +12,11 @@ public data class TalkieWakePush(
     val fromName: String?,
     val title: String?,
     val body: String?,
+    /**
+     * L'audio porté par le push (`audioUrl`, HTTPS seulement) : « Lire » le joue avec le lecteur des vocaux existant,
+     * sans ouvrir l'app. Absent, « Lire » redemande le rattrapage par la socket (`talkie:join`).
+     */
+    val audioUrl: String? = null,
 ) {
     /** Le titre affiché : celui de la passerelle, sinon « X vous parle » (nom servi, ou « Quelqu'un »). */
     public fun displayTitle(fallback: (String) -> String, someone: String): String = title ?: fallback(fromName ?: someone)
@@ -55,6 +60,7 @@ public object TalkieWakePushRouter {
                 fromName = (data["fromName"] ?: data["senderName"]).nonBlank(),
                 title = data["title"].nonBlank(),
                 body = data["body"].nonBlank(),
+                audioUrl = data["audioUrl"].nonBlank()?.takeIf { it.startsWith("https://") },
             ),
         )
     }
