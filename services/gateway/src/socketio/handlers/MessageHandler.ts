@@ -809,8 +809,10 @@ export class MessageHandler {
       }
 
       // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
-      // l'écriture, exactement comme à l'envoi. Ce chemin — le transport
-      // d'édition PRIMAIRE, celui qu'emploie le web — écrivait le texte BRUT :
+      // l'écriture, exactement comme à l'envoi. Ce chemin — qu'AUCUN client du
+      // dépôt n'emploie plus (#17066, mesuré le 2026-11-08 : web, iOS et
+      // Android éditent tous les trois par REST), mais que toute socket
+      // AUTHENTIFIÉE peut appeler — écrivait le texte BRUT :
       // les crochets restaient en dur dans le message, pour toujours, alors que
       // le même texte envoyé produit un lien traçable. Le contenu traité est
       // ensuite le SEUL en circulation : base, mentions, retraduction, payload.
@@ -856,7 +858,10 @@ export class MessageHandler {
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
       // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
-      // ni notification — alors qu'il est le transport d'édition PRIMAIRE.
+      // ni notification — et le correctif ne valait pas parce que ce transport
+      // serait « primaire » (il ne l'est plus, #17066), mais parce qu'il est
+      // ATTEIGNABLE : une garde posée sur le chemin le plus fréquenté se lit
+      // comme posée sur le SUJET, et ne l'est que sur son CHEMIN (cycle 127).
       // Éditer « salut @alice » en « salut @bob » laissait Alice mentionnée et
       // ne nommait jamais Bob. Même unité que la route REST, aux mêmes
       // conditions : la réconciliation ne détruit rien qu'elle n'ait pu lire,

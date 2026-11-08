@@ -30,8 +30,13 @@ export type EditAudiencePrisma = Pick<PrismaClient, 'participant' | 'conversatio
  *
  * Parce que l'édition a DEUX transports, et qu'un audit adversarial a mesuré
  * que la première version de cette garde n'en couvrait qu'un. `message:edited`
- * part aussi de `MessageHandler.handleMessageEdit` (le transport socket, que
- * deux doc-comments du dépôt nomment « primaire »), qui n'appelle pas
+ * part aussi de `MessageHandler.handleMessageEdit` — le transport socket, que
+ * deux doc-comments du dépôt nommaient « primaire » et que j'ai recopiés ici
+ * sans les mesurer. Mesuré depuis (#17066) : **aucun client du dépôt ne l'émet**,
+ * et ces deux doc-comments citaient un fichier parti avec le legacy web
+ * (#7668). Ce qui rend la garde nécessaire n'est donc pas la fréquentation du
+ * chemin mais son ACCESSIBILITÉ — toute socket authentifiée l'appelle. Il
+ * n'appelle pas
  * `broadcastMessageMutation` — la garde y était donc contournable par toute
  * socket authentifiée, l'événement client étant enregistré, validé et
  * rate-limité.

@@ -7,9 +7,18 @@ import { servedEditAttribution, type MessageEditorColumns } from '@meeshy/shared
  *
  * L'événement a TROIS producteurs et un seul décodeur par client :
  *
- * - `MessageHandler.handleMessageEdit` — transport socket, celui qu'emploie le
- *   WEB (`messaging.service.ts` émet `message:edit`), et que son propre
- *   commentaire nomme « le transport d'édition PRIMAIRE » ;
+ * - `MessageHandler.handleMessageEdit` — transport socket. Son commentaire le
+ *   nommait « le transport d'édition PRIMAIRE, celui qu'emploie le WEB », en
+ *   citant `messaging.service.ts` : **c'était vrai, et ça ne l'est plus.** Ce
+ *   fichier vivait dans le legacy web, parti du dépôt le 2026-09-24 (#7668) ;
+ *   il n'existe plus que sous le tag `legacy-web-final`. Mesuré le 2026-11-08
+ *   (#17066) : AUCUN client du dépôt n'émet `message:edit` — ni `apps/web`
+ *   (REST `PUT`), ni iOS (`MessageService.edit` ⇒ `PUT`), ni Android
+ *   (`EditMessageHandler` ⇒ `messageApi.edit`). L'écoute reste enregistrée,
+ *   validée et rate-limitée, donc appelable par toute socket AUTHENTIFIÉE :
+ *   ses gardes gardent une porte, pas un chemin fréquenté. Son retrait est une
+ *   question de RÉTROCOMPATIBILITÉ, pas de code mort — zéro émetteur dans le
+ *   dépôt n'est pas zéro usage en production (#9223) : c'est #17151 ;
  * - `MeeshySocketIOManager.broadcastMessageEdited` — résumés d'appel ;
  * - `broadcastMessageMutation` — transport REST, celui qu'emploie iOS pour
  *   éditer (`PUT /messages/:messageId`).
