@@ -90,6 +90,13 @@ final class ConversationPreviewCasesTests: XCTestCase {
         if let live = preview.liveUntil { out["live"] = ["expiresAt": milliseconds(live)] }
         if preview.offersJoin { out["action"] = "join" }
         if let direction = preview.direction { out["direction"] = direction.rawValue }
+        if let effect = preview.effect {
+            out["effect"] = [
+                "veil": effect.veil,
+                "finish": effect.finish?.rawValue ?? NSNull(),
+                "entrance": effect.entrance?.rawValue ?? NSNull(),
+            ] as [String: Any]
+        }
         return out
     }
 

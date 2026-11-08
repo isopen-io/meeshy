@@ -28,6 +28,7 @@ function operator(value: unknown, present: boolean, op: string, arg: unknown, mo
     case 'contains': return typeof value === 'string' && (mode === 'insensitive' ? value.toLowerCase().includes(String(arg).toLowerCase()) : value.includes(String(arg)));
     case 'mode': return true;
     case 'isSet': return arg === present;
+    case 'some': return Array.isArray(value) && value.some((item) => matchesWhere(item as Doc, arg as Where));
     case 'has': return Array.isArray(value) && value.includes(arg);
     case 'gt': return present && value !== null && comparable(value) > comparable(arg);
     case 'gte': return present && value !== null && comparable(value) >= comparable(arg);

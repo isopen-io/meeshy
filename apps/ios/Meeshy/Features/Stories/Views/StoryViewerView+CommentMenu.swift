@@ -25,30 +25,38 @@ struct StoryCommentThreadWriter {
     @Binding var replies: [String: [FeedComment]]
     @Binding var count: Int
     var service: PostServiceProviding = PostService.shared
+    /// La story a été fermée entre-temps : la passerelle refuse l'édition par
+    /// `403 COMMENTS_DISABLED` (#16930) — le lecteur ferme ses commentaires
+    /// sans attendre `story:updated`.
+    var onCommentsClosed: () -> Void = {}
 
     /// Les effets et la langue d'origine restent ceux du commentaire : l'édition
     /// ne touche que le texte. L'écho `comment:updated` reconfirme la ligne.
     func edit(_ target: FeedComment, content: String) async {
         let applied = FeedCommentThread(roots: comments, replies: replies)
             .replacing(target.withEditedContent(content, effectFlags: target.effectFlags))
-        let saved = await commit(comments: applied.roots, replies: applied.replies, countDelta: 0) {
+        let failure = await commit(comments: applied.roots, replies: applied.replies, countDelta: 0) {
             _ = try await service.updateComment(
                 postId: postId, commentId: target.id, content: content,
                 effectFlags: target.effectFlags, originalLanguage: target.originalLanguage
             )
         }
-        guard !saved else { return }
+        guard let failure else { return }
         HapticFeedback.error()
+        if CommentsClosure.isRefusal(failure) {
+            onCommentsClosed()
+            return FeedbackToastManager.shared.showError(CommentsClosedNotice.text)
+        }
         FeedbackToastManager.shared.showError(
             String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
     }
 
     func remove(_ target: FeedComment, reason: String) async {
         let removal = FeedCommentThread(roots: comments, replies: replies).removing(target)
-        let removed = await commit(comments: removal.thread.roots, replies: removal.thread.replies, countDelta: -removal.removedCount) {
+        let failure = await commit(comments: removal.thread.roots, replies: removal.thread.replies, countDelta: -removal.removedCount) {
             try await service.deleteComment(postId: postId, commentId: target.id, reason: reason)
         }
-        guard removed else {
+        guard failure == nil else {
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(
                 String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
@@ -58,12 +66,14 @@ struct StoryCommentThreadWriter {
             reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
     }
 
+    /// Rend `nil` quand la passerelle a accepté, sinon le refus — le fil est
+    /// alors revenu tel quel, et l'appelant dit pourquoi.
     private func commit(
         comments next: [FeedComment],
         replies nextReplies: [String: [FeedComment]],
         countDelta: Int,
         request: () async throws -> Void
-    ) async -> Bool {
+    ) async -> Error? {
         let snapshot = (comments: comments, replies: replies, count: count)
         comments = next
         replies = nextReplies
@@ -71,12 +81,12 @@ struct StoryCommentThreadWriter {
         do {
             try await request()
             await bestEffort("storyViewerViewCommentMenu.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(postId)") }
-            return true
+            return nil
         } catch {
             comments = snapshot.comments
             replies = snapshot.replies
             count = snapshot.count
-            return false
+            return error
         }
     }
 }
@@ -128,13 +138,13 @@ extension StoryViewerView {
             },
             onRemove: ContentRemovalOffer.comment(comment) { reason in
                 Task { await storyCommentWriter?.remove(comment, reason: reason) }
-            }
+            }, commentsClosed: currentStory?.commentsClosed == true
         )
     }
 
     var storyCommentWriter: StoryCommentThreadWriter? {
-        currentStory.map {
-            StoryCommentThreadWriter(postId: $0.id, comments: $commentSession.roots, replies: $commentSession.replies, count: $commentSession.count)
+        currentStory.map { story in
+            StoryCommentThreadWriter(postId: story.id, comments: $commentSession.roots, replies: $commentSession.replies, count: $commentSession.count, onCommentsClosed: { StoryCommentSettings.noteClosed(storyId: story.id, in: viewModel) })
         }
     }
 

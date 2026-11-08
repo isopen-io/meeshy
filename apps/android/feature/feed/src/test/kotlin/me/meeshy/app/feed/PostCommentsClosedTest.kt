@@ -120,4 +120,47 @@ class PostCommentsClosedTest {
         assertThat(vm.state.value.commentsClosed).isFalse()
         assertThat(vm.state.value.replyTarget?.commentId).isEqualTo("c1")
     }
+
+    @Test
+    fun `a COMMENTS_DISABLED edit refusal rolls the row back and closes the thread without a notice`() = runTest {
+        coEvery { repository.updateComment(any(), any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError(message = "Comments are disabled", code = "COMMENTS_DISABLED", httpStatus = 403))
+        val vm = viewModel()
+        vm.beginEdit("c1")
+        vm.onDraftChange("Bonsoir")
+        vm.submit()
+
+        val s = vm.state.value
+        assertThat(s.comments.map { it.id to it.content }).containsExactly("c1" to "Bonjour")
+        assertThat(s.commentsClosed).isTrue()
+        assertThat(s.notice).isNull()
+        assertThat(s.editing).isNull()
+    }
+
+    @Test
+    fun `any other edit refusal leaves the thread open and says the edit failed`() = runTest {
+        coEvery { repository.updateComment(any(), any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError(message = "boom", code = "INTERNAL_ERROR"))
+        val vm = viewModel()
+        vm.beginEdit("c1")
+        vm.onDraftChange("Bonsoir")
+        vm.submit()
+
+        assertThat(vm.state.value.commentsClosed).isFalse()
+        assertThat(vm.state.value.notice).isEqualTo(CommentNotice.EDIT_FAILED)
+    }
+
+    @Test
+    fun `a closed thread begins no edit, and closing drops the edit in progress`() = runTest {
+        val vm = viewModel()
+        vm.beginEdit("c1")
+        vm.setCommentsClosed(true)
+        assertThat(vm.state.value.editing).isNull()
+        assertThat(vm.state.value.draft).isEmpty()
+
+        vm.beginEdit("c1")
+        vm.submit()
+        assertThat(vm.state.value.editing).isNull()
+        coVerify(exactly = 0) { repository.updateComment(any(), any(), any(), any(), any()) }
+    }
 }

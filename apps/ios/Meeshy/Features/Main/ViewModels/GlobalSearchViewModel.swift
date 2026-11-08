@@ -31,6 +31,10 @@ enum SearchTab: String, CaseIterable, Identifiable {
 
 // MARK: - Global Search Message Result
 
+/// `content` est l'extrait à peindre — le texte servi, ou la transcription
+/// qui a répondu (`mediaKind` dit alors de quel média). Un résultat VOILÉ
+/// (#16957) ne porte aucun texte : le voile se pose à la construction, pas
+/// seulement à la peinture, pour qu'aucune surface ne puisse l'oublier.
 nonisolated struct GlobalSearchMessageResult: Identifiable, Sendable, Equatable {
     let id: String
     let conversationId: String
@@ -40,6 +44,43 @@ nonisolated struct GlobalSearchMessageResult: Identifiable, Sendable, Equatable 
     let senderName: String
     let senderAvatar: String?
     let createdAt: Date
+    let isVeiled: Bool
+    let mediaKind: APIMessageSearchHit.MediaKind?
+
+    init(
+        id: String,
+        conversationId: String,
+        conversationName: String,
+        conversationAvatar: String?,
+        content: String,
+        senderName: String,
+        senderAvatar: String?,
+        createdAt: Date,
+        isVeiled: Bool = false,
+        mediaKind: APIMessageSearchHit.MediaKind? = nil
+    ) {
+        self.id = id
+        self.conversationId = conversationId
+        self.conversationName = conversationName
+        self.conversationAvatar = conversationAvatar
+        self.content = isVeiled ? "" : content
+        self.senderName = senderName
+        self.senderAvatar = senderAvatar
+        self.createdAt = createdAt
+        self.isVeiled = isVeiled
+        self.mediaKind = mediaKind
+    }
+
+    /// Le pictogramme du média dont la transcription a répondu (#16958).
+    var mediaIcon: String? {
+        switch mediaKind {
+        case .audio: return "mic.fill"
+        case .video: return "video.fill"
+        case .image: return "photo.fill"
+        case .document: return "doc.fill"
+        case nil: return nil
+        }
+    }
 }
 
 // MARK: - Global Search User Result
