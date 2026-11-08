@@ -304,18 +304,13 @@ struct RiverReplyPreview: Equatable {
 /// Extrait de la vue pour que `RiverBubbleLayoutTests` puisse l'éprouver
 /// sans SwiftUI (§ tests possibles sans runtime UIKit complet).
 nonisolated enum RiverBubbleLayout {
-    /// Une ou deux lettres majuscules — premier caractère du premier mot, et
-    /// du second s'il existe. Purement typographique : le SENS de « Toi »
+    /// Une ou deux lettres majuscules — la règle de `NameInitials` (#8143),
+    /// « ? » pour un nom vide. Purement typographique : le SENS de « Toi »
     /// (résolution `isViewer`) est une affaire de l'appelant, pas de ce
     /// calcul.
     static func initials(for displayName: String) -> String {
-        let letters = displayName
-            .split(separator: " ")
-            .filter { !$0.isEmpty }
-            .prefix(2)
-            .compactMap { $0.first }
-        guard !letters.isEmpty else { return "?" }
-        return String(letters).uppercased()
+        let initials = NameInitials.of(displayName)
+        return initials.isEmpty ? "?" : initials
     }
 }
 
