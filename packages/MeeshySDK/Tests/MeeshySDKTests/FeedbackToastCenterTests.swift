@@ -2,7 +2,7 @@ import XCTest
 @testable import MeeshySDK
 
 private final class ToastRecorder: @unchecked Sendable {
-    private(set) let recorder = ToastRecorder()
+    private(set) var received: [(message: String, isSuccess: Bool)] = []
     func record(_ toast: (message: String, isSuccess: Bool)) { received.append(toast) }
 }
 
