@@ -44,7 +44,7 @@
     "@meeshy/shared": "workspace:*",
     "@parse/node-apn": "^8.2.0",
     "@prisma/client": "^6.19.3",
-    "@signalapp/libsignal-client": "0.106.1",
+    "@signalapp/libsignal-client": "0.105.4",
     "@socket.io/redis-adapter": "^8.3.0",
     "@tus/file-store": "^2.1.2",
     "@tus/server": "^2.4.7",

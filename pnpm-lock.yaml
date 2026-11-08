@@ -286,8 +286,8 @@ importers:
         specifier: ^6.19.3
         version: 6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3)
       '@signalapp/libsignal-client':
-        specifier: 0.106.1
-        version: 0.106.1
+        specifier: 0.105.4
+        version: 0.105.4
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.8)
@@ -2735,9 +2735,6 @@ packages:
 
   '@signalapp/libsignal-client@0.105.4':
     resolution: {integrity: sha512-gnnke/ctqBjNHBCnnNxD7A8wEbqnH2d5VNXRQ4/Pbup8+sad6phkwz3xTfUdsh/MLYi6EiI2PnkzGHff4tECsg==}
-
-  '@signalapp/libsignal-client@0.106.1':
-    resolution: {integrity: sha512-RHbZPGOxky4z0Bh4dtK+G9lgQTY3rnWxeCk8cav061ajpfImupFyM44vm17Pn8R/BCZpFMTb2fVBuu1aEXjrKg==}
 
   '@signalapp/types@0.3.0':
     resolution: {integrity: sha512-76xr2s0aNbcGOUY9ciy1Qc7t8alGkNYQrpgGmtoBbFl2YGoww+ZW48J8joQit4VmvDV5oLvWk1DGddWwdEAxzQ==}
@@ -10258,13 +10255,6 @@ snapshots:
       rollup: 2.80.0
 
   '@signalapp/libsignal-client@0.105.4':
-    dependencies:
-      '@signalapp/types': 0.3.0
-      node-gyp-build: 4.8.4
-      type-fest: 5.10.0
-    optional: true
-
-  '@signalapp/libsignal-client@0.106.1':
     dependencies:
       '@signalapp/types': 0.3.0
       node-gyp-build: 4.8.4

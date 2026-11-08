@@ -129,7 +129,7 @@
         "@meeshy/shared": "workspace:*",
         "@parse/node-apn": "^8.2.0",
         "@prisma/client": "^6.19.3",
-        "@signalapp/libsignal-client": "0.106.1",
+        "@signalapp/libsignal-client": "0.105.4",
         "@socket.io/redis-adapter": "^8.3.0",
         "@tus/file-store": "^2.1.2",
         "@tus/server": "^2.4.7",
@@ -1072,7 +1072,7 @@
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.67.4", "", { "os": "win32", "cpu": "x64" }, "sha512-RJZnrwTWj7Iq2ooBwoGbDdC65tDwYawneGcAfFMJqVUrRZMcskka6nTkBpXR/47G7kzn3EW2qupExnaBy11vwg=="],
 
-    "@signalapp/libsignal-client": ["@signalapp/libsignal-client@0.106.1", "", { "dependencies": { "@signalapp/types": "^0.3.0", "node-gyp-build": "^4.8.0", "type-fest": "^5.5.0" } }, "sha512-RHbZPGOxky4z0Bh4dtK+G9lgQTY3rnWxeCk8cav061ajpfImupFyM44vm17Pn8R/BCZpFMTb2fVBuu1aEXjrKg=="],
+    "@signalapp/libsignal-client": ["@signalapp/libsignal-client@0.105.4", "", { "dependencies": { "@signalapp/types": "^0.3.0", "node-gyp-build": "^4.8.0", "type-fest": "^5.5.0" } }, "sha512-gnnke/ctqBjNHBCnnNxD7A8wEbqnH2d5VNXRQ4/Pbup8+sad6phkwz3xTfUdsh/MLYi6EiI2PnkzGHff4tECsg=="],
 
     "@signalapp/types": ["@signalapp/types@0.3.0", "", { "dependencies": { "buffer": "6.0.3", "semver": "7.7.4", "type-fest": "5.5.0", "uuid": "13.0.0", "zod": "4.3.6" } }, "sha512-76xr2s0aNbcGOUY9ciy1Qc7t8alGkNYQrpgGmtoBbFl2YGoww+ZW48J8joQit4VmvDV5oLvWk1DGddWwdEAxzQ=="],
 
@@ -3032,8 +3032,6 @@
 
     "@meeshy/gateway/dotenv": ["dotenv@18.0.9", "", { "bin": { "dotenv": "dist/index.cjs" } }, "sha512-3fVOW4cB02R066PUSwn8O4TJyz9NckQl7F81blIbaq9jKBm2tSmOKky7ZHIXzGvkVPXCSn6jkpziBPZdGFs8Tw=="],
 
-    "@meeshy/shared/@signalapp/libsignal-client": ["@signalapp/libsignal-client@0.105.4", "", { "dependencies": { "@signalapp/types": "^0.3.0", "node-gyp-build": "^4.8.0", "type-fest": "^5.5.0" } }, "sha512-gnnke/ctqBjNHBCnnNxD7A8wEbqnH2d5VNXRQ4/Pbup8+sad6phkwz3xTfUdsh/MLYi6EiI2PnkzGHff4tECsg=="],
-
     "@meeshy/shared/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
     "@parcel/watcher/node-addon-api": ["node-addon-api@7.1.1", "", {}, "sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ=="],
@@ -3231,8 +3229,6 @@
     "@langchain/langgraph-sdk/p-queue/p-timeout": ["p-timeout@7.0.2", "", {}, "sha512-prbX4Z3YszrFNgH+MW5Zoeq3baXrMtP/MQnFeET90UB/GtGcGDQ5Usg9OCy6ETjTTntOw1SL2z9fMPUppN3Guw=="],
 
     "@mapbox/node-pre-gyp/https-proxy-agent/agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
-
-    "@meeshy/shared/@signalapp/libsignal-client/type-fest": ["type-fest@5.10.0", "", { "dependencies": { "tagged-tag": "^1.0.0" } }, "sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA=="],
 
     "@tus/server/ioredis/@ioredis/commands": ["@ioredis/commands@1.10.0", "", {}, "sha512-UmeW7z4LfctwoQ5wkhVzgq8tXkreED2xZGpX+Bg+zA+WJFZCT6c062AfCK/Dfk81xZnnwdhJCUMkitihRaoC2Q=="],
 
