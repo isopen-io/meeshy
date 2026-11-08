@@ -13,6 +13,7 @@ const frCommunityMembership = {
   'community.membership.offline': 'Hors ligne.',
   'community.membership.error': 'Échec. Réessayez.',
   'community.membership.error.refused': 'Cette communauté est privée : on n’y entre que sur invitation.',
+  'community.settings.open': "Réglages",
   'community.members.open': 'Membres',
   'community.members.title': 'Membres',
   'community.members.section.admin': 'Administrateurs',

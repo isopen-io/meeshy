@@ -36,7 +36,10 @@
  *     la pastille de synchronisation ne recouvre pas la recherche (#6401) ;
  *  8. les membres (#6375) : le détail y mène, les rôles se lisent AA, un
  *     administrateur repasse un modérateur membre et retire un membre confirmé ;
- *  9. aucune erreur de page.
+ *  9. les réglages (#6377) : le créateur seul y entre, renomme sa communauté
+ *     (le détail le lit au retour), la supprime confirmée — un autre lecteur
+ *     n'a que le refus ;
+ * 10. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -67,6 +70,14 @@ const check = (ok, what) => {
 };
 
 const TAP_FLOOR = 44;
+
+/** Le lecteur des fixtures (`fixtures-base.ts` › `VIEWER_ID`), créateur d'« Équipe déploiement ». */
+const SESSION = {
+  token: 'jwt-check-communities',
+  sessionToken: 'sess-check-communities',
+  user: { id: 'u-viewer', username: 'gate-viewer', displayName: 'Vous' },
+  expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+};
 const WCAG_AA = 4.5;
 
 const capture = async (page, name) => {
@@ -235,6 +246,9 @@ try {
       const label = `${scheme === 'light' ? 'clair' : 'sombre'} ${width}×${height}`;
       const slug = `${scheme}-${width}x${height}`;
       const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      /* Le lecteur de recette est CONNECTÉ (#6377) : « Réglages » n'est offert qu'au créateur,
+         et l'écran le reconnaît à l'identité de la session, jamais à un rôle deviné. */
+      await context.addInitScript((session) => window.localStorage.setItem('meeshy.session', JSON.stringify(session)), SESSION);
       const page = await context.newPage();
       page.setDefaultTimeout(10_000);
       const errors = [];
@@ -412,6 +426,50 @@ try {
       await page.waitForSelector('[data-community-invite-status]');
       check((await textOf(page, '[data-community-invite-status]')) === '1 personne a rejoint la communauté.', `${label} : l'invitation se dit, la feuille se ferme`);
       check((await page.$('[data-community-invite]')) === null, `${label} : la feuille est fermée après l'envoi`);
+      // LES RÉGLAGES (#6377) : le créateur y entre depuis le détail, le formulaire est rempli
+      // depuis le cache, « Enregistrer » n'agit qu'une fois quelque chose changé, le nouveau nom
+      // se lit au retour ; supprimer se confirme en nommant la communauté et ramène à la liste,
+      // où elle a disparu. Un autre lecteur n'a ni l'entrée ni le formulaire.
+      await page.click('[data-community-settings-link]');
+      await page.waitForURL('**/communities/m-deploiement/settings');
+      await page.waitForSelector('#community-settings-name');
+      check((await page.inputValue('#community-settings-name')) === 'Équipe déploiement', `${label} : les réglages se remplissent depuis le cache`);
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'true', `${label} : « Enregistrer » est inerte tant que rien ne change`);
+      const settingsRest = await reachAtRest(page, REACH);
+      const settingsBlocked = settingsRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(settingsRest.controls.length >= 2 && settingsBlocked.length === 0, `${label} : chaque contrôle des réglages s'atteint, 44 au moins — ${JSON.stringify(settingsBlocked)}`);
+      const settingsInks = {
+        titre: await contrastOf(page, 'header h1'),
+        section: await contrastOf(page, '#community-settings-info'),
+        danger: await contrastOf(page, '#community-settings-danger'),
+        supprimer: await contrastOf(page, '[data-community-settings-delete] .flex-1'),
+      };
+      const settingsFaibles = Object.entries(settingsInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(settingsFaibles.length === 0, `${label} : chaque texte des réglages tient AA — ${JSON.stringify(settingsInks)}`);
+      await capture(page, `communaute-reglages-${slug}`);
+      await page.fill('#community-settings-name', 'Équipe mise en ligne');
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : un nom changé rend « Enregistrer » actif`);
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.saved"]');
+      check((await textOf(page, '[data-community-settings-notice]')) === 'Communauté mise à jour.', `${label} : l'enregistrement se dit`);
+      await page.click('[data-community-settings-back]');
+      await page.waitForSelector('[data-community-hero]');
+      check((await textOf(page, '[data-community-title]')) === 'Équipe mise en ligne', `${label} : le détail porte le nouveau nom`);
+      await page.click('[data-community-settings-link]');
+      await page.waitForSelector('[data-community-settings-delete]');
+      await page.click('[data-community-settings-delete]');
+      await page.waitForSelector('[data-confirm-dialog="community-delete"]');
+      check(((await textOf(page, '[data-confirm-dialog="community-delete"]')) ?? '').includes('Équipe mise en ligne'), `${label} : la suppression se confirme, en nommant la communauté`);
+      await page.click('[data-confirm-dialog="community-delete"] [data-confirm="confirm"]');
+      await page.waitForURL((url) => url.pathname === '/communities');
+      await page.waitForSelector('[data-community-card]');
+      check((await page.$('[data-community-card="m-deploiement"]')) === null, `${label} : supprimée, elle a quitté la liste`);
+      await page.goto(`${BASE}/communities/m-polyglottes`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-community-hero]');
+      check((await page.$('[data-community-settings-link]')) === null, `${label} : un lecteur qui ne l'a pas créée n'a pas l'entrée « Réglages »`);
+      await page.goto(`${BASE}/communities/m-polyglottes/settings`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-community-settings-refused]');
+      check((await page.$('[data-community-settings-save]')) === null, `${label} : ni le formulaire, mais le refus dessiné`);
       await page.goto(`${BASE}/communities/inconnue`, { waitUntil: 'load' });
       await page.waitForSelector('[data-community-refused]');
       check((await textOf(page, '[data-community-refused] p')) === 'Communauté introuvable', `${label} : une adresse inconnue rend le refus`);

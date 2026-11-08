@@ -21,7 +21,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 }));
 
 jest.mock('../../../routes/communities/types', () => ({
-  UpdateCommunitySchema: { parse: (data: any) => data },
+  UpdateCommunitySchema: { parse: (data: any) => data, safeParse: (data: any) => ({ success: true, data }) },
   generateIdentifier: jest.fn<any>().mockReturnValue('new-identifier'),
 }));
 
