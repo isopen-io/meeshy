@@ -439,6 +439,11 @@ public actor OfflineQueue {
     /// Nombre de mutations encore observées — témoin de la purge (tests).
     var observedOutcomeCount: Int { outcomes.observedCount }
 
+    /// L'issue mémorisée d'un cmid — témoin du tombstone (tests), symétrique
+    /// d'`observedOutcomeCount`. L'observer par `outcomeStream` obligerait à
+    /// mesurer une absence par un délai (#16749).
+    func firedOutcome(for cmid: String) -> OutboxOutcome? { outcomes.firedOutcome(for: cmid) }
+
     /// Internal: removes the single continuation identified by `token` after
     /// its consumer cancelled (Task cancellation, scope exit). Idempotent —
     /// if the slot was already cleared by `publishOutcome`, this is a no-op.
