@@ -7,7 +7,10 @@
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
 
 const store = new Map<string, string>();
-const native: { client: { status: string } | null } = { client: null };
+const set = jest.fn(async (..._args: unknown[]) => 'OK');
+const evalScript = jest.fn(async (..._args: unknown[]) => 1);
+const native: { client: { status: string; set: typeof set; eval: typeof evalScript } | null } = { client: null };
+const clientAt = (status: string) => ({ status, set, eval: evalScript });
 
 jest.mock('../../../../services/CacheStore', () => ({
   getCacheStore: () => ({
@@ -70,26 +73,42 @@ function monde(wait: () => Promise<void>) {
 const poser = async () => {
   const cache = togetherRelayDepsOf({ prisma: {} as PrismaClient, io: undefined }).cache;
   await storeTogether(cache, seance(), 3600);
-  await indexTogetherUsers(cache, seance(), 3600);
+  await indexTogetherUsers(cache, seance());
   return cache;
 };
 
 afterEach(() => {
   store.clear();
   native.client = null;
+  set.mockClear();
+  evalScript.mockClear();
   delete process.env.RATE_LIMIT_DISABLED;
 });
 
 describe('un client Redis mort', () => {
   it('le limiteur ne sait pas juger (null) : la porte rend « indisponible », pas « trop de gestes »', async () => {
-    native.client = { status: 'end' };
+    native.client = clientAt('end');
     expect(await monde(async () => undefined).deps.withinRate(HOTE)).toBeNull();
   });
 
-  it('la prise de l\'index de paire échoue au lieu de basculer en mémoire locale', async () => {
-    native.client = { status: 'reconnecting' };
-    const { claimPair } = togetherRelayDepsOf({ prisma: {} as PrismaClient, io: undefined });
+  it.each(['end', 'reconnecting', 'connecting'])('statut %s : prise, prolongation et libération de l\'index échouent, sans toucher le client', async (status) => {
+    native.client = clientAt(status);
+    const { claimPair, extendPair, releasePair } = togetherRelayDepsOf({ prisma: {} as PrismaClient, io: undefined });
     await expect(claimPair?.('together:pair:x', ID, 120)).rejects.toThrow();
+    await expect(extendPair?.('together:pair:x', ID, 120)).rejects.toThrow();
+    await expect(releasePair?.('together:pair:x', ID)).rejects.toThrow();
+    expect(set).not.toHaveBeenCalled();
+    expect(evalScript).not.toHaveBeenCalled();
+  });
+
+  it('prêt : la prise est un SET EX GET, la prolongation et la libération des scripts gardés', async () => {
+    native.client = clientAt('ready');
+    const { claimPair, extendPair, releasePair } = togetherRelayDepsOf({ prisma: {} as PrismaClient, io: undefined });
+    await claimPair?.('together:pair:x', ID, 120);
+    await extendPair?.('together:pair:x', ID, 120);
+    await releasePair?.('together:pair:x', ID);
+    expect(set).toHaveBeenCalledWith('together:pair:x', ID, 'EX', 120, 'GET');
+    expect(evalScript).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -94,7 +94,7 @@ function parseSession(raw: string, sessionId: string): TogetherSession | null {
 /**
  * Range la séance scellée. L'index de la paire n'y est JAMAIS écrit : il se prend d'un geste
  * atomique ({@link PairClaim}) et ne se prolonge que s'il désigne encore cette séance
- * ({@link PairExtend}) — une écriture en vol ne peut pas reprendre l'index d'une invitation
+ * ({@link PairExtend}, qui le RECRÉE s'il a expiré entre-temps) — une écriture en vol ne peut pas reprendre l'index d'une invitation
  * plus récente. Sans clé de scellement dans un environnement servi, LÈVE.
  */
 export async function storeTogether(cache: TogetherCache, session: TogetherSession, ttlSeconds: number): Promise<void> {
@@ -112,8 +112,9 @@ export async function storeTogether(cache: TogetherCache, session: TogetherSessi
 export type PairClaim = (pairKey: string, sessionId: string, ttlSeconds: number) => Promise<string | null>;
 
 /**
- * Prolonge l'index d'une paire SI ET SEULEMENT SI il désigne encore `sessionId` (en production,
- * `EXPIRE` gardé par un script Lua sur le client Redis natif) ; sinon ne fait rien.
+ * Prolonge l'index d'une paire s'il désigne encore `sessionId`, ou le RECRÉE s'il a disparu
+ * (expiré avant la prolongation) ; s'il désigne une autre séance, ne fait rien. En production,
+ * un script Lua sur le client Redis natif.
  */
 export type PairExtend = (pairKey: string, sessionId: string, ttlSeconds: number) => Promise<void>;
 
@@ -140,7 +141,18 @@ export const extendPairThroughCache =
   (cache: TogetherCache): PairExtend =>
   (pairKey, sessionId, ttlSeconds) =>
     exclusive(async () => {
-      if ((await cache.get(pairKey)) === sessionId) await cache.set(pairKey, sessionId, ttlSeconds);
+      const held = await cache.get(pairKey);
+      if (held === sessionId || held === null) await cache.set(pairKey, sessionId, ttlSeconds);
+    });
+
+/** Libère l'index d'une paire SI ET SEULEMENT SI il désigne encore `sessionId` (en production, un DEL gardé par Lua). */
+export type PairRelease = (pairKey: string, sessionId: string) => Promise<void>;
+
+export const releasePairThroughCache =
+  (cache: TogetherCache): PairRelease =>
+  (pairKey, sessionId) =>
+    exclusive(async () => {
+      if ((await cache.get(pairKey)) === sessionId) await cache.del(pairKey);
     });
 
 const parseIds = (raw: string | null): readonly string[] => {
@@ -156,13 +168,13 @@ const parseIds = (raw: string | null): readonly string[] => {
 const USER_INDEX_MAX = 20;
 
 /** Inscrit la séance à l'index de ses deux comptes : de quoi la couper quand l'un d'eux disparaît. */
-export async function indexTogetherUsers(cache: TogetherCache, session: TogetherSession, ttlSeconds: number): Promise<void> {
+export async function indexTogetherUsers(cache: TogetherCache, session: TogetherSession): Promise<void> {
   await Promise.all(
     [session.hostId, session.guestId].map((userId) =>
       exclusive(async () => {
         const key = togetherUserKey(userId);
         const ids = parseIds(await cache.get(key)).filter((id) => id !== session.sessionId);
-        await cache.set(key, JSON.stringify([...ids, session.sessionId].slice(-USER_INDEX_MAX)), ttlSeconds);
+        await cache.set(key, JSON.stringify([...ids, session.sessionId].slice(-USER_INDEX_MAX)), TOGETHER_SESSION_TTL_SECONDS);
       }),
     ),
   );
@@ -215,9 +227,12 @@ export async function isTogetherEnded(cache: TogetherCache, sessionId: string): 
 }
 
 /** Efface la séance, et l'index de la paire s'il la désigne encore. */
-export async function clearTogether(cache: TogetherCache, session: TogetherSession): Promise<void> {
-  const pair = togetherPairKey(session.hostId, session.guestId);
-  if ((await cache.get(pair)) === session.sessionId) await cache.del(pair);
+export async function clearTogether(
+  cache: TogetherCache,
+  session: TogetherSession,
+  releasePair: PairRelease = releasePairThroughCache(cache),
+): Promise<void> {
+  await releasePair(togetherPairKey(session.hostId, session.guestId), session.sessionId);
   await cache.del(sessionKey(session.sessionId));
   await Promise.all([session.hostId, session.guestId].map((userId) => unindexTogetherUser(cache, userId, session.sessionId)));
 }

@@ -37,6 +37,7 @@ import { judgeTogether, type TogetherGateDb, type TogetherVerdict } from './toge
 import {
   claimPairThroughCache,
   extendPairThroughCache,
+  releasePairThroughCache,
   clearTogether,
   indexTogetherUsers,
   isTogetherEnded,
@@ -48,6 +49,7 @@ import {
   togetherPairKey,
   type PairClaim,
   type PairExtend,
+  type PairRelease,
   type TogetherCache,
   type TogetherSession,
 } from './togetherStore';
@@ -63,6 +65,8 @@ export type TogetherRelayDeps = {
   readonly claimPair?: PairClaim;
   /** La prolongation gardée de l'index de paire ; absente, le cache la simule. */
   readonly extendPair?: PairExtend;
+  /** La libération gardée de l'index de paire ; absente, le cache la simule. */
+  readonly releasePair?: PairRelease;
   readonly newSessionId?: () => string;
 };
 
@@ -95,6 +99,9 @@ const parse = <T>(schema: ZodType<T>, data: unknown): T | null => {
 
 const ttlOf = (session: TogetherSession): number => (session.joined ? TOGETHER_SESSION_TTL_SECONDS : TOGETHER_INVITE_TTL_SECONDS);
 
+const clear = (deps: TogetherRelayDeps, session: TogetherSession): Promise<void> =>
+  clearTogether(deps.cache, session, deps.releasePair ?? releasePairThroughCache(deps.cache));
+
 /**
  * Écrit la séance, puis relit sa pierre tombale : une coupure survenue entre le jugement et
  * l'écriture l'emporte — ce qui vient d'être écrit est effacé, et rien ne sera émis (`null`).
@@ -108,9 +115,9 @@ async function save(deps: TogetherRelayDeps, session: TogetherSession): Promise<
   const kept = { ...session, expiresAt };
   await storeTogether(deps.cache, kept, ttl);
   await (deps.extendPair ?? extendPairThroughCache(deps.cache))(togetherPairKey(kept.hostId, kept.guestId), kept.sessionId, ttl);
-  await indexTogetherUsers(deps.cache, kept, ttl);
+  await indexTogetherUsers(deps.cache, kept);
   if (!(await isTogetherEnded(deps.cache, kept.sessionId))) return kept;
-  await clearTogether(deps.cache, kept);
+  await clear(deps, kept);
   return null;
 }
 
@@ -121,7 +128,7 @@ async function save(deps: TogetherRelayDeps, session: TogetherSession): Promise<
  */
 async function end(deps: TogetherRelayDeps, session: TogetherSession, reason: TogetherEndReason): Promise<void> {
   await markTogetherEnded(deps.cache, session.sessionId, TOGETHER_SESSION_TTL_SECONDS);
-  await clearTogether(deps.cache, session);
+  await clear(deps, session);
   emitTo(deps.io, membersOf(session), SERVER_EVENTS.TOGETHER_ENDED, {
     sessionId: session.sessionId,
     reason,
@@ -195,7 +202,7 @@ export async function inviteTogether(deps: TogetherRelayDeps, hostId: string, da
   const stillAllowedNow = stillPairs && (await judge(deps, subject).then((again) => again.ok, () => false));
   if (!stillAllowedNow) {
     await markTogetherEnded(deps.cache, session.sessionId, TOGETHER_SESSION_TTL_SECONDS);
-    await clearTogether(deps.cache, session);
+    await clear(deps, session);
     return stillPairs ? NOT_ALLOWED : UNAVAILABLE;
   }
   const expiresAt = new Date(session.expiresAt).toISOString();

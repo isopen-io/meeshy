@@ -632,3 +632,44 @@ describe('#17043 (audit) — une écriture en vol ne reprend pas l\'index d\'une
     expect(await joinTogether(m.deps, PROCHE, { sessionId: secondeId })).toMatchObject({ success: true });
   });
 });
+
+describe('#17043 (contre-audit) — réserves levées', () => {
+  it('R1 : une seconde séance du même compte ne raccourcit pas l\'index de la première', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    await inviter(m, SANG, AUDIO);
+    const indexHote = m.cache.entries.get([...m.cache.entries.keys()].find((key) => key.startsWith('together:user:') && JSON.parse(m.cache.entries.get(key)!.value).length === 2)!);
+    expect(indexHote?.ttl).toBe(TOGETHER_SESSION_TTL_SECONDS);
+
+    m.avancer(200_000);
+    m.emissions.length = 0;
+    await endTogetherOf(m.deps, HOTE);
+
+    expect(m.vers(PROCHE).map((e) => e.event)).toEqual([SERVER_EVENTS.TOGETHER_ENDED]);
+  });
+
+  it('R2 : l\'index de paire expiré avant la prolongation est recréé, le rejugement retrouve la séance', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    m.cache.entries.delete(togetherPairKey(HOTE, PROCHE));
+
+    await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 1 });
+    expect(m.cache.entries.get(togetherPairKey(HOTE, PROCHE))?.value).toBe(SESSION_ID);
+
+    await m.world.users.updateMany({ where: { id: PROCHE }, data: { blockedUserIds: [HOTE] } });
+    m.emissions.length = 0;
+    await rejudgeTogetherBetween(m.deps, { userA: HOTE, userB: PROCHE });
+    expect(m.emissions.map((e) => e.event)).toEqual([SERVER_EVENTS.TOGETHER_ENDED, SERVER_EVENTS.TOGETHER_ENDED]);
+  });
+
+  it('R2 bis : la fin libère l\'index par la libération gardée, jamais par un get puis del', async () => {
+    const m = monde();
+    const released: Array<[string, string]> = [];
+    const deps: TogetherRelayDeps = { ...m.deps, releasePair: async (key, id) => void released.push([key, id]) };
+    await inviteTogether(deps, HOTE, { toUserId: PROCHE, conversationId: CONV, attachmentId: VIDEO });
+    await leaveTogether(deps, HOTE, { sessionId: SESSION_ID });
+    expect(released).toEqual([[togetherPairKey(HOTE, PROCHE), SESSION_ID]]);
+  });
+});

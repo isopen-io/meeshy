@@ -7,7 +7,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
 import type { Redis } from 'ioredis';
-import { claimPairThroughCache, extendPairThroughCache, type PairClaim, type PairExtend } from './togetherStore';
+import { claimPairThroughCache, extendPairThroughCache, releasePairThroughCache, type PairClaim, type PairExtend, type PairRelease } from './togetherStore';
 import { rejudgeTogetherBetween, type TogetherIo, type TogetherRelayDeps } from './togetherRelay';
 
 /** Le cache du processus, résolu à l'usage : brancher une socket n'ouvre aucune connexion. */
@@ -40,17 +40,28 @@ const claimPair: PairClaim = async (pairKey, sessionId, ttlSeconds) => {
   return client ? client.set(pairKey, sessionId, 'EX', ttlSeconds, 'GET') : claimPairThroughCache(lazyCache)(pairKey, sessionId, ttlSeconds);
 };
 
-const EXTEND_IF_MINE = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) end return 0`;
+const EXTEND_OR_RECREATE = `local held = redis.call('get', KEYS[1])
+if held == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) end
+if not held then return redis.call('set', KEYS[1], ARGV[1], 'EX', ARGV[2], 'NX') and 1 or 0 end
+return 0`;
+const DELETE_IF_MINE = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0`;
 
-/** Prolonge l'index de paire seulement s'il désigne encore la séance : un script Lua, donc atomique. */
+/** Prolonge l'index de paire s'il désigne encore la séance, le recrée s'il a expiré : un script Lua, donc atomique. */
 const extendPair: PairExtend = async (pairKey, sessionId, ttlSeconds) => {
   const client = readyClient();
   if (!client) return extendPairThroughCache(lazyCache)(pairKey, sessionId, ttlSeconds);
-  await client.eval(EXTEND_IF_MINE, 1, pairKey, sessionId, String(ttlSeconds));
+  await client.eval(EXTEND_OR_RECREATE, 1, pairKey, sessionId, String(ttlSeconds));
+};
+
+/** Libère l'index de paire seulement s'il désigne encore la séance : un DEL gardé, atomique. */
+const releasePair: PairRelease = async (pairKey, sessionId) => {
+  const client = readyClient();
+  if (!client) return releasePairThroughCache(lazyCache)(pairKey, sessionId);
+  await client.eval(DELETE_IF_MINE, 1, pairKey, sessionId);
 };
 
 export function togetherRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: TogetherIo | undefined }): TogetherRelayDeps {
-  return { prisma: params.prisma, cache: lazyCache, io: params.io, now: () => Date.now(), claimPair, extendPair };
+  return { prisma: params.prisma, cache: lazyCache, io: params.io, now: () => Date.now(), claimPair, extendPair, releasePair };
 }
 
 export async function rejudgeTogetherAfter(
