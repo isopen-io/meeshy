@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_settings_block_talkie">Talkie stummschalten</string>
+    <string name="circles_settings_block_talkie_detail">Die Stimme wird nicht mehr direkt bei dir abgespielt, sondern kommt als Sprachnachricht an. Die Person wird nicht benachrichtigt.</string>
     <string name="contacts_back">Zurück</string>
     <string name="contacts_blocked_empty">Keine blockierten Nutzer</string>
     <string name="contacts_blocked_unblock">Entsperren</string>

@@ -252,3 +252,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (émettre + recevoir), accorder la catégorie depuis le web, rangée de liste (#16733), fantôme.
 - Prochain lot recommandé : accorder « Ce que j'écoute » depuis le web et Android (le web reçoit déjà), sinon
   l'émission du talkie sur iOS.
+## 2026-11-08 — réveil 14 : la voix d'un Proche sort sur Android (`proche-talkie@android`, #16675)
+
+- Reprise : #16757 (écoute reçue sur iOS) était menée par le réveil 13, encore actif (elle a fusionné depuis) : ce
+  réveil ne l'a pas touchée. L'émission de l'écoute depuis iOS toucherait les mêmes fichiers ; il prend donc la réception
+  du talkie sur Android, qui n'en partage aucun. Branche `claude/cercles-talkie-android` réservée avant toute écriture.
+- Livré dans la PR (voir #16675) : `TalkieFloor` (loi pure, iso `TalkieCenter.swift`) et `TalkieAdts` (découpage des
+  trames, configuration du décodeur) dans `:core:model` ; les trois événements sur UN flux ordonné de
+  `RelationSocketEventsManager` (le fragment en binaire natif) ; `TalkieCenter`, `TalkieVoicePlayer` (MediaCodec →
+  AudioTrack en flux, silencieux respecté, rien pendant un appel) et l'indicateur `TalkieOverlay` dans `:app` ;
+  « Couper son talkie » actif dès Proche sur la fiche d'un lien, le réglage par personne généralisé
+  (`RelationReceptionSetting`, `CircleReceptionBlock*`, ex `CircleBringBlock*`). Libellés adoptés du catalogue iOS.
+- Gates : les 18 témoins de `:core:model` verts en local (kotlinc 2.1 + JUnit, hors Gradle) ; le reste se prouve par
+  `android.yml` sur la PR.
+- Ce qui reste du talkie : arrière-plan Android (FCM haute priorité + service au premier plan), émission iOS et
+  Android, copie en message vocal (#16698), Safari/Firefox (#16699).
+- Prochain lot recommandé : émettre l'écoute depuis iOS (#16757 est fusionnée), sinon l'émission du talkie sur iOS.
