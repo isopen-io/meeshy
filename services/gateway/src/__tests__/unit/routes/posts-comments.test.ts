@@ -597,6 +597,17 @@ describe('PATCH /posts/:postId/comments/:commentId — edit own comment', () => 
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 403 COMMENTS_DISABLED when the publication closed its comments (#16930)', async () => {
+    mockUpdateComment.mockRejectedValueOnce(new Error('COMMENTS_DISABLED'));
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'Edited' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('COMMENTS_DISABLED');
+  });
+
   it('returns 400 EMPTY_CONTENT when a text comment is edited to blank', async () => {
     mockUpdateComment.mockRejectedValueOnce(new Error('EMPTY_CONTENT'));
     const res = await app.inject({

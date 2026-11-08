@@ -33,7 +33,8 @@ import java.time.Instant
 /**
  * La section « Messages » sous les conversations trouvées (#14619) : la même ligne que l'onglet
  * Messages de la recherche globale, le texte servi par le Prisme, surligné contre la requête qui
- * l'a produit. Un toucher ouvre la conversation SUR le message.
+ * l'a produit. Un extrait flouté se voile, une transcription se peint derrière l'icône de son
+ * média. Un toucher ouvre la conversation SUR le message.
  */
 internal fun LazyListScope.messageSearchItems(
     search: ListMessageSearchState,
@@ -99,4 +100,6 @@ internal fun ListMessageHit.asSearchHit(conversation: ApiConversation?): Message
     conversationTitle = conversationTitle.ifBlank { conversation?.title.orEmpty() },
     conversation = conversation,
     conversationAvatar = conversationAvatar,
+    isVeiled = isVeiled,
+    transcriptMedia = transcriptMedia,
 )

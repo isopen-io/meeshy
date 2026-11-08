@@ -27,6 +27,7 @@ extension PostDetailViewModel {
     /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
     /// `originalLanguage` est la langue de la pastille du composer, DÉCLARÉE au
     /// serveur : sans elle, la passerelle la remet à null et la redétecte (#6600).
+    /// Un refus `COMMENTS_DISABLED` (#16930) ferme la page au lieu d'une erreur.
     func updateComment(_ target: FeedComment, content: String, effectFlags: Int, originalLanguage: String?) async {
         guard let post else { return }
         let edited = target.withEditedContent(content, effectFlags: effectFlags)
@@ -45,7 +46,11 @@ extension PostDetailViewModel {
         } catch {
             comments = snapshotComments
             repliesMap = snapshotReplies
-            FeedbackToastManager.shared.showError(
+            // #16930 — le fil a été fermé entre-temps : la page se ferme tout de
+            // suite, comme après un envoi refusé, sans attendre `post:updated`.
+            let closed = CommentsClosure.isRefusal(error)
+            if closed { commentsRefusedLocally = true }
+            FeedbackToastManager.shared.showError(closed ? CommentsClosedNotice.text :
                 String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
         }
     }

@@ -37,6 +37,7 @@ import {
 } from '@/routes/communities-parts';
 import { CommunityInviteButton, CommunityMembersLink, CommunitySettingsLink } from '@/routes/community-members-parts';
 import { CommunityMembershipAction, type MembershipFailure } from '@/routes/community-membership';
+import { CommunityDetailTabs, communityPanelId, communityTabId, type CommunityDetailTab } from '@/routes/community-tabs';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -62,16 +63,21 @@ import { href, navigate } from '@/routes/route-table';
  *
  * **« Réglages »** (#6377) mène, au créateur seul, à `community-settings.tsx`.
  *
- * **Ce que l'écran ne montre pas, parce que le web ne le sert pas encore** —
- * loi 4, un contrôle n'existe que s'il a un effet : l'onglet
- * Publications — #6379 (D-60). Le
- * cœur « Réagir à la communauté » d'iOS n'a aucun effet, là-bas non plus.
+ * **Deux onglets, Conversations et Publications** (#6379), comme le
+ * `Picker(.segmented)` d'iOS. L'onglet Publications (`community-posts.tsx`) est
+ * chargé à la demande : la même carte que le Flux, servie par la passerelle
+ * selon ce que le lecteur peut lire de la communauté.
+ *
+ * **Ce que l'écran ne montre pas** — loi 4, un contrôle n'existe que s'il a un
+ * effet : le cœur « Réagir à la communauté » d'iOS n'a aucun effet, là-bas non
+ * plus, et « Créer un post » n'y est pas câblé.
  *
  * 403 et 404 rendent le MÊME refus (D-6) : un identifiant ne dit pas si une
  * communauté privée existe.
  */
 
 const CommunityInviteSheet = lazy(() => import('@/routes/community-invite'));
+const CommunityPostsPanel = lazy(() => import('@/routes/community-posts'));
 
 const ROW_SEPARATOR = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)';
 
@@ -84,6 +90,7 @@ export default function CommunityScreen() {
   const [membershipPending, setMembershipPending] = useState(false);
   const [membershipFailure, setMembershipFailure] = useState<MembershipFailure | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [tab, setTab] = useState<CommunityDetailTab>('channels');
   const [inviteStatus, setInviteStatus] = useState<string | null>(() => takeInviteStatus(communityId));
   const enabled = apiDeps.source === 'fixtures' || signedIn;
 
@@ -112,7 +119,7 @@ export default function CommunityScreen() {
   const sentinel = useLoadMoreSentinel({
     root: scroller,
     rootMargin: '0px 0px 240px 0px',
-    enabled: conversations.hasNextPage && !conversations.isFetchingNextPage && !conversations.isFetchNextPageError,
+    enabled: tab === 'channels' && conversations.hasNextPage && !conversations.isFetchingNextPage && !conversations.isFetchNextPageError,
     onReach: () => void conversations.fetchNextPage(),
   });
 
@@ -198,7 +205,18 @@ export default function CommunityScreen() {
                 onJoin={() => void changeMembership('join')}
                 onLeave={() => void changeMembership('leave')}
               />
-              <CommunityConversationsSection language={language}>{conversationBody}</CommunityConversationsSection>
+              <CommunityDetailTabs language={language} selected={tab} onSelect={setTab} />
+              {tab === 'channels' ? (
+                <div id={communityPanelId('channels')} role="tabpanel" aria-labelledby={communityTabId('channels')}>
+                  <CommunityConversationsSection language={language}>{conversationBody}</CommunityConversationsSection>
+                </div>
+              ) : (
+                <section id={communityPanelId('posts')} role="tabpanel" aria-labelledby={communityTabId('posts')}>
+                  <Suspense fallback={null}>
+                    <CommunityPostsPanel language={language} communityId={community.id} online={online} scroller={scroller} />
+                  </Suspense>
+                </section>
+              )}
             </div>
           </>
         )}

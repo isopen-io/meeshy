@@ -3,6 +3,8 @@ package me.meeshy.app.conversations
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.search.SearchExcerpt
+import me.meeshy.sdk.model.search.SearchMediaKind
 import org.junit.Test
 
 class GlobalSearchResultRowsTest {
@@ -55,6 +57,34 @@ class GlobalSearchResultRowsTest {
             content = "hello",
         )
         assertThat(label).isEqualTo("Message from Ana in Team, hello")
+    }
+
+    @Test
+    fun `a veiled message is announced as blurred, never by its text`() {
+        val label = GlobalSearchRows.messageLabel(
+            template = "Message from %1\$s in %2\$s, %3\$s",
+            sender = "Ana",
+            conversation = "Team",
+            excerpt = SearchExcerpt.Veiled(media = SearchMediaKind.AUDIO),
+            veiledLabel = "Blurred message",
+            mediaLabel = { "Voice message transcript" },
+        )
+
+        assertThat(label).isEqualTo("Message from Ana in Team, Blurred message")
+    }
+
+    @Test
+    fun `a transcript is announced after the name of its media`() {
+        val label = GlobalSearchRows.messageLabel(
+            template = "Message from %1\$s in %2\$s, %3\$s",
+            sender = "Ana",
+            conversation = "Team",
+            excerpt = SearchExcerpt.Shown(text = "see you tomorrow", media = SearchMediaKind.AUDIO),
+            veiledLabel = "Blurred message",
+            mediaLabel = { kind -> if (kind == SearchMediaKind.AUDIO) "Voice message transcript" else "?" },
+        )
+
+        assertThat(label).isEqualTo("Message from Ana in Team, Voice message transcript, see you tomorrow")
     }
 
     @Test

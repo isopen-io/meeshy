@@ -31,7 +31,10 @@ beforeEach(() => {
       }),
     } as unknown as PrismaClient['postComment'],
     commentReaction: {} as unknown as PrismaClient['commentReaction'],
-    post: {} as unknown as PrismaClient['post'],
+    // #16930 — l'édition relit la fermeture des commentaires de la publication : ouverte ici.
+    post: {
+      findFirst: jest.fn().mockResolvedValue({ commentsDisabled: false, repostOf: null }),
+    } as unknown as PrismaClient['post'],
     postMedia: {
       findMany: jest.fn().mockResolvedValue([]),
       count: jest.fn().mockResolvedValue(0),

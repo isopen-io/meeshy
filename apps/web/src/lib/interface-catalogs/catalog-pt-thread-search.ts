@@ -14,6 +14,7 @@ const ptThreadSearch = {
   'thread.search.retry': 'Tentar novamente',
   'thread.search.more': 'Mais resultados',
   'thread.search.translated': 'Encontrado numa tradução',
+  'thread.search.blurred': 'Mensagem desfocada',
 } satisfies ThreadSearchCatalogSlice;
 
 export default ptThreadSearch;

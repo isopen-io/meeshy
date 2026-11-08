@@ -8,7 +8,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import me.meeshy.core.database.dao.MessageDao
-import me.meeshy.sdk.conversation.toLocalMessage
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.search.ListMessageHit
 import me.meeshy.sdk.model.search.ListMessageSearch
@@ -16,7 +15,6 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.network.NetworkMonitor
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -57,21 +55,8 @@ public class RoomListMessageSearchSource @Inject constructor(
     private val network: NetworkMonitor,
 ) : ListMessageSearchSource {
 
-    override suspend fun local(query: String): List<ApiMessage> {
-        val hits = index.searchMessages(query, ListMessageSearch.LIMIT)
-        if (hits.isEmpty()) return emptyList()
-        val cached = messageDao.findAll(hits.map { it.messageId })
-            .mapNotNull { row -> runCatching { row.toLocalMessage().message }.getOrNull() }
-            .associateBy { it.id }
-        return hits.map { hit ->
-            cached[hit.messageId] ?: ApiMessage(
-                id = hit.messageId,
-                conversationId = hit.conversationId,
-                content = hit.text,
-                createdAt = Instant.ofEpochMilli(hit.createdAt).toString(),
-            )
-        }
-    }
+    override suspend fun local(query: String): List<ApiMessage> =
+        messageDao.hydrate(index.searchMessages(query, ListMessageSearch.LIMIT))
 
     override suspend fun remote(query: String, conversationIds: List<String>): RemoteMessageSearch? {
         if (!network.isOnline.value) return null

@@ -395,11 +395,12 @@ const ownerOf = (deps: CommentSendDeps, authorId: string): Credential | null =>
 /** 409 `MUTATION_IN_FLIGHT` — la première tentative est EN COURS sur la passerelle : attendre, jamais défaire. */
 export const commentStillInFlight = (failure: ApiFailure): boolean => failure.status === 409 && failure.code === 'MUTATION_IN_FLIGHT';
 
-const closedBy = (failure: ApiFailure): boolean => failure.status === 403 && failure.code === 'COMMENTS_DISABLED';
+/** LE REFUS « COMMENTAIRES FERMÉS » (#16541, #16930) — sa SIGNATURE, une seule fois : l'envoi et la modification la lisent ici. */
+export const commentsClosedBy = (failure: ApiFailure): boolean => failure.status === 403 && failure.code === 'COMMENTS_DISABLED';
 
 /** Un refus PERMANENT : le message à dire — et, fermés, la publication passe fermée dans chaque caisse. */
 const refusalOf = (deps: CommentSendDeps, postId: string, failure: ApiFailure): CommentResult => {
-  if (!closedBy(failure)) return { ok: false, message: COMMENT_FAILED_MESSAGE };
+  if (!commentsClosedBy(failure)) return { ok: false, message: COMMENT_FAILED_MESSAGE };
   writeCommentsDisabled(deps.queryClient, postId, true);
   return { ok: false, message: COMMENT_CLOSED_MESSAGE };
 };

@@ -4,6 +4,8 @@ import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.HighlightSegment
 import me.meeshy.sdk.model.MessageTextParser
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.search.SearchExcerpt
+import me.meeshy.sdk.model.search.SearchMediaKind
 
 /** Protection d'un dernier message : la ligne dit le libelle, jamais le texte (parite iOS `LastMessageSummaryKind`). */
 enum class RowProtection { HIDDEN, VIEW_ONCE, EXPIRED }
@@ -21,6 +23,16 @@ object GlobalSearchRows {
 
     fun messageLabel(template: String, sender: String, conversation: String, content: String): String =
         template.format(sender, conversation, content)
+
+    /** Le libellé lu d'un message trouvé : un extrait voilé se dit par [veiledLabel], jamais par son texte. */
+    fun messageLabel(
+        template: String,
+        sender: String,
+        conversation: String,
+        excerpt: SearchExcerpt,
+        veiledLabel: String,
+        mediaLabel: (SearchMediaKind) -> String,
+    ): String = messageLabel(template, sender, conversation, excerpt.spoken(veiledLabel, mediaLabel))
 
     fun tabLabel(name: String, count: Int, template: String): String = template.format(name, count)
 

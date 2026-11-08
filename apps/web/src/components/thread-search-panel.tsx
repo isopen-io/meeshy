@@ -1,4 +1,5 @@
 import { translate } from '@/lib/i18n-catalog';
+import { BLUR_RADIUS_PX, surrogateOf } from '@/lib/reading-mode/protection';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { searchStatusKey, type ThreadSearchHit } from '@/lib/view/thread-search';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -99,7 +100,7 @@ export function ThreadSearchPanel({
         <ul className="mt-1 max-h-[55dvh] overflow-y-auto overscroll-contain" data-thread-search-results="">
           {search.hits.map((hit) => (
             <li key={hit.messageId}>
-              <SearchHitRow hit={hit} date={dateOf.format(hit.createdAt)} translatedLabel={translate(language, 'thread.search.translated')} onPick={onPick} />
+              <SearchHitRow hit={hit} date={dateOf.format(hit.createdAt)} translatedLabel={translate(language, 'thread.search.translated')} blurredLabel={translate(language, 'thread.search.blurred')} onPick={onPick} />
             </li>
           ))}
           {search.hasMore ? (
@@ -126,11 +127,13 @@ function SearchHitRow({
   hit,
   date,
   translatedLabel,
+  blurredLabel,
   onPick,
 }: {
   readonly hit: ThreadSearchHit;
   readonly date: string;
   readonly translatedLabel: string;
+  readonly blurredLabel: string;
   readonly onPick: (messageId: string) => void;
 }) {
   return (
@@ -146,6 +149,13 @@ function SearchHitRow({
         <span className="shrink-0">{date}</span>
       </span>
       <span className="line-clamp-2 text-caption">
+        {hit.veiled ? (
+          <span data-thread-search-veiled="" role="img" aria-label={blurredLabel}>
+            <span aria-hidden="true" style={{ filter: `blur(${BLUR_RADIUS_PX / 3}px)`, userSelect: 'none' }}>
+              {surrogateOf(hit.veilLength)}
+            </span>
+          </span>
+        ) : null}
         {hit.snippet.before}
         {hit.snippet.match === '' ? null : (
           <mark className="rounded-sm px-0.5 font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 22%, transparent)', color: 'inherit' }}>

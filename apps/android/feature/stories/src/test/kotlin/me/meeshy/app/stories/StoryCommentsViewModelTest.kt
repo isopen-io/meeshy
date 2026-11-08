@@ -267,6 +267,34 @@ class StoryCommentsViewModelTest {
         assertThat(vm.state.value.comments.find("r")!!.content).isEqualTo("neuf")
     }
 
+    @Test
+    fun `une edition refusee COMMENTS_DISABLED garde le texte d'origine et ferme le fil`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.edit("s1", "r", "neuf", any()) } returns
+            NetworkResult.Failure(ApiError(message = "Comments are disabled", code = "COMMENTS_DISABLED", httpStatus = 403))
+        val vm = viewModel()
+        vm.begin("s1")
+        var closed = 0
+
+        vm.edit("r", "neuf") { closed++ }
+
+        assertThat(vm.state.value.comments.find("r")!!.content).isEqualTo("cr")
+        assertThat(closed).isEqualTo(1)
+    }
+
+    @Test
+    fun `une autre panne d'edition ne ferme pas le fil`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.edit("s1", "r", "neuf", any()) } returns NetworkResult.Failure(ApiError(message = "boom", code = "INTERNAL_ERROR"))
+        val vm = viewModel()
+        vm.begin("s1")
+        var closed = 0
+
+        vm.edit("r", "neuf") { closed++ }
+
+        assertThat(closed).isEqualTo(0)
+    }
+
     private fun loadedViewModel(): StoryCommentsViewModel {
         coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r"), row("q")))
         val vm = viewModel()
