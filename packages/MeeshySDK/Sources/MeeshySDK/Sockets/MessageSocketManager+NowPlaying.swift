@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SocketIO
 
 // L'écoute partagée (#13934, #16755) sur la socket de messages : `now-playing:changed` et `now-playing:cleared`, sur la
 // room `user:<id>` (`packages/shared/types/socketio-events/now-playing-event-names.ts`). Chaque charge est déjà
