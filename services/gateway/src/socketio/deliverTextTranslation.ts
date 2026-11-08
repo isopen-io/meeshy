@@ -6,7 +6,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import type { OfflineParticipantQueueParams } from './offlineParticipantQueue';
-import { translationReaders } from './translationReaders';
+import { translationReaders, type TranslationReaders } from './translationReaders';
 import type { MeeshyIOServer } from './typed-socket';
 
 const logger = enhancedLogger.child({ module: 'TextTranslationDelivery' });
@@ -103,11 +103,54 @@ export async function deliverTextTranslation(
       // #9709 — la room entière, ou ses seuls lecteurs autorisés : un
       // participant dont le plancher d'historique est postérieur au message
       // ne reçoit pas sa traduction (`translationReaders`, fail-closed).
-      const readers = await translationReaders(deps.prisma, conversationIdForBroadcast, messageCreatedAt);
-      if (readers.kind === 'room') {
-        deps.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
-      } else if (readers.rooms.length > 0) {
-        deps.io.to([...readers.rooms]).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
+      // #17026 — la loi du plancher répond TROIS choses, pas deux : la room
+      // entière, ses seuls lecteurs autorisés, ou RIEN DE PROUVÉ. Ses deux
+      // `findMany` étaient nus dans le `try` de fin de méthode.
+      //
+      // ─── Ce que ce guard change, et ce qu'il NE change pas ────────────────
+      //
+      // Le RÉSULTAT observable sur `'unknown'` est le même qu'avant : rien en
+      // direct, rien en file. C'est voulu, et c'est un arbitrage —
+      // `excludedQueueKeys` nomme les lecteurs SOUS le plancher, donc enfiler
+      // sans cette liste déposerait le texte traduit 48 h dans Redis sous la
+      // clé d'un invité qu'aucune route n'autorise à le lire. Entre une
+      // traduction perdue et un contenu persisté chez qui n'y a pas droit, on
+      // choisit la première ; le recours est bon marché (`GET …/messages` sert
+      // les traductions sous le plancher appliqué côté serveur, donc ouvrir la
+      // conversation les retrouve). C'est l'inverse de `message:new`, dont la
+      // file est la SEULE voie — et c'est pourquoi les deux s'arbitrent à
+      // l'opposé.
+      //
+      // Ce qui change est le DIAGNOSTIC, et il faut le dire franchement pour ne
+      // pas se créditer d'une perte réparée : la panne sortait par un `catch`
+      // de fin de méthode qui journalise « Erreur envoi traduction » et
+      // incrémente `stats.errors`, indistinguable d'une charge malformée ou
+      // d'un encodeur en défaut. Elle est désormais une DÉCISION nommée, avec
+      // son propre avertissement et sans compteur d'erreur. Le témoin
+      // pré-existant (« une lecture des participants qui tombe n'émet RIEN »)
+      // était vert des deux côtés : il ne pouvait pas distinguer « retenu à
+      // dessein » de « la méthode a explosé ».
+      //
+      // La durabilité, dans ce fichier, c'est le `try` autour de l'émission
+      // vivante ci-dessous — pas celui-ci.
+      const readers = await translationReadersOrUnknown(deps, conversationIdForBroadcast, messageCreatedAt, result.messageId);
+      if (readers.kind === 'unknown') return;
+
+      // L'émission vivante ne peut pas emporter l'enfilage qui la SUIT : c'est
+      // la règle du cycle 116 (charger → enfiler → cosmétique), et elle valait
+      // ici contre la seule étape que personne n'avait gardée.
+      try {
+        if (readers.kind === 'room') {
+          deps.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
+        } else if (readers.rooms.length > 0) {
+          deps.io.to([...readers.rooms]).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
+        }
+      } catch (error) {
+        logger.warn('message:translation live emission failed — offline replay unaffected', {
+          messageId: result.messageId,
+          targetLanguage,
+          error,
+        });
       }
       deps.stats.translations_sent += clientCount;
 
@@ -178,5 +221,31 @@ export async function deliverTextTranslation(
   } catch (error) {
     logger.error(`❌ Erreur envoi traduction: ${error}`);
     deps.stats.errors++;
+  }
+}
+
+/**
+ * La loi du plancher, avec sa TROISIÈME réponse rendue DISABLE (#17026).
+ *
+ * `translationReaders` ouvre deux `findMany` nus ; une panne de l'une ou de
+ * l'autre ne dit NI qui est bloqué NI qui est autorisé. Un `ReadonlySet` ne
+ * peut pas porter cette phrase — c'est la leçon `[]`-vs-`undefined` du
+ * cycle 116 — donc elle vit dans le discriminant.
+ */
+async function translationReadersOrUnknown(
+  deps: Pick<TextTranslationDeliveryDeps, 'prisma'>,
+  conversationId: string,
+  messageCreatedAt: Date | null | undefined,
+  messageId: string,
+): Promise<TranslationReaders | { readonly kind: 'unknown' }> {
+  try {
+    return await translationReaders(deps.prisma, conversationId, messageCreatedAt);
+  } catch (error) {
+    logger.warn('translation audience unresolvable — translation withheld on both channels', {
+      conversationId,
+      messageId,
+      error,
+    });
+    return { kind: 'unknown' };
   }
 }

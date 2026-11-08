@@ -6340,16 +6340,52 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_handleTextTranslationReady - outer catch', () => {
-    it('increments stats.errors when io.to.emit throws', async () => {
+    /**
+     * #17026 — CE TÉMOIN A CHANGÉ DE SENS, et le changement est le lot.
+     *
+     * Il assertait qu'une émission vivante tombée atteint le `catch` de fin de
+     * méthode et incrémente `stats.errors`. C'était une description EXACTE du
+     * comportement — et ce comportement était le défaut : le `catch` est en
+     * aval de l'enfilage hors ligne, donc y arriver annulait le rejeu de la
+     * traduction pour TOUS les absents, définitivement (le `message:new` enfilé
+     * à l'envoi porte `translations: []`, et aucun client ne refetch de
+     * lui-même).
+     *
+     * L'émission est désormais gardée sur place. Le témoin assert donc la
+     * garantie NEUVE, pas l'absence de l'ancienne : rien n'est désactivé, la
+     * propriété est inversée avec sa raison. La couverture du `catch` extérieur
+     * est reprise par le témoin suivant, sur un chemin qui y mène VRAIMENT.
+     */
+    it("#17026 — une émission tombée ne remonte PAS au catch de fin de méthode", async () => {
       prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
       prisma.conversation.findUnique.mockResolvedValue(null);
 
-      // Make io.to().emit throw to trigger outer catch
       ioState.toEmit.mockImplementationOnce(() => { throw new Error('socket emit crashed in textTranslation'); });
 
       const data = {
         taskId: 'task-txt-outer',
         result: { messageId: 'msg-txt-outer', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
+        targetLanguage: 'fr',
+      };
+
+      const before = manager.getStats().errors;
+      await (manager as any)._handleTextTranslationReady(data);
+      expect(manager.getStats().errors).toBe(before);
+    });
+
+    it('increments stats.errors when la normalisation de la conversation LÈVE', async () => {
+      // Un chemin qui atteint le `catch` extérieur pour de bon : il est en
+      // amont de l'audience comme de l'émission, et rien ne le garde — c'est
+      // la signature d'une conversation introuvable ou d'un cache en défaut,
+      // pas d'un canal best-effort.
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      jest.spyOn(manager as any, 'normalizeConversationId')
+        .mockRejectedValueOnce(new Error('conversation id unresolvable') as never);
+
+      const data = {
+        taskId: 'task-txt-outer-2',
+        result: { messageId: 'msg-txt-outer-2', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
         targetLanguage: 'fr',
       };
 

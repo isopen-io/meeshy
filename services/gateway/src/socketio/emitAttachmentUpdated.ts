@@ -7,7 +7,7 @@ import {
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from './offlineParticipantQueue';
-import { readerSignedPlanForMessageId, type ReaderSignedPlan } from './readerSignedDelivery';
+import { readerSignedPlanForMessageIdBestEffort } from './readerSignedDelivery';
 import { serializeAttachmentForSocket, type SocketAttachmentRow } from './serializeAttachmentForSocket';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
@@ -92,24 +92,37 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
   // transcription et les pistes TTS arrivent après l'envoi) part par
   // destinataire, ses adresses signées pour chacun ; la diffusion chaînée
   // ci-dessous reste celle de toute autre pièce.
-  const plan = await readerSignedPlanBestEffort(prisma, conversationId, messageId, payload.attachment);
-  if (plan === 'unavailable') {
-    // Rien en direct : voir `readerSignedPlanBestEffort`.
-  } else if (plan) {
-    for (const target of plan.targets) {
-      io.to(target.room).emit(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
-        ...payload,
-        attachment: plan.signAttachment(payload.attachment, target.participantId),
+  const plan = await readerSignedPlanForMessageIdBestEffort(prisma, { conversationId, messageId, attachments: [payload.attachment] });
+
+  // #17026 — « Best-effort side channel — never throws » était FAUX de cette
+  // unité : les deux branches d'émission ci-dessous le font, `emit` levant dès
+  // que l'adaptateur ou l'encodeur est en défaut (`emitWithSeq` le dit), et
+  // `emitToConversationParticipants` n'a aucun `try`. L'exception remontait à
+  // l'appelant — contre la promesse du doc-comment — et emportait au passage
+  // l'enfilage hors ligne ci-dessous, c'est-à-dire la pièce ENRICHIE : la
+  // raison d'être du module. Un commentaire qui ÉNONCE une contrainte est une
+  // AFFIRMATION, et se vérifie comme telle (cycle 94).
+  try {
+    if (plan === 'unavailable') {
+      // Rien en direct : voir `readerSignedPlanForMessageIdBestEffort`.
+    } else if (plan) {
+      for (const target of plan.targets) {
+        io.to(target.room).emit(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
+          ...payload,
+          attachment: plan.signAttachment(payload.attachment, target.participantId),
+        });
+      }
+    } else {
+      emitToConversationParticipants({
+        io,
+        conversationId,
+        participants,
+        event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
+        payload,
       });
     }
-  } else {
-    emitToConversationParticipants({
-      io,
-      conversationId,
-      participants,
-      event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
-      payload,
-    });
+  } catch (error) {
+    logger.warn('attachment-updated live emission failed — offline replay unaffected', { conversationId, messageId, error });
   }
 
   // #12822 — la transcription et ses traductions sont du texte du message :
@@ -171,25 +184,5 @@ async function loadActiveParticipants(
       error,
     });
     return [];
-  }
-}
-
-/**
- * Le plan de remise par lecteur, ou `null`. Une lecture qui échoue NE retombe
- * PAS sur la diffusion de room — elle servirait les adresses nues d'une pièce
- * peut-être protégée — : rien ne part en direct, la file hors ligne et la
- * relecture de la page servent la pièce enrichie.
- */
-async function readerSignedPlanBestEffort(
-  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>,
-  conversationId: string,
-  messageId: string,
-  attachment: unknown,
-): Promise<ReaderSignedPlan | null | 'unavailable'> {
-  try {
-    return await readerSignedPlanForMessageId(prisma, { conversationId, messageId, attachments: [attachment] });
-  } catch (error) {
-    logger.warn('attachment-updated reader-signed plan failed — no live emission', { conversationId, error });
-    return 'unavailable';
   }
 }

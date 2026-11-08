@@ -242,3 +242,80 @@ export async function readerSignedPlanForMessageId(
     now,
   });
 }
+
+/**
+ * Le verdict d'un plan dont la LECTURE peut tomber (#17026).
+ *
+ * Les deux unités ci-dessus laissent remonter l'échec de la lecture des
+ * DESTINATAIRES, et c'est voulu : retomber sur la room servirait l'adresse nue
+ * d'une pièce qu'on vient d'établir comme liée au lecteur (voir le doc-comment
+ * de {@link readerSignedPlanForMessageId}). Mais « ne rien émettre en direct »
+ * et « ne rien faire du tout » sont deux phrases différentes, et l'exception
+ * les confondait chez tout appelant dont l'émission vivante précède, dans le
+ * même `try`, un enfilage DURABLE.
+ *
+ * Trois valeurs, donc, parce qu'il y a trois choses à dire :
+ *
+ * | valeur | la phrase | l'appelant |
+ * |---|---|---|
+ * | un plan | « voici les destinataires » | remise par lecteur, signée |
+ * | `null` | « la question ne se pose pas » | diffusion de room ordinaire |
+ * | `'unavailable'` | « je ne sais pas adresser » | RIEN en direct — et la suite a lieu |
+ *
+ * `'unavailable'` n'est PAS `null` : collapser les deux rendrait la diffusion de
+ * room sur une pièce protégée, c'est-à-dire exactement la fuite que le silence
+ * évite. C'est la leçon `[]`-vs-`undefined` du cycle 116 portée au plan signé —
+ * une ignorance qui ne peut pas se dire devient une affirmation.
+ */
+export type ReaderSignedPlanOutcome = ReaderSignedPlan | null | 'unavailable';
+
+/**
+ * {@link readerSignedPlan} dont l'échec ne peut pas emporter ce qui SUIT
+ * l'émission vivante chez l'appelant (#17026).
+ *
+ * Les deux producteurs de `message:new` appelaient la version nue au milieu de
+ * leurs arguments d'émission, dans le `try` dont le `catch` est en fin de
+ * méthode : une lecture tombée y annulait l'enfilage hors ligne du message,
+ * c'est-à-dire la SEULE voie par laquelle un destinataire absent l'apprend
+ * jamais. Rien ne rejoue, et aucun client ne refetch spontanément.
+ */
+export async function readerSignedPlanBestEffort(
+  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink'>,
+  input: { readonly conversationId: string; readonly message: object; readonly attachments: unknown },
+  onError?: (error: unknown) => void,
+): Promise<ReaderSignedPlanOutcome> {
+  try {
+    return await readerSignedPlan(prisma, input);
+  } catch (error) {
+    logger.warn('reader-signed plan failed — no live per-reader delivery, durable paths unaffected', {
+      conversationId: input.conversationId,
+      error,
+    });
+    onError?.(error);
+    return 'unavailable';
+  }
+}
+
+/**
+ * {@link readerSignedPlanForMessageId}, même arbitrage — la variante des
+ * émetteurs qui ne tiennent pas la ligne entière (`message:attachment-updated`).
+ * Elle vivait en copie privée dans `emitAttachmentUpdated`, seule à porter la
+ * décision ; elle vit ici une fois, avec sa jumelle.
+ */
+export async function readerSignedPlanForMessageIdBestEffort(
+  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>,
+  input: { readonly conversationId: string; readonly messageId: string; readonly attachments: unknown },
+  onError?: (error: unknown) => void,
+): Promise<ReaderSignedPlanOutcome> {
+  try {
+    return await readerSignedPlanForMessageId(prisma, input);
+  } catch (error) {
+    logger.warn('reader-signed plan (by messageId) failed — no live per-reader delivery', {
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      error,
+    });
+    onError?.(error);
+    return 'unavailable';
+  }
+}

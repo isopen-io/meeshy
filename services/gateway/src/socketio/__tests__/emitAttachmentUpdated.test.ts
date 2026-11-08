@@ -14,7 +14,7 @@ const THREE = [
 function makeDeps(
   participants: Array<{ id: string; userId: string | null }> = THREE,
   online: string[] = [],
-  overrides: Partial<{ findMany: any; enqueue: any }> = {},
+  overrides: Partial<{ findMany: any; enqueue: any; emitThrows: boolean }> = {},
 ) {
   const emitted: Emitted[] = [];
   const enqueued: Enqueued[] = [];
@@ -24,6 +24,9 @@ function makeDeps(
   const makeOperator = (rooms: string[]) => ({
     to: (room: string) => makeOperator([...rooms, room]),
     emit: (event: string, payload: unknown) => {
+      // #17026 — `emit` LÈVE quand l'adaptateur ou l'encodeur est en défaut :
+      // c'est une affirmation du dépôt (`emitWithSeq`), pas une hypothèse.
+      if (overrides.emitThrows) throw new Error('adapter down');
       emitted.push({ rooms, event, payload });
     },
   });
@@ -263,5 +266,42 @@ describe('emitAttachmentUpdated — joignabilité par conversation (#16687)', ()
     });
 
     expect(enqueued.map((e) => e.userId).sort()).toEqual(['participant-C', 'user-A']);
+  });
+});
+
+/**
+ * #17026 — « Best-effort side channel — never throws » était FAUX.
+ *
+ * Les deux branches d'émission de cette unité peuvent lever (`emit` en défaut
+ * d'adaptateur ou d'encodeur ; `emitToConversationParticipants` n'a aucun
+ * `try`), et l'exception remontait à l'appelant CONTRE la promesse du
+ * doc-comment — en emportant au passage l'enfilage hors ligne qui la suit,
+ * c'est-à-dire la pièce ENRICHIE : la transcription et sa piste traduite, la
+ * raison d'être du module.
+ *
+ * Un commentaire qui ÉNONCE une contrainte est une AFFIRMATION, et se vérifie
+ * comme telle (cycle 94). Les deux témoins ci-dessous la vérifient : l'un sur
+ * la promesse (« ne lève pas »), l'autre sur ce qu'elle protège (« l'absent est
+ * servi »). Séparés, parce que la première peut tenir alors que la seconde est
+ * perdue — un `try` posé autour du tout, enfilage compris, satisferait l'un et
+ * trahirait l'autre.
+ */
+describe('#17026 — une émission vivante qui LÈVE', () => {
+  it('ne remonte pas chez l’appelant : le doc-comment promet « never throws »', async () => {
+    const { deps } = makeDeps(THREE, [], { emitThrows: true });
+
+    await expect(
+      emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('n’emporte pas l’enfilage hors ligne — la pièce ENRICHIE atteint l’absent', async () => {
+    const { enqueued, deps } = makeDeps(THREE, [], { emitThrows: true });
+
+    await emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT });
+
+    // Les trois participants sont hors ligne (`online: []`) : chacun a son
+    // entrée. Sans la garde, aucun ne l'avait.
+    expect(enqueued.map((e) => e.userId).sort()).toEqual(['participant-C', 'user-A', 'user-B']);
   });
 });

@@ -46,8 +46,9 @@ import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
 import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSocket';
-import { emitMessageNew } from './messageNewEmission';
-import { readerSignedPlan } from './readerSignedDelivery';
+import { emitLiveBestEffort } from './emitLiveBestEffort';
+import { emitMessageNewBestEffort } from './messageNewEmission';
+import { readerSignedPlanBestEffort } from './readerSignedDelivery';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { deliverTextTranslation, type TextTranslationReady } from './deliverTextTranslation';
@@ -3148,7 +3149,14 @@ export class MeeshySocketIOManager {
       // destinataire avec adresses signées pour un message dont une pièce se
       // lit par lecteur (#9646) : `messageNewEmission.ts`. Aucun socket
       // d'expéditeur ici : il est rejoué plus bas, pour les appelants de test.
-      emitMessageNew({
+      //
+      // Émission ET lecture de plan BEST-EFFORT (#17026) : les deux précédaient
+      // l'enfilage durable de `syncConversationListOnNewMessage` dans le MÊME
+      // `try`, dont le `catch` de fin de méthode journalise « Erreur broadcast
+      // message ». Une diffusion ou une lecture tombée annulait donc le rejeu
+      // de TOUS les absents, sur un message déjà persisté. Jumeau exact du
+      // chemin socket (`MessageHandler.broadcastNewMessage`).
+      emitMessageNewBestEffort({
         io: this.io,
         room,
         senderPayload,
@@ -3161,8 +3169,8 @@ export class MeeshySocketIOManager {
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
           ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
           : null,
-        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: broadcastPayload.attachments }),
-      });
+        readerSigned: await readerSignedPlanBestEffort(this.prisma, { conversationId: normalizedId, message, attachments: broadcastPayload.attachments }),
+      }, (error) => logger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
       // Il reçoit le payload cid-aware : c'est SON socket, et c'est lui qui doit
@@ -3368,7 +3376,10 @@ export class MeeshySocketIOManager {
         attachments: serializeMessageAttachmentsForSocket(message.attachments),
       };
 
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      // Sixième site de la famille #17026, trouvé par le CLIQUET : l'enfilage
+      // durable est sept lignes plus bas, dans le même `try`.
+      emitLiveBestEffort(() => this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload),
+        (error) => logger.error('message:edited (call summary) live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
 
       await emitConversationPreviewUpdate(
         this.prisma, this.io, normalizedId, resolvedSenderId ?? '',

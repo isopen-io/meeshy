@@ -453,3 +453,132 @@ une édition en vol produit des échecs qui n'appartiennent à aucune révision.
 > deux fois : le temps de la passe, et le temps de disculper les faux rouges.
 > La suite complète se lance sur un arbre GELÉ — après le dernier commit, pas
 > pendant le prochain.
+
+---
+
+## Cinquième tour — lot H : une émission vivante NUE en amont d'un enfilage DURABLE (#17026)
+
+Lot pris après la fusion de #17048. L'issue venait du même audit : **les deux
+auditeurs l'avaient trouvée indépendamment, par deux périmètres disjoints** —
+le signal le plus fort du cycle.
+
+### Le défaut, et pourquoi la règle écrite ne l'a pas couvert
+
+`io.to(room).emit(...)` LÈVE quand l'adaptateur ou l'encodeur est en défaut.
+C'est une affirmation du dépôt, écrite là où il s'en garde
+(`socketio/utils/emitWithSeq.ts` : « la cause est réelle et pas hypothétique »).
+Sept unités plaçaient cet appel — ou une lecture non gardée — en amont d'une
+mise en file hors ligne, **dans le même `try`**, sous un `catch` de fin de
+méthode. Une diffusion tombée annulait donc le rejeu de TOUS les absents, sur
+un contenu déjà persisté et déjà acquitté « envoyé ».
+
+La règle était écrite, **deux fois, aux deux meilleurs endroits** : le
+§ « Sa PLACE fait partie de la garantie » de `MessageHandler.broadcastNewMessage`
+et son jumeau de `postMessageSyncFanOut`. Les deux citent `emitWithSeq`. Les
+deux nomment ce qui vient **après** l'enfilage (les synchros cosmétiques), et
+aucun ne tire la conséquence sur ce qui vient **avant** — l'émission vivante,
+trois lignes au-dessus, dans le même bloc.
+
+L'angle mort est mécanique : le cycle 116 a formulé la règle comme un ORDRE
+(*charger → enfiler → diffuser la cosmétique*), et un ordre se vérifie vers le
+BAS. L'émission vivante est plus haut, et elle n'est pas « cosmétique ».
+
+### Les sept sites, et par quoi chacun a été trouvé
+
+| # | site | ce que l'absent perdait | trouvé par |
+|---|---|---|---|
+| 1 | `deliverTextTranslation` (émission) | la traduction, définitivement — le `message:new` enfilé à l'envoi porte `translations: []` | l'issue |
+| 2 | `emitAttachmentUpdated` (deux branches) | la pièce ENRICHIE : transcription, piste TTS — la raison d'être du module | l'issue |
+| 3 | `MessageHandler.broadcastNewMessage` (`readerSignedPlan`) | le message ENTIER | l'issue |
+| 4 | `MeeshySocketIOManager._broadcastNewMessage` (idem) | le message ENTIER | l'issue |
+| 5 | `MessageHandler.handleMessageEdit` (plan + émission) | l'édition, **et** l'éditeur lisait « échec » sur un geste réussi | relecture de l'import partagé |
+| 6 | `MeeshySocketIOManager` — résumé d'appel édité | l'édition | **le cliquet** |
+| 7 | `MessageHandler.handleMessageDelete` | la suppression (la bulle reste visible) | **le cliquet** |
+
+Les deux derniers vivaient dans des fichiers que l'issue NOMMAIT, à quelques
+dizaines de lignes de sites qu'elle énumérait. Ni l'issue, ni ma relecture ne
+les a vus. **4 annoncés, 7 réels** — la leçon 261 avec son chiffre.
+
+Les sites 3 et 4 étaient des **pièges armés devenant panne dès qu'une clé de
+signature existe** : `readerSignedPlan` ne fait aucune requête sans signeur ni
+pièce liée au lecteur. `ATTACHMENT_URL_SIGNING_KEY` est vide dans
+`.env.example` mais le gabarit de staging la pose — la précondition est donc
+clé posée + message portant une pièce à vue unique / éphémère / floutée /
+scellée, soit exactement la population dont la perte coûte le plus cher.
+
+### Les quatre pièces du correctif
+
+1. **`socketio/emitLiveBestEffort.ts`** — site unique, `onError` REQUIS (une
+   panne d'adaptateur sans trace est la même panne, simplement
+   indiagnosticable). `emitMessageNewBestEffort` y délègue.
+2. **`ReaderSignedPlanOutcome`** (`readerSignedDelivery.ts`) — un verdict à
+   TROIS valeurs, parce qu'il y a trois choses à dire : un plan (« voici les
+   destinataires »), `null` (« la question ne se pose pas » ⇒ room), et
+   `'unavailable'` (« je ne sais pas adresser » ⇒ RIEN en direct, et la suite a
+   lieu). `'unavailable'` n'est pas `null` : collapser les deux rendrait la
+   diffusion de room sur une pièce établie comme liée au lecteur. C'est la
+   leçon `[]`-vs-`undefined` du cycle 116 portée au plan signé.
+   `emitMessageNew` et `emitEditedToReaders` acceptent la troisième valeur ; la
+   copie privée du wrapper qui vivait dans `emitAttachmentUpdated` est
+   consolidée ici, avec sa jumelle.
+3. **`deliverTextTranslation`** — la loi du plancher rend sa troisième réponse
+   (`translationReadersOrUnknown`), et l'émission vivante est enrobée.
+4. **Le cliquet** — `__tests__/live-emission-before-enqueue-sweep.ts`,
+   inventaire VIDE.
+
+### Ce que le cliquet a appris de lui-même
+
+| version | constats | verdict |
+|---|---|---|
+| 1 | 4 | **2 faux positifs** : la DÉCLARATION `private async _enqueueOfflineEventForParticipants(params: {` matchait comme un appel, et l'unité calculée depuis elle enjambait la méthode précédente |
+| 2 | 2 | les deux réels — sites 6 et 7 |
+| 2, relancée après correction | **2** | les mêmes : l'émission vivait désormais dans une fermeture passée à `emitLiveBestEffort`, qui n'est pas un `try` textuel |
+| 3 | **0** | l'enrobage est reconnu comme ce qu'il est — la réparation |
+
+> Un cliquet qui ne connaît pas la forme du correctif **désigne le correctif
+> comme le défaut**, et enseigne l'inverse de sa règle. Le relancer sur l'arbre
+> RÉPARÉ, pas seulement sur l'arbre fautif : son vert est une assertion autant
+> que son rouge.
+
+Et il prouve d'abord qu'il BALAIE (≥ 10 unités d'enfilage atteintes) : une garde
+négative dont le balayage rend `[]` reste verte.
+
+### Deux honnêtetés, écrites parce qu'elles coûtent
+
+**Le guard d'audience de `deliverTextTranslation` ne sauve AUCUN enfilage.** Sur
+`'unknown'` on retient les deux canaux à dessein (`excludedQueueKeys` nomme les
+lecteurs SOUS le plancher ; enfiler sans cette liste déposerait le texte traduit
+48 h dans Redis sous la clé d'un invité qu'aucune route n'autorise à le lire), et
+c'est déjà ce que la panne produisait par le `catch`. Ce qui change est le
+DIAGNOSTIC : une décision nommée au lieu d'une exception anonyme, et pas de
+`stats.errors++`. La première version de mon commentaire de site se lisait comme
+un correctif de durabilité ; elle a été réécrite. Le témoin pré-existant
+(« une lecture des participants qui tombe n'émet RIEN ») était vert des deux
+côtés — il ne pouvait pas distinguer « retenu à dessein » de « la méthode a
+explosé », et il ne faut pas lui faire dire la première chose.
+
+**Une mutation de preuve RED peut être fausse.** Ma première mutation du site du
+plan signé a produit `await (async () => {…})()(this.prisma, …)` — un appel sur
+une Promise, donc un `TypeError` SYNCHRONE inconditionnel. Les cinq témoins sont
+tombés, et aucune de ces chutes ne prouvait quoi que ce soit. La mutation juste
+porte sur la GARDE elle-même (le wrapper relaisse remonter), et elle fait tomber
+exactement les trois témoins du plan. **Une preuve de rouge se lit comme un
+résultat de mesure : vérifier que le rouge vient du mécanisme nommé.**
+
+Elle a aussi révélé qu'un de mes témoins (« rien ne part en direct ») passait au
+VERT sous l'explosion — donc sous la régression même qu'il prétendait garder. Il
+assert désormais les deux moitiés ensemble (rien en direct ET l'absent servi).
+
+### Preuve
+
+- `tsc --noEmit` gateway : **EXIT=0**, 0 ligne
+- rouge prouvé, quatre mutations distinctes :
+  - l'enrobage de `message:new` retiré ⇒ les 2 témoins de producteur tombent
+  - `readerSignedPlanBestEffort` relaisse remonter ⇒ les 3 témoins de plan tombent
+  - le guard d'audience + l'enrobage de `deliverTextTranslation` retirés ⇒ ses 2 témoins neufs tombent, les 8 pré-existants verts des deux côtés
+  - le `try` d'`emitAttachmentUpdated` retiré ⇒ ses 2 témoins tombent, les 13 pré-existants verts
+  - le `try` du 5e site retiré ⇒ ses 2 témoins tombent, les 9 pré-existants verts
+  - l'enrobage du site 6 ou 7 retiré ⇒ **le cliquet tombe en NOMMANT le fichier et l'expression**
+- un témoin de coverage INVERSÉ avec sa raison (`stats.errors` sur une émission
+  tombée), et la couverture du `catch` extérieur reprise sur un chemin qui y mène
+  vraiment
