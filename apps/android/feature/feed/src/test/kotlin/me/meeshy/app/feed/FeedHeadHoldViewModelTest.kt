@@ -66,6 +66,16 @@ class FeedHeadHoldViewModelTest {
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
         every { socialSocket.postReposted } returns MutableSharedFlow()
+        every { socialSocket.postLiked } returns MutableSharedFlow()
+        every { socialSocket.postUnliked } returns MutableSharedFlow()
+        every { socialSocket.postBookmarked } returns MutableSharedFlow()
+        every { socialSocket.commentAdded } returns MutableSharedFlow()
+        every { socialSocket.commentDeleted } returns MutableSharedFlow()
+        every { socialSocket.postTranslationUpdated } returns MutableSharedFlow()
+        every { socialSocket.mediaCaptionTranslationUpdated } returns MutableSharedFlow()
+        every { socialSocket.postReactionAdded } returns MutableSharedFlow()
+        every { socialSocket.postReactionRemoved } returns MutableSharedFlow()
+        every { socialSocket.postUpdated } returns MutableSharedFlow()
         every { socialSocket.reconnected } returns emptyFlow()
         return FeedViewModel(
             repository,

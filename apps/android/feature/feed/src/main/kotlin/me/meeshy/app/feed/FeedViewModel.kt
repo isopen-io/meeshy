@@ -124,10 +124,17 @@ class FeedViewModel @Inject constructor(
     private val realtimeHead = MutableStateFlow(FeedRealtimeHead())
 
     /** L'écran demande la retenue de tête ([holdHead]) : lecteur loin du haut, ou fil hors de l'écran (#16676). */
-    private val headHoldRequested = MutableStateFlow(false)
+    private var headHoldRequested = false
 
-    /** La retenue de tête en cours ([FeedHeadHold]) : ce qui arrive en tête attend, compté par la bannière. */
-    private val headHold = MutableStateFlow(FeedHeadHold())
+    /**
+     * La retenue de tête en cours ([FeedHeadHold]) : ce qui arrive en tête attend, compté par la bannière. Lue au moment
+     * de projeter, jamais combinée au flux du cache : un maillon de plus y décalait l'ordre entre l'émission du cache et
+     * son rappel d'erreur, et l'avis « chargement impossible » se changeait en état d'erreur sur un fil lisible.
+     */
+    private var headHold = FeedHeadHold()
+
+    /** Les dernières entrées projetées : la retenue qui change rejoue la projection sans attendre une émission. */
+    private var latestInputs: FeedInputs? = null
 
     /** The raw posts currently displayed — the flag-tap handler resolves against these. */
     private var latestPosts: List<ApiPost> = emptyList()
@@ -182,60 +189,9 @@ class FeedViewModel @Inject constructor(
                 activeLanguageOverride,
                 realtimeHead,
             ) { result, user, hasMore, overrides, head -> FeedInputs(result, user, hasMore, overrides, head) }
-                .combine(headHoldRequested) { inputs, holding -> inputs.copy(holding = holding) }
-                .combine(headHold) { inputs, hold -> inputs.copy(hold = hold) }
-                .collect { (result, user, hasMore, overrides, head, holding, hold) ->
-                    val cachePosts = result.postsOrNull() ?: latestCachePosts
-                    latestCachePosts = cachePosts
-                    val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
-
-                    // Prune buffered posts the cache has surfaced (memory hygiene) and release
-                    // like overlays the cache has caught up to; the display work below already
-                    // keeps buffered posts from double-rendering.
-                    val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
-                    val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
-                    val reconciledBookmarks = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
-                    val reconciled = FeedRealtimeReducer.reconcileComments(reconciledBookmarks, cachePosts)
-                    if (reconciled !== head) realtimeHead.value = reconciled
-
-                    // Tombstoned posts (live `post:deleted`) are hidden from both the head and
-                    // the cache-projected list until a refresh drops them from the cache. Live
-                    // like overlays (`post:liked`/`post:unliked`) and bookmark overlays
-                    // (`post:bookmarked`) override the cache count/own-state.
-                    val removed = reconciled.removedIds
-                    val likes = reconciled.likes
-                    val bookmarks = reconciled.bookmarks
-                    val comments = reconciled.comments
-                    val marks = reconciled.reposts
-                    val visibleCache = cachePosts
-                        .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
-                        .withLikeOverlays(likes)
-                        .withBookmarkOverlays(bookmarks)
-                        .withCommentOverlays(comments)
-                        .withRepostMarks(marks)
-                    val visibleRealtime = reconciled.posts
-                        .filterNot { it.id in cacheIds || it.id in removed }
-                        .withLikeOverlays(likes)
-                        .withBookmarkOverlays(bookmarks)
-                        .withCommentOverlays(comments)
-                        .withRepostMarks(marks)
-                    val candidate = visibleRealtime + visibleCache
-                    latestPosts = candidate
-
-                    // Lecteur loin du haut ou fil hors de l'écran : ce qui arrive en tête attend, la liste ne bouge pas
-                    // au-dessus du post lu et la position restaurée retombe sur lui (#16676).
-                    val split = hold.steered(holding, candidate.map { it.id }).split(candidate) { it.id }
-                    headHold.compareAndSet(hold, split.next)
-                    _state.update {
-                        it.project(
-                            result = result,
-                            posts = split.displayed,
-                            user = user,
-                            mediaBaseUrl = config.apiBaseUrl,
-                            overrides = overrides,
-                            newPostsCount = FeedHeadHold.bannerCount(reconciled.newPostsCount, split.held.size),
-                        ).copy(hasMore = hasMore)
-                    }
+                .collect { inputs ->
+                    latestInputs = inputs
+                    render(inputs)
                 }
         }
         viewModelScope.launch {
@@ -336,14 +292,71 @@ class FeedViewModel @Inject constructor(
      */
     private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
+    /** La projection du fil depuis [inputs], la retenue de tête appliquée (#16676). */
+    private fun render(inputs: FeedInputs) {
+        val (result, user, hasMore, overrides, head) = inputs
+        val cachePosts = result.postsOrNull() ?: latestCachePosts
+        latestCachePosts = cachePosts
+        val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
+
+        // Prune buffered posts the cache has surfaced (memory hygiene) and release
+        // like overlays the cache has caught up to; the display work below already
+        // keeps buffered posts from double-rendering.
+        val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
+        val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
+        val reconciledBookmarks = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
+        val reconciled = FeedRealtimeReducer.reconcileComments(reconciledBookmarks, cachePosts)
+        if (reconciled !== head) realtimeHead.value = reconciled
+
+        // Tombstoned posts (live `post:deleted`) are hidden from both the head and
+        // the cache-projected list until a refresh drops them from the cache. Live
+        // like overlays (`post:liked`/`post:unliked`) and bookmark overlays
+        // (`post:bookmarked`) override the cache count/own-state.
+        val removed = reconciled.removedIds
+        val likes = reconciled.likes
+        val bookmarks = reconciled.bookmarks
+        val comments = reconciled.comments
+        val marks = reconciled.reposts
+        val visibleCache = cachePosts
+            .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
+            .withLikeOverlays(likes)
+            .withBookmarkOverlays(bookmarks)
+            .withCommentOverlays(comments)
+            .withRepostMarks(marks)
+        val visibleRealtime = reconciled.posts
+            .filterNot { it.id in cacheIds || it.id in removed }
+            .withLikeOverlays(likes)
+            .withBookmarkOverlays(bookmarks)
+            .withCommentOverlays(comments)
+            .withRepostMarks(marks)
+        val candidate = visibleRealtime + visibleCache
+        latestPosts = candidate
+
+        // Lecteur loin du haut ou fil hors de l'écran : ce qui arrive en tête attend, la liste ne bouge pas
+        // au-dessus du post lu et la position restaurée retombe sur lui (#16676).
+        val split = headHold.steered(headHoldRequested, candidate.map { it.id }).split(candidate) { it.id }
+        headHold = split.next
+        _state.update {
+            it.project(
+                result = result,
+                posts = split.displayed,
+                user = user,
+                mediaBaseUrl = config.apiBaseUrl,
+                overrides = overrides,
+                newPostsCount = FeedHeadHold.bannerCount(reconciled.newPostsCount, split.held.size),
+            ).copy(hasMore = hasMore)
+        }
+    }
+
     /**
      * Tap on the "new posts" banner (scroll-to-top): clear the banner count and let the held
      * posts in at the head ([FeedHeadHold]), even before the list has reached the top. Port of
      * iOS `acknowledgeNewPosts`.
      */
     fun acknowledgeNewPosts() {
-        headHold.update { it.release() }
+        headHold = headHold.release()
         realtimeHead.update { FeedRealtimeReducer.acknowledge(it) }
+        latestInputs?.let(::render)
     }
 
     /**
@@ -352,7 +365,9 @@ class FeedViewModel @Inject constructor(
      * qui laisse entrer ce qui attendait.
      */
     fun holdHead(holding: Boolean) {
-        headHoldRequested.value = holding
+        if (holding == headHoldRequested) return
+        headHoldRequested = holding
+        latestInputs?.let(::render)
     }
 
     /**
@@ -484,8 +499,9 @@ class FeedViewModel @Inject constructor(
     }
 
     fun refresh() {
-        headHold.update { it.release() }
+        headHold = headHold.release()
         realtimeHead.update { FeedRealtimeReducer.clear(it) }
+        latestInputs?.let(::render)
         _state.update { it.copy(loadFailed = false, isSyncing = true) }
         viewModelScope.launch {
             val failure = try {
@@ -668,15 +684,13 @@ class FeedViewModel @Inject constructor(
     }
 }
 
-/** The combined inputs of the feed projection, the head hold ([FeedHeadHold]) included. */
+/** The combined inputs of the feed projection (Kotlin has no built-in Quintuple). */
 private data class FeedInputs(
     val result: CacheResult<List<ApiPost>>,
     val user: MeeshyUser?,
     val hasMore: Boolean,
     val overrides: Map<String, String>,
     val head: FeedRealtimeHead,
-    val holding: Boolean = false,
-    val hold: FeedHeadHold = FeedHeadHold(),
 )
 
 /**
