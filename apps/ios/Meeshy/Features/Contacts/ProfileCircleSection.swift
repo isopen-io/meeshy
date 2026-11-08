@@ -24,14 +24,24 @@ struct ProfileCircleSection: View {
             if let level = viewModel.shownLevel {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     row(level)
+                    if viewModel.offersTalkie {
+                        ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
+                    }
                     if viewModel.offersBring {
                         ProfileBringRow(userId: viewModel.userId, displayName: displayName)
                     }
                     promoteButton
                     loweringButton(from: level)
                 }
-            } else if viewModel.offersBring {
-                ProfileBringRow(userId: viewModel.userId, displayName: displayName)
+            } else if viewModel.offersTalkie || viewModel.offersBring {
+                VStack(spacing: MeeshySpacing.smPlus) {
+                    if viewModel.offersTalkie {
+                        ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
+                    }
+                    if viewModel.offersBring {
+                        ProfileBringRow(userId: viewModel.userId, displayName: displayName)
+                    }
+                }
             } else {
                 Color.clear.frame(height: 0)
             }
