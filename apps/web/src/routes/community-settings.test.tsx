@@ -6,7 +6,7 @@ import { loadCommunityMembershipCatalog } from '@/lib/i18n-community-membership-
 import { loadCommunitySettingsCatalog } from '@/lib/i18n-community-settings-catalog';
 
 import { CommunitySettingsLink } from './community-members-parts';
-import { SettingsCreatorOnly, SettingsDangerZone, SettingsSaveButton } from './community-settings-parts';
+import { SettingsCreatorOnly, SettingsDangerZone, SettingsImages, SettingsSaveButton } from './community-settings-parts';
 
 /**
  * LES RÉGLAGES DESSINÉS (#6377) — « Enregistrer » inerte tant que rien ne
@@ -53,5 +53,35 @@ describe('les réglages d’une communauté', () => {
     const html = renderToStaticMarkup(<CommunitySettingsLink language="fr" communityId="m-club" />);
     expect(html).toContain('href="/communities/m-club/settings"');
     expect(html).toContain('Réglages');
+  });
+
+  test('la bannière et l’avatar se changent par deux boutons nommés, de 44 px au moins', () => {
+    const html = renderToStaticMarkup(
+      <SettingsImages language="fr" name="Club" shown={{ avatar: null, banner: null }} uploading={{}} disabled={false} onPick={noop} />,
+    );
+    expect(html).toContain('aria-label="Changer la bannière"');
+    expect(html).toContain('aria-label="Changer l’avatar"');
+    expect(html).toContain('Modifier');
+    expect(html).toContain('min-width:44px');
+    expect(html).toContain('width:44px;height:44px');
+    expect(html).not.toContain('data-community-settings-uploading');
+  });
+
+  test('une image servie s’affiche par la route de flux ; une image en cours d’envoi, sous un voile annoncé', () => {
+    const html = renderToStaticMarkup(
+      <SettingsImages
+        language="fr"
+        name="Club"
+        shown={{ avatar: 'blob:https://meeshy.me/aperçu', banner: '2026/11/65f0c0ffee/banner.webp' }}
+        uploading={{ avatar: true }}
+        disabled={false}
+        onPick={noop}
+      />,
+    );
+    expect(html).toContain('src="blob:https://meeshy.me/aperçu"');
+    expect(html).toContain(encodeURIComponent('2026/11/65f0c0ffee/banner.webp'));
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('Envoi de l’image…');
+    expect(html.match(/data-community-settings-uploading/g)?.length).toBe(1);
   });
 });
