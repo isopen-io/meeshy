@@ -579,6 +579,8 @@ socket jusqu'au client.
   - 38 échecs et 95 erreurs, identiques des deux côtés (modules ML absents, sans torch).
 - **QA** : favorable avec réserves. R1 et R5 → #17002, R2 → #17003, R3 → #17004, R4 → #17005.
 
+- **Intégration** : PR #17006 ouverte, mais **non fusionnée**. La fusion, refusée par le garde-fou d'autonomie tant que la CI n'est pas verte, attend que #17014 soit corrigé ou que le porteur donne son feu vert.
+
 ### Limites connues
 
 - Une tâche reçue par PULL entre `stop_workers` et la fermeture du socket se perd encore. → #17002.
@@ -589,8 +591,9 @@ socket jusqu'au client.
 
 ### Cycle suivant : par où reprendre
 
+0. **PR #17006** : dès que `Qualité TS` est vert (#17014), mettre la branche à jour sur `dev`, relancer `workflow_dispatch`, puis fusionner.
 1. #17002 : refuser l'enfilement une fois l'arrêt lancé (petit lot, même site), avec #17003 si le temps le permet.
 2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
 3. #17014 : tant que `Qualité TS` est rouge sur `dev`, aucune PR traducteur n'a sa preuve CI. Vérifier son état d'abord.
 4. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
-4. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
+5. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
