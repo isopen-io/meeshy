@@ -157,6 +157,8 @@ const en = {
   'positions.attribution': '© OpenStreetMap contributors',
   'positions.zoomIn': 'Zoom in',
   'positions.zoomOut': 'Zoom out',
+  'positions.failed': 'The locations couldn’t be loaded.',
+  'positions.retry': 'Try again',
 } as const satisfies CirclesCatalog;
 
 export default en;

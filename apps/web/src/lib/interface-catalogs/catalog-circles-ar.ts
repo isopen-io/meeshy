@@ -157,6 +157,8 @@ const ar = {
   'positions.attribution': '© مساهمو OpenStreetMap',
   'positions.zoomIn': 'تكبير الخريطة',
   'positions.zoomOut': 'تصغير الخريطة',
+  'positions.failed': 'تعذّر تحميل المواقع.',
+  'positions.retry': 'إعادة المحاولة',
 } as const satisfies CirclesCatalog;
 
 export default ar;

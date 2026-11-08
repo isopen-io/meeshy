@@ -5,6 +5,7 @@ import type { SharedLocationChangedEventData } from '@meeshy/shared/types/shared
 import { bboxQuery, type GeoBbox } from '@/lib/map/slippy';
 
 import { unwrap } from './client';
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -60,12 +61,23 @@ export async function loadSharedLocations(deps: SharedLocationDeps & { readonly 
   return { ok: true, data: Array.isArray(items) ? items.flatMap((row) => decodeSharedLocation(row) ?? []) : [] };
 }
 
-export const SHARED_LOCATIONS_QUERY_KEY = ['relations', 'locations'] as const;
+/**
+ * Sous le préfixe qui ne touche pas le disque (`souverain.ts`, comme les sessions du
+ * compte) : le cache de requêtes est déshydraté dans `localStorage`, et la position d'un
+ * lien n'a rien à y survivre — ni à la session, ni au partage, ni à un blocage.
+ */
+export const SHARED_LOCATIONS_QUERY_KEY = [ADMIN_SOUVERAIN_PREFIXE, 'relations', 'locations'] as const;
+
+/** Un rattrapage dit SON emprise et l'instant (horloge locale) où il est parti : il fait foi dans cette emprise, à cet instant. */
+export type SharedLocationsSnapshot = { readonly items: readonly SharedLocation[]; readonly bbox: GeoBbox; readonly requestedAt: number };
 
 export function sharedLocationsQueryOptions(deps: SharedLocationDeps, bbox: GeoBbox) {
   return {
     queryKey: [...SHARED_LOCATIONS_QUERY_KEY, bboxQuery(bbox)] as const,
-    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
-      unwrap(await loadSharedLocations({ ...deps, bbox, ...(signal === undefined ? {} : { signal }) })),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<SharedLocationsSnapshot> => {
+      const requestedAt = Date.now();
+      const items = unwrap(await loadSharedLocations({ ...deps, bbox, ...(signal === undefined ? {} : { signal }) }));
+      return { items, bbox, requestedAt };
+    },
   };
 }

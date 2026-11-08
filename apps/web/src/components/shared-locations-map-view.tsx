@@ -40,13 +40,16 @@ export type SharedLocationsMapViewProps = {
   readonly personOf: (userId: string) => SharedLocationPerson;
   readonly formatTime: (iso: string) => string;
   readonly online: boolean;
+  /** `loading` : le premier rattrapage n'a pas répondu (rien ne dit « personne ») ; `failed` : il a échoué. */
+  readonly status: 'loading' | 'failed' | 'ready';
+  readonly onRetry: () => void;
   readonly onZoom: (delta: 1 | -1) => void;
   readonly onPan: (dx: number, dy: number) => void;
 };
 
 const TILE_URL = (z: number, x: number, y: number): string => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 /** Les libellés SANS paramètre : `translateCircles` exige les siens, et une union de clés ne les lui donne pas. */
-type PlainKey = 'positions.offline' | 'positions.map.a11y' | 'positions.zoomIn' | 'positions.zoomOut' | 'positions.attribution' | 'positions.empty' | 'positions.list.title' | 'positions.cannotEmit';
+type PlainKey = 'positions.failed' | 'positions.retry' | 'positions.offline' | 'positions.map.a11y' | 'positions.zoomIn' | 'positions.zoomOut' | 'positions.attribution' | 'positions.empty' | 'positions.list.title' | 'positions.cannotEmit';
 const PIN_SIZE = 40;
 /** Sous ce diamètre le cercle ne se voit pas : l'épingle suffit (position exacte). */
 const MIN_VISIBLE_BLUR = 16;
@@ -105,7 +108,7 @@ function Pin({ location, text, person, view }: { readonly location: SharedLocati
   );
 }
 
-export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, onZoom, onPan }: SharedLocationsMapViewProps) {
+export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan }: SharedLocationsMapViewProps) {
   const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
@@ -187,10 +190,29 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           {t('positions.attribution')}
         </small>
       </div>
+      {status === 'failed' ? (
+        <div role="alert" className="flex flex-wrap items-center gap-2">
+          <p className="text-body" style={{ color: 'var(--color-ink)' }}>
+            {t('positions.failed')}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-[44px] rounded-card px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-brand)', border: '1px solid var(--color-border)' }}
+          >
+            {t('positions.retry')}
+          </button>
+        </div>
+      ) : null}
       {rows.length === 0 ? (
-        <p className="text-body" style={{ color: 'var(--color-ink-muted)' }}>
-          {t('positions.empty')}
-        </p>
+        status === 'ready' ? (
+          <p className="text-body" style={{ color: 'var(--color-ink-muted)' }}>
+            {t('positions.empty')}
+          </p>
+        ) : status === 'loading' ? (
+          <div aria-busy="true" className="h-6" />
+        ) : null
       ) : (
         <div>
           <h2 className="text-title font-bold">{t('positions.list.title')}</h2>

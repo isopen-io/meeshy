@@ -159,6 +159,8 @@ const fr = {
   'positions.attribution': '© contributeurs OpenStreetMap',
   'positions.zoomIn': 'Agrandir la carte',
   'positions.zoomOut': 'Éloigner la carte',
+  'positions.failed': 'Les positions n’ont pas pu être chargées.',
+  'positions.retry': 'Réessayer',
 } as const;
 
 export default fr;

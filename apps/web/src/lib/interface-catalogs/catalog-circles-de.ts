@@ -157,6 +157,8 @@ const de = {
   'positions.attribution': '© OpenStreetMap-Mitwirkende',
   'positions.zoomIn': 'Karte vergrößern',
   'positions.zoomOut': 'Karte verkleinern',
+  'positions.failed': 'Die Standorte konnten nicht geladen werden.',
+  'positions.retry': 'Erneut versuchen',
 } as const satisfies CirclesCatalog;
 
 export default de;

@@ -2,6 +2,8 @@ import { SHARED_LOCATION_SERVER_EVENTS } from '@meeshy/shared/types/socketio-eve
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import { decodeSharedLocation, type SharedLocation } from '@/lib/api/shared-locations';
+import { sessionIdentityKey, sessionStore, type SessionStoreApi } from '@/lib/api/session';
+import type { GeoBbox } from '@/lib/map/slippy';
 import type { SocketClient } from '@/lib/net/socket';
 
 /**
@@ -14,7 +16,12 @@ import type { SocketClient } from '@/lib/net/socket';
  * - Le serveur n'émet RIEN au terme : `expire()` retire ce qui a passé `expiresAt`,
  *   appelé par l'horloge de l'hôte.
  * - Le rattrapage (`merge`) rejoue ce que le direct a manqué sans jamais écraser une
- *   position plus récente, ni ressusciter un partage arrêté depuis.
+ *   position plus récente, ni ressusciter un partage arrêté depuis. Avec SON emprise et
+ *   l'instant où il est parti, il fait foi dans cette emprise : ce qu'il ne sert plus et
+ *   qui était arrivé avant lui disparaît (une fin manquée pendant que la carte était
+ *   fermée — blocage, baisse sous Ami), et ce qu'il sert après une fin la fait revenir
+ *   (une remontée : le serveur ne renvoie rien en direct).
+ * - Il appartient au compte ouvert : un changement d'identité le vide.
  *
  * Rien n'est fabriqué : une position n'existe ici que si le serveur l'a servie.
  */
@@ -22,7 +29,7 @@ import type { SocketClient } from '@/lib/net/socket';
 export type SharedLocationsState = {
   readonly byUser: Readonly<Record<string, SharedLocation>>;
   receive(location: SharedLocation): void;
-  merge(locations: readonly SharedLocation[]): void;
+  merge(locations: readonly SharedLocation[], scope?: SnapshotScope): void;
   end(userId: string, at?: string): void;
   expire(): void;
   clear(): void;
@@ -32,37 +39,74 @@ export type SharedLocationsState = {
 
 export type SharedLocationsStoreApi = StoreApi<SharedLocationsState>;
 
+/** Où et quand (horloge LOCALE) un rattrapage a été demandé. */
+export type SnapshotScope = { readonly bbox: GeoBbox; readonly requestedAt: number };
+
+const within = (location: SharedLocation, bbox: GeoBbox): boolean =>
+  location.latitude >= bbox.minLatitude && location.latitude <= bbox.maxLatitude && location.longitude >= bbox.minLongitude && location.longitude <= bbox.maxLongitude;
+
 /** Assez pour qu'une copie en retard d'un partage arrêté ne le ressuscite pas ; borné, rien ne grossit. */
 const ENDED_MEMORY = 128;
 
 export function createSharedLocationsStore({ now = Date.now }: { readonly now?: () => number } = {}): SharedLocationsStoreApi {
-  let endedAt: Readonly<Record<string, number>> = {};
+  /* `server` : l'horloge du serveur (pour le direct) ; `local` : quand la fin est arrivée ici (pour un rattrapage). */
+  let ended: Readonly<Record<string, { readonly server: number; readonly local: number }>> = {};
+  let arrived: Readonly<Record<string, number>> = {};
   const live = (location: SharedLocation): boolean => Date.parse(location.expiresAt) > now();
   const remember = (userId: string, at: number): void => {
-    const kept = Object.entries({ ...endedAt, [userId]: Math.max(at, endedAt[userId] ?? 0) }).slice(-ENDED_MEMORY);
-    endedAt = Object.fromEntries(kept);
+    const kept = Object.entries({ ...ended, [userId]: { server: Math.max(at, ended[userId]?.server ?? 0), local: now() } }).slice(-ENDED_MEMORY);
+    ended = Object.fromEntries(kept);
   };
-  const accepts = (byUser: Readonly<Record<string, SharedLocation>>, location: SharedLocation): boolean => {
-    if (!live(location)) return false;
-    if (Date.parse(location.updatedAt) <= (endedAt[location.userId] ?? Number.NEGATIVE_INFINITY)) return false;
+  const forget = (userId: string): void => {
+    ended = Object.fromEntries(Object.entries(ended).filter(([id]) => id !== userId));
+  };
+  const newest = (byUser: Readonly<Record<string, SharedLocation>>, location: SharedLocation): boolean => {
     const current = byUser[location.userId];
     return current === undefined || Date.parse(location.updatedAt) >= Date.parse(current.updatedAt);
   };
+  const accepts = (byUser: Readonly<Record<string, SharedLocation>>, location: SharedLocation): boolean =>
+    live(location) && Date.parse(location.updatedAt) > (ended[location.userId]?.server ?? Number.NEGATIVE_INFINITY) && newest(byUser, location);
+  /* Un rattrapage parti APRÈS la fin fait foi ; parti avant, il ne ressuscite rien. */
+  const acceptsFromSnapshot = (byUser: Readonly<Record<string, SharedLocation>>, location: SharedLocation, requestedAt: number): boolean => {
+    const end = ended[location.userId];
+    if (end !== undefined && end.local >= requestedAt) return false;
+    return live(location) && newest(byUser, location);
+  };
+  const place = (byUser: Readonly<Record<string, SharedLocation>>, location: SharedLocation) => {
+    arrived = { ...arrived, [location.userId]: now() };
+    return { ...byUser, [location.userId]: location };
+  };
   const withAll = (byUser: Readonly<Record<string, SharedLocation>>, locations: readonly SharedLocation[]) =>
-    locations.reduce((acc, location) => (accepts(acc, location) ? { ...acc, [location.userId]: location } : acc), byUser);
+    locations.reduce((acc, location) => (accepts(acc, location) ? place(acc, location) : acc), byUser);
+  const withSnapshot = (byUser: Readonly<Record<string, SharedLocation>>, locations: readonly SharedLocation[], scope: SnapshotScope) => {
+    const servedIds = new Set(locations.map((location) => location.userId));
+    const kept = Object.fromEntries(
+      Object.entries(byUser).filter(([id, location]) => servedIds.has(id) || !within(location, scope.bbox) || (arrived[id] ?? 0) >= scope.requestedAt),
+    );
+    return locations.reduce((acc, location) => {
+      if (!acceptsFromSnapshot(acc, location, scope.requestedAt)) return acc;
+      forget(location.userId);
+      return place(acc, location);
+    }, kept);
+  };
+  const keepArrivals = (byUser: Readonly<Record<string, SharedLocation>>) => {
+    arrived = Object.fromEntries(Object.entries(arrived).filter(([id]) => byUser[id] !== undefined));
+    return byUser;
+  };
   return createStore<SharedLocationsState>((set, get) => ({
     byUser: {},
     receive: (location) => set((state) => ({ byUser: withAll(state.byUser, [location]) })),
-    merge: (locations) => set((state) => ({ byUser: withAll(state.byUser, locations) })),
+    merge: (locations, scope) => set((state) => ({ byUser: keepArrivals(scope === undefined ? withAll(state.byUser, locations) : withSnapshot(state.byUser, locations, scope)) })),
     end: (userId, at) =>
       set((state) => {
         /* L'horloge du SERVEUR, jamais la nôtre : un appareil en avance masquerait un redémarrage légitime. */
         remember(userId, at !== undefined ? Date.parse(at) : Date.parse(state.byUser[userId]?.updatedAt ?? '') || now());
-        return { byUser: Object.fromEntries(Object.entries(state.byUser).filter(([id]) => id !== userId)) };
+        return { byUser: keepArrivals(Object.fromEntries(Object.entries(state.byUser).filter(([id]) => id !== userId))) };
       }),
-    expire: () => set((state) => ({ byUser: Object.fromEntries(Object.entries(state.byUser).filter(([, location]) => live(location))) })),
+    expire: () => set((state) => ({ byUser: keepArrivals(Object.fromEntries(Object.entries(state.byUser).filter(([, location]) => live(location)))) })),
     clear: () => {
-      endedAt = {};
+      ended = {};
+      arrived = {};
       set({ byUser: {} });
     },
     nextExpiry: () => {
@@ -72,7 +116,19 @@ export function createSharedLocationsStore({ now = Date.now }: { readonly now?: 
   }));
 }
 
+/** Les positions reçues sur la connexion d'un compte ne passent pas au suivant (#8674, même doctrine). */
+export function watchSharedLocationsIdentity({ session, store }: { readonly session: SessionStoreApi; readonly store: SharedLocationsStoreApi }): () => void {
+  let last = sessionIdentityKey(session.getState().session);
+  return session.subscribe((state) => {
+    const identity = sessionIdentityKey(state.session);
+    if (identity === last) return;
+    last = identity;
+    store.getState().clear();
+  });
+}
+
 export const sharedLocationsStore: SharedLocationsStoreApi = createSharedLocationsStore();
+watchSharedLocationsIdentity({ session: sessionStore, store: sharedLocationsStore });
 
 type Wire = Readonly<Record<string, unknown>>;
 

@@ -96,6 +96,41 @@ describe('le magasin des positions partagées', () => {
     expect(Object.keys(store.getState().byUser).sort()).toEqual(['loin', 'proche']);
   });
 
+  test('un rattrapage fait foi dans SON emprise : ce qu’il ne sert plus disparaît (fin manquée hors écoute)', () => {
+    let now = NOW;
+    const store = createSharedLocationsStore({ now: () => now });
+    store.getState().receive(position({ userId: 'bloque' }));
+    store.getState().receive(position({ userId: 'loin', latitude: 10, longitude: 10 }));
+    now = NOW + 1_000;
+    store.getState().merge([], { bbox: { minLongitude: 2, minLatitude: 48, maxLongitude: 3, maxLatitude: 49 }, requestedAt: now });
+    expect(Object.keys(store.getState().byUser)).toEqual(['loin']);
+  });
+
+  test('un rattrapage parti AVANT une position reçue en direct ne l’efface pas', () => {
+    let now = NOW;
+    const store = createSharedLocationsStore({ now: () => now });
+    const requestedAt = now;
+    now = NOW + 1_000;
+    store.getState().receive(position({ userId: 'nouveau' }));
+    store.getState().merge([], { bbox: { minLongitude: 2, minLatitude: 48, maxLongitude: 3, maxLatitude: 49 }, requestedAt });
+    expect(Object.keys(store.getState().byUser)).toEqual(['nouveau']);
+  });
+
+  test('un rattrapage parti APRÈS la fin fait revenir la dernière position conservée (remontée), jamais celui parti avant', () => {
+    let now = NOW;
+    const store = createSharedLocationsStore({ now: () => now });
+    const scope = { bbox: { minLongitude: -180, minLatitude: -90, maxLongitude: 180, maxLatitude: 90 } };
+    store.getState().receive(position());
+    const before = now;
+    now = NOW + 1_000;
+    store.getState().end('ami');
+    store.getState().merge([position()], { ...scope, requestedAt: before });
+    expect(store.getState().byUser).toEqual({});
+    now = NOW + 2_000;
+    store.getState().merge([position()], { ...scope, requestedAt: now });
+    expect(Object.keys(store.getState().byUser)).toEqual(['ami']);
+  });
+
   test('clear() vide tout (changement de compte)', () => {
     const store = storeAt();
     store.getState().receive(position());

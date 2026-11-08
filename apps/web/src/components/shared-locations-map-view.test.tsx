@@ -54,6 +54,8 @@ const render = (props: Partial<Parameters<typeof SharedLocationsMapView>[0]> = {
       personOf={people}
       formatTime={(iso) => (iso.endsWith('11:30:00.000Z') ? '11:30' : '12:00')}
       online
+      status="ready"
+      onRetry={() => undefined}
       onZoom={() => undefined}
       onPan={() => undefined}
       {...props}
