@@ -66,7 +66,95 @@
 
 Le tableau des vues et leurs captures est généré avec la planche (voir l'index ci-dessous).
 
-<!-- INDEX-DES-VUES -->
+### Repos et (…)
+
+| R1 · Scène vierge | R2 · Repos avec contenu | R3 · (…) touché : les rails | R4 · Un toucher : tout se range |
+|---|---|---|---|
+| ![R1](composer-vue-finale/vues/R1.png) | ![R2](composer-vue-finale/vues/R2.png) | ![R3](composer-vue-finale/vues/R3.png) | ![R4](composer-vue-finale/vues/R4.png) |
+
+| R5 · Plusieurs scènes | R6 · Appui long sur une scène | R7 · Publier ▾ : formats | R8 · Disposition du post |
+|---|---|---|---|
+| ![R5](composer-vue-finale/vues/R5.png) | ![R6](composer-vue-finale/vues/R6.png) | ![R7](composer-vue-finale/vues/R7.png) | ![R8](composer-vue-finale/vues/R8.png) |
+
+| R9 · Audience | R10 · Plafond atteint | R11 · Plus | R12 · Tout effacer ? |
+|---|---|---|---|
+| ![R9](composer-vue-finale/vues/R9.png) | ![R10](composer-vue-finale/vues/R10.png) | ![R11](composer-vue-finale/vues/R11.png) | ![R12](composer-vue-finale/vues/R12.png) |
+
+| R13 · Scène claire : verre adaptatif |
+|---|
+| ![R13](composer-vue-finale/vues/R13.png) |
+
+### Ajouter
+
+| A1 · Texte : écrire | A2 · Aa : police et effet | A3 · ● : couleur et contour | A4 · ▣ : fond et cadre |
+|---|---|---|---|
+| ![A1](composer-vue-finale/vues/A1.png) | ![A2](composer-vue-finale/vues/A2.png) | ![A3](composer-vue-finale/vues/A3.png) | ![A4](composer-vue-finale/vues/A4.png) |
+
+| A5 · Mention pendant la frappe | A6 · Média : plusieurs à la fois | A7 · Une scène par média | A8 · Caméra : viseur armé |
+|---|---|---|---|
+| ![A5](composer-vue-finale/vues/A5.png) | ![A6](composer-vue-finale/vues/A6.png) | ![A7](composer-vue-finale/vues/A7.png) | ![A8](composer-vue-finale/vues/A8.png) |
+
+| A9 · Caméra : filmer | A10 · Caméra : look en direct | A11 · Stickers | A12 · Décorations |
+|---|---|---|---|
+| ![A9](composer-vue-finale/vues/A9.png) | ![A10](composer-vue-finale/vues/A10.png) | ![A11](composer-vue-finale/vues/A11.png) | ![A12](composer-vue-finale/vues/A12.png) |
+
+| A13 · Dessin | A14 · Son : création audio | A15 · Son : rogner et régler | A16 · Mention |
+|---|---|---|---|
+| ![A13](composer-vue-finale/vues/A13.png) | ![A14](composer-vue-finale/vues/A14.png) | ![A15](composer-vue-finale/vues/A15.png) | ![A16](composer-vue-finale/vues/A16.png) |
+
+| A17 · Hashtags | A18 · Lieu |
+|---|---|
+| ![A17](composer-vue-finale/vues/A17.png) | ![A18](composer-vue-finale/vues/A18.png) |
+
+### Un objet
+
+| O1 · Sélection | O2 · Appui long | O3 · Glisser : repères d’aimantation | O4 · Modifier une photo |
+|---|---|---|---|
+| ![O1](composer-vue-finale/vues/O1.png) | ![O2](composer-vue-finale/vues/O2.png) | ![O3](composer-vue-finale/vues/O3.png) | ![O4](composer-vue-finale/vues/O4.png) |
+
+| O5 · Réglages | O6 · Filtres | O7 · Recadrer | O8 · Vidéo : couper et son |
+|---|---|---|---|
+| ![O5](composer-vue-finale/vues/O5.png) | ![O6](composer-vue-finale/vues/O6.png) | ![O7](composer-vue-finale/vues/O7.png) | ![O8](composer-vue-finale/vues/O8.png) |
+
+| O9 · Description (texte alternatif) | O10 · Temps de l’objet | O11 · Texte en édition, manipulé au doigt |
+|---|---|---|
+| ![O9](composer-vue-finale/vues/O9.png) | ![O10](composer-vue-finale/vues/O10.png) | ![O11](composer-vue-finale/vues/O11.png) |
+
+### La scène
+
+| S1 · Fond | S2 · Cadre du fond média | S3 · Transitions | S4 · Effet visuel |
+|---|---|---|---|
+| ![S1](composer-vue-finale/vues/S1.png) | ![S2](composer-vue-finale/vues/S2.png) | ![S3](composer-vue-finale/vues/S3.png) | ![S4](composer-vue-finale/vues/S4.png) |
+
+| S5 · Durée | S6 · Légende (story) | S7 · Texte du post (post) | S8 · Animation : la frise |
+|---|---|---|---|
+| ![S5](composer-vue-finale/vues/S5.png) | ![S6](composer-vue-finale/vues/S6.png) | ![S7](composer-vue-finale/vues/S7.png) | ![S8](composer-vue-finale/vues/S8.png) |
+
+| S9 · Frise : un objet choisi | S10 · Aperçu |
+|---|---|
+| ![S9](composer-vue-finale/vues/S9.png) | ![S10](composer-vue-finale/vues/S10.png) |
+
+### Publier et brouillons
+
+| P1 · Publication en cours | P2 · Hors ligne | P3 · Échec partiel | P4 · Fermer le brouillon ? |
+|---|---|---|---|
+| ![P1](composer-vue-finale/vues/P1.png) | ![P2](composer-vue-finale/vues/P2.png) | ![P3](composer-vue-finale/vues/P3.png) | ![P4](composer-vue-finale/vues/P4.png) |
+
+| P5 · Mood | P6 · Modifier une publication |
+|---|---|
+| ![P5](composer-vue-finale/vues/P5.png) | ![P6](composer-vue-finale/vues/P6.png) |
+
+### Grand écran (iPad)
+
+| I1 · iPad paysage, repos | I2 · iPad, un objet choisi | I3 · iPad, frise | I4 · iPad portrait |
+|---|---|---|---|
+| ![I1](composer-vue-finale/vues/I1.png) | ![I2](composer-vue-finale/vues/I2.png) | ![I3](composer-vue-finale/vues/I3.png) | ![I4](composer-vue-finale/vues/I4.png) |
+
+### Retouche d’une image de conversation
+
+| C1 · Retoucher une photo reçue | C2 · Retoucher une vidéo |
+|---|---|
+| ![C1](composer-vue-finale/vues/C1.png) | ![C2](composer-vue-finale/vues/C2.png) |
 
 ## Ce que la proposition ajoute ou change au code de `dev`
 
