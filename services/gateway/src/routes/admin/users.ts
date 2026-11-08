@@ -60,6 +60,7 @@ import { registerConversationSettingsSovereignRoutes } from './conversation-sett
 import { logError, logWarn } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 import { sendZodRefusal } from '../../utils/identity-name-floor';
+import { forgetTeamCircles } from '../../services/relations/relationCaches';
 
 const userConversationSortSchema = z.object({
   sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
@@ -157,6 +158,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     // (#3876) quand `createUser` ajoute le compte au salon global.
     resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
     notifyPasswordReset: passwordResetNotifier(emailService),
+    forgetTeamCircles: (userId) => forgetTeamCircles(fastify, userId),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
   const banService = new BanService(fastify.prisma, userManagementService);

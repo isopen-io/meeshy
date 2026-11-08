@@ -1,7 +1,11 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
-import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
+import { postCircleAudienceFeature, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import { comptesAuMoins, niveauxParmi } from '../friendship';
+import { pairAccessAmong } from '../relations/pairAccess';
+import type { RelationAccess } from '@meeshy/shared/utils/relation-access';
+import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
+import { teamPeersAdmitted } from '../relations/teamPeers';
 import { filterCommunityCoMembersAmong } from './communityVisibility';
 import { filterDirectContactIdsAmong } from './directContactVisibility';
 
@@ -13,7 +17,7 @@ import { filterDirectContactIdsAmong } from './directContactVisibility';
  */
 export type PostAudiencePrisma = Pick<
   PrismaClient,
-  'friendRequest' | 'userRelation' | 'communityMember' | 'participant'
+  'friendRequest' | 'userRelation' | 'communityMember' | 'participant' | 'user'
 >;
 
 export interface PostAudienceParams {
@@ -120,11 +124,11 @@ export async function filterPostConsumers(params: PostAudienceParams): Promise<s
     return admit((id) => coMemberIds.has(id));
   }
 
-  const circleFloor = postCircleAudienceFloor(visibility);
-  if (circleFloor) {
+  const circleFeature = postCircleAudienceFeature(visibility);
+  if (circleFeature) {
     if (others.length === 0) return admit(() => false);
-    const levels = await levelsAmong(prisma, authorId, others);
-    return admit((id) => levels !== null && relationLevelIfAtLeast(levels.get(id), circleFloor) !== null);
+    const verdicts = await circleVerdictsAmong(prisma, { feature: circleFeature, authorId, readerIds: others });
+    return admit((id) => verdicts?.get(id)?.allowed === true);
   }
 
   // Restent `FRIENDS`, `EXCEPT`, et toute valeur inconnue — toutes adossées au
@@ -183,6 +187,28 @@ async function levelsAmong(
   }
 }
 
+/**
+ * Le verdict de la LOI (`resolveRelationAccess`) pour chaque lecteur candidat de
+ * l'audience de cercle `feature` de `authorId` : le lien réel, le blocage, et le
+ * privilège d'équipe (#16623) y sont jugés ensemble. `null` quand la lecture échoue —
+ * l'appelant refuse, il n'ouvre jamais.
+ */
+async function circleVerdictsAmong(
+  prisma: PostAudiencePrisma,
+  params: { readonly feature: RelationFeature; readonly authorId: string; readonly readerIds: readonly string[] }
+): Promise<ReadonlyMap<string, RelationAccess> | null> {
+  try {
+    return await pairAccessAmong(prisma, {
+      feature: params.feature,
+      subjectId: params.authorId,
+      otherIds: params.readerIds,
+      subjectIs: 'target',
+    });
+  } catch {
+    return null;
+  }
+}
+
 /** Borne de l'énumération d'une audience de cercle — au-delà, la diffusion est tronquée aux liens les plus proches. */
 const CIRCLE_AUDIENCE_LIMIT = 5000;
 
@@ -202,10 +228,14 @@ export async function circleAudienceIds(
   visibility: string | null | undefined
 ): Promise<string[] | null> {
   const floor = postCircleAudienceFloor(visibility);
-  if (!floor) return null;
+  const feature = postCircleAudienceFeature(visibility);
+  if (!floor || !feature) return null;
   try {
-    const linked = await comptesAuMoins(prisma, authorId, floor, { limit: CIRCLE_AUDIENCE_LIMIT });
-    return linked.map((account) => account.id);
+    const [linked, colleagues] = await Promise.all([
+      comptesAuMoins(prisma, authorId, floor, { limit: CIRCLE_AUDIENCE_LIMIT }),
+      teamPeersAdmitted(prisma, { feature, subjectId: authorId, subjectIs: 'target' }),
+    ]);
+    return [...new Set([...linked.map((account) => account.id), ...colleagues])];
   } catch {
     return [];
   }
