@@ -2,7 +2,11 @@ import Foundation
 import GRDB
 import os
 
-private let admissionLog = Logger(subsystem: "me.meeshy.sdk", category: "OutboxRetryAdmission")
+// `MeeshyLog.logger(...)` et jamais `Logger(subsystem:)` : la règle maison
+// `logger-subsystem` n'exempte que `MeeshyLog.swift` lui-même. Et la catégorie
+// est celle du FLUSHER, pas une neuve — l'admission et le dispatch sont les deux
+// moitiés de la même machine, et on lit leurs lignes ensemble ou pas du tout.
+private let admissionLog = MeeshyLog.logger(.outboxFlusher, subsystem: .sdk)
 
 /// Qui a le droit d'être RÉARMÉ par une relance manuelle, et le réarmement
 /// lui-même (#16749).
