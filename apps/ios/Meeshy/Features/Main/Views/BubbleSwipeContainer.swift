@@ -88,6 +88,10 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// bar vidéo. Remplace l'ancien paramètre `isScrubbing` qui n'était câblé
     /// par aucun call site — la protection scrubbing → swipe était inopérante.
     @State private var isMediaScrubbing: Bool = false
+    /// Vrai du premier événement du glissé à sa fin OU à son annulation : seule
+    /// une `GestureState` retombe quand le défilement reprend le doigt, là où
+    /// `onEnded` ne vient jamais. C'est elle qui libère `MessageSwipeClaim`.
+    @GestureState private var isDragTracked: Bool = false
 
     private var offer: MessageRowOffer {
         MessageRowOffer(canReply: onSwipeReply != nil, canForward: onSwipeForward != nil)
@@ -170,8 +174,8 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // par layout, pour rien.
                 .opacity(isHiddenForOverlay ? 0 : 1)
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
-                .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }
-                .onPreferenceChange(MediaScrubbingPreferenceKey.self) { isMediaScrubbing = $0 }
+                .modifier(BubbleGestureOwnership(inlinePaging: $isInlinePagingActive, mediaScrubbing: $isMediaScrubbing,
+                                                 isDragTracked: isDragTracked))
                 // Mode sélection : swipe/longpress s'effacent — une
                 // seule intention à la fois, même patron que le carrousel
                 // média (`isInlinePagingActive`) et le scrubbing.
@@ -313,6 +317,7 @@ struct BubbleSwipeContainer<Content: View>: View {
         // horizontal réel (~60-100pt), donc reply/forward continuent
         // de répondre normalement.
         DragGesture(minimumDistance: BubbleSwipeResistance.minimumDistance(resistance))
+            .updating($isDragTracked) { _, tracked, _ in tracked = true }
             .onChanged { value in
                 let h = value.translation.width
                 // Décision d'engagement centralisée dans la logique pure
@@ -332,6 +337,9 @@ struct BubbleSwipeContainer<Content: View>: View {
                     ),
                     resistance: resistance
                 ) else { return }
+                // Le glissé est engagé : le toucher qui partira à la levée
+                // (avatar, auteur cité…) ne doit rien ouvrir (#16880).
+                MessageSwipeClaim.engage()
                 // Un côté que la loi refuse ne s'arme pas : la bulle s'arrête
                 // sous le seuil, l'horodatage reste lisible, aucune action ne
                 // s'annonce qui ne partirait pas (#12626).
@@ -348,6 +356,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 }
             }
             .onEnded { _ in
+                MessageSwipeClaim.release()
                 if let action = offer.committed(directedOffset: offset * replyDirection) {
                     perform(action)
                     HapticFeedback.success()
@@ -360,6 +369,25 @@ struct BubbleSwipeContainer<Content: View>: View {
     }
 }
 
+
+/// Qui possède le glissé horizontal de la bulle : le carrousel inline et le
+/// scrubbing média le reprennent (préférences remontées par la bulle), et la
+/// fin OU l'annulation du glissé libère `MessageSwipeClaim` (#16880) — seule une
+/// `GestureState` retombe quand le défilement reprend le doigt.
+private struct BubbleGestureOwnership: ViewModifier {
+    @Binding var inlinePaging: Bool
+    @Binding var mediaScrubbing: Bool
+    let isDragTracked: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { inlinePaging = $0 }
+            .onPreferenceChange(MediaScrubbingPreferenceKey.self) { mediaScrubbing = $0 }
+            .adaptiveOnChange(of: isDragTracked) { _, tracked in
+                if !tracked { MessageSwipeClaim.release() }
+            }
+    }
+}
 
 /// Applique le `LongPressGesture` custom de la bulle UNIQUEMENT quand
 /// `enabled` (< iOS 26). Sur iOS 26+ le cell attache un `.contextMenu` natif
