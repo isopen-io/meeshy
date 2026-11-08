@@ -804,6 +804,7 @@ export * from './relation-level-response.js';
 export * from './bring.js';
 export * from './talkie.js';
 export * from './now-playing.js';
+export * from './shared-location.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

@@ -689,6 +689,98 @@
       }
     },
     {
+      "id": "temporary-location-friend-shared",
+      "matrix": "Consentement",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "temporary-location-acquaintance-closed",
+      "matrix": "Niveau",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "temporary-location-friend-not-chosen",
+      "matrix": "Consentement",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "temporary-location-minor-friend-shared",
+      "matrix": "Mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
       "id": "close-has-no-live-location",
       "matrix": "Consentement",
       "input": {
