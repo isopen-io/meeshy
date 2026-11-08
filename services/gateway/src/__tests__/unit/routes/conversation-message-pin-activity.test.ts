@@ -41,7 +41,15 @@ const CONV_ID = '507f1f77bcf86cd799439011';
 const USER_ID = '507f1f77bcf86cd799439022';
 const MESSAGE_ID = '507f1f77bcf86cd799439033';
 
-async function buildApp(options: { exists?: boolean; withSocket?: boolean; conversationType?: string; birthDate?: Date | null } = {}) {
+/**
+ * `pinnedAt` est la PRÉ-CONDITION du geste, et elle est l'état OPPOSÉ de celui
+ * qu'il produit (#17031) : un `DELETE` ne transite que depuis « épinglé ». La
+ * fixture portait `null` pour les deux méthodes, donc son `DELETE` décrivait un
+ * REJEU — un appel dont le correctif ne diffuse et n'annonce RIEN, par
+ * décision. Un témoin d'ACTIVITÉ posé sur un rejeu atteste alors l'inverse de
+ * ce que son intitulé promet.
+ */
+async function buildApp(options: { exists?: boolean; withSocket?: boolean; conversationType?: string; birthDate?: Date | null; pinnedAt?: Date | null } = {}) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const io = { to: jest.fn(() => ({ emit: jest.fn() })) };
   const manager = { getIO: () => io, enqueueOfflineMessageMutation: jest.fn(async () => undefined) };
@@ -51,7 +59,7 @@ async function buildApp(options: { exists?: boolean; withSocket?: boolean; conve
       findFirst: jest.fn<any>().mockResolvedValue(
         options.exists === false
           ? null
-          : { id: MESSAGE_ID, pinnedAt: null, ...(options.conversationType ? { conversation: { type: options.conversationType } } : {}) }
+          : { id: MESSAGE_ID, pinnedAt: options.pinnedAt ?? null, pinnedBy: null, ...(options.conversationType ? { conversation: { type: options.conversationType } } : {}) }
       ),
       update: jest.fn<any>().mockResolvedValue({}),
     },
@@ -80,7 +88,7 @@ describe('épingler / dépingler remonte la conversation pour tous (#9026)', () 
     ['PUT', 'épingler'],
     ['DELETE', 'dépingler'],
   ] as const)('%s (%s) annonce une activité, servie sur le io du gestionnaire', async (method) => {
-    const { app, io } = await buildApp({ withSocket: true });
+    const { app, io } = await buildApp({ withSocket: true, pinnedAt: method === 'DELETE' ? new Date('2026-11-01T08:30:00.000Z') : null });
     try {
       const before = Date.now();
       const res = await app.inject({ method, url });
