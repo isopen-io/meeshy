@@ -338,7 +338,23 @@ export async function enqueueForOfflineParticipants(
   // La garde d'ADMISSION, UNE fois pour tout l'éventail : la vivacité est une
   // propriété du MESSAGE, pas du destinataire, donc la demander par participant
   // serait N lectures pour un seul verdict.
-  if (!(await messageStillHasTextToKeep(prisma, messageId, eventType))) return;
+  //
+  // Elle part EN PARALLÈLE de la liste des participants, et ce n'est pas une
+  // micro-optimisation : les deux lectures sont indépendantes, et les sérialiser
+  // ajoutait un TOUR DE BOUCLE DE MICRO-TÂCHES avant la première écriture. Or les
+  // deux appelants de `MessageHandler` lancent cette unité SANS l'attendre
+  // (`_enqueueOfflineEventForParticipants`, lignes 975 et 1169) : ce que leurs
+  // témoins observent dépend donc du nombre de tours écoulés pendant leur propre
+  // `await`, et un tour de plus suffisait à faire passer l'enfilage APRÈS
+  // l'assertion — sur TOUTES les familles, y compris celles que la garde ne
+  // regarde même pas.
+  //
+  // > **Un `await` ajouté en amont d'un canal « fire-and-forget » en change la
+  // > sémantique observable.** Le défaut ne se lit pas dans la garde, qui est
+  // > juste, mais dans la PROFONDEUR D'ATTENTE qu'elle introduit chez des
+  // > appelants qui n'attendent pas. Avant d'ajouter une lecture à une unité,
+  // > demander : qui l'appelle sans l'attendre ?
+  const livenessProbe = messageStillHasTextToKeep(prisma, messageId, eventType);
 
   try {
     // La restriction par langue exige les préférences du lecteur, que la
@@ -369,6 +385,10 @@ export async function enqueueForOfflineParticipants(
           where: { conversationId, ...PARTICIPATION_VIVANTE },
           select: { id: true, userId: true },
         }));
+    // Le verdict est consommé ICI, après que la liste soit là : les deux attentes
+    // se recouvrent, donc la profondeur d'attente est celle d'AVANT ce lot.
+    if (!(await livenessProbe)) return;
+
     const queued: Promise<void>[] = [];
     for (const p of participants) {
       // Queue key mirrors the presence-key convention: userId for registered

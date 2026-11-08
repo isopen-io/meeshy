@@ -390,6 +390,27 @@ function makeValidSendData(overrides: Record<string, unknown> = {}) {
 // TESTS: handleMessageSend
 // ============================================================
 
+/**
+ * Vide la file de MICRO-TÂCHES, puis franchit la phase « check ».
+ *
+ * `MessageHandler` lance l'enfilage hors ligne SANS l'attendre
+ * (`_enqueueOfflineEventForParticipants`, deux sites) : c'est un canal
+ * best-effort, délibérément hors du chemin de l'accusé. Un témoin qui assert
+ * dessus mesure donc ce qui s'est trouvé terminé pendant son propre `await` —
+ * c'est-à-dire un nombre de tours de boucle que personne n'a écrit nulle part.
+ *
+ * Trois témoins de ce fichier en dépendaient sans le dire, et le cycle 143 bis
+ * les a fait rougir en ajoutant UNE lecture en amont de l'unité partagée. Leur
+ * assertion était juste ; c'est leur attente qui était implicite.
+ *
+ * > **Un témoin qui observe un canal non attendu doit l'attendre
+ * > EXPLICITEMENT.** Sinon il ne teste pas un comportement, il teste un
+ * > alignement — et le premier `await` ajouté en amont le casse sans qu'aucun
+ * > défaut n'ait été introduit.
+ */
+const laisserPartirLEnfilage = (): Promise<void> =>
+  new Promise((resolve) => setImmediate(resolve));
+
 describe('MessageHandler.handleMessageSend', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -3893,6 +3914,7 @@ describe('MessageHandler.handleMessageEdit', () => {
       const { handler, enqueue, socket } = makeModeratedSetup({ moderatorOnline: true });
 
       await handler.handleMessageEdit(socket, makeEditData(), jest.fn());
+      await laisserPartirLEnfilage();
 
       expect(enqueue).toHaveBeenCalledWith(
         'user-1',
@@ -3906,6 +3928,7 @@ describe('MessageHandler.handleMessageEdit', () => {
       const { handler, enqueue, socket } = makeModeratedSetup({ moderatorOnline: false });
 
       await handler.handleMessageEdit(socket, makeEditData(), jest.fn());
+      await laisserPartirLEnfilage();
 
       expect(enqueue).not.toHaveBeenCalledWith('user-mod', expect.anything());
       expect(enqueue).toHaveBeenCalledWith('user-1', expect.anything());
@@ -4252,6 +4275,7 @@ describe('MessageHandler.handleMessageDelete', () => {
     });
 
     await handler.handleMessageDelete(makeSocket(), makeDeleteData(), jest.fn());
+    await laisserPartirLEnfilage();
 
     expect(enqueue).toHaveBeenCalledWith(
       'user-1',
