@@ -290,3 +290,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `ci.yml` de cette tête était rouge pour deux raisons extérieures au lot : Trivy (504 au téléchargement) et
   Playwright tranche 4 (`bun.lock` au format 3 que bun 1.3.14 ne lit pas, plus la gate `media-16 … obtenu flow-end`).
   Lockfiles réparés dans la PR #16873 (#16872).
+
+## 2026-11-08 — réveil 18 : le partage temporaire de position, côté serveur (#16980 ⊂ #14109)
+
+- Reprise : #16928 (talkie émis depuis iOS) est ouverte, et le réveil 17 la mène encore (il a poussé une fusion de
+  `dev` à 13:43 pendant ce réveil) : ce réveil ne l'a pas touchée. L'accord de l'écoute sur Android (#16836) attend
+  `claude/cercles-16643-android`, vivante. Ce réveil prend donc le lot suivant du jalon 2 dans l'ordre de la spec, la
+  position temporaire (#14109), par son socle serveur. Issue #16980 ouverte, branche
+  `claude/cercles-position-temporaire-serveur` réservée avant toute écriture.
+- Lot : aucune voie ne partageait une position À DES PERSONNES ni ne la tronquait par lecteur. Livré dans la PR :
+  loi `location.temporary` (dès Ami, consentement de l'émetteur = la liste de ses destinataires et son terme), miroirs
+  Swift et Kotlin, quatre cas communs ; contrat additif `location:share-start|update|stop` →
+  `location:share-changed|ended` (le partage en conversation garde `location:live-*`, inchangé) ;
+  `services/sharedLocation/` sur le patron de l'écoute (état complet scellé, TTL = temps restant, projection exacte /
+  quartier / ville au centre d'une maille fixe, rayon de flou) ; `GET /relations/locations?bbox=` filtré sur la
+  position SERVIE ; recalcul à la baisse, au blocage, au retrait de lien et à l'acceptation.
+- Gates locaux : voir la PR.
+- Ce qui reste de la position temporaire : iOS (#16983, émetteur + carte), web (#16984, carte en lecture), Android
+  (#16985) ; « jusqu'à l'arrivée » (ETA, Live Activity, Live Update), fantôme (LOC-12), précision par niveau (RG-15).
+- Prochain lot recommandé : #16983 (iOS, la référence), sinon #16984 (web, prouvable en conteneur).
