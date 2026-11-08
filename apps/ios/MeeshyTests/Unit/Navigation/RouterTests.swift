@@ -407,17 +407,19 @@ final class RouterTests: XCTestCase {
         XCTAssertEqual(router.currentRoute, .dataExport)
     }
 
-    func test_push_postDetail_addsToPath() {
-        let router = Router()
+    /// Le détail d'un post s'ouvre en FEUILLE, jamais dans la pile (#16676).
+    func test_push_postDetail_presentsTheSheet_andLeavesThePathUntouched() {
+        let router = makeIsolatedRouter()
         router.push(.postDetail("post123"))
-        XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .postDetail("post123"))
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(router.presentedPost?.postId, "post123")
     }
 
-    func test_push_postDetail_withShowComments_addsToPath() {
-        let router = Router()
+    func test_push_postDetail_withShowComments_presentsTheSheetOnComments() {
+        let router = makeIsolatedRouter()
         router.push(.postDetail("post123", showComments: true))
-        XCTAssertEqual(router.path.count, 1)
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(router.presentedPost?.showComments, true)
     }
 
     func test_push_bookmarks_addsToPath() {

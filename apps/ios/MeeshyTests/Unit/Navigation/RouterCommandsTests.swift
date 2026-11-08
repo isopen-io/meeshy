@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 @MainActor
@@ -77,7 +78,30 @@ final class RouterCommandsTests: XCTestCase {
 
         router.commands.openPostDetail(id: "p1", from: .nearby)
 
-        XCTAssertEqual(router.path, [.postDetail("p1")])
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(router.presentedPost?.postId, "p1")
+    }
+
+    func test_closePostDetail_relaysToRouter_andClosesTheSheet() {
+        let router = makeRouter()
+        router.commands.push(.postDetail("p1"))
+
+        router.commands.closePostDetail()
+
+        XCTAssertNil(router.presentedPost)
+    }
+
+    func test_postDetailHeaderGlyph_isACross_whenThePostIsASheet() {
+        let router = makeRouter()
+
+        XCTAssertEqual(router.commands.postDetailHeaderGlyph, .close)
+    }
+
+    func test_postDetailHeaderGlyph_isBack_inTheTwoColumnPanel() {
+        let router = makeRouter()
+        router.onRouteRequested = { _ in true }
+
+        XCTAssertEqual(router.commands.postDetailHeaderGlyph, .back)
     }
 
     func test_inert_relaysNothing_andIsTheEnvironmentDefault() {
@@ -86,6 +110,7 @@ final class RouterCommandsTests: XCTestCase {
         RouterCommands.inert.push(.settings)
         RouterCommands.inert.pop()
         RouterCommands.inert.popToRoot()
+        RouterCommands.inert.closePostDetail()
         RouterCommands.inert.openGame(at: .progressionNotebook)
         RouterCommands.inert.openPostDetail(id: "p1", from: .nearby)
         RouterCommands.inert.navigateToConversation(makeConversation())

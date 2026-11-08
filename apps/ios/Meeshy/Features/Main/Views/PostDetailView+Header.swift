@@ -96,13 +96,13 @@ extension PostDetailView {
                 title: "",
                 scrollOffset: offset,
                 showBackButton: true,
-                onBack: { HapticFeedback.light(); router.pop() },
+                onBack: { HapticFeedback.light(); router.closePostDetail() },
                 titleColor: theme.textPrimary,
                 backArrowColor: theme.textPrimary,
                 backgroundColor: theme.backgroundPrimary,
                 centerReveal: { authorRevealView(post) },
                 trailing: { postMenu }
-            )
+            ).backGlyph(router.postDetailHeaderGlyph)
         }
     }
 }

@@ -49,4 +49,28 @@ final class CollapsibleHeaderGlassBackButtonTests: XCTestCase {
         XCTAssertTrue(try backButtonSource().contains("CollapsibleHeaderMetrics.leadingBackInset"),
                       "Le retour ne se pose pas sur la gouttière des chromes ronds.")
     }
+
+    // MARK: - Un écran présenté en FEUILLE ferme, il ne revient pas (#16676)
+
+    @MainActor
+    func test_backGlyph_byDefault_readsBack() {
+        XCTAssertEqual(CollapsibleHeaderBackGlyph.back.systemImage, "chevron.backward")
+        XCTAssertEqual(CollapsibleHeaderBackGlyph.back.accessibilityLabel,
+                       String(localized: "common.back", defaultValue: "Retour", bundle: .module))
+    }
+
+    @MainActor
+    func test_backGlyph_close_readsCloseAndDrawsACross() {
+        XCTAssertEqual(CollapsibleHeaderBackGlyph.close.systemImage, "xmark")
+        XCTAssertEqual(CollapsibleHeaderBackGlyph.close.accessibilityLabel,
+                       String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
+    }
+
+    /// Le disque dessine et dit le geste choisi, jamais un chevron figé.
+    func test_theDisc_drawsAndSaysTheChosenGlyph() throws {
+        let bouton = try backButtonSource()
+
+        XCTAssertTrue(bouton.contains("leadingGlyph.systemImage"), "Le disque dessine un glyphe figé.")
+        XCTAssertTrue(bouton.contains("leadingGlyph.accessibilityLabel"), "Le disque dit « Retour » même quand il ferme.")
+    }
 }

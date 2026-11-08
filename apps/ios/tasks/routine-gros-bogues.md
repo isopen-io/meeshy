@@ -190,7 +190,8 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `/mnt/project-files/frames/03-peau-teint-naturel-et-lissage.md`, #9199.
 
 ## OPUS-16 — Une prise en retouche est perdue si l'app est tuée avant « Terminé »
-- Statut : décision attendue
+- Statut : à faire
+- Décision : Jacques, le 2026-11-08 : la prise est copiée dans le brouillon (dans l'app, pas dans Photos) dès son arrivée ; au relancement la retouche se rouvre ; la copie s'efface à « Terminé » ou à l'abandon.
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : audit 09 § S4
 - Constat : par défaut l'original ne rejoint pas Photos (`CaptureSavePolicy.standard`, `Features/Composer/ComposerGallery.swift:56`) ; la prise vit dans `ComposerCaptureSession` (`editPhoto`, `editPhotoData`) et dans `tmp/` jusqu'à « Terminé ». Le brouillon du composeur (`ComposerAutosave*`) ne la connaît qu'après la remise à l'hôte. App tuée en arrière-plan (pression mémoire, fréquente avec la caméra), plantage ou balayage : la prise disparaît.

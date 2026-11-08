@@ -191,21 +191,13 @@ struct RootView: View {
             .background(Color.clear)
             .opacity(reelsCoverScreen ? 0 : 1)
 
-            // 3. Feed overlay
-            if showFeed {
+            // 3. Feed overlay — retenu une fois ouvert : le cacher ne le
+            // détruit plus, il revient à sa place exacte (#16676).
+            RetainedFeedHost(isShown: showFeed) {
                 ThemedFeedOverlay()
                     .opacity(reelsCoverScreen ? 0 : 1)
-                    .transition(
-                        .asymmetric(
-                            insertion: .move(edge: .bottom)
-                                .combined(with: .opacity),
-                            removal: .move(edge: .bottom)
-                                .combined(with: .scale(scale: 0.95))
-                                .combined(with: .opacity)
-                        )
-                    )
-                    .zIndex(50)
             }
+            .zIndex(50)
 
             // 3b. Reels overlay — full-screen immersive pager. Born as a liquid
             // disc at the feed button's exact on-screen position, the wavy edge

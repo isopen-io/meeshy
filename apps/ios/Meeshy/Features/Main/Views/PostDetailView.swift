@@ -496,7 +496,7 @@ struct PostDetailView: View {
         Menu {
             if PendingPublicationMarker.isPending(postId: postId) {
                 PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
-                    Task { if await viewModel.deletePost(postId) { router.pop() } }
+                    Task { if await viewModel.deletePost(postId) { router.closePostDetail() } }
                 }, onRemove: nil)
             } else {
                 PostDetailLinkMenuItems { await mintShareLink(action: $0) }
@@ -528,12 +528,12 @@ struct PostDetailView: View {
                         Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                     }
                     PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
-                        Task { if await viewModel.deletePost(postId) { router.pop() } }
+                        Task { if await viewModel.deletePost(postId) { router.closePostDetail() } }
                     }, onRemove: nil)
                 } else {
                     if let post = displayPost {
                         PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
-                            if await viewModel.withdrawPost($0, $1) { router.pop() }
+                            if await viewModel.withdrawPost($0, $1) { router.closePostDetail() }
                         })
                     }
                     Divider()

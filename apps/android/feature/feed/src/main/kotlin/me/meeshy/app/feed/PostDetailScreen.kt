@@ -1,6 +1,5 @@
 package me.meeshy.app.feed
 
-import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,6 +98,8 @@ import me.meeshy.sdk.model.PostAbsenceReason
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -188,8 +189,8 @@ fun PostDetailScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = MeeshyIcons.Back,
-                                contentDescription = stringResource(R.string.post_detail_back),
+                                imageVector = leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.post_detail_back)),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
                         }
