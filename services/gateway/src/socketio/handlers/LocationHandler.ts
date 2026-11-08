@@ -561,7 +561,7 @@ export class LocationHandler {
       const eventData: LocationLiveStoppedEventData = {
         conversationId: normalizedId,
         userId: context.userId,
-        stoppedAt: new Date(),
+        stoppedAt: this.now(),
       };
 
       // Aux autres participants uniquement (cf. handleLiveLocationStart), et
@@ -591,7 +591,7 @@ export class LocationHandler {
    * propriétaire, et la mort du premier ne le retire donc pas.
    */
   handleSocketDisconnecting(socketId: string): void {
-    const now = new Date();
+    const now = this.now();
     for (const [key, session] of [...this.sessions]) {
       if (session.socketId !== socketId) continue;
       // Une entrée SURVIT à son terme — c'est elle qui fait taire les
@@ -708,7 +708,7 @@ export class LocationHandler {
    * minuterie, et la clôture n'a pas à l'annoncer deux fois.
    */
   endSessionsForClosedConversation(conversationId: string): void {
-    const now = new Date();
+    const now = this.now();
     for (const [key, session] of [...this.sessions]) {
       if (session.conversationId !== conversationId) continue;
       this._expireSessionNow(key, session, now);
@@ -745,7 +745,7 @@ export class LocationHandler {
     const key = sessionKey(conversationId, userId);
     const session = this.sessions.get(key);
     if (!session) return;
-    this._expireSessionNow(key, session, new Date());
+    this._expireSessionNow(key, session, this.now());
   }
 
   /**
@@ -823,7 +823,7 @@ export class LocationHandler {
     const eventData: LocationLiveStoppedEventData = {
       conversationId: session.conversationId,
       userId: session.userId,
-      stoppedAt: new Date(),
+      stoppedAt: this.now(),
     };
     // AUCUNE exclusion : une rétractation ne se filtre pas (#16745, cf.
     // l'en-tête). C'est aussi ce qui rend cette unité tenable là où elle est
