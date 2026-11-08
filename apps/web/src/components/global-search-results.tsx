@@ -1,7 +1,8 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { Avatar } from '@/components/avatar';
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { CALLS_GLYPHS } from '@/components/glyphs-calls';
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import { postSearchTarget } from '@/lib/api/global-search';
 import type { FeedPost } from '@/lib/api/feed-pages';
@@ -13,6 +14,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import type { SearchState } from '@/lib/view/global-search-state';
 import type { MessageSearchRowModel } from '@/lib/view/message-search-row';
+import { BLUR_RADIUS_PX, surrogateOf } from '@/lib/reading-mode/protection';
 import { THREAD_ANCHOR_PARAM } from '@/lib/view/thread-anchor';
 import { Link } from '@/routes/route-table';
 
@@ -98,6 +100,21 @@ export function LoadMore({ language, busy, onMore }: { readonly language: Interf
   );
 }
 
+/**
+ * #16957 — LE VOILE D'UN RÉSULTAT FLOUTÉ : le substitut dérivé de la seule
+ * LONGUEUR (`surrogateOf`, le même que la bulle voilée du fil), flouté ; le
+ * vrai texte n'entre jamais dans le DOM. Le lecteur d'écran entend l'étiquette.
+ */
+function VeiledExcerpt({ length, label }: { readonly length: number; readonly label: string }) {
+  return (
+    <span data-search-veiled role="img" aria-label={label}>
+      <span aria-hidden="true" style={{ filter: `blur(${BLUR_RADIUS_PX / 3}px)`, userSelect: 'none' }}>
+        {surrogateOf(length)}
+      </span>
+    </span>
+  );
+}
+
 export function MessageSearchRow({ model, language }: { readonly model: MessageSearchRowModel; readonly language: InterfaceLanguage }) {
   return (
     <li data-search-message={model.messageId}>
@@ -118,7 +135,12 @@ export function MessageSearchRow({ model, language }: { readonly model: MessageS
           </span>
           <span className="line-clamp-2 text-body">
             {model.author === null ? null : <span className="font-medium">{model.author} · </span>}
-            {model.excerpt}
+            {model.mediaGlyph === null ? null : (
+              <span data-search-media={model.mediaGlyph} aria-hidden="true" className="me-1 inline-flex align-[-2px]" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {model.mediaGlyph === 'videoCamera' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={14} /> : <Glyph name={model.mediaGlyph} size={14} />}
+              </span>
+            )}
+            {model.veiled ? <VeiledExcerpt length={model.veilLength} label={text(language, 'message.blurred')} /> : model.excerpt}
           </span>
           {model.translated ? (
             <span className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink-2)' }}>

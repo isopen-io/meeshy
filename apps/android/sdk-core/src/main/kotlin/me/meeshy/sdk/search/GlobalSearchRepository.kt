@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.ApiMessageSender
+import me.meeshy.sdk.model.MessageEncryptionGuard
+import me.meeshy.sdk.model.search.SearchExcerpt
+import me.meeshy.sdk.model.search.SearchMediaKind
 import me.meeshy.sdk.model.search.GlobalMessageSearchHit
 import me.meeshy.sdk.model.search.ListMessageSearch
 import me.meeshy.sdk.model.search.SearchPane
@@ -34,7 +37,14 @@ public data class MessageSearchHit(
     val conversation: ApiConversation? = null,
     /** La photo servie avec [conversationTitle] par la recherche unifiee, quand [conversation] est inconnue. */
     val conversationAvatar: String? = null,
-)
+    /** Floute (#16957) : la ligne se voile ; par defaut lu sur le message lui-meme, donc ferme. */
+    val isVeiled: Boolean = MessageEncryptionGuard.isVeiled(message),
+    /** Le media dont la transcription a repondu (#16958), peint en icone non actionnable. */
+    val transcriptMedia: SearchMediaKind? = null,
+) {
+    /** L'extrait a peindre : jamais le texte d'un message voile. */
+    val excerpt: SearchExcerpt get() = SearchExcerpt.of(message.content, isVeiled, transcriptMedia)
+}
 
 /**
  * Un resultat de `GET /messages/search` (#14619) : le texte servi par le Prisme du serveur, l'auteur,
@@ -55,6 +65,8 @@ internal fun GlobalMessageSearchHit.asMessageSearchHit(known: ApiConversation?):
         conversationTitle = served.conversationTitle,
         conversation = known,
         conversationAvatar = served.conversationAvatar,
+        isVeiled = served.isVeiled,
+        transcriptMedia = served.transcriptMedia,
     )
 }
 

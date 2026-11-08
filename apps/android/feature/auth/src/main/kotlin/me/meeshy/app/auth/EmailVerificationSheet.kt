@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.auth.EmailVerificationLead
 import me.meeshy.sdk.model.auth.LoginOutcome
+import me.meeshy.ui.component.auth.SpamFolderHint
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -91,15 +92,7 @@ internal fun EmailVerificationSheet(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = MeeshySpacing.md),
         )
-        if (state.lead.showsInboxHint) {
-            Text(
-                text = stringResource(R.string.email_verification_inbox_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = tokens.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        SpamFolderHint(textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         EmailCodeEntry(
             code = state.code,
             gate = state.gate,

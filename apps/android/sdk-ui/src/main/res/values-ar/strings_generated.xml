@@ -194,6 +194,7 @@
     <string name="content_failure_unavailable_title">لم يعد هذا المحتوى متاحًا</string>
     <string name="document_card_pages">%1$d صفحة</string>
     <string name="document_delete_attachment">حذف المرفق</string>
+    <string name="email_check_spam">لم يصلك شيء؟ تحقّق أيضًا من مجلد الرسائل غير المرغوب فيها أو البريد العشوائي.</string>
     <string name="emoji_category_activities">الأنشطة</string>
     <string name="emoji_category_animals">الحيوانات</string>
     <string name="emoji_category_faces">الوجوه</string>

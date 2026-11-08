@@ -10,7 +10,7 @@
     "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift::LoginView.normalLoginSection": 135,
     "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift::LoginView.selectedAccountView": 81,
     "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift::MagicLinkView.emailInputContent": 114,
-    "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift::MagicLinkView.waitingContent": 115,
+    "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift::MagicLinkView.waitingContent": 103,
     "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintBorder": 91,
     "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintPattern": 145,
     "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Ornaments.swift::CallFrameRenderer.paintOrnament": 265,

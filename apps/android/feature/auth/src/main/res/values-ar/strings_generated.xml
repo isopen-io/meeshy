@@ -36,8 +36,6 @@
     <string name="auth_magic_header">عنوان بريدك الإلكتروني</string>
     <string name="auth_magic_how_label">كيف يعمل</string>
     <string name="auth_magic_invalid">رابط غير صالح أو منتهي الصلاحية</string>
-    <string name="auth_magic_nothing_label">لم يصلك شيء؟</string>
-    <string name="auth_magic_nothing_text">تحقّق من مجلد الرسائل غير المرغوب فيها (spam): قد تكون الرسالة وصلت إليه.</string>
     <string name="auth_magic_resend">إعادة إرسال الرابط</string>
     <string name="auth_magic_resend_short">إعادة الإرسال</string>
     <string name="auth_magic_send">استلام الرابط</string>
@@ -67,7 +65,6 @@
     <string name="email_verification_error_resend_failed">تعذّر إعادة إرسال رمز التحقّق</string>
     <string name="email_verification_error_too_many_attempts">محاولات كثيرة جدًا. أعد المحاولة بعد بضع دقائق.</string>
     <string name="email_verification_error_weak_password">كلمة المرور هذه ضعيفة جدًا. اختر كلمة مرور أقوى.</string>
-    <string name="email_verification_inbox_hint">افتح بريدك الوارد، ولا تنسَ التحقق من مجلد الرسائل غير المرغوب فيها.</string>
     <string name="email_verification_nav_close">إغلاق</string>
     <string name="email_verification_nav_title">التحقق من البريد الإلكتروني</string>
     <string name="email_verification_no_code">لم يصلك الرمز؟</string>

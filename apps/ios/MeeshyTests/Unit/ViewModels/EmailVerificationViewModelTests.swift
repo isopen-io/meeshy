@@ -368,7 +368,6 @@ final class EmailVerificationLeadTests: XCTestCase {
 
         XCTAssertEqual(sut.lead, .activationRequired)
         XCTAssertTrue(sut.lead.subtitle(email: sut.email).contains("**grace@icloud.example**"))
-        XCTAssertNotNil(sut.lead.inboxHint)
     }
 
     func test_lead_accountCreatedByLogin_keepsTheSignupText() {
@@ -376,14 +375,12 @@ final class EmailVerificationLeadTests: XCTestCase {
 
         XCTAssertEqual(sut.lead, .accountCreated)
         XCTAssertTrue(sut.lead.subtitle(email: sut.email).contains("**grace@icloud.example**"))
-        XCTAssertNil(sut.lead.inboxHint)
     }
 
     func test_lead_withoutPassword_isThePlainCodePrompt() {
         let sut = makeSUT(password: nil, accountCreated: false)
 
         XCTAssertEqual(sut.lead, .codeSent)
-        XCTAssertNil(sut.lead.inboxHint)
     }
 
     func test_lead_outlivesThePasswordForgottenOnVerification() async {
@@ -408,7 +405,6 @@ final class EmailVerificationLeadTests: XCTestCase {
         let strings = try XCTUnwrap(root["strings"] as? [String: Any])
         let expected: [String: [String: String]] = [
             "emailVerification.subtitle.activationRequired": ["fr": "mot de passe est bon", "en": "password is correct"],
-            "emailVerification.inboxHint": ["fr": "indésirables", "en": "spam"],
         ]
         for (key, needles) in expected {
             let entry = try XCTUnwrap(strings[key] as? [String: Any], key)

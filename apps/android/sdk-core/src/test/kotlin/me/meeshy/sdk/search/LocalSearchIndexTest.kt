@@ -3,6 +3,7 @@ package me.meeshy.sdk.search
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -15,7 +16,10 @@ import me.meeshy.sdk.conversation.MessageEntityFactory
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.search.ListMessageSearch
+import me.meeshy.sdk.model.search.SearchExcerpt
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,13 +67,59 @@ class LocalSearchIndexTest {
     fun `un message protege n'est jamais indexe en clair`() = runTest {
         cache(
             apiMessage("view", "secret").copy(isViewOnce = true),
-            apiMessage("blur", "secret").copy(isBlurred = true),
             apiMessage("eph", "secret").copy(expiresAt = "2030-01-01T00:00:00Z"),
             apiMessage("enc", "AAEC").copy(isEncrypted = true),
             apiMessage("ok", "secret visible"),
         )
 
         assertThat(found("secret")).containsExactly("ok")
+    }
+
+    @Test
+    fun `un message floute est trouvable, le flou n'est pas une disparition`() = runTest {
+        cache(apiMessage("blur", "secret").copy(isBlurred = true), apiMessage("ok", "secret visible"))
+
+        assertThat(found("secret")).containsExactly("blur", "ok")
+    }
+
+    @Test
+    fun `la section de la liste rend le message floute trouve localement voile, sans son texte`() = runTest {
+        cache(
+            apiMessage("blur", "secret plan", createdAt = "2026-06-02T10:00:00Z").copy(isBlurred = true),
+            apiMessage("ok", "secret visible"),
+        )
+        val source = RoomListMessageSearchSource(index, database.messageDao(), mockk(relaxed = true), InMemoryNetworkMonitor(initialOnline = false))
+
+        val hits = ListMessageSearch.hitsOf(source.local("secret"), listOf("fr"))
+
+        assertThat(hits.map { it.messageId }).containsExactly("blur", "ok").inOrder()
+        assertThat(hits.first().isVeiled).isTrue()
+        assertThat(hits.first().text).isEmpty()
+        assertThat(hits.last().isVeiled).isFalse()
+        assertThat(hits.last().text).isEqualTo("secret visible")
+    }
+
+    @Test
+    fun `la recherche globale rend le message floute trouve localement voile, sans son texte`() = runTest {
+        cache(
+            apiMessage("blur", "secret plan", createdAt = "2026-06-02T10:00:00Z").copy(isBlurred = true),
+            apiMessage("ok", "secret visible"),
+        )
+        val source = RoomLocalSearchSource(
+            index = index,
+            conversationDao = database.conversationDao(),
+            friends = mockk(relaxed = true),
+            suggestionDao = mockk(relaxed = true),
+            messageDao = database.messageDao(),
+        )
+
+        val hits = source.messages("secret")
+
+        assertThat(hits.map { it.message.id }).containsExactly("blur", "ok").inOrder()
+        assertThat(hits.first().isVeiled).isTrue()
+        assertThat(hits.first().message.content).isEmpty()
+        assertThat(hits.first().excerpt).isEqualTo(SearchExcerpt.Veiled(media = null))
+        assertThat(hits.last().excerpt).isEqualTo(SearchExcerpt.Shown(text = "secret visible", media = null))
     }
 
     @Test

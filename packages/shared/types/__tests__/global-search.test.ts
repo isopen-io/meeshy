@@ -4,6 +4,7 @@ import {
   GLOBAL_SEARCH_POST_TYPES,
   globalSearchQuerySchema,
   messageSearchHitSchema,
+  messageSearchTranscriptSchema,
   postSearchQuerySchema,
 } from '../global-search';
 
@@ -55,6 +56,30 @@ describe('messageSearchHitSchema', () => {
       sender: { id: 'p1', userId: null, displayName: 'Invité', username: null, avatar: null },
       conversation: { id: '65f000000000000000000002', identifier: null, type: 'direct', title: 'Alice', avatar: null },
     };
+    expect(messageSearchHitSchema.parse(hit)).toEqual({ ...hit, isBlurred: false, match: 'content', transcript: null });
+  });
+
+  it('porte le voile du flou et la transcription qui a répondu (#16957, #16958)', () => {
+    const hit = {
+      id: '65f000000000000000000001',
+      conversationId: '65f000000000000000000002',
+      createdAt: '2026-11-02T10:00:00.000Z',
+      messageType: 'audio',
+      content: '',
+      servedLanguage: null,
+      originalContent: '',
+      originalLanguage: 'fr',
+      sender: null,
+      conversation: { id: '65f000000000000000000002', identifier: null, type: 'direct', title: 'Alice', avatar: null },
+      isBlurred: true,
+      match: 'transcript',
+      transcript: { attachmentId: 'a1', mediaKind: 'audio', text: 'on se voit à la plage', servedLanguage: null, durationMs: 4200 },
+    };
     expect(messageSearchHitSchema.parse(hit)).toEqual(hit);
+  });
+
+  it('refuse une nature de média inconnue', () => {
+    const transcript = { attachmentId: 'a1', mediaKind: 'hologram', text: 'x', servedLanguage: null, durationMs: null };
+    expect(messageSearchTranscriptSchema.safeParse(transcript).success).toBe(false);
   });
 });

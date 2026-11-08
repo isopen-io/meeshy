@@ -63,9 +63,43 @@ export const messageSearchConversationSchema = z.object({
 });
 
 /**
+ * LA CAPACITÉ DU CLIENT (#16957). Un client qui envoie `X-Search-Caps` à
+ * `GLOBAL_SEARCH_PROTECTION_CAPS` ou plus déclare savoir VOILER un résultat
+ * flouté et peindre une transcription. Sans elle, la passerelle ne lui sert
+ * aucun flouté et ne cherche pas les transcriptions : un ancien client ne peut
+ * pas afficher en clair ce qu'il ne sait pas voiler.
+ */
+export const GLOBAL_SEARCH_CAPS_HEADER = 'X-Search-Caps';
+export const GLOBAL_SEARCH_PROTECTION_CAPS = 1;
+
+export const MESSAGE_SEARCH_MEDIA_KINDS = ['audio', 'video', 'image', 'document'] as const;
+
+export type MessageSearchMediaKind = (typeof MESSAGE_SEARCH_MEDIA_KINDS)[number];
+
+export const MESSAGE_SEARCH_MATCHES = ['content', 'transcript'] as const;
+
+/**
+ * La transcription qui a répondu (#16958) : `text` est servi par le Prisme du
+ * lecteur (`servedLanguage`, `null` ⇒ l'original). Elle se PEINT avec l'icône
+ * de `mediaKind`, sans jamais se jouer : la ligne n'a qu'un geste, ouvrir la
+ * conversation.
+ */
+export const messageSearchTranscriptSchema = z.object({
+  attachmentId: z.string(),
+  mediaKind: z.enum(MESSAGE_SEARCH_MEDIA_KINDS),
+  text: z.string(),
+  servedLanguage: z.string().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+});
+
+export type MessageSearchTranscript = z.infer<typeof messageSearchTranscriptSchema>;
+
+/**
  * Un message trouvé. `content` est le texte SERVI au lecteur (la traduction
  * élue par son Prisme, ou l'original) ; `servedLanguage` dit sa langue quand
- * c'est une traduction, `null` quand c'est l'original.
+ * c'est une traduction, `null` quand c'est l'original. `isBlurred` dit que
+ * l'extrait se voile (#16957) ; `match` dit ce qui a répondu, et `transcript`
+ * porte la transcription quand c'est elle (#16958).
  */
 export const messageSearchHitSchema = z.object({
   id: z.string(),
@@ -78,6 +112,10 @@ export const messageSearchHitSchema = z.object({
   originalLanguage: z.string().nullable(),
   sender: messageSearchSenderSchema.nullable(),
   conversation: messageSearchConversationSchema,
+  /** Vrai ⇒ l'extrait (texte OU transcription) se VOILE : aucun caractère lisible. */
+  isBlurred: z.boolean().default(false),
+  match: z.enum(MESSAGE_SEARCH_MATCHES).default('content'),
+  transcript: messageSearchTranscriptSchema.nullable().default(null),
 });
 
 export type MessageSearchHit = z.infer<typeof messageSearchHitSchema>;

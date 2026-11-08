@@ -18,6 +18,7 @@ import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.auth.EmailProvenSession
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.SignupCardStage
+import me.meeshy.ui.component.auth.SpamFolderHint
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -96,6 +97,7 @@ internal fun SignupCodeStepContent(
             style = MaterialTheme.typography.bodySmall,
             color = MeeshyTheme.tokens.textSecondary,
         )
+        SpamFolderHint()
         EmailCodeEntry(
             code = state.code,
             gate = state.gate,

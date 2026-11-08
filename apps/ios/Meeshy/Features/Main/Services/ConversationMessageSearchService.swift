@@ -58,6 +58,13 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
         message.contentExitLaw.nature == .ordinary
     }
 
+    /// **Un message flouté sort VOILÉ** (#16957) : le flou se lit sur le
+    /// message ET sur chacune de ses pièces, par la colonne OU le bit
+    /// `blurred` — miroir de la passerelle (`messageIsBlurred || pieceIsBlurred`).
+    static func veilsInSearch(_ message: MeeshyMessage) -> Bool {
+        message.isBlurred || message.attachments.contains(where: \.declaresBlur)
+    }
+
     /// Le texte servi d'un résultat : la traduction élue par le Prisme du
     /// lecteur, sinon l'original (règle 1 — jamais `translations.first`).
     static func servedText(
@@ -112,10 +119,13 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
         guard !records.isEmpty else { return [] }
         let readerId = reader?.id ?? ""
         let preferred = ReaderPrism.resolve(for: reader)
-        let visible = records.filter { Self.appearsInSearch($0.toMessage(currentUserId: readerId)) }
-        let translations = (try? await searchService.translations(forMessageLocalIds: visible.map(\.localId))) ?? [:]
+        let visible = records
+            .map { (record: $0, message: $0.toMessage(currentUserId: readerId)) }
+            .filter { Self.appearsInSearch($0.message) }
+        let translations = (try? await searchService.translations(forMessageLocalIds: visible.map(\.record.localId))) ?? [:]
         let known = await conversationsById()
-        return visible.map { record in
+        return visible.map { entry in
+            let record = entry.record
             let conversation = known[record.conversationId]
             return GlobalSearchMessageResult(
                 id: record.serverId ?? record.localId,
@@ -131,7 +141,8 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
                 ),
                 senderName: record.senderName ?? record.senderUsername ?? "?",
                 senderAvatar: record.senderAvatarURL,
-                createdAt: record.createdAt
+                createdAt: record.createdAt,
+                isVeiled: Self.veilsInSearch(entry.message)
             )
         }
     }
@@ -170,12 +181,15 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
         cursor: String?,
         emptyPagesLeft: Int
     ) async throws -> (hits: [APIMessageSearchHit], nextCursor: String?) {
-        let page: PaginatedAPIResponse<[APIMessageSearchHit]> = try await api.request(
+        let page: PaginatedAPIResponse<[APIMessageSearchHit]> = try await api.requestWithHeaders(
             MessagesEndpoint.search,
+            method: "GET",
+            body: nil,
             queryItems: [
                 URLQueryItem(name: "q", value: query),
                 URLQueryItem(name: "limit", value: String(Self.pageSize))
-            ] + (cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? [])
+            ] + (cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? []),
+            headers: MessageSearchCapabilities.requestHeaders
         )
         let next = page.pagination?.hasMore == true ? page.pagination?.nextCursor : nil
         guard page.data.isEmpty, let next, emptyPagesLeft > 1, !Task.isCancelled else { return (page.data, next) }
@@ -191,10 +205,12 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
             conversationId: hit.conversationId,
             conversationName: conversation?.displayName ?? hit.conversation.title,
             conversationAvatar: conversation.map(avatar(of:)) ?? hit.conversation.avatar,
-            content: hit.content,
+            content: hit.excerpt,
             senderName: hit.senderLabel,
             senderAvatar: hit.sender?.avatar,
-            createdAt: hit.createdAt
+            createdAt: hit.createdAt,
+            isVeiled: hit.isBlurred,
+            mediaKind: hit.transcript?.mediaKind
         )
     }
 
@@ -234,7 +250,8 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
                 queryItems: [URLQueryItem(name: "q", value: query), URLQueryItem(name: "limit", value: "5")]
             )
             return .served(response.data.compactMap { message -> GlobalSearchMessageResult? in
-                guard Self.appearsInSearch(message.toMessage(currentUserId: readerId)) else { return nil }
+                let domain = message.toMessage(currentUserId: readerId)
+                guard Self.appearsInSearch(domain) else { return nil }
                 return GlobalSearchMessageResult(
                     id: message.id,
                     conversationId: message.conversationId,
@@ -248,7 +265,8 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
                     ),
                     senderName: message.sender?.displayName ?? message.sender?.username ?? "?",
                     senderAvatar: message.sender?.avatar,
-                    createdAt: message.createdAt
+                    createdAt: message.createdAt,
+                    isVeiled: Self.veilsInSearch(domain)
                 )
             })
         } catch {

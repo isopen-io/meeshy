@@ -320,6 +320,8 @@ struct DeleteAccountView: View {
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
+
+                EmailSpamFolderHint()
             }
             .accessibilityElement(children: .combine)
             .padding(MeeshySpacing.xxl)
