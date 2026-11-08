@@ -243,6 +243,46 @@ export async function changerRangDeParticipant(
 
   const targetUserId = targetParticipant.userId;
   const newRole = normalizedRole;
+
+  // ─── Reposer le MÊME rang n'est pas un geste (#17078) ──────────────────────
+  //
+  // Rien à écrire : la ligne porte déjà le rang demandé. Ce qui partait
+  // pourtant à chaque rejeu — un retry après délai, un drain d'outbox, un
+  // double tap :
+  //   - une écriture identique ;
+  //   - `participant:role-updated` à toute la salle, SANS delta ;
+  //   - une notification dont `previousRole === newRole`, soit « X vous a
+  //     nommé administrateur » pour un geste qui n'a rien changé, et elle
+  //     perce la sourdine.
+  //
+  // Le court-circuit est placé APRÈS tous les refus : un appelant sans
+  // autorité reçoit toujours son 403, et un créateur reste protégé — un rejeu
+  // n'est une absence d'effet que pour qui avait le DROIT d'agir.
+  //
+  // **Et il rend un ACCORD, là où la jumelle du bannissement refuse en 400.**
+  // Ce n'est pas une incohérence : un bannissement est un acte de MODÉRATION,
+  // dont le refus informe l'acteur que quelqu'un d'autre l'a déjà fait. Un rang
+  // déjà au rang demandé est l'ÉTAT QUE L'APPELANT A DEMANDÉ ; lui rendre une
+  // erreur ferait échouer un geste réussi.
+  //
+  // La comparaison porte sur `normalizedRole`, jamais sur la chaîne reçue : la
+  // casse ne décide pas d'une conséquence (#4008), et `MEMBER` reposé sur
+  // `member` est le même rejeu.
+  if ((targetParticipant.role ?? 'member') === newRole) {
+    logger.info('[ROLE] rang inchangé — aucune écriture, aucune diffusion, aucun avis', {
+      conversationId,
+      targetUserId,
+      role: newRole,
+    });
+    return accorder({
+      message: 'Rôle du participant mis à jour avec succès',
+      userId: targetUserId,
+      participantId: targetParticipant.id,
+      role: newRole,
+      participant: await participantServiPourRejeu(prisma, targetParticipant.id, demande),
+    });
+  }
+
   await prisma.participant.update({
     where: {
       id: targetParticipant.id
@@ -252,29 +292,7 @@ export async function changerRangDeParticipant(
     }
   });
 
-  const updatedRow = await prisma.participant.findUnique({
-    where: { id: targetParticipant.id },
-    include: participantListUserSelect
-  });
-
-  // Cette route servait `updatedRow` TEL QUEL sous la clé `participant`, que
-  // `conversationParticipantSchema` déclare. La réponse REST est gatée par
-  // le viewer DEMANDEUR (régime STRICT — self/ADMIN+/ami) : elle seule a
-  // un destinataire nommé capable de porter une visibilité. La diffusion
-  // Socket.IO plus bas n'en a pas — toute la salle la reçoit — donc son
-  // `participant` ne transporte plus `isOnline`/`lastActiveAt` du tout,
-  // gaté ou non ; le type partagé (`ParticipantRoleUpdatedEventData`) ne
-  // les déclare déjà pas.
-  const rolePresenceViewer = demande.viewer;
-  const rolePresenceVis = updatedRow?.userId
-    ? await getPresenceVisibilityService(prisma).resolveForTarget(rolePresenceViewer, {
-        id: updatedRow.userId,
-        deactivatedAt: updatedRow.user?.deactivatedAt ?? null
-      })
-    : presenceFor(rolePresenceViewer, new Map(), null);
-  const updatedParticipant = updatedRow
-    ? serializeConversationParticipant(updatedRow, { presence: rolePresenceVis })
-    : null;
+  const updatedParticipant = await participantServiPourRejeu(prisma, targetParticipant.id, demande);
   announceParticipantRoleUpdated({
     manager: demande.socketIO?.getManager(),
     prisma,
@@ -303,4 +321,45 @@ export async function changerRangDeParticipant(
     role: newRole,
     participant: updatedParticipant
   });
+}
+
+/**
+ * Le participant SERVI par cette route — lu puis sérialisé, avec la présence
+ * résolue pour le VIEWER DEMANDEUR (régime strict : soi / ADMIN+ / ami).
+ *
+ * Extrait parce que DEUX sorties le servent désormais (#17078) : la transition
+ * de rang, et le REJEU qui n'écrit rien. Le laisser inline aurait fait du rejeu
+ * une réponse PLUS PAUVRE que celle d'un vrai changement — ce qui est
+ * exactement le défaut que #16961 a corrigé ailleurs : deux projections d'une
+ * même chose, gardées différemment.
+ */
+async function participantServiPourRejeu(
+  prisma: PrismaClient,
+  participantId: string,
+  demande: Pick<DemandeDeRangDeParticipant, 'viewer'>,
+) {
+  const updatedRow = await prisma.participant.findUnique({
+    where: { id: participantId },
+    include: participantListUserSelect
+  });
+
+  // Cette route servait `updatedRow` TEL QUEL sous la clé `participant`, que
+  // `conversationParticipantSchema` déclare. La réponse REST est gatée par
+  // le viewer DEMANDEUR (régime STRICT — self/ADMIN+/ami) : elle seule a
+  // un destinataire nommé capable de porter une visibilité. La diffusion
+  // Socket.IO plus bas n'en a pas — toute la salle la reçoit — donc son
+  // `participant` ne transporte plus `isOnline`/`lastActiveAt` du tout,
+  // gaté ou non ; le type partagé (`ParticipantRoleUpdatedEventData`) ne
+  // les déclare déjà pas.
+  const rolePresenceViewer = demande.viewer;
+  const rolePresenceVis = updatedRow?.userId
+    ? await getPresenceVisibilityService(prisma).resolveForTarget(rolePresenceViewer, {
+        id: updatedRow.userId,
+        deactivatedAt: updatedRow.user?.deactivatedAt ?? null
+      })
+    : presenceFor(rolePresenceViewer, new Map(), null);
+  const updatedParticipant = updatedRow
+    ? serializeConversationParticipant(updatedRow, { presence: rolePresenceVis })
+    : null;
+  return updatedParticipant;
 }
