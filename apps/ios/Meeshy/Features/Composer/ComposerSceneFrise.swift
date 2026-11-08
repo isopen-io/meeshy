@@ -373,7 +373,7 @@ struct ComposerSceneFrise: View {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: ComposerSceneFriseMetrics.familySymbol(kind: piste.kind))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundStyle(Color(hex: ComposerSceneFriseMetrics.familyHex(kind: piste.kind)))
+                .foregroundStyle(ComposerSceneFriseMetrics.familyColor(kind: piste.kind))
                 .frame(width: 16)
                 .accessibilityHidden(true)
             Text(ComposerSceneFriseCopy.label(for: piste))
@@ -391,7 +391,7 @@ struct ComposerSceneFrise: View {
     private func barre(_ piste: SceneFriseTrack, choisie: Bool, largeur: CGFloat) -> some View {
         let forme = RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
         return forme
-            .fill(Color(hex: ComposerSceneFriseMetrics.familyHex(kind: piste.kind)).opacity(choisie ? 0.95 : 0.6))
+            .fill(ComposerSceneFriseMetrics.familyColor(kind: piste.kind).opacity(choisie ? 0.95 : 0.6))
             .frame(width: largeur)
             .overlay {
                 ComposerSceneFriseBarContent(kind: piste.kind,
@@ -734,14 +734,14 @@ nonisolated enum ComposerSceneFriseMetrics {
     }
 
     /// **La couleur de chaque famille**, prise au design system (`MeeshyColors`).
-    static func familyHex(kind: SceneFriseTrack.Kind) -> String {
+    static func familyColor(kind: SceneFriseTrack.Kind) -> Color {
         switch kind {
-        case .text: return MeeshyColors.brandPrimaryHex
-        case .sticker: return MeeshyColors.amber500Hex
-        case .image: return "60A5FA"
-        case .video: return MeeshyColors.purple500Hex
-        case .audio: return "34D399"
-        case .place: return MeeshyColors.orange500Hex
+        case .text: return MeeshyColors.brandPrimary
+        case .sticker: return MeeshyColors.amber500
+        case .image: return MeeshyColors.info
+        case .video: return MeeshyColors.purple500
+        case .audio: return MeeshyColors.success
+        case .place: return MeeshyColors.orange500
         }
     }
 
@@ -1065,10 +1065,13 @@ struct ComposerSceneFriseBarContent: View {
         .task(id: url) {
             guard let url, url.isFileURL else { return }
             let cote = ComposerSceneFriseMetrics.trackHeight * echelle
-            image = await Task.detached(priority: .utility) {
-                SceneImageDownsampling.image(fileAt: url, maxPixelSize: cote)
-            }.value
+            image = await Self.decode(url, cote: cote)
         }
+    }
+
+    @concurrent
+    private static func decode(_ url: URL, cote: CGFloat) async -> UIImage? {
+        SceneImageDownsampling.image(fileAt: url, maxPixelSize: cote)
     }
 
     private var filmstrip: some View {
