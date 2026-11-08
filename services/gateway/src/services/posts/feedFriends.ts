@@ -73,7 +73,7 @@ const idsAtLeast = (linked: ReadonlyArray<{ readonly id: string; readonly niveau
  *
  * Un lecteur de l'ÉQUIPE y range en plus ses collègues, dans les trois cercles, sans
  * lien (#16623) : l'ensemble vient de la loi (`teamPeersAdmitted`). Un changement de
- * rôle se lit donc au plus 5 minutes plus tard, comme un changement de lien.
+ * rôle ou de compte oublie ce cache pour toute l'équipe (`forgetTeamCircles`).
  *
  * Une lecture en échec rend des cercles VIDES et ne les met pas en cache : une
  * panne ne sert aucune audience de cercle, elle n'ouvre jamais.

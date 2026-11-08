@@ -52,6 +52,16 @@ export async function teamPeerCandidates(prisma: TeamPeersDb, subjectId: string)
 }
 
 /**
+ * Les comptes qui portent un rôle de l'équipe, quel que soit leur état : ceux dont les
+ * cercles rangent un collègue, donc ceux qu'un changement de rôle ou de compte doit
+ * faire oublier (`forgetTeamCircles`). Une lecture ; elle LÈVE si elle échoue.
+ */
+export async function teamAccountIds(prisma: TeamPeersDb): Promise<readonly string[]> {
+  const rows = await prisma.user.findMany({ where: { role: { in: [...TEAM_ROLES] } }, select: { id: true }, take: TEAM_PEERS_LIMIT });
+  return rows.map((row) => row.id);
+}
+
+/**
  * Les collègues que la loi ADMET pour `feature` auprès de `subjectId`, sans lien :
  * l'ensemble que les énumérateurs ajoutent à celui des liens réels. `subjectIs` dit
  * le sens, comme chez `pairAccessAmong`. Une lecture qui échoue LÈVE : l'appelant ferme.
