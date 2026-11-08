@@ -15,7 +15,8 @@ class CommentMenuPolicyTest {
         editable: Boolean = true,
         deletable: Boolean = true,
         removable: Boolean = true,
-    ) = CommentMenuPolicy.actions(authorId, viewerId, role, text, flags, canImagine, editable, deletable, removable)
+        closed: Boolean = false,
+    ) = CommentMenuPolicy.actions(authorId, viewerId, role, text, flags, canImagine, editable, deletable, removable, commentsClosed = closed)
 
     @Test
     fun `the author copies, imagines, edits and deletes but never reports nor removes`() {
@@ -75,5 +76,19 @@ class CommentMenuPolicyTest {
     fun `a comment is protected by its lifecycle bits only`() {
         assertThat(CommentMenuPolicy.isProtected(null)).isFalse()
         assertThat(CommentMenuPolicy.isProtected(MessageEffectFlags.BLURRED.toInt())).isTrue()
+    }
+
+    @Test
+    fun `on a closed thread the author no longer edits but still deletes`() {
+        assertThat(actions(viewerId = "u-author", closed = true)).containsExactly(
+            CommentMenuAction.COPY, CommentMenuAction.IMAGINE, CommentMenuAction.DELETE,
+        ).inOrder()
+    }
+
+    @Test
+    fun `on a closed thread another reader still reports and moderation still removes`() {
+        assertThat(actions(role = "MODERATOR", closed = true)).containsExactly(
+            CommentMenuAction.COPY, CommentMenuAction.IMAGINE, CommentMenuAction.REPORT, CommentMenuAction.REMOVE,
+        ).inOrder()
     }
 }

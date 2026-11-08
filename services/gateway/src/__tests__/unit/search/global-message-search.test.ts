@@ -132,9 +132,11 @@ async function appFor(world: World, auth: Doc = { registeredUser: { id: READER }
   return app;
 }
 
-async function search(world: World, query: string, extra = '') {
+const PROTECTION_CAPS = { 'x-search-caps': '1' };
+
+async function search(world: World, query: string, extra = '', headers: Record<string, string> = {}) {
   const app = await appFor(world);
-  const response = await app.inject({ method: 'GET', url: `/messages/search?q=${encodeURIComponent(query)}${extra}` });
+  const response = await app.inject({ method: 'GET', url: `/messages/search?q=${encodeURIComponent(query)}${extra}`, headers });
   await app.close();
   return { status: response.statusCode, body: response.json() as { success: boolean; data: Doc[]; pagination: Doc } };
 }
@@ -269,5 +271,109 @@ describe('GET /messages/search — pagination par curseur', () => {
     expect(first.body.pagination.hasMore).toBe(true);
     const second = await search({ messages }, 'plage', `&limit=2&cursor=${first.body.pagination.nextCursor}`);
     expect(contents(second.body.data)).toEqual(['plage ancienne 1', 'plage ancienne 0']);
+  });
+});
+
+const voiceNote = (over: Doc = {}): Doc => ({
+  id: `att-${clock + 1}`,
+  mimeType: 'audio/m4a',
+  duration: 4200,
+  isEncrypted: false,
+  isViewOnce: false,
+  isBlurred: false,
+  effectFlags: 0,
+  transcription: { text: 'on se retrouve à la plage demain', language: 'fr' },
+  translations: null,
+  ...over,
+});
+
+describe('GET /messages/search — le flou voyage avec le résultat (#16957)', () => {
+  it("ne sert aucun flouté à un client qui ne déclare pas savoir le voiler", async () => {
+    const world: World = {
+      messages: [
+        message(CONV_MINE, 'plage floutée', { isBlurred: true }),
+        message(CONV_MINE, 'plage floutée par bit', { effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }),
+        message(CONV_MINE, 'plage ouverte'),
+      ],
+    };
+    const { body } = await search(world, 'plage');
+    expect(contents(body.data)).toEqual(['plage ouverte']);
+    expect(body.data[0]).toMatchObject({ isBlurred: false });
+  });
+
+  it('sert le flouté VOILÉ à un client qui le déclare, par drapeau comme par bit', async () => {
+    const world: World = {
+      messages: [
+        message(CONV_MINE, 'plage floutée', { isBlurred: true }),
+        message(CONV_MINE, 'plage floutée par bit', { effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }),
+        message(CONV_MINE, 'plage ouverte'),
+      ],
+    };
+    const { body } = await search(world, 'plage', '', PROTECTION_CAPS);
+    expect(body.data.map((hit) => [hit.originalContent, hit.isBlurred])).toEqual([
+      ['plage ouverte', false],
+      ['plage floutée par bit', true],
+      ['plage floutée', true],
+    ]);
+  });
+
+  it("voile un message dont TOUTES les pièces sont floutées, jamais celui d'une seule parmi d'autres", async () => {
+    const world: World = {
+      messages: [
+        message(CONV_MINE, 'plage en photos floues', { attachments: [voiceNote({ isBlurred: true, transcription: null })] }),
+        message(CONV_MINE, 'plage en photos mixtes', { attachments: [voiceNote({ isBlurred: true, transcription: null }), voiceNote({ transcription: null })] }),
+      ],
+    };
+    const { body } = await search(world, 'plage', '', PROTECTION_CAPS);
+    expect(body.data.map((hit) => [hit.originalContent, hit.isBlurred])).toEqual([
+      ['plage en photos mixtes', false],
+      ['plage en photos floues', true],
+    ]);
+  });
+});
+
+describe('GET /messages/search — la transcription répond aussi (#16958)', () => {
+  it("trouve un vocal par sa transcription et la sert avec la nature du média", async () => {
+    const note = voiceNote();
+    const { body } = await search({ messages: [message(CONV_MINE, '', { messageType: 'audio', attachments: [note] })] }, 'PLAGE', '', PROTECTION_CAPS);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({
+      match: 'transcript',
+      isBlurred: false,
+      transcript: { attachmentId: note.id, mediaKind: 'audio', text: 'on se retrouve à la plage demain', servedLanguage: null, durationMs: 4200 },
+    });
+  });
+
+  it("dit `content` et ne porte aucune transcription quand c'est le texte qui a répondu", async () => {
+    const { body } = await search({ messages: [message(CONV_MINE, 'plage', { attachments: [voiceNote({ transcription: { text: 'rien à voir', language: 'fr' } })] })] }, 'plage', '', PROTECTION_CAPS);
+    expect(body.data[0]).toMatchObject({ match: 'content', transcript: null });
+  });
+
+  it('sert la transcription dans la langue du lecteur, et la trouve par cette traduction', async () => {
+    const note = voiceNote({ transcription: { text: 'see you at the beach', language: 'en' }, translations: { fr: { type: 'audio', transcription: 'on se voit à la plage', createdAt: '2026-11-01' } } });
+    const { body } = await search({ messages: [message(CONV_MINE, '', { messageType: 'audio', attachments: [note] })], languages: { systemLanguage: 'fr' } }, 'plage', '', PROTECTION_CAPS);
+    expect(body.data[0]).toMatchObject({ match: 'transcript', transcript: { text: 'on se voit à la plage', servedLanguage: 'fr' } });
+  });
+
+  it("voile la transcription d'une pièce floutée", async () => {
+    const { body } = await search({ messages: [message(CONV_MINE, '', { messageType: 'audio', attachments: [voiceNote({ isBlurred: true })] })] }, 'plage', '', PROTECTION_CAPS);
+    expect(body.data[0]).toMatchObject({ match: 'transcript', isBlurred: true });
+  });
+
+  it("ne cherche jamais la transcription d'une pièce chiffrée, à vue unique ou éphémère", async () => {
+    const world: World = {
+      messages: [
+        message(CONV_MINE, '', { messageType: 'audio', attachments: [voiceNote({ isEncrypted: true })] }),
+        message(CONV_MINE, '', { messageType: 'audio', attachments: [voiceNote({ isViewOnce: true })] }),
+        message(CONV_MINE, '', { messageType: 'audio', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 60, expiresAt: new Date(Date.now() + 60_000), attachments: [voiceNote()] }),
+      ],
+    };
+    const { body } = await search(world, 'plage', '', PROTECTION_CAPS);
+    expect(body.data).toEqual([]);
+  });
+
+  it("ne cherche pas les transcriptions pour un client qui ne sait pas les peindre", async () => {
+    const { body } = await search({ messages: [message(CONV_MINE, '', { messageType: 'audio', attachments: [voiceNote()] })] }, 'plage');
+    expect(body.data).toEqual([]);
   });
 });

@@ -90,6 +90,9 @@ final class ComposerDescriptionLayerTests: XCTestCase {
         if fichier == "MeeshyComposerHost.swift" {
             return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         }
+        if fichier == "ComposerSceneSurface.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+        }
         return try source("Meeshy/Features/Composer/\(fichier)")
     }
 

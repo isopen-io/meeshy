@@ -292,11 +292,11 @@ public struct MeeshyAudioEditorView: View {
             .frame(height: 96)
 
             HStack {
-                Text(formatTime(displayTime))
+                Text(MediaFormat.duration(displayTime))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                     .foregroundColor(accent)
                 Spacer()
-                Text(formatTime(controller.activeDuration))
+                Text(MediaFormat.duration(controller.activeDuration))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
@@ -712,9 +712,5 @@ public struct MeeshyAudioEditorView: View {
     }
 
     // MARK: - Formatting
-
-    private func formatTime(_ seconds: Double) -> String {
-        MediaFormat.duration(seconds)
-    }
 
 }

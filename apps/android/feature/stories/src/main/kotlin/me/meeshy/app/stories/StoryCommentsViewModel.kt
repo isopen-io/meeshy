@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ContentRemovalReason
+import me.meeshy.sdk.model.PostCommentSettings
 import me.meeshy.sdk.model.STORY_COMMENT_HEART
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.StoryCommentChase
@@ -60,6 +61,8 @@ data class StoryCommentsUiState(
     /** Le lecteur : d'où se lisent les entrées du menu « … » de chaque ligne (auteur, modération, autre). */
     val viewerId: String? = null,
     val viewerRole: String? = null,
+    /** Le fil de la story est fermé (#16930) : l'hôte le pose depuis le fil épinglé ; l'auteur n'y modifie plus. */
+    val commentsClosed: Boolean = false,
 )
 
 /**
@@ -223,12 +226,17 @@ class StoryCommentsViewModel @Inject constructor(
         }
     }
 
-    fun edit(commentId: String, text: String) {
+    /**
+     * Modifier en place : la ligne change quand le serveur confirme. Un refus `COMMENTS_DISABLED` (#16930) dit que la story
+     * a fermé ses commentaires : la ligne garde son texte et [onCommentsClosed] ferme le fil, sans message d'échec.
+     */
+    fun edit(commentId: String, text: String, onCommentsClosed: () -> Unit = {}) {
         val id = storyId ?: return
         if (text.isBlank()) return
         viewModelScope.launch {
             val result = guarded { repository.edit(id, commentId, text, prefs) }
             if (result is NetworkResult.Success && isViewing(id)) update { StoryCommentsReducer.replaced(it, result.data) }
+            if (result is NetworkResult.Failure && PostCommentSettings.refusesComments(result.error.code)) onCommentsClosed()
         }
     }
 

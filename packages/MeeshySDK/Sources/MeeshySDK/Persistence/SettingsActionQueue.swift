@@ -230,15 +230,9 @@ public actor SettingsActionQueue {
     // MARK: - Disk Persistence
 
     private var queueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            do {
-                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-            } catch {
-                MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
-                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
-            }
+        let cacheDir = MeeshyCacheDirectory.ensured { error in
+            MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
+                .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }
@@ -253,8 +247,7 @@ public actor SettingsActionQueue {
     }
 
     private static func loadFromDisk() -> [SettingsAction] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        let cacheDir = MeeshyCacheDirectory.url
         let url = cacheDir.appendingPathComponent(queueFileName)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
 

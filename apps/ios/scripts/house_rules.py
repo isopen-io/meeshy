@@ -43,6 +43,9 @@ RULES = (
     _pattern("async-after", r"[\w)\]]\.asyncAfter\("),
     _pattern("sink-task", r"\.sink\s*(?:\(\s*receiveValue:\s*)?\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*?(?:(?<![\w)\]?] = )|(?<=\b_ = ))\bTask(?:\.detached)?\s*(?:\(\s*priority:[^)]*\)\s*)?\{"),
     _pattern("sleep-nanoseconds", r"Task\.sleep\(nanoseconds:"),
+    _pattern("task-detached", r"(?<![\w.])Task\.detached\b"),
+    _pattern("dispatch-main-async", r"(?<![\w.])DispatchQueue\.main\.async\b(?!After)"),
+    _pattern("preconcurrency-import", r"@preconcurrency\s+import\b"),
     _pattern(
         "logger-subsystem",
         r"\bLogger\(subsystem:",

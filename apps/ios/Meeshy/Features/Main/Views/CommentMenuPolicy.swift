@@ -23,6 +23,10 @@ enum CommentMenuAction: Hashable {
 ///
 /// Un commentaire protégé (flouté, vue unique, éphémère) ne se copie jamais :
 /// ce qui ne se montre pas en clair ne part pas dans le presse-papiers.
+///
+/// Sur une publication aux commentaires fermés (#16930, règle porteur),
+/// « Modifier » disparaît — la passerelle refuse le PATCH par
+/// `403 COMMENTS_DISABLED`. Supprimer, Signaler et Retirer restent.
 enum CommentMenuPolicy {
 
     static func isAuthor(_ comment: FeedComment, viewerId: String?) -> Bool {
@@ -39,13 +43,15 @@ enum CommentMenuPolicy {
     ///   - editable: l'hôte sait éditer un commentaire.
     ///   - deletable: l'hôte sait supprimer un commentaire.
     ///   - removable: l'hôte sait retirer le commentaire d'un autre (modération, #11151).
+    ///   - commentsClosed: les commentaires de la publication sont fermés (#16930).
     static func actions(
         for comment: FeedComment,
         viewerId: String?,
         servedText: String,
         editable: Bool,
         deletable: Bool,
-        removable: Bool = false
+        removable: Bool = false,
+        commentsClosed: Bool = false
     ) -> [CommentMenuAction] {
         let mine = isAuthor(comment, viewerId: viewerId)
         let known = !(viewerId ?? "").isEmpty
@@ -53,7 +59,7 @@ enum CommentMenuPolicy {
             && !servedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let offered: [(CommentMenuAction, Bool)] = [
             (.copy, copyable),
-            (.edit, mine && editable),
+            (.edit, mine && editable && !commentsClosed),
             (.report, known && !mine),
             (.delete, mine && deletable),
             (.remove, known && !mine && removable),

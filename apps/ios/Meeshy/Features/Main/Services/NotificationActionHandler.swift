@@ -6,44 +6,8 @@ import os
 
 private nonisolated let logger = MeeshyLog.logger(.push)
 
-// MARK: - Injection seams
-
-/// Slice of `OfflineQueue` the handler needs: the durable message path
-/// (kind `.sendMessage`) and the generic mutation path (`.createComment`, …).
-nonisolated protocol NotificationReplyQueueing {
-    func enqueue(_ item: OfflineQueueItem) async throws
-    @discardableResult
-    func enqueue<P: Codable & Sendable>(
-        _ kind: OutboxKind,
-        payload: P,
-        conversationId: String?
-    ) async throws -> String
-    /// La seule entrée d'un commentaire dans la file (#9743) : dans la base
-    /// PROUVÉE de son auteur, et dans aucune autre.
-    @discardableResult
-    func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String
-}
-
-extension OfflineQueue: NotificationReplyQueueing {}
-
-/// Optimistic-write slice of `MessagePersistenceActor`.
-nonisolated protocol OptimisticMessagePersisting {
-    func insertOptimistic(_ record: MessageRecord) async throws
-    func markOptimisticFailed(localId: String, reason: String) async throws
-}
-
-extension MessagePersistenceActor: OptimisticMessagePersisting {}
-
 // MARK: - NotificationActionHandler
 
-@MainActor
-protocol NotificationActionHandling {
-    func handle(
-        actionIdentifier: String,
-        userInfo: [AnyHashable: Any],
-        replyText: String?
-    ) async
-}
 
 /// R1/R2 — the injectable handler behind
 /// `AppDelegate.userNotificationCenter(_:didReceive:withCompletionHandler:)`.
@@ -72,28 +36,28 @@ final class NotificationActionHandler: NotificationActionHandling {
 
     static let shared = NotificationActionHandler()
 
-    private let messageService: MessageServiceProviding
-    private let conversationService: ConversationServiceProviding
+    let messageService: MessageServiceProviding
+    let conversationService: ConversationServiceProviding
     private let postService: PostServiceProviding
     /// Le seul chemin réseau d'un commentaire (#9743) — il lie la requête au
     /// compte de l'auteur.
-    private let commentPublisher: CommentPublisher
+    let commentPublisher: CommentPublisher
     /// Une réponse rapide à un commentaire n'a pu ni partir ni rejoindre la
     /// file : l'utilisateur, hors de l'app, l'apprend par une notification.
-    private let notifyUnsentComment: @MainActor () -> Void
-    private let friendService: FriendServiceProviding
-    private let replyQueue: NotificationReplyQueueing
+    let notifyUnsentComment: @MainActor () -> Void
+    let friendService: FriendServiceProviding
+    let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
     private let injectedPrepareReplyQueue: (@MainActor () async -> Void)?
     private let backgroundTasks: BackgroundTaskScheduling
-    private let authTokenProvider: @MainActor () -> String?
+    let authTokenProvider: @MainActor () -> String?
     private let applyAuthToken: @MainActor (String?) -> Void
-    private let currentUserId: @MainActor () -> String?
-    private let preferredLanguage: @MainActor () -> String?
-    private let isRegisteredUser: @MainActor () -> Bool
-    private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
+    let currentUserId: @MainActor () -> String?
+    let preferredLanguage: @MainActor () -> String?
+    let isRegisteredUser: @MainActor () -> Bool
+    let openNotification: @MainActor ([AnyHashable: Any]) -> Void
     private let dialCallBack: @MainActor (CallBackRequest) -> Void
-    private let localMarkRead: @MainActor (String) -> Void
+    let localMarkRead: @MainActor (String) -> Void
     /// #12655 — la conversation PEUT-elle être verrouillée par PIN sur cet
     /// appareil ? Oui tant que la liste des verrous n'est pas lue (fail-closed).
     private let conversationLocks: any ConversationLockProbing
@@ -103,33 +67,33 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
     private let consume: @MainActor (NotificationRef) async -> Void
-    private let removeDeliveredForConversation: @MainActor (String) -> Void
-    private let removeDeliveredForPost: @MainActor (String) -> Void
-    private let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
+    let removeDeliveredForConversation: @MainActor (String) -> Void
+    let removeDeliveredForPost: @MainActor (String) -> Void
+    let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
     /// #8858 — les trois gestes du DÉTAIL d'un message : Plans, Contacts, et
     /// le parcours de lien de conversation (Anonyme / Mon compte, #8726).
     private let openExternalURL: @MainActor (URL) -> Void
     private let openDeepLink: @MainActor (URL) -> Void
     private let presentNewContact: @MainActor (NotificationContactCard) -> Void
     /// La loi du fil appliquée à la conversation de la réponse (#12641, #12985).
-    private let destinationGuard: EndToEndDestinationGuard
+    let destinationGuard: EndToEndDestinationGuard
     /// Le refus d'une réponse vers une conversation chiffrée se DIT (audit M4),
     /// et sa bannière ouvre la conversation.
-    private let notifyRefusedEndToEndReply: @MainActor (String, EndToEndSendRefusal) -> Void
+    let notifyRefusedEndToEndReply: @MainActor (String, EndToEndSendRefusal) -> Void
     /// Le coffre libsignal, seul lieu du clair d'une réponse chiffrée (#13067).
-    private let endToEnd: any EndToEndMessagingProviding
+    let endToEnd: any EndToEndMessagingProviding
     /// #14667, #14673 — les réponses dont le régime attend d'être relu.
     private let repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring
     private let awaitingReplyRules: NotificationReplyRegimeWait.Rules
-    private var revocationSubscription: AnyCancellable?
+    var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
     /// la racine SwiftUI peut rejouer son câblage sans balayer deux fois.
-    private var foregroundSweepSubscription: AnyCancellable?
+    var foregroundSweepSubscription: AnyCancellable?
 
     /// Resolved lazily so tests never touch `DependencyContainer.shared`
     /// (which opens the on-disk GRDB pool).
-    private var messagePersistence: OptimisticMessagePersisting {
+    var messagePersistence: OptimisticMessagePersisting {
         injectedPersistence ?? DependencyContainer.shared.messagePersistence
     }
 
@@ -142,7 +106,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// `OfflineQueue.configure` is idempotent for the same shared pool, so
     /// wiring it again on a warm launch is harmless. Resolved lazily like
     /// `messagePersistence` so tests never touch `DependencyContainer.shared`.
-    private var prepareReplyQueue: @MainActor () async -> Void {
+    var prepareReplyQueue: @MainActor () async -> Void {
         injectedPrepareReplyQueue ?? {
             await OfflineQueue.shared.configure(pool: DependencyContainer.shared.database.pool)
         }
@@ -257,77 +221,6 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.presentNewContact = presentNewContact
         self.conversationLocks = conversationLocks
         self.notifyRefusedReply = notifyRefusedReply
-    }
-
-    // MARK: - Révocation (features 4/5)
-
-    /// Retire les bannières déjà LIVRÉES des notifications révoquées — par le
-    /// push de contrôle `notification_revoked` (AppDelegate) comme par le
-    /// socket `notification:deleted` (`observeRevocations`). Un seul atome
-    /// `UNUserNotificationCenter` derrière : `removeDeliveredNotifications`.
-    func revokeDeliveredBanners(notificationIds: [String]) async {
-        guard !notificationIds.isEmpty else { return }
-        await removeDeliveredForNotificationIds(notificationIds)
-    }
-
-    /// **Le balayage local des bannières éphémères** (#7453).
-    ///
-    /// iOS n'offre aucune échéance native pour une notification délivrée : le
-    /// seul retrait possible est ce balayage. Le retrait SERVEUR existe déjà
-    /// (`notification_revoked`), mais il ne part qu'à la destruction du message
-    /// — sans réseau, la bannière d'un éphémère survivait indéfiniment au
-    /// message qu'elle annonce, sur l'écran verrouillé, avec le placeholder qui
-    /// dit exactement qu'il y a quelque chose à cacher.
-    ///
-    /// Trois occasions l'appellent, et il en faut trois parce qu'aucune ne
-    /// couvre les deux autres : la NSE (à chaque push reçu, la plus fréquente),
-    /// le retour de l'application au premier plan (le seul moment où
-    /// l'utilisateur REGARDE), et `message:expired` (le seul qui sache qu'un
-    /// message précis vient de mourir, y compris pendant l'usage).
-    ///
-    /// La règle de sélection n'est pas réécrite ici : `EphemeralBannerDeadline`
-    /// (SDK) la tient pour les trois cibles. Une bannière sans échéance n'est
-    /// jamais retirée.
-    nonisolated static func sweepExpiredEphemeralBanners(now: Date = Date()) async {
-        await removeDeliveredNotificationsAwaiting(
-            matching: { EphemeralBannerDeadline.isExpired(userInfo: $0, now: now) }
-        )
-    }
-
-    /// Rejoue `sweepExpiredEphemeralBanners` à chaque retour au premier plan.
-    func observeForegroundSweep() {
-        foregroundSweepSubscription = NotificationCenter.default
-            .publisher(for: UIApplication.willEnterForegroundNotification)
-            .sink { _ in
-                Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
-            }
-    }
-
-    /// Fenêtre de regroupement des révocations reçues par socket. Assez courte
-    /// pour rester imperceptible (la bannière part dans le même geste), assez
-    /// longue pour absorber une purge en lot.
-    private static let revocationBatchWindow: DispatchQueue.SchedulerTimeType.Stride = .milliseconds(200)
-
-    /// Abonne le retrait de bannières au flux des suppressions reçues par
-    /// socket (`NotificationToastManager.notificationWasDeleted`). Un nouvel
-    /// appel REMPLACE l'abonnement : la racine SwiftUI peut rejouer son câblage
-    /// sans retirer deux fois.
-    ///
-    /// Les ids arrivent UN PAR UN — `handleNotificationDeletedBulk` republie
-    /// ligne à ligne — alors que `revokeDeliveredBanners` prend DÉJÀ un
-    /// tableau : sans regroupement, une purge des lues venue d'un autre
-    /// appareil (deux cents lignes) enchaînait deux cents allers-retours
-    /// `getDeliveredNotifications` sur le main thread, chacun suivi de sa
-    /// boucle de confirmation. La rafale se replie ici en UN appel système.
-    func observeRevocations(from deletions: AnyPublisher<String, Never>) {
-        revocationSubscription = deletions
-            .collect(.byTime(DispatchQueue.main, Self.revocationBatchWindow))
-            .filter { !$0.isEmpty }
-            .sink { [weak self] notificationIds in
-                Task { @MainActor [weak self] in
-                    await self?.revokeDeliveredBanners(notificationIds: notificationIds)
-                }
-            }
     }
 
     // MARK: - Entry point
@@ -495,7 +388,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// suit la navigation (`onConversationOpened` / `onPostOpened`), qui sait
     /// ce qui s'est réellement ouvert. Faire les deux marquerait lues des
     /// lignes que l'utilisateur n'a pas atteintes si le routage échoue.
-    private func consumeTapped(_ payload: NotificationPayload) async {
+    func consumeTapped(_ payload: NotificationPayload) async {
         guard let notificationId = payload.notificationId else { return }
         await consume(.notification(id: notificationId))
     }
@@ -513,139 +406,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         removeDeliveredForConversation(conversationId)
     }
 
-    // MARK: - Durable quick reply (R2)
-
-    private func handleReply(_ payload: NotificationPayload, userInfo: [AnyHashable: Any], replyText: String?) async {
-        guard let conversationId = payload.conversationId else {
-            logger.warning("reply action without conversationId — ignoring")
-            return
-        }
-        let text = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            logger.warning("reply action with empty text — ignoring")
-            return
-        }
-        guard let userId = currentUserId() else {
-            logger.warning("reply action without an active user — ignoring")
-            return
-        }
-        guard NotificationReplyFailure.isAddressed(to: userId, userInfo: userInfo) else {
-            logger.warning("reply action on a notification addressed to another account — ignoring")
-            return
-        }
-
-        let originalLanguage = preferredLanguage()
-        let item = OfflineQueueItem(
-            conversationId: conversationId,
-            content: text,
-            originalLanguage: originalLanguage,
-            replyToId: payload.messageId
-        )
-
-        if await refusesEndToEndReply(item, senderId: userId, in: conversationId, userInfo: userInfo) { return }
-        await sendReadableReply(item, senderId: userId)
-
-        localMarkRead(conversationId)
-        do {
-            try await conversationService.markRead(conversationId: conversationId)
-        } catch {
-            logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
-        }
-        removeDeliveredForConversation(conversationId)
-    }
-
-    /// La réponse vers un régime où le serveur lit le message : ligne
-    /// optimiste, outbox, puis requête (R2).
-    private func sendReadableReply(_ item: OfflineQueueItem, senderId: String) async {
-        await insertReplyBubble(item, senderId: senderId, replyToId: item.replyToId)
-        await prepareReplyQueue()
-        var outboxRowLanded = false
-        do {
-            try await replyQueue.enqueue(item)
-            outboxRowLanded = true
-        } catch {
-            logger.error("reply outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        do {
-            let request = SendMessageRequest(
-                content: item.content,
-                originalLanguage: item.originalLanguage,
-                replyToId: item.replyToId,
-                clientMessageId: item.clientMessageId
-            )
-            _ = try await messageService.send(conversationId: item.conversationId, request: request)
-            logger.info("notification reply sent for conversation \(item.conversationId, privacy: .public)")
-        } catch {
-            logger.error("reply REST send failed: \(error.localizedDescription, privacy: .public)")
-            if !outboxRowLanded {
-                do {
-                    try await messagePersistence.markOptimisticFailed(
-                        localId: item.clientMessageId,
-                        reason: error.localizedDescription
-                    )
-                } catch {
-                    logger.error("reply markOptimisticFailed failed: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        }
-    }
-
-    private func insertReplyBubble(_ item: OfflineQueueItem, senderId: String, replyToId: String?) async {
-        do {
-            try await messagePersistence.insertOptimistic(
-                MessageRecord.optimisticText(item: item, senderId: senderId, replyToId: replyToId)
-            )
-        } catch {
-            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    /// #12641, #13067 — la réponse ne sait pas sceller : vers une conversation
-    /// chiffrée de bout en bout (loi du fil, #12985), rien ne part ni n'entre
-    /// dans la file, et la garde se lit AVANT toute ligne. Le clair va au
-    /// coffre sous une bulle scellée en échec, d'où le fil le renvoie chiffré ;
-    /// faute de coffre, rien ne s'écrit. Les deux se disent.
-    /// #13165 — le régime se CONFIRME (mode du push, puis passerelle relue) :
-    /// seul un régime relu où le serveur lit le message laisse partir le clair.
-    /// #14667 — un régime NON confirmé n'écrit aucune ligne : le clair attend
-    /// au coffre que `confirmRepliesAwaitingRegime` relise le régime.
-    private func refusesEndToEndReply(
-        _ item: OfflineQueueItem, senderId: String, in conversationId: String, userInfo: [AnyHashable: Any]
-    ) async -> Bool {
-        switch await replyRegime.destination(of: conversationId, userInfo: userInfo) {
-        case .readableByServer:
-            return false
-        case .endToEnd:
-            logger.warning("notification reply refused before transport: end-to-end regime")
-            let refusal = await offThreadReply.keep(item, senderId: senderId)
-            removeDeliveredForConversation(conversationId)
-            notifyRefusedEndToEndReply(conversationId, refusal)
-        case .unconfirmed:
-            removeDeliveredForConversation(conversationId)
-            await awaitingReplies.hold(item, senderId: senderId)
-        case .inaccessible:
-            removeDeliveredForConversation(conversationId)
-            awaitingReplies.refuseInaccessible(conversationId)
-        }
-        return true
-    }
-
-    private var replyRegime: NotificationReplyRegime {
-        let service = conversationService
-        return NotificationReplyRegime(
-            destinationGuard: destinationGuard,
-            servedMode: { try await service.getByIdTypedRefusals($0).encryptionMode }
-        )
-    }
-
-    private var offThreadReply: EndToEndOffThreadReply {
-        EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
-    }
-
     /// #14667, #14673 — la suite des réponses dont le régime attend : relecture,
     /// retrait, effacement du clair (`NotificationReplyRegimeWait`).
-    private lazy var awaitingReplies = NotificationReplyRegimeWait(
+    lazy var awaitingReplies = NotificationReplyRegimeWait(
         store: repliesAwaitingRegime,
         rules: awaitingReplyRules,
         endToEnd: endToEnd,
@@ -655,343 +418,4 @@ final class NotificationActionHandler: NotificationActionHandling {
         sendReadable: { [unowned self] in await self.sendReadableReply($0, senderId: $1) },
         notifyRefusedEndToEndReply: notifyRefusedEndToEndReply
     )
-
-    /// Appelé à chaque réveil de l'outbox (lancement, retour au premier plan,
-    /// réseau ou socket retrouvés).
-    func confirmRepliesAwaitingRegime() async {
-        await awaitingReplies.confirmAll()
-    }
-
-    /// Les fiches d'un compte déconnecté se retirent à la sortie de sa session.
-    func observeSignOutsForAwaitingReplies(_ authenticated: AnyPublisher<Bool, Never>) {
-        awaitingReplies.observeSignOuts(authenticated)
-    }
-
-    // MARK: - Inline comment on social pushes (R3/R4)
-
-    /// Threading rule (spec D4-R3, décidé) :
-    ///  - comment / thread notifications → the produced comment is a threaded
-    ///    reply to THE notified comment (`parentId = commentId`) ;
-    ///  - `friend_new_post` (or any non-thread type) → root comment ;
-    ///  - missing `commentId` on a thread type → degrade to a root comment
-    ///    rather than dropping the user's text.
-    nonisolated static func threadedParentCommentId(
-        type: String,
-        notifiedCommentId: String?
-    ) -> String? {
-        let threadReplyTypes: Set<String> = [
-            "post_comment",
-            "comment_reply",
-            "story_new_comment",
-            "story_thread_reply",
-            "friend_story_comment"
-        ]
-        guard threadReplyTypes.contains(type),
-              let notifiedCommentId,
-              !notifiedCommentId.isEmpty else { return nil }
-        return notifiedCommentId
-    }
-
-    private func handleComment(
-        _ payload: NotificationPayload,
-        userInfo: [AnyHashable: Any],
-        replyText: String?
-    ) async {
-        guard let postId = payload.postId else {
-            logger.warning("comment action without postId — ignoring")
-            return
-        }
-        let text = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            logger.warning("comment action with empty text — ignoring")
-            return
-        }
-        guard isRegisteredUser() else {
-            logger.warning("comment action from an anonymous session — commenting requires a registered account, ignoring")
-            return
-        }
-
-        let parentId = Self.threadedParentCommentId(
-            type: payload.type ?? "",
-            notifiedCommentId: userInfo["commentId"] as? String
-        )
-        let clientMutationId = ClientMutationId.generate()
-        // #9743, M2 — l'auteur est le compte que le JETON désigne, et la
-        // notification doit s'adresser à lui.
-        guard let owner = NotificationReplyFailure.author(token: authTokenProvider(), userInfo: userInfo) else {
-            CommentSendTrace.log("notification : réponse refusée — le jeton ne désigne pas le destinataire")
-            notifyUnsentComment()
-            return
-        }
-        let comment = CreateCommentPayload(
-                    clientMutationId: clientMutationId,
-                    postId: postId,
-                    parentCommentId: parentId,
-                    content: text,
-                    // #6587 — une réponse rapide depuis l'écran verrouillé n'a
-                    // PAS de pastille : il n'y a aucune langue déclarée à
-                    // porter. `nil` laisse le repli serveur s'appliquer, EXACTEMENT
-                    // comme sur la tentative REST jumelle ci-dessous — les deux
-                    // chemins partagent le même cmid et doivent donner le même
-                    // commentaire, quel que soit celui qui atterrit le premier.
-                    originalLanguage: nil,
-                    authorId: owner
-        )
-
-        await prepareReplyQueue()
-        var kept = false
-        do {
-            try await replyQueue.enqueueComment(comment, ownerId: owner)
-            kept = true
-        } catch {
-            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .private)")
-        }
-
-        do {
-            try await commentPublisher.publish(comment, pieces: [])
-            kept = true
-            logger.info("notification comment sent")
-        } catch {
-            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .private)")
-        }
-        if !kept {
-            CommentSendTrace.log("notification : ni envoyée ni gardée — l'utilisateur est prévenu")
-            notifyUnsentComment()
-        }
-
-        // #6999 — commenter, c'est consommer : la notification commentée passe
-        // lue, et le FIL du post quitte le centre. Ce chemin ne faisait que le
-        // second, laissant la ligne de cloche non lue — contrairement à
-        // `reply`, son jumeau côté conversation, qui marque lu depuis toujours.
-        await consumeTapped(payload)
-        removeDeliveredForPost(postId)
-    }
-
-    // MARK: - Friend request accept / decline (R5)
-
-    /// R5 — ACCEPT/DECLINE execute the REST response in background instead of
-    /// the historical navigation (which parked a `pendingNotificationPayload`
-    /// that lock-screen taps never consumed — the request was neither
-    /// accepted nor refused). The push carries `senderId` (and
-    /// `friendRequestId` once the gateway enriches its payload); when only
-    /// the sender is known, the pending request is resolved via
-    /// `receivedRequests`.
-    private func handleFriendResponse(
-        _ payload: NotificationPayload,
-        userInfo: [AnyHashable: Any],
-        accepted: Bool
-    ) async {
-        let type = payload.type ?? ""
-        guard type == "friend_request" || type == "contact_request" else {
-            // accept/decline are only registered on MEESHY_FRIEND_REQUEST —
-            // an unexpected type falls back to the historical navigation.
-            openNotification(userInfo)
-            return
-        }
-        guard isRegisteredUser() else {
-            logger.warning("friend request action from an anonymous session — ignoring")
-            return
-        }
-        // La demande s'adressait à un autre compte de l'appareil : la trancher
-        // ici accepterait ou refuserait celle du compte ACTIF venue du même
-        // expéditeur.
-        guard NotificationReplyFailure.isAddressed(to: currentUserId(), userInfo: userInfo) else {
-            logger.warning("friend request action on a notification addressed to another account — ignoring")
-            return
-        }
-
-        do {
-            guard let requestId = try await resolveFriendRequestId(payload, userInfo: userInfo) else {
-                logger.warning("friend request action without resolvable request id — falling back to navigation")
-                openNotification(userInfo)
-                return
-            }
-            _ = try await friendService.respond(requestId: requestId, accepted: accepted)
-            logger.info("friend request \(requestId, privacy: .public) \(accepted ? "accepted" : "declined", privacy: .public) from notification")
-            // #6999 — la demande est TRANCHÉE : sa notification est consommée.
-            // Le chemin `reply` le faisait déjà (via `localMarkRead`) ; celui-ci
-            // retirait la bannière et laissait la ligne de cloche non lue, avec
-            // son compteur — une demande d'ami n'a ni `conversationId` ni
-            // `postId`, donc aucun autre chemin ne l'aurait rattrapée.
-            await consumeTapped(payload)
-            if let senderId = payload.senderId {
-                Self.removeDeliveredNotifications(
-                    matching: {
-                        ($0["type"] as? String) == type
-                            && ($0["senderId"] as? String) == senderId
-                    }
-                )
-            }
-        } catch {
-            // A thrown resolution (`receivedRequests`) or a failed `respond`
-            // must not silently drop the user's intent — surface the app on
-            // the request screen, same degradation as the unresolvable-id
-            // path above. The banner is only purged on success, so the user
-            // can also re-tap later.
-            logger.error("friend request \(accepted ? "accept" : "decline", privacy: .public) failed: \(error.localizedDescription, privacy: .public) — falling back to navigation")
-            openNotification(userInfo)
-        }
-    }
-
-    private func resolveFriendRequestId(
-        _ payload: NotificationPayload,
-        userInfo: [AnyHashable: Any]
-    ) async throws -> String? {
-        if let explicit = userInfo["friendRequestId"] as? String, !explicit.isEmpty {
-            return explicit
-        }
-        guard let senderId = payload.senderId else { return nil }
-        let pending = try await friendService.friendRequests(
-            direction: .received, status: "pending", q: nil, cursor: nil, limit: 50
-        )
-        return pending.data.first(where: { $0.senderId == senderId })?.id
-    }
-
-    // MARK: - Notification hygiene
-
-    /// Remove already-delivered banners matching the predicate. Without this,
-    /// after a lock-screen action the banner lingers in Notification Center
-    /// while the coordinator's badge count says 0.
-    ///
-    /// La `completion` n'est appelée qu'une fois le retrait CONFIRMÉ par une
-    /// relecture du centre — voir `removeDeliveredNotificationsAwaiting`.
-    nonisolated static func removeDeliveredNotifications(
-        matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool,
-        center: DeliveredBannerCenter = .system(),
-        confirmationTimeout: Duration = defaultRemovalConfirmationTimeout,
-        completion: (@Sendable () -> Void)? = nil
-    ) {
-        removeDeliveredBanners(
-            matching: { predicate($0.userInfo) },
-            center: center,
-            confirmationTimeout: confirmationTimeout,
-            completion: completion
-        )
-    }
-
-    /// La même chose, mais le prédicat voit la bannière ENTIÈRE — son
-    /// `threadIdentifier` compris (#6999).
-    ///
-    /// La forme `userInfo` ci-dessus reste le point d'entrée des révocations,
-    /// qui interrogent bien une clé de charge (`notificationId`). Le retrait
-    /// par FIL, lui, ne peut pas s'exprimer sur la seule charge : ce qu'iOS a
-    /// REGROUPÉ est dans le `threadIdentifier`, et une bannière peut y être
-    /// rangée sans que sa charge porte la clé de contexte.
-    nonisolated static func removeDeliveredBanners(
-        matching predicate: @escaping @Sendable (DeliveredBanner) -> Bool,
-        center: DeliveredBannerCenter = .system(),
-        confirmationTimeout: Duration = defaultRemovalConfirmationTimeout,
-        completion: (@Sendable () -> Void)? = nil
-    ) {
-        center.delivered { banners in
-            let matching = banners
-                .filter { predicate($0) }
-                .map(\.identifier)
-            guard !matching.isEmpty else {
-                completion?()
-                return
-            }
-            center.remove(matching)
-            // Personne n'attend (nettoyage après action, fire-and-forget) :
-            // relire en boucle ne servirait qu'à brûler des allers-retours
-            // système. La confirmation n'a de sens que pour un appelant qui
-            // s'apprête à rendre la main à iOS.
-            guard let completion else { return }
-            confirmRemoval(
-                of: Set(matching),
-                center: center,
-                timeout: confirmationTimeout,
-                completion: completion
-            )
-        }
-    }
-
-    /// Variante attendue : la révocation par push silencieux doit avoir RETIRÉ
-    /// la bannière avant de rendre la main à iOS (`completionHandler`), sinon
-    /// le processus peut être suspendu la bannière encore affichée.
-    nonisolated static func removeDeliveredNotificationsAwaiting(
-        matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool,
-        center: DeliveredBannerCenter = .system(),
-        confirmationTimeout: Duration = defaultRemovalConfirmationTimeout
-    ) async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            removeDeliveredNotifications(
-                matching: predicate,
-                center: center,
-                confirmationTimeout: confirmationTimeout
-            ) { continuation.resume() }
-        }
-    }
-
-    /// **Le fil consommé quitte le centre iOS (#6999).**
-    ///
-    /// Point d'entrée branché sur `NotificationToastManager.deliveredBannerPurger` :
-    /// ouvrir une conversation ou un post, le marquer lu depuis une bannière,
-    /// répondre, commenter — tout ce qui CONSOMME un fil retire ses bannières.
-    /// Une référence qui ne désigne aucun fil (`.id`, `.types`, `.all`) ne
-    /// retire RIEN : « toutes les bannières » est précisément le geste que
-    /// #7000 vient de supprimer du retour au premier plan.
-    nonisolated static func removeDeliveredBanners(
-        forThreadOf ref: NotificationRef,
-        center: DeliveredBannerCenter = .system()
-    ) {
-        guard NotificationThreadIdentifier.resolve(for: ref) != nil else { return }
-        removeDeliveredBanners(
-            matching: { NotificationActionHandler.bannerBelongs($0, to: ref) },
-            center: center
-        )
-    }
-
-    /// Le prédicat, PUR et testable : une bannière appartient au fil de `ref`
-    /// si iOS l'y a rangée (`threadIdentifier`) **ou** si sa charge porte la
-    /// clé de contexte. Les deux, jamais l'un seul — le `threadIdentifier`
-    /// manque sur une bannière composée sans passer par la NSE (push non
-    /// mutable, notification locale), et la clé de charge manque dès que le
-    /// gateway ne l'a pas remplie.
-    nonisolated static func bannerBelongs(_ banner: DeliveredBanner, to ref: NotificationRef) -> Bool {
-        guard let thread = NotificationThreadIdentifier.resolve(for: ref) else { return false }
-        if banner.threadIdentifier == thread { return true }
-        switch ref {
-        case .conversation(let id):
-            return (banner.userInfo["conversationId"] as? String) == id
-        case .post(let id):
-            return (banner.userInfo["postId"] as? String) == id
-        case .notification, .types, .all:
-            return false
-        }
-    }
-
-    /// Combien de temps on accepte d'attendre la CONFIRMATION du retrait. Le
-    /// budget d'un push silencieux se compte en secondes : une confirmation qui
-    /// n'arrive jamais ne doit pas le consommer entier.
-    nonisolated static let defaultRemovalConfirmationTimeout: Duration = .seconds(3)
-
-    /// Intervalle de relecture pendant la confirmation.
-    private nonisolated static let removalConfirmationPollInterval: Duration = .milliseconds(50)
-
-    /// `removeDeliveredNotifications(withIdentifiers:)` n'a AUCUN completion
-    /// handler : l'appeler est une ÉMISSION, pas un effet. Rendre la main à iOS
-    /// derrière elle laisse le système libre de suspendre le processus avant
-    /// que le retrait soit traité — la bannière reste affichée, exactement ce
-    /// que la révocation prétend empêcher. La RELECTURE est la seule preuve.
-    private nonisolated static func confirmRemoval(
-        of identifiers: Set<String>,
-        center: DeliveredBannerCenter,
-        timeout: Duration,
-        completion: (@Sendable () -> Void)?
-    ) {
-        Task.detached {
-            let deadline = ContinuousClock.now.advanced(by: timeout)
-            while true {
-                let stillDelivered = await center.deliveredIdentifiers()
-                if stillDelivered.isDisjoint(with: identifiers) { break }
-                guard ContinuousClock.now < deadline else {
-                    logger.error("Retrait de bannières non confirmé avant expiration du délai (\(identifiers.count, privacy: .public) id(s))")
-                    break
-                }
-                _ = await cancellableSleep(for: removalConfirmationPollInterval)
-            }
-            completion?()
-        }
-    }
 }

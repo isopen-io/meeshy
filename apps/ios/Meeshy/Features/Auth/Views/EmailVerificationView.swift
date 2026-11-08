@@ -105,19 +105,14 @@ struct EmailVerificationView: View {
     // MARK: - Subtitle
 
     /// Un compte NÉ de cette connexion le dit (#8035) ; un compte EXISTANT qui
-    /// attend son activation dit pourquoi et où chercher le code (#8186).
+    /// attend son activation dit pourquoi (#8186) ; où chercher le code, c'est
+    /// la ligne des spams d'`EmailCodeEntry` qui le dit, sur chaque écran (#16937).
     private var subtitleSection: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            Text(Self.markdown(viewModel.lead.subtitle(email: viewModel.email)))
-                .font(.subheadline)
-            if let inboxHint = viewModel.lead.inboxHint {
-                Text(inboxHint)
-                    .font(.footnote)
-            }
-        }
-        .multilineTextAlignment(.center)
-        .foregroundStyle(theme.textSecondary)
-        .padding(.horizontal, MeeshySpacing.lg)
+        Text(Self.markdown(viewModel.lead.subtitle(email: viewModel.email)))
+            .font(.subheadline)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(theme.textSecondary)
+            .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private static func markdown(_ text: String) -> AttributedString {

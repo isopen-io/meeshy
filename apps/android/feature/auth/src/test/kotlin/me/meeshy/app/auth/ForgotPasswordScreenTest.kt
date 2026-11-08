@@ -59,7 +59,7 @@ class ForgotPasswordScreenTest {
         compose.waitUntil { compose.onAllNodesWithText("Email sent").fetchSemanticsNodes().isNotEmpty() }
 
         compose.onNodeWithText("Open the link sent to ada@example.com").assertIsDisplayed()
-        compose.onNodeWithText("Nothing received?").assertIsDisplayed()
+        compose.onNodeWithText("Nothing yet? Also check your spam or junk folder.").assertIsDisplayed()
         compose.onNodeWithText("Back to login").assertIsDisplayed()
     }
 

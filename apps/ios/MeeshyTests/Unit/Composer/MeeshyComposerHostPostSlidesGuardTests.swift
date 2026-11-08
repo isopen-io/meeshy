@@ -286,6 +286,9 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// le redéclare.
     func test_theRail_isInjectedOnce_andNeverRedeclared() throws {
         func source(_ fichier: String) throws -> String {
+            if fichier == "ComposerSceneSurface.swift" {
+                return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+            }
             let url = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent()

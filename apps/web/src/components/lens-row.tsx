@@ -780,6 +780,7 @@ function LensRowImpl({
               interfaceLanguage={language}
               accent={accent}
               originalLanguage={conversation.lastMessageOriginalLanguage ?? conversation.lastMessage?.originalLanguage}
+              entranceKey={conversation.lastMessage?.id ?? null}
             />
           </span>
 

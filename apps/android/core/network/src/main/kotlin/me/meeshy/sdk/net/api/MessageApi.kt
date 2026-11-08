@@ -16,6 +16,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -149,7 +150,10 @@ interface MessageApi {
     /**
      * La recherche des messages de TOUTES mes conversations (#14619) : le serveur sert le texte
      * élu par le Prisme du lecteur et n'interroge jamais une conversation chiffrée de bout en bout.
+     * `X-Search-Caps: 1` déclare que ce client voile un résultat flouté et peint une transcription
+     * (#16957, #16958) ; sans lui la passerelle ne sert ni l'un ni l'autre.
      */
+    @Headers("X-Search-Caps: 1")
     @GET("messages/search")
     suspend fun searchAll(
         @Query("q") query: String,

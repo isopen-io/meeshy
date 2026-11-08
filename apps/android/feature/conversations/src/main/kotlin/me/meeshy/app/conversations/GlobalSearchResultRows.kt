@@ -88,11 +88,14 @@ internal fun MessageHitRow(
 ) {
     val sender = hit.message.sender?.displayName ?: hit.message.sender?.username.orEmpty()
     val title = identity.title.ifBlank { sender }
+    val excerpt = hit.excerpt
     val description = GlobalSearchRows.messageLabel(
         template = stringResource(R.string.global_search_message_label),
         sender = sender,
         conversation = title,
-        content = hit.message.content,
+        excerpt = excerpt,
+        veiledLabel = stringResource(R.string.global_search_message_blurred),
+        mediaLabel = mediaTranscriptLabel(),
     )
     ResultCard(
         onClick = onClick,
@@ -116,15 +119,7 @@ internal fun MessageHitRow(
                     maxLines = 1,
                 )
             }
-            val highlighted = remember(hit.message.content, resultsQuery) {
-                washed(GlobalSearchRows.highlight(hit.message.content, resultsQuery), SEARCH_HIGHLIGHT_WASH)
-            }
-            Text(
-                text = highlighted,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 2,
-            )
+            MessageHitExcerpt(excerpt = excerpt, resultsQuery = resultsQuery)
         }
     }
 }

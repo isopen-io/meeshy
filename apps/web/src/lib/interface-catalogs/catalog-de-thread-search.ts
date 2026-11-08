@@ -14,6 +14,7 @@ const deThreadSearch = {
   'thread.search.retry': 'Erneut versuchen',
   'thread.search.more': 'Weitere Ergebnisse',
   'thread.search.translated': 'In einer Übersetzung gefunden',
+  'thread.search.blurred': 'Verschwommene Nachricht',
 } satisfies ThreadSearchCatalogSlice;
 
 export default deThreadSearch;

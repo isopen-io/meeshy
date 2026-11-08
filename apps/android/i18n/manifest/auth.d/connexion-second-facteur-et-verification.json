@@ -13,7 +13,6 @@
         {"catalog": "app", "iosKey": "emailVerification.subtitle", "status": "adopted", "androidName": "email_verification_subtitle"},
         {"catalog": "app", "iosKey": "emailVerification.subtitle.accountCreated", "status": "adopted", "androidName": "email_verification_subtitle_account_created"},
         {"catalog": "app", "iosKey": "emailVerification.subtitle.activationRequired", "status": "adopted", "androidName": "email_verification_subtitle_activation_required"},
-        {"catalog": "app", "iosKey": "emailVerification.inboxHint", "status": "adopted", "androidName": "email_verification_inbox_hint"},
         {"catalog": "app", "iosKey": "emailVerification.code.a11yLabel", "status": "adopted", "androidName": "email_verification_code_a11y_label"},
         {"catalog": "app", "iosKey": "emailVerification.codePlaceholder", "status": "adopted", "androidName": "email_verification_code_placeholder"},
         {"catalog": "app", "iosKey": "emailVerification.verifyButton", "status": "adopted", "androidName": "email_verification_verify_button"},

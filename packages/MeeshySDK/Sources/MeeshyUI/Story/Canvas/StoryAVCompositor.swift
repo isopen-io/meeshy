@@ -466,7 +466,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                 if gravity == .resizeAspect {
                     // Letterbox: paint the story background color first (revealed by bands)
                     if let bgHex = slide.effects.background,
-                       let color = parseHex(bgHex) {
+                       let color = HexColor(hex: bgHex)?.uiColor {
                         cg.saveGState()
                         cg.setFillColor(color.cgColor)
                         cg.fill(CGRect(origin: .zero, size: canvasSize))
@@ -737,20 +737,6 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         cg.restoreGState()
     }
 
-    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor. Returns nil if
-    /// the input doesn't match. Local helper to avoid leaking visibility from
-    /// the file-private `UIColor(hex:)` declared in StorySlideRenderer.
-    @MainActor
-    private static func parseHex(_ hex: String) -> UIColor? {
-        var s = hex
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
-        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
-                       green: CGFloat((v >> 8) & 0xff) / 255,
-                       blue: CGFloat(v & 0xff) / 255,
-                       alpha: 1)
-    }
-
     /// Paints `image` in `cg` to FIT entirely inside `size`, preserving aspect
     /// ratio (`UIView.ContentMode.scaleAspectFit`). Letterbox bands appear if
     /// the image aspect ratio differs from the canvas. Caller paints the
@@ -799,7 +785,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             canvasSize: size,
             override: slide.effects.backgroundTransform?.videoFitMode)
         if gravity == .resizeAspect {
-            if let bgHex = slide.effects.background, let color = parseHex(bgHex) {
+            if let bgHex = slide.effects.background, let color = HexColor(hex: bgHex)?.uiColor {
                 cg.saveGState()
                 cg.setFillColor(color.cgColor)
                 cg.fill(CGRect(origin: .zero, size: size))

@@ -14,6 +14,7 @@ const arThreadSearch = {
   'thread.search.retry': 'إعادة المحاولة',
   'thread.search.more': 'المزيد من النتائج',
   'thread.search.translated': 'وُجد في ترجمة',
+  'thread.search.blurred': 'رسالة مموّهة',
 } satisfies ThreadSearchCatalogSlice;
 
 export default arThreadSearch;

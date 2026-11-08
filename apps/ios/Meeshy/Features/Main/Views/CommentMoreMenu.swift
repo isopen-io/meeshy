@@ -21,6 +21,8 @@ struct CommentMoreMenu: View {
     var onDelete: (() -> Void)? = nil
     /// #11151 — retire le commentaire d'un autre ; reçoit le motif de la feuille.
     var onRemove: ((String) -> Void)? = nil
+    /// Les commentaires de la publication sont fermés : « Modifier » se retire (#16930).
+    var commentsClosed: Bool = false
     var glyphSize: CGFloat = 14
     var glyphColor: Color = .secondary
 
@@ -35,7 +37,8 @@ struct CommentMoreMenu: View {
             servedText: servedText,
             editable: onEdit != nil,
             deletable: onDelete != nil,
-            removable: onRemove != nil
+            removable: onRemove != nil,
+            commentsClosed: commentsClosed
         )
     }
 

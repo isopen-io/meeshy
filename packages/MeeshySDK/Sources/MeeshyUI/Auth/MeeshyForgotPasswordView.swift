@@ -13,9 +13,11 @@ import MeeshySDK
 /// adresse seule, n'a rien oublié.
 ///
 /// L'état « envoyé » parle les mots de la connexion par e-mail (« E-mail
-/// envoyé », « Ouvrez le lien reçu à », « Rien reçu ? ») et en emploie les
-/// CLÉS, servies par le catalogue de l'app : les deux écrans disent la même
-/// chose, une copie au catalogue du SDK divergerait à la première retouche.
+/// envoyé », « Ouvrez le lien reçu à ») et en emploie les CLÉS ; sa ligne
+/// « Rien reçu ? Regardez aussi dans vos spams… » est `EmailSpamFolderHint`,
+/// la même sous chaque e-mail parti (#16937). Les clés empruntées sont servies
+/// par le catalogue de l'app : les deux écrans disent la même chose, une copie
+/// au catalogue du SDK divergerait à la première retouche.
 ///
 /// Sur iPad la colonne se borne à `MeeshyLayout.formMaxWidth`, comme la
 /// connexion qui ouvre cette feuille.
@@ -70,7 +72,6 @@ public struct MeeshyForgotPasswordView: View {
 
     private enum Hint {
         case neverHadPassword
-        case nothingReceived
     }
 
     /// - Parameter prefilledEmail: l'adresse déjà tapée par l'hôte (#8216) —
@@ -134,13 +135,6 @@ public struct MeeshyForgotPasswordView: View {
         AuthInfoHint(
             text: String(localized: "auth.forgotPassword.noPassword.hint", defaultValue: "Ce même lien vous permet d'en créer un.", bundle: .module),
             buttonLabel: String(localized: "auth.forgotPassword.noPassword.hintLabel", defaultValue: "Jamais eu de mot de passe ?", bundle: .module)
-        )
-    }
-
-    private var nothingReceivedHint: AuthInfoHint {
-        AuthInfoHint(
-            text: String(localized: "auth.magiclink.sent.spamHint", defaultValue: "Regardez vos indésirables (spam) : le message peut y être tombé.", bundle: .main),
-            buttonLabel: String(localized: "auth.magiclink.sent.hintLabel", defaultValue: "Rien reçu ?", bundle: .main)
         )
     }
 
@@ -241,21 +235,7 @@ public struct MeeshyForgotPasswordView: View {
             }
             .accessibilityElement(children: .combine)
 
-            VStack(spacing: MeeshySpacing.xs) {
-                AuthInfoHintButton(
-                    hint: nothingReceivedHint,
-                    isExpanded: expansion(of: .nothingReceived),
-                    tint: theme.textMuted,
-                    showsLabel: true
-                )
-
-                AuthInfoHintText(
-                    hint: nothingReceivedHint,
-                    isExpanded: expandedHint == .nothingReceived,
-                    color: theme.textMuted,
-                    alignment: .center
-                )
-            }
+            EmailSpamFolderHint()
         }
         .padding(.horizontal, MeeshySpacing.xxl)
     }

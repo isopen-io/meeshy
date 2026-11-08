@@ -1,7 +1,10 @@
 /**
  * LE CATALOGUE DE L'ADHÉSION À UNE COMMUNAUTÉ (#6378) — les libellés
  * `community.membership.*` de « Rejoindre » / « Quitter la communauté »
- * (`routes/community-membership.tsx`), dans les sept langues, repris d'iOS
+ * (`routes/community-membership.tsx`), et les `community.posts.*` des onglets
+ * et de l'onglet « Publications » (#6379 — dans ce catalogue plutôt qu'un
+ * catalogue propre : un fichier de chunk de plus allonge la carte des
+ * préchargements de l'index, donc le premier affichage), dans les sept langues, repris d'iOS
  * (`CommunityDetailScreen.swift`). Un `import()` par langue, chargé AVEC le
  * détail d'une communauté (`routes/route-table.tsx`), jamais au démarrage : le
  * catalogue d'interface est à son plafond (`budgets.json` ›

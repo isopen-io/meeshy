@@ -147,10 +147,6 @@ final class EmailSignInWordingTests: XCTestCase {
         ("auth.magiclink.resendLabel", "Renvoyer le lien", "Resend the link"),
         ("auth.magiclink.sent.title", "E-mail envoyé", "Email sent"),
         ("auth.magiclink.sent.subtitle", "Ouvrez le lien reçu à", "Open the link sent to"),
-        ("auth.magiclink.sent.hintLabel", "Rien reçu ?", "Nothing received?"),
-        ("auth.magiclink.sent.spamHint",
-         "Regardez vos indésirables (spam) : le message peut y être tombé.",
-         "Check your spam folder: the message may have landed there."),
         ("auth.signup.email.hintLabel", "Pourquoi un lien", "Why a link"),
     ]
 
@@ -189,16 +185,17 @@ final class EmailSignInWordingTests: XCTestCase {
 
     // MARK: - La mécanique derrière un (i)
 
-    func test_magicLinkView_explainsItsMechanicBehindTwoInfoHints() throws {
+    /// « Rien reçu ? » n'est plus un (i) : la ligne des spams se lit sans être
+    /// cherchée, sous l'annonce de l'envoi (#16937, `EmailSpamFolderHintTests`).
+    func test_magicLinkView_explainsItsMechanicBehindOneInfoHint() throws {
         let body = try code(Self.magicLinkView)
 
-        XCTAssertEqual(occurrences(of: "AuthInfoHintButton(", in: body), 2,
-                       "« Comment ça marche » à la saisie, « Rien reçu ? » après l'envoi")
-        XCTAssertEqual(occurrences(of: "AuthInfoHintText(", in: body), 2,
-                       "chaque (i) déplie SON texte, sous sa ligne")
+        XCTAssertEqual(occurrences(of: "AuthInfoHintButton(", in: body), 1,
+                       "« Comment ça marche » à la saisie ; après l'envoi, la ligne des spams est visible")
+        XCTAssertEqual(occurrences(of: "AuthInfoHintText(", in: body), 1,
+                       "le (i) déplie SON texte, sous sa ligne")
         XCTAssertTrue(body.contains("auth.magiclink.email.hintLabel"))
-        XCTAssertTrue(body.contains("auth.magiclink.sent.hintLabel"))
-        XCTAssertTrue(body.contains("auth.magiclink.sent.spamHint"))
+        XCTAssertTrue(body.contains("EmailSpamFolderHint()"))
         XCTAssertTrue(matches(of: #"(Text\(String\(localized:\s*"auth\.magiclink\.email\.subtitle")"#, in: body).isEmpty,
                       "le « comment ça marche » ne se pose plus en clair : il est le texte du (i)")
         XCTAssertTrue(body.contains("\"wand.and.stars\""), "le héros de l'écran reste la baguette")

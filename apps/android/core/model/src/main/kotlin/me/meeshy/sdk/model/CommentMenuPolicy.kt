@@ -8,6 +8,9 @@ enum class CommentMenuAction { COPY, IMAGINE, EDIT, REPORT, DELETE, REMOVE }
  * l'auteur modifie et supprime, les autres signalent, la modération de la plateforme retire avec un motif.
  * Un commentaire protégé (flou, vue unique, éphémère) ne se copie jamais ; « Imager » suit la loi de la carte, dont
  * l'hôte passe le verdict par `canImagine`. La feuille et le détail lisent la MÊME loi.
+ *
+ * Sur un fil FERMÉ (`commentsClosed`, règle porteur du 2026-11-08, #16930) l'auteur ne modifie plus : la passerelle
+ * refuse la modification (`403 COMMENTS_DISABLED`). Aimer, supprimer, signaler et retirer restent.
  */
 object CommentMenuPolicy {
 
@@ -27,6 +30,7 @@ object CommentMenuPolicy {
         editable: Boolean,
         deletable: Boolean,
         removable: Boolean = false,
+        commentsClosed: Boolean = false,
     ): List<CommentMenuAction> {
         val mine = isAuthor(authorId, viewerId)
         val known = !viewerId.isNullOrEmpty()
@@ -35,7 +39,7 @@ object CommentMenuPolicy {
         return listOf(
             CommentMenuAction.COPY to copyable,
             CommentMenuAction.IMAGINE to canImagine,
-            CommentMenuAction.EDIT to (mine && editable),
+            CommentMenuAction.EDIT to (mine && editable && !commentsClosed),
             CommentMenuAction.REPORT to (known && !mine),
             CommentMenuAction.DELETE to (mine && deletable),
             CommentMenuAction.REMOVE to (known && !mine && removable && moderates),

@@ -42,6 +42,7 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.search.ConversationSearchResult
 import me.meeshy.sdk.model.search.SearchMatchType
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.VeiledTextBars
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshySpacing
@@ -143,8 +144,9 @@ private fun ChatSearchResultRow(
     val description = stringResource(R.string.chat_search_open_result, result.senderName)
     val translationBadge = stringResource(R.string.chat_search_translation_badge)
     val isTranslation = result.matchType == SearchMatchType.TRANSLATION
+    val spokenText = if (result.isVeiled) stringResource(R.string.chat_search_message_blurred) else result.matchedText
     // iOS `MessageSearchResultRow.accessibilityLabel` : l'auteur, le texte trouvé et l'heure — plus, ici, le drapeau de traduction.
-    val spokenMatch = listOfNotNull(translationBadge.takeIf { isTranslation }, result.matchedText, whenLabel.ifBlank { null }).joinToString(", ")
+    val spokenMatch = listOfNotNull(translationBadge.takeIf { isTranslation }, spokenText, whenLabel.ifBlank { null }).joinToString(", ")
     Row(
         Modifier
             .fillMaxWidth()
@@ -163,13 +165,17 @@ private fun ChatSearchResultRow(
             if (isTranslation) {
                 Text(translationBadge, style = MaterialTheme.typography.labelSmall, color = accentColor)
             }
-            Text(
-                text = highlightedMatch(result.matchedText, query, wash),
-                style = MaterialTheme.typography.bodyMedium,
-                color = tokens.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (result.isVeiled) {
+                VeiledTextBars(tint = tokens.textMuted)
+            } else {
+                Text(
+                    text = highlightedMatch(result.matchedText, query, wash),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tokens.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

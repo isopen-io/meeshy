@@ -37,12 +37,13 @@ class CommentMoreMenuSemanticsTest {
         parentId = null, isReply = false, isPending = false, isOwn = isOwn, authorId = "u-amina", effectFlags = flags,
     )
 
-    private fun host(role: String? = "USER") = CommentMenuHost(
+    private fun host(role: String? = "USER", closed: Boolean = false) = CommentMenuHost(
         viewerId = "u-me",
         viewerRole = role,
         onEdit = { edited += it },
         onRequestReport = { reported += it },
         onRequestRemove = {},
+        commentsClosed = closed,
     )
 
     @Composable
@@ -70,6 +71,18 @@ class CommentMoreMenuSemanticsTest {
     fun `the author gets copy, edit and delete as TalkBack actions`() {
         show(comment(isOwn = true), host())
         assertThat(customLabels()).containsExactly("Copy text", "Edit", "Delete comment").inOrder()
+    }
+
+    @Test
+    fun `on a closed thread the author keeps copy and delete but no longer edits`() {
+        show(comment(isOwn = true), host(closed = true))
+        assertThat(customLabels()).containsExactly("Copy text", "Delete comment").inOrder()
+    }
+
+    @Test
+    fun `on a closed thread another reader still reports`() {
+        show(comment(isOwn = false), host(closed = true))
+        assertThat(customLabels()).containsExactly("Copy text", "Report").inOrder()
     }
 
     @Test

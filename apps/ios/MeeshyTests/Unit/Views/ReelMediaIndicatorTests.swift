@@ -53,6 +53,7 @@ final class ReelMediaIndicatorTests: XCTestCase {
     func test_reelChrome_noLongerPaintsAnIndexOverTotalCounter() throws {
         let carousel = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelsPlayerView+Carousel.swift")
         let host = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+            + MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelPageView.swift")
 
         XCTAssertFalse(carousel.contains("Text(\"\\(currentIndex + 1) / \\(total)\")"),
                        "le réel ne peint plus de compteur « n / M » : ses points le disent déjà")

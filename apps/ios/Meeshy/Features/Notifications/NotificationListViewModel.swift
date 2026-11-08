@@ -132,11 +132,7 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
     }
 
     static func announceFailure(_ message: String) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": false]
-        )
+        FeedbackToastCenter.post(message, isSuccess: false)
     }
 
     func loadInitial() async {

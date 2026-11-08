@@ -113,8 +113,6 @@ class AuthEmailSignInVocabularyTest {
                 "auth_magic_resend" to "Resend the link",
                 "auth_magic_sent_title" to "Email sent",
                 "auth_magic_sent" to "Open the link sent to %1\$s",
-                "auth_magic_nothing_label" to "Nothing received?",
-                "auth_magic_nothing_text" to "Check your spam folder: the message may have landed there.",
             ),
         )
     }
@@ -132,8 +130,6 @@ class AuthEmailSignInVocabularyTest {
                 "auth_magic_resend" to "Renvoyer le lien",
                 "auth_magic_sent_title" to "E-mail envoyé",
                 "auth_magic_sent" to "Ouvrez le lien reçu à %1\$s",
-                "auth_magic_nothing_label" to "Rien reçu ?",
-                "auth_magic_nothing_text" to "Regardez vos indésirables (spam) : le message peut y être tombé.",
             ),
         )
     }
