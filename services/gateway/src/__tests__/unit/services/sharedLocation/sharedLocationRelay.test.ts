@@ -878,3 +878,25 @@ describe('une position en vol pendant une baisse ne revient pas après la fin (#
     expect(m.emissions.filter((e) => e.event === SERVER_EVENTS.SHARED_LOCATION_ENDED)).toEqual([]);
   });
 });
+
+describe('contre-audit a1e903a — le cercle de flou contient toujours la position vraie (#16987)', () => {
+  const metres = (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number => {
+    const rad = (d: number) => (d * Math.PI) / 180;
+    const dLat = rad(b.latitude - a.latitude);
+    const dLon = rad(b.longitude - a.longitude);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+  };
+
+  it('une maille retenue par la marge ne laisse pas la position vraie hors du rayon servi', async () => {
+    const m = monde();
+    await demarrer(m);
+    const DANS_LA_MARGE = { latitude: 48.8624, longitude: 2.3624, accuracy: 4 } as const;
+    await updateSharedLocation(m.deps, EMETTEUR, DANS_LA_MARGE);
+
+    const servi = (await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items[0];
+    expect(servi).toBeDefined();
+    const distance = metres({ latitude: servi!.latitude, longitude: servi!.longitude }, DANS_LA_MARGE);
+    expect(distance).toBeLessThanOrEqual(servi!.radiusMeters);
+  });
+});
