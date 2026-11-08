@@ -202,7 +202,7 @@ export function registerDeleteMessageRoute(
       // appliquaient toutes deux les effets du retrait, dont un décompte NON
       // idempotent. Le perdant de la course apprend désormais ce que le rejeu
       // séquentiel apprend déjà : le message n'est plus là.
-      if (await softDeleteMessage(prisma, messageId) === 'already-deleted') {
+      if (await softDeleteMessage(prisma, messageId, { translations: null, deletedAt: new Date() }) === 'already-deleted') {
         return sendNotFound(reply, 'Message not found');
       }
 
