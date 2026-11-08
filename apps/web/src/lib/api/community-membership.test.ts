@@ -3,6 +3,7 @@ import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 
 import { communitiesQueryKey, communityConversationsQueryKey, communityQueryKey, decodeCommunity, type CommunityPage, type CommunitySummary } from './communities';
 import { performJoinCommunity, performLeaveCommunity, type CommunityActionDeps } from './community-actions';
+import { communityPostsQueryKey } from './communities';
 import { createHttpTransport } from './http';
 
 /**
@@ -89,6 +90,14 @@ describe('performJoinCommunity', () => {
     expect(listIds(queryClient, communitiesQueryKey(''))).toEqual(['m-club', 'm-autre']);
   });
 
+  test('rejointe : ses publications se relisent — un membre lit aussi celles réservées à la communauté (#6379)', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 200, body: { success: true, data: {} } });
+    queryClient.setQueryData(communityPostsQueryKey('m-club'), { pages: [], pageParams: [] });
+    release();
+    await performJoinCommunity({ community: club({ viewerRole: null }), deps });
+    expect(queryClient.getQueryState(communityPostsQueryKey('m-club'))?.isInvalidated).toBe(true);
+  });
+
   test('déjà membre (409) : c’est un succès, le détail reste membre', async () => {
     const { deps, queryClient, release } = depsReplying({ status: 409, body: { success: false, error: 'already' } });
     queryClient.setQueryData(communityQueryKey('m-club'), club({ viewerRole: null }));
@@ -141,6 +150,14 @@ describe('performLeaveCommunity', () => {
     await performLeaveCommunity({ community: club({ viewerRole: 'member' }), deps });
     expect(calls).toEqual([{ url: 'https://gate.test/api/v1/communities/m-club/leave', method: 'POST' }]);
     expect(queryClient.getQueryData(communityConversationsQueryKey('m-club'))).toBeUndefined();
+  });
+
+  test('quittée : ses publications ne restent pas en cache — celles réservées aux membres ne se repeignent plus (#6379)', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 200, body: { success: true, data: {} } });
+    queryClient.setQueryData(communityPostsQueryKey('m-club'), { pages: [], pageParams: [] });
+    release();
+    await performLeaveCommunity({ community: club({ viewerRole: 'member' }), deps });
+    expect(queryClient.getQueryData(communityPostsQueryKey('m-club'))).toBeUndefined();
   });
 
   test('déjà parti (404) : c’est un succès', async () => {

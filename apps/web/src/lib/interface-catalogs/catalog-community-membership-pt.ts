@@ -58,6 +58,16 @@ const ptCommunityMembership = {
   'community.create.members.title': 'Adicionar membros',
   'community.create.members.search': 'Pesquisar por nome ou usuário…',
   'community.create.members.remove': 'Remover {name}',
+  'community.posts.tabs.label': "Conteúdo da comunidade",
+  'community.posts.tab.channels': "Conversas",
+  'community.posts.tab.posts': "Publicações",
+  'community.posts.loading': "Carregando as publicações",
+  'community.posts.empty.title': "Ainda sem publicações",
+  'community.posts.empty.body': "As publicações da comunidade aparecerão aqui.",
+  'community.posts.error.title': "Não foi possível carregar as publicações",
+  'community.posts.error.offline': "Sem conexão: as publicações aparecerão quando a rede voltar.",
+  'community.posts.retry': "Tentar de novo",
+  'community.posts.loadingMore': "Carregando mais",
 } as const satisfies CommunityMembershipCatalog;
 
 export default ptCommunityMembership;
