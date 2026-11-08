@@ -28,10 +28,10 @@ extension MessageSocketRoutes {
             m.route(.presenceSnapshot, PresenceSnapshotEvent.self) { $0.presenceSnapshotReceived.send($1) },
             m.route(.userStatus, UserStatusEvent.self) { $0.userStatusChanged.send($1) },
             m.route(.friendRequestCancelled, FriendRequestCancelledEvent.self) { _, event in
-                Task { await MessageSocketManager.applyFriendRequestWithdrawal(otherUserId: event.cancelledBy) }
+                Task { await FriendRequestRealtimeSync.applyFriendRequestWithdrawal(otherUserId: event.cancelledBy) }
             },
             m.route(.friendRequestRejected, FriendRequestRejectedEvent.self) { _, event in
-                Task { await MessageSocketManager.applyFriendRequestRejection(rejecterId: event.rejecterId) }
+                Task { await FriendRequestRealtimeSync.applyFriendRequestRejection(rejecterId: event.rejecterId) }
             },
         ]
     }
