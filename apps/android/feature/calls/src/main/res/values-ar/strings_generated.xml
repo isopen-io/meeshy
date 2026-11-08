@@ -129,6 +129,9 @@
     <string name="call_history_retry">إعادة المحاولة</string>
     <string name="call_history_title">المكالمات</string>
     <string name="call_history_yesterday">أمس</string>
+    <string name="call_incoming_answer_no_video">بدون فيديو</string>
+    <string name="call_incoming_answer_no_video_hint">يرد والكاميرا مطفأة: يرى المتصل صورتك الرمزية</string>
+    <string name="call_incoming_answer_no_video_label">الرد بدون فيديو</string>
     <string name="call_invite_declined">رفض %1$s المكالمة</string>
     <string name="call_invite_failed">تعذّرت دعوة هذا الشخص</string>
     <string name="call_invite_ringing">يرنّ…</string>

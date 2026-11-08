@@ -80,13 +80,13 @@ const expandedScreen = (overrides: Partial<ActiveCall> = {}, canShare = false) =
 const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }], getTracks: () => [] } as unknown as MediaStream;
 
 describe('CallScreen', () => {
-  test('un appel vidéo entrant propose Refuser, Répondre sans vidéo, Accepter', () => {
+  test('un appel vidéo entrant propose Refuser, Répondre sans vidéo, Répondre (P17)', () => {
     const html = screen({ phase: { kind: 'incoming' }, media: 'video', direction: 'incoming', callerName: 'Amina Diallo' });
     expect(html).toContain('data-call-screen="incoming"');
     expect(html).toContain('Appel vidéo entrant');
     expect(html).toContain('Refuser');
     expect(html).toContain('Répondre sans vidéo');
-    expect(html).toContain('Accepter');
+    expect(html).toContain('aria-label="Répondre"');
     expect(html).not.toContain('Raccrocher');
   });
 
@@ -884,7 +884,7 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     expect(video).not.toBeNull();
     expect(video?.muted).toBe(true);
     expect(view.find('[data-call-preview-audio] audio')).toBeNull();
-    expect(view.find('[data-call-screen="incoming"]')?.textContent).toContain('Accepter');
+    expect(view.find('[data-call-incoming-accept]')?.getAttribute('aria-label')).toBe('Répondre');
     view.done();
   });
 

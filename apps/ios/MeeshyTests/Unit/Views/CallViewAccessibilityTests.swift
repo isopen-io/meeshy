@@ -396,6 +396,25 @@ final class CallViewAccessibilityTests: XCTestCase {
         }
     }
 
+    /// APP-5, loi 9 — le mode ouvert avant la connexion est le MÊME que celui
+    /// de l'appel établi, et ses réglages (vue P8b) portent le flou du fond :
+    /// rien n'est à rajouter ailleurs, ni second panneau à faire revivre.
+    func test_effectsMode_beforeAndAfterTheConnection_offersTheBackgroundBlur() throws {
+        let source = try callViewSource()
+        guard let start = source.range(of: "private func modeControls(_ mode: CallScreenMode) -> some View {"),
+              let end = source.range(of: "case .montage:", range: start.upperBound ..< source.endIndex) else {
+            XCTFail("CallView must route the effects mode through modeControls")
+            return
+        }
+        let effects = String(source[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(effects.contains("CallEffectsModeControls(callManager: callManager"), "Un seul jeu de commandes d'effets, avant comme après la connexion")
+        XCTAssertFalse(effects.contains("if showsConnectedLayout"), "Les commandes d'effets ne dépendent pas de l'appel établi")
+
+        let controls = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
+        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(!config.backgroundBlurEnabled)"), "Le flou du fond se règle dans le mode Effets")
+        XCTAssertTrue(controls.contains("caption: CallEffectsCopy.blur"))
+    }
+
     // MARK: - Video toggle accessibility value (audit fix — inverted state, 2026-08-13)
 
     func test_pillButton_hasSeparateToggleStateParameter() throws {

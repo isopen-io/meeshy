@@ -1,11 +1,13 @@
+import * as z from 'zod/mini';
+
 import * as messagesEndpoints from '@meeshy/shared/api/endpoints/messages';
 import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import type { MessageSearchHit, MessageSearchTranscript } from '@meeshy/shared/types/global-search';
 import {
   GLOBAL_SEARCH_CAPS_HEADER,
   GLOBAL_SEARCH_PROTECTION_CAPS,
-  messageSearchTranscriptSchema,
-  type MessageSearchHit,
-} from '@meeshy/shared/types/global-search';
+  MESSAGE_SEARCH_MEDIA_KINDS,
+} from '@meeshy/shared/types/global-search-constants';
 
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, type FeedPost } from './feed-pages';
@@ -87,8 +89,16 @@ const isHit = (raw: unknown): raw is RawHit => {
   return typeof row?.id === 'string' && typeof row.conversationId === 'string' && typeof row.content === 'string';
 };
 
+const WireTranscript: z.ZodMiniType<MessageSearchTranscript> = z.object({
+  attachmentId: z.string(),
+  mediaKind: z.enum(MESSAGE_SEARCH_MEDIA_KINDS),
+  text: z.string(),
+  servedLanguage: z.nullable(z.string()),
+  durationMs: z.nullable(z.int().check(z.nonnegative())),
+});
+
 const normalizedHit = (row: RawHit): MessageSearchHit => {
-  const transcript = messageSearchTranscriptSchema.safeParse(row.transcript);
+  const transcript = WireTranscript.safeParse(row.transcript);
   return {
     ...row,
     isBlurred: row.isBlurred === true,

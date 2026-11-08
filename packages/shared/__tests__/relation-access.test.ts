@@ -120,6 +120,7 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['together', 'CLOSE'],
     ['bring', 'FRIEND'],
     ['location.live', 'BLOOD'],
+    ['location.temporary', 'FRIEND'],
     ['location.history', 'BLOOD'],
     ['location.proximity', 'BLOOD'],
   ];
@@ -233,7 +234,7 @@ describe('resolveRelationAccess — les mineurs (décision porteur 2026-10-31)',
   const AGES: readonly RelationAgeClass[] = ['minor', 'adult', 'unknown'];
   const pairs = AGES.flatMap((viewerMinor) => AGES.map((targetMinor) => ({ viewerMinor, targetMinor })));
 
-  const CONSENT_FEATURES = ['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.history', 'location.proximity'] as const;
+  const CONSENT_FEATURES = ['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.temporary', 'location.history', 'location.proximity'] as const;
 
   it.each(CONSENT_FEATURES)('%s s\'ouvre à tout âge une fois le consentement DONNÉ, jamais derrière un refus d\'âge', (feature) => {
     pairs.forEach((ages) => {

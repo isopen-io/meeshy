@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { CALL_LIVE_FRAME_ID_MAX, CALL_LIVE_FRAME_ID_PATTERN, CALL_LIVE_FRAME_REPLIES, CALL_LIVE_FRAME_TEXT_MAX, type CallLiveFrameReply } from './call-live-frame-bounds.js';
+
 /**
  * LE CADRE EN DIRECT D'UN APPEL (#9214, doc frames 06 § 4, étape 3.2 ; en groupe #11279).
  *
@@ -15,11 +17,8 @@ import { z } from 'zod';
  * par les clients. Les types en dérivent.
  */
 
-export const CALL_LIVE_FRAME_ID_MAX = 96;
-export const CALL_LIVE_FRAME_TEXT_MAX = 64;
-
-/** La forme d'un identifiant du catalogue : `ambiance.motif[.tranche]`, minuscules, chiffres, tirets. */
-export const CALL_LIVE_FRAME_ID_PATTERN = /^[a-z0-9-]+(\.[a-z0-9-]+){1,3}$/;
+export { CALL_LIVE_FRAME_ID_MAX, CALL_LIVE_FRAME_ID_PATTERN, CALL_LIVE_FRAME_REPLIES, CALL_LIVE_FRAME_TEXT_MAX };
+export type { CallLiveFrameReply } from './call-live-frame-bounds.js';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 
@@ -44,13 +43,6 @@ export type CallLiveFrameTexts = {
   readonly city?: string;
 };
 
-/**
- * La réponse à une proposition (#9287) : le cadre ne s'impose jamais à l'autre. Sans
- * `reply`, l'événement PROPOSE un cadre (ou retire la proposition, `frameId: null`) ;
- * avec `reply`, il dit à l'émetteur si son cadre a été appliqué ou refusé.
- */
-export const CALL_LIVE_FRAME_REPLIES = ['accepted', 'declined'] as const;
-export type CallLiveFrameReply = (typeof CALL_LIVE_FRAME_REPLIES)[number];
 
 /** Client → serveur : proposer (ou retirer, `frameId: null`) un cadre en direct, ou répondre à une proposition. */
 export const callLiveFrameSelectSchema = z

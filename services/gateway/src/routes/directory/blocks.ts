@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import {
@@ -109,6 +110,9 @@ export async function bloquer(
   // #13934 — ce que chacun voit de l'écoute de l'autre, capturé AVANT : seul qui voyait reçoit l'effacement.
   const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, '[BLOCKS] Now playing not cleared after block', error) };
   const ecouteAvant = dejaBloque ? new Map() : await captureNowPlayingBefore(ecoute, { userA: moi, userB: cibleId });
+  // #16980 — de même pour la position partagée à l'autre.
+  const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not cleared after block', error) };
+  const positionAvant = dejaBloque ? new Map() : await captureSharedLocationBefore(position, { userA: moi, userB: cibleId });
 
   if (!dejaBloque) {
     // Le `MutationLog` enregistre l'id de la CIBLE : un blocage ne produit
@@ -148,6 +152,9 @@ export async function bloquer(
   // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
   refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
+  // La position partagée (#16980) : ce que chacun voyait de la position de l'autre s'efface.
+  refreshSharedLocationAfter(position, { userA: moi, userB: cibleId, before: positionAvant })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not refreshed after block', error));
   // La séance « ensemble » (#17012) : rejugée, elle s'arrête chez les deux.
   const ensemble = { ...ecoute, report: (error: unknown) => logError(fastify.log, '[BLOCKS] Together not cut after block', error) };
   rejudgeTogetherAfter(ensemble, { userA: moi, userB: cibleId })

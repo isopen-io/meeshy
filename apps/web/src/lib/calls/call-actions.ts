@@ -4,7 +4,7 @@ import type { CallFeedbackIssue, CallFeedbackRating } from './call-feedback';
 import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 
 import type { DecodedPerson } from './call-decode';
-import type { CallEngine, JoinCallRequest, StartCallRequest } from './engine';
+import type { AcceptOptions, CallEngine, JoinCallRequest, StartCallRequest } from './engine';
 
 /**
  * **CE QUE LES ÉCRANS APPELLENT** (#6382) — le fil, le journal et la bulle
@@ -32,7 +32,7 @@ const run = (fn: (engine: CallEngine) => unknown): void => {
 export const callActions = {
   start: (request: StartCallRequest): void => (callsAvailable() ? run((engine) => engine.start(request)) : undefined),
   join: (request: JoinCallRequest): void => (callsAvailable() ? run((engine) => engine.join(request)) : undefined),
-  accept: (options?: { readonly audioOnly?: boolean }): void => run((engine) => engine.accept(options)),
+  accept: (options?: AcceptOptions): void => run((engine) => engine.accept(options)),
   decline: (): void => run((engine) => engine.decline()),
   /** Entendre l'appelant avant de décrocher fait taire la sonnerie (#8627). */
   hearPreview: (): void => run((engine) => engine.hearPreview()),

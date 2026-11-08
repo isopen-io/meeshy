@@ -5,6 +5,7 @@ import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
@@ -61,6 +62,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       const now = new Date();
       const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not refreshed after drop:', error) };
       const ecouteAvant = await captureNowPlayingBefore(ecoute, { userA: viewerId, userB: otherId });
+      const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Shared location not refreshed after drop:', error) };
+      const positionAvant = await captureSharedLocationBefore(position, { userA: viewerId, userB: otherId });
       await asseoirLienHerite(fastify.prisma, viewerId, otherId, now);
       const outcome = await lowerGrant(fastify.prisma, {
         actorId: viewerId, otherId, level: level as RelationLevel, at: now, cooldownUntil: cooldownEnd(now, thresholdsNow().cooldownDays),
@@ -78,6 +81,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
         await withdrawListeningCategoryBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
       }
       await refreshNowPlayingAfter(ecoute, { userA: viewerId, userB: otherId, before: ecouteAvant });
+      // #16980 — sous Ami, la position partagée s'efface chez qui la voyait.
+      await refreshSharedLocationAfter(position, { userA: viewerId, userB: otherId, before: positionAvant });
       // #17012 — sous Proche, la séance « ensemble » de la paire s'arrête chez les deux.
       await rejudgeTogetherAfter(ecoute, { userA: viewerId, userB: otherId });
       return sendSuccess(reply, link);

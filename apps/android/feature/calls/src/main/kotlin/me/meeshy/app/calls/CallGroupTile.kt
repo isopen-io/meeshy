@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.group.GroupCallStageTile
-import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -76,9 +75,7 @@ internal fun CallGroupTile(
     title: String? = null,
     zoom: Float = 1f,
 ) {
-    val accent = remember(tile.colorKey) {
-        hexColor(DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(tile.colorKey), DynamicColorGenerator.ThemeMode.DARK))
-    }
+    val accent = remember(tile.colorKey) { hexColor(CallTileRim.groupTile(tile.colorKey)) }
     val shape = RoundedCornerShape(TILE_RADIUS)
     val reduceMotion = rememberCallReduceMotion()
     val ring: AnimationSpec<Dp> = if (reduceMotion) snap() else tween(SPEAKING_FADE_MILLIS, easing = FastOutSlowInEasing)

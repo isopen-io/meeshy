@@ -40,7 +40,7 @@ struct MessageSearchResultRow: View, Equatable {
 
                     Text(RelativeTimeFormatter.shortString(for: result.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Text(result.senderName)

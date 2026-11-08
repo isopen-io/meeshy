@@ -437,7 +437,11 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // 475 -> 469 (2026-11-08, #16901) : `StorySlideRenderer.swift` (6) ne décode plus ses fonds et sa couleur de texte par
 // son `UIColor(hex:)` privé (que ce scanner compte comme `Color(hex:`) mais par `HexColor(hex:)?.uiColor`, la source
 // unique du SDK. Aucune couleur en dur n'est ajoutée ailleurs. Valeur MESURÉE le 2026-11-08 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 469;
+// 469 -> 470 (2026-11-08, #16945, le liseré de la vignette d'appel) : `CallTileChrome.swift` (1) teinte le liseré
+// d'une vignette de la couleur de la personne qu'elle montre (`CallSpeakerColor.hex(for:)`), site UNIQUE partagé par
+// ma vignette d'appel entrant et la vignette du duo établi, qui portait un trait blanc (loi 4). Identité d'une
+// PERSONNE, pas d'une conversation. Valeur MESURÉE le 2026-11-08 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 470;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

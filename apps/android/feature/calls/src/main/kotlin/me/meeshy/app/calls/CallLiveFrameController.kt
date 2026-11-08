@@ -97,6 +97,15 @@ class CallLiveFrameController internal constructor(
         _state.value = CallLiveFrameMachine.dismissAnswer(_state.value)
     }
 
+    /**
+     * L'appel passe à trois (`docs/product/appels-vue-finale.md` loi 16, iOS `CallLiveFrameSession.leaveDuo`) : le cadre
+     * tombe chez moi, avec toute proposition ou réponse en cours, sans rien émettre. L'appel reste écouté.
+     */
+    fun leaveDuo() {
+        _state.value = CallLiveFrameState()
+        _notices.value = null
+    }
+
     internal fun receive(event: CallLiveFrameSelected) = run(CallLiveFrameMachine.receive(_state.value, event, callId, myName()))
 
     private fun run(step: CallLiveFrameStep) {

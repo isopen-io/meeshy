@@ -27,7 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
-import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -86,8 +85,8 @@ enum class CallBackAction { Inert, Minimize, Close }
  * [CallViewModel] keeps the call alive across the navigation.
  *
  * Pure glue: every value is derived from the immutable [state]; the accent is
- * resolved from the peer identity for colour coherence (the conversation-accent
- * rule). [peerAvatarUrl] is the peer's photo ([CallPeerVisual.avatarUrl]): like iOS,
+ * resolved from the peer's account id ([peerUserId], the name only as a fallback — law 4 of
+ * `docs/product/appels-vue-finale.md`). [peerAvatarUrl] is the peer's photo ([CallPeerVisual.avatarUrl]): like iOS,
  * the pill shows the real avatar, its initials only standing in while it loads (#12569).
  *
  * While I share my screen ([isScreenSharing]) the pill turns red and offers one control, « Arrêter »
@@ -104,8 +103,9 @@ fun CallPill(
     peerAvatarUrl: String? = null,
     isScreenSharing: Boolean = false,
     onStopScreenShare: () -> Unit = {},
+    peerUserId: String = "",
 ) {
-    val accent = hexColor(DynamicColorGenerator.colorForName(state.peerName))
+    val accent = hexColor(CallTileRim.peerAvatar(peerUserId, state.peerName))
     val ongoingLabel = stringResource(R.string.call_pill_ongoing, state.peerName)
     val reopenLabel = stringResource(R.string.call_pill_reopen)
 

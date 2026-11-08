@@ -129,6 +129,14 @@ describe('appel entrant', () => {
     expect(h.call()?.cameraOn).toBe(false);
   });
 
+  test('un micro coupé avant de décrocher (P17) rejoint micro coupé : la passerelle et mon écran le savent', async () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, initiated);
+    await h.engine.accept({ micMuted: true });
+    expect(h.requested[0]?.[1]).toMatchObject({ settings: { audioEnabled: false, videoEnabled: true } });
+    expect(h.call()?.micMuted).toBe(true);
+  });
+
   test('« Refuser » dit rejected au serveur et libère l’écran', () => {
     const h = harness();
     h.engine.handle(SERVER_EVENTS.CALL_INITIATED, initiated);
