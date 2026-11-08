@@ -15,6 +15,7 @@ const enCommunityMembership = {
   'community.membership.offline': 'Offline.',
   'community.membership.error': 'Failed. Try again.',
   'community.membership.error.refused': 'This community is private: you can only join by invitation.',
+  'community.settings.open': "Settings",
   'community.members.open': 'Members',
   'community.members.title': 'Members',
   'community.members.section.admin': 'Admins',

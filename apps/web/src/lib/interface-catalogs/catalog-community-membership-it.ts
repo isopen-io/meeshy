@@ -15,6 +15,7 @@ const itCommunityMembership = {
   'community.membership.offline': 'Offline.',
   'community.membership.error': 'Non riuscito. Riprova.',
   'community.membership.error.refused': 'Questa community è privata: si entra solo su invito.',
+  'community.settings.open': "Impostazioni",
   'community.members.open': 'Membri',
   'community.members.title': 'Membri',
   'community.members.section.admin': 'Amministratori',

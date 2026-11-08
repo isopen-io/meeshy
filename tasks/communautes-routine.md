@@ -105,3 +105,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : sous happy-dom, un champ texte se lit par `onInput` (convention du dépôt, `list-toolbar.tsx`) ; `onChange` n'y est jamais rappelé.
 - iOS et Android : rien à changer (iOS sert déjà l'écran ; Android : suivi #16153 et suivants).
 - Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), puis #6377 (réglages du créateur, web).
+
+## 2026-11-08 — réveil 13
+
+- Lot : #6377, première moitié. Web : `/communities/:id/settings` (miroir `CommunitySettingsScreen`) — nom, description, confidentialité, « Enregistrer » inerte tant que rien ne change, optimiste avec retour arrière (`lib/api/community-settings.ts`) ; suppression confirmée qui ramène à la liste. « Réglages » sur le détail au créateur seul (`canEditSettingsOf`, identité de session). Catalogue paresseux `community.settings.*` × 7 langues (3,91 Ko, plafond 5) ; une seule clé de plus dans celui de l'adhésion (« Réglages »).
+- Passerelle : `PUT /communities/:id` rend 400 `INVALID_COMMUNITY` (au lieu de 500), 403 `COMMUNITY_CREATOR_ONLY`, 409 `COMMUNITY_IDENTIFIER_TAKEN` ; `DELETE` rend 404 sans rien effacer sur une communauté désactivée par l'administration.
+- Revue adversariale avant la PR : non bloquante ; corrigés dans le lot — un nom servi échappé (« &amp; ») se lit à sa lettre (`decodeCommunity`), sinon chaque enregistrement l'abîmait ; un refus ne rend plus que la fiche et la ligne de cette communauté. Suivis : #16786 (stockage échappé, iOS/Android), #16787 (prévenir avant de passer en privée ; 404 en cours d'édition), #16788 (avatar/bannière : https seulement), #16784 (la confirmation iOS promet d'effacer les messages, la passerelle les garde).
+- Gate navigateur : `check-communities.mjs` tourne désormais avec un lecteur CONNECTÉ (`u-viewer`, créateur d'« Équipe déploiement ») ; à 320 × 568, deux contrôles seulement sont visibles au repos.
+- Reste de #6377 : avatar et bannière (motif du profil, recompressés) — #6377 reste ouverte.
+- Prochain lot recommandé : seconde moitié de #6377 (avec #16788), puis #16739.
