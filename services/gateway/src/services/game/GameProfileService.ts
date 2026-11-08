@@ -28,7 +28,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameVisibility } from '@meeshy/shared/types/game';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import {
   ATLAS_DEFAULT_VISIBILITY,
@@ -42,6 +42,8 @@ import {
 } from '@meeshy/shared/utils/game/trophies';
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from '../relations/usableAccount';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import { niveauEffectif } from '../friendship';
 import type { PresenceViewer } from '../PresenceVisibilityService';
@@ -170,7 +172,8 @@ export class GameProfileService {
   /**
    * Quel lecteur est CE lecteur pour ce membre : la loi des cercles, rien d'autre. `kind` classe pour les réglages
    * (`friends` s'ouvre à Ami+) ; `sparksGlory` dit si le cercle ouvre aussi les étincelles et la gloire (Proche+).
-   * Soi et ADMIN/BIGBOSS voient tout ; le blocage ferme ; l'anonyme est le public.
+   * Soi et ADMIN/BIGBOSS voient tout ; le blocage ferme ; l'anonyme est le public. Le rôle et l'âge des deux côtés ne sont lus
+   * que pour un lecteur de l'équipe : un MODERATOR voit un collègue adulte comme un Sang (#16623).
    */
   async viewerReach(viewer: PresenceViewer, targetId: string): Promise<GameReach> {
     if (!isValidObjectId(targetId)) return CLOSED_REACH;
@@ -178,7 +181,17 @@ export class GameProfileService {
     if (viewer.userId === targetId) return { kind: 'self', sparksGlory: true };
     if (isGlobalAdmin(viewer.role)) return { kind: 'admin', sparksGlory: true };
     if (await isBlockedBetween(this.prisma, viewer.userId, targetId)) return { kind: 'blocked', sparksGlory: false };
-    const level = await niveauEffectif(this.prisma, viewer.userId, targetId);
+    const [level, people] = await Promise.all([
+      niveauEffectif(this.prisma, viewer.userId, targetId),
+      isPlatformTeam(viewer.role)
+        ? this.prisma.user.findMany({
+            where: { id: { in: [viewer.userId, targetId] } },
+            select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT },
+          })
+        : [],
+    ]);
+    const now = new Date();
+    const person = (id: string) => people.find((row) => row.id === id);
     const opens = (feature: RelationFeature): boolean =>
       resolveRelationAccess({
         viewerId: viewer.userId,
@@ -187,9 +200,10 @@ export class GameProfileService {
         grantedByTarget: level,
         sharesCommunity: false,
         blockedEitherWay: false,
-        viewerMinor: 'unknown',
-        targetMinor: 'unknown',
+        viewerMinor: declaredAgeClass(person(viewer.userId)?.birthDate ?? null, now),
+        targetMinor: declaredAgeClass(person(targetId)?.birthDate ?? null, now),
         viewerRole: viewer.role,
+        targetRole: lawRoleOf(person(targetId)),
         feature,
       }).allowed;
     return { kind: opens('game.basic') ? 'friend' : 'other', sparksGlory: opens('game.sparksGlory') };

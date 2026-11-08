@@ -1,3 +1,4 @@
+import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
 import { useQuery } from '@tanstack/react-query';
 import { memo, useState } from 'react';
 import { useStore } from 'zustand/react';
@@ -7,6 +8,7 @@ import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
+import { relationRaiseGateQueryOptions } from '@/lib/api/relations';
 import {
   bringAvailabilityQueryKey,
   bringSendOutcomeOf,
@@ -125,21 +127,30 @@ export function bringAvailabilityQueryOptions(deps: BringDeps, userId: string) {
   };
 }
 
+/**
+ * Hors amitié, la ligne ne demande le Bring que si la porte du lien (`GET /relations/:userId`,
+ * même cache que le cercle de la fiche) sert un `accessLevel` d'au moins Ami : entre deux
+ * comptes de l'équipe, Sang sans lien (#16623). Aucun rôle n'est lu ni déduit ici.
+ */
 export function ProfileBringRow({
   language,
   person,
+  friend,
   onNotice,
   store = bringStore,
   deps = apiDeps,
 }: {
   readonly language: InterfaceLanguage;
   readonly person: PersonSummary;
+  readonly friend: boolean;
   readonly onNotice: (message: string) => void;
   readonly store?: BringStoreApi;
   readonly deps?: BringDeps;
 }) {
   const ready = useCirclesCatalog(language);
-  const availability = useQuery(bringAvailabilityQueryOptions(deps, person.id), appQueryClient);
+  const gate = useQuery({ ...relationRaiseGateQueryOptions(deps, person.id), enabled: !friend }, appQueryClient);
+  const offered = friend || relationLevelIfAtLeast(gate.data?.accessLevel, 'FRIEND') !== null;
+  const availability = useQuery({ ...bringAvailabilityQueryOptions(deps, person.id), enabled: offered }, appQueryClient);
   const outgoing = useStore(store, (state) => state.outgoing[person.id] ?? null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);

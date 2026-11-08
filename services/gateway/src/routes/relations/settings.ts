@@ -14,6 +14,8 @@ import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/
 import { relationIoOf } from '../../socketio/relationEvents';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from '../../services/relations/usableAccount';
 import { niveauEffectif } from '../../services/friendship';
 import { bringDepsOf, bringQuotaOf } from '../bring';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
@@ -24,30 +26,48 @@ import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './sh
  * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404. Un RETRAIT de
  * partage ou un déblocage ne demandent aucun lien : ils ne touchent que MA ligne
  * existante, et ne la créent jamais (audit #14535 constat 1).
+ *
+ * La feature jugée est `dm.direct`, un OUTIL au plancher Connaissance : entre deux comptes
+ * de l'équipe, qui peuvent se sonner sans lien, bloquer ces Bring doit s'écrire aussi
+ * (#16623). Une audience (`audience.acquaintances`) resterait au lien réel. Elle se juge
+ * dans les DEUX sens : on bloque ce qui vient de l'autre, et un collègue mineur déclaré
+ * qui peut sonner un adulte doit pouvoir être bloqué par lui — un 404 dirait son âge.
+ *
+ * Accorder sa catégorie d'écoute (#13934) se juge sur `listening.category`, dans le sens
+ * de ce qui part : l'autre VOIT, le propriétaire est vu.
  */
 async function linkedPerson(
   prisma: FastifyInstance['prisma'],
   ownerId: string,
   otherId: string,
-  feature: 'audience.acquaintances' | 'listening.category' = 'audience.acquaintances',
+  feature: 'dm.direct' | 'listening.category' = 'dm.direct',
 ): Promise<boolean> {
-  const [other, level] = await Promise.all([
-    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true } }),
+  const [other, owner, level] = await Promise.all([
+    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
+    prisma.user.findUnique({ where: { id: ownerId }, select: { role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
     niveauEffectif(prisma, ownerId, otherId),
   ]);
   if (!other || other.deactivatedAt) return false;
-  return resolveRelationAccess({
-    viewerId: ownerId,
-    targetId: otherId,
-    grantedByViewer: level,
-    grantedByTarget: level,
-    sharesCommunity: false,
-    blockedEitherWay: false,
-    viewerMinor: 'unknown',
-    targetMinor: 'unknown',
-    feature,
-    consent: 'granted',
-  }).allowed;
+  const now = new Date();
+  const ownerSide = { id: ownerId, minor: declaredAgeClass(owner?.birthDate ?? null, now), role: lawRoleOf(owner) };
+  const otherSide = { id: otherId, minor: declaredAgeClass(other.birthDate ?? null, now), role: lawRoleOf(other) };
+  const opensFrom = (viewer: typeof ownerSide, target: typeof ownerSide): boolean =>
+    resolveRelationAccess({
+      viewerId: viewer.id,
+      targetId: target.id,
+      grantedByViewer: level,
+      grantedByTarget: level,
+      sharesCommunity: false,
+      blockedEitherWay: false,
+      viewerMinor: viewer.minor,
+      targetMinor: target.minor,
+      viewerRole: viewer.role,
+      targetRole: target.role,
+      feature,
+      consent: 'granted',
+    }).allowed;
+  if (feature === 'listening.category') return opensFrom(otherSide, ownerSide);
+  return opensFrom(ownerSide, otherSide) || opensFrom(otherSide, ownerSide);
 }
 
 const shareFlags = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, { type: 'boolean' }])) as Record<

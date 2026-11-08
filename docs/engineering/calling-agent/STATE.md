@@ -364,3 +364,44 @@ socket jusqu'au client.
    traducteur (`translation_processor.py`, chemin batch). #16716 touche le même site : les grouper.
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
    de #16613.
+
+## Cycle 9 — 2026-11-07
+
+- **Base** : `origin/dev` @ `7c620ef7f` (le cycle 8, #16701, y est fusionné).
+- **Branche** : `claude/determined-volta-lbhlo4`.
+- **Objectif** : #16715 (piste 1 du cycle 8). La cause d'une `TranslationInferenceError` ne doit pas
+  porter le texte d'un sous-titre d'appel.
+- **Livré** (seul le traducteur change : ni la passerelle ni le protocole ZMQ ne bougent) :
+  - `task_privacy.caused_by(error, cause)` attache la cause seulement si `text_may_be_logged()` est
+    vrai ;
+  - aux deux sites de `translator_engine.py` (`translate_sync`, `_infer_batch_sync`), l'erreur est
+    construite dans le `except`, puis levée APRÈS le bloc. Elle n'a donc aucun `__context__`. Un
+    simple `from None` ne masquerait le contexte qu'à l'affichage, il le laisserait rempli ;
+  - régime ordinaire : la cause reste attachée et le diagnostic ne change pas.
+- **Tests** : `tests/test_inference_error_cause_redacted.py` (12) et
+  `tests/test_inference_error_cause_qa_16715.py` (8, ajoutés par la QA : régime non déclaré,
+  `logger.exception` en amont, KeyboardInterrupt intacte). L'ancien témoin
+  `test_the_pipeline_exception_stays_the_cause` exigeait ce que #16715 interdit : il tourne
+  maintenant sous le régime ordinaire.
+  - **Rouge sur le code d'avant** : 9/12, puis 3/8 sur le fichier QA.
+  - **Vert** : 20/20. Avec les fichiers des cycles 6 à 8, 56/56, relancé par moi.
+  - **Suites voisines** : 349 passés, 9 sautés, 4 échecs. Ces 4 échecs sont préexistants
+    (`langdetect` absent). La suite complète échoue à l'identique, ligne à ligne, entre HEAD et
+    `origin/dev`.
+- **QA** : favorable avec réserves → #16735, #16736, #16737.
+- **Environnement** : il n'y a pas de venv pour le traducteur. On construit un venv jetable avec uv
+  (`--index-url https://pypi.org/simple`), puis on lance `pytest --no-cov` (→ #16737).
+
+### Limites connues
+
+- Hors du moteur, des `logger.error(f"…{e}")` citent encore une exception arbitraire en clair. La
+  publication du résultat tourne hors régime. → #16735.
+- Le pipeline audio au repos imprime des traces complètes. → #16736.
+
+### Cycle suivant : par où reprendre
+
+1. #16735 avec #16716 : même site (`translation_processor.py`), faire entrer la publication et le
+   lot ZMQ dans le régime de la tâche.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord.
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.

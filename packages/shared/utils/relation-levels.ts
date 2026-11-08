@@ -193,6 +193,28 @@ export const RELATION_PRESENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<
 ]);
 
 /**
+ * CE QUE LE PRIVILÈGE D'ÉQUIPE N'OUVRE PAS (#16623). Entre deux comptes de l'équipe
+ * (`isPlatformTeam`), le niveau effectif d'un OUTIL vaut Sang sans lien à construire.
+ * Une AUDIENCE, elle, reste au lien réel : ces features diffusent du contenu ou font
+ * naître un lien, et un rôle n'y fait entrer personne.
+ *
+ * - `audience.*` : une publication « Proches » ne part pas chez un collègue ;
+ * - `notify.newContent`, `relay.*` : aucune notification d'entourage vers l'équipe ;
+ * - `acquaintance.auto` : un rôle ne crée aucun lien.
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
+export const RELATION_TEAM_CLOSED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'notify.newContent',
+  'relay.commentersOnMyPosts',
+  'relay.myCommentsElsewhere',
+  'audience.acquaintances',
+  'audience.close',
+  'audience.blood',
+  'acquaintance.auto',
+]);
+
+/**
  * LE RÉGLAGE D'ENTOURAGE (#13929, directives porteur du 2026-10-31) — chacun
  * choisit, action par action, le cran minimal de son entourage qui est PRÉVENU.
  * Il ne gouverne que la diffusion à l'entourage : la personne directement visée

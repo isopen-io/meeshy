@@ -1,11 +1,23 @@
 import type { RelationLevel } from '../types/relation.js';
 import type { GlobalUserRoleType } from '../types/role-types.js';
-import { resolveRelationAccess } from './relation-access.js';
+import { resolveRelationAccess, type RelationAgeClass } from './relation-access.js';
 import { PRESENCE_IDLE_WINDOW_MS } from './user-presence.js';
 
 export type PresenceVisibilityInput = {
   readonly isSelf: boolean;
   readonly viewerRole: GlobalUserRoleType;
+  /**
+   * `User.role` de la cible. Entre deux comptes de l'équipe, la loi d'accès rend la
+   * présence d'un Sang, sous les préférences de la cible (#16623). Absent : rien
+   * ne s'ouvre, MODERATOR reste un viewer ordinaire.
+   */
+  readonly targetRole?: string | null;
+  /**
+   * Âges déclarés, lus avec le rôle : un adulte de l'équipe face à un collègue
+   * mineur déclaré n'a pas le privilège (#16623). Absents : `unknown`.
+   */
+  readonly viewerMinor?: RelationAgeClass;
+  readonly targetMinor?: RelationAgeClass;
   /**
    * Niveau EFFECTIF du lien viewer/cible (minimum des deux accords). Remplace le
    * booléen d'amitié (#13927) : FRIEND sert « en ligne » seulement, CLOSE et
@@ -51,7 +63,10 @@ const TARGET = 'target';
  * ADMIN/BIGBOSS). Un MODERATOR n'est ni un ami ni un administrateur — la
  * directive ne cite que « Admin et supérieur » — donc il rejoint AUDIT,
  * ANALYST, USER, AGENT côté non-privilégié (revirement du 2026-08-25 :
- * jusque-là le bypass suivait `isGlobalModerator`).
+ * jusque-là le bypass suivait `isGlobalModerator`). Une seule exception, entre
+ * deux comptes de l'équipe (#16623) : la loi d'accès leur rend le niveau Sang,
+ * donc la présence détaillée sous les préférences de la cible — jamais le
+ * privilège, et rien face à un utilisateur ordinaire.
  *
  * Autorisé = privilégié OU niveau effectif >= Ami (`relationLevel`, loi
  * `resolveRelationAccess`). L'AMI est BINAIRE (directive porteur 2026-10-31,
@@ -79,9 +94,10 @@ export const resolvePresenceVisibility = (input: PresenceVisibilityInput): Prese
       grantedByTarget: input.relationLevel,
       sharesCommunity: false,
       blockedEitherWay: input.isBlockedEitherWay,
-      viewerMinor: 'unknown',
-      targetMinor: 'unknown',
+      viewerMinor: input.viewerMinor ?? 'unknown',
+      targetMinor: input.targetMinor ?? 'unknown',
       viewerRole: input.viewerRole,
+      targetRole: input.targetRole,
       feature,
     });
 

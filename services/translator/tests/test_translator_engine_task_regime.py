@@ -94,8 +94,8 @@ async def test_a_silent_task_never_leaks_its_text_from_the_inference_thread(regi
 
 @pytest.mark.unit
 @pytest.mark.parametrize("path", PATHS)
-async def test_the_pipeline_exception_stays_the_cause(path, caplog):
-    with task_scope(False, "call-caption:x:1"), pytest.raises(TranslationInferenceError) as raised:
+async def test_an_ordinary_task_keeps_the_pipeline_exception_as_the_cause(path, caplog):
+    with task_scope(*ORDINARY), pytest.raises(TranslationInferenceError) as raised:
         await path(_engine(_failing_pipeline))
     assert isinstance(raised.value.__cause__, ValueError)
 
