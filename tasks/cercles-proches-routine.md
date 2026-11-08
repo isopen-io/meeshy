@@ -417,3 +417,10 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates locaux : `check_house_rules.sh` 33 règles tenues, `check_cohesion_budget.sh` code 0,
   `check_localization.py`, `check_pbxproj_consistency.sh`, `check_test_registration.sh` verts. Swift ne compile pas
   en conteneur : la preuve est la CI iOS et SDK dispatchée sur la PR.
+- État en fin de réveil : **PR #17101 en brouillon, NON fusionnée, aucune preuve Swift.** Les deux dispatches sur
+  `1d6835a16` ont été annulés au bout d'une minute, avant tout job macOS et avant la fin des gardes Linux : iOS run
+  42517215302 (« File d'attente Mac » annulée à 19:53:32, 3 suites devant), SDK run 42517212606. Ce n'est pas une
+  concurrence de la branche (aucun run plus récent dans le groupe) : tous les dispatches iOS du moment, sur d'autres
+  branches (#17099, #17103), finissent annulés de la même façon. Le brouillon empêche le vert vide de la CI gelée
+  (`PR_CI_GEL`) d'emporter la fusion. Prochain réveil : redispatcher `ios.yml` et `sdk-tests.yml` sur la tête de la
+  branche, corriger ce que Swift refuse, fusionner `origin/dev`, puis sortir du brouillon et fusionner sur CI verte.
