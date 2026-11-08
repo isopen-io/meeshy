@@ -13,6 +13,12 @@ import {
 } from './emitConversationPreviewUpdate';
 import type { Anonymized, ServerEmitTarget } from './serverEmit';
 import type { QueuedVariantFor } from './queuedEventContract';
+import {
+  editReadership,
+  blockedEditKeys,
+  emitEditedToReaders,
+  type EditReadership,
+} from './editedAudience';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
 import { readerSignedPlanForMessageId } from './readerSignedDelivery';
@@ -32,15 +38,32 @@ type MutationPrisma = PreviewPrisma & Pick<PrismaClient, 'participant' | 'conver
  * accepts both the production manager and a test double, and so the REST route
  * files never have to import the manager class.
  */
+/**
+ * Ce que l'enfilage hors ligne d'une mutation reçoit — **un type NOMMÉ, parce
+ * qu'il était recopié à deux endroits** : ici et dans la signature de
+ * `MeeshySocketIOManager.enqueueOfflineMessageMutation`. Un relais qui recopie
+ * champ par champ est un inventaire à tenir à jour, et il retient en silence
+ * chaque champ ajouté en amont (cycle 126).
+ */
+export type MessageMutationQueueParams = {
+  conversationId: string;
+  actorUserId: string | null | undefined;
+  messageId: string;
+  /** #8562 — la variante d'un lecteur que la charge commune ne peut pas servir. */
+  resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
+  /**
+   * Les clés de file qui ne doivent RIEN recevoir de cette mutation — les
+   * lecteurs dont le plancher d'historique place ce message hors de leur
+   * portée. Sans elles, la file PERSISTAIT 48 h, sous la clé d'un invité entré
+   * par un lien sans historique, le texte d'un message qu'aucune route ne lui
+   * sert.
+   */
+  excludedQueueKeys?: ReadonlySet<string>;
+} & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'>;
+
 export interface MessageMutationManager {
   getIO(): PreviewEmitIO | null | undefined;
-  enqueueOfflineMessageMutation(params: {
-    conversationId: string;
-    actorUserId: string | null | undefined;
-    messageId: string;
-    /** #8562 — la variante d'un lecteur que la charge commune ne peut pas servir. */
-    resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
-  } & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'>): Promise<void>;
+  enqueueOfflineMessageMutation(params: MessageMutationQueueParams): Promise<void>;
   emitUnreadCountsToRecipients?(params: {
     conversationId: string;
     senderId: string | null | undefined;
@@ -272,36 +295,6 @@ const sealedVariant = <T extends object>(payload: T, sealed: ReadonlyMap<string,
   return at ? withSealedQuote(payload, at) : payload;
 };
 
-type ExceptingTarget = ServerEmitTarget & { except(rooms: string[]): ServerEmitTarget };
-
-const canExcept = (target: ServerEmitTarget): target is ExceptingTarget =>
-  typeof (target as { except?: unknown }).except === 'function';
-
-/**
- * `message:edited` d'une réponse dont la citation est échue pour certains
- * lecteurs (#8562) : la room sans eux, puis leur variante scellée sur leur room
- * personnelle — un seul événement chacun. Une cible qui ne sait pas exclure
- * reçoit la citation scellée pour TOUS : la porte échoue en montrant moins.
- */
-function emitEditedWithSealedQuote(
-  io: PreviewEmitIO | null | undefined,
-  conversationId: string,
-  payload: MessageEditedMutationPayload,
-  sealed: ReadonlyMap<string, Date>,
-): void {
-  if (!io) return;
-  const room = io.to(ROOMS.conversation(conversationId));
-  if (!canExcept(room)) {
-    const earliest = new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())));
-    room.emit(SERVER_EVENTS.MESSAGE_EDITED, withSealedQuote(payload, earliest));
-    return;
-  }
-  room.except([...sealed.keys()].map((key) => ROOMS.user(key))).emit(SERVER_EVENTS.MESSAGE_EDITED, payload);
-  for (const key of sealed.keys()) {
-    io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_EDITED, sealedVariant(payload, sealed, key));
-  }
-}
-
 /**
  * #16689 — `clientMessageId` ne franchit pas ce transport, sur AUCUNE de ses
  * sorties.
@@ -350,6 +343,18 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
   if (!manager) return;
 
   const sealed = params.eventType === 'edited' ? params.sealedQuoteAudience ?? NO_SEALED_READER : NO_SEALED_READER;
+  // Le texte d'une édition ne part qu'à ceux qui ont le droit de LIRE le
+  // message — voir `readableByBestEffort`. Résolu AVANT le `try` d'émission, et
+  // partagé par les DEUX canaux : le direct et la file. Les autres familles de
+  // cette fonction (`deleted`, `expired`, `pinned`, `unpinned`) ne portent que
+  // des ids, pas de contenu : leur audience ne change pas ici, et c'est une
+  // décision — révéler l'EXISTENCE d'un message est une question distincte,
+  // suivie par sa propre issue.
+  const readership: EditReadership =
+    params.eventType === 'edited'
+      ? await editReadership(params.prisma, conversationId, messageId, onError)
+      : { kind: 'room' };
+  const blockedKeys = blockedEditKeys(readership);
   try {
     // #9646 — un message protégé qui porte des pièces : par destinataire,
     // chacun sa variante (scellée ou non) et ses adresses signées.
@@ -361,14 +366,27 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
         })
       : null;
     const io = manager.getIO();
-    if (plan && params.eventType === 'edited' && io) {
-      for (const target of plan.targets) {
-        io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(sealedVariant(params.payload, sealed, target.key), target.participantId));
-      }
-    } else if (params.eventType === 'edited' && sealed.size > 0) {
-      emitEditedWithSealedQuote(manager.getIO(), conversationId, params.payload, sealed);
+    if (readership.kind === 'unknown') {
+      // Ni qui est bloqué, ni qui est autorisé : rien ne part en direct, et
+      // rien n'entre en file (voir l'enfilage plus bas). La relecture de la
+      // page sert le texte édité, sous le plancher appliqué côté serveur.
+    } else if (params.eventType === 'edited') {
+      // Les TROIS sorties de l'édition sont gardées par le MÊME site que le
+      // transport socket (`editedAudience.ts`) : une règle retapée à chaque
+      // site est une règle qu'un site finira par ne pas avoir.
+      emitEditedToReaders({
+        io,
+        conversationId,
+        payload: params.payload,
+        plan,
+        sealed,
+        blocked: blockedKeys,
+        sealedVariant: (payload, key) => sealedVariant(payload, sealed, key),
+        sealedForAll: (payload) =>
+          withSealedQuote(payload, new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())))),
+      });
     } else {
-      emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), params);
+      emitToConversationRoom(io?.to(ROOMS.conversation(conversationId)), params);
     }
   } catch (error) {
     onError?.(error);
@@ -437,11 +455,16 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
   // de sites. Le cliquet qui la tient désormais :
   // `src/__tests__/detached-promise-catch-sweep.ts`.
   try {
+    if (readership.kind === 'unknown') return;
     void Promise.resolve(
       manager.enqueueOfflineMessageMutation({
         conversationId,
         actorUserId,
         messageId,
+        // La file est la TROISIÈME sortie de la même charge, et elle PERSISTE
+        // 48 h : sans cette exclusion, le texte d'un message hors du plancher
+        // d'un invité l'attendait dans Redis sous sa clé.
+        ...(blockedKeys.size > 0 ? { excludedQueueKeys: blockedKeys } : {}),
         // Le couple part CORRÉLÉ (cycle 106) : le destructurer le rendrait à
         // deux unions indépendantes, et la file cesserait d'être gardée à
         // l'étage même où elle vient de l'être.

@@ -2,6 +2,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastMessageMutation } from '../broadcastMessageMutation';
 
+import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
 type Emitted = { room: string; event: string; payload: any };
 
 function makeManager(
@@ -26,15 +27,50 @@ function makeManager(
   } as any;
 }
 
+const ECRIT_LE = new Date('2026-08-01T00:00:00Z');
+
+/**
+ * Le double ÉVALUE le `where` (`matchesMongoWhere`), il ne rend plus une liste
+ * fixe. C'est ce que le programme réel fait, et la différence est portante
+ * depuis que l'édition passe par le plancher d'historique : la requête des
+ * lecteurs TARDIFS (`joinedAt > createdAt OR historyVisibleFrom > createdAt`)
+ * doit pouvoir ne rien rendre, sans quoi chaque participant est tenu pour
+ * suspect et l'audience se restreint dans tous les témoins de ce fichier.
+ *
+ * Un double partiel ne se signale qu'au moment où le module grandit — c'est
+ * arrivé ici, et la réparation est de COMPLÉTER le double, jamais d'affaiblir
+ * la production.
+ */
 function makePrisma() {
+  const participant: MongoDocument = {
+    id: 'participant-B',
+    userId: 'user-B',
+    conversationId: 'conv-1',
+    isActive: true,
+    role: 'member',
+    // AVANT le message : ce participant n'est pas un lecteur tardif, donc la
+    // loi rend `{ kind: 'room' }` et rien ne change pour les témoins d'ici.
+    joinedAt: new Date('2026-07-01T00:00:00Z'),
+    shareLinkId: null,
+    historyVisibleFrom: null,
+    permissions: null,
+    anonymousSession: null,
+    user: { role: 'USER' },
+  };
   return {
-    participant: { findMany: jest.fn(async () => [{ userId: 'user-B' }]) },
+    participant: {
+      findMany: jest.fn(async (args: any) =>
+        [participant].filter((row) => matchesMongoWhere(row, args?.where ?? {})),
+      ),
+    },
+    conversationShareLink: { findMany: jest.fn(async () => []) },
     message: {
+      findUnique: jest.fn(async () => ({ createdAt: ECRIT_LE })),
       findFirst: jest.fn(async () => ({
         id: 'msg-latest',
         content: 'latest',
         senderId: 'participant-A',
-        createdAt: new Date('2026-08-01T00:00:00Z'),
+        createdAt: ECRIT_LE,
         metadata: null,
       })),
     },

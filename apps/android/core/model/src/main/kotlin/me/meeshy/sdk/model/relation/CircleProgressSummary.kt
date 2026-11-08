@@ -111,7 +111,18 @@ public enum class CirclePersonSetting(public val opensAt: RelationLevel) {
     LIVE_LOCATION(RelationLevel.BLOOD),
     ;
 
+    /** La préférence de RÉCEPTION que ce réglage pose (livrée), `null` pour ceux qui arrivent avec leur lot. */
+    public val reception: RelationReceptionSetting?
+        get() = when (this) {
+            BLOCK_BRING -> RelationReceptionSetting.BRING
+            TALKIE -> RelationReceptionSetting.TALKIE
+            LISTENING, LIVE_LOCATION -> null
+        }
+
     public companion object {
         public fun offered(level: RelationLevel): List<CirclePersonSetting> = entries.filter { level >= it.opensAt }
+
+        /** Les blocages de réception ouverts à ce niveau d'outils (#16643) : le Bring dès Ami, le talkie dès Proche. */
+        public fun receptionAt(level: RelationLevel): List<RelationReceptionSetting> = offered(level).mapNotNull { it.reception }
     }
 }

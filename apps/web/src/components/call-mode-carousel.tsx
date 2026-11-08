@@ -397,12 +397,13 @@ export function CallModeBar({ quit, center = null, options }: BarProps) {
 }
 
 /** Une option discrète de la barre : un rond de verre, pressé ou non. */
-export function ModeOption({ label, glyph, onPress, pressed, data = {} }: { readonly label: string; readonly glyph: ReactNode; readonly onPress: () => void; readonly pressed?: boolean; readonly data?: Readonly<Record<`data-${string}`, string>> }) {
+export function ModeOption({ label, glyph, onPress, pressed, hint, data = {} }: { readonly label: string; readonly glyph: ReactNode; readonly onPress: () => void; readonly pressed?: boolean; readonly hint?: string; readonly data?: Readonly<Record<`data-${string}`, string>> }) {
   return (
     <button
       type="button"
       aria-label={label}
-      title={label}
+      title={hint ?? label}
+      {...(hint === undefined ? {} : { 'aria-description': hint })}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       onClick={onPress}
       className={pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`}

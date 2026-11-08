@@ -131,6 +131,13 @@ struct ComposerCaptureMount<Content: View>: View {
             // car l'image qui se charge n'a pas encore de taille, et sous les
             // commandes, qui restent lisibles.
             .overlay { ComposerShutterFlash(tick: session.camera.shutterCount) }
+            .background {
+                ComposerCameraHardwareButtons(
+                    session: session,
+                    active: ComposerHardwareShutter.isActive(stage: session.stage, editing: session.phase.isEditing),
+                    allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
+                    .accessibilityHidden(true)
+            }
             .position(x: rect.midX, y: rect.midY)
     }
 

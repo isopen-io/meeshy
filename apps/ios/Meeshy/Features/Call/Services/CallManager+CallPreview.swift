@@ -16,7 +16,7 @@ extension CallManager: CallPreviewHostActing {
     /// l'ouvre donc soi-même pour entendre l'appelant.
     func setPreviewAudible(_ audible: Bool) {
         let opensSession = audible && callUsesCallKit
-        audioSessionQueue.sync {
+        audioSessionQueue.async { // #17038 : jamais sur le fil principal
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
             if opensSession, (try? AVAudioSession.sharedInstance().setActive(true, options: [])) != nil {

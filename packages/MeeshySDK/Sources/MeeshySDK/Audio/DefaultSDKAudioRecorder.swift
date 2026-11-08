@@ -81,8 +81,27 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         // la reconfiguration est refusée — on n'enregistre pas par-dessus
         // RTCAudioSession. Les sons extérieurs s'arrêtent ; un son Meeshy qui
         // joue baisse, et remonte à la fin.
-        guard MeeshyRecordingSession.shared.begin(.voiceMessage) else { return }
+        // La session se pose HORS du fil principal (#17038) : l'interface passe
+        // « en cours » tout de suite, l'enregistreur démarre une fois la session
+        // prête, et un arrêt entre-temps l'emporte.
+        startAttempt &+= 1
+        let attempt = startAttempt
+        isRecording = true
+        MeeshyRecordingSession.shared.begin(.voiceMessage) { [weak self] granted in
+            guard let self, self.startAttempt == attempt else { return }
+            guard granted else {
+                self.isRecording = false
+                return
+            }
+            self.startRecorder()
+        }
+    }
 
+    /// Chaque démarrage, arrêt ou annulation change de tentative.
+    private var startAttempt = 0
+
+    /// La session est prête : l'enregistreur démarre.
+    private func startRecorder() {
         // Second démarrage sans arrêt (double appui, relance après le prompt
         // micro) : arrêter l'enregistrement précédent et son minuteur 20 Hz,
         // sinon celui-ci reste au run loop jusqu'à la fin du processus.
@@ -110,6 +129,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             // Rendre la session activée juste au-dessus : sans cela le micro
             // reste réservé et l'indicateur orange allumé.
             recorder = nil
+            isRecording = false
             MeeshyRecordingSession.shared.finish(handingBackSession: true)
             return
         }
@@ -139,6 +159,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
 
     @discardableResult
     public func stopRecording() -> URL? {
+        startAttempt &+= 1
         timer?.invalidate()
         timer = nil
         recorder?.stop()
@@ -154,6 +175,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     }
 
     public func cancelRecording() {
+        startAttempt &+= 1
         timer?.invalidate()
         timer = nil
         recorder?.stop()

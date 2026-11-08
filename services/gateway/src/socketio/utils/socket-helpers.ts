@@ -75,6 +75,16 @@ export interface SocketUser {
    *   (#16688).
    */
   unreachableConversations?: ReadonlySet<string>;
+  /**
+   * « Cette socket n'est joignable pour AUCUNE de ses conversations, et on ne
+   * sait pas lesquelles » (#16687 suite). Posé quand la LECTURE des
+   * conversations du compte est tombée au handshake : zéro room rejointe, et
+   * aucune liste à mettre dans `unreachableConversations`, qu'un ensemble ne
+   * peut pas exprimer. La file hors ligne le lit comme injoignable quelle que
+   * soit la conversation — sans quoi la socket passait pour joignable et rien
+   * n'était enfilé, pendant qu'aucune diffusion de room ne l'atteignait.
+   */
+  allConversationRoomsUnreachable?: boolean;
 }
 
 export interface ConnectedUserResult {

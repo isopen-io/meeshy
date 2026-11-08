@@ -5,7 +5,7 @@ import MeeshyUI
 
 /// Le texte du bandeau (#16755, iso web `listening-band.ts`) : la CATÉGORIE pour un Proche, « titre · origine » pour un
 /// Sang. Ce détail est ce que la passerelle a servi ; un titre absent n'est jamais deviné.
-enum ListeningBandText {
+nonisolated enum ListeningBandText {
 
     static func glyph(_ category: NowPlayingCategory) -> String {
         switch category {
@@ -52,7 +52,16 @@ extension ListeningCenter {
 
     /// Le bandeau d'UNE personne puis chacun de ses changements — rien de plus fin que l'écoute de cette personne.
     func band(for userId: String) -> AnyPublisher<AvatarListening?, Never> {
-        $byUser
+        Self.band(of: userId, in: $byUser.eraseToAnyPublisher())
+    }
+
+    /// Hors de tout acteur (#17042) : `.values` demande hors du fil principal, et le centre y remet sa valeur courante.
+    /// Un maillon isolé au MainActor y piège l'app (`dispatch_assert_queue`) dès qu'un avatar s'abonne.
+    nonisolated static func band(
+        of userId: String,
+        in entries: AnyPublisher<[String: ListeningEntry], Never>
+    ) -> AnyPublisher<AvatarListening?, Never> {
+        entries
             .map { $0[userId] }
             .removeDuplicates()
             .map(ListeningBandText.band(for:))

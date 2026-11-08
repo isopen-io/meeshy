@@ -14,12 +14,14 @@ final class TalkieMicCapture: TalkieCapturing {
     private var engine: AVAudioEngine?
     private var encoder: TalkieAacEncoder?
     private var holdsSession = false
+    private var frameRelay: AsyncStream<[TalkieAacFrame]>.Continuation?
+    private var frameDelivery: Task<Void, Never>?
 
     nonisolated deinit {}
 
     func start(onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
         guard engine == nil, await DevicePermissions.requestMicrophone().isUsable else { return false }
-        guard MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
+        guard await MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
         holdsSession = true
         let engine = AVAudioEngine()
         let input = engine.inputNode
@@ -28,12 +30,10 @@ final class TalkieMicCapture: TalkieCapturing {
             releaseSession()
             return false
         }
-        let deliver: @Sendable ([TalkieAacFrame]) -> Void = { frames in
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated { frames.forEach { onFrame($0.data, $0.duration) } }
-            }
-        }
+        let (frames, relay) = AsyncStream.makeStream(of: [TalkieAacFrame].self)
+        let deliver: @Sendable ([TalkieAacFrame]) -> Void = { relay.yield($0) }
         guard let encoder = TalkieAacEncoder(input: format, deliver: deliver) else {
+            relay.finish()
             releaseSession()
             return false
         }
@@ -44,11 +44,16 @@ final class TalkieMicCapture: TalkieCapturing {
             try engine.start()
         } catch {
             input.removeTap(onBus: 0)
+            relay.finish()
             releaseSession()
             return false
         }
         self.engine = engine
         self.encoder = encoder
+        frameRelay = relay
+        frameDelivery = Task { @MainActor in
+            for await batch in frames { batch.forEach { onFrame($0.data, $0.duration) } }
+        }
         return true
     }
 
@@ -60,9 +65,10 @@ final class TalkieMicCapture: TalkieCapturing {
         encoder?.drain()
         encoder = nil
         releaseSession()
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            DispatchQueue.main.async { continuation.resume() }
-        }
+        frameRelay?.finish()
+        frameRelay = nil
+        await frameDelivery?.value
+        frameDelivery = nil
     }
 
     private func releaseSession() {

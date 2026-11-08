@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.call.CallLiveFrameSelected
 import me.meeshy.sdk.model.call.CallLiveFrameTexts
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.frames.CallLiveFrameProposal
+import me.meeshy.sdk.model.call.frames.CallLiveFrameState
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CallSocialSignalManager
 import org.junit.Test
@@ -128,6 +129,25 @@ class CallLiveFrameControllerTest {
         controller.apply(frame)
         controller.onTransition(CallState.Connected, CallState.Idle, info)
         assertThat(controller.state.value.frameId).isNull()
+    }
+
+    @Test
+    fun `l'appel passe a trois, le cadre tombe chez moi, avec la proposition en attente, sans rien emettre`() = run { controller ->
+        controller.apply(frame)
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, CallLiveFrameTexts(name = "Bob")))
+
+        controller.leaveDuo()
+
+        assertThat(controller.state.value).isEqualTo(CallLiveFrameState())
+        coVerify(exactly = 1) { social.selectCallLiveFrame(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `apres le passage a trois, l'appel reste ecoute, un retour au duo peut recevoir un cadre`() = run { controller ->
+        controller.leaveDuo()
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, CallLiveFrameTexts(name = "Bob")))
+
+        assertThat(controller.state.value.proposal).isEqualTo(CallLiveFrameProposal(other, "Bob"))
     }
 
     @Test

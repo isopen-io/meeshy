@@ -6,6 +6,7 @@ import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-a
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { COMMUNITIES_GLYPHS, type CommunitiesGlyphName } from '@/components/glyphs-communities';
 import { GroupedSection, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { IosSwitch } from '@/components/ios-switch';
 import type { CommunityConversation, CommunityDraft, CommunitySummary } from '@/lib/api/communities';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { communityAccent, compactCount, conversationTitleOf } from '@/lib/communities/view';
@@ -543,33 +544,6 @@ export function CommunityPreviewCard({ language, draft }: { readonly language: I
   );
 }
 
-function Switch({ checked }: { readonly checked: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="relative block rounded-chip"
-      style={{
-        width: 51,
-        height: 31,
-        backgroundColor: checked ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 45%, transparent)',
-        transition: 'background-color 160ms ease',
-      }}
-    >
-      <span
-        className="absolute block rounded-chip"
-        style={{
-          top: 2,
-          insetInlineStart: checked ? 22 : 2,
-          width: 27,
-          height: 27,
-          backgroundColor: 'var(--color-ios-on-brand)',
-          boxShadow: 'var(--shadow-sm)',
-          transition: 'inset-inline-start 160ms ease',
-        }}
-      />
-    </span>
-  );
-}
 
 /** Miroir `CommunityCreateView.privacyToggle` — ce que la bascule change se lit SOUS elle. */
 export function PrivacyToggle({
@@ -606,7 +580,7 @@ export function PrivacyToggle({
         className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
         style={{ minWidth: 56, minHeight: 44, outlineColor: BRAND }}
       >
-        <Switch checked={isPrivate} />
+        <IosSwitch checked={isPrivate} />
       </button>
     </div>
   );

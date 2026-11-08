@@ -75,7 +75,7 @@ extension CallView {
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                            .stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1)
+                            .stroke(CallSelfTileStroke.color(forKey: CallSelfTileStroke.colorKey(showsLocal: !effectiveSwapStreams, myId: AuthManager.shared.currentUser?.id, peerId: callManager.remoteUserId)), lineWidth: CallSelfTileStroke.lineWidth)
                     )
                     .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
                     .overlay(alignment: .bottomLeading) {

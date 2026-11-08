@@ -16,18 +16,7 @@ import { loadPhotoSource } from './photo-source';
 export const useScheme = useColorScheme;
 
 /** Une préférence d'accessibilité du système (`prefers-reduced-transparency`, `prefers-reduced-motion`). */
-export function useMediaFlag(query: string): boolean {
-  const [matches, setMatches] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches);
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    const list = window.matchMedia(query);
-    const onChange = (): void => setMatches(list.matches);
-    onChange();
-    list.addEventListener?.('change', onChange);
-    return () => list.removeEventListener?.('change', onChange);
-  }, [query]);
-  return matches;
-}
+export { useMediaFlag } from '@/lib/use-media-flag';
 
 /**
  * Le dessin d'un modèle de pack — chargé À LA DEMANDE (le catalogue embarqué ne

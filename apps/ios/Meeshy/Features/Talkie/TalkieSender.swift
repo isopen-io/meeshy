@@ -57,6 +57,8 @@ final class TalkieSender: ObservableObject {
             self.toUserId = toUserId
         }
 
+        nonisolated deinit {}
+
         var queuedBytes: Int { queue.reduce(0) { $0 + $1.data.count } }
     }
 
