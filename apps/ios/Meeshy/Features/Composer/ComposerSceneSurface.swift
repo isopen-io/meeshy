@@ -448,7 +448,7 @@ struct ComposerSceneSurface: View {
                 } else {
                     restChrome.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
                 }
-                ComposerLimitCapsuleView()
+                ComposerLimitCapsuleView(capsule: .shared)
             } else {
                 concealedRevealLayer
             }
