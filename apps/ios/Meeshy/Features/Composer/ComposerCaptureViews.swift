@@ -462,6 +462,7 @@ struct ComposerCaptureChrome: View {
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { valeur in
                 guard case .second(true, _) = valeur, session.holdStartedAt == nil else { return }
+                session.selfTimer.cancel()
                 scene(.longPress)
             }
             .onEnded { _ in
@@ -576,14 +577,17 @@ struct ComposerCaptureChrome: View {
         scheduleMarkFade(marque)
     }
 
-    /// La grille des tiers (CAM-2), sous l'anneau de mise au point.
+    /// La grille des tiers (CAM-2), sous l'anneau de mise au point, et le
+    /// compte du retardateur (CAM-4), qui s'arrête quand le viseur s'en va.
     private var viewfinderMarks: some View {
         ZStack(alignment: .topLeading) {
             if ComposerCaptureGrid.shows(enabled: gridEnabled, editing: session.phase.isEditing) {
                 ComposerCaptureGridOverlay()
             }
             focusRing
+            ComposerCaptureCountdown(timer: session.selfTimer)
         }
+        .onDisappear { session.selfTimer.cancel() }
     }
 
     @ViewBuilder private var focusRing: some View {

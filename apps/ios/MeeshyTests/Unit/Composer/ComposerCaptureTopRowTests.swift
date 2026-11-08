@@ -32,11 +32,72 @@ final class ComposerCaptureTopRowTests: XCTestCase {
 
     func test_theViewfinder_neverShowsTheSizeToggleInTheRow_itLivesInTheMenu() {
         XCTAssertFalse(ComposerCaptureTopRow.trailing(Self.input()).contains(.size))
-        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: true), [.grid, .size])
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: true), [.grid, .selfTimer, .size])
     }
 
-    func test_theMenu_withoutACardToReturnTo_offersOnlyTheGrid() {
-        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: false), [.grid])
+    func test_theMenu_withoutACardToReturnTo_offersTheGridAndTheTimer() {
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: false), [.grid, .selfTimer])
+    }
+
+    // MARK: - (7) Le retardateur (CAM-4)
+
+    private static func timerDefaults(_ delai: ComposerCaptureSelfTimerDelay) -> UserDefaults {
+        let defaults = UserDefaults(suiteName: "ComposerCaptureSelfTimer.\(UUID().uuidString)") ?? .standard
+        defaults.set(delai.rawValue, forKey: ComposerCaptureSelfTimerDelay.storageKey)
+        return defaults
+    }
+
+    func test_theSelfTimer_offersThreeAndTenSeconds_andIsOffForAnUnknownValue() {
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.allCases, [.off, .three, .ten])
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay(stored: 0), .off)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay(stored: 7), .off)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay(stored: 10), .ten)
+    }
+
+    func test_theSelfTimer_countsDownEverySecond_toOne() {
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.three.ticks, [3, 2, 1])
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.ten.ticks.count, 10)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.off.ticks, [])
+    }
+
+    func test_withTheTimerOff_thePhotoLeavesAtOnce() {
+        let minuterie = ComposerCaptureSelfTimer(defaults: Self.timerDefaults(.off))
+        var prises = 0
+        minuterie.run { prises += 1 }
+        XCTAssertEqual(prises, 1)
+        XCTAssertNil(minuterie.remaining)
+    }
+
+    func test_withTheTimerOn_thePhotoWaitsForTheCount_thenLeavesOnce() async {
+        let minuterie = ComposerCaptureSelfTimer(defaults: Self.timerDefaults(.three), tick: .milliseconds(5))
+        let partie = expectation(description: "la photo part après le compte")
+        var prises = 0
+        minuterie.run {
+            prises += 1
+            partie.fulfill()
+        }
+        XCTAssertEqual(minuterie.remaining, 3, "le premier chiffre paraît tout de suite")
+        XCTAssertEqual(prises, 0)
+        await fulfillment(of: [partie], timeout: 2)
+        XCTAssertEqual(prises, 1)
+        XCTAssertNil(minuterie.remaining)
+        XCTAssertFalse(minuterie.isCounting)
+    }
+
+    func test_aSecondPressDuringTheCount_cancelsIt_andNothingIsTaken() async throws {
+        let minuterie = ComposerCaptureSelfTimer(defaults: Self.timerDefaults(.three), tick: .milliseconds(5))
+        var prises = 0
+        minuterie.run { prises += 1 }
+        minuterie.run { prises += 1 }
+        XCTAssertFalse(minuterie.isCounting)
+        XCTAssertNil(minuterie.remaining)
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(prises, 0, "le compte annulé ne prend rien")
+    }
+
+    func test_theTimerOptions_readAsSecondsInTheLocale() {
+        XCTAssertEqual(ComposerSceneCameraCopy.selfTimerOption(.three, locale: Locale(identifier: "fr_FR")), "3 s")
+        XCTAssertFalse(ComposerSceneCameraCopy.selfTimerOption(.off).isEmpty)
     }
 
     func test_inRetouch_theSizeToggleStaysInTheRow_andThereIsNoMenu() {
