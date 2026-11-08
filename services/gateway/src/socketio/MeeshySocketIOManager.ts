@@ -59,6 +59,7 @@ import { loadSealedQuoteAudience, sealedQuoteVariant } from './quotedEphemeralAu
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
+import type { ReachabilityView } from './offlineParticipantQueue.js';
 import {
   emitToConversationParticipants,
   type ParticipantRoomTarget,
@@ -194,27 +195,23 @@ function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   return [{ event, payload: entry.payload } as SocketEmission];
 }
 
-export interface SocketUser {
-  id: string;
-  socketId: string;
-  isAnonymous: boolean;
-  language: string;
-  /**
-   * Ordered list of languages this socket can consume, derived from
-   * resolveUserLanguagesOrdered() at connection time.
-   * Priority: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
-   * Empty for anonymous users (they use `language` only).
-   */
-  resolvedLanguages: string[];
-  /** For anonymous participants: the participant.id */
-  participantId?: string;
-  /** For registered users: the user.id */
-  userId?: string;
-  /** Display name resolved at connection time */
-  displayName?: string;
-  /** @deprecated kept for backward compat — raw session token */
-  sessionToken?: string;
-}
+/**
+ * #16687 — JUMELLE SUPPRIMÉE. Ce fichier DÉCLARAIT son propre `SocketUser`,
+ * copie verbatim (à un mot de commentaire près) de celui de
+ * `utils/socket-helpers.ts`, que les handlers importent déjà.
+ *
+ * La divergence n'était pas théorique : `connectedUsers` est typé par CELUI-CI,
+ * et ajouter `unreachableConversations` à l'autre a fait tomber la compilation
+ * ici même — c'est le compilateur qui a nommé la jumelle. Deux déclarations du
+ * même concept, et seule celle que le gate lit comptait.
+ *
+ * Re-export de TYPE : les importateurs de `SocketUser` depuis ce module
+ * continuent de compiler, et il n'y a plus qu'une seule déclaration à faire
+ * évoluer. Aucun cycle — `socket-helpers.ts` n'importe pas ce fichier, et un
+ * re-export de type s'efface à l'exécution.
+ */
+import type { SocketUser } from './utils/socket-helpers.js';
+export type { SocketUser };
 
 export interface TranslationNotification {
   messageId: string;
@@ -3489,6 +3486,19 @@ export class MeeshySocketIOManager {
    */
   getConnectedUsers(): string[] {
     return Array.from(this.connectedUsers.keys());
+  }
+
+  /**
+   * #16687 — la carte VIVANTE, pour qui doit demander « joignable pour CETTE
+   * conversation ? » et non seulement « connecté ? ».
+   *
+   * `getConnectedUsers()` rend des CLÉS : enveloppées dans un `Set`, elles
+   * répondent `has` et perdent le marqueur de joignabilité. C'est ce que les
+   * quatre chemins média passaient à la file, et la porte y était morte en
+   * silence. Rendre la carte évite aussi une copie par appel.
+   */
+  getReachability(): ReachabilityView {
+    return this.connectedUsers;
   }
 
   /**
