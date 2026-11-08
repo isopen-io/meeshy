@@ -228,3 +228,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   SDK relancées sur le dernier commit.
 - La branche porte aussi le correctif de `dev` rouge après OPUS-5 (#16743, autre session) qu'elle avait fusionné pour
   verdir sa CI iOS.
+- Tranche 4 d'iOS rouge deux fois, de façon déterministe : `MessageAuthorRingTests` portait deux fois la clé
+  `Bring/BringRingView.swift` dans un littéral de dictionnaire (deux fusions de `dev`), ce qui piège à l'exécution.
+  `dev` était rouge du même défaut (ses push ne lancent pas les tests). Doublon retiré dans ce lot ; diagnostic du
+  réveil 12.
