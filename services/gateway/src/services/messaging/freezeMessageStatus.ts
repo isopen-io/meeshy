@@ -49,6 +49,20 @@ export interface FreezeMessageStatusParams {
    * affiché, donc la fenêtre reste correcte pour `deliveredAt`.
    */
   readonly messageIds?: readonly string[];
+
+  /**
+   * Borne HAUTE de la fenêtre temporelle, en position CHRONOLOGIQUE — le
+   * `createdAt` du message jusqu'auquel le lecteur déclare être arrivé.
+   *
+   * Sans elle, la fenêtre monte jusqu'à `at` (l'horloge MURALE), donc jusqu'au
+   * dernier message écrit avant l'instant de la requête — y compris ceux
+   * arrivés APRÈS la frontière que le lecteur rapporte. Un accusé rejoué
+   * (file hors ligne du web) gravait ainsi `readAt` sur tout ce qui s'était
+   * dit entre-temps, et le gel est write-once : rien ne le défait.
+   *
+   * Sans objet en mode `messageIds` : la liste EST la borne.
+   */
+  readonly until?: Date | null;
   /**
    * Version linguistique affichée au lecteur. Contrairement à l'horodatage,
    * elle n'est PAS write-once : un lecteur qui bascule sur la traduction a
@@ -69,7 +83,7 @@ export async function freezeMessageStatus(
   prisma: FreezeStatusPrisma,
   params: FreezeMessageStatusParams,
 ): Promise<number> {
-  const { participantId, conversationId, since, at, field, messageIds } = params;
+  const { participantId, conversationId, since, at, field, messageIds, until } = params;
   const defaultLanguage =
     field === 'readAt' ? normalizeLanguageCode(params.language) : undefined;
   const perMessage = field === 'readAt' ? params.messageLanguages : undefined;
@@ -87,7 +101,7 @@ export async function freezeMessageStatus(
         senderId: { not: participantId },
         ...(messageIds
           ? { id: { in: [...messageIds] } }
-          : { createdAt: { lte: at, ...(since ? { gt: since } : {}) } }),
+          : { createdAt: { lte: until ?? at, ...(since ? { gt: since } : {}) } }),
       },
       select: { id: true },
     });

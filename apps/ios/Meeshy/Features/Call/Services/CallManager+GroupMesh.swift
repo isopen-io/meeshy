@@ -117,7 +117,7 @@ extension CallManager: GroupCallHostProviding {
         guard let placeholder = conversationId, remoteUserId == placeholder,
               !userId.isEmpty, userId != groupLocalUserId else { return }
         remoteUserId = userId
-        webRTCService.setNegotiationRole(isPolite: Self.isPolitePeer(localUserId: groupLocalUserId, remoteUserId: userId))
+        webRTCService.setNegotiationRole(isPolite: CallNegotiationRules.isPolitePeer(localUserId: groupLocalUserId, remoteUserId: userId))
     }
 
     /// Une offre adressée à la CONVERSATION (appelant d'un groupe) part au pair
