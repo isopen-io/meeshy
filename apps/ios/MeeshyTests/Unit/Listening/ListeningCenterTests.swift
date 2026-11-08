@@ -48,6 +48,23 @@ final class ListeningCenterTests: XCTestCase {
         )
     }
 
+    // MARK: - Lu hors du fil principal (#17042)
+
+    /// `AvatarListeningLive` lit le bandeau par `.values` : l'itérateur Combine demande hors du fil principal, et le
+    /// centre y remet sa valeur courante. Un maillon isolé au MainActor y piégeait l'app à l'ouverture d'un direct.
+    func test_band_readOffTheMainActor_deliversTheServedBand() async {
+        let rig = makeRig()
+        rig.sut.receive(served(title: "Clair de lune", source: "Spotify"))
+        nonisolated(unsafe) let band = rig.sut.band(for: "alice")
+
+        let first = await Task.detached { () -> AvatarListening? in
+            for await value in band.values { return value }
+            return nil
+        }.value
+
+        XCTAssertEqual(first?.text, "Clair de lune · Spotify")
+    }
+
     // MARK: - Ce qui est servi, et rien de plus
 
     func test_aProche_showsTheCategoryAlone() {
