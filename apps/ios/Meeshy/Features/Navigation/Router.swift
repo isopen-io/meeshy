@@ -220,8 +220,8 @@ extension Route {
 
 /// Le détail d'un post, présenté en FEUILLE (#16676).
 ///
-/// Directive porteur du 2026-11-07 : « la vue détail doit s'afficher en
-/// feuille et non plus ouvrir une vue à part ». `.postDetail` reste la route
+/// Directive porteur : « la vue détail doit s'afficher en feuille et non
+/// plus ouvrir une vue à part ». `.postDetail` reste la route
 /// que TOUS les appelants poussent — fil, recherche, notification, lien
 /// profond, repost, réel, profil — et c'est le routeur qui la transforme en
 /// feuille : aucune porte n'a à le savoir, aucune ne peut l'oublier.
@@ -305,11 +305,11 @@ final class Router: ObservableObject {
     init(refusesProfiles: Bool = false,
          surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared,
          locks: ConversationLockGating = ConversationLockManager.shared,
-         surfaceHandoffNanoseconds: UInt64 = 400_000_000) {
+         surfaceHandoff: Duration = .milliseconds(400)) {
         self.refusesProfiles = refusesProfiles
         self.surfaces = surfaces
         self.locks = locks
-        self.surfaceHandoffNanoseconds = surfaceHandoffNanoseconds
+        self.surfaceHandoff = surfaceHandoff
     }
 
     /// La fiche d'un participant SANS COMPTE, à ouvrir.
@@ -342,7 +342,7 @@ final class Router: ObservableObject {
 
     /// Le temps qu'une surface met à se refermer avant que la feuille du post
     /// monte à sa place.
-    private let surfaceHandoffNanoseconds: UInt64
+    private let surfaceHandoff: Duration
 
     /// Ce que le lien profond de partage remet à l'écran de partage unique (#10947).
     @Published var pendingShareContent: ShareSubject? = nil
@@ -467,9 +467,9 @@ final class Router: ObservableObject {
     /// que la story descend encore.
     private func noteSurfacesLeaving() {
         leavingSurfaces += 1
-        let delay = surfaceHandoffNanoseconds
+        let delay = surfaceHandoff
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: delay)
+            _ = await cancellableSleep(for: delay)
             self?.leavingSurfaces -= 1
             self?.presentPostAwaitingPresentation()
         }

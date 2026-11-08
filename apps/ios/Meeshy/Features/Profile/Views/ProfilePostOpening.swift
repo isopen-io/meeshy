@@ -28,7 +28,8 @@ enum ProfilePostsOpener {
     /// de profil partie, comme le lecteur des réels ci-dessus.
     static func openPost(_ post: FeedPost, dismiss: @escaping () -> Void) {
         dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        Task { @MainActor in
+            guard await cancellableSleep(for: .milliseconds(350)) else { return }
             NotificationCenter.default.post(
                 name: Notification.Name("pushNavigateToRoute"),
                 object: "postDetail:\(post.id)"

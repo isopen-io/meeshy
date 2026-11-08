@@ -250,7 +250,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     /// la seconde levée ne voit plus rien à fermer, mais la story part encore.
     func test_clearPresentedSurfaces_postOpenedFromANotification_closesTheStoryFirst() async {
         let registry = PresentedSurfaceRegistry()
-        let router = Router(surfaces: registry, surfaceHandoffNanoseconds: 0)
+        let router = Router(surfaces: registry, surfaceHandoff: .zero)
         var events: [String] = []
         _ = registry.declare(.storyViewer, answer: { .closes }) { events.append("story refermée") }
         let presented = expectation(description: "la feuille du post monte")

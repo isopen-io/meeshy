@@ -13,7 +13,7 @@ import MeeshySDK
 final class PostDetailSheetRoutingTests: XCTestCase {
 
     private func makeRouter(registry: PresentedSurfaceRegistry = PresentedSurfaceRegistry()) -> Router {
-        Router(surfaces: registry, surfaceHandoffNanoseconds: 0)
+        Router(surfaces: registry, surfaceHandoff: .zero)
     }
 
     private func makeConversation(id: String = "0000000000000000000000c1") -> Conversation {
