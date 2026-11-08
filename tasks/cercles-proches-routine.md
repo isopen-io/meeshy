@@ -310,3 +310,29 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (PushToTalk) et Android, Safari/Firefox (#16699).
 - Prochain lot recommandé : accorder « Ce que j'écoute » depuis Android quand #16643 aura fusionné, sinon l'émission du
   talkie sur Android.
+
+## 2026-11-08 — réveil 19 : regarder ou écouter ensemble, côté serveur (#17012 ⊂ #17011)
+
+- Reprise : #16928 (talkie émis depuis iOS) est menée par le réveil 17, qui attend sa CI ; #16986 (position temporaire,
+  serveur) par le réveil 18, encore actif. Ce réveil ne touche ni l'une ni l'autre.
+- Deux demandes de Jacques n'avaient AUCUNE issue : la lecture synchronisée « regarder/écouter ensemble » (#17011, et son
+  sous-lot serveur #17012) et l'icône de position par cercle sur la carte (#17013, qui attend les clients de la position
+  temporaire #16983–#16985). Toutes trois au milestone #215, sous l'épopée #13925.
+- Lot : le sous-lot SERVEUR de « ensemble », PR #17021 vers `dev`. Contrat `together:invite|join|sync|leave` →
+  `invited|started|synced|ended` ; feature `together` (dès Proche, adressée, l'invitation acceptée tient lieu de
+  consentement) et ses miroirs Swift/Kotlin ; porte (loi par `pairAccess`, pièce audio/vidéo non protégée d'une
+  conversation où les deux sont membres actifs, refus indistincts) ; relais scellé (`secret-at-rest`, une séance par
+  paire, TTL 2 min puis 4 h), horloge serveur, rejugement à chaque geste, coupure après blocage, baisse ou retrait.
+- Revue adversariale : bloquante sur deux points, corrigés dans le lot — une coupure se disait `cut` au bloqué (elle se
+  dit désormais `left` aux deux, et `join`/`sync` rendent `NOT_FOUND`), et une acceptation ou une synchronisation jugée
+  avant un blocage pouvait réécrire la séance après lui (pierre tombale posée par la fin, relue après chaque écriture).
+  Corrigés aussi : l'index de paire est un HMAC (plus d'identifiants en clair dans les clés), une séance en clair n'est
+  jamais lue quand la clé est posée, témoins de route (blocage, baisse, retrait) et de porte (banni, désactivé, vue
+  unique du message). Ouverts en suivi : les autres chemins de coupure (#17022) et la préférence de réception avec un
+  plafond par paire (#17023).
+- Gates locaux : témoins « ensemble » et routes touchées 297/297 ; shared 9506/9506 ; `tsc` passerelle et web verts ; cliquet `any` 490 ; catalogue
+  TS mort 270/270. Rouge préexistant sur `dev`, hors lot : `orphaned-sender-repair-surface-guard` (globalMessageSearch).
+- Décision ouverte pour Jacques (dans #17011) : la séance reste ouverte dans une conversation E2EE (le serveur ne voit que
+  des identifiants et une position) — à confirmer par `crypto-e2ee`.
+- Prochain lot recommandé : « ensemble » sur le web (inviter depuis une vidéo/un audio, accepter, lecteur synchronisé),
+  puis iOS ; l'icône par cercle (#17013) quand les clients de la position temporaire auront fusionné.

@@ -681,6 +681,34 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertFalse(ComposerCaptureCopy.cameraNotReady.isEmpty)
     }
 
+    /// CAM-16 : le cadre écrit le jour du déclenchement, pas celui de l'ouverture du viseur.
+    func test_lookClock_followsTheDay_butNeverDuringATake() {
+        let calendrier = Calendar(identifier: .gregorian)
+        let hier = Date(timeIntervalSince1970: 1_700_000_000)
+        let plusTard = hier.addingTimeInterval(3600)
+        let demain = hier.addingTimeInterval(86_400)
+        XCTAssertEqual(ComposerLookClock.date(shown: hier, now: plusTard, frozen: false, calendar: calendrier), hier,
+                       "le même jour garde la même date : les clés de scène restent stables")
+        XCTAssertEqual(ComposerLookClock.date(shown: hier, now: demain, frozen: false, calendar: calendrier), demain)
+        XCTAssertEqual(ComposerLookClock.date(shown: hier, now: demain, frozen: true, calendar: calendrier), hier,
+                       "une prise en cours garde le jour de son déclenchement")
+    }
+
+    func test_followTheDay_armedViewfinderOpenedYesterday_writesToday() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.lookDate = Date().addingTimeInterval(-2 * 86_400)
+        session.followTheDay()
+        XCTAssertTrue(Calendar.current.isDateInToday(session.lookDate))
+    }
+
+    func test_followTheDay_whileRecording_keepsTheDayTheTakeStarted() {
+        let session = ComposerCaptureSession(stage: .recording)
+        let debut = Date().addingTimeInterval(-2 * 86_400)
+        session.lookDate = debut
+        session.followTheDay()
+        XCTAssertEqual(session.lookDate, debut)
+    }
+
     /// R2 : la file retient les OCTETS de la prise, décodés au moment de peindre.
     func test_saveRenderedPhoto_fromTheTakeBytes_savesTheRendered() async {
         let galerie = MockComposerGallery()

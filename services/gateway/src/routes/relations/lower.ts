@@ -5,6 +5,7 @@ import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
 import { loadRelationLink } from '../../services/relations/relationLinks';
@@ -77,6 +78,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
         await withdrawListeningCategoryBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
       }
       await refreshNowPlayingAfter(ecoute, { userA: viewerId, userB: otherId, before: ecouteAvant });
+      // #17012 — sous Proche, la séance « ensemble » de la paire s'arrête chez les deux.
+      await rejudgeTogetherAfter(ecoute, { userA: viewerId, userB: otherId });
       return sendSuccess(reply, link);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');

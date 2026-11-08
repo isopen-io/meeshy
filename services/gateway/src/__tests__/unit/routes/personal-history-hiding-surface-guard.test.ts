@@ -687,11 +687,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * marqueurs de `IN_MEMORY_HIDING_SURFACES` ci-dessous en sont la preuve.
    */
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
-  // #14619 — la recherche de la liste des conversations : ses trois lectures
-  // (contenu, traductions, et transcriptions depuis #16958) partagent la MÊME
-  // disjonction par conversation, où chaque conversation bornée reçoit
-  // `applyPersonalHistoryHiding` — une application pour trois lectures, comme
-  // `conversations/messages-search.ts`.
+  // #14619 — la recherche de la liste des conversations : ses lectures
+  // partagent la MÊME disjonction par conversation, où chaque conversation
+  // bornée reçoit `applyPersonalHistoryHiding` — une seule application pour
+  // toutes, comme `conversations/messages-search.ts`.
+  //
+  // TROIS depuis #16574 (`cb3e6d2ab`), qui a ajouté les TRANSCRIPTIONS —
+  // cliquet resté ROUGE sur `dev` faute de redéclaration. Bien masquée : les
+  // trois `findMany` répandent le même `base`, la disjonction qu'a déjà bornée
+  // `applyPersonalHistoryHiding`.
   'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
 
   /**
