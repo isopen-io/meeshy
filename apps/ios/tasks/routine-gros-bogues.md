@@ -143,7 +143,8 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `/mnt/project-files/frames/09-audit-bogues-capture-camera.md` § S1, #9684 (aucune prise ne se perd).
 
 ## OPUS-12 — « Enregistrer l'original » met dans Photos une copie réduite à 2560 px, débruitée et rognée en 16:9
-- Statut : décision attendue
+- Statut : à faire
+- Décision : Jacques, le 2026-11-08 : l'original enregistré à la définition native et en 4:3 en photo ; la version bornée ne sert qu'à l'envoi. Plein écran : la prise garde son format, le viseur remplit l'écran, les boutons se posent dessus ; la photo n'est plus rognée aux proportions de l'écran.
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : audit 09 § F1 ; recoupe OPUS-1
 - Constat : le délégué photo traite la prise avec `PhotoCaptureSettings.capture` (`CameraModel.swift:952` ; `packages/MeeshySDK/Sources/MeeshySDK/Media/PhotoCaptureProcessor.swift:61` : 2560 px, débruitage et netteté `:220-224`), puis c'est ce fichier que le réglage « enregistrer l'original » écrit dans Photos (`CameraModel.swift:967-976`). La session est en `.high` (`:275`), donc la photo est au 16:9 : le capteur 4:3 perd un quart de son champ. Le traitement tourne de façon synchrone dans le délégué d'AVFoundation.
@@ -154,7 +155,8 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : OPUS-1, #16505.
 
 ## OPUS-13 — Aucune photo prise dans Meeshy ne porte de lieu
-- Statut : décision attendue
+- Statut : à faire
+- Décision : Jacques, le 2026-11-08 : la copie dans Photos garde la position précise ; à l'envoi, la position est réduite selon le réglage de précision du lieu (jusqu'à rien).
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : audit 09 § I1
 - Constat : `AVCapturePhotoOutput` n'écrit jamais de GPS ; rien dans `CameraModel`, `PhotoCaptureProcessor` ni `PhotosAssetCreator` (`PhotoLibraryManager.swift:308-327`, pas de `location`) ne l'ajoute. Deux commentaires disent le contraire (`Features/Composer/ComposerCaptureOrientation.swift:56-57`, `PhotoCaptureProcessor.swift:14`). Les cadres n'ont pas d'élément « lieu ». La décision du projet (précision du lieu réglée par l'utilisateur, aussi pour les posts) n'est pas appliquée.
@@ -176,7 +178,8 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : #16506, OPUS-3.
 
 ## OPUS-15 — Au viseur, le lissage est figé à 0,4 et le Teint naturel n'existe pas
-- Statut : décision attendue
+- Statut : à faire
+- Décision : Jacques, le 2026-11-08 : un seul réglage de peau (force du lissage + Teint naturel) pour l'appel et le viseur, sauf contre-indication technique à documenter ici.
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : audit 09 § I2
 - Constat : `ComposerFaceEffects.intensity` lit un `VideoFilterConfig()` neuf (`Features/Composer/ComposerFaceEffects.swift:32`, valeur par défaut `skinSmoothingIntensity = 0.4`, `Main/Services/VideoFilterPipeline.swift:32`), jamais le réglage du curseur de l'appel (`Features/Call/Views/CallModeControls.swift:209`). Le Teint naturel (décision du 2026-10-02 : filtre permanent imperceptible) n'est appliqué qu'en appel (`Features/Call/Services/CallSkinRetouch.swift`).
