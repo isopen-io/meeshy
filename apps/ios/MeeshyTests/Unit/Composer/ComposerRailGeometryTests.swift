@@ -211,8 +211,8 @@ final class ComposerRailGeometryTests: XCTestCase {
                       "Ce que la carte laisse est le SOL de la scène : le thumbhash de son résultat, comme le lecteur.")
         XCTAssertTrue(surface.contains("StorySlideRenderer.computeThumbHash(slide:slide,"),
                       "Le sol se peint du composite de la slide — ce que la publication emporte.")
-        guard let debut = surface.range(of: "privatevarsceneLayer:someView{"),
-              let fin = surface.range(of: "privatevarchromeLayer:someView{") else {
+        guard let debut = surface.range(of: "varsceneLayer:someView{"),
+              let fin = surface.range(of: "varchromeLayer:someView{") else {
             return XCTFail("Les deux calques ont changé de nom — la garde doit être re-pointée.")
         }
         let scene = surface[debut.upperBound..<fin.lowerBound]

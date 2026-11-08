@@ -101,7 +101,7 @@ final class LentilleRowChromeTests: XCTestCase {
     func test_flatRow_dateLeavesTheHeaderLine_andSitsAloneTrailingBelow() throws {
         let code = try rowSource()
         let header = try viewBlock("headerLine", in: code)
-        XCTAssertFalse(header.contains("LentilleRowTimestamp("), "plus d'heure sur la ligne du nom")
+        XCTAssertFalse(header.contains("LiveRelativeTimestamp("), "plus d'heure sur la ligne du nom")
         // Les DEUX écritures du séparateur : la littérale et `MetaSeparator`, qui
         // l'a remplacée au 251i. Une garde NÉGATIVE restée sur l'ancien nom ne
         // rougit pas quand le nom change — elle passe au vert en cessant de voir.
@@ -123,7 +123,7 @@ final class LentilleRowChromeTests: XCTestCase {
         let code = try rowSource()
         let stamp = try viewBlock("timestampText", in: code)
         XCTAssertTrue(stamp.contains("LentilleFocusCard.fullTimestamp("), "date complète sous la loupe")
-        XCTAssertTrue(stamp.contains("LentilleRowTimestamp(date: conversation.lastMessageAt)"), "relatif court au repos")
+        XCTAssertTrue(stamp.contains("LiveRelativeTimestamp(date: conversation.lastMessageAt)"), "relatif court au repos")
         let header = try viewBlock("headerLine", in: code)
         XCTAssertFalse(header.contains("fullTimestamp("), "ni l'une ni l'autre sur la ligne du nom")
     }

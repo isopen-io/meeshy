@@ -474,7 +474,7 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         let header = String(code[headerStart.lowerBound..<headerEnd.lowerBound])
 
         XCTAssertFalse(
-            header.contains("LentilleRowTimestamp"),
+            header.contains("LiveRelativeTimestamp"),
             "headerLine rend encore l'horodatage — l'heure appartient à sa propre bande."
         )
         // Les DEUX écritures du point médian. `MetaSeparator` (251i) a rendu le
@@ -496,7 +496,7 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         }
         let tail = String(code[dateStart.lowerBound...])
         guard let spacer = tail.range(of: "Spacer(minLength: 0)"),
-              let stamp = tail.range(of: "LentilleRowTimestamp(date: conversation.lastMessageAt)")
+              let stamp = tail.range(of: "LiveRelativeTimestamp(date: conversation.lastMessageAt)")
         else {
             XCTFail("`dateLine` doit pousser l'horodatage à droite par un Spacer(minLength: 0)")
             return
@@ -506,7 +506,7 @@ final class LentilleRowSourceGuardTests: XCTestCase {
             "Le Spacer doit PRÉCÉDER l'horodatage : la date est en bas à DROITE."
         )
         XCTAssertEqual(
-            occurrences(of: "LentilleRowTimestamp(", in: code), 1,
+            occurrences(of: "LiveRelativeTimestamp(", in: code), 1,
             "UN seul rendu d'horodatage dans la rangée : deux sites l'afficheraient en double."
         )
     }
@@ -584,19 +584,30 @@ final class LentilleRowSourceGuardTests: XCTestCase {
     /// rangée visible fait pulser son humeur et son point en ligne en
     /// `repeatForever`, et la liste au repos garde le GPU et ProMotion éveillés.
     func test_everyRowAvatar_disablesThePulse() throws {
-        let calls = try rowSources().flatMap { source in
-            Self.avatarCallArguments(in: normalizedCode(source.code)).map { (source.name, $0) }
-        }
+        let avatar = normalizedCode(try String(
+            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationRowAvatar.swift"),
+            encoding: .utf8
+        ))
+        let calls = Self.avatarCallArguments(in: avatar)
         XCTAssertFalse(
             calls.isEmpty,
-            "aucun appel MeeshyAvatar( trouvé sous Lens/Row/ : la garde ne voit plus l'avatar de rangée."
+            "aucun appel MeeshyAvatar( trouvé dans ConversationRowAvatar.swift : la garde ne voit plus l'avatar de rangée."
         )
-        for (name, arguments) in calls {
+        for arguments in calls {
             XCTAssertTrue(
-                arguments.contains("enablePulse: false"),
-                "\(name) monte un MeeshyAvatar sans `enablePulse: false` : une rangée de liste ne pulse jamais (#9868)."
+                arguments.contains("enablePulse: style.enablePulse"),
+                "ConversationRowAvatar monte un MeeshyAvatar sans transmettre `enablePulse: style.enablePulse` : le style Lentille ne pourrait plus couper la pulsation (#9868)."
             )
         }
+        XCTAssertTrue(
+            avatar.contains("static let lentille = Style( context: LentilleMetrics.Avatar.context, presenceOnlyForDirect: false, enablePulse: false,"),
+            "le style .lentille doit porter `enablePulse: false` : une rangée de liste ne pulse jamais (#9868)."
+        )
+        let row = normalizedCode(try rowSource())
+        XCTAssertTrue(
+            row.contains("ConversationRowAvatar( style: .lentille,"),
+            "LentilleConversationRow doit monter l'avatar partagé en style .lentille."
+        )
     }
 
     func test_rowAvatarContext_wouldPulseByDefault_soTheOverrideIsLoadBearing() async {

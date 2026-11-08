@@ -76,6 +76,12 @@ final class ProfileCircleViewModel: ObservableObject {
         max(shownLevel ?? .public, toolLevel ?? .public) >= .friend
     }
 
+    /// Le talkie se PROPOSE dès Proche (D-4), par le lien affiché ou par le verdict servi. La passerelle rejuge à chaque
+    /// appui ; un `TALKIE_NOT_ALLOWED` retire la ligne (#16927).
+    var offersTalkie: Bool {
+        max(shownLevel ?? .public, toolLevel ?? .public) >= .close
+    }
+
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
     var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
 

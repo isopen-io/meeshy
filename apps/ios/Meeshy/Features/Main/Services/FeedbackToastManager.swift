@@ -12,7 +12,7 @@ final class FeedbackToastManager: ObservableObject {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
     static let shared = FeedbackToastManager()
-    static let showToastNotification = Notification.Name("meeshy.showToast")
+    static let showToastNotification = FeedbackToastCenter.notificationName
 
     @Published var currentToast: FeedbackToast?
     var onTapAction: (() -> Void)?
@@ -119,14 +119,15 @@ final class FeedbackToastManager: ObservableObject {
 
     nonisolated private func observeSDKToasts() {
         NotificationCenter.default.addObserver(
-            forName: Notification.Name("meeshy.showToast"),
+            forName: FeedbackToastCenter.notificationName,
             object: nil,
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
 
-            let message = notification.userInfo?["message"] as? String ?? "Unknown"
-            let isSuccess = notification.userInfo?["isSuccess"] as? Bool ?? false
+            guard let toast = FeedbackToastCenter.decode(notification) else { return }
+            let message = toast.message
+            let isSuccess = toast.isSuccess
 
             Task { @MainActor in
                 if isSuccess {
