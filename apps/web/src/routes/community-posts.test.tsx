@@ -56,11 +56,9 @@ describe('l’onglet Publications', () => {
     await Promise.all([loadInterfaceCatalog('fr'), loadCommunityMembershipCatalog('fr'), loadCommunityMembershipCatalog('en')]);
   });
 
-  test('le cache se peint aussitôt, avec la carte du Flux, dans un panneau relié à son onglet', () => {
+  test('le cache se peint aussitôt, avec la carte du Flux', () => {
     seed('c-cache', { posts: [POST_IMAGE_FR, POST_TEXT_RANK2], pagination: { limit: 20, hasMore: false, nextCursor: null } });
     const html = renderToStaticMarkup(<CommunityPostsPanel language="fr" communityId="c-cache" online scroller={scroller} />);
-    expect(html).toContain('role="tabpanel"');
-    expect(html).toContain('aria-labelledby="community-tab-posts"');
     expect(html).toContain(`data-feed-card-id="${POST_IMAGE_FR.id}"`);
     expect(html).toContain(`data-feed-card-id="${POST_TEXT_RANK2.id}"`);
     expect(html).not.toContain('data-community-posts-loading');

@@ -17,7 +17,6 @@ import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { communityPanelId, communityTabId } from '@/routes/community-tabs';
 
 /**
  * **LES PUBLICATIONS D'UNE COMMUNAUTÉ** (#6379) — l'onglet « Publications » du
@@ -33,6 +32,10 @@ import { communityPanelId, communityTabId } from '@/routes/community-tabs';
  * (`usePostGesture` : cœur, signet, partage, commentaire, republication, menu)
  * et le même Prisme : chaque carte descend les langues du lecteur
  * (`resolveFeedCardModel`).
+ *
+ * **Le panneau d'onglet** (`role="tabpanel"`) est posé par l'hôte
+ * (`community.tsx`) : importer `community-tabs.tsx` d'ici faisait du chunk du
+ * détail un chunk partagé, au prix du premier affichage.
  *
  * **États dessinés** : chargement, vide (« Aucune publication pour
  * l'instant »), échec avec « Réessayer », hors ligne sur un cache vide, et la
@@ -118,11 +121,11 @@ export default function CommunityPostsPanel({
     );
 
   return (
-    <section id={communityPanelId('posts')} role="tabpanel" aria-labelledby={communityTabId('posts')} data-community-posts className="grid gap-3">
+    <div data-community-posts className="grid gap-3">
       {body}
       <LiveAnnouncement text={announcement} tone="neutral" marker="communityPosts" />
       {repostConfirm}
-    </section>
+    </div>
   );
 }
 

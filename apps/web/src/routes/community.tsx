@@ -211,9 +211,11 @@ export default function CommunityScreen() {
                   <CommunityConversationsSection language={language}>{conversationBody}</CommunityConversationsSection>
                 </div>
               ) : (
-                <Suspense fallback={null}>
-                  <CommunityPostsPanel language={language} communityId={community.id} online={online} scroller={scroller} />
-                </Suspense>
+                <section id={communityPanelId('posts')} role="tabpanel" aria-labelledby={communityTabId('posts')}>
+                  <Suspense fallback={null}>
+                    <CommunityPostsPanel language={language} communityId={community.id} online={online} scroller={scroller} />
+                  </Suspense>
+                </section>
               )}
             </div>
           </>
