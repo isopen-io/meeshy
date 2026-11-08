@@ -1,6 +1,5 @@
-import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
-import { useStore } from 'zustand/react';
+import type { InfiniteData } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { PeerAvatar } from '@/components/peer-avatar';
@@ -9,17 +8,14 @@ import type { CommunitySummary } from '@/lib/api/communities';
 import type { CommunityActionDeps } from '@/lib/api/community-actions';
 import { performInviteMembers } from '@/lib/api/community-invite';
 import { communityMembersQueryKey, type CommunityMemberPage } from '@/lib/api/community-members';
-import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
-import { sessionStore } from '@/lib/api/session';
-import { searchUsers } from '@/lib/api/users-search';
-import { resolveViewer } from '@/lib/api/viewer';
-import { candidatesFor, friendsOf } from '@/lib/conversation-new/candidates';
+import type { PersonSummary } from '@/lib/api/friend-requests';
+import { inviteStatusOf } from '@/lib/communities/invite-status';
+import { usePeopleCandidates } from '@/lib/communities/use-people-candidates';
 import { communityAccent } from '@/lib/communities/view';
 import { translateMembership } from '@/lib/i18n-community-membership-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { initialsOf } from '@/lib/view/conversation';
-import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
 
 /**
  * **INVITER DANS UNE COMMUNAUTÉ** (#6376) — miroir `CommunityInviteScreen`
@@ -35,8 +31,6 @@ import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
  * de présence, qui ne tient que ce que la passerelle a servi : rien d’inventé.
  */
 
-const SEARCH_DEBOUNCE_MS = 250;
-const MIN_QUERY_LENGTH = 2;
 const ROW_MIN_HEIGHT = 56;
 
 type MembersData = InfiniteData<CommunityMemberPage, number>;
@@ -56,38 +50,10 @@ export default function CommunityInviteSheet({
 }) {
   const t = translateMembership;
   const online = useOnline();
-  const session = useStore(sessionStore, (state) => state.session);
-  const viewerId = resolveViewer({ source: deps.source, session }).id ?? null;
   const [query, setQuery] = useState('');
-  const [debounced, setDebounced] = useState('');
   const [chosen, setChosen] = useState<ReadonlyMap<string, PersonSummary>>(new Map());
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  const accepted = useInfiniteQuery(friendRequestsQueryOptions(deps, 'accepted'), deps.queryClient);
-  useExhaustPages(accepted, true);
-  const friends = useMemo(() => friendsOf({ accepted: flattenFriendRequests(accepted.data), viewerId }), [accepted.data, viewerId]);
-
-  const trimmed = debounced.trim();
-  const searching = trimmed.length >= MIN_QUERY_LENGTH;
-  const results = useQuery(
-    {
-      queryKey: ['users', 'search', trimmed],
-      queryFn: async () => {
-        const result = await searchUsers(deps, trimmed);
-        if (!result.ok) throw new Error(result.error);
-        return result.data;
-      },
-      enabled: searching,
-    },
-    deps.queryClient,
-  );
-
-  const view = candidatesFor({ friends, query, searchResults: searching ? results.data : undefined, viewerId });
+  const view = usePeopleCandidates({ deps, query });
   const members = deps.queryClient.getQueryData<MembersData>(communityMembersQueryKey(community.id));
   const memberIds = useMemo(() => new Set(members?.pages.flatMap((page) => page.members.map((member) => member.userId)) ?? []), [members]);
 
@@ -105,19 +71,7 @@ export default function CommunityInviteSheet({
     const outcome = await performInviteMembers({ community, people: [...chosen.values()], deps });
     setBusy(false);
     onClose();
-    if (outcome.status === 'offline') {
-      onDone(t(language, 'community.invite.offline'));
-      return;
-    }
-    if (outcome.invited === 0) {
-      onDone(
-        t(language, outcome.failed > 0 ? 'community.invite.failed' : outcome.already > 0 && outcome.refused === 0 ? 'community.invite.member' : 'community.invite.refused'),
-      );
-      return;
-    }
-    const added =
-      outcome.invited === 1 ? t(language, 'community.invite.done.one') : t(language, 'community.invite.done.other', { count: String(outcome.invited) });
-    onDone(outcome.refused + outcome.failed > 0 ? `${added} ${t(language, 'community.invite.partial')}` : added);
+    onDone(inviteStatusOf(language, outcome));
   };
 
   const submitLabel =
@@ -210,7 +164,7 @@ export default function CommunityInviteSheet({
       {view.friends.map(row)}
       {view.others.length > 0 ? heading(t(language, 'community.invite.others')) : null}
       {view.others.map(row)}
-      {searching && results.isFetching && view.others.length === 0 ? (
+      {view.fetching && view.others.length === 0 ? (
         <li role="status" className="px-4 py-4 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
           {t(language, 'community.invite.searching')}
         </li>

@@ -28,9 +28,10 @@
  *  5. une carte ouvre SON détail (titre, compteurs, conversations), une
  *     conversation ouvre SON fil, et une adresse inconnue rend le refus ;
  *  6. la création : bouton désactivé tant que le nom manque, couple de focus
- *     des trois champs, aperçu vivant, 409 posé SOUS l'identifiant, puis une
- *     création qui REMPLACE l'écran par le détail et se lit en tête de liste au
- *     retour ;
+ *     des trois champs, aperçu vivant, 409 posé SOUS l'identifiant, une
+ *     personne ajoutée dès la création (#6376, cibles de 44), puis une
+ *     création qui REMPLACE l'écran par le détail — qui dit que la personne y
+ *     est entrée — et se lit en tête de liste au retour ;
  *  7. hors ligne, la liste reste lisible et le dit, et la création ne part pas ;
  *     la pastille de synchronisation ne recouvre pas la recherche (#6401) ;
  *  8. les membres (#6375) : le détail y mène, les rôles se lisent AA, un
@@ -440,11 +441,27 @@ try {
       check(new URL(page.url()).pathname === '/communities/new', `${label} : et l'écran reste ouvert`);
       await page.fill('#community-identifier', 'atelier-web');
       check((await page.$('#community-identifier-error')) === null, `${label} : corriger le champ retire son refus`);
+      check((await page.$('[data-community-new-members-candidate]')) === null, `${label} : « Ajouter des membres » ne propose personne avant la première lettre`);
+      await page.fill('[data-community-new-members-search]', 'b');
+      await page.waitForSelector('[data-community-new-members-candidate="u-bruno"]');
+      await page.click('[data-community-new-members-candidate="u-bruno"]');
+      check((await page.getAttribute('[data-community-new-members-candidate="u-bruno"]', 'aria-checked')) === 'true', `${label} : une personne se coche`);
+      check(
+        (await page.getAttribute('[data-community-new-members-chosen="u-bruno"]', 'aria-label')) === 'Retirer Bruno Laurent',
+        `${label} : et sa pastille dit comment la retirer`,
+      );
+      const memberTargets = await page.$$eval('[data-community-new-members] button', (els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
+      check(memberTargets.every((h) => h >= 44), `${label} : chaque cible d'« Ajouter des membres » fait au moins 44 — ${JSON.stringify(memberTargets)}`);
+      await capture(page, `communaute-creation-membres-${slug}`);
       await page.click('[data-community-submit]');
       await page.waitForURL(/\/communities\/m-[^/]+$/);
       await page.waitForSelector('[data-community-title]');
       check((await textOf(page, '[data-community-title]')) === 'Atelier web', `${label} : créée, l'écran devient son détail`);
       check(((await textOf(page, '[data-community-hero] [data-community-privacy]')) ?? '') === 'Publique', `${label} : publique, comme choisi`);
+      check(
+        (await textOf(page, '[data-community-invite-status]')) === '1 personne a rejoint la communauté.',
+        `${label} : le détail dit que la personne choisie à la création y est entrée`,
+      );
       await page.goBack();
       await page.waitForURL('**/communities');
       await page.waitForSelector('[data-community-card]');

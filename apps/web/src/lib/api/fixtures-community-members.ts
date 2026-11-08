@@ -94,7 +94,7 @@ const INVITABLE: Readonly<Record<string, { readonly name: string; readonly usern
 export function fixtureInviteMember(communityId: string, userId: string): ApiResult<CommunityMember> {
   const community = resolved(communityId);
   if (community === null) return { ok: false, status: 404, error: 'Community not found' };
-  const role = community.viewerRole;
+  const role = community.createdBy === VIEWER_ID ? 'admin' : community.viewerRole;
   if (role === null || role === undefined) return { ok: false, status: 403, error: 'You must be a member to invite others' };
   if (community.isPrivate && role === 'member') return { ok: false, status: 403, error: 'Only admins and moderators can invite to private communities' };
   const invitee = INVITABLE[userId];

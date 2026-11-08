@@ -84,6 +84,7 @@ struct ComposerSceneCameraBar: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     @AppStorage(ComposerCaptureGrid.storageKey) private var gridEnabled = false
+    @AppStorage(ComposerCaptureSelfTimerDelay.storageKey) private var selfTimerDelay = 0
     @State private var recordingBlink: Double = 1
     /// Le curseur du flash paraît à l'interaction et s'efface 2 s après (#9753).
     @State private var sliderTimer = ComposerFlashSliderTimer()
@@ -263,6 +264,15 @@ struct ComposerSceneCameraBar: View {
                     Toggle(isOn: $gridEnabled) {
                         Label(ComposerSceneCameraCopy.gridLabel, systemImage: "grid")
                     }
+                case .selfTimer:
+                    Picker(selection: $selfTimerDelay) {
+                        ForEach(ComposerCaptureSelfTimerDelay.allCases, id: \.self) { delai in
+                            Text(ComposerSceneCameraCopy.selfTimerOption(delai)).tag(delai.rawValue)
+                        }
+                    } label: {
+                        Label(ComposerSceneCameraCopy.selfTimerLabel, systemImage: "timer")
+                    }
+                    .pickerStyle(.menu)
                 case .size:
                     Button(action: onToggleSize) {
                         Label(ComposerSceneCameraCopy.sizeLabel(size), systemImage: size.toggleSymbol)
@@ -390,6 +400,87 @@ struct ComposerCaptureGridOverlay: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// **Le compte à rebours du retardateur** (CAM-4) : un appui sur la prise
+/// pendant le compte l'annule. Chaque seconde se dit à VoiceOver et se sent au
+/// doigt ; le chiffre se lit au centre du viseur.
+@MainActor
+final class ComposerCaptureSelfTimer: ObservableObject {
+    @Published private(set) var remaining: Int?
+
+    private var countdown: Task<Void, Never>?
+    private let defaults: UserDefaults
+    private let tick: Duration
+
+    init(defaults: UserDefaults = .standard, tick: Duration = .seconds(1)) {
+        self.defaults = defaults
+        self.tick = tick
+    }
+
+    nonisolated deinit {}
+
+    var delay: ComposerCaptureSelfTimerDelay {
+        ComposerCaptureSelfTimerDelay(stored: defaults.integer(forKey: ComposerCaptureSelfTimerDelay.storageKey))
+    }
+
+    var isCounting: Bool { countdown != nil }
+
+    /// Prend tout de suite, ou après le compte ; un compte en cours s'annule.
+    func run(_ shoot: @escaping @MainActor () -> Void) {
+        guard countdown == nil else { return cancel() }
+        let secondes = delay.ticks
+        guard !secondes.isEmpty else { return shoot() }
+        let pas = tick
+        show(secondes[0])
+        countdown = Task { [weak self] in
+            for (rang, seconde) in secondes.enumerated() {
+                if rang > 0 { self?.show(seconde) }
+                guard await cancellableSleep(for: pas), !Task.isCancelled else { return }
+            }
+            self?.finish()
+            shoot()
+        }
+    }
+
+    func cancel() {
+        countdown?.cancel()
+        finish()
+    }
+
+    private func show(_ seconde: Int) {
+        remaining = seconde
+        HapticFeedback.light()
+        UIAccessibility.post(notification: .announcement, argument: LocalizedNumber.exact(seconde))
+    }
+
+    private func finish() {
+        countdown = nil
+        remaining = nil
+    }
+}
+
+struct ComposerCaptureCountdown: View {
+    @ObservedObject var timer: ComposerCaptureSelfTimer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            if let seconde = timer.remaining {
+                Text(LocalizedNumber.exact(seconde))
+                    .font(MeeshyFont.relative(96, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.45), radius: 10)
+                    .id(seconde)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 1.4).combined(with: .opacity))
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: timer.remaining)
+        .allowsHitTesting(false)
     }
 }
 

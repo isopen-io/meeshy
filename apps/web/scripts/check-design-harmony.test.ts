@@ -134,6 +134,23 @@ describe('le périmètre', () => {
   });
 });
 
+describe("l'art d'attente baké — même dessin que sa source, même exemption", () => {
+  test('le SVG généré du sticker Mee/Meo (components/screen-wait-art.ts) est exempté, comme sa source lib/mee/', () => {
+    // La source du dessin est DÉJÀ exemptée sous `lib/mee/` (palette des
+    // PERSONNAGES, peinte dans le SVG du sticker). Son jumeau BAKÉ — généré par
+    // `scripts/generate-screen-wait-art.ts`, « ne pas modifier à la main », et
+    // byte-identique à la source (gardé par `screen-wait.test.tsx`) — porte la
+    // MÊME palette de personnages : le gate ne doit pas le compter comme chrome.
+    expect(exemptionOf('lib/mee/screen-wait-art-source.ts')).not.toBe(null);
+    expect(exemptionOf('components/screen-wait-art.ts')).not.toBe(null);
+  });
+
+  test("l'exemption du baké ne couvre ni le composant hôte ni son témoin, qui restent du chrome scanné", () => {
+    expect(exemptionOf('components/screen-wait.tsx')).toBe(null);
+    expect(isInScope('components/screen-wait.test.tsx')).toBe(false);
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];
