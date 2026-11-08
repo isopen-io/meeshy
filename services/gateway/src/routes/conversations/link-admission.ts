@@ -1,16 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { guestNicknameSchema } from '@meeshy/shared/types/link-join';
 import { sendLengthFloorRefusal, sendZodRefusal, servedGuestNicknameViolation } from '../../utils/identity-name-floor';
-import { automaticNicknameBase, numberedAnonymousUsername } from '../../utils/anonymous-nickname';
-import { generateSessionToken, hashSessionToken } from '../../utils/session-token';
-import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { announceMemberArrival } from './memberArrivalFanOut';
+import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 import { creditLinkJoin, type LinkJoinEngagement } from '../links/utils/link-join-credit';
 import {
   sendSuccess,
@@ -36,10 +34,10 @@ import {
   REJOIN_PARTICIPANT_STATE,
   type ConversationEntryDecision,
 } from '../../services/conversations/conversationEntryAdmission';
-import { findFreeAnonymousUsername } from '../../services/conversations/anonymousUsername';
-import { describeGuestClient } from '../../services/conversations/guestClient';
 import { extractUserAgent } from '../../services/GeoIPService';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import { claimLinkUse, LINK_EXHAUSTED_RACE } from './link-admission-claim';
+import { joinAsGuest } from './link-admission-guest';
 import {
   resolveEntryRights,
   type ParticipantRightName,
@@ -96,6 +94,13 @@ export interface LinkJoinParams {
   readonly requestUserAgent?: string | null;
   readonly profile: LinkJoinProfileInput;
   readonly broadcast?: LinkJoinBroadcast;
+  /**
+   * L'émetteur de l'éventail d'ARRIVÉE (#16837, doctrine dans
+   * `memberArrivalFanOut.ts`). Distinct de `broadcast`, qui ne porte qu'un
+   * MESSAGE de conversation. Il vit ICI, dans le cœur partagé, et non chez les
+   * trois routes qui l'appellent. Absent : rien n'est annoncé.
+   */
+  readonly arrivalIO?: ConversationRoomEmitter | null;
   /**
    * Un `Authorization: Bearer` a été PRÉSENTÉ et n'a pas authentifié (#6741) —
    * la porte `optionalAuth` retombe alors sur un `authContext` anonyme,
@@ -218,36 +223,6 @@ async function findShareLinkByKey(prisma: PrismaClient, key: string): Promise<Sh
  * n'existe côté inscrit (`POST /conversations/:id/leave` ne touche pas au
  * lien) ; les y inclure produirait une fuite qui ne se referme jamais.
  */
-async function claimLinkUse(
-  prisma: PrismaClient,
-  linkId: string,
-  maxUses: number | null,
-  extraIncrements: Record<string, { increment: number }> = {}
-): Promise<boolean> {
-  // #10470 (R2) — l'état du lien se revérifie AU MOMENT de la réservation : une
-  // fermeture ou une échéance tombée depuis la lecture d'admission refuse, sans
-  // quoi l'invité entrerait après la fermeture et échapperait à la révocation.
-  const now = new Date();
-  const claim = await prisma.conversationShareLink.updateMany({
-    where: {
-      id: linkId,
-      isActive: true,
-      AND: [
-        { OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: now } }] },
-        ...(maxUses === null ? [] : [{ OR: [{ maxUses: null }, { currentUses: { lt: maxUses } }] }]),
-      ],
-    },
-    data: { currentUses: { increment: 1 }, ...extraIncrements },
-  });
-  return claim.count > 0;
-}
-
-const LINK_EXHAUSTED_RACE: LinkAdmissionRefusal = {
-  granted: false,
-  status: 409,
-  code: 'LINK_EXHAUSTED',
-  message: "Ce lien a atteint sa limite d'utilisation",
-};
 
 const COMMUNITY_MEMBERS_ONLY: LinkAdmissionRefusal = {
   granted: false,
@@ -256,124 +231,6 @@ const COMMUNITY_MEMBERS_ONLY: LinkAdmissionRefusal = {
   message: 'Cette conversation est réservée aux membres de sa communauté',
 };
 
-async function joinAsGuest(
-  prisma: PrismaClient,
-  shareLink: ShareLinkWithConversation,
-  profile: LinkJoinProfileInput,
-  broadcast: LinkJoinBroadcast | undefined,
-  requestUserAgent: string | null | undefined
-): Promise<LinkJoinOutcome> {
-  const firstName = SecuritySanitizer.sanitizeText(profile.firstName || '');
-  const lastName = SecuritySanitizer.sanitizeText(profile.lastName || '');
-  const nicknameBase =
-    profile.requestedUsername && profile.requestedUsername.trim() !== ''
-      ? SecuritySanitizer.sanitizeUsername(profile.requestedUsername.trim())
-      : automaticNicknameBase(firstName, lastName);
-  const username = await findFreeAnonymousUsername(
-    prisma,
-    () => numberedAnonymousUsername(nicknameBase),
-    shareLink.conversationId
-  );
-
-  if (!username) {
-    return { kind: 'username-taken', suggestion: numberedAnonymousUsername(automaticNicknameBase(firstName, lastName)) };
-  }
-
-  const claimed = await claimLinkUse(prisma, shareLink.id, shareLink.maxUses, {
-    currentConcurrentUsers: { increment: 1 },
-    currentUniqueSessions: { increment: 1 },
-  });
-  if (!claimed) return { kind: 'refused', refusal: LINK_EXHAUSTED_RACE };
-
-  const sessionToken = generateSessionToken(profile.deviceFingerprint);
-  const sessionTokenHash = hashSessionToken(sessionToken);
-
-  const permissions: ParticipantPermissions = {
-    canSendMessages: shareLink.allowAnonymousMessages,
-    canSendFiles: shareLink.allowAnonymousFiles,
-    canSendImages: shareLink.allowAnonymousImages,
-    // Une vidéo EST un fichier (`classifyAnonymousAttachment`,
-    // `services/attachments/ContentSignature.ts`) : elle suit le MÊME
-    // drapeau que `canSendFiles`, jamais un `false` inventé par ce site.
-    // La voix suit le droit d'ÉCRIRE, pas celui d'envoyer des fichiers — même
-    // fonction, même décision produit, `isAudio` y retourne `{ allowed: true }`
-    // sans jamais consulter `allowAnonymousFiles`/`allowAnonymousImages` (#6091).
-    canSendVideos: shareLink.allowAnonymousFiles,
-    canSendAudios: shareLink.allowAnonymousMessages,
-    // Refus ASSUMÉS, alignés sur `NEW_MEMBER_PERMISSIONS` : le lien ne porte
-    // aucun drapeau position/lien, et un visiteur n'a pas de raison d'émettre
-    // l'un ou l'autre avant un geste explicite de l'hôte.
-    canSendLocations: false,
-    canSendLinks: false,
-    canViewHistory: shareLink.allowViewHistory,
-  };
-
-  const participant = await prisma.participant.create({
-    data: {
-      conversationId: shareLink.conversationId,
-      type: 'anonymous',
-      displayName: username,
-      language: profile.language,
-      sessionTokenHash,
-      shareLinkId: shareLink.id,
-      role: 'member',
-      permissions,
-      anonymousSession: {
-        shareLinkId: shareLink.id,
-        session: {
-          sessionTokenHash,
-          // Aucune IP n'est conservée (#9342) : l'adresse de la requête sert
-          // la seule recherche du pays, puis elle est oubliée.
-          // Le pays d'arrivée vit sur `Participant.joinCountry` (#7797),
-          // posé après la réponse par la vraie géolocalisation
-          // (`services/conversations/arrivalCountry.ts`) — jamais par
-          // l'heuristique du premier octet que #4167 a retirée.
-          country: null,
-          deviceFingerprint: profile.deviceFingerprint || null,
-          // Le poste RÉDUIT (#10102) — nom et version majeure, jamais la
-          // chaîne User-Agent. Lu par la seule fiche de modération de World Wide.
-          client: describeGuestClient(requestUserAgent),
-          connectedAt: new Date(),
-        },
-        profile: {
-          firstName,
-          lastName,
-          username,
-          email: profile.email || null,
-          birthday: profile.birthday ? new Date(profile.birthday) : null,
-        },
-      },
-    },
-  });
-  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: profile.language, readerUserId: null });
-
-  await postJoinSystemMessage(
-    { prisma, broadcast },
-    {
-      conversationId: shareLink.conversationId,
-      participantId: participant.id,
-      displayName: username,
-      isAnonymous: true,
-      viaShareLink: true,
-      username,
-      givenName: [firstName, lastName].filter(Boolean).join(' ') || undefined,
-      linkRules: {
-        canSendMessages: shareLink.allowAnonymousMessages,
-        canSendFiles: shareLink.allowAnonymousFiles,
-        canSendImages: shareLink.allowAnonymousImages,
-      },
-    }
-  );
-
-  return {
-    kind: 'joined',
-    outcome: 'new',
-    shareLink,
-    participant,
-    sessionToken,
-    rights: resolveEntryRights(participant, undefined, shareLink.allowViewHistory),
-  };
-}
 
 async function joinAsRegistered(
   prisma: PrismaClient,
@@ -554,6 +411,25 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
     if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
     const participantId = outcome.participant.id;
+    // #16837 — l'arrivée s'annonce aux autres membres. Un invité ne peut pas
+    // en être le SUJET (contrat strict, #16838) ; il en reste DESTINATAIRE.
+    const arrivingUserId = outcome.participant.userId;
+    if (arrivingUserId) {
+      await announceMemberArrival({
+        prisma,
+        io: params.arrivalIO,
+        conversationId: shareLink.conversationId,
+        arrival: {
+          userId: arrivingUserId,
+          displayName: outcome.participant.displayName,
+          joinedAt: outcome.participant.joinedAt ?? new Date(),
+        },
+        onError: (error) => logError(
+          `member arrival fan-out failed on link join (conversation ${shareLink.conversationId})`,
+          error,
+        ),
+      });
+    }
     (params.afterResponse ?? deferAfterResponse)(
       () => recordArrivalCountry({
         prisma,
@@ -827,6 +703,8 @@ export function registerLinkAdmissionRoutes(
           prisma,
           key,
           authContext,
+          // `getIO?.()` : l'éventail est ACCESSOIRE (#16837).
+          arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
           requestIp: resolveClientIp(request),
           requestUserAgent: extractUserAgent(request),
           rejectedCredential,

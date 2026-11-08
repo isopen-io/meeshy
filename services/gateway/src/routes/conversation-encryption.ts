@@ -48,7 +48,8 @@ import {
   END_TO_END_DIRECT_ONLY_MESSAGE,
   endToEndSupportsConversationType,
 } from '@meeshy/shared/utils/conversation-creation-encryption';
-import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { participantUserRooms } from '../socketio/emitToConversationParticipants';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
   ENCRYPTION_ALREADY_ENABLED_CODE,
@@ -95,6 +96,12 @@ interface EncryptionStatusParams {
 }
 
 type RegimeMember = {
+  /**
+   * La SEULE raison d'être de ce champ : nommer la room personnelle d'un
+   * participant SANS compte (`userId ?? id`). Un invité de lien partagé n'a pas
+   * de ligne `User`, et l'adresser par `userId` seul saute une room qui EXISTE.
+   */
+  readonly id: string;
   readonly userId: string | null;
   readonly role?: string | null;
   readonly user?: { readonly role?: string | null } | null;
@@ -124,6 +131,11 @@ const REGIME_SELECT = {
   participants: {
     where: { isActive: true },
     select: {
+      // `id` ET `userId` : la projection est la moitié de la loi `userId ?? id`
+      // (#16830). Sans la colonne, la room d'un invité est inadressable en
+      // aval, et aucun témoin de comportement ne peut le voir — un double
+      // Prisma rend ce qu'on lui dit quel que soit le `select`.
+      id: true,
       userId: true,
       role: true,
       user: { select: { role: true } }
@@ -243,9 +255,20 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
     try {
       const io = fastify.socketIOHandler?.getManager()?.getIO();
       const change = encryptionChange(conversation.id, switched, actorUserId);
-      conversation.participants
-        .flatMap((participant) => (participant.userId ? [participant.userId] : []))
-        .forEach((userId) => io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, change));
+      // #16830 — la loi `userId ?? id`, par son site UNIQUE. Le `flatMap` qui
+      // vivait ici JETAIT tout participant sans compte, pendant que le
+      // doc-comment ci-dessus promettait « chaque membre actif » : un invité de
+      // lien partagé gardait son `encryptionMode` périmé, le web n'appliquant le
+      // régime QUE depuis cet événement (`applyEncryptionAnnounced`). Il voyait
+      // pourtant l'avis système dans le fil, celui-là partant bien à la room de
+      // conversation — annoncé à tous, appliqué chez les seuls inscrits.
+      //
+      // Les rooms PERSONNELLES seules, comme avant : un destinataire déjà dans
+      // le fil n'a pas besoin d'une seconde copie, et `postSystemNotice` a déjà
+      // adressé la room de conversation.
+      for (const room of participantUserRooms(conversation.participants)) {
+        io?.to(room).emit(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, change);
+      }
     } catch (error) {
       logger.warn('encryption switched but not announced on sockets', {
         conversationId: conversation.id,
