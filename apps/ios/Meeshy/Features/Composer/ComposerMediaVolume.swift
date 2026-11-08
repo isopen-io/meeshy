@@ -57,6 +57,34 @@ nonisolated enum ComposerMediaVolume {
             set: { viewModel.setAudioVolume(audioId: mediaId, volume: Float($0)) })
     }
 
+    /// **Les réglages que « Rogner et régler » montre** (#17110) : le volume et
+    /// Muet d'une vidéo ou d'un son posé, lus dans le modèle. `nil` pour un
+    /// objet sans son.
+    @MainActor
+    static func adjustments(viewModel: StoryComposerViewModel, id: String) -> MediaTrimAdjustments? {
+        if let son = sound(viewModel, id) {
+            return MediaTrimAdjustments(volume: Double(son.volume), isMuted: son.isMuted,
+                                        loops: son.loop ?? false, ducksUnderVoices: true)
+        }
+        guard let media = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == id }),
+              media.kind == .video else { return nil }
+        return MediaTrimAdjustments(volume: Double(media.volume), isMuted: media.isMuted,
+                                    loops: media.loop, isDuckingDisabled: media.isDuckingDisabled)
+    }
+
+    /// **Écrire ce que la bande a changé**, par les écrivains du modèle : Muet
+    /// bascule (le mémento rend le niveau quitté), sinon le curseur écrit.
+    @MainActor
+    static func apply(_ reglages: MediaTrimAdjustments, viewModel: StoryComposerViewModel, id: String) {
+        guard let avant = adjustments(viewModel: viewModel, id: id) else { return }
+        if reglages.isMuted != avant.isMuted {
+            guard sound(viewModel, id) != nil else { return viewModel.toggleMediaMute(id: id) }
+            return viewModel.toggleAudioMute(id: id)
+        }
+        guard reglages.volume != avant.volume else { return }
+        sliderBinding(viewModel: viewModel, mediaId: id).wrappedValue = reglages.volume
+    }
+
     @MainActor
     private static func sound(_ viewModel: StoryComposerViewModel, _ id: String) -> StoryAudioPlayerObject? {
         viewModel.currentEffects.audioPlayerObjects?.first { $0.id == id }

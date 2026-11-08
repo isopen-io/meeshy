@@ -714,3 +714,31 @@ extension TimelineViewModel {
         }
     }
 }
+
+// MARK: - Repère d'annulation (frise plein écran « Quitter · Valider », #17110)
+
+/// **Un repère dans l'historique d'une timeline**, posé à l'ouverture d'une
+/// session de réglage ; « Quitter » le rejoint, « Valider » l'oublie.
+public nonisolated struct TimelineUndoMark: Equatable, Sendable {
+    let applied: Int
+
+    /// Le nombre de commandes APPLIQUÉES au moment où on le pose.
+    @MainActor
+    public static func taken(on timeline: TimelineViewModel) -> TimelineUndoMark {
+        TimelineUndoMark(applied: timeline.commandStack.snapshot().cursor)
+    }
+
+    /// Défait tout ce qui a été appliqué depuis le repère, une commande à la
+    /// fois (chacune reprend sa durée de slide) ; s'arrête dès qu'une
+    /// annulation ne recule plus, pour ne jamais boucler.
+    @MainActor
+    public func rewind(_ timeline: TimelineViewModel) {
+        var courant = Self.taken(on: timeline).applied
+        while courant > applied {
+            timeline.undo()
+            let suivant = Self.taken(on: timeline).applied
+            guard suivant < courant else { return }
+            courant = suivant
+        }
+    }
+}
