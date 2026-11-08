@@ -81,10 +81,6 @@ struct ComposerCameraHardwareButtons: UIViewRepresentable {
         private var press = ComposerHardwareShutter.Press.none
         private var holdTimer: Task<Void, Never>?
 
-        // Deinit synthétisée ISOLÉE sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor :
-        // elle tue xctest au démontage (garde : MainActorDeinitSourceGuardTests).
-        nonisolated deinit {}
-
         // iOS 26.1 : une deinit synthétisée ISOLÉE au MainActor (SE-0466) fait un
         // double-free au démontage (#9694). Le minuteur tient `self` en `weak`.
         nonisolated deinit {}
