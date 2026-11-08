@@ -37,6 +37,7 @@ android {
 dependencies {
     implementation(project(":sdk-core"))
     implementation(project(":sdk-ui"))
+    implementation(project(":feature:contacts"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

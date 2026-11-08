@@ -182,7 +182,13 @@ class RelationsRepository internal constructor(
 
     override suspend fun raiseGate(userId: String): RelationRaiseGate? =
         (quietly { apiCall { api.byUserId(userId) } } as? NetworkResult.Success)?.data
-            ?.let { RelationRaiseGate(canRaise = it.canRaise, raiseBlockedUntil = it.raiseBlockedUntil) }
+            ?.let {
+                RelationRaiseGate(
+                    canRaise = it.canRaise,
+                    raiseBlockedUntil = it.raiseBlockedUntil,
+                    accessLevel = it.accessLevel?.let(RelationLevel::of),
+                )
+            }
 
     override suspend fun people(ids: List<String>): Map<String, CirclePerson> {
         val wanted = ids.distinct()

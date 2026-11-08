@@ -119,7 +119,7 @@ internal fun CircleLinkSheet(
                     color = tokens.textMuted,
                 )
             } else {
-                if (!CIRCLE_PERSON_SETTINGS_ENABLED && settings.any { it.receptionSetting() == null }) {
+                if (!CIRCLE_PERSON_SETTINGS_ENABLED && settings.any { it.reception == null }) {
                     Text(
                         text = stringResource(R.string.circles_sheet_settings_unavailable),
                         style = MaterialTheme.typography.bodySmall,
@@ -127,7 +127,7 @@ internal fun CircleLinkSheet(
                     )
                 }
                 settings.forEach { setting ->
-                    val reception = setting.receptionSetting()
+                    val reception = setting.reception
                     if (reception != null) {
                         CircleReceptionBlockToggle(
                             userId = link.userId,
@@ -146,21 +146,13 @@ internal fun CircleLinkSheet(
 }
 
 private fun CirclePersonSetting.titleRes(): Int = when (this) {
-    CirclePersonSetting.BLOCK_BRING -> R.string.circles_settings_block_bring
-    CirclePersonSetting.TALKIE -> R.string.circles_settings_block_talkie
+    CirclePersonSetting.BLOCK_BRING -> RelationReceptionSetting.BRING.titleRes()
+    CirclePersonSetting.TALKIE -> RelationReceptionSetting.TALKIE.titleRes()
     CirclePersonSetting.LISTENING -> R.string.circles_settings_listening
     CirclePersonSetting.LIVE_LOCATION -> R.string.circles_settings_location
 }
 
-private fun CirclePersonSetting.detailRes(): Int? =
-    if (this == CirclePersonSetting.TALKIE) R.string.circles_settings_block_talkie_detail else null
-
-/** Les réglages déjà livrés, ACTIFS sur la fiche : les préférences de réception (Bring dès Ami, talkie dès Proche). */
-private fun CirclePersonSetting.receptionSetting(): RelationReceptionSetting? = when (this) {
-    CirclePersonSetting.BLOCK_BRING -> RelationReceptionSetting.BRING
-    CirclePersonSetting.TALKIE -> RelationReceptionSetting.TALKIE
-    CirclePersonSetting.LISTENING, CirclePersonSetting.LIVE_LOCATION -> null
-}
+private fun CirclePersonSetting.detailRes(): Int? = reception?.detailRes()
 
 @Composable
 private fun SettingRow(title: String) {

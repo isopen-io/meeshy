@@ -32,6 +32,7 @@ import me.meeshy.sdk.model.relation.CirclePerson
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.RelationLink
 import me.meeshy.sdk.model.relation.RelationRaiseGate
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.model.relation.RelationRitualConsents
 import me.meeshy.sdk.model.relation.RelationRitualPhase
 import me.meeshy.sdk.model.relation.RelationRitualStep
@@ -433,6 +434,130 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.CLOSE)
         assertThat(seen).contains(ProfileActionEvent.Toast(ProfileActionFeedback.LowerFailed))
+    }
+
+    @Test
+    fun `un collegue de l'equipe sans lien ouvre le blocage du Bring et du talkie, sans cercle fabrique`() = runTest {
+        val circles = ProfileCirclesFake()
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vm = viewModel(circles = circles)
+
+        vm.bind("u2", isAnonymous = false)
+
+        assertThat(vm.state.value.circle).isNull()
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `sans niveau d'outils servi, ou quand le lien ouvre deja tout, aucun blocage n'est propose sur la fiche`() = runTest {
+        val bare = ProfileCirclesFake()
+        val vmBare = viewModel(circles = bare)
+        vmBare.bind("u2", isAnonymous = false)
+        assertThat(vmBare.state.value.receptionsOnProfile).isEmpty()
+
+        val linked = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.CLOSE))))
+        linked.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vmLinked = viewModel(circles = linked)
+        vmLinked.bind("u2", isAnonymous = false)
+        assertThat(vmLinked.state.value.circle?.level).isEqualTo(RelationLevel.CLOSE)
+        assertThat(vmLinked.state.value.receptionsOnProfile).isEmpty()
+    }
+
+    @Test
+    fun `un collegue de l'equipe lie en Ami ouvre sur la fiche le blocage du talkie que son lien ne propose pas`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.FRIEND))))
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vm = viewModel(circles = circles)
+
+        vm.bind("u2", isAnonymous = false)
+
+        assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.FRIEND)
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `retrograder un Proche ordinaire ne laisse pas sur la fiche le blocage d'un talkie que le lien ne permet plus`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.CLOSE))))
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.CLOSE)
+        val reply = CompletableDeferred<NetworkResult<RelationLink>>()
+        circles.lowerReply = reply
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.FRIEND)
+        assertThat(vm.state.value.receptionsOnProfile).isEmpty()
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.FRIEND)
+        reply.complete(NetworkResult.Success(circleLink("u2", RelationLevel.FRIEND)))
+        assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.FRIEND)
+        assertThat(vm.state.value.receptionsOnProfile).isEmpty()
+    }
+
+    @Test
+    fun `annuler le lien d'un collegue de l'equipe relit le niveau d'outils et garde ses blocages sur la fiche`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.ACQUAINTANCE))))
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(vm.state.value.circle).isNull()
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `retrograder le lien d'un collegue de l'equipe ne retire pas ses blocages pendant que la passerelle repond`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.FRIEND))))
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val reply = CompletableDeferred<NetworkResult<RelationLink>>()
+        circles.lowerReply = reply
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.ACQUAINTANCE)
+        assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+        reply.complete(NetworkResult.Success(circleLink("u2", RelationLevel.ACQUAINTANCE)))
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `une relecture du niveau d'outils en panne garde les blocages deja peints`() = runTest {
+        val circles = ProfileCirclesFake()
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        circles.gate = null
+        vm.bind("u2", isAnonymous = false, callsAvailable = true)
+
+        assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `une retrogradation refusee rend aussi le niveau d'outils d'avant`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.FRIEND))))
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        circles.lowerReply = CompletableDeferred(NetworkResult.Failure(ApiError("refused")))
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
     }
 
     @Test
