@@ -701,6 +701,7 @@ final class ComposerCaptureEditTests: XCTestCase {
     /// dernier segment) passe par la même garde.
     func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo() throws {
         let camera = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Components/CameraModel.swift")
+            + ComposerCaptureTakesTests.code("Meeshy/Features/Main/Components/CameraModel+Video.swift")
         let ecritures = camera.components(separatedBy: "PhotoLibraryManager.shared.save").count - 1
         XCTAssertTrue(camera.contains("func savesOriginal() -> Bool"))
         let gardes = camera.components(separatedBy: "savesOriginal()").count - 2

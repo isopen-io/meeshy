@@ -28,7 +28,8 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        let video = url.deletingLastPathComponent().appendingPathComponent("CameraModel+Video.swift")
+        return try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: video, encoding: .utf8)
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
@@ -43,7 +44,7 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
         let source = try cameraViewSource()
         let fn = try body(
             from: "func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto",
-            to: "// MARK: - Video Delegate",
+            to: "// MARK: - Video recording",
             in: source
         )
         XCTAssertTrue(

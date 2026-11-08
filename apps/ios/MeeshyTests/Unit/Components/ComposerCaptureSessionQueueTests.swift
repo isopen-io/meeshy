@@ -63,6 +63,7 @@ final class ComposerCaptureSessionQueueTests: XCTestCase {
 
     func test_camera_noLongerStartsOrStopsFromDetachedTasks() throws {
         let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+            + Self.code("Meeshy/Features/Main/Components/CameraModel+Video.swift")
         XCTAssertFalse(camera.contains("Task.detached"), "deux tâches détachées ne s'ordonnent pas")
         XCTAssertTrue(camera.contains("sessionQueue.setRunning(true"))
         XCTAssertTrue(camera.contains("sessionQueue.setRunning(false"))
