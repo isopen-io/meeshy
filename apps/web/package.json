@@ -93,7 +93,7 @@
     "@meeshy/shared": "workspace:*",
     "@tanstack/react-query": "5.106.1",
     "@tanstack/react-virtual": "3.14.26",
-    "preact": "11.1.0",
+    "preact": "11.1.1",
     "socket.io-client": "4.8.4",
     "zod": "4.4.3",
     "zustand": "5.0.16"
