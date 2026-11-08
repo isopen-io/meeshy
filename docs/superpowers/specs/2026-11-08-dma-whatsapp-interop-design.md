@@ -1,7 +1,9 @@
 # Écrire depuis Meeshy à un ami sur WhatsApp — interopérabilité DMA (design)
 
-> Directive porteur du 2026-11-08. Statut : design à valider avant tout plan.
-> Pilotage : issue parapluie + milestone (créés à la validation), issues filles par lot.
+> Directive porteur du 2026-11-08.
+> Statut : **validé par le porteur le 2026-11-08**. Pilotage : issue parapluie [#17007](https://github.com/isopen-io/meeshy/issues/17007),
+> milestone n° 257 « On écrit depuis Meeshy à un ami sur WhatsApp », issues filles par lot.
+> Routine : `.claude/workflows/meeshy-dma-whatsapp.js`, relancée toutes les 5 h.
 
 ## 1. Intention
 
@@ -86,6 +88,7 @@ restent au porteur : aucun agent n'y touche.
 | Rythme | une routine planifiée **toutes les 5 heures** |
 | Web | dans la v1 : le pont WASM libsignal est livré (le bundle web passe sous AGPL-3.0, l'écran Licences le dit — `libsignal-engine.ts`) ; c'est un lot préalable à la coquille |
 | Numéros | l'utilisateur Meeshy doit avoir un numéro **vérifié** pour écrire à WhatsApp ; le numéro de l'ami WhatsApp est gardé **en clair**, seulement pour une conversation que l'utilisateur a ouverte lui-même, avec une **durée de conservation** (exception assumée à #9225, bornée ; la durée exacte et sa base légale sont fixées par le lot conformité avec #16999) |
+| Licence | AGPL acceptée pour les clients (porteur, 2026-11-08) — pas de licence commerciale Signal |
 | Moteur maison | retiré une fois libsignal prouvé sur toutes les plateformes |
 | DSA / RGPD | issues ouvertes à part (milestones 255 et 256), #16999 rattachée ici |
 
