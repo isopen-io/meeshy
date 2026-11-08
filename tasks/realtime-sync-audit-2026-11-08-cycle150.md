@@ -190,3 +190,106 @@ qu'on paie la borne en sérialisant les petits lots.
   `take`, bornés par la conversation (et, pour le premier, par le plancher du
   lecteur) — hors de portée du balayage par construction. Constat, pas lot :
   l'élargir est un chantier à soi, avec son propre inventaire gelé.
+
+## Second tour — ce que l'audit adversarial a rendu, et les trois cliquets
+
+Le lot K est passé par `auditeur-adversarial` (lot de contrôle d'accès, directive
+2026-10-03) **avant** fusion. Verdict : **BLOQUANT**, en une observation, plus
+six constats secondaires. En parallèle, la suite complète a fait rougir **trois**
+cliquets que la zone d'impact n'avait pas atteints.
+
+### Le constat bloquant — la PORTE manquait, pas le plancher
+
+Le lien de partage répond à DEUX questions sur la même ligne `Participant` :
+**depuis quand** ce lecteur peut lire (`historyFloor.ts`) et **s'il** peut encore
+lire (`shareLinkReadGate.ts`). J'ai posé la première. Les quatre surfaces que mon
+propre message de commit citait en référence posent les DEUX ; `stats.ts` ne
+portait aucune occurrence de `ShareLink`.
+
+Ce qui rend l'écart exploitable est écrit dans `shareLinkGuestsWhere` : la
+révocation d'un lien ne touche que les participations ANONYMES. Un INSCRIT admis
+par lien n'est jamais révoqué — sa ligne reste active, `canAccessConversation`
+l'accepte, et seule la porte par route l'arrête. **Cette surface était donc la
+seule que l'expiration ne fermait pas** : elle servait l'activité des jours
+POSTÉRIEURS à l'expiration, indéfiniment, à quelqu'un à qui le fil rendait 403.
+
+Et la justification que j'avais écrite pour refuser un refus — « la fenêtre d'un
+lecteur à plancher EST celle que `GET …/messages` lui sert déjà » — était fausse
+pour exactement cette population.
+
+### Le témoin ne mesurait pas ce qu'il disait
+
+Sa fixture portait `historyVisibleFrom: FLOOR`, le rang (iii) de
+`settleBeforeLink`, qui tranche AVANT toute lecture de lien. La branche
+`link-decides` — `shareLinkId` + `allowViewHistory: false`, **exactement la
+population de l'issue** — n'était exercée par aucun des sept témoins, et le
+double de `conversationShareLink.findUnique` était du code inatteignable.
+
+Sept témoins deviennent **quatorze** : lien échu, octroi par date, bypass de
+plateforme (#3892/#11217), droit figé dans les deux sens, masquage personnel,
+recollement de pages, fenêtre vide.
+
+### Le pli n'était pas borné, et ma comparaison de coût était fausse
+
+Le doc-comment adossait le coût à `GET …/messages`. Vrai du DROIT, **faux du
+COÛT** : la liste est paginée (`maxLimit = 50`), elle ne matérialise jamais la
+fenêtre. Un lecteur entré il y a deux ans faisait charger le `content` et les
+pièces jointes de tout ce qui a été écrit depuis. Le pli avance désormais par
+curseur d'`id` — pas de `createdAt`, qui n'est pas unique — et ne retient que les
+compteurs ; `mergeFoldedStats` dit champ par champ comment il recolle, parce
+qu'un recollement faux rend un nombre PLAUSIBLE.
+
+### Les trois cliquets, et ce qu'ils ont trouvé que l'audit n'avait pas dit
+
+| cliquet | ce qu'il a exigé |
+|---|---|
+| `orphaned-sender-repair-surface-guard` | déclarer la nouvelle lecture de `Message` : `applies 2/1`, parce que réparer est une ÉCRITURE et que la fenêtre d'un lecteur n'écrit rien |
+| `personal-history-hiding-surface-guard` | la même, et son exemption d'avant (« une valeur stockée une fois et lue par tout le monde ») est devenue à moitié fausse : une des deux lectures est désormais PAR LECTEUR |
+| `gateway-test-file-size-budget` | deux fichiers déjà hors budget ou au plafond — et c'est lui qui a pointé un défaut de COHÉSION que je n'avais pas vu |
+
+Le dernier mérite d'être raconté : ne pouvant pas grossir le fichier du cliquet
+voisin pour y écrire ma déclaration, j'ai cherché où elle devait vraiment aller.
+La réponse était que la **LECTURE** n'était pas au bon endroit — j'avais mis un
+`findMany` dans un module dont le doc-comment déclare qu'il ne connaît « ni
+prisma, ni cache, ni horloge ». Elle vit maintenant chez le service, qui possède
+déjà les lectures et le cache ; le module du pli est pur de nouveau.
+
+### Les deux autres corrections du tour
+
+- **Le masquage PERSONNEL s'applique à la fenêtre par lecteur**, et il entre dans
+  la CLÉ de cache : deux lecteurs au même plancher masquent des choses
+  différentes, et une clé qui ne nommait que le plancher leur aurait servi
+  l'agrégat l'un de l'autre.
+- **Le seau planchéisé est borné (32 fenêtres) et `recompute()` le vide.** Sans
+  plafond, une conversation sans nouveau message gardait une entrée par fenêtre
+  pour la vie du processus ; sans l'invalidation, un recalcul de maintenance
+  laissait compter cinq minutes de plus des messages qu'il venait de retirer. Le
+  doc-comment affirmait l'inverse.
+
+### Ce que l'audit a trouvé et que ce lot NE prend PAS
+
+- **#17139** — deux listes (`loadMostActiveParticipants`, les suggestions de
+  mention) CLASSENT leurs membres sur l'agrégat non planchéisé. Un ordre révèle
+  autant que le champ, le dépôt l'a déjà tranché pour la présence. Hors des
+  fichiers de ce lot, et un correctif d'ORDRE est une décision par surface.
+- **#17140** — un `shareLinkId` dont la ligne de lien a DISPARU rend « aucun
+  plancher », et la purge d'un compte en fabrique (elle supprime le lien et ne
+  révoque que les anonymes). Fail-OPEN **décisionnel**, cohérent avec les cinq
+  autres surfaces, mais présenté comme fail-closed : la décision touche six
+  lectures à la fois, plus la révocation.
+
+### Preuve du second tour
+
+| gate | résultat |
+|---|---|
+| `tsc --noEmit` gateway | **EXIT=0** |
+| rouge, la porte | sans elle, « un lien ÉCHU ferme la route » tombe **seul** — les 13 autres restent verts, ce qui montre que la porte est la seule chose qui manquait |
+| zone d'impact | 134 suites / 3 302 témoins verts |
+| trois cliquets | verts, par DÉCLARATION raisonnée (deux) et par correction de cohésion (un) |
+| suite gateway COMPLÈTE, arbre fusionné `aeb9a0c4c` | **2 583 suites / 40 310 témoins, 6 rouges** — les six suites de codecs d'image déjà rouges sur `dev`, hors du diff |
+
+> **Un inventaire gelé est un auditeur qui ne dort pas.** Il ne sait pas ce que
+> le lot voulait faire — il sait qu'une lecture de plus est apparue, et il exige
+> qu'on dise quelle règle de la maison elle applique, ou pourquoi elle en est
+> exemptée. C'est la forme la moins chère d'une revue adversariale, et elle
+> tourne à chaque suite.
