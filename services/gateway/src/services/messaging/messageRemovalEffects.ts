@@ -2,9 +2,14 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import {
   conversationMessageStatsService,
-  resolveAttachmentType,
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
+// La table MIME → compteur vient du module du PLI, jamais du service (#17076).
+// Les témoins de cette unité DOUBLENT le service pour observer le décompte ;
+// importée de là, la table traversait ce double, et un double qui l'omet rend
+// `.map(undefined)` — une levée avalée par le `catch` du décompte, donc un
+// compteur silencieusement jamais débité.
+import { resolveAttachmentType } from '../conversations/messageStatsAggregate';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import {
   getSharedDeliveryQueue,

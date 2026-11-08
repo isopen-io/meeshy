@@ -38,6 +38,8 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { isNotificationTypeEnabledByPreference } from './type-preference';
+import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
+import { NOTIFICATION_FANOUT_CONCURRENCY } from './notificationFanOutBudget';
 import {
   resolveUserLanguage,
   resolveUserLanguagesOrdered,
@@ -1825,19 +1827,29 @@ export class NotificationService {
     // le verrou de protection n'est jamais arrivé jusqu'ici.
     const { senderId, messageContent, ...banner } = commonData;
 
-    const results = await Promise.all(
-      eligibleUserIds.map(userId =>
-        this.createMentionNotification({
-          ...banner,
-          mentionedUserId: userId,
-          mentionerUserId: senderId,
-          messagePreview: messageContent,
-          prismSource,
-        })
-      )
+    // Débit BORNÉ (#17081), comme l'éventail `regular` depuis #10819 : ce lot
+    // paie le MÊME coût par destinataire — `createNotification` et son badge
+    // non lu, « 2 requêtes + une par conversation non muette » — et il en
+    // lançait jusqu'à `MAX_MENTIONS_PER_MESSAGE` (50) d'un coup, soit trois
+    // fois le débit que la mesure de #10819 a jugé fatal pour TOUTES les
+    // routes de la passerelle.
+    //
+    // Le réservoir règle une SECONDE chose, et elle ne se mesure pas en
+    // requêtes : `Promise.all` REJETTE au premier échec, donc un seul
+    // destinataire en défaut emportait le lot entier — y compris le compte
+    // rendu de ceux qui avaient abouti. `settleWithConcurrency` est
+    // `allSettled` par construction.
+    const results = await settleWithConcurrency(eligibleUserIds, NOTIFICATION_FANOUT_CONCURRENCY, userId =>
+      this.createMentionNotification({
+        ...banner,
+        mentionedUserId: userId,
+        mentionerUserId: senderId,
+        messagePreview: messageContent,
+        prismSource,
+      })
     );
 
-    return results.filter(Boolean).length;
+    return results.filter((result) => result.status === 'fulfilled' && !!result.value).length;
   }
 
   // ==============================================

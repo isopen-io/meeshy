@@ -57,6 +57,23 @@ export const NO_PERSONAL_HIDING: PersonalHistoryHiding = Object.freeze({
 export const hidesNothing = (hiding: PersonalHistoryHiding): boolean =>
   hiding.clearHistoryBefore === null && hiding.hiddenMessageIds.length === 0;
 
+/**
+ * L'EMPREINTE d'un masquage, pour une clé de cache (#17076).
+ *
+ * Elle vit ici, avec le type, et pas chez l'appelant : deux appelants qui
+ * composeraient leur propre empreinte pourraient se croire d'accord et ne pas
+ * l'être. Les ids sont TRIÉS, parce que l'ordre d'une lecture Prisma n'est pas
+ * garanti et qu'une empreinte qui dépend de l'ordre rate le cache sans jamais
+ * le dire.
+ *
+ * Un masquage VIDE rend la chaîne vide — le cas écrasant, et celui qui doit
+ * coûter le moins.
+ */
+export const hidingFingerprint = (hiding: PersonalHistoryHiding): string =>
+  hidesNothing(hiding)
+    ? ''
+    : `${hiding.clearHistoryBefore?.toISOString() ?? ''}#${[...hiding.hiddenMessageIds].sort().join(',')}`;
+
 type DateBound = { gte?: Date; gt?: Date; lt?: Date; lte?: Date };
 type IdBound = { in?: string[]; notIn?: string[] };
 

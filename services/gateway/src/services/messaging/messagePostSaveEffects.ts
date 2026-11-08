@@ -9,9 +9,11 @@ import { isEndToEndMode } from './e2eePlaintextAdmission';
 import type { StartedGroupAnnouncer } from '../conversations/announceStartedGroup';
 import {
   conversationMessageStatsService,
-  resolveAttachmentType,
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
+// Même raison que dans `messageRemovalEffects` (#17076) : la table MIME vient
+// du module du PLI, hors du double que les témoins posent sur le service.
+import { resolveAttachmentType } from '../conversations/messageStatsAggregate';
 
 /**
  * Ce que la mise en file de traduction demande au message, et rien de plus.
