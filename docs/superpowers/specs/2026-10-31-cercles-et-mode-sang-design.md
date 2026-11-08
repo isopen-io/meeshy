@@ -117,6 +117,12 @@ Au-dessous d'Ami :
   - Journal des consultations visible du seul observé, avec un message discret en cas d'excès.
   - Proximité : une alerte aux deux, au plus une par paire toutes les 2 h, et rien si l'un est en fantôme.
 
+- **Arrivées et départs de lieux entre Sangs** (décision du porteur du 2026-11-08, #14161, LOC-09 remonté au MVP). Un Sang est prévenu quand l'autre arrive à la maison, au travail, à l'école ou dans un lieu défini librement dans leur lien, ou qu'il en part.
+  - L'un ou l'autre propose un lieu ; **seule la personne observée l'active**.
+  - Elle dispose de trois interrupteurs, tous désactivés par défaut : global, par relation (« pas pour X ») et par lieu.
+  - L'alerte ne porte aucune coordonnée. Le fantôme la coupe. La règle est de 5 lieux par paire, sans rebond.
+  - Le lot dépend de la position temporaire (#14109) et de la position Sang (#13937), et passe derrière le même flag.
+
 ### 1.8 Garde-fous transverses
 
 - **Loi unique** `resolveRelationAccess` (§ 3), avec ses miroirs Swift et Kotlin.
