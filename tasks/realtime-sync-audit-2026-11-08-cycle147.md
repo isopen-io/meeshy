@@ -311,3 +311,94 @@ pour tout lot de contrôle d'accès.
 > introduit moi-même.** Le dépôt se corrige davantage par ses gardes que par ses
 > audits — à condition qu'on lise ce qu'elles demandent au lieu de les faire
 > taire.
+
+---
+
+## Second tour — l'audit a refusé le lot G, et il avait raison sur cinq points
+
+Le dépôt exige le passage de `auditeur-adversarial` avant la fusion de tout lot
+de contrôle d'accès. Il a rendu **« à ne pas fusionner en l'état »**, et c'est le
+résultat le plus utile du cycle — plus utile que n'importe lequel des six lots.
+
+**La garde ne tenait pas sa phrase.** Le lot disait « le texte d'une édition ne
+part qu'à ceux qui ont le droit de LIRE ce message ». Il était juste là où il
+était posé, invoquait les bonnes leçons du dépôt dans ses doc-comments, et en
+manquait **deux à la fois** :
+
+1. **un SECOND transport** — `message:edited` part aussi de
+   `MessageHandler.handleMessageEdit`, que deux doc-comments du dépôt nomment
+   « le transport d'édition PRIMAIRE », et qui n'appelle pas
+   `broadcastMessageMutation`. Aucune lecture de plancher, aucun `except`, un
+   enfilage sans exclusion. L'auditeur l'a prouvé ROUGE.
+2. **un objet VOISIN** — `mention:created` porte `content`, le texte APRÈS
+   édition, et il est émis **à quatre lignes** de chaque appel que la garde
+   venait de poser.
+
+> **Le lot CITAIT la leçon 275 en en-tête et la manquait d'un objet voisin.**
+> C'est la forme la plus coûteuse d'une leçon apprise : elle était écrite, elle
+> était au bon endroit, et elle n'a pas empêché le défaut qu'elle décrit. Une
+> leçon ne protège pas parce qu'on la connaît — elle protège quand quelqu'un
+> pose la question qu'elle contient AU MOMENT du correctif, sur l'objet qu'on
+> remet, ligne à ligne.
+
+### Et les trois autres constats disent chacun quelque chose de différent
+
+**Le type nommé n'avait pas été appliqué.** Le lot créait
+`MessageMutationQueueParams` *en écrivant qu'il remplaçait deux recopies* ; il
+n'en avait remplacé qu'une. La signature du relais de production gardait son
+littéral inline sans `excludedQueueKeys`, et marchait par deux accidents (l'objet
+relayé en bloc, `strictFunctionTypes: false`). Elle MENTAIT donc sur un champ de
+confidentialité.
+
+> **Un doc-comment qui annonce ce que le lot a fait est une AFFIRMATION, comme un
+> compte ou un tri.** Celui-ci décrivait un travail à moitié fait, et c'est le
+> doc-comment lui-même qui rendait l'autre moitié invisible : on ne cherche pas
+> une recopie dont on vient de lire qu'elle a été supprimée.
+
+**Les trois gardes par lecteur ne pouvaient pas tomber.** Mesuré par mutation :
+neutralisées en `if (false && …)`, 139 suites et 2 392 témoins restaient VERTS.
+Les témoins du lot n'atteignaient que la diffusion de room — pas d'`attachments`
+dans la charge (donc aucun plan signé), un harnais qui expose toujours `except`,
+aucun cas avec `sealedQuoteAudience`. **Le chemin que la production désigne
+elle-même comme le plus dangereux était le seul sans témoin.**
+
+> La règle « prouver le ROUGE » avait été suivie — sur le chemin le plus facile à
+> atteindre. **Prouver le rouge d'UN chemin ne prouve rien des autres**, et la
+> mesure qui le dit n'est pas la relecture de l'assertion : c'est la MUTATION de
+> chaque garde, une par une.
+
+**Un double d'`io` qui AVALAIT les `except`.** Il enregistrait une diffusion de
+room comme si elle atteignait tout le monde, y compris les lecteurs qu'elle
+venait d'exclure. Aucun témoin d'exclusion ne pouvait s'y écrire — et je l'ai
+découvert en écrivant un témoin qui échouait pour la mauvaise raison.
+
+> C'est « un double mente aussi par ce qu'il ACCEPTE » appliqué à ce qu'il
+> OBSERVE : un double d'émission qui perd l'exclusion ne décrit pas une
+> diffusion plus simple, il décrit une diffusion DIFFÉRENTE — celle qu'on est en
+> train d'essayer d'interdire.
+
+### Ce que le second tour a produit
+
+`socketio/editedAudience.ts` : la loi, le verdict à trois états et les trois
+sorties de l'édition, écrits UNE fois et partagés par les deux transports. **Le
+lot précédent avait dupliqué la règle ; celui-ci la déduplique** — et c'est la
+réponse structurelle au constat, pas un correctif par site.
+
+Plus : la garde du plancher dans `emitMentionCreated` (à côté de celle
+d'auto-mention, pour la raison que son doc-comment donne déjà), le type nommé
+appliqué au relais, quatre témoins qui tombent sous la mutation de l'auditeur, et
+quatre doubles complétés.
+
+### La leçon de forme du second tour
+
+Le cycle s'était clos sur « le dépôt se corrige davantage par ses gardes que par
+ses audits ». C'est vrai des cliquets, et c'est **faux de ce lot-ci** : aucun
+cliquet ne pouvait voir qu'une garde manquait à un second transport, ni qu'un
+objet voisin emportait le texte. Il a fallu quelqu'un qui cherche à CASSER.
+
+> **Un cliquet garde ce que quelqu'un a déjà pensé à garder.** C'est beaucoup, et
+> ce n'est pas la même chose qu'un adversaire. Les deux ne se remplacent pas : le
+> cliquet empêche la régression d'une règle connue, l'audit trouve la règle qu'on
+> croyait appliquée. Ce cycle a eu besoin des deux, et le compte final le dit —
+> quatre lots déclenchés par un cliquet, deux constats bloquants trouvés par un
+> audit, et un défaut que j'avais introduit moi-même.
