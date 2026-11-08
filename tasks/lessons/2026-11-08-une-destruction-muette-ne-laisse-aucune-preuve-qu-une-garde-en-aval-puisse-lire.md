@@ -1,8 +1,4 @@
-# Une destruction muette ne laisse aucune preuve qu'une garde en aval puisse lire
-
-**Date** : 2026-11-08 · **Cycle** : 143 · **Issue** : #16706
-
-## Le constat
+## Une destruction muette ne laisse aucune preuve qu'une garde en aval puisse lire (cycle 143, #16706)
 
 `purgeViewOnceContent` détruit le contenu d'une vue unique — `content: ''`,
 `encryptedContent: null`, `translations: null`, `metadata: null`, fichiers
@@ -18,15 +14,12 @@ ce message recevait, à la reconnexion, **son texte entier** — après que le
 serveur en ait détruit le contenu, les fichiers et les traductions. Le drain
 interrogeait bien la base, et la trouvait **VIVANTE**.
 
-## Pourquoi aucun témoin ne pouvait l'attraper
-
-La garde est juste, testée, et son cadrage est le bon. Elle ne peut simplement
-**rien lire** : il n'y a aucune colonne à interroger. Un témoin de la garde
-l'exerce contre `deletedAt`/`expiresAt`, et passe. Un témoin du module de purge
-vérifie que le contenu est parti de la base, et passe. Le défaut vit dans
-l'espace exact entre les deux, et aucune des deux suites n'a de raison d'y aller.
-
-## La forme, et son inverse connu
+**Aucun témoin ne pouvait l'attraper.** La garde est juste, testée, et son
+cadrage est le bon. Elle ne peut simplement **rien lire** : il n'y a aucune
+colonne à interroger. Un témoin de la garde l'exerce contre
+`deletedAt`/`expiresAt`, et passe. Un témoin du module de purge vérifie que le
+contenu est parti de la base, et passe. Le défaut vit dans l'espace exact entre
+les deux, et aucune des deux suites n'a de raison d'y aller.
 
 C'est **l'inverse du cycle 124**. Là, un champ (`notificationLocKey`)
 **DÉCLARAIT** une restriction que rien n'appliquait. Ici, un module
@@ -34,8 +27,6 @@ C'est **l'inverse du cycle 124**. Là, un champ (`notificationLocKey`)
 aval ne peut interroger. Les deux produisent le même symptôme (un secret qui
 part) par des chemins opposés, et le second est plus discret : il n'y a pas de
 champ trompeur à trouver, il n'y a rien du tout.
-
-## La question à poser
 
 > **Devant une destruction, demander ce qu'elle LAISSE DERRIÈRE comme preuve, et
 > QUI peut la lire.** Une destruction muette ne protège que ce qu'elle touche
@@ -49,10 +40,7 @@ correctif de #16706 fait les deux — un prédicat de mort partagé pour les
 destructions qui LAISSENT une preuve (`deleted` / `expired`), et un appel direct
 à la purge pour celle qui n'en laisse pas.
 
-## Où elle s'applique encore
-
-Tout chemin qui rend un contenu illisible sans l'annoncer dans une colonne :
-l'anonymisation de compte, le scellement au repos (`content: ''` + chiffré
-ailleurs — là le contenu n'est pas détruit, il change de forme), les purges de
+Où elle s'applique encore : tout chemin qui rend un contenu illisible sans
+l'annoncer dans une colonne — l'anonymisation de compte, les purges de
 rétention. Avant de conclure qu'une garde de remise couvre un cas, vérifier
 qu'elle a **quelque chose à lire** pour ce cas-là.
