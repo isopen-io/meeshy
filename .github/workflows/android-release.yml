@@ -37,6 +37,10 @@ on:
         description: 'versionCode imposé (optionnel) — au-dessus du plus haut code déjà publié sur la fiche'
         type: string
         default: ''
+      source_ref:
+        description: 'Ref à construire et publier (optionnel, défaut : le ref dispatché) — main en pratique, avec l’outillage du ref dispatché'
+        type: string
+        default: ''
 
 concurrency:
   group: android-native-release
@@ -49,7 +53,7 @@ jobs:
   release:
     name: Android natif — ${{ inputs.track }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     defaults:
       run:
         working-directory: apps/android
@@ -59,6 +63,16 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Construire le ref demandé avec l'outillage du ref dispatché (#16959)
+        if: inputs.source_ref != ''
+        working-directory: .
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          git fetch --no-tags origin "$SOURCE_REF"
+          git checkout -q --detach FETCH_HEAD
+          echo "Ref construit : $SOURCE_REF ($(git rev-parse --short HEAD)), outillage de $GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Refuser sans clé d'envoi
         env:
@@ -130,13 +144,31 @@ jobs:
             echo "$GOOGLE_SERVICES_BASE64" | base64 --decode > app/google-services.json
           fi
 
+      - name: Le wrapper attend le réseau (#16959)
+        run: sed -i 's/^networkTimeout=.*/networkTimeout=60000/' gradle/wrapper/gradle-wrapper.properties
+
       - name: Construire l'App Bundle signé (bundleRelease)
         env:
           MEESHY_ANDROID_STORE_TYPE: ${{ vars.MEESHY_ANDROID_STORE_TYPE || 'pkcs12' }}
           MEESHY_ANDROID_STORE_PASSWORD: ${{ secrets.MEESHY_ANDROID_STORE_PASSWORD }}
           MEESHY_ANDROID_KEY_ALIAS: ${{ secrets.MEESHY_ANDROID_KEY_ALIAS }}
           MEESHY_ANDROID_KEY_PASSWORD: ${{ secrets.MEESHY_ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :app:bundleRelease -PmeeshyBuildNumber="$MEESHY_BUILD_NUMBER" --stacktrace
+          GRADLE_NETWORK: >-
+            -Dorg.gradle.internal.http.connectionTimeout=60000
+            -Dorg.gradle.internal.http.socketTimeout=180000
+            -Dorg.gradle.internal.repository.max.retries=8
+            -Dorg.gradle.internal.repository.initial.backoff=2000
+        run: |
+          for attempt in 1 2 3; do
+            if ./gradlew $GRADLE_NETWORK :app:bundleRelease -PmeeshyBuildNumber="$MEESHY_BUILD_NUMBER" --stacktrace; then
+              exit 0
+            fi
+            [ "$attempt" -lt 3 ] || break
+            echo "::warning::bundleRelease, tentative $attempt échouée : nouvel essai dans $((attempt * 60)) s (téléchargements déjà faits gardés)."
+            sleep $((attempt * 60))
+          done
+          echo "::error::bundleRelease échoue trois fois de suite."
+          exit 1
 
       - name: L'App Bundle est signé par la clé d'envoi
         env:
