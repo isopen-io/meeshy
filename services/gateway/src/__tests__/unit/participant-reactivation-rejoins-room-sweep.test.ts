@@ -51,7 +51,15 @@ const REJOIN = 'joinUserToConversationRoom';
  * pas — sans quoi « le fichier n'appelle pas » et « quelqu'un d'autre appelle
  * pour lui » seraient indistinguables.
  */
-const REJOIN_DELEGATE: Readonly<Record<string, string>> = {};
+const REJOIN_DELEGATE: Readonly<Record<string, string>> = {
+  // #16964 — le noyau du geste appelle `rejoinRestoredMembership`, l'unité
+  // partagée qui porte les deux règles d'emploi (n'appeler qu'après une
+  // restauration EFFECTIVE, et AVANT la diffusion du fait) et le journal d'un
+  // échec non fatal. Déléguer n'est pas se taire : la délégation se DÉCLARE
+  // ici, sans quoi « ce fichier n'appelle pas » et « quelqu'un appelle pour
+  // lui » seraient indistinguables.
+  'routes/conversations/restore-for-me.ts': 'routes/conversations/utils/rejoin-restored-membership.ts',
+};
 
 /** VIDE, et à défendre : voir l'en-tête. */
 const SANS_REJOIN: ReadonlyArray<{ readonly file: string; readonly raison: string }> = [];
@@ -124,7 +132,11 @@ describe('toute porte qui rallume une participation rebranche ses sockets (#1696
   });
 
   it('restore-for-me rebranche, et sur la conversation qu’il vient de rendre', () => {
-    const source = readFileSync(join(SRC, 'routes/user-deletions.ts'), 'utf8');
-    expect(source).toContain(`${REJOIN}(userId, conversationId)`);
+    const core = readFileSync(join(SRC, 'routes/conversations/restore-for-me.ts'), 'utf8');
+    expect(core).toContain('rejoinRestoredMembership(fastify, { roomKey: userId, conversationId })');
+    // Et l'unité déléguée appelle bien le verbe : une délégation déclarée vers
+    // un module qui ne rebranche rien serait une exemption déguisée.
+    const delegate = readFileSync(join(SRC, 'routes/conversations/utils/rejoin-restored-membership.ts'), 'utf8');
+    expect(delegate).toContain(`${REJOIN}(params.roomKey, params.conversationId)`);
   });
 });

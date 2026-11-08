@@ -31,7 +31,7 @@ const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
  */
 export type ReachabilityView = {
   has(key: string): boolean;
-  get(key: string): { readonly unreachableConversations?: ReadonlySet<string> } | undefined;
+  get(key: string): { readonly unreachableConversations?: ReadonlySet<string>; readonly allConversationRoomsUnreachable?: boolean } | undefined;
 };
 
 export interface OfflineParticipantQueueDeps {
@@ -404,9 +404,16 @@ export async function enqueueForOfflineParticipants(
       // (l'échec n'est que journalisé) : la tenir pour joignable DÉSARMAIT la
       // file, alors que le `io.to(ROOMS.conversation(...))` ne l'atteint pas
       // davantage — message perdu, et sans rejeu puisque rien n'a été écrit.
+      // Le drapeau dit « injoignable pour TOUTES, liste inconnue » — ce qu'un
+      // ensemble de rooms ne peut pas exprimer. Il est posé quand la lecture
+      // des conversations du compte est tombée au handshake : la socket n'a
+      // alors rejoint aucune room, et la tenir pour joignable DÉSARMAIT la file
+      // pour toute sa vie.
+      const socketState = connectedUsers.get(queueKey);
       const reachableHere =
         connectedUsers.has(queueKey) &&
-        !connectedUsers.get(queueKey)?.unreachableConversations?.has(conversationId);
+        socketState?.allConversationRoomsUnreachable !== true &&
+        !socketState?.unreachableConversations?.has(conversationId);
       if (isActor || reachableHere || params.excludedQueueKeys?.has(queueKey)) continue;
       if (restrictToLanguage !== null) {
         // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est

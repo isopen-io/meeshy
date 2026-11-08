@@ -198,11 +198,19 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #7377 — la liste des favoris de message charge `sender` pour chaque ligne
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
-  // #14619 — la recherche de la liste des conversations : ses deux lectures
-  // (contenu, traductions) chargent `sender` pour la ligne de résultat, et un
-  // seul `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée =
-  // les conversations du lecteur.
-  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #14619 — la recherche de la liste des conversations : ses lectures
+  // chargent `sender` pour la ligne de résultat, et un seul
+  // `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée = les
+  // conversations du lecteur.
+  //
+  // TROIS depuis #16574 (`cb3e6d2ab`), qui a ajouté la recherche dans les
+  // TRANSCRIPTIONS à côté du contenu et des traductions. Le lot n'a pas
+  // redéclaré son compte ici : ce cliquet est resté ROUGE sur `dev`, et c'est
+  // exactement la question qu'il est fait pour poser — « une lecture de plus,
+  // est-elle enveloppée ? ». Elle l'est : les trois partagent le même
+  // `Promise.all` sous l'unique `withOrphanedSenderRepair`, donc une seule
+  // application pour trois lectures.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de
