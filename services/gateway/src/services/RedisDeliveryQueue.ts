@@ -589,7 +589,22 @@ export class RedisDeliveryQueue {
         const pruned = await redis.eval(PRUNE_STALE_LUA, 1, key, ...doomed);
         removed += typeof pruned === 'number' ? pruned : doomed.length;
       }
-      await redis.del(indexKey);
+      // `SREM` des porteurs TRAITÉS, et jamais `DEL` de la clé (#16706, cycle
+      // 143 bis). L'enfilage et la purge ne sont pas ordonnés : une entrée qui
+      // atterrit ENTRE le `smembers` ci-dessus et cette ligne verrait son membre
+      // d'index effacé sans que son entrée ait été vue, et **plus aucune purge ne
+      // pourrait jamais la retrouver** — le clair y resterait pour ses 48 h.
+      //
+      // C'est la course INVERSE de celle que `PRUNE_STALE_LUA` ferme (lui retire
+      // par valeur brute exacte, donc ne touche jamais une entrée arrivée après
+      // la lecture). Le commentaire d'origine ne nommait que celle-là, et en
+      // concluait trop : fermer une course ne dit rien de sa symétrique.
+      //
+      // Un membre qui survit sans entrée ne coûte rien — la purge suivante fait
+      // un `LRANGE`, ne trouve rien, et passe — et la clé expire de toute façon
+      // avec son TTL. L'asymétrie des coûts décide : un membre de trop est
+      // gratuit, un membre manquant est définitif.
+      if (holders.length > 0) await redis.srem(indexKey, ...holders);
     } catch (error) {
       // Best-effort, comme tout ce module : la destruction en base a déjà eu
       // lieu, et la garde de vivacité du drain tient la remise. Lever ici

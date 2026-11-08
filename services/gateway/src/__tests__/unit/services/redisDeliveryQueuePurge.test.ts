@@ -47,6 +47,7 @@ const fakeRedis = () => {
   const lists = new Map<string, string[]>();
   const sets = new Map<string, Set<string>>();
   const calls: string[] = [];
+  const hooks: { onLrange?: () => void } = {};
   const client = {
     eval: async (script: string, numkeys: number, ...rest: string[]) => {
       const keys = rest.slice(0, numkeys);
@@ -68,8 +69,18 @@ const fakeRedis = () => {
       calls.push(`smembers:${key}`);
       return [...(sets.get(key) ?? [])];
     },
-    lrange: async (key: string) => lists.get(key) ?? [],
+    lrange: async (key: string) => {
+      const out = lists.get(key) ?? [];
+      hooks.onLrange?.();
+      return out;
+    },
     llen: async (key: string) => (lists.get(key) ?? []).length,
+    srem: async (key: string, ...members: string[]) => {
+      calls.push(`srem:${key}:${members.length}`);
+      const set = sets.get(key);
+      members.forEach((m) => set?.delete(m));
+      return members.length;
+    },
     del: async (key: string) => {
       calls.push(`del:${key}`);
       return sets.delete(key) ? 1 : 0;
@@ -77,6 +88,7 @@ const fakeRedis = () => {
   };
   return {
     calls,
+    hooks,
     lists,
     sets,
     bytes: () => [...lists.values()].flat().join('\n'),
@@ -139,15 +151,37 @@ describe('purgeMessage — tranche Redis', () => {
     expect(redis.calls).not.toContain('prune:delivery:queue:u-3:1');
   });
 
-  it('efface la clé d’index après la purge', async () => {
+  it('retire les porteurs TRAITÉS de l’index, et n’efface pas la clé en bloc', async () => {
+    // L'enfilage et la purge ne sont pas ordonnés. Un `DEL` inconditionnel
+    // effacerait le membre d'une entrée atterrie ENTRE le `smembers` et lui :
+    // plus aucune purge ne pourrait la retrouver, et le clair y resterait ses
+    // 48 h. C'est la course INVERSE de celle que `PRUNE_STALE_LUA` ferme — fermer
+    // une course ne dit rien de sa symétrique.
+    const redis = fakeRedis();
+    const queue = new RedisDeliveryQueue(redis.cacheStore);
+    await queue.enqueue('u-1', entry());
+
+    // Un porteur arrive dans l'index pendant la purge, après la lecture.
+    redis.hooks.onLrange = () => {
+      redis.sets.get(`delivery:msg-queues:${DOOMED}`)?.add('u-late');
+      redis.lists.set('delivery:queue:u-late', [JSON.stringify(entry())]);
+    };
+
+    await queue.purgeMessage(DOOMED);
+
+    expect(redis.calls).not.toContain(`del:delivery:msg-queues:${DOOMED}`);
+    expect([...(redis.sets.get(`delivery:msg-queues:${DOOMED}`) ?? [])]).toEqual(['u-late']);
+  });
+
+  it('efface de l’index le porteur traité', async () => {
     const redis = fakeRedis();
     const queue = new RedisDeliveryQueue(redis.cacheStore);
     await queue.enqueue('u-1', entry());
 
     await queue.purgeMessage(DOOMED);
 
-    expect(redis.calls).toContain(`del:delivery:msg-queues:${DOOMED}`);
-    expect(redis.sets.has(`delivery:msg-queues:${DOOMED}`)).toBe(false);
+    expect(redis.calls).toContain(`srem:delivery:msg-queues:${DOOMED}:1`);
+    expect([...(redis.sets.get(`delivery:msg-queues:${DOOMED}`) ?? [])]).toEqual([]);
   });
 
   it('n’indexe PAS une famille sans texte — donc ne la cherche jamais à la purge', async () => {
