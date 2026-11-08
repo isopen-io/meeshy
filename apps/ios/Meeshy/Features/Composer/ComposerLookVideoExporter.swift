@@ -38,14 +38,19 @@ nonisolated enum ComposerLookVideoExporter {
     /// image et son ; `nil` ⇒ le clip entier.
     /// `audioGain` : le son réglé en retouche (#9754), de 0 (muet) à 2 (#10360),
     /// 1 = intact.
+    /// `cropChosen` : l'auteur a recadré (CAM-14) — des proportions autres que la
+    /// prise debout se rendent ; sans recadrage explicite, rien n'est rogné.
     @concurrent
     static func export(_ url: URL, look: ComposerPhotoLook, framing: ComposerFraming = .identity,
                        timeRange: CMTimeRange? = nil, aspect: CGFloat = ComposerLookPainter.designAspect,
                        person: CallFramePerson, date: Date, uses: ComposerVideoUses = .gallery,
                        declaredSpaceName: String? = nil, audioGain: Float = 1,
-                       overlay: ComposerTextOverlay? = nil) async -> ComposerVideoRendition? {
+                       overlay: ComposerTextOverlay? = nil, cropChosen: Bool = false) async -> ComposerVideoRendition? {
         let asset = AVURLAsset(url: url)
-        switch plan(look: look, framing: framing, timeRange: timeRange, audioGain: audioGain, hasOverlay: overlay != nil) {
+        let debout = cropChosen ? await uprightSize(asset) : nil
+        let recadre = debout.map { reshapes(upright: $0, aspect: aspect, chosen: true) } ?? false
+        switch plan(look: look, framing: framing, timeRange: timeRange, audioGain: audioGain, hasOverlay: overlay != nil,
+                    reshapes: recadre) {
         case .untouched: return ComposerVideoRendition(same: url, uses: uses)
         case .trimOnly(let plage): return await trimmed(asset, timeRange: plage).map { ComposerVideoRendition(same: $0, uses: uses) }
         case .render: break
@@ -142,10 +147,27 @@ nonisolated enum ComposerLookVideoExporter {
     }
 
     /// `hasOverlay` : un texte posé par-dessus (#12591) touche aux échantillons, comme un look.
+    /// `reshapes` : un recadrage de l'auteur change les proportions (CAM-14) — il se rend.
     static func plan(look: ComposerPhotoLook, framing: ComposerFraming, timeRange: CMTimeRange?,
-                     audioGain: Float, hasOverlay: Bool = false) -> Plan {
-        guard !hasOverlay, !paints(look: look, framing: framing, audioGain: audioGain) else { return .render }
+                     audioGain: Float, hasOverlay: Bool = false, reshapes: Bool = false) -> Plan {
+        guard !hasOverlay, !reshapes, !paints(look: look, framing: framing, audioGain: audioGain) else { return .render }
         return timeRange.map(Plan.trimOnly) ?? .untouched
+    }
+
+    /// **Un recadrage choisi part recadré** (CAM-14) : seules des proportions que
+    /// l'auteur a choisies, et dont la toile diffère de la prise debout, demandent
+    /// un rendu. Des proportions qu'il n'a pas touchées ne rognent rien.
+    static func reshapes(upright: CGSize, aspect: CGFloat, chosen: Bool) -> Bool {
+        guard chosen, upright.width > 0, upright.height > 0 else { return false }
+        return !MeeshyVideoWatermarkBaker.sizesMatch(ComposerLookPainter.canvas(for: upright, aspect: aspect), upright)
+    }
+
+    /// La taille debout de la piste vidéo, `nil` sans piste lisible.
+    private static func uprightSize(_ asset: AVAsset) async -> CGSize? {
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let natural = try? await track.load(.naturalSize),
+              let transform = try? await track.load(.preferredTransform) else { return nil }
+        return MeeshyVideoWatermarkBaker.orientedSize(natural: natural, transform: transform)
     }
 
     /// Le look, le cadrage ou le son réglé touchent-ils aux échantillons ?
