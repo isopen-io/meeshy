@@ -2,6 +2,7 @@
  * Types and utilities for communities module
  */
 import { z } from 'zod';
+import { isProfileImageReference } from '@meeshy/shared/utils/profile-image-reference';
 import type { EngagementService } from '../../services/engagement/EngagementService';
 
 /**
@@ -20,12 +21,20 @@ export enum CommunityRole {
   MEMBER = 'member'
 }
 
+/**
+ * L'avatar et la bannière d'une communauté sont des images d'IDENTITÉ : la
+ * loi est celle du profil (`isProfileImageReference`, #16788) — le chemin de
+ * stockage qu'un téléversement rend, une adresse http(s) ou un chemin d'API ;
+ * jamais `javascript:`, `data:`, un autre schéma, `//hôte` ni `..`.
+ */
+const identityImage = z.string().min(1).max(2048).refine(isProfileImageReference, 'Invalid image reference');
+
 // Schemas de validation
 export const CreateCommunitySchema = z.object({
   name: z.string().min(1).max(100),
   identifier: z.string().regex(/^[a-zA-Z0-9\-_@]*$/, 'Identifier can only contain letters, numbers, hyphens, underscores, and @').optional(),
   description: z.string().optional(),
-  avatar: z.string().optional(),
+  avatar: identityImage.optional(),
   isPrivate: z.boolean().default(true)
 });
 
@@ -33,8 +42,8 @@ export const UpdateCommunitySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   identifier: z.string().regex(/^[a-zA-Z0-9\-_@]*$/, 'Identifier can only contain letters, numbers, hyphens, underscores, and @').optional(),
   description: z.string().optional(),
-  avatar: z.string().optional(),
-  banner: z.string().optional(),
+  avatar: identityImage.optional(),
+  banner: identityImage.optional(),
   isPrivate: z.boolean().optional()
 });
 
