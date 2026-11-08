@@ -187,10 +187,19 @@ export class ConversationViewingHandler {
       const socketIds = [...(this.byConversation.get(conversationId)?.get(userId) ?? [])];
       if (socketIds.length === 0) return;
 
+      // CAPTURÉ AVANT `untrack`, qui efface les entrées d'où il se lit : même
+      // règle que la rétractation ordinaire (#16752) — une rétractation exclut
+      // ceux qui avaient été exclus de l'annonce, et l'annonce de CHAQUE socket
+      // porte son propre ensemble prouvé. L'union est la posture la plus
+      // fermée des deux quand un appareil a annoncé avant un blocage et
+      // l'autre après.
+      const blockRelated = new Set<string>(
+        socketIds.flatMap(socketId => [...(this.bySocket.get(socketId)?.blockRelated ?? [])])
+      );
+
       socketIds.forEach(socketId => this.untrack(socketId, [conversationId]));
       if (this.isHere(userId, conversationId)) return;
 
-      const blockRelated = await this.blockRelatedOf(userId);
       this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId, conversationId }, blockRelated);
     } catch (error) {
       logger.error('viewing retraction for departed member failed', { error, conversationId, userId });
@@ -241,7 +250,13 @@ export class ConversationViewingHandler {
     });
     if (!participant) return;
 
-    const blockRelated = user.isAnonymous ? new Set<string>() : await getBlockRelatedUserIds(this.prisma, userId);
+    // Même posture que l'instantané ci-dessous : sans exclusion prouvée, ce
+    // socket n'apprend rien et n'annonce rien. `track` n'a donc jamais lieu
+    // sur une lecture qui lève — ce qui est l'invariant dont dépendent les deux
+    // rétractations : l'ensemble retenu par `SocketViewing.blockRelated` est
+    // toujours un ensemble PROUVÉ.
+    const blockRelated = await this.blockRelatedOf(userId);
+    if (blockRelated === null) return;
     const alreadyHere = this.viewersOf(conversationId).filter(id => id !== userId && !blockRelated.has(id));
     socket.emit(SERVER_EVENTS.VIEWING_SNAPSHOT, { conversationId, userIds: alreadyHere });
 
@@ -349,12 +364,23 @@ export class ConversationViewingHandler {
     if (!userIdOrToken) return;
     const connected = getConnectedUser(userIdOrToken, this.connectedUsers);
     if (!connected) return;
-    const { user, realUserId: userId } = connected;
+    const { realUserId: userId } = connected;
 
     const occupied = [...this.byConversation.keys()].filter(id => socket.rooms.has(ROOMS.conversation(id)));
     if (occupied.length === 0) return;
 
-    const blockRelated = user.isAnonymous ? new Set<string>() : await this.blockRelatedOf(userId);
+    // FAIL-CLOSED (#16752) : sans exclusion PROUVÉE, aucun instantané ne part.
+    // Ce qui suit est la liste NOMINATIVE des gens présents dans chacune des
+    // conversations de ce socket — renoncer coûte un point « ici » qui
+    // s'allumera au prochain `viewing:start` d'un pair ; servir non filtré
+    // coûte un secret qui ne se retire pas.
+    //
+    // Le `user.isAnonymous ? new Set() :` qui enveloppait cet appel redisait au
+    // SITE la règle que `blockRelatedOf` porte déjà — et il ne la redisait
+    // qu'ici, si bien que les deux appels de la même loi n'avaient pas la même
+    // forme. C'est exactement de cette famille d'écart qu'est né #16752.
+    const blockRelated = await this.blockRelatedOf(userId);
+    if (blockRelated === null) return;
     for (const conversationId of occupied) {
       const userIds = this.viewersOf(conversationId).filter(id => id !== userId && !blockRelated.has(id));
       if (userIds.length > 0) socket.emit(SERVER_EVENTS.VIEWING_SNAPSHOT, { conversationId, userIds });
@@ -398,9 +424,22 @@ export class ConversationViewingHandler {
     const left = leaving.filter(id => !this.isHere(viewing.userId, id));
     if (left.length === 0) return;
 
-    const blockRelated = await this.blockRelatedOf(viewing.userId);
+    // UNE RÉTRACTATION EXCLUT CEUX QUI AVAIENT ÉTÉ EXCLUS DE L'ANNONCE (#16752).
+    //
+    // Qui affiche le point « ici » de ce lecteur ? Exactement ceux à qui le
+    // `viewing:start` — ou l'instantané — est parvenu, c'est-à-dire la room
+    // MOINS l'ensemble bloqué AU MOMENT de l'annonce. Et le handler retient cet
+    // ensemble-là : `track` l'a écrit depuis un `start` fail-closed, donc c'est
+    // un ensemble PROUVÉ.
+    //
+    // Relire la base ici coûtait deux requêtes par déconnexion POUR OBTENIR UNE
+    // RÉPONSE MOINS JUSTE : un pair bloqué APRÈS l'annonce porte le point, et un
+    // ensemble frais l'exclurait du retrait — son point resterait allumé pour
+    // toute sa session. C'est la lecture, pas sa posture, qui était l'erreur ;
+    // la retirer ferme le fail-open par CONSTRUCTION plutôt que par un test de
+    // `null`.
     for (const conversationId of left) {
-      this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId: viewing.userId, conversationId }, blockRelated);
+      this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId: viewing.userId, conversationId }, viewing.blockRelated);
     }
   }
 
@@ -417,14 +456,35 @@ export class ConversationViewingHandler {
     }
   }
 
-  private async blockRelatedOf(userId: string): Promise<ReadonlySet<string>> {
+  /**
+   * L'ensemble des comptes qu'un blocage sépare de `userId`, dans un sens ou
+   * dans l'autre — ou `null` quand la lecture N'A RIEN PROUVÉ (#16752).
+   *
+   * TROIS états, jamais deux (la distinction du cycle 127). Cette unité rendait
+   * un `Set` VIDE sur une levée, et un ensemble vide ne se lit pas « je ne
+   * sais pas » : il se lit **« personne à exclure »**. Une bascule de réplique
+   * de vingt secondes publiait donc `viewing:snapshot` — la liste NOMINATIVE
+   * des gens présents — aux pairs bloqués dans les deux sens.
+   *
+   * L'arbitrage du `unknown` se décide par ce qui est EN JEU, et ici c'est un
+   * secret : chaque appelant se tait plutôt que d'élargir son audience. C'est
+   * la posture que `start` tenait déjà, par accident de forme — il appelait la
+   * loi partagée sans `catch`, si bien qu'une levée remontait au `.catch` de
+   * `listen` et que rien ne partait. Une asymétrie entre deux appels de la
+   * MÊME loi dans le MÊME fichier est le signe d'un oubli, pas d'un arbitrage ;
+   * les deux passent désormais par ici.
+   *
+   * Un participant ANONYME n'a pas de ligne `User` : il ne peut ni bloquer ni
+   * être bloqué, et l'ensemble vide est alors une PREUVE, pas une ignorance.
+   */
+  private async blockRelatedOf(userId: string): Promise<ReadonlySet<string> | null> {
     const user = this.connectedUsers.get(userId);
     if (user?.isAnonymous) return new Set();
     try {
       return await getBlockRelatedUserIds(this.prisma, userId);
     } catch (error) {
       logger.error('viewing block lookup failed', { error, userId });
-      return new Set();
+      return null;
     }
   }
 

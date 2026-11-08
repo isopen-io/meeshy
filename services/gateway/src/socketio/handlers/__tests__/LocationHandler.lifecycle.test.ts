@@ -46,6 +46,7 @@ jest.mock('../../../utils/socket-rate-limiter.js', () => ({
 import { LocationHandler } from '../LocationHandler';
 import type { Socket } from 'socket.io';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { noBlocksUserSurface } from '../../__tests__/helpers/no-blocks';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ function makeIo() {
 const makePrisma = () => ({
   participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }) },
   conversation: { findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }) },
+  user: noBlocksUserSurface(),
 });
 
 function makeHandler() {
@@ -105,6 +107,7 @@ function makeHandler() {
     io,
     prisma: makePrisma() as any,
     connectedUsers,
+    userSockets: new Map(),
     socketToUser,
     normalizeConversationId: jest.fn<any>(async (id: string) =>
       id === CONV_ID ? NORMALIZED_CONV_ID : id
@@ -329,7 +332,7 @@ describe('LocationHandler — cycle de vie du partage', () => {
       await startShare(handler, makeSocket(SHARER_SOCKET), 30);
 
       const viewer = makeSocket(VIEWER_SOCKET);
-      handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
+      await handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
 
       expect(viewer.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_STARTED,
@@ -350,7 +353,7 @@ describe('LocationHandler — cycle de vie du partage', () => {
       await handler.handleLiveLocationUpdate(socket, { ...LYON, conversationId: CONV_ID });
 
       const viewer = makeSocket(VIEWER_SOCKET);
-      handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
+      await handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
 
       expect(viewer.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_STARTED,
@@ -365,7 +368,7 @@ describe('LocationHandler — cycle de vie du partage', () => {
 
       const reconnected = makeSocket('socket-sharer-again');
       ctx.socketToUser.set('socket-sharer-again', SHARER_ID);
-      handler.replayLiveLocationsTo(reconnected, NORMALIZED_CONV_ID);
+      await handler.replayLiveLocationsTo(reconnected, NORMALIZED_CONV_ID);
 
       expect(reconnected.emit).not.toHaveBeenCalled();
     });
@@ -376,7 +379,7 @@ describe('LocationHandler — cycle de vie du partage', () => {
       await startShare(handler, makeSocket(SHARER_SOCKET), 30);
 
       const viewer = makeSocket(VIEWER_SOCKET);
-      handler.replayLiveLocationsTo(viewer, OTHER_CONV_ID);
+      await handler.replayLiveLocationsTo(viewer, OTHER_CONV_ID);
 
       expect(viewer.emit).not.toHaveBeenCalled();
     });
@@ -389,7 +392,7 @@ describe('LocationHandler — cycle de vie du partage', () => {
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
       const viewer = makeSocket(VIEWER_SOCKET);
-      handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
+      await handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
 
       expect(viewer.emit).not.toHaveBeenCalled();
     });
@@ -402,7 +405,7 @@ describe('LocationHandler — cycle de vie du partage', () => {
       jest.advanceTimersByTime(15 * 60_000);
 
       const viewer = makeSocket(VIEWER_SOCKET);
-      handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
+      await handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
 
       expect(viewer.emit).not.toHaveBeenCalled();
     });
@@ -413,7 +416,7 @@ describe('LocationHandler — cycle de vie du partage', () => {
       await startShare(handler, makeSocket(SHARER_SOCKET), 30);
 
       const stranger = makeSocket('socket-unknown');
-      handler.replayLiveLocationsTo(stranger, NORMALIZED_CONV_ID);
+      await handler.replayLiveLocationsTo(stranger, NORMALIZED_CONV_ID);
 
       expect(stranger.emit).not.toHaveBeenCalled();
     });
