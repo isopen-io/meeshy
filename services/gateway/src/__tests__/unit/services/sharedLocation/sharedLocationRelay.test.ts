@@ -66,6 +66,7 @@ function monde() {
   let now = T0;
   const cache = sharedLocationKvEnMemoire({ horloge: () => now });
   let pauseLecture: Promise<void> | null = null;
+  let lectureEnPanne = false;
   let relacherLecture = (): void => undefined;
   const users = world.prisma.user as unknown as { findMany: (args: unknown) => Promise<unknown> };
   const prisma = new Proxy(world.prisma, {
@@ -75,6 +76,10 @@ function monde() {
             get: (userTarget, userProp) =>
               userProp === 'findMany'
                 ? async (args: unknown) => {
+                    if (lectureEnPanne) {
+                      lectureEnPanne = false;
+                      throw new Error('base injoignable');
+                    }
                     const attente = pauseLecture;
                     pauseLecture = null;
                     const rows = await users.findMany(args);
@@ -102,6 +107,10 @@ function monde() {
       });
     },
     relacherLecture: () => relacherLecture(),
+    /** La prochaine lecture des comptes lève (base injoignable). */
+    echouerProchaineLecture: () => {
+      lectureEnPanne = true;
+    },
     avancer: (ms: number) => {
       now += ms;
     },
@@ -489,23 +498,23 @@ describe('les rejeux en vol — un rejeu ou un rattrapage lus avant un geste ne 
     expect(m.cache.etatsDe(EMETTEUR)).toHaveLength(1);
   });
 
-  it('un démarrage posé pendant que l\'arrêt prévient ses lecteurs lui survit : l\'arrêt a eu lieu avant lui', async () => {
+  it('un arrêt qui éteint un démarrage posé pendant lui prévient ceux que ce démarrage a servis', async () => {
     const m = monde();
     await demarrer(m, [{ userId: AMI, precision: 'exact' }]);
 
-    m.suspendreProchaineLecture();
+    m.cache.suspendreProchaineEcriture('advance');
     const arret = stopSharedLocation(m.deps, EMETTEUR);
     await tick();
     expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'city' }])).toMatchObject({ success: true });
-    m.relacherLecture();
+    m.cache.relacher();
     expect(await arret).toEqual({ success: true });
 
-    expect((await readSharedLocation(m.cache, EMETTEUR, T0))?.recipients.map((r) => r.userId)).toEqual([AMI, PROCHE]);
-    [AMI, PROCHE].forEach((id) => expect(m.vers(id).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_CHANGED));
-    expect(m.cache.etatsDe(EMETTEUR)).toHaveLength(1);
+    [AMI, PROCHE].forEach((id) => expect(m.vers(id).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED));
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toBeNull();
+    expect(m.cache.clesDe(EMETTEUR)).toEqual([]);
   });
 
-  it('une baisse sous Ami efface chez un destinataire DÉSIGNÉ même si la capture d\'avant ne l\'a pas vu servi', async () => {
+  it('une baisse sous Ami efface chez un destinataire SERVI même si la capture d\'avant ne l\'a pas vu servi', async () => {
     const m = monde();
     const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: PROCHE });
     await demarrer(m);
@@ -615,5 +624,89 @@ describe('le magasin strict — contre-audit de #16986 (A, B, C)', () => {
     expect(m.vers(PROCHE).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_CHANGED, SERVER_EVENTS.SHARED_LOCATION_ENDED]);
     expect(m.vers(AMI).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
     expect(m.cache.etatsDe(EMETTEUR)).toHaveLength(1);
+  });
+});
+
+describe('contre-audit adversarial de 86fa2ae — la fin ne part qu\'à qui a vu, et n\'est jamais perdue', () => {
+  it('F1 — un destinataire désigné qui n\'a jamais rien vu ne reçoit aucune fin, qu\'il bloque, rebloque ou retire une demande', async () => {
+    const m = monde();
+    await demarrer(m);
+    expect(m.vers(CONNAISSANCE)).toEqual([]);
+
+    await refreshSharedLocationBetween(m.deps, { userA: CONNAISSANCE, userB: EMETTEUR, before: new Map() });
+    const avant = await captureSharedLocationAccess(m.deps, { userA: CONNAISSANCE, userB: EMETTEUR });
+    await refreshSharedLocationBetween(m.deps, { userA: CONNAISSANCE, userB: EMETTEUR, before: avant });
+
+    expect(m.vers(CONNAISSANCE)).toEqual([]);
+  });
+
+  it('F1 — qui a vu reçoit la fin UNE fois : un second blocage ne redit pas que le partage court', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    await m.lier(EMETTEUR, PROCHE, 'ACQUAINTANCE');
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: new Map() });
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: new Map() });
+
+    expect(m.vers(PROCHE).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_ENDED]);
+  });
+
+  it('F1 — un lecteur servi par le seul rattrapage reçoit la fin à l\'arrêt', async () => {
+    const m = monde();
+    await demarrer(m, [{ userId: CONNAISSANCE, precision: 'exact' }]);
+    await m.lier(EMETTEUR, CONNAISSANCE, 'FRIEND');
+    expect((await sharedLocationSnapshotFor(m.deps, CONNAISSANCE, {})).items).toHaveLength(1);
+
+    await stopSharedLocation(m.deps, EMETTEUR);
+
+    expect(m.vers(CONNAISSANCE).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_ENDED]);
+  });
+
+  it('F2 — un arrêt dont l\'annonce échoue après avoir pris : le nouvel essai annonce la fin à ceux qui voyaient', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    m.cache.echouerProchaine('seenAmong');
+    expect(await stopSharedLocation(m.deps, EMETTEUR)).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.UNAVAILABLE });
+    expect(await stopSharedLocation(m.deps, EMETTEUR)).toEqual({ success: true });
+
+    expect(m.emissions.map((e) => e.room).sort()).toEqual([AMI, PROCHE, SANG].map((id) => ROOMS.user(id)).sort());
+    expect(new Set(m.emissions.map((e) => e.event))).toEqual(new Set([SERVER_EVENTS.SHARED_LOCATION_ENDED]));
+    expect(m.cache.clesDe(EMETTEUR)).toEqual([]);
+  });
+
+  it('F2 — une session remplacée dont le retrait échoue est retirée au geste suivant', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    m.cache.echouerProchaine('seenAmong');
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toMatchObject({ success: true });
+    expect(m.vers(PROCHE)).toEqual([]);
+    await stopSharedLocation(m.deps, EMETTEUR);
+
+    [AMI, PROCHE, SANG].forEach((id) => expect(m.vers(id).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED));
+    expect(m.cache.clesDe(EMETTEUR)).toEqual([]);
+  });
+
+  it('F3 — un démarrage dont l\'éventail échoue après la prise est annoncé tel qu\'il est : courant', async () => {
+    const m = monde();
+    m.echouerProchaineLecture();
+
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toHaveLength(1);
+    expect(await stopSharedLocation(m.deps, EMETTEUR)).toEqual({ success: true });
+    expect(m.vers(AMI).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
+  });
+
+  it('F3 — une position écrite dont l\'éventail échoue reste acquise, et l\'accusé le dit', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.echouerProchaineLecture();
+
+    expect(await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN)).toMatchObject({ success: true });
+    expect((await readSharedLocation(m.cache, EMETTEUR, T0))?.position).toEqual(PLUS_LOIN);
   });
 });

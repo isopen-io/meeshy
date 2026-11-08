@@ -17,7 +17,9 @@ import {
   type SharedLocationPosition,
   type SharedLocationPrecision,
 } from '@meeshy/shared/types/shared-location';
+import { createHmac } from 'node:crypto';
 import type { SharedLocationKv } from './sharedLocationKv';
+import { readerKeySecret } from '../posts/readerKey';
 import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
 
 export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision };
@@ -38,6 +40,16 @@ const keyOf = (userId: string, sessionId: string): string => `shared-location:${
 const pointerKeyOf = (userId: string): string => `shared-location-current:${tagOf(userId)}`;
 /** Sans durée de vie : une génération ne revient jamais en arrière (une par compte). */
 const generationKeyOf = (userId: string): string => `shared-location-gen:${tagOf(userId)}`;
+const retiringKeyOf = (userId: string): string => `shared-location-retiring:${tagOf(userId)}`;
+const seenKeyOf = (userId: string, sessionId: string): string => `shared-location-seen:${tagOf(userId)}:${sessionId}`;
+const pointerKeys = (userId: string) => ({ generation: generationKeyOf(userId), pointer: pointerKeyOf(userId), retiring: retiringKeyOf(userId) });
+
+/**
+ * L'empreinte d'un lecteur dans l'ensemble des servis d'UNE session : HMAC à clé secrète,
+ * salée par la session — aucun identifiant en clair, et deux sessions ne se relient pas.
+ */
+const seenMemberOf = (sessionId: string, readerId: string): string =>
+  createHmac('sha256', readerKeySecret()).update(`shared-location-seen:${sessionId}:${readerId.toLowerCase()}`).digest('hex');
 const SESSION_ID = /^[0-9a-f-]{36}$/;
 const validSession = (value: string | null): string | null => (value !== null && SESSION_ID.test(value) ? value : null);
 const contextOf = (userId: string): string => `SharedLocation.state:${userId.toLowerCase()}`;
@@ -101,7 +113,7 @@ export async function claimSharedLocation(
   now: number,
 ): Promise<{ readonly claimed: boolean; readonly displaced: string | null }> {
   const result = await cache.claim(
-    { generation: generationKeyOf(userId), pointer: pointerKeyOf(userId) },
+    pointerKeys(userId),
     { generation, session: state.sessionId, ttlSeconds: ttlOf(state, now) },
   );
   return { claimed: result.claimed, displaced: validSession(result.displaced) };
@@ -117,7 +129,35 @@ export async function storeSharedLocationIfCurrent(cache: SharedLocationCache, u
 
 /** Arrête : la génération avance, le pointeur part, et la session qu'il désignait est rendue (atomique). */
 export async function advanceSharedLocationGeneration(cache: SharedLocationCache, userId: string): Promise<string | null> {
-  return validSession(await cache.advance({ generation: generationKeyOf(userId), pointer: pointerKeyOf(userId) }));
+  return validSession(await cache.advance(pointerKeys(userId)));
+}
+
+/** Les sessions remplacées ou arrêtées dont le retrait n'est pas encore fait. */
+export async function retiringSharedLocationSessions(cache: SharedLocationCache, userId: string): Promise<readonly string[]> {
+  return (await cache.retiring(retiringKeyOf(userId))).filter((session) => validSession(session) !== null);
+}
+
+/** Efface une session retirée : son état, ses servis, et sa place dans l'ensemble « à retirer » (en dernier). */
+export async function forgetRetiredSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string): Promise<void> {
+  await cache.del(keyOf(userId, sessionId));
+  await cache.del(seenKeyOf(userId, sessionId));
+  await cache.retired(retiringKeyOf(userId), sessionId);
+}
+
+/** Note, AVANT de les servir, ceux qu'une session sert ; l'ensemble vit jusqu'au terme du partage. */
+export async function markSharedLocationSeen(cache: SharedLocationCache, userId: string, state: SharedLocationState, readerIds: readonly string[], now: number): Promise<void> {
+  await cache.markSeen(seenKeyOf(userId, state.sessionId), readerIds.map((id) => seenMemberOf(state.sessionId, id)), ttlOf(state, now));
+}
+
+/** Parmi `readerIds`, ceux que la session `sessionId` a servis (et à qui la fin n'est pas encore partie). */
+export async function sharedLocationSeenAmong(cache: SharedLocationCache, userId: string, sessionId: string, readerIds: readonly string[]): Promise<readonly string[]> {
+  const flags = await cache.seenAmong(seenKeyOf(userId, sessionId), readerIds.map((id) => seenMemberOf(sessionId, id)));
+  return readerIds.filter((_, index) => flags[index] === true);
+}
+
+/** Ceux à qui la fin vient de partir ne sont plus des servis de la session. */
+export async function unmarkSharedLocationSeen(cache: SharedLocationCache, userId: string, sessionId: string, readerIds: readonly string[]): Promise<void> {
+  await cache.unmarkSeen(seenKeyOf(userId, sessionId), readerIds.map((id) => seenMemberOf(sessionId, id)));
 }
 
 /** La session courante, ou `null`. */
@@ -144,7 +184,7 @@ export async function readSharedLocation(cache: SharedLocationCache, userId: str
   return sessionId === null ? null : readSharedLocationSession(cache, userId, sessionId, now);
 }
 
-/** Efface l'état d'une session qui n'est plus (ou ne sera jamais) courante. */
+/** Efface l'état d'une session qui ne sera jamais courante (un démarrage perdu). */
 export async function dropSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string): Promise<void> {
   await cache.del(keyOf(userId, sessionId));
 }

@@ -334,6 +334,14 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `UNAVAILABLE`), trois scripts Lua (prise sous condition de génération rendant la session réellement remplacée,
   écriture sous condition de session courante, arrêt par `INCR` sans TTL), clés étiquetées `{id}`. Le repli de débit
   ne s'applique plus quand la limitation est coupée hors production et s'élague par la tête.
+- Contre-audit adversarial de cette réponse (non fusionnable, trois défauts prouvés) : la fin partait vers un
+  destinataire désigné qui n'avait jamais rien vu (un blocage répété révélait le partage), une fin était perdue si
+  l'arrêt échouait après avoir pris, et un démarrage était annoncé en échec alors qu'il courait. Réponse : chaque
+  session tient l'ensemble de ceux qu'elle a SERVIS (empreintes HMAC salées par la session, notées avant l'envoi,
+  rattrapage compris) et la fin ne part qu'à eux, une fois ; une session remplacée ou arrêtée entre, dans le même
+  script Lua, dans un ensemble « à retirer » qu'un nouvel essai vide ; l'accusé dit l'état réel après la prise.
+  Résiduels consignés dans #16987 : course entre la loi lue par une position et une baisse concurrente, comptes
+  désactivés ou supprimés pendant un partage, purge de la génération à la suppression du compte.
 - Leçon : un schéma de concurrence se juge sur la cohérence du MAGASIN qu'il suppose, pas seulement sur l'ordre des
   gestes ; un cache à repli silencieux n'est pas une source de vérité pour un arrêt.
 - Gates locaux : voir la PR.

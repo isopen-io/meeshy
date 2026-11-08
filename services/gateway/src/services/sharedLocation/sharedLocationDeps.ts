@@ -33,6 +33,11 @@ const lazyCache: SharedLocationRelayDeps['cache'] = {
   claim: (keys, args) => kv().claim(keys, args),
   setIfCurrent: (keys, args) => kv().setIfCurrent(keys, args),
   advance: (keys) => kv().advance(keys),
+  retiring: (key) => kv().retiring(key),
+  retired: (key, session) => kv().retired(key, session),
+  markSeen: (key, members, ttlSeconds) => kv().markSeen(key, members, ttlSeconds),
+  seenAmong: (key, members) => kv().seenAmong(key, members),
+  unmarkSeen: (key, members) => kv().unmarkSeen(key, members),
 };
 
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {

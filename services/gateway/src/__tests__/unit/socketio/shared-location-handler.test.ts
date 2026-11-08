@@ -45,7 +45,7 @@ describe('SharedLocationHandler — la porte', () => {
   it('un compte inscrit démarre : le partage est rangé et l\'accusé rend son terme', async () => {
     const p = porte();
     expect(await p.call('location:share-start', DEMARRER)).toEqual({ success: true, data: { expiresAt: '2026-11-08T13:00:00.000Z' } });
-    expect(p.cache.clesDe(MOI).map((key) => key.replace(/[0-9a-f-]{36}$/, '<session>')).sort()).toEqual([`shared-location-current:{${MOI}}`, `shared-location:{${MOI}}:<session>`].sort());
+    expect(p.cache.clesDe(MOI).map((key) => key.replace(/[0-9a-f-]{36}$/, '<session>')).sort()).toEqual([`shared-location-current:{${MOI}}`, `shared-location-seen:{${MOI}}:<session>`, `shared-location:{${MOI}}:<session>`].sort());
     expect(await p.call('location:share-update', { latitude: 48.86, longitude: 2.34 })).toMatchObject({ success: true });
   });
 
