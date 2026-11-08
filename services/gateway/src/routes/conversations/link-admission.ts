@@ -11,6 +11,8 @@ import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { announceMemberArrival } from './memberArrivalFanOut';
+import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 import { creditLinkJoin, type LinkJoinEngagement } from '../links/utils/link-join-credit';
 import {
   sendSuccess,
@@ -96,6 +98,21 @@ export interface LinkJoinParams {
   readonly requestUserAgent?: string | null;
   readonly profile: LinkJoinProfileInput;
   readonly broadcast?: LinkJoinBroadcast;
+  /**
+   * #16837 — l'émetteur de l'éventail d'ARRIVÉE. Distinct de `broadcast`, qui
+   * ne porte qu'un MESSAGE de conversation : l'arrivée s'annonce aux rooms
+   * PERSONNELLES des autres membres, que le compteur de la liste écoute
+   * précisément quand ils ne sont pas dans la room du fil.
+   *
+   * Il vit ICI, dans le cœur partagé, et non chez les trois routes qui
+   * l'appellent : une règle qu'il faut retaper à chaque site est une règle
+   * qu'un site finira par ne pas avoir — c'est exactement ce qui a laissé ces
+   * portes muettes pendant que leur jumelle émettait.
+   *
+   * Absent (un appelant qui ne l'a pas encore câblé) : rien n'est annoncé, et
+   * l'adhésion est persistée comme avant.
+   */
+  readonly arrivalIO?: ConversationRoomEmitter | null;
   /**
    * Un `Authorization: Bearer` a été PRÉSENTÉ et n'a pas authentifié (#6741) —
    * la porte `optionalAuth` retombe alors sur un `authContext` anonyme,
@@ -554,6 +571,30 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
     if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
     const participantId = outcome.participant.id;
+    // #16837 — l'arrivée s'annonce aux autres membres. Le SUJET de
+    // `conversation:participant-joined` doit être un compte : son contrat
+    // déclare `userId` et `displayName` non optionnels et les décodeurs
+    // clients sont stricts, donc un invité ne peut pas y être nommé sans
+    // casser le décodage de l'événement ENTIER (décision à part, #16838).
+    // L'invité reste en revanche un DESTINATAIRE légitime de l'éventail —
+    // c'est `differsOrUnset` qui le garde dedans.
+    const arrivingUserId = outcome.participant.userId;
+    if (arrivingUserId) {
+      await announceMemberArrival({
+        prisma,
+        io: params.arrivalIO,
+        conversationId: shareLink.conversationId,
+        arrival: {
+          userId: arrivingUserId,
+          displayName: outcome.participant.displayName,
+          joinedAt: outcome.participant.joinedAt ?? new Date(),
+        },
+        onError: (error) => logError(
+          `member arrival fan-out failed on link join (conversation ${shareLink.conversationId})`,
+          error,
+        ),
+      });
+    }
     (params.afterResponse ?? deferAfterResponse)(
       () => recordArrivalCountry({
         prisma,
@@ -827,6 +868,11 @@ export function registerLinkAdmissionRoutes(
           prisma,
           key,
           authContext,
+          // `getIO?.()` et non `getIO()` : l'éventail est ACCESSOIRE, et une
+          // passerelle dont le gestionnaire n'expose pas d'émetteur ne doit pas
+          // faire échouer une adhésion déjà persistée (mesuré : trois suites de
+          // route rendaient 500 sur l'appel nu).
+          arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
           requestIp: resolveClientIp(request),
           requestUserAgent: extractUserAgent(request),
           rejectedCredential,
