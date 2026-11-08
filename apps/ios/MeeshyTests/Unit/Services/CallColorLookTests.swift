@@ -74,6 +74,38 @@ final class CallColorLookTests: XCTestCase {
         }
     }
 
+    // MARK: - Les ambiances (OPUS-2)
+
+    func test_catalog_eightAmbiances_naturalFirst_everyOtherHasACube() {
+        XCTAssertEqual(VideoFilterPreset.catalog.count, 8)
+        XCTAssertEqual(VideoFilterPreset.catalog.first, .natural)
+        for preset in VideoFilterPreset.catalog.dropFirst() {
+            XCTAssertNotNil(CallColorLook.recipe(for: preset), "\(preset) s'étalonne par son cube")
+        }
+    }
+
+    func test_monochrome_removesAllColor_skinIncluded() throws {
+        XCTAssertEqual(CallColorLook.saturation(of: try graded(lightSkin, .monochrome)), 0, accuracy: 0.0001)
+        XCTAssertEqual(CallColorLook.saturation(of: try graded(dullBlue, .monochrome)), 0, accuracy: 0.0001)
+    }
+
+    func test_golden_warmsAMidGray() throws {
+        let gris = try graded(SIMD3(repeating: 0.5), .golden)
+        XCTAssertGreaterThan(gris.x, gris.z)
+    }
+
+    func test_softNightAndBright_liftAMidGray() throws {
+        for preset in [VideoFilterPreset.softNight, .bright] {
+            XCTAssertGreaterThan(CallColorLook.luminance(try graded(SIMD3(repeating: 0.4), preset)), 0.4)
+        }
+    }
+
+    func test_sky_saturatesSkinLessThanTheRest() throws {
+        let skinGain = CallColorLook.saturation(of: try graded(lightSkin, .sky)) / CallColorLook.saturation(of: lightSkin)
+        let blueGain = CallColorLook.saturation(of: try graded(dullBlue, .sky)) / CallColorLook.saturation(of: dullBlue)
+        XCTAssertLessThan(skinGain, blueGain)
+    }
+
     // MARK: - Le cube
 
     func test_cubeData_hasOneRGBAFloatPerLatticePoint() throws {
