@@ -434,7 +434,11 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // `CallTranscriptSection.swift` (1) peint le nom du locuteur dans le fil d'après l'appel (`CallSpeakerColor.hex(for:mode:)`).
 // C'est l'identité d'une PERSONNE, dérivée de son identifiant (même graine que le liseré de sa vignette), pas la
 // couleur d'une conversation : `accentColor` n'en dit rien. Valeur MESURÉE le 2026-11-07 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 475;
+// 475 -> 476 (2026-11-08, #16945, le liseré de la vignette d'appel) : `CallTileChrome.swift` (1) teinte le liseré
+// d'une vignette de la couleur de la personne qu'elle montre (`CallSpeakerColor.hex(for:)`), site UNIQUE partagé par
+// ma vignette d'appel entrant et la vignette du duo établi, qui portait un trait blanc (loi 4). Identité d'une
+// PERSONNE, pas d'une conversation. Valeur MESURÉE le 2026-11-08 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 476;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

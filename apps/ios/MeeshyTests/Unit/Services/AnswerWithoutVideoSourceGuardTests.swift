@@ -96,6 +96,68 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
         XCTAssertTrue(Self.view.contains("LocalCameraVideoView("), "La vignette lit la piste locale déjà ouverte à la sonnerie.")
     }
 
+    // MARK: - Avant de décrocher (P17, #16945)
+
+    func test_accept_followsThePreAnswerRoute_thenAppliesTheMicrophoneChoice() {
+        guard let fn = slice(Self.view, from: "private func acceptCall() {", to: "private func acceptCallWithoutVideo() {") else { return }
+        guard let route = fn.range(of: "preAnswer.route(isVideoCall: callManager.isVideoEnabled)"),
+              let mute = fn.range(of: "applyMicrophoneChoice()") else {
+            XCTFail("Répondre suit la caméra choisie, puis pose le micro choisi"); return
+        }
+        XCTAssertLessThan(route.lowerBound, mute.lowerBound, "Le micro se coupe APRÈS la réponse, jamais avant.")
+        XCTAssertTrue(fn.contains("CallAnswerWithoutVideo(call: callManager).answer()"), "Caméra coupée ⇒ « Répondre sans vidéo ».")
+    }
+
+    func test_answerWithoutVideo_keepsTheMicrophoneChoice() {
+        guard let fn = slice(Self.view, from: "private func acceptCallWithoutVideo() {", to: "var body: some View") else { return }
+        XCTAssertTrue(fn.contains("applyMicrophoneChoice()"))
+    }
+
+    func test_microphoneChoice_mutesOnlyAnAnsweredCall_throughTheSharedToggle() {
+        guard let fn = slice(Self.view, from: "private func applyMicrophoneChoice() {", to: "/// Tranche les permissions") else { return }
+        XCTAssertTrue(fn.contains("callManager.callState == .connecting"), "Rien ne se coupe si la réponse n'est pas partie.")
+        XCTAssertTrue(fn.contains("callManager.toggleMute()"), "Le même chemin que la pilule : CallKit, pair et piste naissante suivent.")
+    }
+
+    func test_incomingView_wiresThePreAnswerBar_andMyColor() {
+        XCTAssertTrue(Self.view.contains("IncomingPreAnswerBar("))
+        XCTAssertTrue(Self.view.contains("cameraChosen: preAnswer.cameraOn"), "Caméra coupée ⇒ ma vignette s'efface.")
+        XCTAssertTrue(Self.view.contains("CallSelfTileStroke.color(forKey: IncomingCallChoices.selfColorKey(userId: AuthManager.shared.currentUser?.id))"), "Le liseré de ma vignette porte MA couleur (loi 4).")
+        XCTAssertTrue(Self.view.contains("CallTileNameplate(title:"), "La plaque « Vous » est celle de la tuile de groupe.")
+    }
+
+    func test_incomingView_followsTheP17Hierarchy_andKeepsTheAudioScreen() {
+        guard let video = slice(Self.view, from: "private var videoHeader: some View {", to: "private var callerNameText: some View {") else { return }
+        guard let chip = video.range(of: "typeChip"),
+              let name = video.range(of: "callerNameText"),
+              let sound = video.range(of: "CallPreviewSoundButton(preview: .shared)"),
+              let tile = video.range(of: "selfPreview") else {
+            XCTFail("P17 : puce de type, nom, « Activer le son », puis ma vignette"); return
+        }
+        XCTAssertLessThan(chip.lowerBound, name.lowerBound)
+        XCTAssertLessThan(name.lowerBound, sound.lowerBound)
+        XCTAssertLessThan(sound.lowerBound, tile.lowerBound, "Ma vignette se pose SOUS « Activer le son ».")
+        XCTAssertTrue(video.contains("CallPreviewCallerDisc(preview: .shared)"), "Le disque de l'appelant s'efface quand sa vidéo joue.")
+        XCTAssertFalse(video.contains("callTypeBadge"), "Pas de badge « Vidéo » redondant sur P17.")
+
+        guard let audio = slice(Self.view, from: "private var audioHeader: some View {", to: "private var videoHeader: some View {") else { return }
+        XCTAssertTrue(audio.contains("callTypeBadge\n            .padding(.bottom, 60)"), "L'écran audio livré garde ses espacements.")
+        XCTAssertFalse(audio.contains("selfPreview"))
+    }
+
+    func test_answerButton_glyphFollowsTheChosenRoute() {
+        XCTAssertTrue(Self.view.contains("IncomingCallChoices.acceptGlyph("))
+        XCTAssertTrue(Self.view.contains("route: preAnswer.route(isVideoCall: callManager.isVideoEnabled)"))
+        XCTAssertTrue(Self.view.contains("call.incoming.answer\""), "P17 : le bouton principal dit « Répondre ».")
+    }
+
+    func test_cameraButton_lightsOnlyWhenTheCameraReallyFilms() {
+        let bar = Self.source("Meeshy/Features/Call/Views/IncomingPreAnswerBar.swift")
+        XCTAssertTrue(bar.contains("kind: cameraFilms ? .active : .normal"))
+        XCTAssertTrue(bar.contains("toggleState: cameraFilms"))
+        XCTAssertTrue(Self.view.contains("cameraFilms: preAnswer.cameraFilms("))
+    }
+
     func test_answerWithoutVideo_alsoGuardsTheMicrophone() {
         guard let fn = slice(Self.view, from: "private func acceptCallWithoutVideo() {", to: "var body: some View") else { return }
         XCTAssertTrue(fn.contains("MediaPermissionCoordinator.ensureMicrophone()"))
