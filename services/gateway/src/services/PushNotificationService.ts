@@ -398,9 +398,10 @@ export class PushNotificationService {
       },
     });
 
-    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`).
+    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`). Un jeton
+    // PushToTalk (#17142) n'est enregistré QUE par un client qui sait le traiter : il porte sa capacité.
     const pushType = effectivePayload.data?.type;
-    const tokens = activeTokens.filter((token) => tokenRoutesPushType(token, pushType));
+    const tokens = activeTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
 
     if (tokens.length === 0) {
       pushLogger.debug('No active tokens found for user', { userId, pushType, excluded: activeTokens.length });

@@ -105,4 +105,10 @@ export type TalkieEndedEventData = {
   readonly toUserId: string;
   readonly reason: TalkieEndReason;
   readonly endedAt: string;
+  /**
+   * Une voix RÉVEILLÉE seulement (#17142) : le destinataire l'a-t-il rejointe avant sa fin ? `false` ⇒ le client
+   * émetteur crée la copie vocale (dans `conversationId` de son repli, ou la conversation la plus récente), comme pour
+   * un repli. Absent pour une voix en direct.
+   */
+  readonly joined?: boolean;
 };

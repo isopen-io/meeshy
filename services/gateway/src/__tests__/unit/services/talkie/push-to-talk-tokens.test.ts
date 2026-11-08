@@ -37,7 +37,7 @@ function store(tokens: Token[], sessions: Session[]) {
       userSession: {
         findMany: async (args: { where: Record<string, any> }) => sessions.filter((s) =>
           (args.where.sessionToken === undefined || s.sessionToken === args.where.sessionToken)
-          && (args.where.id === undefined || args.where.id.in.includes(s.id))
+          && (args.where.id === undefined || (typeof args.where.id === 'string' ? s.id === args.where.id : args.where.id.in.includes(s.id)))
           && (args.where.isValid === undefined || s.isValid === args.where.isValid)
           && (args.where.expiresAt === undefined || s.expiresAt > args.where.expiresAt.gt)),
       },
@@ -50,7 +50,7 @@ const ptt = (id: string, sessionId: string | null, userId = U): Token => ({ id, 
 
 describe('#17142 — le jeton PushToTalk suit sa session', () => {
   it('la fermeture d’UNE session retire ses jetons PushToTalk, pas ceux d’une autre session ni les autres jetons', async () => {
-    const s = store([ptt('a', 's1'), ptt('b', 's2'), { ...ptt('c', 's1'), type: 'apns' }], []);
+    const s = store([ptt('a', 's1'), ptt('b', 's2'), { ...ptt('c', 's1'), type: 'apns' }], [{ id: 's1', userId: U, sessionToken: 'h', isValid: false, expiresAt: later }]);
     await retirePushToTalkTokensAfterSessionEnd(s.prisma as never, { sessionId: 's1' }, () => undefined);
 
     expect(s.rows.map((t) => t.id)).toEqual(['b', 'c']);
@@ -79,15 +79,21 @@ describe('#17142 — le jeton PushToTalk suit sa session', () => {
 
   it('un retrait qui échoue ne fait jamais échouer la fermeture de session', async () => {
     const errors: unknown[] = [];
-    const broken = { pushToken: { deleteMany: async () => { throw new Error('mongo'); } }, userSession: { findMany: async () => [] } };
+    const broken = { pushToken: { deleteMany: async () => { throw new Error('mongo'); } }, userSession: { findMany: async () => [{ id: 's1', userId: U }] } };
     await expect(retirePushToTalkTokensAfterSessionEnd(broken as never, { sessionId: 's1' }, (e) => errors.push(e))).resolves.toBeUndefined();
     expect(errors).toHaveLength(1);
   });
 
-  it('la porte du réveil ignore — et retire — un jeton PushToTalk dont la session est close : repli sur le push ordinaire', async () => {
+  it('la porte du réveil ignore — et retire — un jeton PushToTalk dont la session est close ; un appareil qui ne sait pas router le réveil ne compte pas', async () => {
     const s = store([ptt('ferme', 's-ko'), { ...ptt('apns', null), type: 'apns' }], [{ id: 's-ko', userId: U, sessionToken: 'y', isValid: false, expiresAt: later }]);
 
-    expect(await talkieWakeChannel(s.prisma as never, U, NOW)).toBe('push');
+    expect(await talkieWakeChannel(s.prisma as never, U, NOW)).toBeNull();
     expect(s.rows.map((t) => t.id)).toEqual(['apns']);
+  });
+
+  it('un jeton PushToTalk dont la session vit : canal pushtotalk', async () => {
+    const s = store([ptt('vivant', 's-ok')], [{ id: 's-ok', userId: U, sessionToken: 'x', isValid: true, expiresAt: later }]);
+
+    expect(await talkieWakeChannel(s.prisma as never, U, NOW)).toBe('pushtotalk');
   });
 });

@@ -12,8 +12,11 @@ import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 
 export const talkieAudioPath = (talkieId: string): string => `/api/v1/talkie/${talkieId}/audio`;
 
+/** Une clé PROPRE à cet usage, dérivée du secret maître : jamais `JWT_SECRET` lui-même comme clé de signature. */
+const audioKey = (): Buffer => createHmac('sha256', getJwtSecret()).update('meeshy/talkie-audio/v1').digest();
+
 const signature = (talkieId: string, toUserId: string, expiresAt: number): string =>
-  createHmac('sha256', getJwtSecret())
+  createHmac('sha256', audioKey())
     .update(`talkie-audio:${talkieId.toLowerCase()}:${toUserId.toLowerCase()}:${expiresAt}`)
     .digest('base64url');
 

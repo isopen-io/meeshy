@@ -110,9 +110,11 @@ describe('#17142 — talkie:join rejoue tout, dans l’ordre, puis le direct, pu
     t.relay.end(SENDER_SOCKET, FROM, { talkieId: data.talkieId });
 
     const seen = toSocket(t).map((e) => (e.event === 'talkie:chunk' ? `chunk:${e.payload.seq}` : e.event));
-    expect(seen).toEqual(['talkie:incoming', 'chunk:0', 'chunk:1', 'chunk:2']);
+    expect(seen).toEqual(['talkie:incoming', 'chunk:0', 'chunk:1', 'chunk:2', 'talkie:ended']);
     expect(toSocket(t)[0].payload).toMatchObject({ talkieId: data.talkieId, fromUserId: FROM, codec: 'aac-adts' });
-    expect(t.emissions.filter((e) => e.event === 'talkie:ended').map((e) => e.room)).toEqual([`user:${TO}`, `user:${FROM}`]);
+    const ended = t.emissions.filter((e) => e.event === 'talkie:ended');
+    expect(ended.map((e) => e.room)).toEqual([RECIPIENT_SOCKET, `user:${FROM}`]);
+    expect(ended[1].payload).toMatchObject({ reason: 'sender', joined: true });
     expect(t.trace).toHaveBeenCalledWith('[TALKIE_JOINED]', expect.objectContaining({ talkieId: data.talkieId, toUserId: TO, afterEnd: false }));
     expect(t.followUp).not.toHaveBeenCalled();
     t.relay.dispose();
@@ -232,7 +234,7 @@ describe('#17142 — talkie:join rejoue tout, dans l’ordre, puis le direct, pu
 });
 
 describe('#17142 — les bornes du tampon', () => {
-  it('le tampon d’une session suit les octets gardés, et se libère à la fermeture sans rattrapage', async () => {
+  it('le tampon suit les octets gardés ; la socket émettrice qui tombe GARDE la voix pour le rattrapage, un blocage la libère', async () => {
     const t = relayWith();
     const { data } = await open(t);
     await say(t, data.talkieId, 0);
@@ -240,22 +242,38 @@ describe('#17142 — les bornes du tampon', () => {
     expect(t.relay.bufferedBytes).toBe(2000);
 
     t.relay.socketGone(SENDER_SOCKET);
+    expect(t.relay.bufferedBytes).toBe(2000);
+    expect(t.followUp).toHaveBeenCalledTimes(1);
+    t.relay.cutPair(FROM, TO);
     expect(t.relay.bufferedBytes).toBe(0);
   });
 
-  it('le plafond d’octets du processus ferme la prise de parole qui le franchirait (« limit »)', async () => {
+  it('au plus deux voix réveillées par émetteur à la fois : la troisième se replie, avec sa conversation', async () => {
+    const t = relayWith({ fallbackConversation: async () => 'd'.repeat(24) });
+    const first = await t.relay.start('s-1', FROM, { toUserId: TO, codec: 'aac-adts' });
+    await t.relay.start('s-2', FROM, { toUserId: TO, codec: 'aac-adts' });
+    if (first.success) t.relay.end('s-1', FROM, { talkieId: first.data.talkieId });
+    const third = await t.relay.start('s-3', FROM, { toUserId: TO, codec: 'aac-adts' });
+
+    expect(third).toMatchObject({ success: false, code: 'TALKIE_FALLBACK_VOICE', conversationId: 'd'.repeat(24) });
+    expect(t.wake).toHaveBeenCalledTimes(2);
+    t.relay.dispose();
+  });
+
+  it('un processus qui ne peut plus garder une voix entière replie la suivante au lieu d’évincer les autres', async () => {
     const t = relayWith();
-    const sessions = Math.ceil(TALKIE_WAKING_PROCESS_MAX_BYTES / 500_000) + 1;
-    const ids: string[] = [];
-    for (let i = 0; i < sessions; i += 1) {
-      const ack = await t.relay.start(`s-${i}`, FROM, { toUserId: TO, codec: 'aac-adts' });
-      if (!ack.success) throw new Error('refus');
-      ids.push(ack.data.talkieId);
-      for (let seq = 0; seq < 31; seq += 1) await t.relay.chunk(`s-${i}`, FROM, { talkieId: ack.data.talkieId, seq, data: frame(1, 16_000) });
+    const senders = Array.from({ length: Math.ceil(TALKIE_WAKING_PROCESS_MAX_BYTES / 496_000) + 2 }, (_, i) => `${String(i).padStart(24, '0')}`);
+    const outcomes: string[] = [];
+    for (const [i, sender] of senders.entries()) {
+      const ack = await t.relay.start(`s-${i}`, sender, { toUserId: TO, codec: 'aac-adts' });
+      outcomes.push(ack.success ? 'ok' : ack.code);
+      if (!ack.success) continue;
+      for (let seq = 0; seq < 31; seq += 1) await t.relay.chunk(`s-${i}`, sender, { talkieId: ack.data.talkieId, seq, data: frame(1, 16_000) });
     }
 
+    expect(outcomes).toContain('TALKIE_FALLBACK_VOICE');
     expect(t.relay.bufferedBytes).toBeLessThanOrEqual(TALKIE_WAKING_PROCESS_MAX_BYTES);
-    expect(t.emissions.some((e) => e.event === 'talkie:ended' && e.payload.reason === 'limit')).toBe(true);
+    expect(t.emissions.some((e) => e.event === 'talkie:ended' && e.payload.reason === 'limit')).toBe(false);
     t.relay.dispose();
     expect(t.relay.bufferedBytes).toBe(0);
   });
@@ -299,6 +317,18 @@ describe('#17142 — la voix lisible sans socket (extension de notification) et 
     expect(await t.relay.audioFor('f'.repeat(24), TO)).toEqual({ ok: false, reason: 'unknown' });
     t.cuts.set(`${FROM}:${TO}`, t.now());
     expect(await t.relay.audioFor(data.talkieId, TO)).toEqual({ ok: false, reason: 'refused' });
+    t.relay.dispose();
+  });
+
+  it('finie sans join : l’émetteur l’apprend (joined: false) pour créer la copie vocale ; le destinataire n’entend rien', async () => {
+    const t = relayWith();
+    const { data } = await open(t);
+    await say(t, data.talkieId, 0);
+    t.relay.end(SENDER_SOCKET, FROM, { talkieId: data.talkieId });
+
+    const ended = t.emissions.filter((e) => e.event === 'talkie:ended');
+    expect(ended.map((e) => e.room)).toEqual([`user:${FROM}`]);
+    expect(ended[0].payload).toMatchObject({ reason: 'sender', joined: false });
     t.relay.dispose();
   });
 
@@ -386,5 +416,30 @@ describe('#17141 — la conversation la plus récente de la paire', () => {
     const { mostRecentSharedConversation } = await import('../../../../services/talkie/talkieFallback');
     expect(await mostRecentSharedConversation(prisma as never, FROM, TO)).toBe('c-groupe');
     expect(await mostRecentSharedConversation(prisma as never, FROM, INTRUS)).toBeNull();
+  });
+});
+
+describe('#17142 (audit) — ce qui borne le rattrapage et la copie', () => {
+  it('la coupure d’un blocage vit aussi longtemps qu’une voix réveillée reste rejoignable', async () => {
+    const { cutTalkiesOnBlock } = await import('../../../../services/talkie/talkieCut');
+    const ttls: number[] = [];
+    await cutTalkiesOnBlock(
+      { cache: { get: async () => null, set: async (_k: string, _v: string, ttl?: number) => { ttls.push(ttl ?? 0); } } as never, relay: null, now: () => 0 },
+      { blockerId: TO, blockedId: FROM, scope: 'user' },
+    );
+    expect(Math.min(...ttls) * 1000).toBeGreaterThanOrEqual(TALKIE_MAX_DURATION_MS + TALKIE_JOIN_WINDOW_MS);
+  });
+
+  it('la copie ne vise qu’un échange privé que le serveur lit : direct ou groupe, jamais chiffré', async () => {
+    const { mostRecentSharedConversation } = await import('../../../../services/talkie/talkieFallback');
+    const findFirst = jest.fn(async (_args: unknown) => null);
+    const prisma = {
+      participant: { findMany: async () => [{ conversationId: 'c1' }] },
+      conversation: { findFirst },
+    };
+    await mostRecentSharedConversation(prisma as never, FROM, TO);
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ type: { in: ['direct', 'group'] }, NOT: expect.objectContaining({ AND: expect.any(Array) }) }),
+    }));
   });
 });

@@ -153,32 +153,21 @@ describe('#17142 — le réveil du talkie au chokepoint', () => {
     expect(mockPrisma.pushToken.findMany.mock.calls[0][0]).toMatchObject({ where: { type: { in: ['apns', 'fcm', 'voip'] } } });
   });
 
-  it('sans PushToTalk : APNs time-sensitive de catégorie TALKIE, collapse-id, expirée avec la fenêtre de rattrapage', async () => {
-    const svc = await service();
-    mockPrisma.pushToken.findMany.mockResolvedValue([IOS]);
-    const before = Math.floor(Date.now() / 1000);
+  it('sans PushToTalk : le push TALKIE est time-sensitive, de catégorie TALKIE, collapse-id et expiré avec la fenêtre ; data-only sur Android', () => {
+    const [apns, fcm] = wake('push');
 
-    await svc.sendToUser(wake('push')[0]);
-
-    const note = mockApnsSend.mock.calls[0][0] as Record<string, any>;
-    expect(note.aps['interruption-level']).toBe('time-sensitive');
-    expect(note.category).toBe('TALKIE');
-    expect(note.collapseId).toBe(`talkie-${TALKIE}`);
-    expect(note.alert).toMatchObject({ title: 'Awa vous parle', body: 'Talkie — touchez pour écouter' });
-    expect(note.expiry).toBeGreaterThanOrEqual(before + TALKIE_WAKE_TTL_MS / 1000);
-    expect(note.pushType).not.toBe('voip');
+    expect(apns).toMatchObject({ types: ['apns'], platforms: ['ios'], payload: { interruptionLevel: 'time-sensitive', category: 'TALKIE', collapseId: `talkie-${TALKIE}`, ttlMs: TALKIE_WAKE_TTL_MS } });
+    expect(apns.payload.title).toBe('Awa vous parle');
+    expect(fcm).toMatchObject({ types: ['fcm'], platforms: ['android', 'web'], payload: { dataOnlyOnAndroid: true, ttlMs: TALKIE_WAKE_TTL_MS } });
   });
 
-  it('sans PushToTalk : FCM Android en DATA-ONLY haute priorité, mêmes clés', async () => {
+  it.each([[IOS], [ANDROID]])('rétrocompatibilité : un client qui ne route pas talkie_incoming (%j) ne reçoit RIEN', async (token) => {
     const svc = await service();
-    mockPrisma.pushToken.findMany.mockResolvedValue([ANDROID]);
+    mockPrisma.pushToken.findMany.mockResolvedValue([token]);
 
-    await svc.sendToUser(wake('push')[1]);
-
-    const message = mockFirebaseMessagingSend.mock.calls[0][0] as Record<string, any>;
-    expect(message.notification).toBeUndefined();
-    expect(message.android).toMatchObject({ priority: 'high', ttl: TALKIE_WAKE_TTL_MS });
-    expect(message.data).toMatchObject({ type: 'talkie_incoming', talkieId: TALKIE, fromName: 'Awa', title: 'Awa vous parle' });
+    expect(await svc.sendToUser(wake('push')[token.type === 'apns' ? 0 : 1])).toEqual([]);
+    expect(mockApnsSend).not.toHaveBeenCalled();
+    expect(mockFirebaseMessagingSend).not.toHaveBeenCalled();
   });
 
   it('les préférences s’appliquent : pushs coupés ⇒ rien ne part, PushToTalk compris', async () => {
@@ -221,10 +210,10 @@ describe('#17142 — le canal de réveil d’un destinataire', () => {
 
   it.each([
     [['pushtotalk', 'apns'], 'pushtotalk'],
-    [['apns'], 'push'],
-    [['fcm'], 'push'],
+    [['apns'], null],
+    [['fcm'], null],
     [[], null],
-  ])('jetons %j : %s', async (types, expected) => {
+  ])('jetons %j : %s — un APNs/FCM ne réveille que si son client route talkie_incoming (aucun client publié encore)', async (types, expected) => {
     expect(await talkieWakeChannel(prismaWith(types) as never, 'u')).toBe(expected);
   });
 

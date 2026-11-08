@@ -43,15 +43,18 @@
  * processus — et UN réveil part (`wake`). Rien n'est émis vers le destinataire tant
  * qu'il n'a pas émis `talkie:join` : il reçoit alors, sur SA socket, `talkie:incoming`,
  * tous les fragments gardés dans l'ordre, puis le direct, puis `talkie:ended`. Une
- * voix finie (relâchée ou au plafond, jamais coupée) reste rejoignable
+ * voix finie (relâchée, au plafond, ou socket émettrice tombée — jamais coupée) reste rejoignable
  * `TALKIE_JOIN_WINDOW_MS`, puis son tampon est libéré ; finie sans que personne l'ait
- * rejointe, elle envoie un push de SUIVI (`followUp`) qui porte l'audio. Le join, et
+ * rejointe, elle envoie un push de SUIVI (`followUp`) qui porte l'audio, et sa fin dit à
+ * l'émetteur `joined: false` — son client crée alors la copie vocale. Au plus deux voix
+ * réveillées par émetteur à la fois ; au-delà, ou processus plein, le repli. Le join, et
  * la lecture HTTP du tampon (`audioFor`), passent la MÊME garde : le destinataire seul,
  * aucune coupure depuis l'ouverture, et la porte rejugée. Rien n'est persisté.
  */
 import { randomBytes } from 'node:crypto';
 import {
   TALKIE_ERROR_CODES,
+  TALKIE_FALLBACK_VOICE_MESSAGE,
   TALKIE_JOIN_WINDOW_MS,
   TALKIE_MAX_CHUNK_BYTES,
   TALKIE_MAX_CHUNKS,
@@ -80,6 +83,8 @@ const DURATION_GRACE_MS = 1_000;
 export const REJUDGE_EVERY_MS = 2_000;
 /** Tout ce que les voix réveillées de CE processus gardent en mémoire, ensemble. */
 export const TALKIE_WAKING_PROCESS_MAX_BYTES = 32 * 1024 * 1024;
+/** Les voix réveillées qu'un même émetteur garde à la fois : le réveil n'est pas une rafale de pushs. */
+export const TALKIE_WAKING_PER_SENDER = 2;
 
 type Waiting = {
   readonly buffer: TalkieChunkEventData[];
@@ -143,6 +148,7 @@ export type TalkieAudio =
 
 const refusal = (verdict: TalkieRefusal): TalkieStartAck => ({ success: false, error: verdict.message, code: verdict.code });
 const INVALID: TalkieStartAck = { success: false, error: 'Charge illisible', code: TALKIE_ERROR_CODES.INVALID };
+const WAKING_FULL: TalkieStartAck = { success: false, error: TALKIE_FALLBACK_VOICE_MESSAGE, code: TALKIE_ERROR_CODES.FALLBACK_VOICE };
 const RATE_LIMITED: TalkieStartAck = { success: false, error: 'Trop de prises de parole', code: TALKIE_ERROR_CODES.RATE_LIMITED };
 
 const byteLength = (data: Uint8Array | ArrayBuffer): number => data.byteLength;
@@ -203,6 +209,7 @@ export class TalkieRelay {
 
     const startedAt = this.deps.now();
     const waking: TalkieWaking | null = admitted.ok === true && admitted.delivery === 'waking' ? (admitted as TalkieWaking) : null;
+    if (waking && !this.mayHoldAnotherVoice(fromUserId)) return this.withFallbackConversation(WAKING_FULL, fromUserId, toUserId);
     const session: Session = {
       talkieId: randomBytes(12).toString('hex'),
       fromUserId,
@@ -236,6 +243,17 @@ export class TalkieRelay {
       success: true,
       data: { talkieId: session.talkieId, maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES, delivery: session.delivery },
     };
+  }
+
+  /**
+   * Une voix réveillée tient de la mémoire et envoie des pushs : au plus `TALKIE_WAKING_PER_SENDER` à la fois par
+   * émetteur (en cours ou en rattrapage), et jamais quand le processus ne peut plus en garder une entière — la voix
+   * suivante se replie en message vocal au lieu d'évincer celles des autres.
+   */
+  private mayHoldAnotherVoice(fromUserId: string): boolean {
+    if (this.buffered + TALKIE_MAX_TOTAL_BYTES > TALKIE_WAKING_PROCESS_MAX_BYTES) return false;
+    const held = [...this.sessions.values(), ...this.finished.values()].filter((s) => s.waiting !== null && same(s.fromUserId, fromUserId));
+    return held.length < TALKIE_WAKING_PER_SENDER;
   }
 
   private async withFallbackConversation(ack: TalkieStartAck, fromUserId: string, toUserId: string): Promise<TalkieStartAck> {
@@ -420,7 +438,7 @@ export class TalkieRelay {
   socketGone(socketId: string): void {
     if (this.opening.has(socketId)) this.lostWhileOpening.add(socketId);
     const talkieId = this.bySocket.get(socketId);
-    if (talkieId) this.close(talkieId, 'cut');
+    if (talkieId) this.close(talkieId, 'cut', 'both', true);
   }
 
   /** Coupe, SUR CETTE INSTANCE, les prises de parole de `fromUserId` vers `toUserId` — un blocage. Casse libre. */
@@ -436,30 +454,37 @@ export class TalkieRelay {
   }
 
   /** `audience` : `both` prévient aussi l'émetteur (ses autres appareils) ; `recipient` ne prévient que celui qui écoute. */
-  private close(talkieId: string, reason: TalkieEndReason, audience: 'both' | 'recipient' = 'both'): void {
+  /**
+   * `keep` : une voix réveillée reste rejoignable après sa fin — relâchée, au plafond, ou dont la socket émettrice est
+   * tombée ; jamais une voix coupée par un blocage, un réglage ou une panne de garde.
+   */
+  private close(talkieId: string, reason: TalkieEndReason, audience: 'both' | 'recipient' = 'both', keep = reason !== 'cut'): void {
     const session = this.sessions.get(talkieId);
     if (!session) return;
     this.sessions.delete(talkieId);
     if (this.bySocket.get(session.socketId) === talkieId) this.bySocket.delete(session.socketId);
     if (session.timer) clearTimeout(session.timer);
 
-    const ended = {
+    const waiting = session.waiting;
+    const ended: TalkieEndedEventData = {
       talkieId,
       fromUserId: session.fromUserId,
       toUserId: session.toUserId,
       reason,
       endedAt: new Date(this.deps.now()).toISOString(),
+      ...(waiting ? { joined: waiting.joined } : {}),
     };
-    this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
+    if (waiting) waiting.listeners.forEach((socket) => this.sendToSocket(socket, SERVER_EVENTS.TALKIE_ENDED, ended));
+    else this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
     if (audience === 'both') this.sendTo(session.fromUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
-    if (session.waiting) this.keepForLateJoin(session, ended);
+    if (waiting) this.keepForLateJoin(session, ended, keep);
   }
 
   /** Une voix relâchée ou au plafond reste rejoignable la fenêtre durant ; une voix coupée est oubliée sur-le-champ. */
-  private keepForLateJoin(session: Session, ended: TalkieEndedEventData): void {
+  private keepForLateJoin(session: Session, ended: TalkieEndedEventData, keep: boolean): void {
     const waiting = session.waiting as Waiting;
     waiting.listeners.clear();
-    if (ended.reason === 'cut') {
+    if (!keep) {
       this.forget(session);
       return;
     }

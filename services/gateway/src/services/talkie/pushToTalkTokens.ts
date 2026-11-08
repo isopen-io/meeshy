@@ -43,11 +43,14 @@ export async function retirePushToTalkTokensAfterSessionEnd(
       await retireOrphanPushToTalkTokens(prisma, scope.userId, new Date());
       return;
     }
-    const sessionIds = 'sessionId' in scope
-      ? [scope.sessionId]
-      : (await prisma.userSession.findMany({ where: { sessionToken: scope.sessionToken }, select: { id: true } })).map((session) => session.id);
-    if (sessionIds.length === 0) return;
-    await prisma.pushToken.deleteMany({ where: { type: PTT, sessionId: { in: sessionIds } } });
+    const sessions = await prisma.userSession.findMany({
+      where: 'sessionId' in scope ? { id: scope.sessionId } : { sessionToken: scope.sessionToken },
+      select: { id: true, userId: true },
+    });
+    if (sessions.length === 0) return;
+    await prisma.pushToken.deleteMany({
+      where: { userId: { in: sessions.map((s) => s.userId) }, type: PTT, sessionId: { in: sessions.map((s) => s.id) } },
+    });
   } catch (error) {
     onError(error);
   }

@@ -36,6 +36,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import type { TalkieWakeChannel } from './talkieGate';
 import { talkieAudioUrl } from './talkieAudioToken';
 import { retireOrphanPushToTalkTokens, type PushToTalkPrisma } from './pushToTalkTokens';
+import { tokenRoutesPushType } from '../push-type-routing';
 
 export const TALKIE_PUSH_CATEGORY = 'TALKIE';
 /** Une voix réveillée vit au plus le temps d'une prise de parole et de sa fenêtre de rattrapage. */
@@ -45,7 +46,10 @@ export const TALKIE_AUDIO_MIME = 'audio/aac';
 
 const WAKE_TOKEN_TYPES = ['pushtotalk', 'apns', 'fcm'] as const;
 
-/** Le canal de réveil du destinataire : PushToTalk d'abord (session encore valide), sinon tout jeton APNs ou FCM actif, sinon `null`. */
+/**
+ * Le canal de réveil du destinataire : PushToTalk d'abord (seul un client neuf l'enregistre, session encore valide),
+ * sinon un jeton APNs ou FCM d'un client qui sait router `talkie_incoming` (`push-type-routing.ts`), sinon `null`.
+ */
 export async function talkieWakeChannel(
   prisma: PushToTalkPrisma,
   userId: string,
@@ -55,10 +59,10 @@ export async function talkieWakeChannel(
   await retireOrphanPushToTalkTokens(prisma, userId, now);
   const tokens = await prisma.pushToken.findMany({
     where: { userId, isActive: true, type: { in: [...WAKE_TOKEN_TYPES] } },
-    select: { type: true },
+    select: { type: true, platform: true, appVersion: true, bundleId: true },
   });
   if (tokens.some((token) => token.type === 'pushtotalk')) return 'pushtotalk';
-  return tokens.length > 0 ? 'push' : null;
+  return tokens.some((token) => token.type !== 'pushtotalk' && tokenRoutesPushType(token, TALKIE_PUSH_TYPES.INCOMING)) ? 'push' : null;
 }
 
 export type TalkieWakePhase =
