@@ -631,3 +631,33 @@ socket jusqu'au client.
 3. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
 4. #17005 : mesurer la livraison PUB à l'arrêt.
 5. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 16 — 2026-11-08
+
+- **Base** : `origin/dev` @ `f625d0c5b`. La PR #17065 du cycle 15 y est fusionnée.
+- **Branche** : `claude/determined-volta-1jsemr`.
+- **Objectif** : #17063 et #17064, piste 1 du cycle 15. Un lot refusé pendant que l'arrêt annule la boucle de flush est quand même signalé, et les refus d'arrivée tardive ne remplissent plus le journal.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni le JSON publié) :
+  - **#17063** : `_report_through_cancellation` signale les lots refusés de `_flush_batches` sous `asyncio.shield`. Une annulation reçue pendant le report n'est relancée qu'une fois le report fini, donc `stop()` l'attend. Aucune tâche n'est signalée ni comptée deux fois.
+  - **#17064** : une tâche refusée à l'entrée pendant l'arrêt passe par le rappel `on_refused_at_shutdown`. Côté traducteur, `TranslationHandler.publish_refused_at_shutdown` publie le même JSON que `publish_pool_full`, avec le même `release_inflight`, mais sa ligne de refus est en DEBUG. Le gestionnaire écrit une seule WARNING au premier refus tardif.
+  - `set_rejection_handler(handler, at_shutdown=None)` : un appel à un seul rappel reçoit tout, comme avant. Hors arrêt, un refus de file pleine garde sa WARNING.
+- **Tests** : `tests/test_shutdown_flush_cancel_and_quiet_logs.py` (7 tests) et `..._qa.py` (QA : 3 tests et 1 `xfail(strict)`). L'`xfail` de #17063 dans `test_shutdown_ingress_and_bounded_logs_qa.py` est retiré.
+  - **Rouge sur le code d'avant** : 4 sur 7, dont `assert 5 == 500` (WARNING pour N=5 contre N=500) et `['blocker'] == ['acc-0-0', …]`.
+  - **Vert** : relancé par moi, `109 passed, 1 xfailed` sur `test_shutdown_*`, `test_fast_lane_quota*` et `test_batch_pool_full_rejection*`.
+  - **Suites voisines** (QA, `-k "zmq_pool or translation_processor or call_caption or batch or shutdown or pool or zmq or handler"`) : 519 passés sur la branche contre 511 sur `dev`. Les 5 échecs et les 31 erreurs de collecte (torch absent) sont identiques des deux côtés.
+  - **Mutations QA** : 10 sur 10 tuées, après l'ajout des tests QA. Deux survivaient aux seuls tests du lot (relance de l'annulation, remise à zéro de `at_shutdown`), et les tests QA les ont bouchés.
+- **QA** : favorable avec réserves. R1 → #17132. R4 → #17133. R5 (libellé de la WARNING) est corrigé dans ce lot. R2 : `stop()` absorbe sa propre annulation, un comportement antérieur rattaché à #17132. R3 : un double tiers à l'ancienne signature lèverait `TypeError`, mais aucun n'existe dans le dépôt.
+
+### Limites connues
+
+- Une seconde annulation, celle de `stop()` lui-même, perd encore le lot en cours de report. → #17132 (xfail strict).
+- Si le PUB est cassé pendant l'arrêt, il y a une ligne ERROR par envoi raté. → #17133.
+- `stop()` attend le report sans limite de temps : un PUB qui ne rend pas la main bloque l'arrêt.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : la mettre à jour sur `dev`, lancer `workflow_dispatch` de `ci.yml`, puis fusionner au vert.
+1. #16822 : `{e}` brut, et exception levée après le `pop` de l'accumulateur.
+2. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
+3. #17132 et #17133 : petits lots du même site.
+4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
