@@ -32,6 +32,7 @@ import me.meeshy.sdk.model.relation.CirclePerson
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.RelationLink
 import me.meeshy.sdk.model.relation.RelationRaiseGate
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.model.relation.RelationRitualConsents
 import me.meeshy.sdk.model.relation.RelationRitualPhase
 import me.meeshy.sdk.model.relation.RelationRitualStep
@@ -433,6 +434,34 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.CLOSE)
         assertThat(seen).contains(ProfileActionEvent.Toast(ProfileActionFeedback.LowerFailed))
+    }
+
+    @Test
+    fun `un collegue de l'equipe sans lien ouvre le blocage du Bring et du talkie, sans cercle fabrique`() = runTest {
+        val circles = ProfileCirclesFake()
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vm = viewModel(circles = circles)
+
+        vm.bind("u2", isAnonymous = false)
+
+        assertThat(vm.state.value.circle).isNull()
+        assertThat(vm.state.value.receptionsWithoutLink)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `sans niveau d'outils servi, ou pour une personne liee, aucun blocage n'est propose sur la fiche`() = runTest {
+        val bare = ProfileCirclesFake()
+        val vmBare = viewModel(circles = bare)
+        vmBare.bind("u2", isAnonymous = false)
+        assertThat(vmBare.state.value.receptionsWithoutLink).isEmpty()
+
+        val linked = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.CLOSE))))
+        linked.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vmLinked = viewModel(circles = linked)
+        vmLinked.bind("u2", isAnonymous = false)
+        assertThat(vmLinked.state.value.circle?.level).isEqualTo(RelationLevel.CLOSE)
+        assertThat(vmLinked.state.value.receptionsWithoutLink).isEmpty()
     }
 
     @Test

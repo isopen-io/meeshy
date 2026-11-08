@@ -182,4 +182,21 @@ class RelationsRepositoryTest {
         assertThat(repository().raiseGate("u1")).isEqualTo(RelationRaiseGate(false, "2026-12-01T00:00:00Z"))
         assertThat(repository().raiseGate("u2")).isNull()
     }
+
+    @Test
+    fun `le niveau des outils servi entre deux comptes de l'equipe se lit, un niveau illisible se lit Public`() = runTest {
+        coEvery { api.byUserId("u1") } returns ApiResponse(
+            success = true,
+            data = RelationLevelResponse("u1", "PUBLIC", accessLevel = "BLOOD"),
+        )
+        coEvery { api.byUserId("u2") } returns ApiResponse(
+            success = true,
+            data = RelationLevelResponse("u2", "PUBLIC", accessLevel = "ATOM"),
+        )
+        coEvery { api.byUserId("u3") } returns ApiResponse(success = true, data = RelationLevelResponse("u3", "PUBLIC"))
+
+        assertThat(repository().raiseGate("u1")?.accessLevel).isEqualTo(RelationLevel.BLOOD)
+        assertThat(repository().raiseGate("u2")?.accessLevel).isEqualTo(RelationLevel.PUBLIC)
+        assertThat(repository().raiseGate("u3")?.accessLevel).isNull()
+    }
 }
