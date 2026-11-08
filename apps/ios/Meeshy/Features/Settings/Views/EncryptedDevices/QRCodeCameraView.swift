@@ -65,7 +65,7 @@ final class QRCodeCameraController: UIViewController {
         guard !isPaused else { return }
         if let lastCode, lastCode.text == code, Date().timeIntervalSince(lastCode.at) < Self.repeatDelay { return }
         lastCode = (code, Date())
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        HapticFeedback.success()
         onCode?(code)
     }
 }
