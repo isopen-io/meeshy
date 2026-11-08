@@ -70,6 +70,11 @@ const createsAParticipantRow = (source: string): boolean =>
  * du lot qui l'a fait disparaître.
  */
 const NOT_AN_ARRIVAL_DOOR: Record<string, string> = {
+  'routes/conversations/link-admission-guest.ts':
+    "crée la ligne d'un INVITÉ, dont l'arrivée ne peut pas être le SUJET de " +
+    "`conversation:participant-joined` (contrat strict, #16838) ; l'arrivée d'un " +
+    "INSCRIT par lien, elle, est annoncée par `link-admission.ts`, qui appelle " +
+    'bien la loi depuis le cœur partagé `performLinkJoin`',
   'services/InitService.ts':
     "amorçage du dépôt : il crée les conversations système et leurs membres avant qu'aucun socket n'existe",
   'services/conversations/ensureGlobalConversationMembership.ts':
