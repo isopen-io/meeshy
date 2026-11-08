@@ -22,8 +22,7 @@ import MeeshySDK
 @MainActor
 final class ComposerCaptureSession: ObservableObject {
 
-    /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
-    /// demande.
+    /// Construit MUET : `CameraModel` n'ouvre sa session qu'à la demande.
     let camera: CameraModel
     /// Les COMMANDES de l'objectif — `camera` en temps normal, une
     /// doublure dans les témoins ; les vues lisent `camera`.
@@ -31,6 +30,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// Le pont toucher → capteur de l'aperçu partagé : l'aperçu s'y
     /// accroche, le toucher du chrome le lit.
     let focusPoints = CameraPreviewFocusPoints()
+    let selfTimer = ComposerCaptureSelfTimer()
 
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`. Le guet des
     /// trames la suit : la bande peint dès le viseur armé.

@@ -104,6 +104,7 @@ nonisolated enum ComposerCaptureTopRow {
 /// Une entrée du menu `⋯` du viseur.
 nonisolated enum ComposerCaptureMoreItem: Equatable, Hashable, Sendable {
     case grid
+    case selfTimer
     case size
 }
 
@@ -111,7 +112,27 @@ nonisolated enum ComposerCaptureMoreItem: Equatable, Hashable, Sendable {
 /// taille seulement s'il y a une carte où rentrer (#9125).
 nonisolated enum ComposerCaptureMoreMenu {
     static func items(offersSizeToggle: Bool) -> [ComposerCaptureMoreItem] {
-        [.grid] + (offersSizeToggle ? [.size] : [])
+        [.grid, .selfTimer] + (offersSizeToggle ? [.size] : [])
+    }
+}
+
+/// **Le retardateur du viseur** (CAM-4, décision porteur, OPUS-8) : choisi dans
+/// `⋯`, gardé d'une ouverture à l'autre, il diffère la PHOTO — jamais la vidéo,
+/// qu'un doigt tient. Une valeur inconnue vaut « désactivé ».
+nonisolated enum ComposerCaptureSelfTimerDelay: Int, CaseIterable, Hashable, Sendable {
+    case off = 0
+    case three = 3
+    case ten = 10
+
+    static let storageKey = "composer.camera.selfTimer"
+
+    init(stored: Int) {
+        self = Self(rawValue: stored) ?? .off
+    }
+
+    /// Les secondes montrées, de la première à la dernière.
+    var ticks: [Int] {
+        Array(stride(from: rawValue, to: 0, by: -1))
     }
 }
 

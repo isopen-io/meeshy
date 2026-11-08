@@ -109,6 +109,19 @@ enum ComposerSceneCameraCopy {
         String(localized: "composer.camera.grid", defaultValue: "Grille", bundle: .main)
     }
 
+    /// Le retardateur, dans le menu `⋯` (CAM-4).
+    static var selfTimerLabel: String {
+        String(localized: "composer.camera.selfTimer", defaultValue: "Retardateur", bundle: .main)
+    }
+
+    static func selfTimerOption(_ delai: ComposerCaptureSelfTimerDelay, locale: Locale = .current) -> String {
+        guard delai != .off else {
+            return String(localized: "composer.camera.selfTimer.off", defaultValue: "Désactivé", bundle: .main)
+        }
+        return String(format: String(localized: "composer.camera.selfTimer.seconds", defaultValue: "%@ s", bundle: .main),
+                      LocalizedNumber.exact(delai.rawValue, locale: locale))
+    }
+
     /// Le bouton `⋯` du viseur, qui ouvre la grille et la taille (OPUS-6).
     static var moreLabel: String {
         String(localized: "composer.camera.more", defaultValue: "Plus d’options", bundle: .main)
