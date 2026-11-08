@@ -544,9 +544,9 @@ socket jusqu'au client.
 
 ### Limites connues
 
-- Il n'y a pas de métrique Prometheus des stats du pool, donc pas d'alerte possible sur `caption_fast_lane_overflow`. `prometheus_client` ne sert qu'au pipeline audio. → issue ouverte ce cycle.
+- Il n'y a pas de métrique Prometheus des stats du pool, donc pas d'alerte possible sur `caption_fast_lane_overflow`. `prometheus_client` ne sert qu'au pipeline audio. → #16933.
 - Une tâche régulière prise au titre du quota peut être un lot de 10 traductions. Elle retarde alors un sous-titre de la durée de ce lot. N est réglable par l'environnement.
-- `TestRealTranslatorIntegration` est rouge sur `dev`, hors lot. → issue ouverte ce cycle.
+- `TestRealTranslatorIntegration` est rouge sur `dev`, hors lot. → #16934.
 
 ### Cycle suivant : par où reprendre
 
