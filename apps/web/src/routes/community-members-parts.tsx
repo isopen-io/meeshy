@@ -246,6 +246,29 @@ export function CommunityMembersLink({ language, communityId }: { readonly langu
   );
 }
 
+/** « Réglages » (#6377) : au créateur seul, comme la passerelle (`canEditSettingsOf`). */
+export function CommunitySettingsLink({ language, communityId }: { readonly language: InterfaceLanguage; readonly communityId: string }) {
+  return (
+    <Link
+      to="communitySettings"
+      params={{ community: communityId }}
+      data-community-settings-link
+      className="flex items-center gap-3 rounded-card px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ ...SECTION_CARD_STYLE, minHeight: 52, color: INK }}
+    >
+      <span aria-hidden="true" style={{ color: 'var(--color-ios-brand)' }}>
+        <Glyph name="key" size={18} />
+      </span>
+      <span className="flex-1">
+        <span className="text-body font-semibold">{translateMembership(language, 'community.settings.open')}</span>
+      </span>
+      <span aria-hidden="true" style={{ color: INK_2 }}>
+        <GlyphSvg glyph={ROW_MENU_GLYPHS.caretRight} size={14} className="rtl:-scale-x-100" />
+      </span>
+    </Link>
+  );
+}
+
 /** « Inviter » (#6376) : ouvre la feuille d'invitation, chargée à la demande (`community-invite.tsx`). */
 export function CommunityInviteButton({ language, onOpen }: { readonly language: InterfaceLanguage; readonly onOpen: () => void }) {
   return (

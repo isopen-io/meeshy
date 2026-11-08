@@ -14,6 +14,8 @@ public protocol RelationsProviding: Sendable {
     /// `POST /relations/:userId/level` — baisse MON accord vers `level` (`public` annule le lien). Silencieux.
     func lower(userId: String, to level: RelationLevel) async throws -> RelationLink
     func config() async throws -> RelationsConfig
+    /// `GET /relations/now-playing` — les écoutes de mes Proches et de mes Sangs, déjà tronquées pour moi (#16755).
+    func nowPlaying() async throws -> [NowPlayingChanged]
     func ritual(
         userId: String,
         phase: RelationRitualPhase,
@@ -58,6 +60,13 @@ public final class RelationsService: RelationsProviding, Sendable {
             RelationsEndpoint.config, method: "GET", body: nil, queryItems: nil
         )
         return response.data
+    }
+
+    public func nowPlaying() async throws -> [NowPlayingChanged] {
+        let response: APIResponse<NowPlayingSnapshot> = try await api.request(
+            RelationsEndpoint.nowPlaying, method: "GET", body: nil, queryItems: nil
+        )
+        return response.data.items
     }
 
     /// `POST /relations/:userId/ritual` — `start` ouvre ou rejoint, `hold` se rejoue tant

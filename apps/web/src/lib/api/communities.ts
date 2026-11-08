@@ -1,6 +1,8 @@
 import * as z from 'zod/mini';
 import * as communitiesEndpoints from '@meeshy/shared/api/endpoints/communities';
 
+import { decodeHtmlText } from '@/lib/admin/interpret/html-text';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
@@ -121,6 +123,12 @@ const WireConversation = z.object({
 const textOrNull = (value: string | null | undefined): string | null =>
   value === undefined || value === null || value.trim() === '' ? null : value;
 
+/** Nom et description sont stockés ÉCHAPPÉS par la passerelle (`SecuritySanitizer.sanitizeText`) : rendus à leur lettre, ils ne s'abîment plus à chaque enregistrement (#6377). */
+const servedText = (value: string | null | undefined): string | null => {
+  const text = textOrNull(value);
+  return text === null ? null : decodeHtmlText(text);
+};
+
 const countOf = (...values: ReadonlyArray<number | null | undefined>): number => {
   const found = values.find((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
   return found === undefined || found === null ? 0 : Math.floor(found);
@@ -138,8 +146,8 @@ export function decodeCommunity(raw: unknown): CommunitySummary | null {
   return {
     id: wire.id,
     identifier: textOrNull(wire.identifier) ?? wire.id,
-    name: wire.name,
-    description: textOrNull(wire.description),
+    name: decodeHtmlText(wire.name),
+    description: servedText(wire.description),
     avatar: textOrNull(wire.avatar),
     banner: textOrNull(wire.banner),
     isPrivate: wire.isPrivate ?? true,

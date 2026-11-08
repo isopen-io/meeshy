@@ -148,6 +148,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case notificationNew = "notification:new"
     case notificationRead = "notification:read"
     case notificationReadBulk = "notification:read-bulk"
+    case nowPlayingChanged = "now-playing:changed"
+    case nowPlayingCleared = "now-playing:cleared"
     case participantRightsUpdated = "participant:rights-updated"
     case participantRoleUpdated = "participant:role-updated"
     case postBookmarked = "post:bookmarked"

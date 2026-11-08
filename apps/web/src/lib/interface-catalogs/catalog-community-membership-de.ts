@@ -15,6 +15,7 @@ const deCommunityMembership = {
   'community.membership.offline': 'Offline.',
   'community.membership.error': 'Fehlgeschlagen. Versuche es erneut.',
   'community.membership.error.refused': 'Diese Community ist privat: Beitritt nur auf Einladung.',
+  'community.settings.open': "Einstellungen",
   'community.members.open': 'Mitglieder',
   'community.members.title': 'Mitglieder',
   'community.members.section.admin': 'Admins',

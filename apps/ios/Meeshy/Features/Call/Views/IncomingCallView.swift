@@ -53,7 +53,7 @@ struct IncomingCallView: View {
                 callManager.endCall()
                 return
             }
-            callManager.answerCallWithoutVideo()
+            CallAnswerWithoutVideo(call: callManager).answer()
         }
     }
 

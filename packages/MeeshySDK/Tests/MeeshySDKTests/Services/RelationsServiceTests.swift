@@ -57,6 +57,25 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertEqual(served.effectiveLevel, .friend)
     }
 
+    func test_nowPlaying_getsTheServedListenings_asTheGatewaySendsThem() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/now-playing", json: """
+        {"success":true,"data":{"items":[
+          {"userId":"u1","category":"music","updatedAt":"2026-11-08T10:00:00.000Z","expiresAt":"2026-11-08T10:15:00.000Z"},
+          {"userId":"u2","category":"music","title":"Clair de lune","source":"Spotify",
+           "updatedAt":"2026-11-08T10:00:00.000Z","expiresAt":"2026-11-08T10:15:00.000Z"}
+        ]}}
+        """)
+
+        let served = try await service.nowPlaying()
+
+        XCTAssertEqual(api.lastRequest?.endpoint, "/relations/now-playing")
+        XCTAssertEqual(api.lastRequest?.method, "GET")
+        XCTAssertEqual(served.map(\.userId), ["u1", "u2"])
+        XCTAssertNil(served[0].title)
+        XCTAssertEqual(served[1].source, "Spotify")
+    }
+
     // MARK: - Baisser (#14910)
 
     func test_lower_postsTheTargetLevelAndReadsTheServedLink() async throws {

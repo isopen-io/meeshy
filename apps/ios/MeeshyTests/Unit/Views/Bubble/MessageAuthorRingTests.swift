@@ -124,7 +124,6 @@ final class MessageAuthorRingTests: XCTestCase {
         "Contacts/CallLinkConfirmation.swift": (1, "lien d'appel — la cible résolue ne sert pas le contour (#10957)"),
         "Contacts/CallsTab.swift": (1, "journal d'appel — la charge de l'appel ne sert pas le contour (#10957)"),
         "Call/Views/CallControlsViews.swift": (1, "appel — l'invitation qui sonne ne porte pas le contour (#10957)"),
-        "Bring/BringRingView.swift": (1, "Bring qui sonne — `bring:ring` et le push ne portent que l'identifiant, ni nom ni contour (#10957)"),
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": (1, "carte de contact — le compte public servi ne porte pas le contour (#10957)"),
         "Main/Components/ContactCardView.swift": (1, "carte de contact — le compte public servi ne porte pas le contour (#10957)"),
         "Main/Components/ConversationCard/ConversationLinkCardBody.swift": (1, "carte de lien — l'invitant servi ne porte pas le contour (#10957)"),

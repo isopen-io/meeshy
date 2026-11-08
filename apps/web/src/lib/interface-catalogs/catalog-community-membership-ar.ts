@@ -15,6 +15,7 @@ const arCommunityMembership = {
   'community.membership.offline': 'غير متصل.',
   'community.membership.error': 'تعذّر ذلك. حاول مرة أخرى.',
   'community.membership.error.refused': 'هذا المجتمع خاص: لا يُنضمّ إليه إلا بدعوة.',
+  'community.settings.open': "الإعدادات",
   'community.members.open': 'الأعضاء',
   'community.members.title': 'الأعضاء',
   'community.members.section.admin': 'المسؤولون',

@@ -15,6 +15,7 @@ const ptCommunityMembership = {
   'community.membership.offline': 'Offline.',
   'community.membership.error': 'Falhou. Tente novamente.',
   'community.membership.error.refused': 'Esta comunidade é privada: só se entra por convite.',
+  'community.settings.open': "Definições",
   'community.members.open': 'Membros',
   'community.members.title': 'Membros',
   'community.members.section.admin': 'Administradores',

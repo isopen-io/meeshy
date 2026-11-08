@@ -26,6 +26,7 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
 
     private static let client = source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
     private static let answer = source("Meeshy/Features/Call/Services/CallManager+Answer.swift")
+    private static let withholding = source("Meeshy/Features/Call/Services/CallAnswerWithoutVideo.swift")
     private static let view = source("Meeshy/Features/Call/Views/IncomingCallView.swift")
 
     private func slice(_ text: String, from start: String, to end: String, file: StaticString = #filePath, line: UInt = #line) -> String? {
@@ -62,8 +63,8 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
     // MARK: - CallManager
 
     func test_answerWithholdsTheCameraBeforeCreatingTheAnswer() {
-        guard let fn = slice(Self.answer, from: "func answerBufferedOffer(", to: "func withholdLocalVideoIfDeclined(") else { return }
-        guard let withhold = fn.range(of: "await self.withholdLocalVideoIfDeclined(callId: callId)"),
+        guard let fn = slice(Self.answer, from: "func answerBufferedOffer(", to: "/// Who answers the caller's offer") else { return }
+        guard let withhold = fn.range(of: "await CallAnswerWithoutVideo(call: self).withholdLocalVideoIfDeclined(callId: callId)"),
               let create = fn.range(of: "self.webRTCService.createAnswer(from: remoteOffer)") else {
             XCTFail("answerBufferedOffer doit retirer la caméra puis créer la réponse"); return
         }
@@ -71,16 +72,16 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
     }
 
     func test_withholdTellsThePeerAndCallKit() {
-        guard let fn = slice(Self.answer, from: "func withholdLocalVideoIfDeclined(", to: "/// Who answers the caller's offer") else { return }
-        XCTAssertTrue(fn.contains("guard !isVideoEnabled"), "Sans effet quand la vidéo est voulue.")
-        XCTAssertTrue(fn.contains("webRTCService.downgradeFromVideo()"))
+        guard let fn = slice(Self.withholding, from: "func withholdLocalVideoIfDeclined(", to: "\n    }\n}") else { return }
+        XCTAssertTrue(fn.contains("guard !call.isVideoEnabled"), "Sans effet quand la vidéo est voulue.")
+        XCTAssertTrue(fn.contains("call.webRTCService.downgradeFromVideo()"))
         XCTAssertTrue(fn.contains("emitCallToggleVideo(callId: callId, enabled: false)"), "Le pair affiche notre avatar.")
         XCTAssertTrue(fn.contains("update.hasVideo = false"), "CallKit range l'appel en audio.")
     }
 
     func test_answerWithoutVideo_dropsTheIntentThenAnswers() {
-        guard let fn = slice(Self.answer, from: "func answerCallWithoutVideo() {", to: "func answerCall() {") else { return }
-        guard let intent = fn.range(of: "isVideoEnabled = false"), let answer = fn.range(of: "answerCall()") else {
+        guard let fn = slice(Self.withholding, from: "func answer() {", to: "func withholdLocalVideoIfDeclined(") else { return }
+        guard let intent = fn.range(of: "call.isVideoEnabled = false"), let answer = fn.range(of: "call.answerCall()") else {
             XCTFail("answerCallWithoutVideo pose l'intention puis répond"); return
         }
         XCTAssertLessThan(intent.lowerBound, answer.lowerBound)
@@ -90,7 +91,7 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
 
     func test_incomingView_wiresTheNewButtonAndThePreview() {
         XCTAssertTrue(Self.view.contains("IncomingCallChoices.actions(isVideoCall:"))
-        XCTAssertTrue(Self.view.contains("callManager.answerCallWithoutVideo()"))
+        XCTAssertTrue(Self.view.contains("CallAnswerWithoutVideo(call: callManager).answer()"))
         XCTAssertTrue(Self.view.contains("call.incoming.answerNoVideo.label"))
         XCTAssertTrue(Self.view.contains("LocalCameraVideoView("), "La vignette lit la piste locale déjà ouverte à la sonnerie.")
     }

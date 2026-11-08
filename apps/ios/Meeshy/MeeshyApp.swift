@@ -515,6 +515,7 @@ struct ProfileSheetEnvironment: ViewModifier {
                 ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
             })
             .environment(\.profileLoading, LiveProfileLoading())
+            .environment(\.avatarListeningSource, ListeningCenter.shared.source)
     }
 }
 
