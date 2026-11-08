@@ -37,7 +37,15 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PARTICIPANT_RIGHT_NAMES, type ParticipantRightName } from '../../services/participantRights';
 
-const LINK_ADMISSION_PATH = join(__dirname, '../../routes/conversations/link-admission.ts');
+// #6091 garde DEUX blocs de permissions, et #16837 les a séparés en deux
+// fichiers : celui de l'INVITÉ est parti vers `link-admission-guest.ts` (avec
+// la création de sa ligne), celui de l'INSCRIT est resté dans
+// `link-admission.ts` (avec la décision). La garde lit les DEUX — elle suit le
+// code, elle ne garde pas un chemin ; et lire un seul des deux la rendrait
+// aveugle à la moitié de ce qu'elle a été écrite pour tenir.
+const GUEST_PATH = join(__dirname, '../../routes/conversations/link-admission-guest.ts');
+const REGISTERED_PATH = join(__dirname, '../../routes/conversations/link-admission.ts');
+const ADMISSION_PATHS = [GUEST_PATH, REGISTERED_PATH] as const;
 
 /**
  * Refus ASSUMÉS — ils figurent tels quels dans `NEW_MEMBER_PERMISSIONS`, et un
@@ -96,13 +104,14 @@ describe('le balayage sait reconnaître le motif — sinon la garde serait verte
 });
 
 describe('#6091 — link-admission.ts ne fige plus `canSendVideos`/`canSendAudios` à `false`', () => {
-  it('aucun droit non justifié ne subsiste dans le fichier', () => {
-    const source = readFileSync(LINK_ADMISSION_PATH, 'utf8');
-    expect(droitsNonJustifies(source)).toEqual([]);
+  it('aucun droit non justifié ne subsiste dans les deux fichiers d\'admission', () => {
+    for (const path of ADMISSION_PATHS) {
+      expect(droitsNonJustifies(readFileSync(path, 'utf8'))).toEqual([]);
+    }
   });
 
-  it('contre-épreuve — un `false` réintroduit sur `canSendVideos` ferait tomber la garde', () => {
-    const source = readFileSync(LINK_ADMISSION_PATH, 'utf8');
+  it('contre-épreuve — un `false` réintroduit sur `canSendVideos` (invité) ferait tomber la garde', () => {
+    const source = readFileSync(GUEST_PATH, 'utf8');
     const reoffending = source.replace(
       'canSendVideos: shareLink.allowAnonymousFiles,',
       'canSendVideos: false,',
@@ -111,8 +120,8 @@ describe('#6091 — link-admission.ts ne fige plus `canSendVideos`/`canSendAudio
     expect(droitsNonJustifies(reoffending)).toEqual(['canSendVideos']);
   });
 
-  it('contre-épreuve — un `false` réintroduit sur `canSendAudios` (site nommé) ferait tomber la garde', () => {
-    const source = readFileSync(LINK_ADMISSION_PATH, 'utf8');
+  it('contre-épreuve — un `false` réintroduit sur `canSendAudios` (inscrit, site nommé) ferait tomber la garde', () => {
+    const source = readFileSync(REGISTERED_PATH, 'utf8');
     const reoffending = source.replace(
       /canSendAudios: true,\n(\s*)\/\/ Refus ASSUMÉS/,
       'canSendAudios: false,\n$1// Refus ASSUMÉS',
@@ -121,9 +130,11 @@ describe('#6091 — link-admission.ts ne fige plus `canSendVideos`/`canSendAudio
     expect(droitsNonJustifies(reoffending)).toEqual(['canSendAudios']);
   });
 
-  it('le fichier tolère toujours explicitement les deux refus assumés — la garde ne rougit pas dessus', () => {
-    const source = readFileSync(LINK_ADMISSION_PATH, 'utf8');
-    expect(source).toMatch(/canSendLocations:\s*false/);
-    expect(source).toMatch(/canSendLinks:\s*false/);
+  it('les deux fichiers tolèrent toujours explicitement les refus assumés — la garde ne rougit pas dessus', () => {
+    for (const path of ADMISSION_PATHS) {
+      const source = readFileSync(path, 'utf8');
+      expect(source).toMatch(/canSendLocations:\s*false/);
+      expect(source).toMatch(/canSendLinks:\s*false/);
+    }
   });
 });
