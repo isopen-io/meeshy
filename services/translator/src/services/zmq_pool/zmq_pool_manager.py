@@ -219,8 +219,12 @@ class TranslationPoolManager:
         await self.normal_pool.stop_workers()
         await self.any_pool.stop_workers()
 
-        # Arrêter le connection manager
+        # Arrêter le connection manager (son flush final dépose dans les files)
         await self.connection_manager.stop()
+
+        # #16819 — plus aucun worker ne lit les files : ce qui y reste, et ce que
+        # le flush final vient d'y déposer, est signalé à la passerelle.
+        await self.connection_manager.reject_pending_at_shutdown()
 
         logger.info("[POOL_MANAGER] All workers and services stopped")
 

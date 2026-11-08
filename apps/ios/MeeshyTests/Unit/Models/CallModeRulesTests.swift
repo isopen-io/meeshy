@@ -171,7 +171,7 @@ final class CallModeRulesTests: XCTestCase {
     }
 
     func test_colors_naturalFirst() {
-        XCTAssertEqual(CallEffectsModeRule.colors, [.natural, .warm, .cool, .vivid, .muted])
+        XCTAssertEqual(CallEffectsModeRule.colors, [.natural, .golden, .film, .softNight, .bright, .velvet, .sky, .monochrome])
     }
 
     func test_colorSelection_noPreset_readsAsNatural() {
