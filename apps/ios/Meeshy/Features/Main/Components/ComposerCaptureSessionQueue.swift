@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import QuartzCore
 
 /// Ce que la file lance et arrête — `AVCaptureSession` en production, une
 /// doublure dans les témoins.
@@ -27,9 +28,9 @@ nonisolated final class ComposerCaptureSessionQueue: @unchecked Sendable {
     private let lock = NSLock()
     private var wantsRunning = false
 
-    /// La session voyage avec la file, qui seule la touche.
-    private struct Target: @unchecked Sendable {
-        let session: any ComposerCaptureRunning
+    /// La session — ou la couche d'aperçu — voyage avec la file, qui seule la touche.
+    private struct Target<Value>: @unchecked Sendable {
+        let value: Value
     }
 
     var wantsToRun: Bool {
@@ -53,15 +54,15 @@ nonisolated final class ComposerCaptureSessionQueue: @unchecked Sendable {
         lock.lock()
         wantsRunning = running
         lock.unlock()
-        let cible = Target(session: session)
+        let cible = Target(value: session)
         // Capture FORTE : un modèle libéré juste après `stop()` ne laisse pas la
         // session tourner — la file n'est retenue que le temps du bloc.
         queue.async {
             self.lock.lock()
             let voulu = self.wantsRunning
             self.lock.unlock()
-            if voulu, !cible.session.isRunning { cible.session.startRunning() }
-            if !voulu, cible.session.isRunning { cible.session.stopRunning() }
+            if voulu, !cible.value.isRunning { cible.value.startRunning() }
+            if !voulu, cible.value.isRunning { cible.value.stopRunning() }
         }
     }
 
@@ -70,12 +71,39 @@ nonisolated final class ComposerCaptureSessionQueue: @unchecked Sendable {
     /// encore, jamais après un désarmement. AVFoundation ne la relance pas, et
     /// l'aperçu garderait sa dernière image, figée.
     func resumeIfWanted(_ session: any ComposerCaptureRunning) {
-        let cible = Target(session: session)
+        let cible = Target(value: session)
         queue.async {
             self.lock.lock()
             let voulu = self.wantsRunning
             self.lock.unlock()
-            if voulu, !cible.session.isRunning { cible.session.startRunning() }
+            if voulu, !cible.value.isRunning { cible.value.startRunning() }
+        }
+    }
+
+    /// **La couche d'aperçu se rattache ICI** (#17041). `layer.session = …`
+    /// ajoute ou retire la couche de la session et VALIDE une configuration :
+    /// le fil qui l'écrit attend la file de capture — 1,12 s mesurée depuis
+    /// `makeUIView`. Sur la file, il passe dans l'ordre des configurations ;
+    /// la transaction explicite valide la couche sur place, sans attendre la
+    /// boucle d'un fil qui n'en a pas.
+    func attach(_ layer: AVCaptureVideoPreviewLayer, to session: AVCaptureSession?) {
+        let couche = Target(value: layer)
+        let cible = Target(value: session)
+        queue.async {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            couche.value.session = cible.value
+            CATransaction.commit()
+        }
+    }
+
+    /// Et sa connexion s'y règle (#10308, #17041) : `isEnabled` sur une session
+    /// en marche la reconfigure — 9,03 s mesurées depuis le fil principal.
+    func enableConnection(of layer: AVCaptureVideoPreviewLayer, _ enabled: Bool) {
+        let couche = Target(value: layer)
+        queue.async {
+            guard let connexion = couche.value.connection, connexion.isEnabled != enabled else { return }
+            connexion.isEnabled = enabled
         }
     }
 
