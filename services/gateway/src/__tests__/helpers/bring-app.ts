@@ -89,8 +89,12 @@ export async function buildBringApp(
   const prisma = {
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
-      findMany: jest.fn(async (args: { where: { id: { in: string[] } } }) =>
-        args.where.id.in.map((id) => users.get(id)).filter((u) => u !== undefined)),
+      // Honore `blockedUserIds: { has }` (qui m'a bloqué ?) : sans lui, tous les candidats se lisaient bloqués.
+      findMany: jest.fn(async (args: { where: { id: { in: string[] }; blockedUserIds?: { has: string } } }) =>
+        args.where.id.in
+          .map((id) => users.get(id))
+          .filter((u) => u !== undefined)
+          .filter((u) => args.where.blockedUserIds === undefined || ((u.blockedUserIds as string[]) ?? []).includes(args.where.blockedUserIds.has))),
       findFirst: jest.fn(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
         args.where.OR.map((branch) => users.get(branch.id)).find((u, i) =>
           u !== undefined && ((u.blockedUserIds as string[]) ?? []).includes(args.where.OR[i].blockedUserIds.has),

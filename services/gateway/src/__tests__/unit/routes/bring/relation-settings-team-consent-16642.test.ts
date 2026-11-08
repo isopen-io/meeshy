@@ -122,6 +122,7 @@ describe('#16642 — tout ce qui n\'est pas deux collègues utilisables est refu
     ['un analyste', equipe('ANALYST', 'ADMIN')],
     ['un auditeur', equipe('ADMIN', 'AUDIT')],
     ['un rôle inconnu', equipe('ADMIN', 'SUPERADMIN')],
+    ['un blocage que j\'ai posé', { personnes: { [MOI]: { role: 'MODERATOR', blockedUserIds: [AUTRE] }, [AUTRE]: { role: 'ADMIN' } } }],
     ['un blocage', equipe('MODERATOR', 'ADMIN', { blockedUserIds: [MOI] })],
     ['un collègue désactivé', equipe('MODERATOR', 'ADMIN', { deactivatedAt: new Date('2026-10-01T00:00:00Z') })],
     ['un collègue supprimé', equipe('MODERATOR', 'ADMIN', { deletedAt: new Date('2026-10-01T00:00:00Z') })],
