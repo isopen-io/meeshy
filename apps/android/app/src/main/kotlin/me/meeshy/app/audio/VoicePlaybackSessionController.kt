@@ -11,16 +11,27 @@ import android.graphics.drawable.Icon
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.SystemClock
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
+import me.meeshy.app.push.PushTapExtras
+import me.meeshy.sdk.model.playback.BackgroundResumeRoute
 import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCardRules
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
+import me.meeshy.sdk.model.playback.VoicePlaybackQueueControls
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
+import me.meeshy.sdk.model.rootnav.NowPlayingReturnPolicy
+
+/** L'application a une activité visible : le seul cas où elle peut demander le focus sans service de premier plan. */
+private fun processInForeground(): Boolean =
+    ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
 /** En lecture ou en attente du réseau : la carte reste au premier plan. */
 private val VoicePlaybackTransportState.isActive: Boolean get() = isPlaying || isBuffering
@@ -48,8 +59,12 @@ internal class VoicePlaybackSessionController(
     private val foreground: VoicePlaybackForeground,
     private val scope: CoroutineScope,
     private val loadArtwork: suspend (String) -> Bitmap?,
+    private val appInForeground: () -> Boolean = ::processInForeground,
+    private val sdkInt: Int = Build.VERSION.SDK_INT,
+    private val targetSdk: Int = context.applicationInfo.targetSdkVersion,
 ) {
     private val session = MediaSession(context, TAG)
+    private var inForeground = false
     private val artwork = HashMap<String, Bitmap>()
     private var observing: Job? = null
     private var artworkJob: Job? = null
@@ -60,16 +75,20 @@ internal class VoicePlaybackSessionController(
     fun start() {
         session.setCallback(
             object : MediaSession.Callback() {
-                override fun onPlay() = bridge.dispatch(VoicePlaybackCommand.Play)
+                override fun onPlay() = dispatch(VoicePlaybackCommand.Play)
 
-                override fun onPause() = bridge.dispatch(VoicePlaybackCommand.Pause)
+                override fun onPause() = dispatch(VoicePlaybackCommand.Pause)
 
-                override fun onStop() = bridge.dispatch(VoicePlaybackCommand.Stop)
+                override fun onStop() = dispatch(VoicePlaybackCommand.Stop)
 
-                override fun onSeekTo(pos: Long) = bridge.dispatch(VoicePlaybackCommand.SeekTo(pos))
+                override fun onSeekTo(pos: Long) = dispatch(VoicePlaybackCommand.SeekTo(pos))
+
+                override fun onSkipToNext() = dispatch(VoicePlaybackCommand.Next)
+
+                override fun onSkipToPrevious() = dispatch(VoicePlaybackCommand.Previous)
 
                 override fun onCustomAction(action: String, extras: android.os.Bundle?) {
-                    command(action)?.let(bridge::dispatch)
+                    command(action)?.let { dispatch(it) }
                 }
             },
         )
@@ -79,10 +98,34 @@ internal class VoicePlaybackSessionController(
 
     /** Un bouton de la notification (intent de service) : la même voie que la carte du système. */
     fun onAction(action: String?) {
-        command(action)?.let(bridge::dispatch)
+        command(action)?.let { dispatch(it) }
+    }
+
+    /** Remet un ordre au lecteur ; une reprise prend d'abord le premier plan quand le système l'exige pour le focus. */
+    private fun dispatch(command: VoicePlaybackCommand) {
+        if (command == VoicePlaybackCommand.Play) takeForegroundBeforeFocus()
+        bridge.dispatch(command)
+    }
+
+    private fun takeForegroundBeforeFocus() {
+        val route = BackgroundResumeRoute.of(
+            appForeground = appInForeground(),
+            serviceForeground = inForeground,
+            targetSdk = targetSdk,
+            sdkInt = sdkInt,
+        )
+        if (route != BackgroundResumeRoute.EnterForegroundThenFocus) return
+        val snapshot = bridge.snapshot.value ?: return
+        enterForeground(snapshot, shown(snapshot).artworkUrl?.let(artwork::get))
+    }
+
+    private fun enterForeground(snapshot: VoicePlaybackSnapshot, art: Bitmap?) {
+        foreground.enter(NOTIFICATION_ID, notification(snapshot, art))
+        inForeground = true
     }
 
     fun stop() {
+        inForeground = false
         observing?.cancel()
         artworkJob?.cancel()
         session.isActive = false
@@ -96,12 +139,15 @@ internal class VoicePlaybackSessionController(
         ACTION_STOP -> VoicePlaybackCommand.Stop
         ACTION_BACK -> VoicePlaybackCommand.Skip(-VoicePlaybackCardRules.SKIP_MS)
         ACTION_FORWARD -> VoicePlaybackCommand.Skip(VoicePlaybackCardRules.SKIP_MS)
+        ACTION_NEXT -> VoicePlaybackCommand.Next
+        ACTION_PREVIOUS -> VoicePlaybackCommand.Previous
         else -> null
     }
 
     private fun render(snapshot: VoicePlaybackSnapshot?) {
         if (snapshot == null) {
             foreground.leave()
+            inForeground = false
             return
         }
         val url = shown(snapshot).artworkUrl
@@ -111,9 +157,11 @@ internal class VoicePlaybackSessionController(
         val notification = notification(snapshot, cached)
         if (snapshot.transport.isActive) {
             foreground.enter(NOTIFICATION_ID, notification)
+            inForeground = true
         } else {
             context.getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification)
             foreground.park()
+            inForeground = false
         }
         if (url != null && cached == null) fetchArtwork(url, snapshot.card.attachmentId)
     }
@@ -128,16 +176,7 @@ internal class VoicePlaybackSessionController(
         }
     }
 
-    /**
-     * Un vocal protégé (éphémère, à vue unique, flouté, chiffré) ne livre AUCUNE métadonnée
-     * identifiante à la session : ni auteur, ni conversation, ni date, ni avatar.
-     */
-    private fun shown(snapshot: VoicePlaybackSnapshot): VoicePlaybackCard =
-        if (snapshot.card.isProtected) {
-            snapshot.card.copy(sender = null, conversation = null, sentAtLabel = null, artworkUrl = null)
-        } else {
-            snapshot.card
-        }
+    private fun shown(snapshot: VoicePlaybackSnapshot): VoicePlaybackCard = VoicePlaybackCardRules.shown(snapshot.card)
 
     private fun labels(snapshot: VoicePlaybackSnapshot) = VoicePlaybackCardRules.labels(
         card = shown(snapshot),
@@ -162,6 +201,7 @@ internal class VoicePlaybackSessionController(
         var actions = PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP or
             if (transport.isActive) PlaybackState.ACTION_PAUSE else PlaybackState.ACTION_PLAY
         if (seekable) actions = actions or PlaybackState.ACTION_SEEK_TO
+        actions = actions or queueTransportActions(snapshot.controls)
         val state = when {
             transport.isBuffering -> PlaybackState.STATE_BUFFERING
             transport.isPlaying -> PlaybackState.STATE_PLAYING
@@ -195,9 +235,10 @@ internal class VoicePlaybackSessionController(
         val open = PendingIntent.getActivity(
             context,
             NOTIFICATION_ID,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            openIntent(snapshot),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val buttons = buttons(snapshot, playing, seekable)
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(labels.title)
@@ -212,19 +253,62 @@ internal class VoicePlaybackSessionController(
             .setStyle(
                 Notification.MediaStyle()
                     .setMediaSession(session.sessionToken)
-                    .setShowActionsInCompactView(*(if (seekable) intArrayOf(0, 1, 2) else intArrayOf(0))),
+                    .setShowActionsInCompactView(*compactIndices(buttons, hasQueue = snapshot.controls != null, seekable = seekable)),
             )
         if (art != null) builder.setLargeIcon(art)
-        if (seekable) builder.addAction(action(ACTION_BACK, android.R.drawable.ic_media_rew, R.string.voice_playback_back, REQUEST_BACK))
-        builder.addAction(
-            if (playing) {
-                action(ACTION_PAUSE, android.R.drawable.ic_media_pause, R.string.voice_playback_pause, REQUEST_PAUSE)
-            } else {
-                action(ACTION_PLAY, android.R.drawable.ic_media_play, R.string.voice_playback_play, REQUEST_PLAY)
-            },
-        )
-        if (seekable) builder.addAction(action(ACTION_FORWARD, android.R.drawable.ic_media_ff, R.string.voice_playback_forward, REQUEST_FORWARD))
+        buttons.forEach { builder.addAction(it.action) }
         return builder.build()
+    }
+
+    private enum class Slot { Previous, Back, PlayPause, Forward, Next }
+
+    private class Button(val slot: Slot, val action: Notification.Action)
+
+    /** Les boutons de la carte, dans l'ordre : précédent, −15 s, lecture/pause, +15 s, suivant (ceux que la file et la durée permettent). */
+    private fun buttons(snapshot: VoicePlaybackSnapshot, playing: Boolean, seekable: Boolean): List<Button> {
+        val queue = VoicePlaybackCardRules.queueActions(snapshot.controls)
+        return buildList {
+            if (queue.previous) add(Button(Slot.Previous, action(ACTION_PREVIOUS, android.R.drawable.ic_media_previous, R.string.voice_playback_previous, REQUEST_PREVIOUS)))
+            if (seekable) add(Button(Slot.Back, action(ACTION_BACK, android.R.drawable.ic_media_rew, R.string.voice_playback_back, REQUEST_BACK)))
+            add(
+                Button(
+                    Slot.PlayPause,
+                    if (playing) {
+                        action(ACTION_PAUSE, android.R.drawable.ic_media_pause, R.string.voice_playback_pause, REQUEST_PAUSE)
+                    } else {
+                        action(ACTION_PLAY, android.R.drawable.ic_media_play, R.string.voice_playback_play, REQUEST_PLAY)
+                    },
+                ),
+            )
+            if (seekable) add(Button(Slot.Forward, action(ACTION_FORWARD, android.R.drawable.ic_media_ff, R.string.voice_playback_forward, REQUEST_FORWARD)))
+            if (queue.next) add(Button(Slot.Next, action(ACTION_NEXT, android.R.drawable.ic_media_next, R.string.mini_player_next, REQUEST_NEXT)))
+        }
+    }
+
+    /** Une carte de file montre précédent, lecture/pause, puis suivant (sinon +15 s) ; sans file, comme avant. */
+    private fun compactIndices(buttons: List<Button>, hasQueue: Boolean, seekable: Boolean): IntArray {
+        val order = when {
+            hasQueue -> listOf(Slot.Previous, Slot.PlayPause, if (buttons.any { it.slot == Slot.Next }) Slot.Next else Slot.Forward)
+            seekable -> listOf(Slot.Back, Slot.PlayPause, Slot.Forward)
+            else -> listOf(Slot.PlayPause)
+        }
+        return order.mapNotNull { slot -> buttons.indexOfFirst { it.slot == slot }.takeIf { it >= 0 } }.toIntArray()
+    }
+
+    /**
+     * Le toucher ramène à la bulle du vocal qui joue, par les extras que lit le toucher de notification
+     * (`LaunchRouter`) ; en pause, sans conversation ou pour un audio de post, il ouvre l'app seule.
+     */
+    private fun openIntent(snapshot: VoicePlaybackSnapshot): Intent {
+        val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val target = NowPlayingReturnPolicy.notificationTarget(snapshot.card, snapshot.transport.isPlaying)
+        if (target != null) {
+            PushTapExtras.put(
+                intent,
+                mapOf("conversationId" to target.conversationId, "messageId" to target.messageId),
+            )
+        }
+        return intent
     }
 
     /** Ce que l'écran verrouillé montre : « Message vocal », sans nom, conversation ni avatar. */
@@ -262,6 +346,13 @@ internal class VoicePlaybackSessionController(
     }
 
     internal companion object {
+        /** « Suivant » / « précédent » que la session annonce au système (casque, voiture) : ceux de la file, jamais ceux d'un écran. */
+        fun queueTransportActions(controls: VoicePlaybackQueueControls?): Long {
+            val queue = VoicePlaybackCardRules.queueActions(controls)
+            return (if (queue.previous) PlaybackState.ACTION_SKIP_TO_PREVIOUS else 0L) or
+                (if (queue.next) PlaybackState.ACTION_SKIP_TO_NEXT else 0L)
+        }
+
         const val NOTIFICATION_ID = 0x4d56
         const val CHANNEL_ID = "meeshy_voice_playback"
         const val TAG = "MeeshyVoicePlayback"
@@ -270,10 +361,14 @@ internal class VoicePlaybackSessionController(
         const val ACTION_STOP = "me.meeshy.app.voice.STOP"
         const val ACTION_BACK = "me.meeshy.app.voice.BACK15"
         const val ACTION_FORWARD = "me.meeshy.app.voice.FORWARD15"
+        const val ACTION_NEXT = "me.meeshy.app.voice.NEXT"
+        const val ACTION_PREVIOUS = "me.meeshy.app.voice.PREVIOUS"
         private const val REQUEST_PLAY = NOTIFICATION_ID + 1
         private const val REQUEST_PAUSE = NOTIFICATION_ID + 2
         private const val REQUEST_STOP = NOTIFICATION_ID + 3
         private const val REQUEST_BACK = NOTIFICATION_ID + 4
         private const val REQUEST_FORWARD = NOTIFICATION_ID + 5
+        private const val REQUEST_NEXT = NOTIFICATION_ID + 6
+        private const val REQUEST_PREVIOUS = NOTIFICATION_ID + 7
     }
 }

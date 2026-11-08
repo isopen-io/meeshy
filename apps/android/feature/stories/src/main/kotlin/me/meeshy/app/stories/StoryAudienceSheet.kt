@@ -28,6 +28,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
+import me.meeshy.feature.feed.R as FeedR
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.composer.AudienceCandidate
 import me.meeshy.sdk.model.composer.ComposerAudienceTap
@@ -115,10 +118,12 @@ internal fun StoryAudiencePanel(
     onRemoveMention: (String) -> Unit,
     onRemoveHashtag: (String) -> Unit,
     onDismiss: () -> Unit,
+    commentsDisabled: Boolean = false,
+    onCommentsDisabledChange: ((Boolean) -> Unit)? = null,
 ) {
     AudiencePages(
-        AudienceSheetData(visibility, userIds, mentions, hashtags),
-        AudienceSheetActions(onChooseVisibility, onUserIdsChange, onAddMention, onRemoveMention, onRemoveHashtag, onDismiss),
+        AudienceSheetData(visibility, userIds, mentions, hashtags, commentsDisabled),
+        AudienceSheetActions(onChooseVisibility, onUserIdsChange, onAddMention, onRemoveMention, onRemoveHashtag, onDismiss, onCommentsDisabledChange),
         republish = false,
         canApply = true,
         onApply = onDismiss,
@@ -130,6 +135,7 @@ private class AudienceSheetData(
     val userIds: List<String>,
     val mentions: List<PostMentionInput>,
     val hashtags: List<String>,
+    val commentsDisabled: Boolean = false,
 )
 
 private class AudienceSheetActions(
@@ -139,6 +145,7 @@ private class AudienceSheetActions(
     val onRemoveMention: (String) -> Unit,
     val onRemoveHashtag: (String) -> Unit,
     val onDismiss: () -> Unit,
+    val onCommentsDisabledChange: ((Boolean) -> Unit)? = null,
 )
 
 /** La page de l'audience, ou le sélecteur qui la remplace (une feuille montée sur une feuille est irreprésentable). */
@@ -182,6 +189,8 @@ private fun AudiencePages(
                 republish = republish,
                 canApply = canApply,
                 onApply = onApply,
+                commentsDisabled = data.commentsDisabled,
+                onCommentsDisabledChange = actions.onCommentsDisabledChange,
             )
         } else {
             StoryAudiencePickerPage(
@@ -224,6 +233,8 @@ private fun AudiencePage(
     republish: Boolean,
     canApply: Boolean,
     onApply: () -> Unit,
+    commentsDisabled: Boolean = false,
+    onCommentsDisabledChange: ((Boolean) -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
         Row(
@@ -254,6 +265,7 @@ private fun AudiencePage(
             if (!republish) {
                 MentionsSection(visibility, userIds, mentions, onAddMention, onRemoveMention)
                 HashtagsSection(hashtags, onRemoveHashtag)
+                onCommentsDisabledChange?.let { CommentsDisabledRow(commentsDisabled, it) }
             }
         }
         if (republish) ApplyBar(visibility, onApply, enabled = canApply, labelRes = R.string.my_stories_repost)
@@ -302,12 +314,40 @@ private fun AudienceRow(
     HorizontalDivider()
 }
 
+/**
+ * #16541 — « Désactiver les commentaires » : un interrupteur de la publication, à côté de son audience. Activé, la
+ * publication naît commentaires fermés (à l'édition, elle les ferme) ; l'auteur les rouvre par le menu « ⋯ ».
+ */
+@Composable
+private fun CommentsDisabledRow(disabled: Boolean, onChange: (Boolean) -> Unit) {
+    val label = stringResource(FeedR.string.feed_action_disable_comments)
+    val hint = stringResource(FeedR.string.feed_comments_disable_hint)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 60.dp)
+            .toggleable(value = disabled, role = Role.Switch, onValueChange = onChange)
+            .padding(top = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = disabled, onCheckedChange = null)
+    }
+}
+
 @Composable
 private fun audienceSubtitle(visibility: StoryVisibility, count: Int): String =
     when (ComposerAudienceSubtitle.of(visibility, count)) {
         ComposerAudienceSubtitle.Kind.PUBLIC -> stringResource(R.string.composer_audience_sub_public)
         ComposerAudienceSubtitle.Kind.COMMUNITY -> stringResource(R.string.composer_audience_sub_community)
+        ComposerAudienceSubtitle.Kind.ACQUAINTANCES -> stringResource(R.string.composer_audience_sub_acquaintances)
         ComposerAudienceSubtitle.Kind.FRIENDS -> stringResource(R.string.composer_audience_sub_friends)
+        ComposerAudienceSubtitle.Kind.CLOSE -> stringResource(R.string.composer_audience_sub_close)
+        ComposerAudienceSubtitle.Kind.BLOOD -> stringResource(R.string.composer_audience_sub_blood)
         ComposerAudienceSubtitle.Kind.PRIVATE -> stringResource(R.string.composer_audience_sub_private)
         ComposerAudienceSubtitle.Kind.PICK -> stringResource(R.string.composer_audience_sub_pick)
         ComposerAudienceSubtitle.Kind.COUNT -> stringResource(R.string.composer_audience_sub_count, count)

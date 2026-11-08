@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import me.meeshy.sdk.model.audioedit.AudioEditDocument
@@ -18,6 +20,11 @@ import me.meeshy.sdk.model.audioedit.AudioEditError
 import me.meeshy.sdk.model.audioedit.AudioEditorMode
 import me.meeshy.sdk.model.audioedit.AudioEditorStaging
 import me.meeshy.sdk.model.audioedit.AudioEditorTool
+import me.meeshy.sdk.model.audioedit.AudioTranscriptionFailure
+import me.meeshy.sdk.model.audioedit.AudioTranscriptionState
+import me.meeshy.sdk.model.speech.TranscriptionError
+import me.meeshy.sdk.model.speech.TranscriptionException
+import me.meeshy.sdk.speech.SoundTranscriptionOutcome
 
 /** Ce que l'écran de l'éditeur audio affiche — une seule vérité, rendue par [AudioEditorController.state]. */
 public data class AudioEditorState(
@@ -26,6 +33,8 @@ public data class AudioEditorState(
     val staging: AudioEditorStaging = AudioEditorStaging(),
     val processing: Boolean = false,
     val error: AudioEditError? = null,
+    val transcription: AudioTranscriptionState = AudioTranscriptionState.Idle,
+    val transcriptionLanguage: String = "fr",
 ) {
     val duration: Double get() = document?.active?.durationSeconds ?: 0.0
     val canUndo: Boolean get() = document?.canUndo == true && !processing
@@ -47,13 +56,19 @@ public class AudioEditorController(
     private val durations: AudioDurationReader,
     private val ioDispatcher: CoroutineDispatcher,
     private val scope: CoroutineScope,
+    private val transcriber: AudioTranscriber? = null,
+    defaultLanguage: String = "fr",
 ) {
-    private val _state = MutableStateFlow(AudioEditorState())
+    private val _state = MutableStateFlow(AudioEditorState(transcriptionLanguage = defaultLanguage))
     public val state: StateFlow<AudioEditorState> = _state.asStateFlow()
 
     private val opening = Mutex()
     private var session: AudioEditSession? = null
     private var job: Job? = null
+    private var transcriptionJob: Job? = null
+
+    /** Faux quand l'appareil ne sait pas transcrire : l'outil est alors ABSENT, jamais grisé. */
+    public val canTranscribe: Boolean get() = transcriber != null
 
     public val sessionDirectory: File? get() = session?.sessionDirectory
 
@@ -68,7 +83,7 @@ public class AudioEditorController(
                 val opened = AudioEditSession.open(source, root, engine, durations, ioDispatcher)
                 session = opened
                 val document = opened.document.value
-                _state.value = AudioEditorState(
+                _state.value = _state.value.copy(
                     preparing = false,
                     document = document,
                     staging = AudioEditorStaging.initial(document.active.durationSeconds),
@@ -132,7 +147,7 @@ public class AudioEditorController(
     public suspend fun confirm(outputDirectory: File): AudioEditResult {
         cancelBackgroundWork()
         val opened = checkNotNull(session) { "confirm before prepare" }
-        return opened.confirm(outputDirectory)
+        return opened.confirm(outputDirectory).copy(transcription = _state.value.transcription.exported())
     }
 
     /** Abandonne : arrête le rendu en cours et efface tous les fichiers temporaires. */
@@ -154,6 +169,57 @@ public class AudioEditorController(
     public fun cancelBackgroundWork() {
         job?.cancel()
         job = null
+        cancelTranscription()
+    }
+
+    public fun setTranscriptionLanguage(code: String) {
+        _state.update { it.copy(transcriptionLanguage = code) }
+    }
+
+    /**
+     * Lance la reconnaissance de la version active (la précédente est annulée). Tolérante aux crashs : un
+     * reconnaisseur qui plante, se tait ou ne finit pas devient un état `Failed`, jamais une exception.
+     */
+    public fun transcribe(): Job {
+        val recognizer = transcriber
+        val file = activeFile
+        if (recognizer == null || file == null) return finished()
+        cancelTranscription()
+        val language = _state.value.transcriptionLanguage
+        _state.update { it.copy(transcription = AudioTranscriptionState.Running) }
+        return scope.launch {
+            val outcome = recognize(recognizer, file, language)
+            _state.update { it.copy(transcription = outcome) }
+        }.also { transcriptionJob = it }
+    }
+
+    private suspend fun recognize(recognizer: AudioTranscriber, file: File, language: String): AudioTranscriptionState {
+        val size = withContext(ioDispatcher) { if (file.isFile) file.length() else -1L }
+        if (size < 0) return AudioTranscriptionState.Failed(AudioTranscriptionFailure.FILE_MISSING)
+        if (size == 0L) return AudioTranscriptionState.Failed(AudioTranscriptionFailure.EMPTY)
+        return try {
+            val outcome = withTimeoutOrNull(TRANSCRIPTION_TIMEOUT_MS) { recognizer.transcribe(file, language) }
+            when (outcome) {
+                is SoundTranscriptionOutcome.Heard -> outcome.transcription.text.trim().let { text ->
+                    if (text.isEmpty()) AudioTranscriptionState.Failed(AudioTranscriptionFailure.NO_SPEECH)
+                    else AudioTranscriptionState.Done(text, language)
+                }
+                else -> AudioTranscriptionState.Failed(AudioTranscriptionFailure.FAILED)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (refused: TranscriptionException) {
+            if (refused.error is TranscriptionError.PermissionDenied) AudioTranscriptionState.PermissionDenied
+            else AudioTranscriptionState.Failed(AudioTranscriptionFailure.FAILED)
+        } catch (failure: Exception) {
+            AudioTranscriptionState.Failed(AudioTranscriptionFailure.FAILED)
+        }
+    }
+
+    private fun cancelTranscription() {
+        transcriptionJob?.cancel()
+        transcriptionJob = null
+        _state.update { if (it.transcription.isRunning) it.copy(transcription = AudioTranscriptionState.Idle) else it }
     }
 
     private fun move(step: suspend (AudioEditSession) -> AudioEditDocument): Job {
@@ -163,11 +229,14 @@ public class AudioEditorController(
     }
 
     private fun publish(document: AudioEditDocument, closeTool: Boolean) {
+        transcriptionJob?.cancel()
+        transcriptionJob = null
         _state.update { current ->
             val reset = current.staging.resetFor(document.active.durationSeconds)
             current.copy(
                 document = document,
                 processing = false,
+                transcription = AudioTranscriptionState.Idle,
                 staging = if (closeTool) reset else reset.copy(tool = current.staging.tool),
             )
         }
@@ -176,4 +245,9 @@ public class AudioEditorController(
     private fun launchEdit(block: suspend () -> Unit): Job = scope.launch { block() }.also { job = it }
 
     private fun finished(): Job = Job().also { it.complete() }
+
+    public companion object {
+        /** Un reconnaisseur qui n'a rien rendu au bout de ce délai est forcé à échouer (comme le chien de garde d'iOS). */
+        public const val TRANSCRIPTION_TIMEOUT_MS: Long = 90_000
+    }
 }

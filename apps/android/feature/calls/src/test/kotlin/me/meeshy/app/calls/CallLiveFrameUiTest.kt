@@ -159,7 +159,7 @@ class CallLiveFrameUiTest {
             .performScrollToNode(androidx.compose.ui.test.hasText("Unplugged"))
         rule.onNodeWithText("Unplugged").assertExists()
         assertThat(carousel().fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].map { it.label })
-            .containsAtLeast("Take a photo", "Record")
+            .containsAtLeast("Take a photo", "Record video")
         controller.onCleared()
     }
 }

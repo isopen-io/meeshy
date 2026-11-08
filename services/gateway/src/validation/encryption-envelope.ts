@@ -4,6 +4,7 @@ import {
   E2EE_SEND_SHAPE,
   LIBSIGNAL_PROTOCOL,
   e2eeDeviceIdSchema,
+  type E2EEDeviceLayerRequest,
   type E2EEEnvelope,
   type E2EERelayRequest,
 } from '@meeshy/shared/types/e2ee-directory';
@@ -189,4 +190,28 @@ export function toEncryptedPayload(
     ...metadata,
     ...(relay ? { relay } : {}),
   } as unknown as MessageRequest['encryptedPayload'];
+}
+
+/**
+ * La couche APPAREIL d'un envoi hybride (#14369) : un envoi libsignal complet
+ * (protocole, enveloppes, appareil émetteur) posé SANS `encryptedContent`, à
+ * côté d'un `content` en clair. Exclusive de `toEncryptedPayload` : un chiffré
+ * n'a jamais de couche appareil, il EST l'envoi libsignal.
+ *
+ * Un serveur antérieur à #14369 ignorait ces enveloppes (aucun chiffré, donc
+ * aucune charge) et rangeait le message en couche serveur seule : c'est le
+ * repli rétrocompatible, jamais un clair perdu.
+ */
+export function toDeviceLayer(
+  envelope: { encryptedContent?: string } & LibsignalSendFields,
+  caller: { readonly sessionId?: string | null } = {},
+): E2EEDeviceLayerRequest | undefined {
+  if (envelope.encryptedContent) return undefined;
+  const relay = relayOf(envelope, caller.sessionId ?? null);
+  if (!relay) return undefined;
+  const declaredEpoch = envelope.encryptionMetadata?.regimeEpoch;
+  return {
+    relay,
+    ...(typeof declaredEpoch === 'number' && Number.isInteger(declaredEpoch) ? { regimeEpoch: declaredEpoch } : {}),
+  };
 }

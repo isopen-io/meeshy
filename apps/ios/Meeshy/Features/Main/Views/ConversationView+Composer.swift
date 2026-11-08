@@ -31,7 +31,8 @@ extension ConversationView {
             animationKeys: composerAnimationKeys,
             bar: { composerBar(textBinding: $0, isRecording: $1, recordingDuration: $2, audioLevels: $3) },
             onReplyRoute: { viewModel.armReplyContagion(quoting: $0) },
-            onFold: { closeComposerEmojiPanel() }
+            onFold: { closeComposerEmojiPanel() },
+            foldMemoryKey: viewModel.conversationId
         )
         .modifier(ConversationComposerPickers(
             composerState: $composerState, accentColor: accentColor,
@@ -96,7 +97,7 @@ extension ConversationView {
     /// ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant tout le
     /// cycle REST(12 s)+repli socket(10 s) d'UN message — le bouton d'envoi serait
     /// mort ~22 s par message en réseau dégradé (2026-07-02). Les double-taps
-    /// restent couverts par le champ vidé synchrone et la garde `isUploading`.
+    /// restent couverts par le champ et le plateau vidés dans le tour du tap (#14696).
     /// Aucun dédoublonnage par CONTENU : des emojis identiques partent en série (#7985).
     func composerBar(
         textBinding: Binding<String>,

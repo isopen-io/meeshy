@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.category.CategoryRepository
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -29,6 +30,7 @@ internal class ConversationListObservers(
     private val categorySocketManager: CategorySocketManager,
     private val storyRepository: StoryRepository,
     private val statusBarCache: StatusBarCache,
+    private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
 ) {
 
     /** Corpus vivant des categories : re-seme par le cache, plie par les evenements socket. */
@@ -41,14 +43,12 @@ internal class ConversationListObservers(
     fun startCategories() {
         scope.launch {
             categoryRepository.categoriesStream().collect { categories ->
-                categoryCatalog = UserCategoryCatalog.of(categories)
-                publishCategories()
+                adopt(UserCategoryCatalog.of(categories))
             }
         }
         scope.launch {
             categorySocketManager.categoryEvents.collect { event ->
-                categoryCatalog = categoryCatalog.apply(event)
-                publishCategories()
+                adopt(categoryCatalog.apply(event))
             }
         }
     }
@@ -60,7 +60,11 @@ internal class ConversationListObservers(
         paintMoodStatusesFromCache()
     }
 
-    private fun publishCategories() {
+    /** Adopte le nouveau catalogue ; un pli changé depuis un autre appareil s'applique à la mémoire de session. */
+    private fun adopt(next: UserCategoryCatalog) {
+        ConversationSectionExpansionStore.remoteChanges(categoryCatalog.sorted, next.sorted)
+            .forEach { (id, expanded) -> sectionExpansion.applyRemote(id, expanded) }
+        categoryCatalog = next
         state.update { it.copy(categories = categoryCatalog.sorted) }
     }
 
@@ -96,12 +100,23 @@ internal class ConversationListObservers(
                 armTypingCleanup(event.conversationId, event.userId)
             }
         }
+        scope.launch { messageSocketManager.messageReceived.collect(::endTypingOnMessage) }
         scope.launch {
             messageSocketManager.typingStopped.collect { event ->
                 typingCleanupJobs.remove("${event.conversationId} ${event.userId}")?.cancel()
                 state.update {
                     it.copy(typers = ConversationTypingRoster.stopped(it.typers, event.conversationId, event.userId))
                 }
+            }
+        }
+    }
+
+    /** Le message de X est la preuve qu'il a fini d'ecrire : sa frappe s'eteint sans attendre `typing:stop`. */
+    private fun endTypingOnMessage(message: ApiMessage) {
+        listOfNotNull(message.senderId, message.sender?.resolvedUserId).distinct().forEach { userId ->
+            typingCleanupJobs.remove("${message.conversationId} $userId")?.cancel()
+            state.update {
+                it.copy(typers = ConversationTypingRoster.stopped(it.typers, message.conversationId, userId))
             }
         }
     }

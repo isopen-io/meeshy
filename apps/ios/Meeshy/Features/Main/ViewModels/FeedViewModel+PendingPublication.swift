@@ -4,72 +4,28 @@ import MeeshySDK
 // MARK: - Publications encore dans la file (#10321)
 extension FeedViewModel {
 
-    /// **« Supprimer » sur une carte encore en file d'envoi** (#10321).
-    ///
-    /// La carte optimiste porte le cmid de sa ligne `.createPost` : il n'existe
-    /// rien côté serveur à supprimer, un `DELETE` y échouait et la ligne
-    /// partait quand même au retour du réseau. Le geste retire donc la ligne de
-    /// la file, localement, sans appeler le serveur. Une ligne déjà EN VOL est
-    /// marquée : l'envoi s'arrête au prochain point de contrôle, et si la
-    /// requête était déjà partie, le serveur fait foi — la publication
-    /// apparaîtra en ligne au rechargement, sans carte fantôme ici.
+    /// **« Annuler l'envoi » sur une carte encore en file** (#10321) — la carte
+    /// part tout de suite, l'action est celle de la pastille et du détail
+    /// (`PendingPublicationCancel`). Si rien n'a pu être arrêté (déjà partie,
+    /// base en échec), la carte revient à sa place ; le serveur fait foi.
     func withdrawPendingPublication(_ cmid: String) async {
         let removedIndex = posts.firstIndex(where: { $0.id == cmid })
         let removedPost = removedIndex.map { posts[$0] }
         removeOptimisticPost(id: cmid)
-        // Remet CETTE carte à sa place — le fil chargé pendant l'attente reste (`OptimisticRollback`).
-        let putBack = { [weak self] in
-            guard let self, let removedPost, let removedIndex else { return }
-            self.posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: self.posts)
-        }
-        switch await offlineQueue.cancelPendingPublication(clientMutationId: cmid) {
-        case .removed, .cancelRequested:
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pending.withdrawn", defaultValue: "Envoi annulé", bundle: .main))
-        case .notFound:
-            putBack()
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.pending.alreadySent", defaultValue: "Cette publication vient de partir. Supprimez-la une fois en ligne.", bundle: .main))
-        case .failed:
-            putBack()
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
-        }
+        guard !(await PendingPublicationCancel.run(cmid, queue: offlineQueue, feedCache: feedCache)),
+              let removedPost, let removedIndex else { return }
+        posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: posts)
     }
 
     /// Returns the last POST/REEL that got stuck offline (unsent for more than
-    /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft.
-    ///
-    /// **Une ligne dont un média est de l'AUDIO n'est jamais proposée, et c'est
-    /// une garde de CONTENU, pas une préférence d'ergonomie.**
-    ///
-    /// Le composer du feed ne sait pas rouvrir un enregistrement : sa
-    /// restauration ne traite que l'image et la vidéo
-    /// (`FeedView+Attachments.restoreRecoveredMedia`). Offrir la ligne quand
-    /// même produisait une chaîne complète de DESTRUCTION — brouillon
-    /// « restauré » VIDE (un vocal n'a pas de texte), `recoveredPostCmid` posé
-    /// malgré tout, puis, à la publication suivante quelle qu'elle soit,
-    /// `supersedeRecoveredPost` → `cancelCreatePost`, qui efface le fichier
-    /// relocalisé ET la ligne. L'enregistrement n'a alors JAMAIS été vu par son
-    /// auteur, et rien ne le lui dit.
-    ///
-    /// Le trou n'existait pas avant que les deux jumeaux audio entrent dans
-    /// cette file : `case .audio: break` y était juste, et son commentaire
-    /// (« audio offline posts aren't queued through this composer path yet »)
-    /// était vrai. Un lot qui fait CONVERGER une chaîne doit énumérer les
-    /// CONSOMMATEURS de la ligne qu'il vient de créer, pas seulement les
-    /// producteurs.
-    ///
-    /// Prix assumé : tant qu'un vocal est bloqué en file, aucun brouillon plus
-    /// ancien n'est proposé. Une affordance de reprise retardée n'est pas
-    /// comparable à un enregistrement détruit.
+    /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft
+    /// — only when that composer can restore it (`FeedDraftRecovery`).
     func recoverUnsentPost() async -> RecoveredOfflinePost? {
         let draft = await offlineQueue.recoverLastUnsentPost(
             matchingTypes: ["POST", "REEL"],
             olderThan: Self.offlineStuckThreshold
         )
-        guard let draft else { return nil }
-        let porteUneVoix = draft.localMediaURLs.contains { url in
-            AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)) == .audio
-        }
-        return porteUneVoix ? nil : draft
+        return draft.flatMap { FeedDraftRecovery.isProposable($0) ? $0 : nil }
     }
 
     /// Supersedes a recovered post/reel when the user re-sends it from the
@@ -99,9 +55,88 @@ extension FeedViewModel {
         posts[i].commentCount = OptimisticRollback.decremented(posts[i].commentCount, removed: result.removed)
     }
 
+    /// **La carte d'un post en attente montre SA photo** (#15095). La file a
+    /// copié les fichiers sous `Documents/pending-media/<cmid>/` puis effacé
+    /// leurs sources : la carte optimiste, qui visait encore ces sources, ne
+    /// rendait plus qu'un aplat. Elle vise désormais la copie que la file
+    /// garde jusqu'à l'envoi.
+    func showRelocatedMedia(of cmid: String, storedPaths: [String]) {
+        guard let i = posts.firstIndex(where: { $0.id == cmid }),
+              let relocated = PendingPublicationLocalMedia.relocated(posts[i], storedPaths: storedPaths) else { return }
+        posts[i] = relocated
+        debouncedCacheSave()
+    }
+
     func removeOptimisticPost(id: String) {
         guard let i = posts.firstIndex(where: { $0.id == id }) else { return }
         posts.remove(at: i)
         debouncedCacheSave()
+    }
+}
+
+/// **Le média local d'une publication en attente suit le conteneur de l'app**
+/// (#15095). Le cache du fil garde l'URL `file://` absolue de la copie que la
+/// file d'envoi détient ; le dossier `…/Data/Application/<UUID>/` change d'un
+/// lancement à l'autre (mise à jour, réinstallation, simulateur), et la carte
+/// relue visait l'ANCIEN conteneur. Seules les cartes en attente sont
+/// touchées : une carte publiée ne porte jamais de fichier local.
+nonisolated enum PendingPublicationLocalMedia {
+    static func rebased(_ posts: [FeedPost], ontoHome home: String = NSHomeDirectory()) -> [FeedPost] {
+        posts.map { post in
+            guard PendingPublicationMarker.isPending(postId: post.id) else { return post }
+            var rebased = post
+            rebased.media = post.media.map { media in
+                guard let url = media.url.flatMap(URL.init(string:)), url.isFileURL else { return media }
+                let path = StoryMediaReference.rebasing(url.path, ontoHome: home)
+                return path == url.path ? media : pointing(media, at: URL(fileURLWithPath: path))
+            }
+            return rebased
+        }
+    }
+
+    static func relocated(_ post: FeedPost, storedPaths: [String]) -> FeedPost? {
+        guard post.media.count == storedPaths.count else { return nil }
+        var relocated = post
+        relocated.media = zip(post.media, storedPaths).map { media, stored in
+            pointing(media, at: URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: stored)))
+        }
+        return relocated
+    }
+
+    static func optimisticMedia(_ files: [URL], declaredMimeTypes: [String]?) -> [FeedMedia] {
+        files.enumerated().map { index, url in
+            optimistic(forLocalURL: url, declaredMimeType: declaredMimeTypes.flatMap {
+                $0.indices.contains(index) ? $0[index] : nil
+            })
+        }
+    }
+
+    /// Builds the optimistic `FeedMedia` for a not-yet-uploaded local file,
+    /// deriving the type from its DECLARED mime — and only from its extension
+    /// when nothing was declared. The `file://` URL is replaced by the server
+    /// media URL on reconcile.
+    ///
+    /// La distinction n'est pas cosmétique : un vocal importé en `.caf` se
+    /// re-dérivait en `application/octet-stream`, donc `AttachmentKind` le
+    /// classait autrement qu'audio et la carte optimiste s'affichait comme une
+    /// IMAGE — un lecteur absent là où l'auteur venait d'enregistrer sa voix.
+    static func optimistic(
+        forLocalURL url: URL, declaredMimeType: String?
+    ) -> FeedMedia {
+        let mime = declaredMimeType ?? MimeTypeResolver.mimeType(forExtension: url.pathExtension)
+        let type: FeedMediaType
+        switch AttachmentKind(mimeType: mime) {
+        case .video: type = .video
+        case .audio: type = .audio
+        default: type = .image
+        }
+        return FeedMedia(type: type, url: url.absoluteString)
+    }
+
+    static func pointing(_ media: FeedMedia, at file: URL) -> FeedMedia {
+        FeedMedia(id: media.id, type: media.type, url: file.absoluteString,
+                  thumbnailColor: media.thumbnailColor,
+                  width: media.width, height: media.height, duration: media.duration,
+                  fileName: media.fileName, caption: media.caption, alt: media.alt)
     }
 }

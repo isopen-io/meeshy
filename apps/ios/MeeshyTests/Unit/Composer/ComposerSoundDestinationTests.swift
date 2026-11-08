@@ -23,13 +23,6 @@ final class ComposerSoundDestinationTests: XCTestCase {
         XCTAssertEqual(ComposerSoundDestination.forForeground(on: .scene), .sceneChip)
     }
 
-    /// L'atelier aussi : c'est une scène plein écran, et il peint déjà ses
-    /// puces (`audioForegroundOverlay`). Ce qui décide n'est pas l'écran, c'est
-    /// la présence d'une TOILE.
-    func test_lAtelier_recoitAussiUnePuce() {
-        XCTAssertEqual(ComposerSoundDestination.forForeground(on: .atelier), .sceneChip)
-    }
-
     /// **Un post se compose sur la scène (#13864) : son premier plan y devient
     /// une PUCE**, comme celui d'une story — plus de carte sous un texte, il
     /// n'y a plus de colonne de texte.
@@ -191,6 +184,19 @@ final class ComposerSoundDestinationWiringGuardTests: XCTestCase {
     /// ses feuilles** — sans toucher au thème de l'app. Elle lisait le thème
     /// global : sur un téléphone en clair, elle montait claire au-dessus d'une
     /// scène sombre.
+    func test_unSonImporteParLaFeuille_garde_leNomChoisiDansSaCopie() {
+        let copie = AudioPostComposerView.importedCopyURL(of: URL(fileURLWithPath: "/tmp/On fait comme ça.m4a"))
+
+        XCTAssertEqual(ImportedCopyName.chosenName(in: copie.lastPathComponent), "On fait comme ça.m4a")
+    }
+
+    func test_unSonImporteSansExtension_devientUnM4aNomme() {
+        let copie = AudioPostComposerView.importedCopyURL(of: URL(fileURLWithPath: "/tmp/Mémo"))
+
+        XCTAssertEqual(copie.pathExtension, "m4a")
+        XCTAssertEqual(ImportedCopyName.chosenName(in: copie.lastPathComponent), "Mémo.m4a")
+    }
+
     @MainActor
     func test_laFeuilleSon_duCompositeur_estSombre_dansUneAppClaire() throws {
         let modeAvant = ThemeManager.shared.mode

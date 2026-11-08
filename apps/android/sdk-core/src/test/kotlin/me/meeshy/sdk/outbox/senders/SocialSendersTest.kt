@@ -13,6 +13,7 @@ import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.SendFailureClassifier
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.story.StoryDraftConfirmation
@@ -47,7 +48,7 @@ class SocialSendersTest {
         assertThat(handler.send(storyRow())).isEqualTo(SendResult.TransientFailure)
 
         coEvery { postApi.createStory(story) } throws IOException("offline")
-        assertThat(handler.send(storyRow())).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(storyRow())).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test
@@ -146,7 +147,7 @@ class SocialSendersTest {
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
 
         coEvery { postApi.like("p1") } throws IOException("offline")
-        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransportFailure)
         coVerify(exactly = 0) { postRepository.rollbackLike(any(), any(), any()) }
     }
 
@@ -245,12 +246,14 @@ class SocialSendersTest {
         val handler = LikePostHandler(postApi, postRepository)
         val row = outboxRow(OutboxKind.LIKE_POST, targetId = "p1")
 
-        listOf(401, 408, 429, 500, 502, 503).forEach { status ->
+        listOf(408, 429, 500, 502, 503).forEach { status ->
             coEvery { postApi.like("p1") } throws refusal(status)
             assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
         }
+        coEvery { postApi.like("p1") } throws refusal(401)
+        assertThat(handler.send(row)).isEqualTo(SendResult.Deferred(SendFailureClassifier.SESSION_EXPIRED_REASON))
         coEvery { postApi.like("p1") } throws IOException("offline")
-        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test

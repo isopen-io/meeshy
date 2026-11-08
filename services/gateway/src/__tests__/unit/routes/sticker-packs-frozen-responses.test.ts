@@ -15,6 +15,11 @@
  * régénère jamais pour faire passer un changement : un écart est un contrat
  * servi qui bouge.
  *
+ * Seul AJOUT admis depuis : l'éditeur de chaque pack (`publisher`, #16274),
+ * champ additif qu'un ancien client ignore. Il est retiré du corps avant la
+ * comparaison — tout le reste reste figé à l'octet — et sa présence est
+ * vérifiée à part.
+ *
  * @jest-environment node
  */
 import { describe, it, expect, jest } from '@jest/globals';
@@ -42,6 +47,7 @@ type Who = { readonly userId: string; readonly anonymous?: boolean };
 async function buildApp() {
   const db = memoryPrisma();
   const at = new Date('2026-10-01T08:00:00.000Z');
+  db.profiles.push({ id: '68e0000000000000000000a1', userId: ALICE, slug: 'studio-minou', displayName: 'Studio Minou', nameKey: 'studiominou', verifiedAt: null, verifiedBy: null, createdAt: at });
   db.packs.push({
     id: '68b0000000000000000000f1',
     slug: 'chats-de-paris',
@@ -117,6 +123,20 @@ const EXCHANGES: readonly Exchange[] = [
   { name: 'DELETE /:slug/install — intégré', who: { userId: BOB }, request: { method: 'DELETE', url: '/mee-et-meo/install' } },
 ];
 
+/** Le corps sans `publisher` (#16274) : l'ancien contrat, octet pour octet. */
+const withoutPublisher = (body: string): string => {
+  const strip = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(strip);
+    if (value === null || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'publisher').map(([key, inner]) => [key, strip(inner)]));
+  };
+  try {
+    return JSON.stringify(strip(JSON.parse(body)));
+  } catch {
+    return body;
+  }
+};
+
 async function served() {
   const { app, as } = await buildApp();
   const out: Record<string, { status: number; contentType: unknown; cacheControl: unknown; body: string }> = {};
@@ -135,7 +155,15 @@ describe('/sticker-packs — les réponses servies, figées à l’octet', () =>
     if (process.env.UPDATE_FROZEN_PACK_RESPONSES === '1') writeFileSync(FIXTURE, `${JSON.stringify(actual, null, 2)}\n`);
     const frozen = JSON.parse(readFileSync(FIXTURE, 'utf8')) as typeof actual;
     expect(Object.keys(actual)).toEqual(Object.keys(frozen));
-    for (const name of Object.keys(frozen)) expect({ name, ...actual[name] }).toEqual({ name, ...frozen[name] });
+    for (const name of Object.keys(frozen)) expect({ name, ...actual[name], body: withoutPublisher(actual[name].body) }).toEqual({ name, ...frozen[name] });
+  });
+
+  it('ajoute l’éditeur de chaque pack : Meeshy pour un intégré, l’éditeur du proposant pour un tiers — jamais son compte (#16274)', async () => {
+    const actual = await served();
+    const shop = JSON.parse(actual['GET / — la boutique, un intégré retiré, un tiers installé'].body) as { data: readonly { slug: string; publisher?: unknown }[] };
+    expect(shop.data.find((pack) => pack.slug === 'mee')?.publisher).toEqual({ slug: 'meeshy', name: 'Meeshy', verified: true, official: true });
+    expect(shop.data.find((pack) => pack.slug === 'chats-de-paris')?.publisher).toEqual({ slug: 'studio-minou', name: 'Studio Minou', verified: false, official: false });
+    expect(actual['GET /:slug — tiers publié, vu par un autre'].body).not.toContain(ALICE);
   });
 
   it('ne sert jamais une clé glory-frame.* à la boutique des stickers', async () => {

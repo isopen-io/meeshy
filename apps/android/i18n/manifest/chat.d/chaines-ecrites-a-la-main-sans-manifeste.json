@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "chat_effects_panel_clear_all",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_confetti",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_explode",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_fireworks",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_glow",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_pulse",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_rainbow",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_section_entry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_section_permanent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_shake",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_sparkle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_waoo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_effects_panel_zoom",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_swipe_action_menu",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_text_format_bar",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_text_format_bold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_text_format_italic",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_text_format_strikethrough",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_text_format_underline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_cancel_preparing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_edit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_item_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_preview",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_remove_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_type_audio",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_type_file",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_type_image",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_type_place",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_tray_type_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_members_open_participation_a11y",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

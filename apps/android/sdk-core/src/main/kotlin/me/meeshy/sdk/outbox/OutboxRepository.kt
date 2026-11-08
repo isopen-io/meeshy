@@ -1,15 +1,21 @@
 package me.meeshy.sdk.outbox
 
+import kotlinx.serialization.decodeFromString
 import androidx.room.withTransaction
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ObjectIdGuard
 import me.meeshy.sdk.session.AccountClosedException
 import me.meeshy.sdk.session.AccountFence
@@ -35,6 +41,33 @@ class OutboxRepository @Inject constructor(
     /** Per-`cmid` delivery outcomes — drives optimistic rollback in the UI. */
     val outcomes: SharedFlow<OutboxOutcome> = _outcomes.asSharedFlow()
 
+    private val _enqueued = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Ticks on every [enqueue] — the trigger that wakes the flusher (debounced by `OutboxDrainTriggers`). */
+    val enqueued: SharedFlow<Unit> = _enqueued.asSharedFlow()
+
+    private val registry = OutboxOutcomeRegistry()
+
+    /**
+     * L'issue terminale de [cmid] : émise une fois, puis le flux se termine. Un abonné qui arrive APRÈS la livraison la reçoit
+     * encore (tombstones FIFO bornés) ; annuler un observateur ne retire que le sien. Une mutation retirée sans issue
+     * ([cancelPendingSend], [clearSendMessageRow], [discard]) termine le flux à vide.
+     */
+    fun outcomeFor(cmid: String): Flow<OutboxOutcome> = callbackFlow {
+        val observer = OutboxOutcomeRegistry.Observer(
+            onOutcome = { trySend(it); close() },
+            onEnd = { close() },
+        )
+        when (val subscription = registry.subscribe(cmid, observer)) {
+            is OutboxOutcomeRegistry.Subscription.Fired -> {
+                trySend(subscription.outcome)
+                close()
+                awaitClose()
+            }
+            is OutboxOutcomeRegistry.Subscription.Registered -> awaitClose { registry.drop(cmid, subscription.token) }
+        }
+    }
+
     /** Observes the whole queue (oldest first) — for a failed-message / pending UI. */
     fun observeAll(): Flow<List<OutboxEntity>> = outboxDao.observeAll()
 
@@ -47,25 +80,50 @@ class OutboxRepository @Inject constructor(
      *
      * @return the persisted row's `cmid`, or `null` if it annihilated existing rows.
      */
-    suspend fun enqueue(mutation: OutboxMutation, ticket: AccountTicket? = null): String? {
-        val decision = if (fence == null) {
+    suspend fun enqueue(mutation: OutboxMutation, ticket: AccountTicket? = null): String? =
+        when (val result = tryEnqueue(mutation, ticket)) {
+            is OutboxEnqueueResult.Accepted -> result.cmid
+            OutboxEnqueueResult.Annihilated -> null
+            is OutboxEnqueueResult.QueueFull -> null
+        }
+
+    /**
+     * [enqueue] avec un résultat qui dit POURQUOI rien n'est en file : au plafond ([OutboxCapacity.MAX_ROWS]) la mutation est
+     * refusée ([OutboxEnqueueResult.QueueFull]) et son `cmid` reçoit l'issue [OutboxOutcome.Exhausted] — le retour arrière
+     * optimiste de l'appelant se déclenche, jamais d'éviction silencieuse d'une ligne déjà promise. Un remplacement ou une
+     * annulation ne fait pas grossir la file : jamais refusé.
+     */
+    suspend fun tryEnqueue(mutation: OutboxMutation, ticket: AccountTicket? = null): OutboxEnqueueResult {
+        val written = if (fence == null) {
             write(mutation.toEntity(now(), ticket?.ownerId ?: ownerSource.currentOwnerId()))
         } else {
             val owner = ticket ?: fence.currentTicket()
             fence.commit(owner) { write(mutation.toEntity(now(), owner.ownerId)) } ?: throw AccountClosedException()
         }
+        val decision = when (written) {
+            is Written.Refused -> {
+                emit(OutboxOutcome.Exhausted(mutation.cmid, OutboxCapacity.REASON_QUEUE_FULL))
+                return OutboxEnqueueResult.QueueFull(written.rowCount, OutboxCapacity.MAX_ROWS)
+            }
+            is Written.Applied -> written.decision
+        }
+        _enqueued.tryEmit(Unit)
         return when (decision) {
-            is CoalesceDecision.Enqueue -> decision.row.cmid
+            is CoalesceDecision.Enqueue -> OutboxEnqueueResult.Accepted(decision.row.cmid)
             is CoalesceDecision.Replace -> {
                 decision.supersededCmids.forEach { emit(OutboxOutcome.Superseded(it)) }
-                decision.row.cmid
+                OutboxEnqueueResult.Accepted(decision.row.cmid)
             }
             is CoalesceDecision.Annihilate -> {
                 decision.cancelledCmids.forEach { emit(OutboxOutcome.Cancelled(it)) }
-                null
+                OutboxEnqueueResult.Annihilated
             }
         }
     }
+
+    /** Le remplissage de la file, live : l'UI prévient dès [OutboxCapacityState.NEAR_CAPACITY]. */
+    fun observeCapacity(): Flow<OutboxCapacityState> =
+        outboxDao.observeCount().map(OutboxCapacity::stateFor).distinctUntilChanged()
 
     /**
      * Rows of one lane the drainer may attempt NOW, oldest first: not exhausted, and not
@@ -144,6 +202,28 @@ class OutboxRepository @Inject constructor(
      */
     suspend fun stateOf(cmid: String): OutboxState? = outboxDao.find(cmid)?.stateEnum
 
+    private val liveSends: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /**
+     * #14697 — [send] runs with [cmid] `INFLIGHT` and held LIVE in this process: a concurrent flush pass's
+     * [recoverInflight] leaves it alone, so sending another message during a long upload never restarts that upload.
+     *
+     * #15677 — [send] runs only once [cmid] is CLAIMED ([OutboxDao.claimPending]): two overlapping passes that both read
+     * the row `PENDING` reduce to one send, and the pass that loses the claim gets `null` without sending anything.
+     *
+     * #15541 — the claim also requires the row to be DUE at [at] (the drainer's clock): a pass whose snapshot predates
+     * another pass's failed attempt does not send the row again past its backoff — a 44 MB video is uploaded once.
+     */
+    suspend fun <T : Any> sendingLive(cmid: String, at: Long = now(), send: suspend () -> T): T? {
+        if (!liveSends.add(cmid)) return null
+        try {
+            if (outboxDao.claimPending(cmid, at) != 1) return null
+            return send()
+        } finally {
+            liveSends -= cmid
+        }
+    }
+
     suspend fun markInflight(cmid: String) {
         val row = outboxDao.find(cmid) ?: return
         outboxDao.updateState(cmid, OutboxState.INFLIGHT.name, row.attempts, now())
@@ -159,19 +239,46 @@ class OutboxRepository @Inject constructor(
      * Records a failed attempt: back to `PENDING` for another try, or `EXHAUSTED`
      * (with an [OutboxOutcome.Exhausted] signal) once [MAX_ATTEMPTS] is reached.
      */
-    suspend fun markFailed(cmid: String, reason: String? = null): OutboxState {
+    suspend fun markFailed(cmid: String, reason: String? = null, backoffMs: Long = 0L): OutboxState {
+        val state = database.withTransaction { markFailedInTransaction(cmid, reason, backoffMs) }
+        if (state == OutboxState.EXHAUSTED) emit(OutboxOutcome.Exhausted(cmid, "Exceeded $MAX_ATTEMPTS delivery attempts"))
+        return state
+    }
+
+    /** #15541 — `PENDING` and its backoff land TOGETHER: no overlapping claim slips between the two writes. */
+    private suspend fun markFailedInTransaction(cmid: String, reason: String?, backoffMs: Long): OutboxState {
         val row = outboxDao.find(cmid) ?: return OutboxState.PENDING
         val attempts = row.attempts + 1
         return if (attempts >= MAX_ATTEMPTS) {
             outboxDao.updateState(cmid, OutboxState.EXHAUSTED.name, attempts, now())
-            emit(OutboxOutcome.Exhausted(cmid, "Exceeded $MAX_ATTEMPTS delivery attempts"))
             OutboxState.EXHAUSTED
         } else {
             outboxDao.updateState(cmid, OutboxState.PENDING.name, attempts, now())
             reason?.let { outboxDao.recordError(cmid, it, now()) }
+            if (backoffMs > 0L) outboxDao.scheduleNext(cmid, now() + backoffMs, now())
             OutboxState.PENDING
         }
     }
+
+    /**
+     * The transport failed (connection, DNS, timeout): back to `PENDING` WITHOUT charging an attempt, held back for
+     * [backoffMs] on its own row — a network outage of a few minutes exhausts nothing.
+     */
+    suspend fun markTransportFailed(cmid: String, reason: String, backoffMs: Long) {
+        database.withTransaction {
+            val row = outboxDao.find(cmid) ?: return@withTransaction
+            val at = now()
+            outboxDao.updateState(cmid, OutboxState.PENDING.name, row.attempts, at)
+            outboxDao.recordError(cmid, reason, at)
+            outboxDao.scheduleNext(cmid, at + backoffMs, at)
+        }
+    }
+
+    /** The earliest `nextAttemptAt` of a `PENDING` row, or `null` when no row is held back. */
+    suspend fun earliestScheduledAttempt(): Long? = outboxDao.earliestScheduledAttempt()
+
+    /** Whether any row still waits for delivery (`PENDING` or `INFLIGHT`) — the network gate's « is there work ». */
+    suspend fun hasWork(): Boolean = outboxDao.hasWork()
 
     /** A permanent (non-retryable) failure — exhaust immediately, ignoring the attempt count. */
     suspend fun markExhausted(cmid: String, reason: String) {
@@ -225,15 +332,26 @@ class OutboxRepository @Inject constructor(
         outboxDao.endWait(cmid, reason, now())
     }
 
-    /** Reclaims rows left `INFLIGHT` for longer than [staleAfterMs] (a worker killed mid-send). */
+    /**
+     * Reclaims rows left `INFLIGHT` for longer than [staleAfterMs] (a worker killed mid-send). A row a live pass of this
+     * process is still sending ([sendingLive]) is not stale however long it takes (#15541): a slow 44 MB upload is never
+     * put back in the queue for another pass to send again.
+     */
     suspend fun reclaimStaleInflight(staleAfterMs: Long = STALE_INFLIGHT_MS): Int {
         val at = now()
-        return outboxDao.reclaimStaleInflight(staleBefore = at - staleAfterMs, now = at)
+        return outboxDao.reclaimStaleInflightExcept(liveSends.toList(), staleBefore = at - staleAfterMs, now = at)
     }
+
+    /** Grave [payload] sur la ligne [cmid] : ce qu'une tentative a déjà acquis (pièces téléversées) survit au rejeu. */
+    suspend fun rewritePayload(cmid: String, payload: String) = outboxDao.updatePayload(cmid, payload, now())
 
     /** Whether a [kind] row anchored on [anchor] is still on its way (exhausted rows do not count). */
     suspend fun hasUnsentRow(kind: OutboxKind, anchor: String): Boolean =
         outboxDao.hasUnsentRow(kind.name, anchor)
+
+    /** One-shot twin of [observePendingTargets] : les ancres qui doivent encore une ecriture de l'un des [kinds], maintenant. */
+    suspend fun pendingTargets(vararg kinds: OutboxKind): Set<String> =
+        outboxDao.pendingTargets(kinds.map { it.name }).toSet()
 
     /**
      * The anchors (`targetId`) that still owe the server a write of one of [kinds], live. A row
@@ -256,6 +374,10 @@ class OutboxRepository @Inject constructor(
     /** Head of the queue for the sync pill, capped at [TOP_OF_QUEUE_LIMIT]. */
     fun observeTopOfQueue(): Flow<List<OutboxEntity>> =
         outboxDao.observeTop(OutboxKindCatalog.syncIndicatorExcludedDiskValues, TOP_OF_QUEUE_LIMIT)
+
+    /** La tête de file projetée pour la pastille ([toUiItem]) : un genre inconnu d'un build plus récent est ignoré. */
+    fun observeUiItems(): Flow<List<me.meeshy.sdk.model.sync.OutboxUiItem>> =
+        observeTopOfQueue().map { rows -> rows.mapNotNull { it.toUiItem() } }.distinctUntilChanged()
 
     /**
      * Garbage-collects rows that gave up more than [olderThanMs] ago, but only the kinds whose
@@ -283,7 +405,95 @@ class OutboxRepository @Inject constructor(
         outboxDao.updateState(cmid, OutboxState.PENDING.name, 0, at)
         outboxDao.resetSchedule(cmid)
         ownerSource.currentOwnerId()?.let { outboxDao.claimIfOwnerless(cmid, it, at) }
+        registry.forget(cmid)
         return true
+    }
+
+    /**
+     * Relance la bulle en échec [cmid] (miroir d'iOS `retryItem`) : sa ligne et ses téléversements `EXHAUSTED` repartent avec
+     * un budget d'essais neuf. `false` quand la ligne n'existe plus.
+     */
+    suspend fun retryByClientMessageId(cmid: String): Boolean = retryWithPrerequisites(cmid)
+
+    /**
+     * Relance TOUS les échecs du compte connecté (et les lignes sans auteur, que `retry` adopte), sauf ceux que rejouer
+     * échouerait à l'identique : un média perdu ou dont la position n'a pas pu être retirée. Un échec d'un AUTRE compte reste
+     * tel quel, il repartira quand ce compte reviendra.
+     *
+     * @return les `cmid` relancés, le plus ancien d'abord.
+     */
+    suspend fun retryAll(): List<String> {
+        val owner = ownerSource.currentOwnerId()
+        val failed = outboxDao.byState(OutboxState.EXHAUSTED.name)
+            .filter { it.ownerId == null || owner == null || it.ownerId == owner }
+            .filterNot { MediaLocationRefusal.isReason(it.lastError) || MediaLoss.isReason(it.lastError) }
+        return failed.filter { retry(it.cmid) }.map { it.cmid }
+    }
+
+    /**
+     * L'utilisateur annule l'envoi EN ATTENTE [cmid] : sa ligne `PENDING` disparaît, ainsi que ses téléversements `PENDING`
+     * que plus aucune ligne n'attend. Une ligne déjà en vol n'est pas touchée (sa requête est partie). Les observateurs de
+     * l'issue se terminent à vide : un envoi annulé n'en publiera jamais. La ligne optimiste de la bulle se retire côté
+     * `MessageSendCoordinator.cancelPendingSend`.
+     *
+     * @return `true` quand une ligne a été retirée.
+     */
+    suspend fun cancelPendingSend(cmid: String): Boolean {
+        val removed = database.withTransaction {
+            val row = outboxDao.find(cmid)
+            if (row == null || row.state != OutboxState.PENDING.name || !isSendRow(row)) return@withTransaction false
+            outboxDao.deleteAll(listOf(cmid))
+            OutboxDependencyKey.decode(row.dependsOn).forEach { dropOrphanedUpload(it) }
+            true
+        }
+        registry.end(cmid)
+        return removed
+    }
+
+    /**
+     * Retire la ligne d'envoi [cmid] quel que soit son état SAUF en vol — celle d'un envoi échoué ou épuisé que
+     * [cancelPendingSend] (volontairement limité à `PENDING`) ne peut pas atteindre. Sans ligne : déjà nettoyé, un succès.
+     */
+    suspend fun clearSendMessageRow(cmid: String) {
+        database.withTransaction {
+            val row = outboxDao.find(cmid) ?: return@withTransaction
+            if (row.state == OutboxState.INFLIGHT.name || !isSendRow(row)) return@withTransaction
+            outboxDao.deleteAll(listOf(cmid))
+            OutboxDependencyKey.decode(row.dependsOn).forEach { dropOrphanedUpload(it) }
+        }
+        registry.end(cmid)
+    }
+
+    private fun isSendRow(row: OutboxEntity): Boolean =
+        row.kind == OutboxKind.SEND_MESSAGE.name || row.kind == OutboxKind.SEND_E2EE_MESSAGE.name
+
+    private suspend fun dropOrphanedUpload(prerequisite: String) {
+        val upload = outboxDao.find(prerequisite) ?: return
+        if (upload.kind != OutboxKind.UPLOAD_MEDIA.name || upload.state != OutboxState.PENDING.name) return
+        if (outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisite)).isNotEmpty()) return
+        outboxDao.deleteAll(listOf(prerequisite))
+        registry.end(prerequisite)
+    }
+
+    /** Les lignes `PENDING` d'un [kind], le plus ancien d'abord — ce que la reprise inspecte. */
+    suspend fun pendingRows(kind: OutboxKind): List<OutboxEntity> =
+        outboxDao.byState(OutboxState.PENDING.name).filter { it.kind == kind.name }
+
+    /**
+     * Retire les lignes terminales JETABLES dont la fenêtre ([OutboxTerminalRetention.windowFor]) est écoulée depuis leur
+     * renoncement (`updatedAt`). Une ligne qui porte le texte de l'utilisateur n'a pas de fenêtre : elle reste.
+     *
+     * @return combien de lignes sont sorties.
+     */
+    suspend fun purgeDiscardableTerminalRows(nowMs: Long = now()): Int {
+        val doomed = outboxDao.exhaustedOlderThan(nowMs)
+            .filter { row ->
+                val window = row.kindEnum?.let(OutboxTerminalRetention::windowFor) ?: return@filter false
+                row.updatedAt < nowMs - window
+            }
+            .map { it.cmid }
+        if (doomed.isNotEmpty()) outboxDao.deleteAll(doomed)
+        return doomed.size
     }
 
     /**
@@ -302,6 +512,45 @@ class OutboxRepository @Inject constructor(
         return retry(cmid)
     }
 
+    /**
+     * « Supprimer » une publication (iOS `OfflineQueue+PublicationCancel`) : dans UNE transaction, la ligne est retirée si
+     * aucun drainer ne l'a réservée ([OutboxWithdrawal.Removed]), sinon elle porte la marque d'annulation
+     * ([OutboxWithdrawal.Marked]) ; sans ligne, elle est déjà partie ([OutboxWithdrawal.Absent]). Les deux écritures sont
+     * conditionnées dans leur requête : une réservation qui passe entre la lecture et l'écriture ne peut pas produire un
+     * « retiré » sur une ligne en vol.
+     */
+    suspend fun withdrawUnlessInflight(cmid: String): OutboxWithdrawal {
+        val withdrawal = database.withTransaction<OutboxWithdrawal> {
+            val row = outboxDao.find(cmid) ?: return@withTransaction OutboxWithdrawal.Absent
+            when {
+                outboxDao.deleteUnlessInflight(cmid) == 1 -> OutboxWithdrawal.Removed(row)
+                outboxDao.requestCancelIfInflight(cmid, now()) == 1 -> OutboxWithdrawal.Marked
+                else -> OutboxWithdrawal.Absent
+            }
+        }
+        if (withdrawal is OutboxWithdrawal.Removed) registry.end(cmid)
+        return withdrawal
+    }
+
+    /** La marque d'annulation de [cmid], relue EN BASE — jamais sur la copie que le drainer a lue avant sa réservation. */
+    suspend fun isCancelRequested(cmid: String): Boolean = outboxDao.find(cmid)?.cancelRequestedAt != null
+
+    /**
+     * L'auteur a supprimé la ligne pendant son vol et le sender l'a honoré ([SendResult.Cancelled]) : elle quitte la file
+     * avec l'issue [OutboxOutcome.Cancelled] — jamais [OutboxOutcome.Succeeded], rien n'a été livré.
+     */
+    suspend fun markCancelledByAuthor(cmid: String) {
+        outboxDao.deleteAll(listOf(cmid))
+        emit(OutboxOutcome.Cancelled(cmid))
+    }
+
+    /** Les téléversements durables de la bulle [messageCid] (#16168), le plus ancien d'abord — ceux d'avant le champ n'y sont pas. */
+    suspend fun uploadsOfMessage(messageCid: String): List<OutboxEntity> =
+        outboxDao.byKind(OutboxKind.UPLOAD_MEDIA.name).filter { row ->
+            row.payload.isNotBlank() &&
+                runCatching { me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<MediaUploadPayload>(row.payload) }.getOrNull()?.messageCid == messageCid
+        }
+
     /** The queued row [cmid], or `null` once it is gone (delivered or discarded). */
     suspend fun row(cmid: String): OutboxEntity? = outboxDao.find(cmid)
 
@@ -313,6 +562,7 @@ class OutboxRepository @Inject constructor(
      */
     suspend fun discard(cmid: String) {
         outboxDao.deleteAll(listOf(cmid))
+        registry.end(cmid)
     }
 
     /** The still-queued rows that wait on [prerequisiteCmid] (an upload's message, #12956). */
@@ -348,8 +598,11 @@ class OutboxRepository @Inject constructor(
         return changed
     }
 
-    /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
-    suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
+    /**
+     * Crash-safe recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`; a row a live pass of this
+     * process is still sending ([sendingLive]) is not orphaned (#14697).
+     */
+    suspend fun recoverInflight(): Int = outboxDao.resetInflightExcept(liveSends.toList(), now())
 
     /**
      * The account a write beginning NOW belongs to (#13555) — taken by a caller when the user ACTS, before any work that
@@ -360,10 +613,22 @@ class OutboxRepository @Inject constructor(
     /** The ticket of the work running here — the one installed at the gesture ([me.meeshy.sdk.session.withAccountTicket]) when there is one (#13558). */
     suspend fun currentTicket(): AccountTicket? = fence?.currentTicket()
 
-    private suspend fun write(incoming: OutboxEntity): CoalesceDecision = database.withTransaction {
+    private sealed interface Written {
+        data class Applied(val decision: CoalesceDecision) : Written
+        data class Refused(val rowCount: Int) : Written
+    }
+
+    private suspend fun write(incoming: OutboxEntity): Written = database.withTransaction {
         val pending = outboxDao.deliverableForLane(incoming.lane)
             .filter { it.stateEnum == OutboxState.PENDING }
-        OutboxCoalescer.decide(incoming, pending).also { apply(it) }
+        val decision = OutboxCoalescer.decide(incoming, pending)
+        val rowCount = if (decision is CoalesceDecision.Enqueue) outboxDao.count() else 0
+        if (decision is CoalesceDecision.Enqueue && !OutboxCapacity.admits(rowCount)) {
+            Written.Refused(rowCount)
+        } else {
+            apply(decision)
+            Written.Applied(decision)
+        }
     }
 
     private suspend fun apply(decision: CoalesceDecision) {
@@ -378,6 +643,7 @@ class OutboxRepository @Inject constructor(
     }
 
     private fun emit(outcome: OutboxOutcome) {
+        registry.publish(outcome)
         _outcomes.tryEmit(outcome)
     }
 

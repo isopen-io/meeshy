@@ -41,6 +41,7 @@ import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type Voic
 import { isEmojiOnly } from '../../utils/emoji-only';
 import { guardedInterval } from '../../utils/guarded-timer';
 import { implicitConversationRegime } from '../conversations/creationRegime';
+import { isEndToEndMode } from '../messaging/e2eePlaintextAdmission';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -55,7 +56,7 @@ export interface MessageData {
   replyToId?: string;
   targetLanguage?: string;
   isEncrypted?: boolean;
-  encryptionMode?: 'e2ee' | 'server' | 'hybrid' | null;
+  encryptionMode?: string | null;
   modelType?: string;
 }
 
@@ -255,7 +256,7 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // SECURITY: Skip translation for E2EE messages
-      if (messageData.encryptionMode === 'e2ee') {
+      if (isEndToEndMode(messageData.encryptionMode)) {
         logger.debug('Skipping translation for E2EE message', {
           conversationId: messageData.conversationId,
           encryptionMode: messageData.encryptionMode
@@ -1043,6 +1044,7 @@ export class MessageTranslationService extends EventEmitter {
       // Rétrocompatibilité base64 (legacy)
       audioDataBase64?: string;
       segments?: TranscriptionSegment[];  // Segments de la transcription de l'audio traduit
+      textOnly?: boolean;  // #16340 — TTS en échec : texte traduit seul, aucune piste
     }>;
     voiceModelUserId: string;
     voiceModelQuality: number;
@@ -1156,6 +1158,7 @@ export class MessageTranslationService extends EventEmitter {
         const trackLocation = await saveTranslatedTrack(this.prisma, {
           translatedDir, filename: `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`, attachmentId: data.attachmentId,
           language: translatedAudio.targetLanguage, binary: translatedAudio._audioBinary, base64: translatedAudio.audioDataBase64,
+          textOnly: translatedAudio.textOnly,
         });
 
         // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
@@ -1665,6 +1668,7 @@ export class MessageTranslationService extends EventEmitter {
         segments?: TranscriptionSegment[];
         _audioBinary?: Buffer | null;  // AJOUT: support multipart
         audioDataBase64?: string;  // AJOUT: support base64 legacy
+        textOnly?: boolean;  // #16340 — TTS en échec : texte traduit seul, aucune piste
       };
     },
     eventName: string,
@@ -1700,6 +1704,7 @@ export class MessageTranslationService extends EventEmitter {
       const trackLocation = await saveTranslatedTrack(this.prisma, {
         translatedDir: path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated'), filename: `${data.attachmentId}_${data.language}.${ext}`,
         attachmentId: data.attachmentId, language: data.language, binary: data.translatedAudio._audioBinary, base64: data.translatedAudio.audioDataBase64,
+        textOnly: data.translatedAudio.textOnly,
       });
 
       // 2. Mettre à jour translations JSON — SÉRIALISÉ par attachment.

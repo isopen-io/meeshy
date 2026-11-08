@@ -58,6 +58,27 @@ class EndToEndRegimeKeeper @Inject constructor(
     }
 
     /**
+     * #13794 — `conversation:encryption-changed` repeint la ligne en cache pour TOUS les modes, comme iOS
+     * (`adoptingEncryption`) : le fil ouvert observe sa ligne et se repeint sans rechargement. Le passage au bout en bout
+     * passe par [learn] (registre d'abord, puis la ligne) ; un mode lisible par le serveur ne repeint jamais une
+     * conversation vue e2ee, par sa ligne ou par le registre ([EndToEndRegimeMemory.adopting], #12949).
+     */
+    suspend fun adopt(conversationId: String, announcedMode: String?) {
+        if (conversationId.isBlank()) return
+        if (EndToEndRegime.isEndToEnd(announcedMode)) return learn(conversationId)
+        if (ledger.isSealed(conversationId)) return
+        database.withTransaction {
+            val conversations = database.conversationDao()
+            val row = conversations.find(conversationId) ?: return@withTransaction
+            val cached = runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
+                ?: return@withTransaction
+            val adopted = EndToEndRegimeMemory.adopting(cached, announcedMode, seenEndToEnd = ledger.isSealed(conversationId))
+                ?: return@withTransaction
+            conversations.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(adopted))))
+        }
+    }
+
+    /**
      * #13792 — des messages SERVIS (socket `message:new`, page REST, accusé d'envoi) apprennent le régime à la conversation
      * où ils sont rangés ([filedUnder], sinon la leur), fil ouvert ou non, par la loi du fil
      * ([EndToEndRegimeMemory.teachesEndToEnd]). Les envois hors du fil (réponse d'une bannière, partage, humeur, refus
@@ -85,8 +106,8 @@ class EndToEndRegimeKeeper @Inject constructor(
 
 /**
  * `conversation:encryption-changed` (#12522) appliqué même sans écran ouvert : une activation du
- * bout en bout faite depuis un autre appareil ferme le fil Android ouvert à l'instant. Une
- * rétrogradation annoncée est ignorée (#12949).
+ * bout en bout faite depuis un autre appareil ferme le fil Android ouvert à l'instant, et une bascule
+ * `server` ⇄ `hybrid` le repeint (#13794). Une rétrogradation annoncée est ignorée (#12949).
  */
 @Singleton
 class EndToEndRegimeBinding @Inject constructor(
@@ -100,13 +121,12 @@ class EndToEndRegimeBinding @Inject constructor(
         job?.cancel()
         job = scope.launch {
             socket.encryptionChanged.collect { event ->
-                if (!EndToEndRegime.isEndToEnd(event.mode)) return@collect
                 try {
-                    keeper.learn(event.conversationId)
+                    keeper.adopt(event.conversationId, event.mode)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
-                    Timber.w(failure, "conversation:encryption-changed : régime e2ee non retenu")
+                    Timber.w(failure, "conversation:encryption-changed : régime non retenu")
                 }
             }
         }

@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.composer.ComposerKeyboardTransition
+
 /**
  * Which end of the rendered [ChatListItem] list currently holds the newest
  * message. [BottomUp] is [ChatScreen]'s shipped mode (`LazyColumn(reverseLayout
@@ -111,4 +113,95 @@ object ChatScrollGeometry {
             ChatListOrientation.BottomUp -> lastVisibleIndex
         }
     }
+
+    /**
+     * Durée (ms) sur laquelle la marge basse du fil rejoint sa nouvelle valeur. Pendant un
+     * mouvement de clavier annoncé SANS insets image par image (avant API 30), la marge suit la
+     * durée du clavier ; avec des insets par image elle les suit tels quels, et passé le
+     * mouvement rien n'est rejoué : une animation de plus ferait traîner le fil derrière la barre.
+     */
+    fun bottomMarginAnimationMs(transition: ComposerKeyboardTransition?, nowMs: Long): Int {
+        if (transition == null || transition.perFrame || !transition.isLive(nowMs)) return 0
+        return transition.durationMs.toInt()
+    }
+
+    /**
+     * Le défilement qui retient immobile le bord ancré d'un message en train de changer de hauteur
+     * (dépliage d'un long message, `LongMessageExpansionLaw`) : [edgeBefore] et [edgeAfter] sont les
+     * ordonnées écran de ce bord avant et après le changement. Un bord descendu se rattrape en
+     * faisant remonter le contenu ; sous `reverseLayout` ([ChatListOrientation.BottomUp]) le sens
+     * du défilement est inversé. Borné à ±[maxDelta] (la hauteur du viewport) : un message plus
+     * long que l'écran ne fait jamais voler la liste ; sous le demi-pixel, rien ne bouge.
+     */
+    fun anchoredScrollDelta(
+        edgeBefore: Float,
+        edgeAfter: Float,
+        orientation: ChatListOrientation,
+        maxDelta: Float,
+    ): Float {
+        val shift = edgeAfter - edgeBefore
+        if (kotlin.math.abs(shift) <= ANCHOR_TOLERANCE_PX) return 0f
+        val signed = if (orientation == ChatListOrientation.BottomUp) -shift else shift
+        val bound = kotlin.math.abs(maxDelta)
+        return signed.coerceIn(-bound, bound)
+    }
+
+    /**
+     * Durée (ms) de la marge basse quand elle varie SANS clavier en mouvement (le composeur qui
+     * gagne une ligne) : la barre bouge sur sa courbe, le fil la suit sur la même durée au lieu de
+     * sauter en une image (iOS `applyBottomInset(_:transition:)`). Pendant un mouvement de clavier,
+     * la durée est celle de [bottomMarginAnimationMs].
+     */
+    const val COMPOSER_INSET_MS = 180
+
+    fun bottomInsetAnimationMs(transition: ComposerKeyboardTransition?, nowMs: Long): Int {
+        if (transition != null && transition.isLive(nowMs)) return bottomMarginAnimationMs(transition, nowMs)
+        return COMPOSER_INSET_MS
+    }
+
+    /** Marge horizontale de la section : les rangées ne touchent pas le bord (iOS `sectionHorizontalInset`). */
+    const val SECTION_HORIZONTAL_INSET_DP = 12
+
+    /** Précharger l'ancien tant que le bord chargé est à moins de ce nombre de hauteurs d'écran (iOS « rouleau »). */
+    const val PRELOAD_VIEWPORTS = 4f
+
+    /** Zone de confort avant l'apparition du bouton « dernier message » (iOS `nearBottomFollowThreshold`). */
+    const val NEAR_BOTTOM_THRESHOLD_DP = 200f
+
+    /**
+     * Distance estimée (px) entre le dernier pixel affiché et le bord ANCIEN chargé. [edgeIndex] est
+     * la rangée visible la plus proche de ce bord (la plus haute sous [ChatListOrientation.BottomUp],
+     * la plus basse sous [ChatListOrientation.TopDown]) ; [edgeOvershootPx] ce qui dépasse encore de
+     * cette rangée hors du viewport ; les rangées non composées sont estimées à [averageRowPx].
+     */
+    fun distanceToOldEdgePx(
+        edgeIndex: Int,
+        lastIndex: Int,
+        edgeOvershootPx: Float,
+        averageRowPx: Float,
+        orientation: ChatListOrientation,
+    ): Float {
+        val rowsBeyond = when (orientation) {
+            ChatListOrientation.TopDown -> edgeIndex
+            ChatListOrientation.BottomUp -> lastIndex - edgeIndex
+        }.coerceAtLeast(0)
+        return edgeOvershootPx.coerceAtLeast(0f) + rowsBeyond * averageRowPx.coerceAtLeast(0f)
+    }
+
+    /** Vrai quand l'ancien doit être demandé : à moins de [PRELOAD_VIEWPORTS] hauteurs d'écran du bord chargé. */
+    fun shouldLoadOlder(distanceToOldEdgePx: Float, viewportPx: Float): Boolean =
+        viewportPx > 0f && distanceToOldEdgePx < viewportPx * PRELOAD_VIEWPORTS
+
+    /**
+     * Distance (px) du bas du fil sous [ChatListOrientation.BottomUp] : le défilement de la rangée 0
+     * plus les rangées passées, estimées à [averageRowPx].
+     */
+    fun distanceFromBottomPx(firstVisibleIndex: Int, firstVisibleOffsetPx: Int, averageRowPx: Float): Float =
+        firstVisibleOffsetPx.coerceAtLeast(0) + firstVisibleIndex.coerceAtLeast(0) * averageRowPx.coerceAtLeast(0f)
+
+    /** Le seuil « près du bas » du bouton « dernier message », strict comme iOS (`offset < seuil`). */
+    fun isNearBottomPx(distanceFromBottomPx: Float, thresholdPx: Float): Boolean =
+        distanceFromBottomPx < thresholdPx
+
+    private const val ANCHOR_TOLERANCE_PX = 0.5f
 }

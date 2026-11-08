@@ -1,5 +1,7 @@
 package me.meeshy.app.shortcuts
 
+import androidx.annotation.StringRes
+import me.meeshy.app.R
 import me.meeshy.app.conversations.ConversationRowTime
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.theme.displayTitle
@@ -46,5 +48,22 @@ internal data class DynamicShortcutsPresentation(
                 }
             return DynamicShortcutsPresentation(rows)
         }
+    }
+}
+
+/**
+ * Les deux raccourcis d'ENTRÉE du lanceur (iOS App Shortcuts « Conversations récentes » et « Non lues »), posés avant
+ * les conversations : leur adresse est celle que la racine élit ([me.meeshy.sdk.model.link.ConversationListEntry]).
+ */
+internal enum class EntryShortcut(val shortcutId: String, val address: String, @StringRes val labelRes: Int) {
+    RECENT("entry-recent", "meeshy://conversations/recent", R.string.shortcut_recent_conversations),
+    UNREAD("entry-unread", "meeshy://conversations/unread", R.string.shortcut_unread_conversations),
+    ;
+
+    companion object {
+        /** Les places que les conversations gardent une fois les raccourcis d'entrée posés. */
+        fun conversationSlots(maxCount: Int): Int = (maxCount - all.size).coerceAtLeast(0)
+
+        val all: List<EntryShortcut> = values().toList()
     }
 }

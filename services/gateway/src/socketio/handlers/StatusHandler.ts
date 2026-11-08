@@ -24,6 +24,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
+import { pairAccessAmong } from '../../services/relations/pairAccess';
 import { guardedInterval } from '../../utils/guarded-timer.js';
 import { createEndToEndRegimeReader } from '../../services/e2ee/e2ee-signal-channel';
 
@@ -182,12 +183,18 @@ export class StatusHandler {
   }
 
   /**
-   * PRIVACY: socket ids to exclude from a typing broadcast — same bidirectional
-   * blocking rule already enforced on the presence channel (`_broadcastUserStatus`
-   * in MeeshySocketIOManager). Typing is a more sensitive, moment-to-moment signal
-   * than presence, so it must not leak to a blocked co-participant either.
-   * Anonymous participants (no `userId`) can't block/be blocked — only registered
-   * users are considered.
+   * PRIVACY: socket ids to exclude from a typing broadcast.
+   *
+   * - The bidirectional BLOCKING rule already enforced on the presence channel
+   *   (`_broadcastUserStatus` in MeeshySocketIOManager): typing is a more
+   *   sensitive, moment-to-moment signal than presence.
+   * - The CIRCLE law (#14107, MSG-05): a registered typer's typing reaches only
+   *   the registered members who are at least ACQUAINTANCE (`dm.typing`), in a
+   *   direct conversation as in a group — a group unlocks nothing (RG-22).
+   *
+   * Anonymous participants (no `userId`) have no circle and can't block/be
+   * blocked: an anonymous typer keeps the blocking rule alone, an anonymous
+   * viewer is never in this list.
    */
   private async _getBlockedSocketIdsInRoom(userId: string, conversationId: string): Promise<string[]> {
     const participants = await this.prisma.participant.findMany({
@@ -199,10 +206,24 @@ export class StatusHandler {
       .filter((id): id is string => !!id && id !== userId && this.connectedUsers.has(id));
     if (onlineParticipantUserIds.length === 0) return [];
 
-    const blockedUserIds = await getBlockedUserIdsAmong(this.prisma, userId, onlineParticipantUserIds);
-    if (blockedUserIds.size === 0) return [];
+    const typerIsRegistered = participants.some((p) => p.userId === userId);
+    const hiddenUserIds = typerIsRegistered
+      ? await this._typingDeniedAmong(userId, onlineParticipantUserIds)
+      : await getBlockedUserIdsAmong(this.prisma, userId, onlineParticipantUserIds);
+    if (hiddenUserIds.size === 0) return [];
 
-    return [...blockedUserIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
+    return [...hiddenUserIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
+  }
+
+  /** The members the law refuses `dm.typing` from `typerId` — blocking included. */
+  private async _typingDeniedAmong(typerId: string, viewerIds: readonly string[]): Promise<Set<string>> {
+    const verdicts = await pairAccessAmong(this.prisma, {
+      feature: 'dm.typing',
+      subjectId: typerId,
+      otherIds: viewerIds,
+      subjectIs: 'target',
+    });
+    return new Set(viewerIds.filter((id) => verdicts.get(id)?.allowed !== true));
   }
 
   private _untrackTyping(socketId: string, conversationId: string): void {

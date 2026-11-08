@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comments_overlay_expired">Historia caducada: los comentarios siguen visibles</string>
+    <string name="stories_comments_overlay_reply">Responder</string>
+    <string name="stories_comments_overlay_more">Opciones del comentario</string>
+    <string name="stories_comments_overlay_copy">Copiar texto</string>
+    <string name="stories_comments_overlay_edit">Editar</string>
+    <string name="stories_comments_overlay_delete">Eliminar</string>
+    <string name="stories_comments_overlay_report">Denunciar</string>
+    <string name="stories_comments_overlay_remove">Retirar</string>
+    <string name="stories_comments_overlay_save">Guardar</string>
+    <string name="stories_comments_overlay_cancel">Cancelar</string>
+    <string name="stories_comments_overlay_editing">Editando el comentario</string>
+    <string name="stories_comments_overlay_like">Me gusta</string>
+    <string name="stories_comments_overlay_unlike">Quitar me gusta</string>
+    <string name="stories_comments_overlay_show_original">Ver original</string>
+    <string name="stories_comments_overlay_show_translated">Ver traducción</string>
+    <string name="stories_comments_overlay_show_replies">Ver respuestas</string>
+    <string name="stories_comments_overlay_hide_replies">Ocultar respuestas</string>
+    <string name="stories_comments_overlay_more_replies">Ver más respuestas</string>
+    <string name="stories_comments_overlay_retry">Reintentar</string>
+    <string name="stories_comments_overlay_media">Contenido adjunto</string>
+    <string name="stories_comments_overlay_cancel_reply">Cancelar respuesta</string>
+</resources>

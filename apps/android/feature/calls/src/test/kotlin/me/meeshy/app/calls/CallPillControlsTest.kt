@@ -27,9 +27,10 @@ class CallPillControlsTest {
         var mute = 0
         var speaker = 0
         var hangUp = 0
+        var stopShare = 0
     }
 
-    private fun show(state: CallUiState): Taps {
+    private fun show(state: CallUiState, sharing: Boolean = false): Taps {
         val taps = Taps()
         rule.setContent {
             MeeshyTheme {
@@ -39,6 +40,8 @@ class CallPillControlsTest {
                     onToggleMute = { taps.mute++ },
                     onToggleSpeaker = { taps.speaker++ },
                     onHangUp = { taps.hangUp++ },
+                    isScreenSharing = sharing,
+                    onStopScreenShare = { taps.stopShare++ },
                 )
             }
         }
@@ -81,5 +84,17 @@ class CallPillControlsTest {
         rule.onNodeWithContentDescription("Ongoing call with Alice").performClick()
 
         assertThat(taps.reopen).isEqualTo(1)
+    }
+
+    @Test
+    fun `while I share my screen the pill turns into Stop, and nothing else can be touched by mistake`() {
+        val taps = show(connected(), sharing = true)
+
+        rule.onNodeWithContentDescription("Stop sharing screen").performClick()
+
+        assertThat(taps.stopShare).isEqualTo(1)
+        assertThat(taps.reopen).isEqualTo(0)
+        rule.onNodeWithContentDescription("Hang up").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Earpiece").assertDoesNotExist()
     }
 }

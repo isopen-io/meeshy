@@ -106,4 +106,16 @@ final class SyncPillLabelsTests: XCTestCase {
         let label = try frLabel(for: item(kind: .other("createPost"), status: .exhausted))
         XCTAssertEqual(label, "Post non publié")
     }
+
+    // MARK: - #15997 — un favori en file se nomme
+
+    func test_bookmark_pending_readsAsSyncingFavorites() throws {
+        let label = try frLabel(for: item(kind: .other("toggleBookmarkPost"), status: .pending))
+        XCTAssertEqual(label, "Synchronisation des favoris")
+    }
+
+    func test_bookmark_exhausted_readsAsFavoritesNotSynced() throws {
+        let label = try frLabel(for: item(kind: .other("toggleBookmarkPost"), status: .exhausted))
+        XCTAssertEqual(label, "Favoris non synchronisés")
+    }
 }

@@ -23,7 +23,8 @@ extension ComposerCaptureSession {
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.photo)
         editChromeShown = true
-        editAspect = ComposerEditScene.clampedAspect(canvasAspect)
+        editAspect = ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: CGSize(width: debout.width, height: debout.height)))
+        openingAspect = editAspect
         phase = .editing(.photo)
         camera.pauseRunning()
     }
@@ -53,7 +54,8 @@ extension ComposerCaptureSession {
         editChromeShown = true
         takeSound = ComposerTakeSound()
         editPaused = false
-        editAspect = ComposerEditScene.clampedAspect(canvasAspect)
+        editAspect = ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: lecteur.uprightSize))
+        openingAspect = editAspect
         phase = .editing(.video(url))
         camera.pauseRunning()
         lecteur.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget),
@@ -61,8 +63,7 @@ extension ComposerCaptureSession {
         lecteur.play()
     }
 
-    /// « Fermer » en édition : on revient viser ; la prise est abandonnée, et un
-    /// rendu en vol avec elle — la croix reste vivante pendant « Terminé » (#8653).
+    /// « Fermer » : on revient viser, la prise et un rendu en vol abandonnés (#8653).
     func cancelEditing() {
         isRenderingLook = false
         abandonEditing()
@@ -182,7 +183,7 @@ extension ComposerCaptureSession {
         let (auteur, date) = (lookPerson, lookDate)
         let cache = scenes
         let prise = editPhotoData
-        let proportions = canvasAspect
+        let proportions = editAspect ?? canvasAspect
         let textes = retouchTexts
         let intacte = ComposerPhotoEncoding.untouchedTake(prise, of: photo, paints: ComposerLiveLookRule.rendersLive(regard) || !cadrage.isIdentity || !textes.isEmpty, aspect: proportions)
         return { @MainActor in
@@ -194,9 +195,7 @@ extension ComposerCaptureSession {
         }
     }
 
-    /// Le rendu de la vidéo retouchée — look, cadrage, découpe et son (#9754),
-    /// lus dans l'espace où la boucle la lisait. « Terminé » et la flèche ⬇︎
-    /// exportent par lui : une seule recette.
+    /// Le rendu de la vidéo retouchée (look, cadrage, découpe, son, recadrage) : « Terminé » et ⬇︎ l'exportent.
     private func videoRender(_ url: URL, uses usages: ComposerVideoUses) -> @MainActor () async -> ComposerVideoRendition? {
         let regard = look
         let cadrage = framing
@@ -204,24 +203,24 @@ extension ComposerCaptureSession {
         let date = lookDate
         let espace = loopPlayer?.declaredSpace?.name as String?
         let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
-        let proportions = canvasAspect
+        let proportions = editAspect ?? canvasAspect
+        let recadree = editAspect != openingAspect
         let gain = takeSound.effectiveGain
         let calque = loopPlayer.flatMap { retouchTexts.overlay(canvas: ComposerLookPainter.canvas(for: $0.uprightSize, aspect: proportions)) }
         return { @MainActor in
             await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
                                                    aspect: proportions, person: auteur, date: date, uses: usages,
-                                                   declaredSpaceName: espace, audioGain: gain, overlay: calque)
+                                                   declaredSpaceName: espace, audioGain: gain, overlay: calque,
+                                                   cropChosen: recadree)
         }
     }
 
-    /// La retouche validée est-elle encore celle de l'écran ? La croix et la
-    /// fermeture du viseur relâchent sa source : un rendu en vol ne remet plus rien.
+    /// La retouche validée est-elle encore celle de l'écran ? Sinon un rendu en vol ne remet rien.
     private func isStillEditing(_ source: any ComposerFrameSourcing) -> Bool {
         editSource === source
     }
 
-    /// La retouche quitte l'édition PUIS part : l'hôte retire le viseur sans
-    /// boucle à arrêter. Un hôte qui le garde retrouve l'objectif.
+    /// La retouche quitte l'édition PUIS part ; un hôte qui garde le viseur retrouve l'objectif.
     private func deliverEdited(_ result: CameraResult) {
         isRenderingLook = false
         leaveEditing()
@@ -230,9 +229,7 @@ extension ComposerCaptureSession {
         camera.resumeRunning()
     }
 
-    /// La phase revient à la capture et la source éditée est relâchée — la
-    /// boucle s'arrête, une fois — sans toucher à l'objectif : qui désarme le
-    /// ferme, qui annule le relance.
+    /// Retour à la capture, la source relâchée (la boucle s'arrête une fois), l'objectif intact.
     func leaveEditing() {
         let lecteur = loopPlayer
         loopPlayer = nil
@@ -245,6 +242,8 @@ extension ComposerCaptureSession {
         editSource = nil
         framing = .identity
         editAspect = nil
+        openingAspect = nil
+        cropEntry = nil
         activeEditTools = []
         editChromeShown = false
         takeSound = ComposerTakeSound()
@@ -411,7 +410,7 @@ extension ComposerCaptureSession {
         phase.isEditing && editChromeShown && ComposerEditTools.showsBrackets(active: activeEditTools)
     }
 
-    /// **La prise se réduit-elle ?** Au recadrage montré, et seulement là (#10930).
+    /// **La prise se pose-t-elle dans un cadre ?** Au recadrage montré, seulement là (#10930, #15193).
     var editFramesScene: Bool {
         phase.isEditing && ComposerEditTools.framesScene(active: activeEditTools, chromeShown: editChromeShown)
     }
@@ -439,7 +438,10 @@ extension ComposerCaptureSession {
     /// « Terminé » plus rien ne bouge.
     func toggleEditTool(_ tool: ComposerEditTool) {
         guard phase.isEditing, !isRenderingLook, editTools.contains(tool) else { return }
+        let avant = activeEditTools
         activeEditTools = ComposerEditTools.toggled(activeEditTools, tapping: tool, familyOpen: openFamily != nil)
+        cropEntry = ComposerCropEntry.after(cropEntry, before: avant, after: activeEditTools,
+                                            current: ComposerCropEntry(aspect: editAspect, framing: framing))
         if activeEditTools.contains(tool) { openFamily = nil }
         if tool == .text { activeEditTools.contains(.text) ? retouchTexts.begin() : retouchTexts.endTyping() }
         HapticFeedback.light()
@@ -470,15 +472,6 @@ extension ComposerCaptureSession {
     func setEditAspect(_ aspect: CGFloat) {
         guard phase.isEditing, !isRenderingLook else { return }
         editAspect = ComposerEditScene.clampedAspect(aspect)
-    }
-
-    func applyCropPreset(_ preset: ComposerCropPreset) {
-        setEditAspect(preset.aspect(source: editExtent?.size ?? .zero))
-    }
-
-    /// Le preset que la scène réalise ; `nil` pour un recadrage libre.
-    var cropPreset: ComposerCropPreset? {
-        editAspect.flatMap { ComposerCropPreset.matching($0, source: editExtent?.size ?? .zero) }
     }
 
     // MARK: - La découpe (#9353)

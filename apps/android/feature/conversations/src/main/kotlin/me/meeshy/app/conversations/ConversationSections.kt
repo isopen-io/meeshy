@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationReorder
 import me.meeshy.sdk.model.ConversationReorderItem
+import me.meeshy.sdk.model.conversationlist.ConversationListSectionDefaults
 
 /**
  * The kind of a conversation-list section (parity §B): Épingles first, then the
@@ -23,7 +24,17 @@ public data class ConversationSection(
     val items: List<ApiConversation>,
     val categoryId: String? = null,
     val title: String? = null,
-)
+    val color: String? = null,
+    val icon: String? = null,
+) {
+    /** The id the fold state is keyed by (iOS section id): `pinned`, `other`, or the category id. */
+    val sectionId: String
+        get() = when (kind) {
+            ConversationSectionKind.PINNED -> ConversationListSectionDefaults.PINNED_ID
+            ConversationSectionKind.ALL -> ConversationListSectionDefaults.OTHER_ID
+            ConversationSectionKind.CATEGORY -> categoryId.orEmpty()
+        }
+}
 
 /**
  * Splits the already filtered/ordered conversation list into display sections
@@ -81,6 +92,8 @@ public object ConversationSections {
                             items = it,
                             categoryId = category.id,
                             title = category.name,
+                            color = category.color,
+                            icon = category.icon,
                         ),
                     )
                 }

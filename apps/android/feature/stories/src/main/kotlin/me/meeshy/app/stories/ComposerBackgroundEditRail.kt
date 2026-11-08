@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +41,7 @@ import me.meeshy.sdk.model.composer.ComposerSelectionSubject
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundEditLevel
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool
+import me.meeshy.sdk.model.composer.look.ComposerCropPreset
 import me.meeshy.sdk.model.composer.look.ComposerLookFamily
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.ui.component.media.MediaTrimContent
@@ -50,15 +53,16 @@ import me.meeshy.ui.theme.MeeshySpacing
 
 internal const val BACKGROUND_BAND_TAG = "composer-background-band"
 internal const val BACKGROUND_LOOP_TAG = "composer-background-loop"
+internal const val BACKGROUND_CROP_TAG = "composer-background-crop"
 internal const val BACKGROUND_DESCRIPTION_TAG = "composer-background-description"
 
 private val OPTION_WIDTH = 68.dp
-private val OPTION_DISC = 40.dp
 
 internal fun ComposerBackgroundTool.glyph(): ImageVector = composerEditIcon(ComposerBackgroundEditLevel.entryOf(this).material) ?: MeeshyIcons.Edit
 
 internal fun ComposerBackgroundTool.labelRes(): Int = when (this) {
     ComposerBackgroundTool.FRAMING -> R.string.composer_edit_background_framing
+    ComposerBackgroundTool.CROP -> R.string.composer_column_media_crop
     ComposerBackgroundTool.TRIM -> R.string.composer_edit_trim
     ComposerBackgroundTool.FILTERS -> R.string.composer_column_media_filter
     ComposerBackgroundTool.FRAMES -> R.string.composer_edit_frames
@@ -125,13 +129,14 @@ private fun LoopSwitch(on: Boolean, onToggle: () -> Unit) {
     Column(
         modifier = Modifier
             .width(OPTION_WIDTH)
+            .heightIn(min = SCENE_TARGET)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .toggleable(value = on, role = Role.Switch, onValueChange = { onToggle() })
             .testTag(BACKGROUND_LOOP_TAG),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val disc = if (on) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.38f)
-        Box(Modifier.size(OPTION_DISC).background(disc, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(LocalComposerRailSize.current.optionDiscDp.dp).background(disc, CircleShape), contentAlignment = Alignment.Center) {
             Icon(ComposerBackgroundTool.LOOP.glyph(), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         OptionWord(stringResource(ComposerBackgroundTool.LOOP.labelRes()))
@@ -162,7 +167,7 @@ internal fun SceneLevelTitle(icon: ImageVector, label: String) {
         modifier = Modifier.width(OPTION_WIDTH).semantics(mergeDescendants = true) { heading() },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(OPTION_DISC).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(LocalComposerRailSize.current.optionDiscDp.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         OptionWord(label)
@@ -171,7 +176,7 @@ internal fun SceneLevelTitle(icon: ImageVector, label: String) {
 
 /**
  * La bande du réglage ouvert, au bas de la scène qui se réduit au-dessus d'elle (#13973) : le Cadrage (le panneau Cadre),
- * Couper (la frise de la source), Filtres (le filtre de la scène puis ceux de l'appel), Cadres, Réglages, Effets, le Son
+ * Recadrer (les proportions de l'image), Couper (la frise de la source), Filtres (le filtre de la scène puis ceux de l'appel), Cadres, Réglages, Effets, le Son
  * d'une vidéo (son volume en %, et Muet). Chaque
  * geste écrit sa valeur à chaque image : la scène se repeint pendant le geste.
  */
@@ -181,6 +186,7 @@ internal fun BackgroundBand(tool: ComposerBackgroundTool, state: StoryComposerUi
     Column(Modifier.fillMaxWidth().testTag(BACKGROUND_BAND_TAG), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
         when (tool) {
             ComposerBackgroundTool.FRAMING -> BackgroundFraming(state, viewModel)
+            ComposerBackgroundTool.CROP -> BackgroundCropPresets(state, viewModel)
             ComposerBackgroundTool.TRIM -> BackgroundTrimStrip(state, id, viewModel)
             ComposerBackgroundTool.FILTERS -> {
                 FilterRow(
@@ -211,6 +217,25 @@ private fun BackgroundVolume(state: StoryComposerUiState, viewModel: StoryCompos
             label = { Text(stringResource(R.string.composer_edit_mute)) },
             modifier = Modifier.heightIn(min = 48.dp),
         )
+    }
+}
+
+/** Recadrer le fond image : « Original », 9:16, 4:5, 1:1, 16:9 — le plus grand cadre centré, peint aussitôt sur la scène. */
+@Composable
+private fun BackgroundCropPresets(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    val chosen = state.backgroundCropPreset
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag(BACKGROUND_CROP_TAG),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        ComposerCropPreset.entries.forEach { preset ->
+            FilterChip(
+                selected = preset == chosen,
+                onClick = { viewModel.onSceneReduce { StoryComposerBackgroundReducer.cropPreset(it, preset) } },
+                label = { Text(preset.notation ?: stringResource(me.meeshy.ui.R.string.retouch_crop_original)) },
+                modifier = Modifier.heightIn(min = 48.dp),
+            )
+        }
     }
 }
 

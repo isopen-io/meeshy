@@ -162,15 +162,13 @@ final class EndToEndDiskPlaintextLawTests: XCTestCase {
     /// déclencheurs provisoires et reconstruit l'index depuis l'expression scellée.
     func test_upgradingADevDatabase_sealsTheRow_dropsProvisionalTriggers_andLeavesAConsistentIndex() throws {
         let queue = try DatabaseQueue()
-        var migrator = DatabaseMigrator()
-        migrator.register(Array(MessageDatabaseMigrations.all.dropLast(3)))
-        try migrator.migrate(queue)
+        try MessageDatabaseMigrations.migrate(queue, upTo: "messages_e2ee_plaintext_erasures")
         var legacy = MessageRecordFactory.make(localId: "srv_30", content: secret)
         legacy.isEncrypted = true
         legacy.encryptionMode = E2EEWire.mode
         let rows = [legacy], secret = secret
         try queue.write { db in
-            try rows.forEach { try $0.insert(db) }
+            try rows.forEach { try $0.insertAsOfStoredSchema(db) }
             try db.execute(sql: "UPDATE messages SET content = ? WHERE localId = 'srv_30'", arguments: [secret])
             try db.execute(sql: "CREATE TRIGGER e2ee_content_sealed_on_update AFTER UPDATE ON messages BEGIN SELECT 1; END")
         }

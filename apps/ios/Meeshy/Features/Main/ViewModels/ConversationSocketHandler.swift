@@ -531,6 +531,24 @@ final class ConversationSocketHandler {
                 self?.delegate?.isConversationClosed = true
             }
             .store(in: &cancellables)
+
+        // Rendue OBSOLÈTE (#14645) : le contenu est effacé pour tous, l'écran
+        // ouvert se referme par le chemin d'un accès retiré (cache oublié, toast).
+        messageSocket.conversationObsoleted
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.delegate?.handleSocketAccessRevoked(reason: Self.obsoletedNotice)
+            }
+            .store(in: &cancellables)
+    }
+
+    static var obsoletedNotice: String {
+        String(
+            localized: "conversation.obsoleted.notice",
+            defaultValue: "Cette conversation a été rendue obsolète : son contenu a été effacé pour tous.",
+            bundle: .main
+        )
     }
 
     /// **La fin d'appartenance du LECTEUR, fil ouvert** (#11415). La passerelle

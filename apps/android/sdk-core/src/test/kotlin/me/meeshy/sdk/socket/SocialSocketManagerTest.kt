@@ -50,6 +50,7 @@ class SocialSocketManagerTest {
     fun `leavePostRoom emits post-leave with the postId`() = runTest {
         val socket: SocketManager = mockk(relaxed = true)
         val manager = SocialSocketManager(socket, json)
+        manager.joinPostRoom("p1")
 
         manager.leavePostRoom("p1")
 
@@ -542,6 +543,50 @@ class SocialSocketManagerTest {
             assertThat(event.commentId).isEqualTo("c2")
             assertThat(event.userId).isEqualTo("u3")
             assertThat(event.emoji).isEqualTo("❤️")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `post reaction added carries the absolute count of the emoji`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postReactionAdded.test {
+            handlers.getValue("post:reaction-added").invoke(
+                arrayOf(JSONObject("""{"postId":"p1","userId":"u2","emoji":"🔥","action":"add","aggregation":{"emoji":"🔥","count":4}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.aggregation!!.count).isEqualTo(4)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `comment media updated carries the enriched comment`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentMediaUpdated.test {
+            handlers.getValue("comment:media-updated").invoke(
+                arrayOf(JSONObject("""{"postId":"p1","commentId":"c1","comment":{"id":"c1","content":"x"}}""")),
+            )
+            assertThat(awaitItem().comment.id).isEqualTo("c1")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a connection that follows a connection already seen is a reconnection`() = runTest {
+        val connected = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+        val socket: SocketManager = mockk(relaxed = true) {
+            every { isConnected } returns false
+            every { this@mockk.connected } returns connected
+        }
+        val manager = SocialSocketManager(socket, json)
+
+        manager.reconnected.test {
+            connected.emit(Unit)
+            expectNoEvents()
+            connected.emit(Unit)
+            awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
     }

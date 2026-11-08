@@ -109,4 +109,11 @@ class ReelPlayerLawsTest {
         assertThat(ReelCaption.toggled(current = null, tapped = "en")).isEqualTo("en")
         assertThat(ReelCaption.toggled(current = "fr", tapped = "en")).isEqualTo("en")
     }
+
+    @Test
+    fun `Modifier suit Epingler pour son propre reel quand l edition est possible`() {
+        assertThat(ReelMenu.actions(isOwn = true, hasText = false, canEdit = true))
+            .containsExactly(ReelMenu.Action.OPEN, ReelMenu.Action.SHARE, ReelMenu.Action.PIN, ReelMenu.Action.EDIT, ReelMenu.Action.DELETE).inOrder()
+        assertThat(ReelMenu.actions(isOwn = false, hasText = false, canEdit = true)).doesNotContain(ReelMenu.Action.EDIT)
+    }
 }

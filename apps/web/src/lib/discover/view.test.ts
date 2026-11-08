@@ -61,6 +61,7 @@ describe('les onglets et le filtre vivent dans l’adresse', () => {
     expect(discoverTabFromSearch('inconnu')).toBe('discover');
     expect(discoverTabFromSearch('requests')).toBe('requests');
     expect(discoverTabFromSearch('blocked')).toBe('blocked');
+    expect(discoverTabFromSearch('circles')).toBe('circles');
     expect(requestFilterFromSearch(null)).toBe('received');
     expect(requestFilterFromSearch('sent')).toBe('sent');
   });

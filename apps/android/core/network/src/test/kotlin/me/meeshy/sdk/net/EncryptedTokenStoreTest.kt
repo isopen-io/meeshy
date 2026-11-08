@@ -76,4 +76,56 @@ class EncryptedTokenStoreTest {
         assertThat(store.jwt).isNull()
         assertThat(store.isAuthenticated).isFalse()
     }
+
+    @Test
+    fun `chaque jeton recu date le jeton`() {
+        var now = 1_000L
+        val vault = InMemorySecureStore()
+        val store = EncryptedTokenStore(vault, nowMillis = { now })
+        store.userId = "A"
+        assertThat(store.tokenDateMillis).isNull()
+        store.jwt = "j1"
+        assertThat(store.tokenDateMillis).isEqualTo(1_000L)
+        now = 5_000L
+        store.jwt = "j2"
+        assertThat(store.tokenDateMillis).isEqualTo(5_000L)
+    }
+
+    @Test
+    fun `la date d'un jeton recu avant le userId suit le compte`() {
+        val vault = InMemorySecureStore()
+        val store = EncryptedTokenStore(vault, nowMillis = { 42L })
+        store.jwt = "j"
+        store.userId = "A"
+        assertThat(vault.get("token_date", "A")).isEqualTo("42")
+        assertThat(store.tokenDateMillis).isEqualTo(42L)
+    }
+
+    @Test
+    fun `clear efface le profil dans le coffre du profil, distinct de celui des jetons, et celui du compte actif seulement`() {
+        val tokenVault = InMemorySecureStore()
+        val profileVault = InMemorySecureStore()
+        profileVault.put("meeshy_user_B", "{}", "B")
+        val store = EncryptedTokenStore(tokenVault, profileVault)
+        store.userId = "A"
+        store.jwt = "ja"
+        profileVault.put("meeshy_user_A", "{}", "A")
+
+        store.clear()
+
+        assertThat(profileVault.get("meeshy_user_A", "A")).isNull()
+        assertThat(profileVault.get("meeshy_user_B", "B")).isEqualTo("{}")
+        assertThat(tokenVault.get("token_date", "A")).isNull()
+        assertThat(store.userId).isNull()
+    }
+
+    @Test
+    fun `sans coffre de profil, clear n'invente rien et efface les jetons`() {
+        val tokenVault = InMemorySecureStore()
+        val store = EncryptedTokenStore(tokenVault)
+        store.userId = "A"
+        store.jwt = "ja"
+        store.clear()
+        assertThat(tokenVault.get("jwt", "A")).isNull()
+    }
 }

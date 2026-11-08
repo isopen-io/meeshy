@@ -68,11 +68,8 @@ import ImageIO
 /// média local, lieu, transcription. Elle NE sert PAS la citation : un repost
 /// (`repostOfId != nil`) part par `POST /posts/:id/repost`, sans file durable,
 /// et `ComposerDocumentSendPlan` le REFUSE (`.nonDurablePath(.quotedRepost)`)
-/// plutôt que de le faire partir par un chemin que rien ne rejoue. Les deux
-/// citations restent donc sur `FeedComposerSheet` (T3.2) jusqu'à la **condition
-/// de levée 7.5** : un écrivain durable du repost (fondation livrée, zéro
-/// appelant). La recâbler ici avant 7.5 la ferait refuser en SILENCE — le
-/// composer se refermerait comme quand tout va bien.
+/// plutôt que de le faire partir sans sa source. Les deux citations ouvrent
+/// donc `QuoteComposerDoor`, qui publie par l'écrivain durable du repost.
 struct DocumentComposerDoor: View {
 
     /// La porte au sens de la table. C'est elle qui décide du format d'ouverture
@@ -345,7 +342,8 @@ struct DocumentComposerDoor: View {
             // **L'autorisation d'extraction du son** (#3996). Même discipline
             // que le canvas juste au-dessus : la porte jumelle passe la même
             // valeur au même rang.
-            allowSoundExtraction: draft.allowSoundExtraction
+            allowSoundExtraction: draft.allowSoundExtraction,
+            commentsDisabled: draft.commentsDisabled
         )
         await viewModel.publish(intent)
 

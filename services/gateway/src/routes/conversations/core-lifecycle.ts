@@ -22,9 +22,16 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
+import {
+  decideOpenings,
+  withoutRequestColumns,
+  requestRecipientFields,
+  requesterPermissionsFor,
+  type DirectOpening
+} from '../../services/messaging/messageRequests';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
-import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
+import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import {
@@ -36,7 +43,6 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -55,7 +61,10 @@ import {
   type CreationRegimeRefusal,
 } from '../../services/conversations/creationRegime';
 import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest';
+import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
+import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
+import { activeMembershipOf } from '../communities/serialization';
 import {
   composeConversationUpdate,
   broadcastConversationUpdated,
@@ -81,6 +90,9 @@ export function registerCreateConversationRoute(
       body: createConversationRequestSchema,
       response: {
         200: conversationResponseSchema,
+        // #14107 (audit B1) — déclarée : `fast-json-stringify` retire du fil toute
+        // colonne de ligne `Participant` que le schéma ne nomme pas.
+        201: conversationResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -131,20 +143,21 @@ export function registerCreateConversationRoute(
 
       // Note: La validation de l'identifier est maintenant gérée par CommonSchemas.conversationIdentifier dans Zod
 
-      // Validate community access if communityId is provided
+      // Validate community access if communityId is provided.
+      // #8876 — une communauté désactivée n'accueille plus aucun geste (404).
+      const hostCommunity = communityId
+        ? await prisma.community.findFirst({
+            where: { id: communityId, isActive: true },
+            select: { createdBy: true, isPrivate: true, members: { where: activeMembershipOf(userId), select: { userId: true, role: true }, take: 1 } }
+          })
+        : null;
       if (communityId) {
-        const community = await prisma.community.findFirst({
-          where: { id: communityId },
-          include: { members: true }
-        });
-
-        if (!community) {
+        if (!hostCommunity) {
           return sendNotFound(reply, 'Community not found');
         }
 
         // Check if user is member of the community
-        const isMember = community.createdBy === userId ||
-                        community.members.some(member => member.userId === userId);
+        const isMember = hostCommunity.createdBy === userId || hostCommunity.members.length > 0;
 
         if (!isMember) {
           return sendForbidden(reply, 'You must be a member of this community to create a conversation');
@@ -175,6 +188,32 @@ export function registerCreateConversationRoute(
       // et ne contient pas de valeurs null/undefined/empty
       const uniqueParticipantIds = [...new Set(participantIds)]
         .filter((id: any) => id && id !== userId && typeof id === 'string' && id.trim().length > 0);
+
+      // #14644 (C) — un groupe peut n'avoir que son créateur (audits, recueils
+      // d'avis extérieurs) : il n'a alors aucun membre dont tirer un titre, il
+      // doit donc en porter un.
+      if (type === 'group' && uniqueParticipantIds.length === 0 && (!title || title.trim() === '')) {
+        throw createError(ErrorCode.MISSING_REQUIRED_FIELD, 'Un groupe sans invité doit avoir un titre');
+      }
+
+      // #16639 — faire entrer les participants dans la communauté hôte est une
+      // INVITATION : elle se décide AVANT la création, sous la loi de
+      // `POST /communities/:id/invite`, pour refuser sans rien écrire.
+      const communityAdmission = communityId && hostCommunity
+        ? await planCommunityAdmission(prisma, {
+            communityId,
+            actorId: userId,
+            createdBy: hostCommunity.createdBy,
+            isPrivate: hostCommunity.isPrivate,
+            actorRole: hostCommunity.members[0]?.role ?? null,
+            participantIds: uniqueParticipantIds,
+          })
+        : null;
+      if (communityAdmission?.kind === 'refused') {
+        return communityAdmission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendNotFound(reply, 'User to invite not found');
+      }
 
       // Block enforcement applies to DIRECT conversations only (group / community /
       // public / global / broadcast are never block-enforced). Bidirectional: reject
@@ -249,16 +288,21 @@ export function registerCreateConversationRoute(
                 const socketIOHandler = fastify.socketIOHandler;
                 const io = socketIOHandler?.getManager()?.getIO();
                 if (io && creatorParticipant.userId) {
-                  io.to(ROOMS.user(creatorParticipant.userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
-                    conversationId: existingDirect.id,
-                    conversationType: existingDirect.type,
-                    title: existingDirect.title,
-                    creatorId: creatorParticipant.userId,
-                    participantIds: existingDirect.participants.map((p: any) => p.userId).filter(Boolean),
-                    createdAt: existingDirect.createdAt instanceof Date
-                      ? existingDirect.createdAt.toISOString()
-                      : String(existingDirect.createdAt)
-                  });
+                  announceConversationNew(prisma, {
+                    io,
+                    recipientIds: [creatorParticipant.userId],
+                    payload: {
+                      conversationId: existingDirect.id,
+                      conversationType: existingDirect.type,
+                      title: existingDirect.title,
+                      creatorId: creatorParticipant.userId,
+                      participantIds: existingDirect.participants.map((p: any) => p.userId).filter(Boolean),
+                      createdAt: existingDirect.createdAt instanceof Date
+                        ? existingDirect.createdAt.toISOString()
+                        : String(existingDirect.createdAt)
+                    },
+                    onError: (error) => logger.warn('error broadcasting CONVERSATION_NEW on DM reinitiation', { conversationId: existingDirect.id, error })
+                  }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
                 }
               } catch (broadcastError) {
                 logger.error('error broadcasting CONVERSATION_NEW on DM reinitiation', { error: broadcastError });
@@ -270,11 +314,22 @@ export function registerCreateConversationRoute(
 
           return sendSuccess(reply, {
             ...existingDirect,
+            participants: withoutRequestColumns(existingDirect.participants),
             ...(sealed ?? {}),
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
       }
+
+      // #14107 — chaque membre nommé : direct dès Connaissance, sinon une DEMANDE
+      // dans sa boîte, dans un tête-à-tête comme dans un groupe (RG-22). Aucune
+      // issue de refus : la porte répond pareil vers un mineur (audit B2).
+      const openedAt = new Date();
+      const openings = await decideOpenings(prisma, { senderId: userId, recipientIds: uniqueParticipantIds, now: openedAt });
+      const openingOf = (participantId: string): DirectOpening => openings.get(participantId) ?? { kind: 'direct' };
+      const creatorOpening: DirectOpening = type === 'direct' && uniqueParticipantIds.length === 1
+        ? openingOf(uniqueParticipantIds[0])
+        : { kind: 'direct' };
 
       const allUserIds = [userId, ...uniqueParticipantIds];
       const allUsers = await prisma.user.findMany({
@@ -296,6 +351,8 @@ export function registerCreateConversationRoute(
       // Broadcast = announcement channel with admin-only write
       const isBroadcast = type === 'broadcast';
 
+      const silentUntilFirstMessage = type === 'direct' || type === 'group';
+
       const nascent = await nascentRegime(nascentRegimeDeps(prisma), { mode: regime.mode, enabledBy: userId });
 
       const conversation = await prisma.conversation.create({
@@ -312,7 +369,9 @@ export function registerCreateConversationRoute(
           // on ne le posait pas, ce qui le laisserait ABSENT plutôt que
           // `null` — voir Prisme design doc 2026-08-04 (DM vide et silencieux
           // jusqu'au premier message).
-          ...(type === 'direct' ? { firstMessageSentAt: null } : {}),
+          // #14644 (B) — un groupe neuf est silencieux comme un tête-à-tête :
+          // il ne s'annonce à ses invités qu'au premier message.
+          ...(silentUntilFirstMessage ? { firstMessageSentAt: null } : {}),
           participants: {
             create: [
               {
@@ -321,7 +380,7 @@ export function registerCreateConversationRoute(
                 displayName: creatorUser?.displayName || creatorUser?.username || 'User',
                 role: 'creator',
                 language: languageByUserId.get(userId) ?? 'fr',
-                permissions: defaultPermissions
+                permissions: requesterPermissionsFor(creatorOpening, defaultPermissions)
               },
               ...uniqueParticipantIds.map((participantId: string) => {
                 const pUser = userMap.get(participantId);
@@ -331,7 +390,8 @@ export function registerCreateConversationRoute(
                   displayName: pUser?.displayName || pUser?.username || 'User',
                   role: 'member',
                   language: languageByUserId.get(participantId) ?? 'fr',
-                  permissions: defaultPermissions
+                  permissions: defaultPermissions,
+                  ...requestRecipientFields(openingOf(participantId), openedAt, userId)
                 };
               })
             ]
@@ -368,13 +428,10 @@ export function registerCreateConversationRoute(
         conversationId: conversation.id,
       }).catch(() => undefined);
 
-      // Si la conversation est créée dans une communauté, ajouter automatiquement
-      // tous les participants à la communauté s'ils n'y sont pas déjà —
-      // réactivant au passage une ligne laissée par un départ (#5760), voir
-      // `reconcileCommunityMembership`.
-      if (communityId) {
-        const allUserIds = [userId, ...uniqueParticipantIds];
-        await reconcileCommunityMembership(prisma, communityId, allUserIds);
+      // Si la conversation est créée dans une communauté, ses participants y
+      // entrent selon le plan admis plus haut (#16639, `planCommunityAdmission`).
+      if (communityId && communityAdmission?.kind === 'admitted') {
+        await applyCommunityAdmission(prisma, communityId, communityAdmission);
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur
@@ -433,13 +490,16 @@ export function registerCreateConversationRoute(
           // Un direct fraîchement créé (0 message) reste silencieux pour les
           // autres participants — seul le créateur voit sa conversation
           // vide apparaître immédiatement (Prisme design doc 2026-08-04).
-          const emitParticipantIds = type === 'direct' ? [userId] : allParticipantIds;
-          for (const participantId of emitParticipantIds) {
-            io.to(ROOMS.user(participantId)).emit(
-              SERVER_EVENTS.CONVERSATION_NEW,
-              conversationNewPayload
-            );
-          }
+          // #14644 — un groupe neuf aussi : ses invités l'apprennent au premier
+          // message (`services/conversations/announceStartedGroup.ts`).
+          const emitParticipantIds = silentUntilFirstMessage ? [userId] : allParticipantIds;
+          // #14690 — chacun reçoit SES capacités, sans retarder la réponse.
+          announceConversationNew(prisma, {
+            io,
+            recipientIds: emitParticipantIds,
+            payload: conversationNewPayload,
+            onError: (error) => logger.error('error broadcasting CONVERSATION_NEW', { conversationId: conversation.id, error })
+          }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
         }
       } catch (broadcastError) {
         logger.error('error broadcasting CONVERSATION_NEW', { error: broadcastError });
@@ -451,7 +511,7 @@ export function registerCreateConversationRoute(
       // direct fraîchement créé (0 message) : silencieux à la création, voir
       // Prisme design doc 2026-08-04.
       const notificationService = fastify.notificationService;
-      if (notificationService && uniqueParticipantIds.length > 0 && type !== 'direct') {
+      if (notificationService && uniqueParticipantIds.length > 0 && !silentUntilFirstMessage) {
         try {
           // Le créateur est déjà chargé dans userMap (userId ∈ allUserIds) :
           // pas de second aller-retour DB.
@@ -459,8 +519,9 @@ export function registerCreateConversationRoute(
 
           if (creator) {
             // Notifications d'invitation indépendantes : fan-out parallèle (O(1) latence).
+            // #14107 (M1) — une demande ne s'annonce pas : elle attend dans la boîte.
             await Promise.all(
-              uniqueParticipantIds.map(async (participantId) => {
+              uniqueParticipantIds.filter((participantId) => openingOf(participantId).kind === 'direct').map(async (participantId) => {
                 await notificationService.createConversationInviteNotification({
                   invitedUserId: participantId,
                   inviterId: userId,
@@ -482,6 +543,7 @@ export function registerCreateConversationRoute(
 
       return sendSuccess(reply, {
         ...conversation,
+        participants: withoutRequestColumns(conversation.participants),
         title: displayTitle
       }, { statusCode: 201 });
 
@@ -498,7 +560,7 @@ export function registerCreateConversationRoute(
 function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusal) {
   if (refusal === 'end-to-end-direct-only') {
     return sendError(reply, 400, 'End-to-end encryption can only be chosen at creation for a direct conversation for now', {
-      code: 'ENCRYPTION_MODE_UNSUPPORTED',
+      code: ENCRYPTION_MODE_UNSUPPORTED_CODE,
     });
   }
   if (refusal === 'plaintext-with-end-to-end') {

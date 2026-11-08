@@ -7,6 +7,10 @@ import {
 } from '../ConversationMessageStatsService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import {
+  getSharedDeliveryQueue,
+  type QueuedMessagePurger,
+} from '../delivery-queue-registry';
+import {
   retractMessageNotifications,
   type RetractedNotificationAnnouncer,
 } from './retractMessageNotifications';
@@ -18,6 +22,7 @@ export type {
 import { withoutCaptureNotices } from './captureNoticeVisibility';
 import { boundCaptureNoticesNaming } from './captureNoticeRetention';
 import { eraseSharedTranslations } from './sharedTranslationErasure';
+import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -274,8 +279,23 @@ export async function applyMessageRemovalEffects(
   prisma: PrismaClient,
   message: RemovedMessageRecord,
   announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
-  options: { readonly cause?: 'deleted' | 'expired' } = {}
+  options: {
+    readonly cause?: 'deleted' | 'expired';
+    /**
+     * #16706 — la file de rejeu hors ligne à purger. Résolue depuis le registre
+     * par défaut ; le paramètre n'existe que pour les témoins, et c'est pour
+     * cela qu'il est DANS les options et non une quatrième position : aucun
+     * appelant de production ne le passe, donc aucun ne peut l'oublier.
+     */
+    readonly deliveryQueue?: QueuedMessagePurger;
+  } = {}
 ): Promise<void> {
+  // La copie EN MÉMOIRE de ses traductions (#16557). L'écrivain vient de vider
+  // `Message.translations`, mais le cache du traducteur, servi avant la base et
+  // sans TTL, gardait le texte traduit d'un message rappelé. Synchrone, ne lève
+  // jamais : elle passe avant tout `await`.
+  purgeTranslationCacheFor([message.id]);
+
   // Les traductions PARTAGÉES du message (#9899). Chaque écrivain de retrait vide
   // `Message.translations` ; la table voisine, elle, gardait la version scellée
   // du message — lisible, pour qui détenait la clé, aussi longtemps que la base
@@ -285,6 +305,35 @@ export async function applyMessageRemovalEffects(
   // BEST-EFFORT à l'intérieur de l'unité même (`eraseSharedTranslations`) :
   // elle ne lève jamais, donc aucun `try` ici.
   await eraseSharedTranslations(prisma, { messageIds: [message.id] });
+
+  // La QUATRIÈME copie résiduelle du texte, et la seule qui vivait hors de
+  // Mongo (#16706). Cette unité en balayait déjà trois — le cache du
+  // traducteur juste au-dessus (#16557), la table des traductions partagées
+  // (#9899), et `Message.translations` que chaque écrivain vide chez lui. La
+  // file de rejeu hors ligne est leur JUMELLE, et elle avait la pire propriété
+  // des quatre : `enqueueForOfflineParticipants` y écrit `payload: body`
+  // VERBATIM, dans Redis, avec un TTL de 48 h et une persistance AOF. Un
+  // message brûlé, rappelé ou échu laissait donc son clair sur disque alors que
+  // `_burn` revendique « le contenu est détruit ».
+  //
+  // La question qui l'a trouvée est celle du cycle 85 : *cette entité a-t-elle
+  // une jumelle ?* — posée non pas à une table voisine, mais à un SUBSTRAT
+  // voisin. Les trois balayages existants nettoient Mongo et le tas du
+  // processus ; aucun ne regardait Redis, parce qu'aucun n'y avait de chemin.
+  //
+  // Best-effort, et jamais `await`-bloquant pour l'appelant au sens du résultat :
+  // la destruction en base a déjà eu lieu, et la garde de vivacité du drain
+  // (#16685) tient la REMISE si la purge échoue. Les deux gardes sont
+  // indépendantes par construction — l'une empêche de GARDER, l'autre de
+  // REMETTRE.
+  const deliveryQueue = options.deliveryQueue ?? getSharedDeliveryQueue();
+  if (deliveryQueue) {
+    try {
+      await deliveryQueue.purgeMessage(message.id);
+    } catch (error) {
+      log.warn('offline delivery queue purge failed', { messageId: message.id, error });
+    }
+  }
 
   // Le décompte des compteurs de conversation. Il vivait recopié dans UNE
   // seule des quatre routes de suppression — celle qu'empruntent iOS et la vue

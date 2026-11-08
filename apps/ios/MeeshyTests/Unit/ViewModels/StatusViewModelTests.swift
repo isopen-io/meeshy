@@ -1026,7 +1026,69 @@ final class StatusViewModelTests: XCTestCase {
 
         await offlineSUT.supersedeRecoveredStatus(clientMutationId: "cmid_mood")
 
-        XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_mood"])
+        XCTAssertEqual(queue.cancelPendingPublicationCalls, ["cmid_mood"],
+                       "la même annulation gardée que la pastille et le détail (#10331)")
+        XCTAssertTrue(queue.cancelCreatePostCalls.isEmpty)
+    }
+
+    // MARK: - #10331 — une humeur encore dans la file s'annule, elle ne se supprime pas
+
+    private func makePendingMoodSUT(queue: MockOfflineQueue) -> (StatusViewModel, StatusEntry) {
+        let pending = makeStatusEntry(id: ClientMutationId.generate(), userId: "me")
+        let sut = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue
+        )
+        sut.myStatus = pending
+        sut.statuses = [pending]
+        return (sut, pending)
+    }
+
+    func test_clearStatus_onPendingMood_cancelsItsRow_andNeverCallsDelete() async {
+        let queue = MockOfflineQueue()
+        queue.cancelPendingPublicationResult = .removed
+        let (sut, pending) = makePendingMoodSUT(queue: queue)
+
+        await sut.clearStatus()
+
+        XCTAssertEqual(queue.cancelPendingPublicationCalls, [pending.id])
+        XCTAssertEqual(mockStatusService.deleteCallCount, 0, "un cmid n'existe pas côté serveur : aucun DELETE ne part")
+        XCTAssertNil(sut.myStatus)
+        XCTAssertTrue(sut.statuses.isEmpty)
+    }
+
+    func test_clearStatus_onPendingMoodThatCouldNotBeStopped_restoresIt_withoutCallingDelete() async {
+        let queue = MockOfflineQueue()
+        queue.cancelPendingPublicationResult = .failed
+        let (sut, pending) = makePendingMoodSUT(queue: queue)
+
+        await sut.clearStatus()
+
+        XCTAssertEqual(mockStatusService.deleteCallCount, 0)
+        XCTAssertEqual(sut.myStatus?.id, pending.id, "rien n'a été arrêté : l'humeur reste à sa place")
+        XCTAssertEqual(sut.statuses.map(\.id), [pending.id])
+    }
+
+    func test_clearStatus_onServerMood_neverTouchesTheOutbox() async {
+        let queue = MockOfflineQueue()
+        let sut = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue
+        )
+        let entry = makeStatusEntry(id: "665f1c2e9b1d4a0012345678", userId: "me")
+        sut.myStatus = entry
+        sut.statuses = [entry]
+
+        await sut.clearStatus()
+
+        XCTAssertTrue(queue.cancelPendingPublicationCalls.isEmpty)
+        XCTAssertEqual(mockStatusService.deleteCallCount, 1)
     }
 
     // MARK: - Portée du mood (impressions & vues)

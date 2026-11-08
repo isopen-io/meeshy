@@ -94,72 +94,24 @@ extension ConversationView {
 
     /// **La barre d'action du mode sélection (#4005).** Remplace le composer
     /// tant que la sélection est active — voir le site de montage
-    /// (`ConversationView.body`, branche `isSelectionModeActive`).
+    /// (`ConversationView.body`, branche `isSelectionModeActive`). Le dock
+    /// ignore la zone sûre basse : la barre reçoit l'encart de la FENÊTRE et
+    /// se relève elle-même au-dessus de l'indicateur d'accueil (#16532).
     var selectionToolbar: some View {
-        HStack(spacing: MeeshySpacing.lg) {
-            Button {
+        ConversationSelectionBar(
+            selectedCount: overlayState.selectedMessageIds.count,
+            offersForward: selectionOffersForward,
+            accentColor: accentColor,
+            safeAreaBottom: windowInsets.bottom,
+            onCancel: { endSelectionMode() },
+            onDelete: { overlayState.deleteConfirmSelectionActive = true },
+            onForward: {
+                let selected = selectedMessagesInThreadOrder
+                guard let first = selected.first, MessageExitOffer.selectionOffersForward(selected) else { return }
+                composerState.forwardMessage = first
+                composerState.forwardAdditionalMessages = Array(selected.dropFirst())
                 endSelectionMode()
-            } label: {
-                Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
             }
-            .accessibilityIdentifier("conversation.selection.cancel")
-
-            // #4024 — Supprimer, à côté d'Annuler. Ouvre la confirmation
-            // groupée (pour tous / pour moi, gardée par
-            // `selectionAllowsDeleteForAll`) — jamais de suppression directe
-            // sans confirmation, même règle que la suppression d'un message.
-            Button(role: .destructive) {
-                overlayState.deleteConfirmSelectionActive = true
-            } label: {
-                Image(systemName: "trash")
-            }
-            .disabled(overlayState.selectedMessageIds.isEmpty)
-            .accessibilityLabel(MessageDeleteConfirmation.title(count: overlayState.selectedMessageIds.count))
-            .accessibilityIdentifier("conversation.selection.delete")
-
-            Spacer(minLength: 0)
-
-            // #4023 — « N sélectionnés » tout court, et affiché SEULEMENT au-delà
-            // d'un élément (un seul sélectionné ⇒ pas de compteur).
-            if overlayState.selectedMessageIds.count >= 2 {
-                Text(selectionCountLabel)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(ThemeManager.shared.textSecondary)
-                    .accessibilityIdentifier("conversation.selection.count")
-            }
-
-            Spacer(minLength: 0)
-
-            if selectionOffersForward {
-                Button {
-                    let selected = selectedMessagesInThreadOrder
-                    guard let first = selected.first, MessageExitOffer.selectionOffersForward(selected) else { return }
-                    composerState.forwardMessage = first
-                    composerState.forwardAdditionalMessages = Array(selected.dropFirst())
-                    endSelectionMode()
-                } label: {
-                    Label(
-                        String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main),
-                        systemImage: "arrowshape.turn.up.right"
-                    )
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                }
-                .disabled(overlayState.selectedMessageIds.isEmpty)
-                .accessibilityIdentifier("conversation.selection.forward")
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
-        .background(.regularMaterial)
-    }
-
-    /// « N sélectionnés » (#4023) — libellé court, sans le mot « message », le
-    /// compteur n'étant montré qu'à partir de 2 éléments (voir `selectionToolbar`).
-    /// Un simple `%d` suffit : le compte ne dépasse jamais `selectionCap`.
-    private var selectionCountLabel: String {
-        let n = overlayState.selectedMessageIds.count
-        let format = String(localized: "conversation.selection.count", defaultValue: "%d sélectionnés", bundle: .main)
-        return String(format: format, n)
+        )
     }
 }

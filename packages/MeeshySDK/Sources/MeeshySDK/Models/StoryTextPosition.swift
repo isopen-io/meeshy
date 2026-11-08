@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Story Text Position
 
-public struct StoryTextPosition: Codable, Sendable {
+public struct StoryTextPosition: Codable, Sendable, Equatable {
     public var x: CGFloat
     public var y: CGFloat
 

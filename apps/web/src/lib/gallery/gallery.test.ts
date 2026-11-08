@@ -8,9 +8,8 @@ import {
   GALLERY_REGISTRY_CAPACITY,
   createGalleryAutoSave,
   createGalleryRegistry,
-  galleryAutoSaveEnabled,
   galleryCandidates,
-  setGalleryAutoSaveEnabled,
+  type GalleryMessage,
   type GalleryStorage,
 } from './auto-save';
 import { saveToGallery } from './save-to-gallery';
@@ -153,22 +152,6 @@ describe('le registre — une seule fois par pièce', () => {
   });
 });
 
-describe('l’interrupteur des réglages médias', () => {
-  test('actif par défaut, et il se retient', () => {
-    const storage = memoryStorage();
-    expect(galleryAutoSaveEnabled(storage)).toBe(true);
-    setGalleryAutoSaveEnabled(storage, false);
-    expect(galleryAutoSaveEnabled(storage)).toBe(false);
-    setGalleryAutoSaveEnabled(storage, true);
-    expect(galleryAutoSaveEnabled(storage)).toBe(true);
-  });
-
-  test('un stockage illisible laisse l’interrupteur à sa valeur par défaut', () => {
-    expect(galleryAutoSaveEnabled(brokenStorage)).toBe(true);
-    expect(() => setGalleryAutoSaveEnabled(brokenStorage, false)).not.toThrow();
-  });
-});
-
 function fakeSaver(outcome: GallerySaveOutcome = 'saved') {
   const saved: string[] = [];
   const saver: GallerySaver = {
@@ -185,9 +168,9 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function autoSave(options: { readonly android?: boolean; readonly enabled?: boolean; readonly saver?: GallerySaver; readonly storage?: GalleryStorage } = {}) {
   const storage = options.storage ?? memoryStorage();
-  if (options.enabled === false) setGalleryAutoSaveEnabled(storage, false);
   const fetched: string[] = [];
-  const run = createGalleryAutoSave({
+  const consent = options.enabled ?? true;
+  const create = createGalleryAutoSave({
     isAndroidShell: () => options.android ?? true,
     saver: () => options.saver ?? NULL_GALLERY_SAVER,
     storage: () => storage,
@@ -196,6 +179,7 @@ function autoSave(options: { readonly android?: boolean; readonly enabled?: bool
       return new Blob(['x'], { type: attachment.mimeType });
     },
   });
+  const run = (message: GalleryMessage, viewerId: string): void => create(message, viewerId, consent);
   return { run, fetched, storage };
 }
 
@@ -228,7 +212,7 @@ describe('la décision à la réception', () => {
     expect(createGalleryRegistry({ storage, readerId: VIEWER }).has('att-img')).toBe(false);
   });
 
-  test('interrupteur coupé ⇒ rien n’est ni téléchargé ni enregistré', async () => {
+  test('« Sauvegarder média » coupé (ou inconnu) ⇒ rien n’est ni téléchargé ni enregistré (#14641)', async () => {
     const { saver, saved } = fakeSaver();
     const { run, fetched } = autoSave({ saver, enabled: false });
     run(message(), VIEWER);

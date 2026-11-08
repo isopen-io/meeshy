@@ -70,6 +70,8 @@ import {
 import {
   PREFERENCE_REGISTRY,
   applyCategoryWriteEffects,
+  keepUnnamedKeys,
+  resetDocumentFor,
   isPreferenceCategory,
   parseSubmittedKeys,
   resolveComplete,
@@ -325,17 +327,19 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
             ? await resolveCompleteCategories(fastify.prisma, userId, categories)
             : {};
 
-        const writes: CategoryWrite[] = categories.map((category) => {
+        const writes: CategoryWrite[] = await Promise.all(categories.map(async (category) => {
           const submitted = parseSubmittedKeys(category, body[category]);
           const stored =
-            mode === 'merge' ? { ...(base[category] ?? {}), ...submitted } : submitted;
+            mode === 'merge'
+              ? { ...(base[category] ?? {}), ...submitted }
+              : await keepUnnamedKeys(fastify.prisma, userId, category, submitted, submitted);
           return {
             category,
             stored,
             effective: resolveComplete(PREFERENCE_REGISTRY[category].defaults, stored),
             submitted,
           };
-        });
+        }));
 
         // #4578 — la garde lit `submitted`, pas `effective`.
         //
@@ -510,7 +514,9 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
         // qui n'a jamais rien écrit, donc qui EST déjà aux valeurs par défaut.
         await fastify.prisma.userPreferences.updateMany({
           where: { userId },
-          data: Object.fromEntries(categories.map((category) => [category, null])),
+          data: Object.fromEntries(
+            await Promise.all(categories.map(async (category) => [category, await resetDocumentFor(fastify.prisma, userId, category)] as const))
+          ),
         });
 
         await applyCategoryWriteEffects(fastify, userId, categories);

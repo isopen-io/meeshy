@@ -51,10 +51,11 @@ class ComposerSceneExportTest {
     }
 
     @Test
-    fun `a colour backdrop alone publishes nothing and exports nothing`() {
+    fun `a chosen colour backdrop alone is publishable matter and is offered to export`() {
         val coloured = StoryComposerBackgroundReducer.backgroundChanged(base, StoryBackgroundValue.Hex("112233"))
 
-        assertThat(ComposerSceneExport.entries(coloured)).isEmpty()
+        assertThat(ComposerSceneExport.entries(coloured))
+            .containsExactly(ComposerOverflowEntry.SAVE_TO_PHOTOS, ComposerOverflowEntry.SHARE).inOrder()
     }
 
     @Test

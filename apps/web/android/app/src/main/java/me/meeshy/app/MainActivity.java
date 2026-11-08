@@ -263,6 +263,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshySpeechPlugin.class);
         registerPlugin(ScreenBrightnessPlugin.class);
         registerPlugin(MeeshyFileSinkPlugin.class);
+        registerPlugin(MeeshyGalleryPlugin.class);
         registerPlugin(MeeshyScreenGuardPlugin.class);
         registerPlugin(MeeshyLocalePlugin.class);
         registerPlugin(MeeshySystemBarsPlugin.class);

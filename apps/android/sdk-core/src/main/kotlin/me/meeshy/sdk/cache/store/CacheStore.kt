@@ -11,7 +11,7 @@ import me.meeshy.sdk.model.cache.PaginationCursor
  * The three iOS write entry points are explicit here because each leaves a different freshness
  * clock behind (see [me.meeshy.sdk.model.cache.FreshnessWriteMode]).
  */
-interface CacheStore<V> : MutableCacheStore<String, V> {
+interface CacheStore<V> : MutableCacheStore<String, V>, CacheStoreHandle {
 
     /** A network fetch landed: the key's clock advances to now. Same as [save]. */
     suspend fun saveFetched(items: List<V>, key: String)
@@ -34,5 +34,5 @@ interface CacheStore<V> : MutableCacheStore<String, V> {
     suspend fun clear(key: String)
 
     /** Drops every key of this store's namespace. */
-    suspend fun clearAll()
+    override suspend fun clearAll()
 }

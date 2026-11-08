@@ -21,6 +21,7 @@ public object ApiRoutesPosts {
     public const val BY_POST_ID_COMMENTS_BY_COMMENT_ID_LIKE: String = "posts/{postId}/comments/{commentId}/like"
     public const val BY_POST_ID_COMMENTS_BY_COMMENT_ID_REPLIES: String = "posts/{postId}/comments/{commentId}/replies"
     public const val BY_POST_ID_COMMENTS_BY_COMMENT_ID_TRANSLATE: String = "posts/{postId}/comments/{commentId}/translate"
+    public const val BY_POST_ID_COMMENT_SETTINGS: String = "posts/{postId}/comment-settings"
     public const val BY_POST_ID_DOWNLOADS: String = "posts/{postId}/downloads"
     public const val BY_POST_ID_IMPRESSION: String = "posts/{postId}/impression"
     public const val BY_POST_ID_INTERACTIONS: String = "posts/{postId}/interactions"
@@ -49,6 +50,7 @@ public object ApiRoutesPosts {
     public const val NEARBY: String = "posts/nearby"
     public const val NEARBY_DENSITY: String = "posts/nearby/density"
     public const val ROOT: String = "posts"
+    public const val SEARCH: String = "posts/search"
     public const val STORIES_MINE: String = "posts/stories/mine"
     public const val USER_BY_USER_ID: String = "posts/user/{userId}"
 }

@@ -1,28 +1,12 @@
 package me.meeshy.app.feed
 
 import android.widget.Toast
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.core.os.bundleOf
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.HasDefaultViewModelProviderFactory
@@ -35,8 +19,8 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryOwner
-import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
+import androidx.compose.ui.res.stringResource
+import me.meeshy.ui.component.comments.CommentsSheet
 
 /**
  * **LE fil des commentaires d'un contenu monté hors du détail de son post** (#14313) — un réel, une story. Le même
@@ -57,55 +41,45 @@ fun rememberPostCommentsViewModel(postId: String): PostCommentsViewModel {
  * fil qui défile, et le composeur universel épinglé dessous, au-dessus du clavier. Les encarts système sont laissés au
  * composeur (`ComposerShellLayout`) : la feuille n'en ajoute aucun, sinon la barre de navigation serait comptée deux fois.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PostCommentsThreadSheet(
     viewModel: PostCommentsViewModel,
     title: String,
     onDismiss: () -> Unit,
     headerAction: (@Composable RowScope.() -> Unit)? = null,
+    onCommentSent: ((postId: String) -> Unit)? = null,
+    commentsClosed: Boolean? = null,
 ) {
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+    CommentsClosedEffect(viewModel, commentsClosed)
+    DisposableEffect(viewModel, onCommentSent) {
+        viewModel.onCommentSent = onCommentSent
+        onDispose { viewModel.onCommentSent = null }
+    }
+    CommentsSheet(
+        title = title,
+        closeLabel = stringResource(me.meeshy.ui.R.string.common_close),
+        onDismiss = onDismiss,
+        headerAction = headerAction,
+        composer = { PostCommentsComposerBar(viewModel = viewModel) },
     ) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(SHEET_HEIGHT_FRACTION)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    modifier = Modifier.weight(1f),
-                )
-                headerAction?.invoke(this)
-            }
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-            ) {
-                PostCommentsSection(
-                    viewModel = viewModel,
-                    showsTitle = false,
-                    onNotice = { notice -> Toast.makeText(context, context.getString(notice.messageRes), Toast.LENGTH_SHORT).show() },
-                )
-            }
-            PostCommentsComposerBar(viewModel = viewModel)
-        }
+        PostCommentsSection(
+            viewModel = viewModel,
+            showsTitle = false,
+            onNotice = { notice -> Toast.makeText(context, context.getString(notice.messageRes), Toast.LENGTH_SHORT).show() },
+        )
     }
 }
 
-private const val SHEET_HEIGHT_FRACTION = 0.85f
+/**
+ * #16541 — l'hôte dit au fil ce que le post SERT : fermé, le composeur cède la place au bandeau « Les commentaires sont
+ * désactivés » ; rouvert (une diffusion `post:updated`), il revient. `null` : l'hôte ne sait pas, le fil garde ce qu'il a
+ * appris (un refus `COMMENTS_DISABLED`).
+ */
+@Composable
+fun CommentsClosedEffect(viewModel: PostCommentsViewModel, commentsClosed: Boolean?) {
+    LaunchedEffect(viewModel, commentsClosed) { commentsClosed?.let(viewModel::setCommentsClosed) }
+}
 
 /**
  * Le magasin d'UN fil : ses ViewModels vivent et meurent avec lui. Les extras de création sont ceux de l'hôte, avec

@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover
 
 # Import des modules internes
 from .worker_pool import WorkerPool, configure_pytorch_threads, calculate_optimal_workers
-from .connection_manager import ConnectionManager
+from .connection_manager import ConnectionManager, RejectedTasksHandler, take_next_task
 
 # Import local
 from ..zmq_models import TranslationTask
@@ -184,6 +184,10 @@ class TranslationPoolManager:
         """
         return await self.connection_manager.enqueue_task(task)
 
+    def set_rejection_handler(self, handler: Optional[RejectedTasksHandler]) -> None:
+        """Branche le rappel des tâches d'un lot refusé par une file pleine (#16781)."""
+        self.connection_manager.on_tasks_rejected = handler
+
     async def start_workers(self) -> List[asyncio.Task]:
         """Démarre tous les workers et services"""
         logger.info("[POOL_MANAGER] Starting workers and services...")
@@ -300,23 +304,14 @@ class TranslationPoolManager:
             regular_pool: Pool régulière
 
         Returns:
-            TranslationTask ou None si timeout
+            TranslationTask ou None si rien n'arrive en 1 s (le worker
+            revérifie alors son arrêt et le scaling)
         """
-        # Vérifier fast_pool d'abord (textes courts prioritaires)
-        if not fast_pool.empty():
-            try:
-                task = fast_pool.get_nowait()
-                logger.debug(f"⚡ Task from fast_pool")
-                return task
-            except asyncio.QueueEmpty:
-                pass
-
-        # Sinon attendre la pool régulière
-        try:
-            task = await asyncio.wait_for(regular_pool.get(), timeout=1.0)
-            return task
-        except asyncio.TimeoutError:
-            return None
+        return await take_next_task(
+            (fast_pool, regular_pool),
+            self.connection_manager.work_arrived,
+            timeout=1.0
+        )
 
     async def _process_task(self, task: TranslationTask, worker_name: str):
         """

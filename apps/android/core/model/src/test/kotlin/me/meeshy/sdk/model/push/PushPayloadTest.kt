@@ -122,4 +122,17 @@ class PushPayloadTest {
         assertThat(decode("ephemeralDuration" to "30").mediaMayTravel).isFalse()
         assertThat(decode("ephemeralDuration" to "0").mediaMayTravel).isTrue()
     }
+    @Test
+    fun `#13794 le mode e2ee servi par la passerelle apprend le bout en bout a la conversation du push`() {
+        assertThat(decode("conversationId" to "c1", "conversationEncryptionMode" to "e2ee").teachesEndToEndTo).isEqualTo("c1")
+        assertThat(decode("conversationId" to "c1", "conversationEncryptionMode" to " E2EE ").teachesEndToEndTo).isEqualTo("c1")
+    }
+
+    @Test
+    fun `#13794 un mode lisible par le serveur, absent ou sans conversation n apprend rien`() {
+        assertThat(decode("conversationId" to "c1", "conversationEncryptionMode" to "server").teachesEndToEndTo).isNull()
+        assertThat(decode("conversationId" to "c1", "conversationEncryptionMode" to "hybrid").teachesEndToEndTo).isNull()
+        assertThat(decode("conversationId" to "c1").teachesEndToEndTo).isNull()
+        assertThat(decode("conversationEncryptionMode" to "e2ee").teachesEndToEndTo).isNull()
+    }
 }

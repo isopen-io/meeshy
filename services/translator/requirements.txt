@@ -2,10 +2,10 @@
 python-dotenv==1.2.4
 
 # Framework web
-fastapi==0.161.1
+fastapi==0.162.0
 uvicorn[standard]==0.54.0
 pydantic-settings==2.15.0
-pydantic==2.13.5
+pydantic==2.14.3
 
 # Communication gRPC et ZeroMQ
 # PIN EXACT lockstep (verified against PyPI metadata + `uv pip install --dry-run`).
@@ -39,11 +39,11 @@ pydantic==2.13.5
 # and be validated with
 # `uv pip compile --python-version 3.11 services/translator/requirements.txt -o <tmp>`
 # (exit 0) before merge — uv only ever reports the FIRST unsatisfiable pin.
-grpcio==1.84.1
+grpcio==1.85.1
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
 protobuf==6.33.6
-pyzmq==27.2.0
+pyzmq==27.3.0
 
 # Machine Learning et NLP
 # Versions gérées par chatterbox-tts pour compatibilité
@@ -79,7 +79,7 @@ pyarrow==25.0.1
 # insoluble ("No solution found... huggingface-hub>=0.25.0,<2.0" vs "==2.1.1") et
 # casse le job Docker "Build translator" (#10035). NE PAS bumper au-delà de 1.x
 # tant que datasets reste sur 5.0.1 — revalider avec `uv pip compile` si l'un bouge.
-huggingface_hub==1.32.0
+huggingface_hub==1.33.0
 safetensors==0.8.0
 peft==0.21.2
 # PIN EXACT — comme toute lib ML de ce fichier. Le service tourne SCIEMMENT sur
@@ -173,7 +173,7 @@ diffusers==0.41.0
 resemble-perth==1.0.1
 omegaconf==2.4.0
 conformer==0.3.2
-spacy==3.8.16
+spacy==3.8.18
 einops==0.8.2
 soxr==1.1.0  # Requis par transformers/audio_utils pour chatterbox-tts
 # chatterbox-tts==0.1.6 (installé dans Dockerfile avec --no-deps)
@@ -230,6 +230,11 @@ ffmpeg-python==0.2.0
 pyannote.audio==3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0 (4.0+ exige torch>=2.8.0)
 
 # Priorité 2: SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
+# NE PAS BUMPER vers 1.1.2+ : speechbrain 1.1.2 exige torch>=2.7.1, ce qui fait
+# monter l'image à torch 2.12 / torchaudio 2.11 malgré le pin torch==2.6.0 du
+# Dockerfile (chatterbox-tts 0.1.6 exige torch==2.6.0). Mesuré sur staging le
+# 2026-11-05 : toutes les synthèses TTS échouaient, aucun vocal ne recevait de
+# traduction, quel que soit le client émetteur (#16340). 1.1.1 exige torch>=2.1.0.
 speechbrain==1.1.1  # ✅ ACTIVÉ - Fallback si pyannote indisponible
 scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
@@ -244,7 +249,7 @@ prometheus-client==0.26.0
 # renames asyncio_mode semantics). Dependabot's bump to 1.4.0 (PR #2081) made the
 # set unsatisfiable — same recurrence as the pytest 9.1.1 revert in ded481979.
 # Reject future pytest-asyncio 1.x PRs unless pytest itself moves off 8.3.4.
-pytest==8.3.4
+pytest==8.4.2
 pytest-asyncio==0.26.0
 pytest-cov==7.1.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
@@ -269,4 +274,4 @@ httpcore==0.17.3
 # 4.14.2 => OK. dependabot ignore désormais 4.15.0 exactement.
 # Le jour où Prisma permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en
 # propre et cette paire cesse d'être fragile.
-anyio==4.15.1
+anyio==4.16.0

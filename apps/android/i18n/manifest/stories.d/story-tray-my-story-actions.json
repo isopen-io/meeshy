@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.tray.a11y.createStory", "androidName": "story_tray_a11y_createStory", "status": "adopted" }
+      ]
+    }
+  }
+}

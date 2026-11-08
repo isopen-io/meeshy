@@ -1,12 +1,14 @@
 /**
  * `GET /relations/:userId` — le niveau EFFECTIF du lien du lecteur avec une
- * personne, et RIEN de plus (#13998, spec cercles § 4).
+ * personne (#13998, spec cercles § 4), et la vue du lien élargie par #14910
+ * (`grantedByMe`, `since`, `progress`, `eligibleFor`, `canRaise`, `raiseBlockedUntil`).
  *
  * Le double Prisme honore la clé de paire : ce que la route lit passe par
  * `niveauEffectifUniforme` (la loi de `niveauEffectif`), jamais par une comparaison
  * locale, et il compare les ObjectId sans casse, comme Mongo. La réponse
  * est comparée à l'IDENTIQUE (`toEqual`) : un champ de plus — un second niveau,
  * un identifiant de demande, un drapeau de blocage — ferait rougir le témoin.
+ * Le détail de `canRaise` et du cool-down est témoigné par `relation-link-manage.test.ts`.
  *
  * @jest-environment node
  */
@@ -38,6 +40,9 @@ type Monde = {
   readonly niveaux?: { readonly low: string; readonly high: string; readonly transitions?: ReadonlyArray<Transition> };
   readonly bloques?: ReadonlyArray<{ readonly id: string; readonly bloque: string }>;
   readonly acceptees?: ReadonlyArray<{ readonly senderId: string; readonly receiverId: string; readonly respondedAt: Date }>;
+  readonly roles?: Readonly<Record<string, string>>;
+  readonly naissances?: Readonly<Record<string, Date>>;
+  readonly supprimes?: readonly string[];
 };
 
 /**
@@ -49,8 +54,13 @@ type Monde = {
  */
 const memeObjectId = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-function prismaDouble({ niveaux, bloques = [], acceptees = [] }: Monde) {
+function prismaDouble({ niveaux, bloques = [], acceptees = [], roles = {}, naissances = {}, supprimes = [] }: Monde) {
   const user = {
+    findMany: jest.fn<any>(async (args: any) =>
+      Object.entries(roles)
+        .filter(([id]) => args.where.id.in.some((wanted: string) => memeObjectId(wanted, id)))
+        .map(([id, role]) => ({ id, role, birthDate: naissances[id] ?? null, isActive: true, deletedAt: supprimes.includes(id) ? new Date() : null, deactivatedAt: null }))
+    ),
     findFirst: jest.fn<any>(async (args: any) => {
       const or: ReadonlyArray<{ id: string; blockedUserIds: { has: string } }> = args.where.OR;
       const trouve = bloques.find((b) =>
@@ -84,8 +94,25 @@ function prismaDouble({ niveaux, bloques = [], acceptees = [] }: Monde) {
       return trouvee ? { ...trouvee, updatedAt: trouvee.respondedAt } : null;
     }),
   };
-  return { user, userRelation, friendRequest };
+  const pairInteractionDay = { findMany: jest.fn<any>(async () => []) };
+  return { user, userRelation, friendRequest, pairInteractionDay };
 }
+
+const VUE_VIDE = { since: null, progress: { activeWeeks: 0, needed: null, missing: [] }, eligibleFor: null, raiseBlockedUntil: null };
+
+/** La réponse attendue : sous Connaissance, la vue vide ; au-dessus, ce que J'accorde et la possibilité de monter. */
+const SEMAINES_REQUISES: Record<string, number> = { FRIEND: 4, CLOSE: 12 };
+
+const vue = (userId: string, effectiveLevel: string, extra: Record<string, unknown> = {}) => ({
+  userId,
+  effectiveLevel,
+  accessLevel: effectiveLevel,
+  grantedByMe: ['PUBLIC', 'COMMUNITY'].includes(effectiveLevel) ? 'PUBLIC' : effectiveLevel,
+  ...VUE_VIDE,
+  progress: { ...VUE_VIDE.progress, needed: SEMAINES_REQUISES[effectiveLevel] ?? null },
+  canRaise: false,
+  ...extra,
+});
 
 async function monter(monde: Monde = {}, { authentifie = true }: { authentifie?: boolean } = {}) {
   const prisma = prismaDouble(monde);
@@ -109,20 +136,20 @@ const lire = (app: Awaited<ReturnType<typeof monter>>['app'], id: string) =>
   app.inject({ method: 'GET', url: `${PREFIXE}/${id}` });
 
 describe('GET /relations/:userId', () => {
-  it('sert FRIEND pour un ami, et UNIQUEMENT userId et effectiveLevel', async () => {
+  it('sert FRIEND pour un ami, et UNIQUEMENT la vue du lien déclarée', async () => {
     const { app } = await monter({ niveaux: { low: 'FRIEND', high: 'FRIEND' } });
 
     const res = await lire(app, AUTRE);
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ success: true, data: { userId: AUTRE, effectiveLevel: 'FRIEND' } });
+    expect(res.json()).toEqual({ success: true, data: vue(AUTRE, 'FRIEND') });
     await app.close();
   });
 
   it('sert CLOSE pour un proche', async () => {
     const { app } = await monter({ niveaux: { low: 'CLOSE', high: 'CLOSE' } });
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'CLOSE' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'CLOSE'));
     await app.close();
   });
 
@@ -133,10 +160,56 @@ describe('GET /relations/:userId', () => {
     await app.close();
   });
 
+  it('entre deux comptes de l\'équipe sans lien : le niveau dit l\'absence de lien, `accessLevel` dit le verdict (#16623)', async () => {
+    const { app } = await monter({ roles: { [MOI]: 'MODERATOR', [AUTRE]: 'ADMIN' } });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC', { accessLevel: 'BLOOD' }));
+    await app.close();
+  });
+
+  it('un lien réel entre deux comptes de l\'équipe garde son niveau, sa montée et sa baisse (#16623)', async () => {
+    const { app } = await monter({ niveaux: { low: 'FRIEND', high: 'FRIEND' }, roles: { [MOI]: 'ADMIN', [AUTRE]: 'BIGBOSS' } });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'FRIEND', { accessLevel: 'BLOOD' }));
+    await app.close();
+  });
+
+  it.each([
+    ['un modérateur face à un utilisateur ordinaire', { [MOI]: 'MODERATOR', [AUTRE]: 'USER' }],
+    ['un utilisateur ordinaire face à un administrateur : son rôle ne fuit pas', { [MOI]: 'USER', [AUTRE]: 'ADMIN' }],
+    ['un rôle de cible absent', { [MOI]: 'ADMIN' }],
+  ])('%s : `accessLevel` vaut le niveau réel (#16623)', async (_label, roles) => {
+    const { app } = await monter({ roles });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
+    await app.close();
+  });
+
+  it('un blocage entre deux comptes de l\'équipe ne se distingue pas d\'un collègue qui ne bloque pas (#16623)', async () => {
+    const roles = { [MOI]: 'MODERATOR', [AUTRE]: 'ADMIN' };
+    const bloque = await monter({ bloques: [{ id: AUTRE, bloque: MOI }], roles });
+    const libre = await monter({ roles });
+    expect((await lire(bloque.app, AUTRE)).json().data).toEqual((await lire(libre.app, AUTRE)).json().data);
+    await bloque.app.close();
+    await libre.app.close();
+  });
+
+  it('un collègue supprimé n\'a plus le privilège : `accessLevel` vaut le niveau réel (#16623)', async () => {
+    const { app } = await monter({ roles: { [MOI]: 'ADMIN', [AUTRE]: 'MODERATOR' }, supprimes: [AUTRE] });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
+    await app.close();
+  });
+
+  it('un collègue mineur déclaré ne se distingue pas d\'un collègue adulte : `accessLevel` ne dit pas l\'âge (#16623)', async () => {
+    const roles = { [MOI]: 'ADMIN', [AUTRE]: 'MODERATOR' };
+    const mineur = await monter({ roles, naissances: { [AUTRE]: new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000) } });
+    const adulte = await monter({ roles });
+    expect((await lire(mineur.app, AUTRE)).json().data).toEqual((await lire(adulte.app, AUTRE)).json().data);
+    await mineur.app.close();
+    await adulte.app.close();
+  });
+
   it("sert PUBLIC pour quelqu'un qu'aucun lien ne relie", async () => {
     const { app } = await monter();
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'PUBLIC' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
     await app.close();
   });
 
@@ -146,7 +219,7 @@ describe('GET /relations/:userId', () => {
       bloques: [{ id: MOI, bloque: AUTRE }],
     });
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'PUBLIC' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
     await app.close();
   });
 
@@ -156,7 +229,7 @@ describe('GET /relations/:userId', () => {
       bloques: [{ id: AUTRE, bloque: MOI }],
     });
 
-    expect((await lire(app, AUTRE)).json().data).toEqual({ userId: AUTRE, effectiveLevel: 'PUBLIC' });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
     await app.close();
   });
 
@@ -166,7 +239,7 @@ describe('GET /relations/:userId', () => {
     const inconnu = await lire(app, INCONNU);
 
     expect(inconnu.statusCode).toBe(200);
-    expect(inconnu.json()).toEqual({ success: true, data: { userId: INCONNU, effectiveLevel: 'PUBLIC' } });
+    expect(inconnu.json()).toEqual({ success: true, data: vue(INCONNU, 'PUBLIC') });
     await app.close();
   });
 
@@ -178,7 +251,8 @@ describe('GET /relations/:userId', () => {
       return {
         blocage: prisma.user.findFirst.mock.calls.length,
         lien: prisma.userRelation.findUnique.mock.calls.length,
-        acceptation: prisma.friendRequest.findFirst.mock.calls.length,
+        demandes: prisma.friendRequest.findFirst.mock.calls.length,
+        serie: prisma.pairInteractionDay.findMany.mock.calls.length,
       };
     };
     const proche = { low: 'CLOSE', high: 'CLOSE' };
@@ -192,7 +266,8 @@ describe('GET /relations/:userId', () => {
       await lectures({ bloques: [{ id: AUTRE, bloque: MOI }] }, AUTRE),
     ];
 
-    mesures.forEach((m) => expect(m).toEqual({ blocage: 1, lien: 1, acceptation: 1 }));
+    mesures.forEach((m) => expect(m).toEqual(mesures[0]));
+    expect(mesures[0]).toEqual({ blocage: 1, lien: 2, demandes: 2, serie: 1 });
   });
 
   it('un identifiant en MAJUSCULES désigne la même personne : même niveau, identifiant servi canonique', async () => {
@@ -200,7 +275,7 @@ describe('GET /relations/:userId', () => {
 
     const res = await lire(app, AUTRE.toUpperCase());
 
-    expect(res.json()).toEqual({ success: true, data: { userId: AUTRE, effectiveLevel: 'CLOSE' } });
+    expect(res.json()).toEqual({ success: true, data: vue(AUTRE, 'CLOSE') });
     await app.close();
   });
 

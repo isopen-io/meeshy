@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pack_shop_detail_items">Itens do pacote</string>
+    <string name="pack_shop_detail_embedded">Incluído no app</string>
+    <string name="pack_shop_detail_embedded_size">Incluído no app · %1$s</string>
+    <string name="pack_shop_detail_price">%1$d Meeshes</string>
+    <string name="pack_shop_state_installed">Instalado</string>
+    <string name="pack_shop_state_embedded">Incluído</string>
+    <string name="pack_shop_state_to_download">Para baixar</string>
+    <string name="pack_shop_download_required">Download necessário</string>
+    <string name="pack_shop_viewer_position">%1$d / %2$d</string>
+    <string name="pack_shop_viewer_item_a11y">%1$s, item %2$d de %3$d</string>
+    <string name="pack_shop_viewer_next">Próximo item</string>
+    <string name="pack_shop_viewer_previous">Item anterior</string>
+    <string name="pack_shop_close">Fechar</string>
+    <string name="pack_shop_viewer_others">Outras sugestões</string>
+    <string name="pack_shop_equip">Equipar</string>
+    <string name="pack_shop_equip_a11y">Equipar %1$s</string>
+    <string name="pack_shop_equipped">Equipado</string>
+    <string name="pack_shop_equip_failed">Não foi possível equipar o item.</string>
+    <string name="pack_shop_wallpaper_hint">Escolha este fundo na aparência de uma conversa.</string>
+    <string name="pack_shop_open_pack_a11y">Abrir o pacote %1$s</string>
+    <string name="pack_shop_open_item_a11y">Ver %1$s em tela cheia</string>
+    <string name="pack_shop_preview_bubble_in">Oi! Viu este fundo?</string>
+    <string name="pack_shop_preview_bubble_out">Sim, adorei 😍</string>
+    <string name="pack_shop_preview_bubble_in_2">E tudo continua legível!</string>
+</resources>

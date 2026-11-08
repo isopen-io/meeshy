@@ -95,6 +95,23 @@ final class StoryActionRailPlanTests: XCTestCase {
         XCTAssertFalse(plan.showsExport)
     }
 
+    /// RG-18 (#13939) : une story de Sang ne se repartage pas — la loi d'audience n'offre rien, le bouton disparaît.
+    func test_resolve_aBloodStory_offersNoRepost() {
+        let plan = StoryActionRailPlan.resolve(
+            isOwnStory: false,
+            canReply: true,
+            isPublicStory: false,
+            hasAudibleSound: false,
+            commentCount: 0,
+            hasTranslatableContent: false,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: "BLOOD")
+        )
+
+        XCTAssertFalse(plan.showsRepost)
+        XCTAssertTrue(StoryActionRailPlan.isRepublishable(visibility: "CLOSE"))
+        XCTAssertTrue(StoryActionRailPlan.isRepublishable(visibility: nil))
+    }
+
     func test_resolve_commentsMembership_decidedByEntryCount_only() {
         let without = StoryActionRailPlan.resolve(
             isOwnStory: false, canReply: false, isPublicStory: false,
@@ -273,5 +290,23 @@ extension StoryActionRailPlanTests {
         XCTAssertFalse(
             sidebar.contains("storyCommentCountReconciledPulse +="),
             "le rail lit le canal, il ne l'incrémente jamais")
+    }
+
+    // MARK: - #15198 — une story en attente
+
+    /// Une story encore dans la file porte un id local, qu'aucune route du
+    /// serveur n'adresse : le rail ne garde que le son, local à la surface.
+    func test_resolve_pendingStory_keepsOnlyTheLocalSoundControl() {
+        let plan = StoryActionRailPlan.resolve(
+            isOwnStory: true, canReply: true, isPublicStory: true,
+            hasAudibleSound: true, commentCount: 3, hasTranslatableContent: true,
+            canCompose: true, isRepublishable: true, isPending: true
+        )
+
+        XCTAssertEqual(plan, StoryActionRailPlan(
+            showsReact: false, showsReply: false, showsForward: false, showsRepost: false,
+            showsViews: false, showsExport: false, showsSound: true, showsComments: false,
+            showsTranslations: false, showsCompose: false
+        ))
     }
 }

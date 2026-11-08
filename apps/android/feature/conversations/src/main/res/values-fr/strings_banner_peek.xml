@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_peek_open_full">Ouvrir la conversation complète</string>
+    <string name="conversation_peek_placeholder">Message</string>
+    <string name="conversation_peek_send">Envoyer</string>
+    <string name="conversation_peek_empty">Aucun message pour l\'instant</string>
+    <string name="conversation_peek_unavailable">Impossible de charger les messages</string>
+    <string name="conversation_peek_sealed">Conversation chiffrée</string>
+    <string name="conversation_peek_sealed_message">Message chiffré</string>
+    <string name="conversation_peek_composer_locked">Conversation chiffrée : écrivez depuis la vue complète</string>
+</resources>

@@ -59,6 +59,13 @@ struct RootEnvironmentLayer: ViewModifier {
                     .presentationDragIndicator(.visible)
                     .closesForConversationOpening(.sheet)
             }
+            .modifier(PostDetailSheetHost(
+                router: router,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                conversationViewModel: conversationViewModel,
+                storyViewerCoordinator: storyViewerCoordinator
+            ))
             // Propagate story viewer presentation state down to chrome (sync
             // pill, etc.) so they can skip rendering while a `fullScreenCover`
             // story is on top. Read by `ConnectionBanner` via
@@ -191,7 +198,7 @@ struct RootChromeLayer: ViewModifier {
     @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
     @ObservedObject var router: Router
     let activeConversationId: () -> String?
-    let onSyncPillTap: (OutboxUIItem.Source) -> Void
+    let onSyncPillTap: (OutboxUIItem.Source) -> Bool
     let onMiniPlayerTap: () -> Void
     let showFeed: Bool
     let showMenu: Bool
@@ -278,6 +285,9 @@ struct RootSheetsLayer: ViewModifier {
     @ObservedObject var deepLinkRouter: DeepLinkRouter
     @ObservedObject var upgradeGate: UpgradeGateController
     let onDeepLink: (DeepLink?) -> Void
+    /// La porte de citation, posée par la couche la plus EXTERNE (#15911) :
+    /// les feuilles de profil ci-dessous et toutes les pages en héritent.
+    let quoteHost: QuoteComposerHost
 
     func body(content: Content) -> some View {
         content
@@ -305,18 +315,12 @@ struct RootSheetsLayer: ViewModifier {
                     presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                     postsContent: { uid in
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
-                            router.deepLinkProfileUser = nil
-                            router.push(.postDetail(post.id, post))
+                            router.push(.postDetail(post.id, post)) // la fiche part d'abord (#16676)
                         }, onOpenReel: { reel, reels in
                             ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))
                     },
-                    onCall: { request in
-                        router.deepLinkProfileUser = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            CallBackDialer.shared.dialFromProfile(request)
-                        }
-                    }, dependencies: .live
+                    onCall: dialFromProfile, dependencies: .live
                 )
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
@@ -400,6 +404,15 @@ struct RootSheetsLayer: ViewModifier {
             // referme que ceux de cette fenêtre (#10543).
             // La demande d'un lien d'appel : confirmée ici, dans la fenêtre principale.
             .callLinkConfirmationSheet()
+            .environment(\.meeshyQuoteComposerHost, quoteHost)
             .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    /// L'appel lancé depuis la feuille de profil part une fois la feuille fermée.
+    private func dialFromProfile(_ request: ProfileCallRequest) {
+        router.deepLinkProfileUser = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            CallBackDialer.shared.dialFromProfile(request)
+        }
     }
 }

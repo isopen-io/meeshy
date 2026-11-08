@@ -85,7 +85,7 @@ const mockResolveMentionedUsers = jest.fn() as jest.Mock<any>;
 const mockResolveUsernamesToIds = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
-  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a), withoutPendingMessageRequests: async (_p: unknown, _c: unknown, ids: readonly string[]) => [...ids],
 }));
 
 const mockBuildPostReplyTo = jest.fn() as jest.Mock<any>;

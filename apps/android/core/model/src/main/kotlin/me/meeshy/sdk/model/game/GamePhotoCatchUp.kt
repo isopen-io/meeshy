@@ -109,14 +109,27 @@ public object GamePhotoCatchUpLaw {
     private fun count(value: Int): Int = maxOf(0, value)
 
     /** Toutes les étapes franchies, piste après piste, chacune dans son ordre. */
-    public fun stepsReached(standing: PhotoCatchUpStanding): List<PhotoLawStep> =
-        listOf(PhotoLawStep(PhotoTrack.Start, "start", PhotoStepEmblem.Start)) +
-            rankSteps(standing) + tierSteps(standing) + summitSteps(standing) +
-            meeshSteps(standing) + treasurySteps(standing) + flameSteps(standing)
+    public fun stepsReached(standing: PhotoCatchUpStanding, policy: PhotoAlertPolicy = PhotoAlertPolicy.Standard): List<PhotoLawStep> =
+        (
+            listOf(PhotoLawStep(PhotoTrack.Start, "start", PhotoStepEmblem.Start)) +
+                rankSteps(standing) + tierSteps(standing) + summitSteps(standing) +
+                meeshSteps(standing) + treasurySteps(standing) + flameSteps(standing)
+            ).filter { isPhotographed(it, policy) }
+
+    /** « Le rang au PASSAGE seulement » : la division V et le Mythe ; une étape non photographiable ne verrouille pas sa piste. */
+    private fun isPhotographed(step: PhotoLawStep, policy: PhotoAlertPolicy): Boolean {
+        val emblem = step.emblem
+        if (policy.photographs != PhotoAlertPolicy.Photographs.RankPassage || emblem !is PhotoStepEmblem.Rank) return true
+        return emblem.division == null || emblem.division == 5
+    }
 
     /** Les étapes franchies sans photo gardée : la première de chaque piste est ouverte, les suivantes l'attendent. */
-    public fun catchUp(standing: PhotoCatchUpStanding, kept: Set<String>): List<PhotoLawEntry> {
-        val missing = stepsReached(standing).filterNot { it.id in kept }
+    public fun catchUp(
+        standing: PhotoCatchUpStanding,
+        kept: Set<String>,
+        policy: PhotoAlertPolicy = PhotoAlertPolicy.Standard,
+    ): List<PhotoLawEntry> {
+        val missing = stepsReached(standing, policy).filterNot { it.id in kept }
         val firstOfTrack = missing.groupBy { it.track }.mapValues { (_, steps) -> steps.first().id }
         return missing.map { step ->
             val first = firstOfTrack.getValue(step.track)
@@ -141,8 +154,13 @@ public object GamePhotoCatchUpLaw {
      * LA proposition d'une transition : chaque moment d'une piste est remplacé par l'étape OUVERTE de sa piste (aucune
      * si la piste est à jour), puis le plus marquant l'emporte. `null` : rien à proposer.
      */
-    public fun offer(ids: List<String>, standing: PhotoCatchUpStanding, kept: Set<String>): String? {
-        val open = catchUp(standing, kept).filter { it.isOpen }
+    public fun offer(
+        ids: List<String>,
+        standing: PhotoCatchUpStanding,
+        kept: Set<String>,
+        policy: PhotoAlertPolicy = PhotoAlertPolicy.Standard,
+    ): String? {
+        val open = catchUp(standing, kept, policy).filter { it.isOpen }
         val candidates = ids.mapNotNull { id ->
             val lane = track(id) ?: return@mapNotNull id
             open.firstOrNull { it.track == lane }?.id
@@ -227,6 +245,6 @@ public object GamePhotoCatchUpLaw {
 
     /** Le nom d'une clé sur le fil : son `@SerialName`, l'unique source. */
     @OptIn(ExperimentalSerializationApi::class)
-    private inline fun <reified E : Enum<E>> wire(value: E): String =
+    internal inline fun <reified E : Enum<E>> wire(value: E): String =
         serializer<E>().descriptor.getElementName(value.ordinal)
 }

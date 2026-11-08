@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.logout.inprogress",
+          "androidName": "settings_logout_in_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.logout.hint",
+          "androidName": "settings_logout_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

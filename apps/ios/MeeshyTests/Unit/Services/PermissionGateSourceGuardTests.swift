@@ -208,7 +208,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// demande, et plus de reconfiguration qui noircit l'aperçu au déclenchement.
     func test_cameraSession_doesNotAddAudioInputEagerly() throws {
         let src = try source("Meeshy/Features/Main/Components/CameraModel.swift")
-        let setup = try body(from: "private func setupSession() {", to: "func enableAudioCaptureIfNeeded", in: src)
+        let setup = try body(from: "private func setupSession(", to: "func enableAudioCaptureIfNeeded", in: src)
 
         XCTAssertFalse(
             setup.contains("AVCaptureDevice.default(for: .audio)") || setup.contains("ensureMicrophone"),
@@ -221,7 +221,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             "Seul un micro déjà autorisé entre à l'ouverture (#9328)."
         )
 
-        let configure = try body(from: "func configure() {", to: "private func setupSession", in: src)
+        let configure = try body(from: "func configure(", to: "private func setupSession", in: src)
         XCTAssertFalse(
             configure.contains(".audio"),
             "configure() ne doit demander QUE la caméra — pas le micro."
@@ -360,16 +360,12 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "La categorie POI de MapKit est disponible et doit etre conservee.")
     }
 
-    /// Les quatre call sites (message, feed inline, feed sheet, commentaire)
-    /// jetaient le lieu — `FeedCommentsSheet` écrivait littéralement
+    /// Les call sites (message, feed, commentaire) jetaient le lieu — `FeedCommentsSheet` écrivait littéralement
     /// `{ coordinate, _ in }`.
     func test_noCallSiteDiscardsThePlace() throws {
         for path in ["Meeshy/Features/Main/Views/ConversationView+Composer.swift",
                      "Meeshy/Features/Main/Views/FeedView.swift",
                      "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
-                     // La feuille est sortie de `FeedView+Attachments` en #6040 ;
-                     // le site du feed sheet vit là désormais.
-                     "Meeshy/Features/Main/Views/FeedComposerSheet.swift",
                      "Meeshy/Features/Main/Views/FeedCommentsSheet.swift"] {
             let src = try source(path)
             XCTAssertFalse(src.contains("LocationPickerView(accentColor: accentColor) { coordinate, _ in"),
@@ -381,53 +377,19 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Partage de position (Task 13, 2026-07-29)
 
-    /// `publishPost()` **et** `publishPostWithAttachments()` sortaient tous deux
-    /// par `createPost(content:)` seul quand il n'y avait pas de fichier : une
-    /// position seule, sans texte ni piece jointe, n'envoyait rien. Corriger un
-    /// seul des deux chemins laisse la moitie du bug.
-    ///
-    /// **Il n'en reste qu'UN (#6016).** `publishPostWithAttachments` — le
-    /// composer INLINE du fil — a été retiré : plus rien ne l'appelait depuis la
-    /// bascule vers `DocumentComposerDoor`. Sa moitié de ce témoin n'est pas
-    /// PERDUE, elle a changé d'adresse avec la règle : c'est
-    /// `ComposerDocumentSendRules.emptyDraft` qui accepte désormais un lieu
-    /// seul, et `ComposerDocumentToolChainTests.test_unLieuSeul_sansTexteNiMedia_peutPartir`
-    /// qui le mesure. Retirer une assertion parce que son sujet disparaît n'est
-    /// légitime QUE si l'on peut nommer où elle se rejoue — sinon c'est de la
-    /// couverture perdue déguisée en nettoyage.
-    ///
-    /// `publishPost()` est la FEUILLE (`FeedComposerSheet`), qui reste montée :
-    /// son retrait est explicitement INTERDIT par
-    /// `FeedComposerSheetRetirementInventoryTests` tant que cinq capacités n'ont
-    /// pas rejoint le meuble.
-    func test_theSheetPublishPathCarriesTheLocation() throws {
-        // `FeedComposerSheet.swift` depuis #6040 : la feuille a quitté le
-        // fichier qui annonçait une extension de `FeedView`.
-        let src = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
-        let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
-        // Le lieu est CAPTURÉ avant `onDismiss()` (la feuille est démontée
-        // aussitôt, une lecture tardive depuis la Task ne trouverait plus
-        // rien) : c'est la capture qui part, jamais le `@State` relu.
-        XCTAssertTrue(publish.contains("let capturedPlace = pendingPlace"),
-                      "publishPost doit capturer la position avant de refermer la feuille.")
-        XCTAssertTrue(publish.contains("location: capturedPlace"),
-                      "publishPost perd la position dans sa branche sans fichier.")
-
-        XCTAssertTrue(publish.contains("pendingPlace != nil"),
-                      "Une position seule, sans texte ni piece jointe, doit pouvoir partir.")
-    }
+    // `publishPost()` et `publishPostWithAttachments()` sortaient tous deux par
+    // `createPost(content:)` seul quand il n'y avait pas de fichier : une
+    // position seule n'envoyait rien. Les deux chemins ont quitté le dépôt
+    // (#6016, puis la feuille du fil en #15628) ; la règle se rejoue dans
+    // `ComposerDocumentSendRules.emptyDraft`, mesurée par
+    // `ComposerDocumentToolChainTests.test_unLieuSeul_sansTexteNiMedia_peutPartir`.
 
     /// Le pendant du retrait : `publishPostWithAttachments` ne doit pas
     /// REVENIR. Un chemin de publication inline ressuscité sur le fil rouvrirait
     /// la divergence que #6016 vient de fermer — deux implémentations de
     /// « publier un post », dont une seule reçoit les corrections.
     func test_theInlineFeedPublishPath_staysRetired() throws {
-        // Les DEUX moitiés du fichier d'origine : le chemin inline ne doit
-        // renaître ni dans l'extension, ni dans la feuille qui en est sortie.
-        let src = try [ "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
-                        "Meeshy/Features/Main/Views/FeedComposerSheet.swift" ]
-            .map { try source($0) }
-            .joined(separator: "\n")
+        let src = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
         XCTAssertFalse(AppSourceGuard.stripComments(src).contains("func publishPostWithAttachments"),
                        "Le chemin inline du fil est retire (#6016) : la publication d'un post passe par "
                            + "`ComposerDocumentSurface.publishDocument`. Le faire revenir ici redonne deux "
@@ -625,15 +587,14 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     /// Le corollaire d'asymétrie du champ REQUIS : `FeedView` portait une
     /// SECONDE porte de langue (`composerLanguage` + `showComposerLanguagePicker`
-    /// + sa feuille) que rien n'ouvrait jamais — le feed délègue à
-    /// `FeedComposerSheet`, qui possède la sienne, branchée jusqu'à
-    /// `createPost(originalLanguage:)`. Câbler les deux fabriquerait DEUX
+    /// + sa feuille) que rien n'ouvrait jamais — le feed délègue au
+    /// compositeur, qui possède la sienne. Câbler les deux fabriquerait DEUX
     /// vérités pour une même composition.
     func test_feedView_carriesNoSecondLanguageDoor() throws {
         let src = try source("Meeshy/Features/Main/Views/FeedView.swift")
 
         XCTAssertFalse(src.contains("composerLanguage"),
-                       "FeedView ne doit porter aucune pastille de langue : la porte vivante est celle de FeedComposerSheet.")
+                       "FeedView ne doit porter aucune pastille de langue : la porte vivante est celle du compositeur.")
         XCTAssertFalse(src.contains("showComposerLanguagePicker"),
                        "Un sélecteur que rien n'ouvre est un contrôle qui ment.")
     }

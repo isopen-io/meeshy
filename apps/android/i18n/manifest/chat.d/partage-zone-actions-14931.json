@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "forward.publish-section",
+          "androidName": "share_publish_section",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.publish-story",
+          "androidName": "share_publish_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.publish.feed",
+          "androidName": "share_publish_feed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.publish.reel",
+          "androidName": "share_publish_reel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.action.save",
+          "androidName": "share_action_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.action.copy-text",
+          "androidName": "share_action_copy_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withheld.single-photo",
+          "androidName": "share_withheld_single_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withheld.too-many",
+          "androidName": "share_withheld_too_many",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withheld.flame",
+          "androidName": "share_withheld_flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withheld.blurred",
+          "androidName": "share_withheld_blurred",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withheld.encrypted",
+          "androidName": "share_withheld_encrypted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withheld.cites-protected",
+          "androidName": "share_withheld_cites_protected",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.duration.note",
+          "androidName": "share_flame_note",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.publish-capture-warning",
+          "androidName": "share_capture_warning",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withheld.not-a-reel",
+          "androidName": "share_withheld_not_a_reel",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

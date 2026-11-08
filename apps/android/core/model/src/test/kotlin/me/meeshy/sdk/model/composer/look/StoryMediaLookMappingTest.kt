@@ -86,4 +86,15 @@ class StoryMediaLookMappingTest {
         assertThat(StoryMediaLookMapping.framingCrop(StoryMediaFraming(0.25, 0.75, 2.0))).isEqualTo(NormalizedCrop(0f, 0f, 0.5f, 0.5f))
         assertThat(StoryMediaLookMapping.framingCrop(StoryMediaFraming(1.0, 0.0, 4.0))).isEqualTo(NormalizedCrop(0.75f, 0.75f, 0.25f, 0.25f))
     }
+
+    @Test
+    fun `une video peint son filtre, son cadre et son cadrage, jamais un effet de visage`() {
+        assertThat(StoryMediaLookMapping.videoPaints(StoryMediaLook(filterPreset = "warm"))).isTrue()
+        assertThat(StoryMediaLookMapping.videoPaints(StoryMediaLook(frameId = "classic:polaroid"))).isTrue()
+        assertThat(StoryMediaLookMapping.videoPaints(StoryMediaLook(framing = StoryMediaFraming(0.5, 0.5, 2.0)))).isTrue()
+        assertThat(StoryMediaLookMapping.videoPaints(StoryMediaLook(faceEffect = "angel"))).isFalse()
+        assertThat(StoryMediaLookMapping.videoPaints(null)).isFalse()
+        assertThat(StoryMediaLookMapping.videoLook(StoryMediaLook(filterPreset = "warm", faceEffect = "angel")))
+            .isEqualTo(ComposerPhotoLook(filter = VideoFilterPreset.Warm))
+    }
 }

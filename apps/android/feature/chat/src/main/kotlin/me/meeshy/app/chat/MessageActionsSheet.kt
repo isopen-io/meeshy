@@ -74,6 +74,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ConversationClearance
+import me.meeshy.sdk.model.MessageExitTransport
 import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.PlainSignalAdmission
@@ -137,6 +138,7 @@ internal fun MessageActionsSheet(
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var confirmingDelete by remember { mutableStateOf(false) }
+    var showAllActions by remember { mutableStateOf(false) }
     val nowMillis = remember(bubble.messageId) { System.currentTimeMillis() }
     val ctx = bubble.actionContext(
         canWrite = canWrite,
@@ -205,6 +207,7 @@ internal fun MessageActionsSheet(
             bubble.audios.firstOrNull { it.isPlayable }?.let { audio ->
                 OverlayMediaPreview(
                     audio = audio,
+                    isProtected = ChatVoiceQueue.isProtected(bubble, audio),
                     accentColor = accentColor,
                     modifier = Modifier.padding(
                         horizontal = MeeshySpacing.lg,
@@ -216,7 +219,11 @@ internal fun MessageActionsSheet(
 
             // The action grid is composed by the pure [MessageActionMenu] SSOT; this
             // block is a dumb renderer mapping each resolved action to its row.
-            MessageActionMenu.actions(ctx).forEach { action ->
+            val tiers = remember(ctx, bubble.isViewOnce, bubble.isDeleted) {
+                MessageActionResolver.split(MessageActionMenu.actions(ctx), contentHidden = bubble.isViewOnce || bubble.isDeleted)
+            }
+            val shownActions = if (showAllActions) tiers.primary + tiers.more else tiers.primary
+            shownActions.forEach { action ->
                 when (action) {
                     MessageAction.Reply -> SheetAction(
                         icon = Icons.AutoMirrored.Filled.Reply,
@@ -247,7 +254,7 @@ internal fun MessageActionsSheet(
                         icon = Icons.Filled.ContentCopy,
                         label = stringResource(R.string.chat_action_copy),
                         onClick = {
-                            clipboard.setText(AnnotatedString(bubble.text))
+                            MessageExitTransport.copy(bubble.text, bubble.exitOffer) { clipboard.setText(AnnotatedString(it)) }
                             onDismiss()
                         },
                     )
@@ -370,7 +377,8 @@ internal fun MessageActionsSheet(
                         label = shareTitle,
                         onClick = {
                             when (MessageMenuEntries.shareTarget(entryFacts)) {
-                                MessageMenuEntries.ShareTarget.TEXT -> shareMessageText(context, bubble.text, shareTitle)
+                                MessageMenuEntries.ShareTarget.TEXT ->
+                                    MessageExitTransport.share(bubble.text, bubble.exitOffer) { shareMessageText(context, it, shareTitle) }
                                 MessageMenuEntries.ShareTarget.PIECE -> bubble.onlyPieceId?.let(onSharePiece)
                                 null -> Unit
                             }
@@ -394,6 +402,13 @@ internal fun MessageActionsSheet(
                         onClick = onReport,
                     )
                 }
+            }
+            if (!showAllActions && tiers.more.isNotEmpty()) {
+                SheetAction(
+                    icon = MeeshyIcons.MoreHorizontal,
+                    label = stringResource(R.string.action_more),
+                    onClick = { showAllActions = true },
+                )
             }
             if (MessageMenuEntries.saysServerFeaturesAbsent(entryFacts)) {
                 EndToEndMenuNotice(R.string.chat_menu_e2ee_notice)

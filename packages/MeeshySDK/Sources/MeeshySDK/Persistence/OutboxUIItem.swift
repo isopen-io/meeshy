@@ -162,6 +162,8 @@ extension OutboxUIItem {
             return mapCreatePost(record: record)
         case .repostPost:
             return mapRepostPost(record: record)
+        case .toggleBookmarkPost:
+            return mapBookmark(record: record)
         case .markAsRead,
              .markStoryViewed,
              .reportAttachmentStatus,
@@ -384,6 +386,10 @@ extension OutboxUIItem {
     /// "Publication de réel" / "Publication de statut" vs "Publication de post")
     /// and to derive an accurate media icon + content preview. Falls back to a
     /// plain post on decode failure.
+    ///
+    /// La source vise la CARTE OPTIMISTE, dont l'id est le cmid de la ligne
+    /// (#10331) : le post serveur n'existe pas encore, et c'est ce cmid que
+    /// « Annuler l'envoi » retire de la file.
     private static func mapCreatePost(record: OutboxRecord) -> OutboxUIItem {
         let payload = JSONDecoder().decodeOrLog(CreatePostPayload.self, from: record.payload,
                                                 field: "create-post payload (sync pill)", id: record.id,
@@ -427,16 +433,17 @@ extension OutboxUIItem {
             titlePreview: preview,
             iconKind: icon,
             attachmentCount: mediaPaths.count,
-            source: .unknown,
+            source: payload.map { .post(id: $0.clientMutationId) } ?? .unknown,
             status: record.status,
             createdAt: record.createdAt
         )
     }
 
     /// A queued repost (`.repostPost`, fil rouge du repost — lot 7 tâche 7.5)
-    /// — `POST /posts/:postId/repost`. Contrairement à `mapCreatePost`, l'id
-    /// SOURCE est déjà connu à l'enfilage (`RepostPostPayload.postId`, le
-    /// post reposté, pas le repost lui-même qui n'existe pas encore) :
+    /// — `POST /posts/:postId/repost`. Contrairement à `mapCreatePost`, qui ne
+    /// vise qu'une carte optimiste, l'id SOURCE est un id serveur connu à
+    /// l'enfilage (`RepostPostPayload.postId`, le post reposté, pas le repost
+    /// lui-même qui n'existe pas encore) :
     /// `source` résout donc en `.post(id:)`, navigable, jamais `.unknown` —
     /// le repli de `mapOther`, qui perd la destination (défaut mesuré en
     /// prod sur `markStoryViewed`, cf. doc de `countsTowardSyncIndicator`
@@ -457,6 +464,22 @@ extension OutboxUIItem {
             kind: .other("repostPost"),
             titlePreview: preview,
             iconKind: .text,
+            attachmentCount: 0,
+            source: source,
+            status: record.status,
+            createdAt: record.createdAt
+        )
+    }
+
+    /// #15997 — un favori en file mène à SA carte, comme une réaction de post.
+    private static func mapBookmark(record: OutboxRecord) -> OutboxUIItem {
+        let object = (try? JSONSerialization.jsonObject(with: record.payload)) as? [String: Any]
+        let source: Source = (object?["postId"] as? String).map { .post(id: $0) } ?? .unknown
+        return OutboxUIItem(
+            id: record.id,
+            kind: .other(record.kind.rawValue),
+            titlePreview: nil,
+            iconKind: .none,
             attachmentCount: 0,
             source: source,
             status: record.status,

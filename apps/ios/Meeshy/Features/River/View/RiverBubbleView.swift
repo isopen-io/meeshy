@@ -563,7 +563,7 @@ struct RiverBubbleView: View, Equatable {
     ///
     /// #8147 — la Rivière tronque désormais comme les autres modes : l'extrait
     /// d'un message long, « … Lire la suite », dépliage en place. L'état vient
-    /// de l'hôte par l'environnement (`longMessageFocus`).
+    /// de l'hôte par l'environnement (`longMessageExpansion(_:)`).
     @ViewBuilder
     private var riverText: some View {
         if let emojiSize = content.emojiFontSize {

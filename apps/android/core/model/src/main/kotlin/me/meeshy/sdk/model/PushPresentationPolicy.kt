@@ -44,10 +44,17 @@ public sealed interface PushPresentationDecision {
  * app-icon badge is a side effect of a posted notification, not an independent option), so it is
  * deliberately not modelled here; suppression withholds the whole banner, badge included.
  *
+ * [appInForeground] : the « socket alive » and « thread on screen » suppressions only hold in the
+ * FOREGROUND — a data-only push received in the background is rendered even while the socket has
+ * not dropped yet (it would otherwise be swallowed by a socket nobody is watching).
+ *
  * The wall clock is passed in ([now]) so every branch stays deterministically testable, mirroring
  * [NotificationToastPolicy] and [DndWindow].
  */
 public object PushPresentationPolicy {
+
+    /** Les appels ne sont gouvernés que par `callsEnabled` : ni le maître push ni le calme ne les coupent. */
+    private val CALL_TYPES = setOf("incoming_call", "call_incoming", "call", "CALL_INCOMING")
 
     public fun decide(
         socketConnected: Boolean,
@@ -56,13 +63,19 @@ public object PushPresentationPolicy {
         conversationId: String?,
         activeConversationId: String?,
         now: LocalDateTime,
+        appInForeground: Boolean = true,
     ): PushPresentationDecision {
-        if (conversationId != null && conversationId == activeConversationId) {
-            return PushPresentationDecision.Suppress
+        if (appInForeground) {
+            if (conversationId != null && conversationId == activeConversationId) {
+                return PushPresentationDecision.Suppress
+            }
+            if (socketConnected) return PushPresentationDecision.Suppress
         }
-        if (socketConnected) return PushPresentationDecision.Suppress
-        if (!preferences.pushEnabled) return PushPresentationDecision.Suppress
-        if (DndWindow.isActive(preferences, now)) return PushPresentationDecision.Suppress
+        val isCall = rawType.orEmpty() in CALL_TYPES
+        if (!isCall) {
+            if (!preferences.pushEnabled) return PushPresentationDecision.Suppress
+            if (DndWindow.isActive(preferences, now)) return PushPresentationDecision.Suppress
+        }
         if (!NotificationTypeToggle.isEnabled(rawType.orEmpty(), preferences)) {
             return PushPresentationDecision.Suppress
         }

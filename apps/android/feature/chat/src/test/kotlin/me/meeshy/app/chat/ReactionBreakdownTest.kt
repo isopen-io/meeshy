@@ -309,4 +309,28 @@ class ReactionBreakdownTest {
 
     private fun ReactionBreakdown.emojiTab(): ReactionTab.Emoji =
         tabs.filterIsInstance<ReactionTab.Emoji>().single()
+
+    @Test
+    fun `the who-reacted list is drawn offline from the persisted rows, mine first`() {
+        val rows = listOf(
+            me.meeshy.sdk.model.ReactionRow("a", "m1", "p-bob", "❤️"),
+            me.meeshy.sdk.model.ReactionRow("b", "m1", "me", "❤️"),
+            me.meeshy.sdk.model.ReactionRow("c", "m1", null, "❤️"),
+            me.meeshy.sdk.model.ReactionRow("d", "m1", "p-eve", "🔥"),
+        )
+
+        val breakdown = ReactionBreakdown.fromRows(rows, currentUserId = "me")
+
+        val hearts = breakdown.tabs.filterIsInstance<ReactionTab.Emoji>().first { it.emoji == "❤️" }
+        assertThat(hearts.count).isEqualTo(3)
+        assertThat(hearts.reactors.map { it.userId }).containsExactly("me", "p-bob").inOrder()
+        assertThat(hearts.reactors.first().isSelf).isTrue()
+        assertThat(hearts.reactors.first().displayName).isNull()
+        assertThat(breakdown.tabs.first()).isInstanceOf(ReactionTab.All::class.java)
+    }
+
+    @Test
+    fun `no persisted row means an empty breakdown`() {
+        assertThat(ReactionBreakdown.fromRows(emptyList(), "me").isEmpty).isTrue()
+    }
 }

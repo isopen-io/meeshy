@@ -121,6 +121,24 @@ public extension ConversationsEndpoint {
 }
 
 
+public extension RelationsEndpoint {
+    /// **Le rituel du Sang et la baisse d'un lien rendent des refus que l'écran LIT (#13938).**
+    ///
+    /// `POST …/ritual` pose `RELATION_RITUAL_LAPSED`, `…_NOT_SYNCHRONISED`, `…_NO_REQUEST`,
+    /// `…_INVALID`, `…_BUSY`, `RELATION_CONSENT_REQUIRED`… : chacun change ce que l'écran dit
+    /// (« l'autre a lâché », « il manque un consentement », « plus de demande »). Sans cette
+    /// déclaration le transport ne rend qu'une phrase (`MeeshyError.server(409, _)`) et un
+    /// lâcher se confondrait avec une panne. Les deux lectures (`GET /relations`,
+    /// `GET /relations/config`) gardent la forme d'erreur qu'elles ont.
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy {
+        switch self {
+        case .byUserIdRitual, .byUserIdLevel: return .structured
+        default: return .opaque
+        }
+    }
+}
+
+
 // MARK: - Une catégorie de préférences DÉSIGNE son adresse (#4282)
 
 public extension PreferenceCategory {

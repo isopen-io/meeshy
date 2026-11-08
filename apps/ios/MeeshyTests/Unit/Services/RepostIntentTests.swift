@@ -629,7 +629,7 @@ final class RepostIntentTests: XCTestCase {
         }
     }
 
-    // MARK: - 5. Les trois gestes nommés
+    // MARK: - 5. Les deux gestes nommés
 
     func test_unRepartageSec_nEstPasUneCitation() {
         let geste = RepostIntent.simple(postId: "p", targetType: .post, visibility: nil)
@@ -653,20 +653,6 @@ final class RepostIntentTests: XCTestCase {
         let geste = RepostIntent.quoted(postId: "p", targetType: .post, comment: "  mon avis  ", visibility: nil)
         XCTAssertEqual(geste.content, "mon avis")
         XCTAssertTrue(geste.isQuote)
-    }
-
-    /// **Le troisième geste existe parce qu'une surface DÉCLARE une citation
-    /// sans recueillir de commentaire** — la feuille de détail, dont l'alerte
-    /// « Citer » n'a aucun champ de saisie. Le normaliser en repartage sec
-    /// serait un changement de PRODUIT et non de forme : côté serveur,
-    /// `isQuote` décide où s'enracinent les réactions (`PostService.ts`,
-    /// `reactionRootId`) — une citation les garde, un repartage sec les renvoie
-    /// sur l'original. Ce geste est donc porté FIDÈLEMENT, et sa dette est
-    /// nommée plutôt que corrigée à l'aveugle.
-    func test_uneCitationDECLAREE_resteUneCitation_memeSansCommentaire() {
-        let geste = RepostIntent.declaredQuote(postId: "p", targetType: .post, visibility: nil)
-        XCTAssertTrue(geste.isQuote)
-        XCTAssertNil(geste.content)
     }
 
     // MARK: - Helper d'attente

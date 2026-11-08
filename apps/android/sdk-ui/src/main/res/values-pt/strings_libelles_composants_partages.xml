@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brand_logo_description">Meeshy</string>
+    <plurals name="bubble_story_reactions">
+        <item quantity="one">%1$d reação</item>
+        <item quantity="many">%1$d reações</item>
+        <item quantity="other">%1$d reações</item>
+    </plurals>
+    <plurals name="bubble_story_comments">
+        <item quantity="one">%1$d comentário</item>
+        <item quantity="many">%1$d comentários</item>
+        <item quantity="other">%1$d comentários</item>
+    </plurals>
+    <plurals name="bubble_story_shares">
+        <item quantity="one">%1$d compartilhamento</item>
+        <item quantity="many">%1$d compartilhamentos</item>
+        <item quantity="other">%1$d compartilhamentos</item>
+    </plurals>
+    <plurals name="bubble_hidden_images">
+        <item quantity="one">mais %1$d imagem</item>
+        <item quantity="many">mais %1$d imagens</item>
+        <item quantity="other">mais %1$d imagens</item>
+    </plurals>
+</resources>

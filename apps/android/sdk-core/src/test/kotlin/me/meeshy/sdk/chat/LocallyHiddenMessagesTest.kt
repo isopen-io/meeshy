@@ -77,3 +77,13 @@ class LocallyHiddenMessagesTest {
             .inOrder()
     }
 }
+
+class LocallyHiddenMessagesUnhideTest {
+    @Test
+    fun unhiding_restores_visibility_and_an_unknown_id_is_the_same_instance() {
+        val hidden = LocallyHiddenMessages().hide("m1")
+
+        assertThat(hidden.unhide("m1").isHidden("m1")).isFalse()
+        assertThat(hidden.unhide("zz")).isSameInstanceAs(hidden)
+    }
+}

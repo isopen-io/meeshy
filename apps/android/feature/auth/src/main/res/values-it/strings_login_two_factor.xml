@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_two_factor_error_invalid_code">Quel codice non è corretto. Controlla la tua app di autenticazione e riprova.</string>
+    <string name="login_two_factor_error_too_many_attempts">Troppi tentativi. Riprova tra qualche minuto.</string>
+    <string name="login_two_factor_error_token_expired">Questo accesso è scaduto. Inserisci di nuovo la password.</string>
+    <string name="login_two_factor_description_with_backup">Inserisci il codice di verifica a 6 cifre della tua app di autenticazione, oppure uno dei tuoi codici di backup.</string>
+</resources>

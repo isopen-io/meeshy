@@ -37,6 +37,7 @@ import esQuote from './catalog-es-quote';
 import esCommentRow from './catalog-es-comment-row';
 import esContactDiscovery from './catalog-es-contact-discovery';
 import esDownload from './catalog-es-download';
+import esAuthFooter from './catalog-es-auth-footer';
 import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
 import esContentRefused from './catalog-es-content-refused';
@@ -504,6 +505,7 @@ const es = {
 
   'media.video.play': 'Reproducir vídeo',
   'media.video.pause': 'Pausa',
+  'media.video.paused': 'En pausa',
   'media.video.position': 'Posición de reproducción',
   'media.audio.position': 'Posición de reproducción',
   'media.audio.speed': 'Velocidad de reproducción',
@@ -594,6 +596,7 @@ const es = {
   'discover.tab.discover': 'Descubrir',
   'discover.tab.requests': 'Solicitudes',
   'discover.tab.blocked': 'Bloqueados',
+  'discover.tab.circles': 'Círculos',
   'discover.tab.requests.count.one': 'Solicitudes, {count} recibida',
   'discover.tab.requests.count.other': 'Solicitudes, {count} recibidas',
   'discover.invite.title': 'Invitar por correo',
@@ -860,13 +863,20 @@ const es = {
   'story.studio.audience.title': 'Audiencia',
   'story.studio.audience.public': 'Público',
   'story.studio.audience.community': 'Comunidades',
-  'story.studio.audience.friends': 'Contactos',
+  'story.studio.audience.acquaintances': 'Conocidos',
+  'story.studio.audience.friends': 'Amigos',
+  'story.studio.audience.close': 'Cercanos',
+  'story.studio.audience.blood': 'Sangre',
   'story.studio.audience.except': 'Excepto…',
   'story.studio.audience.only': 'Solo…',
   'story.studio.audience.private': 'Privado',
+  'story.studio.audience.restricted': 'Restringida',
   'story.studio.audience.subtitle.public': 'Todo el mundo, incluidos quienes no te siguen',
   'story.studio.audience.subtitle.community': 'Los miembros de tus comunidades',
+  'story.studio.audience.subtitle.acquaintances': 'Tus Conocidos, Amigos, Cercanos y Sangre',
   'story.studio.audience.subtitle.friends': 'Tus contactos aceptados',
+  'story.studio.audience.subtitle.close': 'Tus Cercanos y tu Sangre',
+  'story.studio.audience.subtitle.blood': 'Solo tu Sangre — nunca se vuelve a compartir',
   'story.studio.audience.subtitle.private': 'Solo tú — no se publica nada',
   'story.studio.audience.refusal.people': 'Elegir personas aún no está disponible en la web.',
   'story.studio.audience.scope': 'La audiencia elegida pertenece a la publicación, nunca a un formato: cambiar de formato la conserva.',
@@ -935,6 +945,13 @@ const es = {
   'comments.send': 'Enviar comentario',
   'comments.row.pending': 'Enviando',
   'comments.signin': 'Inicia sesión para comentar.',
+  'comments.closed': 'Los comentarios están desactivados.',
+  'feed.post.menu.comments_off': 'Desactivar los comentarios',
+  'feed.post.menu.comments_on': 'Activar los comentarios',
+  'feed.post.comments_off.done': 'Comentarios desactivados',
+  'feed.post.comments_on.done': 'Comentarios activados',
+  'feed.post.comments_toggle.failed': 'No se guardó el ajuste de comentarios.',
+  'story.studio.comments_off.hint': 'Nadie podrá comentar esta publicación.',
   'comment.send.error': 'No se pudo publicar el comentario.',
   'comment.send.pending': 'Comentario sin confirmar: sin conexión',
   'comment.send.empty': 'Escribe algo antes de enviar.',
@@ -952,7 +969,6 @@ const es = {
   'thread.unread-separator.one': '{count} mensaje no leído',
   'thread.unread-separator.other': '{count} mensajes no leídos',
   'thread.long-message.read-more': 'Leer más',
-  'thread.long-message.collapse': 'Mostrar menos',
   'message-detail.info.title': 'Información del mensaje',
   'message-detail.received-by': 'Recibido por',
   'message-detail.read-by': 'Leído por',
@@ -977,6 +993,7 @@ const es = {
   'message-detail.retry': 'Reintentar',
 
   ...esDownload,
+  ...esAuthFooter,
   ...esPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -984,6 +1001,8 @@ const es = {
   'composer.viewOnce.activate': 'Activar el modo de vista única',
   'composer.viewOnce.active': 'Modo de vista única activo',
   'composer.viewOnce.label': 'Vista única',
+  'conversation.composer.fold': 'Contraer la barra de mensajes',
+  'conversation.composer.unfold': 'Mostrar la barra de mensajes',
   'composer.protection.ephemeral.state': 'Modo efímero activo',
   'composer.protection.blur.state': 'Modo desenfoque activo',
   'message.location.shared': 'Ubicación compartida',
@@ -1039,6 +1058,8 @@ const es = {
   'media.reactions.badge.a11y': 'Reacciones',
   'media.reactions.badge.mine.a11y': 'incluida la suya',
   'message.join.noAccount': 'sin cuenta',
+  'message.join.greet.one': 'Salúdale',
+  'message.join.greet.many': 'Salúdales',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Audio',

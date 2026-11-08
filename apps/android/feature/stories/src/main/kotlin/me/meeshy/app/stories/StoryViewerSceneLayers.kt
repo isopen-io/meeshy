@@ -146,7 +146,11 @@ internal fun StoryForegroundLayer(
     modifier: Modifier = Modifier,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     players: Boolean = true,
+    holdsAudioFocus: Boolean = true,
+    looks: StorySceneMediaLooks? = null,
 ) {
     if (media.isVideo && !players && restingPosterKind(media.posterUrl, media.thumbHash) == RestingPosterKind.NONE) return
     val animated = media.animated(playheadSeconds)
@@ -189,11 +193,16 @@ internal fun StoryForegroundLayer(
                 sourceStartMs = media.sourceWindow?.startMs,
                 sourceEndMs = media.sourceWindow?.endMs,
                 onAudioFocusLost = onAudioFocusLost,
+                onAudioFocusGained = onAudioFocusGained,
+                onAudioFocusLostForGood = onAudioFocusLostForGood,
+                holdsAudioFocus = holdsAudioFocus,
+                textured = true,
+                effects = rememberSceneVideoEffects(media.url, media.posterUrl, looks),
             )
         } else {
             Box(layerModifier) {
                 AsyncImage(
-                    model = media.url,
+                    model = rememberSceneMediaModel(media.url, looks),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     colorFilter = SceneLookChain.colorFilter(media.lookRecipe),
@@ -359,97 +368,6 @@ private fun StickerGlyphOrImage(sticker: StoryStickerView, glyphSize: androidx.c
         )
     }
 }
-
-/**
- * La puce d'un son de premier plan, aux mesures d'iOS `AudioForegroundChip` (capsule de
- * verre sombre, liseré, onde de marque, marges 12 × 8, contenu 54 ou 92) exprimées sur une
- * scène de 390 de large puis projetées à la largeur réelle : elle garde la même part de la
- * scène que chez l'auteur.
- */
-@Composable
-internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier, chipModifier: Modifier = Modifier) {
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val unit = maxWidth / AUDIO_CHIP_REFERENCE_WIDTH
-        val contentWidth = unit * if (chip.credit != null) AUDIO_CHIP_CREDIT_WIDTH else AUDIO_CHIP_WAVE_WIDTH
-        val chipWidth = unit * (2 * AUDIO_CHIP_PAD_X + AUDIO_CHIP_ICON + AUDIO_CHIP_GAP) + contentWidth
-        val chipHeight = unit * (2 * AUDIO_CHIP_PAD_Y + AUDIO_CHIP_ICON)
-        val density = LocalDensity.current
-        Row(
-            modifier = Modifier
-                .offset(
-                    x = maxWidth * chip.x.toFloat() - chipWidth / 2,
-                    y = maxHeight * chip.y.toFloat() - chipHeight / 2,
-                )
-                .size(width = chipWidth, height = chipHeight)
-                .then(chipModifier)
-                .background(Color.Black.copy(alpha = 0.28f), CircleShape)
-                .border(width = unit, color = Color.White.copy(alpha = 0.25f), shape = CircleShape)
-                .padding(horizontal = unit * AUDIO_CHIP_PAD_X, vertical = unit * AUDIO_CHIP_PAD_Y),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Filled.GraphicEq,
-                contentDescription = null,
-                tint = MeeshyPalette.Indigo500,
-                modifier = Modifier.size(unit * AUDIO_CHIP_ICON),
-            )
-            Spacer(Modifier.width(unit * AUDIO_CHIP_GAP))
-            val credit = chip.credit
-            if (credit != null) {
-                Text(
-                    text = credit,
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = with(density) { (unit * AUDIO_CHIP_CREDIT_SIZE).toSp() },
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(contentWidth),
-                )
-            } else {
-                AudioChipWave(samples = chip.waveform, width = contentWidth, height = unit * AUDIO_CHIP_ICON)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AudioChipWave(samples: List<Float>, width: Dp, height: Dp) {
-    val bars = audioChipBars(samples)
-    Row(
-        modifier = Modifier.size(width = width, height = height),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        bars.forEach { level ->
-            Box(
-                modifier = Modifier
-                    .width(width / (bars.size * 2))
-                    .height(height * level)
-                    .background(Color.White.copy(alpha = 0.92f), CircleShape),
-            )
-        }
-    }
-}
-
-/** Les barres de l'onde : les échantillons de l'auteur ramenés à [AUDIO_CHIP_BARS], sinon un motif fixe. */
-private fun audioChipBars(samples: List<Float>): List<Float> {
-    val finite = samples.filter { it.isFinite() }
-    if (finite.isEmpty()) return DEFAULT_WAVE
-    return List(AUDIO_CHIP_BARS) { index ->
-        finite[index * finite.size / AUDIO_CHIP_BARS].coerceIn(0.2f, 1f)
-    }
-}
-
-private const val AUDIO_CHIP_REFERENCE_WIDTH = 390f
-private const val AUDIO_CHIP_PAD_X = 12f
-private const val AUDIO_CHIP_PAD_Y = 8f
-private const val AUDIO_CHIP_ICON = 18f
-private const val AUDIO_CHIP_GAP = 8f
-private const val AUDIO_CHIP_WAVE_WIDTH = 54f
-private const val AUDIO_CHIP_CREDIT_WIDTH = 92f
-private const val AUDIO_CHIP_CREDIT_SIZE = 12f
-private const val AUDIO_CHIP_BARS = 9
-private val DEFAULT_WAVE = listOf(0.35f, 0.7f, 0.5f, 0.95f, 0.6f, 0.85f, 0.4f, 0.65f, 0.3f)
 
 /** La boîte d'un sticker du lecteur, pour les témoins qui mesurent sa taille peinte. */
 internal const val STORY_STICKER_TAG = "story-sticker"

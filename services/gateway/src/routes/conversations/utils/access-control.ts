@@ -90,12 +90,12 @@ export async function resolveCallerParticipant(
   prisma: Pick<PrismaClient, 'participant'>,
   authContext: CallerParticipantIdentity | null | undefined,
   conversationId: string
-): Promise<{ id: string; role: string; joinedAt: Date | null } | null> {
+): Promise<{ id: string; role: string; joinedAt: Date | null; messageRequestAt?: Date | null; messageRequestRisk?: number | null } | null> {
   const participantId = authContext?.participantId;
   if (participantId) {
     return prisma.participant.findFirst({
       where: { id: participantId, conversationId, ...PARTICIPATION_VIVANTE },
-      select: { id: true, role: true, joinedAt: true }
+      select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
     });
   }
 
@@ -104,7 +104,7 @@ export async function resolveCallerParticipant(
 
   return prisma.participant.findFirst({
     where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
-    select: { id: true, role: true, joinedAt: true }
+    select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
   });
 }
 

@@ -17,7 +17,10 @@ import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.PinPayload
+import me.meeshy.sdk.outbox.SendAttemptRecorder
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.model.SendOutcome
+import me.meeshy.sdk.model.SendTransport
 import org.junit.Test
 import java.io.IOException
 
@@ -46,8 +49,70 @@ class MessageSendersTest {
 
         val result = sendHandler().send(sendRow())
 
-        assertThat(result).isEqualTo(SendResult.Success)
+        assertThat(result).isInstanceOf(SendResult.SuccessWithId::class.java)
         coVerify(exactly = 1) { messageRepository.reconcileSent("cmid-1", serverMessage) }
+    }
+
+    private val originCid = "cid_11111111-1111-4111-8111-111111111111"
+
+    private fun fanoutRow() = sendRow(
+        encodedPayload(sendRequest.copy(copyAttachmentsFromMessageId = originCid)),
+    )
+
+    @Test
+    fun `une cible de fan-out dont l'origine n'est pas acquittee attend, sans rien envoyer`() = runTest {
+        coEvery { messageRepository.serverIdOf(originCid) } returns null
+
+        val result = sendHandler().send(fanoutRow())
+
+        assertThat(result).isInstanceOf(SendResult.Deferred::class.java)
+        coVerify(exactly = 0) { messageApi.send(any(), any()) }
+    }
+
+    @Test
+    fun `une cible de fan-out dont l'origine est acquittee reclame la copie par l'id serveur`() = runTest {
+        coEvery { messageRepository.serverIdOf(originCid) } returns "srv-origin"
+        val expected = sendRequest.copy(copyAttachmentsFromMessageId = "srv-origin")
+        coEvery { messageApi.send("c1", expected) } returns accepted(serverMessage)
+
+        assertThat(sendHandler().send(fanoutRow())).isEqualTo(SendResult.SuccessWithId("srv-1"))
+    }
+
+    @Test
+    fun `une cible deja greffee d'un id serveur part telle quelle`() = runTest {
+        val grafted = sendRequest.copy(copyAttachmentsFromMessageId = "srv-origin")
+        coEvery { messageApi.send("c1", grafted) } returns accepted(serverMessage)
+
+        assertThat(sendHandler().send(sendRow(encodedPayload(grafted)))).isInstanceOf(SendResult.SuccessWithId::class.java)
+    }
+
+    @Test
+    fun `chaque envoi journalise sa tentative avec le transport et l issue`() = runTest {
+        val logged = mutableListOf<List<Any?>>()
+        val recorder = object : SendAttemptRecorder {
+            override suspend fun record(
+                localId: String,
+                transport: SendTransport,
+                startedAtMillis: Long,
+                finishedAtMillis: Long,
+                outcome: SendOutcome,
+                errorMessage: String?,
+            ) {
+                logged += listOf(localId, transport, outcome, errorMessage)
+            }
+        }
+        val handler = SendMessageHandler(messageApi, messageRepository, senderJson, ledger, attempts = recorder)
+        coEvery { messageApi.send(any(), any()) } returns refused() andThen accepted(serverMessage)
+
+        handler.send(sendRow())
+        handler.send(sendRow().copy(attempts = 1))
+
+        assertThat(logged.map { it.take(3) }).containsExactly(
+            listOf("cmid-1", SendTransport.REST, SendOutcome.FAILURE),
+            listOf("cmid-1", SendTransport.OUTBOX, SendOutcome.SUCCESS),
+        ).inOrder()
+        assertThat(logged.first()[3]).isNotNull()
+        assertThat(logged.last()[3]).isNull()
     }
 
     @Test
@@ -90,7 +155,7 @@ class MessageSendersTest {
     fun `send message stays retryable when the network is down`() = runTest {
         coEvery { messageApi.send(any(), any()) } throws IOException("offline")
 
-        assertThat(sendHandler().send(sendRow())).isEqualTo(SendResult.TransientFailure)
+        assertThat(sendHandler().send(sendRow())).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test
@@ -153,7 +218,22 @@ class MessageSendersTest {
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
 
         coEvery { messageApi.delete("m1") } throws IOException("offline")
-        assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row)).isEqualTo(SendResult.TransportFailure)
+    }
+
+    /** #14656 — only an ACCEPTED deletion lets the end-to-end plaintext leave the vault. */
+    @Test
+    fun `delete message confirms the erasure only once the server accepted it`() = runTest {
+        val handler = DeleteMessageHandler(messageApi, messageRepository, ledger)
+        val row = outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1")
+
+        coEvery { messageApi.delete("m1") } returns refused()
+        handler.send(row)
+        coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
+
+        coEvery { messageApi.delete("m1") } returns accepted(Unit)
+        handler.send(row)
+        coVerify(exactly = 1) { messageRepository.confirmDeletion("m1") }
     }
 
     @Test

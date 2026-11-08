@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recognition_language_title">Idioma do áudio</string>
+    <string name="recognition_language_show_all">Mostrar todos os idiomas</string>
+    <string name="recognition_language_hint">Por padrão, apenas os idiomas disponíveis neste dispositivo são listados.</string>
+    <string name="recognition_language_search">Pesquisar um idioma</string>
+    <string name="recognition_language_selected">Selecionado</string>
+</resources>

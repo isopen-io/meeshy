@@ -94,6 +94,7 @@ class FeedViewModelTest {
     private fun viewModel(hasMore: Boolean = true): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
         every { socialSocket.postLiked } returns postLiked
@@ -103,6 +104,9 @@ class FeedViewModelTest {
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
+        every { socialSocket.postReactionAdded } returns MutableSharedFlow()
+        every { socialSocket.postReactionRemoved } returns MutableSharedFlow()
+        every { socialSocket.reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
@@ -461,6 +465,7 @@ class FeedViewModelTest {
     ): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } returns stream
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
@@ -561,6 +566,26 @@ class FeedViewModelTest {
         stream.value = CacheResult.Fresh(listOf(translatedPost("1")), 0L)
 
         assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `a manual language choice survives a realtime translation of another language and can be reset`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(translatedPost("1")), 0L),
+        )
+        val vm = viewModel(bilingualUser, stream)
+        vm.onPostFlagTap("1", "es")
+
+        val withGerman = translatedPost("1").let {
+            it.copy(translations = it.translations.orEmpty() + ("de" to ApiPostTranslationEntry(text = "Hallo", confidenceScore = 0.8)))
+        }
+        stream.value = CacheResult.Fresh(listOf(withGerman), 0L)
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+
+        vm.clearLanguageOverride("1")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
     }
 
     // --- On-demand post translation (tapping a configured-but-absent flag) ---

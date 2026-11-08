@@ -19,7 +19,7 @@ nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
     case detach, search, call, videoCall
     case readingMode, details, groupSettings, rename, manageMembers, favorite, move
     case invite, lock, unlock, archive, unarchive, block, unblock, report, adminOpen
-    case leave, delete, hide
+    case leave, delete, hide, obsolete
 
     var label: String {
         switch self {
@@ -56,6 +56,8 @@ nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
         // « Masquer » pour un geste qui ne retire la discussion que de SA liste.
         case .hide: return String(localized: "context.hide_chat", defaultValue: "Masquer la discussion", bundle: .main)
+        // Efface le contenu POUR TOUS (#14645) — la confirmation le dit.
+        case .obsolete: return String(localized: "context.make_obsolete", defaultValue: "Rendre obsolète", bundle: .main)
         }
     }
 
@@ -91,6 +93,7 @@ nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
         case .leave: return "rectangle.portrait.and.arrow.right"
         case .delete: return "trash"
         case .hide: return "eye.slash"
+        case .obsolete: return "clock.badge.xmark"
         }
     }
 
@@ -102,7 +105,7 @@ nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
     /// Les entrées qui retirent quelque chose — rendues en rouge par les deux chemins.
     var isDestructive: Bool {
         switch self {
-        case .block, .leave, .delete, .hide: return true
+        case .block, .leave, .delete, .hide, .obsolete: return true
         default: return false
         }
     }
@@ -119,7 +122,7 @@ nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
     /// qui change l'état de la conversation, léger pour le reste.
     var haptic: ConversationMenuHaptic {
         switch self {
-        case .block, .unblock, .leave, .delete, .hide: return .heavy
+        case .block, .unblock, .leave, .delete, .hide, .obsolete: return .heavy
         case .pin, .unpin, .call, .videoCall, .invite, .lock, .unlock, .archive, .unarchive: return .medium
         default: return .light
         }
@@ -245,7 +248,8 @@ nonisolated struct ConversationMenuCatalog: Equatable, Sendable {
             ]),
             departure: offered([
                 (.leave, law.leave),
-                (law.removal == .hide ? .hide : .delete, law.removal != nil)
+                (law.removal == .hide ? .hide : .delete, law.removal != nil),
+                (.obsolete, law.obsolete)
             ])
         )
     }
@@ -282,6 +286,7 @@ extension ConversationRowMenuActions {
         case .adminOpen: onOpenAdmin()
         case .leave: onLeave()
         case .delete, .hide: onDelete()
+        case .obsolete: onObsolete()
         case .readingMode, .favorite, .move: return
         }
     }

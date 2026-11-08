@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver.Result
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.BubbleFlagTap
 import org.junit.Test
 
 private data class Tr(
@@ -135,5 +136,39 @@ class LanguageFlagTapResolverTest {
         )
 
         assertThat(result).isEqualTo(Result.Activate("es"))
+    }
+
+    private fun bubbleTap(tapped: String, active: String? = "fr", secondary: String? = null) =
+        LanguageFlagTapResolver.resolveBubble(
+            tappedCode = tapped,
+            activeCode = active,
+            secondaryCode = secondary,
+            originalLanguage = "en",
+            preferredCode = "fr",
+            translations = translations + Tr("de", "  "),
+        )
+
+    @Test
+    fun `bubble tap on a third language with content opens the secondary panel`() {
+        val outcome = bubbleTap("es")
+        assertThat(outcome.action).isEqualTo(BubbleFlagTap.Action.OpenSecondary)
+        assertThat(outcome.secondaryCode).isEqualTo("es")
+    }
+
+    @Test
+    fun `bubble tap on the open secondary closes it`() {
+        assertThat(bubbleTap("es", secondary = "es").action).isEqualTo(BubbleFlagTap.Action.CloseSecondary)
+    }
+
+    @Test
+    fun `bubble tap on the original switches the primary text`() {
+        assertThat(bubbleTap("en", secondary = "es").action).isEqualTo(BubbleFlagTap.Action.SwitchPrimary)
+    }
+
+    @Test
+    fun `bubble tap on a blank translation requests it`() {
+        val outcome = bubbleTap("de")
+        assertThat(outcome.action).isEqualTo(BubbleFlagTap.Action.RequestTranslation)
+        assertThat(outcome.targetLanguage).isEqualTo("de")
     }
 }

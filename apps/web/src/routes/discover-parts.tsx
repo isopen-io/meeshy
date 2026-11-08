@@ -87,10 +87,11 @@ export function DiscoverHeader({ language }: { readonly language: InterfaceLangu
   );
 }
 
-const TAB_LABEL = { discover: 'discover.tab.discover', requests: 'discover.tab.requests', blocked: 'discover.tab.blocked' } as const;
+const TAB_LABEL = { discover: 'discover.tab.discover', requests: 'discover.tab.requests', blocked: 'discover.tab.blocked', circles: 'discover.tab.circles' } as const;
 
 function TabGlyph({ tab }: { readonly tab: DiscoverTab }) {
   if (tab === 'discover') return <Glyph name="magnifyingGlass" size={14} />;
+  if (tab === 'circles') return <Glyph name="users" size={14} />;
   return <DiscoverGlyph name={tab === 'requests' ? 'userPlus' : 'handPalm'} size={14} />;
 }
 
@@ -217,7 +218,7 @@ export function DiscoverTabBar({
   );
 }
 
-function PersonAvatar({ person, name }: { readonly person: PersonSummary | null; readonly name: string }) {
+export function PersonAvatar({ person, name }: { readonly person: PersonSummary | null; readonly name: string }) {
   const avatar = person?.avatar ?? null;
   /* L'AVATAR OUVRE LE PROFIL (#6396) — le critère de fin nommait précisément
      ces lignes : « les lignes de la découverte, des demandes et des bloqués
@@ -238,7 +239,7 @@ function PersonAvatar({ person, name }: { readonly person: PersonSummary | null;
   );
 }
 
-function PersonText({ person, name, children }: { readonly person: PersonSummary | null; readonly name: string; readonly children?: ReactNode }) {
+export function PersonText({ person, name, children }: { readonly person: PersonSummary | null; readonly name: string; readonly children?: ReactNode }) {
   return (
     <span className="grid min-w-0 flex-1 gap-0.5">
       <span data-person-name className="truncate text-body font-semibold" style={{ color: INK }}>
@@ -415,12 +416,15 @@ export const ReceivedRequestRow = memo(function ReceivedRequestRow({
   now,
   onAccept,
   onReject,
+  levelCaption = null,
 }: {
   readonly language: InterfaceLanguage;
   readonly request: FriendRequestRecord;
   readonly now: Date;
   readonly onAccept: (request: FriendRequestRecord) => void;
   readonly onReject: (request: FriendRequestRecord) => void;
+  /** Le cran qu'une demande de montée vise (« Demande le niveau Proche », #13938) ; absent pour une demande d'Ami. */
+  readonly levelCaption?: string | null;
 }) {
   const name = personNameOf(request.sender, translate(language, 'discover.unknown'));
   return (
@@ -430,6 +434,11 @@ export const ReceivedRequestRow = memo(function ReceivedRequestRow({
         <span data-request-message className="line-clamp-2 text-caption" style={{ color: INK_2 }}>
           {request.message ?? translate(language, 'discover.requests.intent')}
         </span>
+        {levelCaption === null ? null : (
+          <span data-request-level className="text-caption font-semibold" style={{ color: INK }}>
+            {levelCaption}
+          </span>
+        )}
         <time dateTime={request.createdAt} className="text-caption font-medium" style={{ color: INK_2 }}>
           {shortRelativeTime(new Date(request.createdAt), now, language)}
         </time>
@@ -445,11 +454,13 @@ export const SentRequestRow = memo(function SentRequestRow({
   request,
   now,
   onCancel,
+  levelCaption = null,
 }: {
   readonly language: InterfaceLanguage;
   readonly request: FriendRequestRecord;
   readonly now: Date;
   readonly onCancel: (request: FriendRequestRecord) => void;
+  readonly levelCaption?: string | null;
 }) {
   const name = personNameOf(request.receiver, translate(language, 'discover.unknown'));
   return (
@@ -462,6 +473,11 @@ export const SentRequestRow = memo(function SentRequestRow({
           </time>
           <StatusCapsule tone="warning" data="pendingSent" glyph={<Glyph name="clock" size={11} />} text={translate(language, 'discover.connection.pending')} />
         </span>
+        {levelCaption === null ? null : (
+          <span data-request-level className="text-caption font-semibold" style={{ color: INK }}>
+            {levelCaption}
+          </span>
+        )}
       </PersonText>
       <button
         type="button"

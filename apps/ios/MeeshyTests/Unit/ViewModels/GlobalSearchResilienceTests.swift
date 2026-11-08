@@ -65,6 +65,10 @@ final class GlobalSearchResilienceTests: XCTestCase {
         {"success":true,"data":[]}
         """)
         mockAPI.stub("/conversations/search", result: response)
+        let noPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":{"limit":30,"hasMore":false,"nextCursor":null}}
+        """)
+        mockAPI.stub("/posts/search", result: noPosts)
     }
 
     // MARK: - La liste ne clignote plus

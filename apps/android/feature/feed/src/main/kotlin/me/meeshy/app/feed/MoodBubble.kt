@@ -23,6 +23,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.PopupPositionProvider
+import me.meeshy.sdk.model.status.StatusBubblePlacement
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -63,14 +71,12 @@ fun MoodBubble(
     onDismiss: () -> Unit,
     onDwellEnd: () -> Unit,
     isChangingConfigurations: () -> Boolean = rememberIsChangingConfigurations(),
+    /** Le point touché sur le badge, en pixels de la fenêtre : la bulle s'y ancre ; `null` la centre. */
+    anchor: IntOffset? = null,
 ) {
     DisposableEffect(model.statusId) { onDispose(onDwellEnd) }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (!isChangingConfigurations()) onDismiss() }
-    Popup(
-        alignment = Alignment.Center,
-        onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = true),
-    ) {
+    val bubble: @Composable () -> Unit = {
         MeeshyGlassSurface(
             shape = RoundedCornerShape(MeeshyRadius.lg),
             modifier = Modifier.widthIn(min = 160.dp, max = 260.dp),
@@ -111,6 +117,44 @@ fun MoodBubble(
                 )
             }
         }
+    }
+    if (anchor == null) {
+        Popup(alignment = Alignment.Center, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+            bubble()
+        }
+    } else {
+        val margin = with(LocalDensity.current) { MeeshySpacing.md.roundToPx() }
+        val gap = with(LocalDensity.current) { MeeshySpacing.sm.roundToPx() }
+        val provider = remember(anchor, margin, gap) { AnchoredBubblePosition(anchor, margin, gap) }
+        Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+            bubble()
+        }
+    }
+}
+
+/** La bulle posée par la loi [StatusBubblePlacement] : sous le point touché, ou au-dessus s'il n'y a pas la place. */
+private class AnchoredBubblePosition(
+    private val anchor: IntOffset,
+    private val margin: Int,
+    private val gap: Int,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val origin = StatusBubblePlacement.place(
+            anchorX = anchor.x,
+            anchorY = anchor.y,
+            bubbleWidth = popupContentSize.width,
+            bubbleHeight = popupContentSize.height,
+            windowWidth = windowSize.width,
+            windowHeight = windowSize.height,
+            margin = margin,
+            gap = gap,
+        )
+        return IntOffset(origin.x, origin.y)
     }
 }
 
@@ -215,6 +259,16 @@ fun MoodReactFailureToast(failures: Flow<Unit>) {
     val message = stringResource(R.string.status_react_error)
     LaunchedEffect(failures) {
         failures.collect { Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
+    }
+}
+
+/** « Humeur en attente d'envoi » : tapée sans réseau, elle partira au retour du réseau (iOS `status.queuedOffline`). */
+@Composable
+fun MoodQueuedToast(queued: Flow<Unit>) {
+    val context = LocalContext.current
+    val message = stringResource(R.string.status_queued_offline)
+    LaunchedEffect(queued) {
+        queued.collect { Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
     }
 }
 

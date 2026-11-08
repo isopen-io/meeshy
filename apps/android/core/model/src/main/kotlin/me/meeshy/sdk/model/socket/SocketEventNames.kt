@@ -18,6 +18,9 @@ object SocketEventNames {
     const val AUTH_SESSION_REVOKED = "auth:session-revoked"
     const val AUTH_TOKEN_EXPIRED = "auth:token-expired"
 
+    // connection health
+    const val HEARTBEAT_ACK = "heartbeat:ack"
+
     // call
     const val CALL_ALREADY_ANSWERED = "call:already-answered"
     const val CALL_ANALYTICS = "call:analytics"
@@ -85,7 +88,10 @@ object SocketEventNames {
     const val COMMENT_ADDED = "comment:added"
     const val COMMENT_DELETED = "comment:deleted"
     const val COMMENT_LIKED = "comment:liked"
+    const val COMMENT_MEDIA_UPDATED = "comment:media-updated"
+    const val COMMENT_REACTION_ADD = "comment:reaction-add"
     const val COMMENT_REACTION_ADDED = "comment:reaction-added"
+    const val COMMENT_REACTION_REMOVE = "comment:reaction-remove"
     const val COMMENT_REACTION_REMOVED = "comment:reaction-removed"
     const val COMMENT_TRANSLATION_UPDATED = "comment:translation-updated"
     const val COMMENT_UNLIKED = "comment:unliked"
@@ -96,6 +102,7 @@ object SocketEventNames {
     const val CONVERSATION_DELETED = "conversation:deleted"
     const val CONVERSATION_ENCRYPTION_CHANGED = "conversation:encryption-changed"
     const val CONVERSATION_NEW = "conversation:new"
+    const val CONVERSATION_OBSOLETED = "conversation:obsoleted"
     const val CONVERSATION_PARTICIPANT_BANNED = "conversation:participant-banned"
     const val CONVERSATION_PARTICIPANT_JOINED = "conversation:participant-joined"
     const val CONVERSATION_PARTICIPANT_LEFT = "conversation:participant-left"
@@ -103,6 +110,9 @@ object SocketEventNames {
     const val CONVERSATION_RESTORED = "conversation:restored"
     const val CONVERSATION_UNREAD_UPDATED = "conversation:unread-updated"
     const val CONVERSATION_UPDATED = "conversation:updated"
+
+    // e2ee (#14591) — vers la room de la GÉNÉRATION de l'appareil, jamais de l'utilisateur
+    const val E2EE_ENVELOPE = "e2ee:envelope"
 
     // location
     const val LOCATION_LIVE_START = "location:live-start"
@@ -122,6 +132,8 @@ object SocketEventNames {
     const val MESSAGE_EXPIRED = "message:expired"
     const val MESSAGE_NEW = "message:new"
     const val MESSAGE_PINNED = "message:pinned"
+    const val MESSAGE_SEND = "message:send"
+    const val MESSAGE_SEND_WITH_ATTACHMENTS = "message:send-with-attachments"
     const val MESSAGE_TRANSLATION = "message:translation"
     const val MESSAGE_TRANSLATION_SHARED = "message:translation-shared"
     const val MESSAGE_UNPINNED = "message:unpinned"
@@ -142,8 +154,16 @@ object SocketEventNames {
     const val POST_CREATED = "post:created"
     const val POST_DELETED = "post:deleted"
     const val POST_JOIN = "post:join"
+    const val POST_REACTION_ADD = "post:reaction-add"
+    const val POST_REACTION_REMOVE = "post:reaction-remove"
+    const val POST_REACTION_REQUEST_SYNC = "post:reaction-request-sync"
+    const val FEED_SUBSCRIBE = "feed:subscribe"
+    const val FEED_UNSUBSCRIBE = "feed:unsubscribe"
+    const val COMMENT_REACTION_REQUEST_SYNC = "comment:reaction-request-sync"
     const val POST_LEAVE = "post:leave"
     const val POST_LIKED = "post:liked"
+    const val POST_REACTION_ADDED = "post:reaction-added"
+    const val POST_REACTION_REMOVED = "post:reaction-removed"
     const val POST_REPOSTED = "post:reposted"
     const val POST_TRANSLATION_UPDATED = "post:translation-updated"
     const val POST_UNLIKED = "post:unliked"
@@ -164,8 +184,24 @@ object SocketEventNames {
     const val REACTION_ADDED = "reaction:added"
     const val REACTION_REMOVED = "reaction:removed"
 
+    // friend-request : annulation et refus, signaux temps réel purs (aucune ligne Notification)
+    const val FRIEND_REQUEST_CANCELLED = "friend-request:cancelled"
+    const val FRIEND_REQUEST_REJECTED = "friend-request:rejected"
+
     // read-status
     const val READ_STATUS_UPDATED = "read-status:updated"
+
+    // relation (#13933, #13938) : tous serveur -> client, sur la room `user:<id>` ; aucun événement de baisse (RG-07)
+    const val RELATION_LEVEL_RAISED = "relation:level-raised"
+    const val RELATION_RITUAL_STARTED = "relation:ritual-started"
+    const val RELATION_RITUAL_PROGRESS = "relation:ritual-progress"
+    const val RELATION_RITUAL_COMPLETED = "relation:ritual-completed"
+    const val BRING_STOPPED = "bring:stopped"
+
+    // talkie (#13935, #16675) : serveur -> client, sur la room `user:<id>` ; le fragment voyage en binaire natif
+    const val TALKIE_INCOMING = "talkie:incoming"
+    const val TALKIE_CHUNK = "talkie:chunk"
+    const val TALKIE_ENDED = "talkie:ended"
 
     // status
     const val STATUS_CREATED = "status:created"
@@ -210,6 +246,8 @@ object SocketEventNames {
     const val AUDIO_TRANSLATION_FAILED = "audio:translation-failed"
     const val AUDIO_TRANSLATIONS_COMPLETED = "audio:translations-completed"
     const val AUDIO_TRANSLATIONS_PROGRESSIVE = "audio:translations-progressive"
+    const val CONVERSATION_JOIN = "conversation:join"
+    const val CONVERSATION_LEAVE = "conversation:leave"
     const val CONVERSATION_JOIN_ERROR = "conversation:join-error"
     const val CONVERSATION_JOINED = "conversation:joined"
     const val CONVERSATION_LEFT = "conversation:left"
@@ -218,6 +256,9 @@ object SocketEventNames {
 
     /** `engagement:conversation-updated` : l'instantané « N (M) 🔥 » du lecteur, vers sa room personnelle (#8906). */
     const val ENGAGEMENT_CONVERSATION_UPDATED = "engagement:conversation-updated"
+
+    /** `engagement:post-updated` : ce qu'un post a rapporté au lecteur `{ postId, viewerPoints, at }`, vers sa room personnelle (#9569). */
+    const val ENGAGEMENT_POST_UPDATED = "engagement:post-updated"
     const val MESSAGE_CONSUMED = "message:consumed"
     const val MESSAGE_COUNTDOWN_STARTED = "message:countdown-started"
     const val MESSAGE_HIDDEN_FOR_ME = "message:hidden-for-me"
@@ -233,6 +274,7 @@ object SocketEventNames {
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
         AUTH_TOKEN_EXPIRED,
+        HEARTBEAT_ACK,
         CALL_ALREADY_ANSWERED,
         CALL_ANALYTICS,
         CALL_BACKGROUNDED,
@@ -293,7 +335,10 @@ object SocketEventNames {
         COMMENT_ADDED,
         COMMENT_DELETED,
         COMMENT_LIKED,
+        COMMENT_MEDIA_UPDATED,
+        COMMENT_REACTION_ADD,
         COMMENT_REACTION_ADDED,
+        COMMENT_REACTION_REMOVE,
         COMMENT_REACTION_REMOVED,
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
@@ -302,6 +347,7 @@ object SocketEventNames {
         CONVERSATION_DELETED,
         CONVERSATION_ENCRYPTION_CHANGED,
         CONVERSATION_NEW,
+        CONVERSATION_OBSOLETED,
         CONVERSATION_PARTICIPANT_BANNED,
         CONVERSATION_PARTICIPANT_JOINED,
         CONVERSATION_PARTICIPANT_LEFT,
@@ -309,7 +355,9 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
+        ENGAGEMENT_POST_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
@@ -324,6 +372,8 @@ object SocketEventNames {
         MESSAGE_EXPIRED,
         MESSAGE_NEW,
         MESSAGE_PINNED,
+        MESSAGE_SEND,
+        MESSAGE_SEND_WITH_ATTACHMENTS,
         MESSAGE_TRANSLATION,
         MESSAGE_TRANSLATION_SHARED,
         MESSAGE_UNPINNED,
@@ -338,8 +388,16 @@ object SocketEventNames {
         POST_CREATED,
         POST_DELETED,
         POST_JOIN,
+        POST_REACTION_ADD,
+        POST_REACTION_REMOVE,
+        POST_REACTION_REQUEST_SYNC,
+        FEED_SUBSCRIBE,
+        FEED_UNSUBSCRIBE,
+        COMMENT_REACTION_REQUEST_SYNC,
         POST_LEAVE,
         POST_LIKED,
+        POST_REACTION_ADDED,
+        POST_REACTION_REMOVED,
         POST_REPOSTED,
         POST_TRANSLATION_UPDATED,
         POST_UNLIKED,
@@ -350,7 +408,17 @@ object SocketEventNames {
         PROFILE_DECOR_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
+        FRIEND_REQUEST_CANCELLED,
+        FRIEND_REQUEST_REJECTED,
         READ_STATUS_UPDATED,
+        RELATION_LEVEL_RAISED,
+        RELATION_RITUAL_STARTED,
+        RELATION_RITUAL_PROGRESS,
+        RELATION_RITUAL_COMPLETED,
+        BRING_STOPPED,
+        TALKIE_INCOMING,
+        TALKIE_CHUNK,
+        TALKIE_ENDED,
         STATUS_CREATED,
         STATUS_DELETED,
         STATUS_REACTED,
@@ -383,6 +451,8 @@ object SocketEventNames {
         AUDIO_TRANSLATION_FAILED,
         AUDIO_TRANSLATIONS_COMPLETED,
         AUDIO_TRANSLATIONS_PROGRESSIVE,
+        CONVERSATION_JOIN,
+        CONVERSATION_LEAVE,
         CONVERSATION_JOIN_ERROR,
         CONVERSATION_JOINED,
         CONVERSATION_LEFT,

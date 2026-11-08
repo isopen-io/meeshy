@@ -31,6 +31,34 @@ import me.meeshy.ui.theme.MeeshyPalette
 internal fun LazyListState.lastVisibleItemIndex(): Int =
     layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
 
+/** La hauteur moyenne (px) des rangées visibles, base d'estimation des rangées non composées. */
+private fun LazyListState.averageRowPx(): Float {
+    val visible = layoutInfo.visibleItemsInfo
+    if (visible.isEmpty()) return 0f
+    return visible.sumOf { it.size }.toFloat() / visible.size
+}
+
+/** Distance (px) estimée au bord ancien chargé du fil [ChatListOrientation.BottomUp]. */
+internal fun LazyListState.distanceToOldEdgePx(lastIndex: Int): Float {
+    val info = layoutInfo
+    val edge = info.visibleItemsInfo.lastOrNull() ?: return Float.MAX_VALUE
+    val overshoot = (edge.offset + edge.size - info.viewportEndOffset).toFloat()
+    return ChatScrollGeometry.distanceToOldEdgePx(
+        edgeIndex = edge.index,
+        lastIndex = lastIndex,
+        edgeOvershootPx = overshoot,
+        averageRowPx = averageRowPx(),
+        orientation = ChatListOrientation.BottomUp,
+    )
+}
+
+/** Vrai quand le fil est à moins de [ChatScrollGeometry.NEAR_BOTTOM_THRESHOLD_DP] de son bas. */
+internal fun LazyListState.isNearBottomPx(thresholdPx: Float): Boolean =
+    ChatScrollGeometry.isNearBottomPx(
+        ChatScrollGeometry.distanceFromBottomPx(firstVisibleItemIndex, firstVisibleItemScrollOffset, averageRowPx()),
+        thresholdPx,
+    )
+
 /**
  * The scroll-to-bottom affordance: a badged FAB that surfaces when the reader has
  * scrolled away, with a live count and a compact preview of the newest unread message

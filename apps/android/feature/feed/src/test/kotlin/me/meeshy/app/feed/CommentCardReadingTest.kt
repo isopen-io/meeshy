@@ -86,4 +86,33 @@ class CommentCardReadingTest {
         assertThat(PostCommentCardComposition.cardOf(restricted, labels)?.quoted).isNull()
         assertThat(PostCommentCardComposition.withheldByAudience(restricted)).isTrue()
     }
+
+    @Test
+    fun `the support's media carry their file, their poster and their sides, as the gateway serves them`() {
+        val media = listOf(
+            ApiPostMedia(id = "i", mimeType = "image/jpeg", fileUrl = "/api/v1/attachments/file/i.jpg", width = 1080, height = 1350, order = 0),
+            ApiPostMedia(
+                id = "v", mimeType = "video/mp4", fileUrl = "https://cdn.test/v.mp4", thumbnailUrl = "https://cdn.test/v.jpg",
+                width = 1920, height = 1080, order = 1,
+            ),
+        )
+        val support = CommentCardReading.support(post(media = media), "Coucher de soleil")
+
+        assertThat(support.media.map { it.url }).containsExactly("/api/v1/attachments/file/i.jpg", "https://cdn.test/v.mp4").inOrder()
+        assertThat(support.media.map { it.posterUrl }).containsExactly(null, "https://cdn.test/v.jpg").inOrder()
+        assertThat(support.media.map { it.width to it.height }).containsExactly(1080 to 1350, 1920 to 1080).inOrder()
+    }
+
+    @Test
+    fun `a comment's pieces carry their file, a blank one none`() {
+        val withPhotos = comment("dan", "", 4).copy(
+            media = listOf(
+                ApiPostMedia(id = "far", mimeType = "image/jpeg", fileUrl = "https://cdn.test/far.jpg", order = 0),
+                ApiPostMedia(id = "blank", mimeType = "image/jpeg", fileUrl = " ", order = 1),
+            ),
+        )
+        val source = CommentCardReading.source(withPhotos, null, listOf(withPhotos), emptySet(), null, reader, reader)
+
+        assertThat(source.target.media.map { it.id to it.url }).containsExactly("far" to "https://cdn.test/far.jpg", "blank" to null).inOrder()
+    }
 }

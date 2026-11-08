@@ -14,8 +14,9 @@ class NavGraphRouteSetTest {
     private val navigationDir = File("src/main/kotlin/me/meeshy/app/navigation")
     private val graphDir = File(navigationDir, "graph")
 
-    private val registered: List<String> = graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }
-        .orEmpty()
+    private val registered: List<String> = (
+        graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }.orEmpty().toList() + File(navigationDir, "ChatDestination.kt")
+        )
         .flatMap { file ->
             Regex("""[cC]omposable\(\s*(?:route = )?(?:"\$\{)?Routes\.([A-Z_]+)""").findAll(file.readText()).map { it.groupValues[1] }.toList()
         }
@@ -27,7 +28,7 @@ class NavGraphRouteSetTest {
             "CONVERSATIONS", "SHARE_LINK_PICKER", "GLOBAL_SEARCH", "DASHBOARD", "CREATE_SHARE_LINK",
             "MY_SHARE_LINKS", "SHARE_LINK_DETAIL", "SHARE_LINK_ARRIVALS", "NEW_CONVERSATION", "CHAT", "STARRED",
             "FEED", "SAVED_POSTS", "NEARBY_DISCOVERY", "POST_DETAIL", "REELS", "STORY_VIEWER", "COMPOSER", "STORY_COMPOSER_ROUTE",
-            "SETTINGS", "NOTIFICATION_SETTINGS", "CHANGE_PASSWORD", "TWO_FACTOR", "ACCOUNT_CONTACT", "DELETE_ACCOUNT", "MEDIA_DOWNLOAD",
+            "SETTINGS", "SETTINGS_FOCUS", "NOTIFICATION_SETTINGS", "CHANGE_PASSWORD", "TWO_FACTOR", "ACCOUNT_CONTACT", "DELETE_ACCOUNT", "MEDIA_DOWNLOAD",
             "MEDIA_CACHE", "PACK_SHOP", "DATA_EXPORT", "DIAGNOSTICS", "ABOUT", "SUPPORT", "LICENSES", "LEGAL", "PRIVACY",
             "ACTIVE_SESSIONS", "SECURITY", "ENCRYPTED_DEVICES",
             "CONTACTS", "CONTACTS_DISCOVER", "BLOCKED_USERS", "NOTIFICATIONS", "PROFILE_USER", "USER_POSTS", "REPORT_USER", "HASHTAG_RESULTS", "MY_STORIES", "MOOD_SPOTLIGHT",
@@ -42,7 +43,7 @@ class NavGraphRouteSetTest {
 
     @Test
     fun `deep links stay declared in the graphs`() {
-        val deepLinks = graphDir.listFiles().orEmpty()
+        val deepLinks = (graphDir.listFiles().orEmpty().toList() + File(navigationDir, "ChatDestination.kt"))
             .flatMap { Regex("""uriPattern = (Routes\.[A-Z_]+)""").findAll(it.readText()).map { m -> m.groupValues[1] }.toList() }
         assertThat(deepLinks).containsExactly(
             "Routes.GUEST_JOIN_DEEP_LINK", "Routes.GUEST_JOIN_WEB_DEEP_LINK", "Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK",

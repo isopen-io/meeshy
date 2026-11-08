@@ -108,6 +108,8 @@ export const AUDIT_ACTIONS = {
   // ── Contenus, diffusions, agent, signalements ──────────────────────────────
   DELETE_POST: entry('posts', 'trash', 'danger'),
   MODERATE_POST: entry('posts', 'eyeSlash', 'warning'),
+  DISABLE_COMMENTS: entry('posts', 'prohibit', 'warning'),
+  ENABLE_COMMENTS: entry('posts', 'chats', 'success'),
   REMOVE_CONTENT: entry('reports', 'trash', 'danger'),
   ADMIN_POST_VIEWERS_VIEWED: entry('posts', 'eye', 'info', true),
   CREATE_BROADCAST: entry('broadcasts', 'plus', 'neutral'),

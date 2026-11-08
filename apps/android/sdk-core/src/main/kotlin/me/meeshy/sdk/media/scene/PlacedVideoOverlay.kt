@@ -20,8 +20,9 @@ internal interface PlacedVideoFrames {
 /**
  * **Une vidéo posée, VIVANTE dans son cadre** (#13897) : à chaque image rendue, l'image de sa source que son horloge
  * désigne (fenêtre coupée, boucle), peinte à sa pose de l'instant — centre, taille, rotation, arrondi, opacité — et sous son
- * look, sur un calque transparent de la taille du format. Sur le S8, une vidéo posée ne sortait dans AUCUNE image : la
- * composition ne la déclarait pas et le peintre des calques n'en tient que l'affiche.
+ * look (celui du compositeur d'abord, [PlacedVideoLookFrame], puis sa matrice), sur un calque transparent de la taille du
+ * format. Sur le S8, une vidéo posée ne sortait dans AUCUNE image : la composition ne la déclarait pas et le peintre des
+ * calques n'en tient que l'affiche.
  *
  * Hors de sa présence, elle ne pose qu'un pixel transparent et rend son décodeur ; le calque du format ne vit que tant
  * qu'elle est à l'écran. Appelé sur le fil GL de Media3.
@@ -34,6 +35,7 @@ internal class PlacedVideoOverlay(
 
     private var frames: PlacedVideoFrames? = null
     private var surface: Bitmap? = null
+    private val looked = video.look?.let(::PlacedVideoLookFrame)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = video.colorMatrix?.let(::ColorMatrixColorFilter)
     }
@@ -46,7 +48,8 @@ internal class PlacedVideoOverlay(
             if (atMillis >= video.clock.endMillis) discard()
             return SceneTransparent.pixel
         }
-        val frame = (frames ?: open(video).also { frames = it }).frameAt(source) ?: return SceneTransparent.pixel
+        val decoded = (frames ?: open(video).also { frames = it }).frameAt(source) ?: return SceneTransparent.pixel
+        val frame = looked?.looked(decoded) ?: decoded
         val target = surface ?: Bitmap.createBitmap(format.width, format.height, Bitmap.Config.ARGB_8888).also { surface = it }
         target.eraseColor(TRANSPARENT)
         paint(Canvas(target), frame, placement)
@@ -77,6 +80,7 @@ internal class PlacedVideoOverlay(
     private fun discard() {
         frames?.release()
         frames = null
+        looked?.release()
         surface?.recycle()
         surface = null
     }

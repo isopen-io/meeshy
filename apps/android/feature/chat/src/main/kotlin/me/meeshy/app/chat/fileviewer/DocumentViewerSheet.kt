@@ -1,6 +1,7 @@
 package me.meeshy.app.chat.fileviewer
 
 import android.content.Context
+import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,7 +61,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.app.chat.FileAttachmentIntentResolver
 import me.meeshy.feature.chat.R
+import me.meeshy.app.chat.mediahub.HubCaptureShield
 import me.meeshy.sdk.model.fileviewer.DocumentHandOff
+import me.meeshy.sdk.model.fileviewer.DocumentPreviewPlan
+import me.meeshy.sdk.model.fileviewer.DocumentSheetPolicy
+import me.meeshy.ui.component.document.DocumentWebPreview
 import me.meeshy.sdk.model.fileviewer.SavedDocument
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -101,6 +106,11 @@ internal fun DocumentViewerSheet(request: FileViewerRequest, isPdf: Boolean, acc
         }
     }
     val title = request.fileName.ifBlank { stringResource(R.string.viewer_doc_default_name) }
+    val policy = remember(request.isProtected) { DocumentSheetPolicy.of(request.isProtected) }
+    val plan = remember(request.mimeType, request.fileName, isPdf) {
+        if (isPdf) DocumentPreviewPlan.Pdf else DocumentPreviewPlan.of(request.mimeType, request.fileName)
+    }
+    LaunchedEffect(request.localUri) { haptics.light() }
     val saveLabel = stringResource(R.string.viewer_doc_save)
     val shareLabel = stringResource(R.string.viewer_share)
     ModalBottomSheet(
@@ -109,12 +119,13 @@ internal fun DocumentViewerSheet(request: FileViewerRequest, isPdf: Boolean, acc
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
         Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+            HubCaptureShield(active = policy.secureWindow)
             ViewerBar(
                 onClose = onDismiss,
                 accent = accent,
                 title = { Text(title, color = MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.label, fontWeight = FontWeight.SemiBold, maxLines = 1) },
                 actions = {
-                    when (saveState) {
+                    if (policy.mayLeave) when (saveState) {
                         SaveState.SAVING -> Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(Modifier.size(20.dp), color = accent, strokeWidth = 2.dp)
                         }
@@ -125,10 +136,14 @@ internal fun DocumentViewerSheet(request: FileViewerRequest, isPdf: Boolean, acc
                             if (!launched) { saveState = SaveState.FAILED; haptics.error() }
                         }
                     }
-                    BarButton(MeeshyIcons.Share, shareLabel, accent) { share(context, request) }
+                    if (policy.mayLeave) BarButton(MeeshyIcons.Share, shareLabel, accent) { share(context, request) }
                 },
             )
-            if (isPdf) PdfBody(request, accent) else NoPreviewBody(request, title, accent)
+            when (plan) {
+                DocumentPreviewPlan.Pdf -> PdfBody(request, accent)
+                DocumentPreviewPlan.Web -> DocumentWebPreview(request.localUri, Modifier.fillMaxSize())
+                DocumentPreviewPlan.Unavailable -> NoPreviewBody(request, title, accent, policy.mayLeave)
+            }
         }
     }
 }
@@ -154,11 +169,11 @@ private fun openWithAnotherApp(context: Context, request: FileViewerRequest, mim
 }
 
 @Composable
-private fun NoPreviewBody(request: FileViewerRequest, title: String, accent: Color) {
+private fun NoPreviewBody(request: FileViewerRequest, title: String, accent: Color, mayLeave: Boolean) {
     val context = LocalContext.current
     val uri = remember(request.localUri) { request.localUri.toUri() }
     val handOffMime = remember(request.fileName) { DocumentHandOff.mimeFor(request.fileName) }
-        ?.takeIf { FileAttachmentIntentResolver.canHandOff(uri.scheme) }
+        ?.takeIf { mayLeave && FileAttachmentIntentResolver.canHandOff(uri.scheme) }
     Column(
         Modifier.fillMaxSize().padding(MeeshySpacing.xl),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.CenterVertically),
@@ -167,6 +182,9 @@ private fun NoPreviewBody(request: FileViewerRequest, title: String, accent: Col
         Icon(MeeshyIcons.Document, null, tint = accent, modifier = Modifier.size(64.dp))
         Text(title, color = MeeshyTheme.tokens.textPrimary, fontSize = MeeshyFontSize.callout, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(stringResource(R.string.viewer_doc_preview_unavailable), color = MeeshyTheme.tokens.textSecondary, fontSize = MeeshyFontSize.label)
+        request.sizeBytes?.takeIf { it > 0 }?.let { bytes ->
+            Text(Formatter.formatShortFileSize(context, bytes.toLong()), color = MeeshyTheme.tokens.textSecondary, fontSize = MeeshyFontSize.label)
+        }
         if (handOffMime != null) {
             val openWith = stringResource(R.string.viewer_doc_open_with)
             Row(

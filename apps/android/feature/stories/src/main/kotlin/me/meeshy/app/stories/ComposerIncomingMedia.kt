@@ -53,7 +53,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  * L'espace réservé d'un média qui entre dans la scène (R5 de #13863) : à la place que R4 lui a donnée — [fillsScene] pour
  * le fond d'une diapo qui n'en a pas, sinon centré sur ([x], [y]), là où se posera le prochain objet —, avec [preview] (la
  * vignette locale, `null` pour une vidéo : une forme neutre), [fraction] de l'envoi (`null` : encore en préparation) et
- * [more] médias de la même sélection qui fondent leur propre diapo.
+ * [more] médias de la même sélection qui fondent leur propre diapo ; [isVideo] choisit le libellé « Chargement de l'image… / de la vidéo… » de la préparation.
  */
 @Immutable
 internal data class IncomingMediaPlaceholder(
@@ -63,21 +63,40 @@ internal data class IncomingMediaPlaceholder(
     val preview: Any?,
     val fraction: Float?,
     val more: Int,
+    val isVideo: Boolean = false,
 )
+
+/**
+ * Ce que le choix dit d'un média AVANT que sa copie existe (#16205, iOS `ComposerSceneIntake.thumbnail`) : s'il est une
+ * vidéo, et pour une photo l'adresse choisie, que Coil décode à la taille de l'espace réservé. Une vidéo n'a pas de vignette
+ * tant qu'elle n'est pas copiée : une forme neutre, mais qui dit « Chargement de la vidéo… ».
+ */
+@Immutable
+data class IncomingMediaHint(val preview: Any?, val isVideo: Boolean) {
+    companion object {
+        fun of(picked: Any, mimeType: String?): IncomingMediaHint {
+            val isVideo = mimeType?.startsWith("video", ignoreCase = true) == true
+            return IncomingMediaHint(preview = picked.takeUnless { isVideo }, isVideo = isVideo)
+        }
+    }
+}
 
 /** L'espace réservé de la sélection en cours d'envoi, ou `null` quand rien n'entre : il part dans l'image où l'envoi s'achève. */
 internal fun StoryComposerUiState.incomingPlaceholder(): IncomingMediaPlaceholder? {
-    if (!isUploadingMedia) return null
+    if (!isPreparingMedia) return null
     val first = mediaLandings.firstOrNull() ?: return null
     val at = deck.nextObjectPosition().takeIf { first.role == ComposerMediaRole.FOREGROUND }
     val item = incomingMedia.firstOrNull()
+    val hint = incomingHints.firstOrNull()
+    val itemIsVideo = item?.mimeType?.startsWith("video", ignoreCase = true)
     return IncomingMediaPlaceholder(
         fillsScene = first.role == ComposerMediaRole.BACKGROUND && !first.newSlide,
         x = at?.x ?: CENTER,
         y = at?.y ?: CENTER,
-        preview = item?.takeUnless { it.mimeType.startsWith("video", ignoreCase = true) }?.previewModel,
+        preview = if (item != null) item.takeUnless { itemIsVideo == true }?.previewModel else hint?.preview,
         fraction = incomingFraction(uploadingMedia, incomingMedia),
         more = mediaLandings.size - 1,
+        isVideo = itemIsVideo ?: hint?.isVideo ?: false,
     )
 }
 
@@ -152,6 +171,10 @@ private fun IncomingMediaCard(placeholder: IncomingMediaPlaceholder, onCancel: (
                 CircularProgressIndicator(progress = { fraction }, color = Color.White, strokeWidth = RING_STROKE, modifier = Modifier.size(RING))
             }
             Text(status, color = Color.White, style = MaterialTheme.typography.labelMedium)
+            if (fraction == null) {
+                val loading = if (placeholder.isVideo) R.string.story_composer_loadingVideo else R.string.story_composer_loadingImage
+                Text(stringResource(loading), color = Color.White, style = MaterialTheme.typography.labelSmall)
+            }
             if (placeholder.more > 0) {
                 Text(stringResource(R.string.story_composer_incoming_more, placeholder.more), color = Color.White, style = MaterialTheme.typography.labelSmall)
             }
@@ -178,7 +201,7 @@ internal fun IncomingCancel(onCancel: () -> Unit, modifier: Modifier = Modifier)
  * « Envoi… » quand il repart, « Échec — Réessayer » quand son dernier essai a échoué — jamais une attente figée en ligne.
  */
 @Composable
-internal fun IncomingWaitingBadge(phase: PendingUploadPhase = PendingUploadPhase.OFFLINE, modifier: Modifier = Modifier) {
+internal fun IncomingWaitingBadge(phase: PendingUploadPhase = PendingUploadPhase.OFFLINE, modifier: Modifier = Modifier, fraction: Float? = null) {
     Row(
         modifier = modifier
             .background(PREVIEW_VEIL, RoundedCornerShape(MeeshyRadius.sm))
@@ -187,17 +210,58 @@ internal fun IncomingWaitingBadge(phase: PendingUploadPhase = PendingUploadPhase
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
     ) {
         when (phase) {
-            PendingUploadPhase.SENDING ->
+            PendingUploadPhase.SENDING -> if (fraction == null) {
                 CircularProgressIndicator(color = Color.White, strokeWidth = BADGE_STROKE, modifier = Modifier.size(BADGE_ICON))
+            } else {
+                CircularProgressIndicator(progress = { fraction }, color = Color.White, strokeWidth = BADGE_STROKE, modifier = Modifier.size(BADGE_ICON))
+            }
             PendingUploadPhase.OFFLINE ->
                 Icon(MeeshyIcons.Hourglass, contentDescription = null, tint = Color.White, modifier = Modifier.size(BADGE_ICON))
             PendingUploadPhase.FAILED -> Unit
         }
-        val text = when (phase) {
-            PendingUploadPhase.OFFLINE -> stringResource(R.string.story_composer_incoming_waiting)
+        val text = when {
+            phase == PendingUploadPhase.OFFLINE -> stringResource(R.string.story_composer_incoming_waiting)
+            phase == PendingUploadPhase.SENDING && fraction != null -> stringResource(R.string.story_composer_incoming_sending, (fraction * PERCENT).roundToInt())
             else -> phase.label()
         }
         Text(text, color = Color.White, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/**
+ * L'espace réservé d'un sticker image qui entre (#15597) : posé sur le sticker, à son échelle, son anneau annoncé à
+ * TalkBack et ✕ pour annuler — le reste de l'écran est voilé par l'hôte tant qu'il est là.
+ */
+@Composable
+internal fun IncomingStickerPlaceholderLayer(placeholder: IncomingStickerPlaceholder, onCancel: () -> Unit) {
+    val label = stringResource(R.string.story_composer_incoming_sticker_a11y)
+    val status = stringResource(R.string.story_composer_incoming_preparing)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val widthPx = constraints.maxWidth.toFloat()
+        val heightPx = constraints.maxHeight.toFloat()
+        val sidePx = StickerArtMetrics.sidePx(widthPx) * placeholder.scale
+        val side = with(LocalDensity.current) { sidePx.toDp() }
+        Box(
+            Modifier
+                .offset { IntOffset((placeholder.x * widthPx - sidePx / 2).roundToInt(), (placeholder.y * heightPx - sidePx / 2).roundToInt()) }
+                .size(side),
+        ) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(PREVIEW_VEIL, RoundedCornerShape(MeeshyRadius.md))
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = label
+                        stateDescription = status
+                        liveRegion = LiveRegionMode.Polite
+                        progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = RING_STROKE, modifier = Modifier.size(RING))
+            }
+            IncomingCancel(onCancel, Modifier.align(Alignment.TopEnd).offset(x = TARGET / 2, y = -TARGET / 2))
+        }
     }
 }
 

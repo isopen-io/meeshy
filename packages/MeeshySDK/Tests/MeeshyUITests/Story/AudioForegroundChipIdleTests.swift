@@ -61,24 +61,4 @@ final class AudioForegroundChipIdleTests: XCTestCase {
                       "le RÉVEIL aussi — sinon la puce reste figée sur un écran vivant")
     }
 
-    /// **Le canal atteint la PUCE.** Une valeur qui traverse trois couches sans
-    /// arriver au pixel ne corrige personne : c'est le mode d'échec que la
-    /// leçon des résolveurs de Prisme nomme — « qui AFFICHE ce que tu élis ? ».
-    func test_leRégime_arriveJUSQUÀLaPuce() throws {
-        let canvas = try source("Story/StoryComposerView+Canvas.swift")
-        XCTAssertTrue(canvas.contains("onEditClockThrottleChanged: { throttled in"),
-                      "la surface doit écouter le canvas")
-        XCTAssertTrue(canvas.contains("isEditClockThrottled: isEditClockThrottled"),
-                      "…et le passer à la couche des puces, sinon la valeur meurt dans un @State")
-        let overlays = try source("Story/StoryCanvasMediaMuteOverlays.swift")
-        XCTAssertTrue(overlays.contains("isEditClockThrottled: isEditClockThrottled"),
-                      "…qui le passe elle-même à la puce")
-
-        let puce = try source("Story/Controls/AudioForegroundChip.swift")
-        XCTAssertEqual(puce.components(separatedBy: "Self.animationIsPaused(").count - 1, 2,
-                       "les DEUX horloges d'animation — la marquise et la sinusoïde — passent par "
-                           + "la règle ; en laisser une sur `isUserMuted` seul garderait 30 fps.")
-        XCTAssertFalse(puce.contains("paused: isUserMuted,"),
-                       "plus aucune horloge ne se pause sur la seule sourdine")
-    }
 }

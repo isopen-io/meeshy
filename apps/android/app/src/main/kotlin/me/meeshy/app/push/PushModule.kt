@@ -10,7 +10,6 @@ import me.meeshy.app.push.pipeline.AndroidPushEnvironment
 import me.meeshy.app.push.pipeline.BigTextEnricher
 import me.meeshy.app.push.pipeline.EphemeralExpirationEnricher
 import me.meeshy.app.push.pipeline.GroupAndBadgeEnricher
-import me.meeshy.app.push.pipeline.ImageMediaEnricher
 import me.meeshy.app.push.pipeline.MessageActionsEnricher
 import me.meeshy.app.push.pipeline.MessagingStyleEnricher
 import me.meeshy.app.push.pipeline.NotificationEnricher
@@ -50,10 +49,6 @@ interface PushModule {
     @Binds
     @IntoSet
     fun groupAndBadgeEnricher(impl: GroupAndBadgeEnricher): NotificationEnricher
-
-    @Binds
-    @IntoSet
-    fun imageMediaEnricher(impl: ImageMediaEnricher): NotificationEnricher
 
     @Binds
     @IntoSet

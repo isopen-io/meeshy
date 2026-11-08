@@ -1,15 +1,13 @@
 package me.meeshy.app.chat
 
 import android.widget.Toast
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
@@ -30,7 +29,6 @@ import me.meeshy.app.chat.export.CardExportSheet
 import me.meeshy.app.chat.export.DiscussionCardExportSheet
 import me.meeshy.app.chat.fileviewer.FileViewerHost
 import me.meeshy.app.chat.fileviewer.FileViewerRequest
-import me.meeshy.app.chat.mediahub.ConversationMediaHubContent
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.app.chat.options.ConversationOptionsExit
 import me.meeshy.app.chat.options.rememberConversationOptionsSlots
@@ -46,6 +44,8 @@ import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.focal.FlatRowExpansion
+import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 import me.meeshy.ui.component.viewer.GalleryImageSaver
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
@@ -54,7 +54,6 @@ import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
-import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.component.bubble.BubbleContent
 
@@ -75,6 +74,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     val localRoute = rememberLocalDetailRoute()
     var exportMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     var discussionEndingAt by rememberSaveable { mutableStateOf<String?>(null) }
+    sheets.exportCardRequest?.let { requested ->
+        LaunchedEffect(requested) {
+            exportMessageId = requested
+            sheets.exportCardRequest = null
+        }
+    }
     if (gallery != null) {
         val relativeStrings = rememberRelativeTimeStrings()
         val galleryNow = remember(gallery) { System.currentTimeMillis() }
@@ -127,7 +132,13 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) {
                 bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds)
             }
-            CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
+            val heroExpansion = remember(actionTarget.messageId) {
+                FlatRowExpansion(isExpanded = actionTarget.messageId in host.expandedLongMessages) {}
+            }
+            CompositionLocalProvider(
+                LocalBubbleFileTransfers provides fileTransfers,
+                LocalFlatRowExpansion provides heroExpansion,
+            ) {
                 MessageOverlayPreviewHero(
                     frame = frame,
                     content = actionTarget,
@@ -221,7 +232,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
     FileAttachmentDownloadOverlay(
         download = state.fileDownload,
-        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)) },
+        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)).guardedBy(state.messages) },
         onDismiss = actions.dismissFileDownload,
         onRetry = { actions.retryFileDownload() },
     )
@@ -255,7 +266,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             }
             // Moderator+ viewers of a group get the conversation-settings sheet (write-role /
             // announcement / slow-mode); the share link is the « Partager » button of the Options.
-            if (state.slowModeExempt) {
+            if (host.capabilities?.rename == true) {
                 add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
             }
         }
@@ -273,47 +284,28 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 if (exit != ConversationOptionsExit.BLOCKED) host.navigation.onBack()
             },
         )
-        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (l'analyse en tête, comme le tableau de bord iOS), Options.
-        val analysisEntry = ConversationInfoEntry(
-            MeeshyIcons.Sparkles,
-            stringResource(R.string.conversation_analysis_title),
-            openFrom { sheets.analysis = true },
+        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (le tableau de bord unifié, analyse comprise), Options.
+        val tabs = conversationInfoTabSlots(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            isEndToEnd = state.isEndToEnd,
+            conversationTitle = state.conversationTitle,
+            clientMessages = rememberClientStatMessages(state.messages),
+            onGoToMessage = { messageId ->
+                sheets.info = false
+                actions.scrollToMessage(messageId)
+            },
+            onOpenFile = openHubFile,
+            options = options,
         )
-        val tabs = ConversationInfoTabSlots(
-            members = { modifier -> ConversationMembersContent(state.conversationId, accentColor, modifier) },
-            media = { modifier ->
-                ConversationMediaHubContent(
-                    conversationId = state.conversationId,
-                    accentColor = accentColor,
-                    isEndToEnd = state.isEndToEnd,
-                    conversationTitle = state.conversationTitle,
-                    onGoToMessage = { messageId ->
-                        sheets.info = false
-                        actions.scrollToMessage(messageId)
-                    },
-                    onOpenFile = openHubFile,
-                    modifier = modifier,
-                )
-            },
-            stats = { modifier ->
-                ConversationStatsContent(
-                    conversationId = state.conversationId,
-                    accentColor = accentColor,
-                    clientMessages = rememberClientStatMessages(state.messages),
-                    modifier = modifier,
-                    header = { ConversationInfoEntryRow(analysisEntry, accentColor) },
-                )
-            },
-            options = { modifier ->
-                Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg).padding(bottom = MeeshySpacing.xl)) {
-                    options.body()
-                }
-            },
-        )
+        val infoViewModel: ConversationInfoViewModel = hiltViewModel(key = "conversation-info")
+        LaunchedEffect(state.conversationId) { if (state.conversationId.isNotBlank()) infoViewModel.start(state.conversationId) }
+        val hero by infoViewModel.hero.collectAsStateWithLifecycle()
         ConversationInfoSheet(
+            hero = hero,
             title = infoTitle,
             subtitle = if (state.isGroup && state.memberCount > 0) {
-                stringResource(R.string.chat_header_members, state.memberCount)
+                pluralStringResource(R.plurals.chat_header_members, state.memberCount, state.memberCount)
             } else {
                 null
             },
@@ -333,7 +325,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     if (sheets.encryption) {
         ConversationEncryptionSheet(
             conversationId = state.conversationId,
-            isDirect = !state.isGroup,
+            isDirect = state.isKnownDirect,
             accentColor = accentColor,
             onDismiss = { sheets.encryption = false },
         )
@@ -394,14 +386,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
     }
 
-    if (sheets.analysis) {
-        ConversationAnalysisSheet(
-            conversationId = state.conversationId,
-            accentColor = accentColor,
-            onDismiss = { sheets.analysis = false },
-        )
-    }
-
     val detailRoute = MessageDetailRoutes.fromChatState(
         reportMessageId = state.reportForm?.messageId,
         languagesMessageId = state.explorerMessageId.takeIf { state.languageExplorer != null },
@@ -427,7 +411,13 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
                     is MessageDetailRoute.Transcription ->
-                        MessageTranscriptionSheet(route.messageId, actions.attachmentsOf(route.messageId), accentColor, sheetModifier)
+                        MessageTranscriptionSheet(
+                            messageId = route.messageId,
+                            attachments = actions.attachmentsOf(route.messageId),
+                            isProtected = actions.transcriptionPlaybackProtected(route.messageId),
+                            accentColor = accentColor,
+                            modifier = sheetModifier,
+                        )
                     else -> Unit
                 }
             }
@@ -448,13 +438,36 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         },
         languages = { route ->
             state.languageExplorer?.let { explorer ->
+                val voiceBubble = state.messages.firstOrNull { it.messageId == route.messageId }
+                val audioInput = remember(voiceBubble, explorer, state.encryptionMode, state.isEndToEnd) {
+                    voiceBubble?.let {
+                        AudioTranslationInputs.of(
+                            bubble = it,
+                            attachments = actions.attachmentsOf(route.messageId),
+                            explorerLanguages = explorer.rows.map { row -> row.code },
+                            conversationEncryptionMode = state.encryptionMode,
+                            conversationShownSealed = state.isEndToEnd,
+                        )
+                    }
+                }
+                var audioSheetOpen by rememberSaveable(route.messageId) { mutableStateOf(false) }
                 MessageLanguageExplorerSheet(
                     explorer = explorer,
                     accentColor = accentColor,
-                    onSelectLanguage = { code -> actions.onFlagTap(route.messageId, code) },
+                    onSelectLanguage = { code -> actions.onExplorerRowTap(route.messageId, code) },
                     onRetranslate = { code -> actions.onExplorerRetranslate(route.messageId, code) },
                     onDismiss = actions.dismissLanguageExplorer,
+                    onTranslateAudio = audioInput?.let { { audioSheetOpen = true } },
                 )
+                if (audioSheetOpen && audioInput != null) {
+                    AudioTranslationSheet(
+                        input = audioInput,
+                        accentColor = accentColor,
+                        onPlayTrack = actions.onAudioLanguage,
+                        onOpenConsent = null,
+                        onDismiss = { audioSheetOpen = false },
+                    )
+                }
             }
         },
         report = {
@@ -511,36 +524,9 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         }
     }
 
-    if (state.isEffectsPickerOpen) {
-        ModalBottomSheet(
-            onDismissRequest = actions.dismissEffectsPicker,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            EffectsPickerSheet(
-                effects = state.pendingEffects,
-                accentColor = accentColor,
-                onToggle = actions.toggleEffect,
-                onSelectDuration = actions.selectEphemeralDuration,
-                onClear = actions.clearEffects,
-                onDone = actions.dismissEffectsPicker,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
-    }
-
     val replyThread = state.replyThreadOverlay
     if (replyThread != null) {
-        ModalBottomSheet(
-            onDismissRequest = actions.closeReplyThread,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            ReplyThreadSheet(
-                overlay = replyThread,
-                accentColor = accentColor,
-                onReplyTap = actions.onReplyThreadReplyTap,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
+        ReplyThreadHost(state, replyThread.parentId, accentColor, actions.closeReplyThread)
     }
 
     val forward = state.forward

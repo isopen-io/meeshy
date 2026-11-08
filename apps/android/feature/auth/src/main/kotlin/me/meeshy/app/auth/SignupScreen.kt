@@ -1,96 +1,109 @@
-@file:OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package me.meeshy.app.auth
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.autofill.AutofillType
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.SignupField
-import me.meeshy.sdk.model.auth.PhonePlausibility
-import me.meeshy.sdk.model.auth.RegistrationIdentity
-import me.meeshy.sdk.model.auth.SignupFieldIssue
-import me.meeshy.sdk.model.auth.SignupFieldMessage
-import me.meeshy.sdk.model.auth.SignupRefusal
+import me.meeshy.sdk.model.auth.SignupPrimaryAction
 import me.meeshy.sdk.model.auth.SignupSubmitError
-import me.meeshy.ui.component.MeeshyPrimaryButton
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.auth.AuthContentType
+import me.meeshy.ui.component.auth.AuthTextField
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.modifier.autofill
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.formColumnWidth
-import me.meeshy.ui.component.chrome.leadingNavigationIcon
-import me.meeshy.ui.component.chrome.leadingNavigationLabel
+
+internal const val SIGNUP_EMAIL_TAG: String = "signup.email"
+internal const val SIGNUP_PRIMARY_TAG: String = "signup.primary"
+internal const val SIGNUP_SIGN_IN_TAG: String = "signup.signIn"
+
+private const val PHASE_RESPONSE = 0.42f
+private const val PHASE_DAMPING = 0.8f
+private const val PHASE_SCALE_FROM = 0.97f
+private const val REDUCED_FADE_MS = 200
+private const val INACTIVE_ALPHA = 0.6f
+private val PRIMARY_MIN_HEIGHT = 52.dp
+private val PHASE_GAP = MeeshySpacing.xl
 
 /**
- * La création de compte : UN écran, aucun délai, aucune vérification préalable.
+ * L'inscription en phases vivantes (iOS `SignupView`) : UN écran qui se déplie à mesure que la
+ * saisie avance — le téléphone d'abord, l'adresse dès qu'un numéro plausible existe, puis la
+ * carte « Votre compte » (nom et @pseudo pré-dérivés et modifiables, mot de passe facultatif).
+ * Une phase parue ne disparaît jamais.
  *
- * Il remplace un assistant en huit étapes. Ce que l'utilisateur y gagne n'est
- * pas seulement sept écrans de moins : plus rien n'attend entre sa dernière
- * frappe et le bouton — pas de sonde de disponibilité, pas de verdict serveur à
- * franchir pour passer au champ suivant — et aucun refus ne lui parvient sept
- * écrans après le champ fautif : chacun se pose SOUS son champ.
- *
- * L'écran ne décide de rien. Le verdict local, l'état du bouton et le message
- * de chaque champ sont projetés par [SignupUiState] au-dessus des cœurs purs
- * `SignupForm` / `SignupFieldMessages` ; l'écran choisit seulement les mots.
- *
- * Le remplissage automatique est câblé sur les quatre saisies que le système
- * sait servir (nom, e-mail, téléphone, nouveau mot de passe) via le
- * modificateur partagé [autofill].
+ * L'écran ne décide de rien : phases, refus, état du bouton viennent de [SignupUiState], au-dessus
+ * des cœurs purs `SignupPhases` / `SignupForm`. Aucune attente ne précède la saisie ni ne la suit.
  */
 @Composable
 fun SignupScreen(
@@ -98,76 +111,124 @@ fun SignupScreen(
     onRegistered: () -> Unit,
     onOpenTerms: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
+    onOpenSignInLink: () -> Unit = {},
+    onOpenForgotPassword: () -> Unit = {},
     viewModel: SignupViewModel = hiltViewModel(),
+    codeEntry: @Composable () -> EmailVerificationViewModel = { hiltViewModel(key = SIGNUP_CODE_ENTRY_KEY) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val scroll = rememberScrollState()
+    val actions = remember(viewModel) {
+        SignupCardActions(
+            onDisplayNameChange = viewModel::onDisplayNameChange,
+            onUsernameChange = viewModel::onUsernameChange,
+            onSuggestionPicked = viewModel::onUsernameSuggestionPicked,
+            onPasswordChange = viewModel::onPasswordChange,
+            onSubmit = viewModel::onPrimary,
+            onValidateNow = viewModel::validateNow,
+            onSignIn = { viewModel.onSwitchToLogin(); onClose() },
+        )
+    }
 
+    val takenActions = remember(viewModel) {
+        SignupEmailTakenActions(
+            onItsMe = viewModel::requestSignInLink,
+            onNotMe = viewModel::claimEmail,
+            onForgotPassword = viewModel::onForgotPassword,
+        )
+    }
+    val latestOpenSignInLink by rememberUpdatedState(onOpenSignInLink)
+    val latestOpenForgotPassword by rememberUpdatedState(onOpenForgotPassword)
+    LaunchedEffect(viewModel) {
+        viewModel.effect.collect { effect ->
+            when (effect) {
+                SignupEffect.OpenSignInLink -> latestOpenSignInLink()
+                SignupEffect.OpenForgotPassword -> latestOpenForgotPassword()
+            }
+        }
+    }
     LaunchedEffect(state.isRegistered) {
         if (state.isRegistered) onRegistered()
     }
+    // Le clavier se ferme au défilement : le clavier qui suit le doigt n'est pas celui d'un champ.
+    LaunchedEffect(scroll.isScrollInProgress) {
+        if (scroll.isScrollInProgress) {
+            focusManager.clearFocus()
+            keyboard?.hide()
+        }
+    }
 
     MeeshyBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                        titleContentColor = MeeshyTheme.tokens.textPrimary,
-                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
-                    ),
-                    title = {},
-                    navigationIcon = {
-                        IconButton(onClick = onClose) {
-                            Icon(
-                                imageVector = leadingNavigationIcon(),
-                                contentDescription = leadingNavigationLabel(stringResource(R.string.signup_back)),
-                            )
-                        }
-                    },
-                )
-            },
-        ) { padding ->
+        Column(modifier = Modifier.fillMaxSize()) {
+            SignupCloseBar(onClose = onClose)
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
+                    .weight(1f)
+                    .fillMaxWidth()
+                    // Un toucher HORS des champs leur retire la main — et le numéro quitté dit son refus.
+                    .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } }
                     .imePadding()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scroll)
                     .formColumnWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 SignupHeader()
-                DisplayNameField(state = state, viewModel = viewModel)
-                EmailField(state = state, viewModel = viewModel, onSignIn = onClose)
-                PhoneField(state = state, viewModel = viewModel)
-                PasswordField(state = state, viewModel = viewModel)
-                LanguagePill(state = state, viewModel = viewModel)
-                GlobalErrorBanner(error = state.globalError)
-                MeeshyPrimaryButton(
-                    text = stringResource(R.string.signup_submit),
-                    onClick = viewModel::register,
-                    enabled = state.canSubmit,
-                    loading = state.isSubmitting,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                SignupPhoneSection(state = state, viewModel = viewModel)
+                PhaseReveal(visible = state.progress.emailShown) {
+                    EmailPhase(state = state, viewModel = viewModel, takenActions = takenActions, modifier = Modifier.padding(top = PHASE_GAP))
+                }
+                PhaseReveal(visible = state.progress.cardShown) {
+                    Column(
+                        modifier = Modifier.padding(top = PHASE_GAP),
+                        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xl),
+                    ) {
+                        SignupIdentityCard(
+                            state = state,
+                            actions = actions,
+                            codeStep = { step -> SignupCodeHost(step, viewModel, codeEntry()) },
+                        )
+                        if (state.card is SignupCard.Editing) LanguagePill(state = state, viewModel = viewModel)
+                    }
+                }
+                if (state.globalError != null) {
+                    Box(Modifier.padding(top = PHASE_GAP)) { GlobalErrorBanner(error = state.globalError) }
+                }
+                SignupPrimaryButton(state = state, onClick = viewModel::onPrimary, modifier = Modifier.padding(top = PHASE_GAP))
                 LegalNotice(onOpenTerms = onOpenTerms, onOpenPrivacy = onOpenPrivacy)
-                SignInPrompt(enabled = !state.isSubmitting, onSignIn = onClose)
+                SignInPrompt(enabled = !state.isSubmitting, onSignIn = { viewModel.onSwitchToLogin(); onClose() })
             }
+        }
+    }
+}
+
+/** La croix vit dans SA barre : empilée au-dessus du défilement, jamais en surimpression du formulaire. */
+@Composable
+private fun SignupCloseBar(onClose: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
+            Icon(
+                imageVector = MeeshyIcons.Close,
+                contentDescription = stringResource(R.string.signup_close),
+                tint = MeeshyTheme.tokens.textMuted,
+            )
         }
     }
 }
 
 @Composable
 private fun SignupHeader() {
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+    Column(modifier = Modifier.padding(bottom = PHASE_GAP), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         Text(
             text = stringResource(R.string.signup_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MeeshyTheme.tokens.textPrimary,
+            modifier = Modifier.semantics { heading() },
         )
         Text(
             text = stringResource(R.string.signup_subtitle),
@@ -177,93 +238,43 @@ private fun SignupHeader() {
     }
 }
 
+/**
+ * Une phase qui PARAÎT : ressort 0,42 / 0,8 — opacité, déplacement et échelle 0,97 — ou fondu
+ * seul sous « Réduire les animations ». Une phase n'en sort jamais : [visible] ne redevient pas faux.
+ */
 @Composable
-private fun DisplayNameField(state: SignupUiState, viewModel: SignupViewModel) {
-    val message = state.messageFor(SignupField.DISPLAY_NAME)
-    OutlinedTextField(
-        value = state.form.displayName,
-        onValueChange = viewModel::onDisplayNameChange,
-        label = { Text(stringResource(R.string.signup_display_name_label)) },
-        singleLine = true,
-        enabled = !state.isSubmitting,
-        isError = message != null,
-        supportingText = fieldSupportingText(SignupField.DISPLAY_NAME, message),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-        modifier = Modifier
-            .fillMaxWidth()
-            .autofill(listOf(AutofillType.PersonFullName), viewModel::onDisplayNameChange),
-    )
+private fun PhaseReveal(visible: Boolean, content: @Composable () -> Unit) {
+    val reduce = LocalReduceMotion.current
+    val stiffness = MeeshyMotion.stiffnessForResponse(PHASE_RESPONSE)
+    val enter: EnterTransition = if (reduce) {
+        fadeIn(tween(REDUCED_FADE_MS))
+    } else {
+        fadeIn(spring(PHASE_DAMPING, stiffness)) +
+            slideInVertically(spring(PHASE_DAMPING, stiffness, IntOffset.VisibilityThreshold)) { it / 4 } +
+            scaleIn(spring(PHASE_DAMPING, stiffness), initialScale = PHASE_SCALE_FROM) +
+            expandVertically(spring(PHASE_DAMPING, stiffness, IntSize.VisibilityThreshold))
+    }
+    AnimatedVisibility(visible = visible, enter = enter, exit = ExitTransition.None) {
+        content()
+    }
 }
 
 @Composable
-private fun EmailField(state: SignupUiState, viewModel: SignupViewModel, onSignIn: () -> Unit) {
-    val message = state.messageFor(SignupField.EMAIL)
-    val emailTaken = (message as? SignupFieldMessage.Refused)?.refusal == SignupRefusal.EMAIL_TAKEN
-    OutlinedTextField(
-        value = state.form.email,
-        onValueChange = viewModel::onEmailChange,
-        label = { Text(stringResource(R.string.signup_email_label)) },
-        singleLine = true,
-        enabled = !state.isSubmitting,
-        isError = message != null,
-        // Une adresse déjà prise n'est pas une faute de frappe : la sortie est de
-        // se connecter, et elle doit être à portée du doigt, sous le champ.
-        supportingText = fieldSupportingText(SignupField.EMAIL, message, action = if (emailTaken) onSignIn else null),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-        modifier = Modifier
-            .fillMaxWidth()
-            .autofill(listOf(AutofillType.EmailAddress), viewModel::onEmailChange),
-    )
-}
-
-@Composable
-private fun PhoneField(state: SignupUiState, viewModel: SignupViewModel) {
+private fun SignupPhoneSection(state: SignupUiState, viewModel: SignupViewModel) {
     var showCountryPicker by remember { mutableStateOf(false) }
     val countries = rememberCountryCatalog()
     val country = remember(state.form.dialCountryIso, countries) {
         selectedCountry(state.form.dialCountryIso, countries)
     }
-    val message = state.messageFor(SignupField.PHONE)
-    val chooseCountryLabel = stringResource(R.string.signup_choose_country)
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(top = MeeshySpacing.sm)
-                .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .background(MeeshyTheme.tokens.backgroundSecondary)
-                .clickable(enabled = !state.isSubmitting) { showCountryPicker = true }
-                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md)
-                .semantics { contentDescription = chooseCountryLabel },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            Text(text = country.flag, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = country.dialCode,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textPrimary,
-            )
-        }
-        OutlinedTextField(
-            value = state.form.phoneDigits,
-            onValueChange = viewModel::onPhoneEntryChange,
-            label = { Text(stringResource(R.string.signup_phone_label)) },
-            singleLine = true,
-            enabled = !state.isSubmitting,
-            isError = message != null,
-            supportingText = fieldSupportingText(SignupField.PHONE, message),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
-            modifier = Modifier
-                .weight(1f)
-                .autofill(listOf(AutofillType.PhoneNumber), viewModel::onPhoneEntryChange),
-        )
-    }
-
+    SignupPhoneRow(
+        country = country,
+        phoneDigits = state.form.phoneDigits,
+        onPhoneChange = viewModel::onPhoneEntryChange,
+        onCountryClick = { showCountryPicker = true },
+        onFieldLeft = viewModel::onPhoneFieldLeft,
+        errorText = phoneErrorText(state),
+        enabled = !state.isLocked,
+    )
     if (showCountryPicker) {
         CountryPickerSheet(
             countries = countries,
@@ -277,34 +288,83 @@ private fun PhoneField(state: SignupUiState, viewModel: SignupViewModel) {
 }
 
 @Composable
-private fun PasswordField(state: SignupUiState, viewModel: SignupViewModel) {
-    var visible by remember { mutableStateOf(false) }
-    val message = state.messageFor(SignupField.PASSWORD)
-    OutlinedTextField(
-        value = state.form.password,
-        onValueChange = viewModel::onPasswordChange,
-        label = { Text(stringResource(R.string.signup_password_label)) },
-        singleLine = true,
-        enabled = !state.isSubmitting,
-        isError = message != null,
-        supportingText = fieldSupportingText(SignupField.PASSWORD, message),
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { viewModel.register() }),
-        trailingIcon = {
-            IconButton(onClick = { visible = !visible }) {
-                Icon(
-                    imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                    contentDescription = stringResource(
-                        if (visible) R.string.signup_password_hide else R.string.signup_password_show,
-                    ),
-                    tint = MeeshyTheme.tokens.textSecondary,
-                )
-            }
-        },
-        modifier = Modifier
+private fun EmailPhase(
+    state: SignupUiState,
+    viewModel: SignupViewModel,
+    takenActions: SignupEmailTakenActions,
+    modifier: Modifier = Modifier,
+) {
+    val message = state.messageFor(SignupField.EMAIL)
+    val errorText = fieldMessageText(SignupField.EMAIL, message)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        AuthTextField(
+            value = state.form.email,
+            onValueChange = viewModel::onEmailChange,
+            title = stringResource(R.string.signup_email_placeholder),
+            icon = MeeshyIcons.Mail,
+            contentType = AuthContentType.Email,
+            imeAction = ImeAction.Next,
+            enabled = !state.isLocked,
+            errorText = errorText,
+            modifier = Modifier.testTag(SIGNUP_EMAIL_TAG),
+        )
+        ErrorHaptic(errorText)
+        // Une adresse déjà prise n'est pas une faute de frappe : « Est-ce vous ? », ses gestes valent pour CETTE adresse.
+        SignupEmailTakenBlock(state = state, actions = takenActions)
+    }
+}
+
+/**
+ * « S'inscrire » : dégradé de marque pleine largeur, ACTIF dès la carte et un formulaire prêt,
+ * à 0,6 d'opacité sinon — inactif à l'œil, jamais sourd au doigt : le toucher fait dire au
+ * numéro son refus ([SignupViewModel.register]).
+ */
+@Composable
+private fun SignupPrimaryButton(state: SignupUiState, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val action = state.primaryAction
+    val title = stringResource(
+        if (action is SignupPrimaryAction.Talk) R.string.signup_talk else R.string.signup_phased_submit,
+    )
+    val inProgress = stringResource(R.string.signup_submit_in_progress)
+    val active = action is SignupPrimaryAction.Talk || (action as? SignupPrimaryAction.SignUp)?.enabled == true
+    Box(
+        modifier = modifier
             .fillMaxWidth()
-            .autofill(listOf(AutofillType.NewPassword), viewModel::onPasswordChange),
+            .heightIn(min = PRIMARY_MIN_HEIGHT)
+            .testTag(SIGNUP_PRIMARY_TAG)
+            .alpha(if (active || state.isSubmitting) 1f else INACTIVE_ALPHA)
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(Brush.linearGradient(MeeshyPalette.BrandGradient))
+            .clickable(enabled = !state.isSubmitting && !state.isValidating, role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = title
+                if (state.isSubmitting) stateDescription = inProgress
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (state.isSubmitting) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MeeshyPalette.White)
+        } else {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.White,
+            )
+        }
+    }
+}
+
+private const val SIGNUP_CODE_ENTRY_KEY = "signup-code"
+
+/** La saisie du code dans la carte : son ViewModel est celui de l'écran du code, une instance par écran d'inscription. */
+@Composable
+private fun SignupCodeHost(step: SignupCodeStep, viewModel: SignupViewModel, entry: EmailVerificationViewModel) {
+    SignupCodeStepContent(
+        step = step,
+        entry = entry,
+        onVerified = viewModel::onCodeVerified,
+        onProvenElsewhere = viewModel::onLinkOpenedElsewhere,
     )
 }
 
@@ -365,6 +425,7 @@ private fun LanguagePill(state: SignupUiState, viewModel: SignupViewModel) {
     }
 }
 
+
 @Composable
 private fun GlobalErrorBanner(error: SignupSubmitError?) {
     val text = when (error) {
@@ -374,6 +435,7 @@ private fun GlobalErrorBanner(error: SignupSubmitError?) {
     }
     AuthErrorMessage(text = text, boxed = true)
 }
+
 
 /**
  * La phrase légale, puis les deux documents qu'elle nomme, chacun derrière son
@@ -409,6 +471,7 @@ private fun LegalNotice(onOpenTerms: () -> Unit, onOpenPrivacy: () -> Unit) {
     }
 }
 
+
 @Composable
 private fun SignInPrompt(enabled: Boolean, onSignIn: () -> Unit) {
     Row(
@@ -421,7 +484,7 @@ private fun SignInPrompt(enabled: Boolean, onSignIn: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MeeshyTheme.tokens.textSecondary,
         )
-        TextButton(onClick = onSignIn, enabled = enabled) {
+        TextButton(onClick = onSignIn, enabled = enabled, modifier = Modifier.testTag(SIGNUP_SIGN_IN_TAG)) {
             Text(
                 text = stringResource(R.string.signup_sign_in),
                 style = MaterialTheme.typography.bodySmall,
@@ -429,71 +492,4 @@ private fun SignInPrompt(enabled: Boolean, onSignIn: () -> Unit) {
             )
         }
     }
-}
-
-/**
- * Le `supportingText` d'un champ : le refus, plus l'issue quand il en a une.
- *
- * Rend `null` quand il n'y a rien à dire, pour que le champ ne réserve pas une
- * ligne vide sous lui — un formulaire de cinq champs qui respire de six lignes
- * fantômes n'est pas aéré, il est lâche.
- */
-@Composable
-private fun fieldSupportingText(
-    field: SignupField,
-    message: SignupFieldMessage?,
-    action: (() -> Unit)? = null,
-): (@Composable () -> Unit)? {
-    val text = fieldMessageText(field, message) ?: return null
-    val actionLabel = if (action != null) stringResource(R.string.signup_sign_in) else null
-    return {
-        Column {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-            if (actionLabel != null) {
-                Text(
-                    text = actionLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyPalette.Indigo500,
-                    modifier = Modifier
-                        .clickable { action?.invoke() }
-                        .padding(vertical = MeeshySpacing.xs),
-                )
-            }
-        }
-    }
-}
-
-/**
- * Le texte d'un message de champ.
- *
- * Un refus de la passerelle est rendu dans NOS mots ([SignupRefusalCopy]) : elle répond dans sa
- * langue, pas dans celle du lecteur, et sa validation brute (motif AJV) ne se montre jamais.
- */
-@Composable
-private fun fieldMessageText(field: SignupField, message: SignupFieldMessage?): String? = when (message) {
-    null -> null
-    is SignupFieldMessage.Local -> when (message.issue) {
-        SignupFieldIssue.PHONE_TOO_SHORT ->
-            stringResource(R.string.signup_phone_too_short, PhonePlausibility.MIN_DIGITS)
-        SignupFieldIssue.DISPLAY_NAME_TOO_SHORT ->
-            stringResource(R.string.signup_min_characters, RegistrationIdentity.NAME_MIN)
-        else -> stringResource(message.issue.labelRes())
-    }
-    is SignupFieldMessage.Refused -> stringResource(SignupRefusalCopy.fieldRefusal(field, message.refusal))
-}
-
-private fun SignupFieldIssue.labelRes(): Int = when (this) {
-    SignupFieldIssue.DISPLAY_NAME_REQUIRED -> R.string.signup_display_name_required
-    SignupFieldIssue.DISPLAY_NAME_TOO_SHORT -> R.string.signup_min_characters
-    SignupFieldIssue.DISPLAY_NAME_TOO_LONG -> R.string.signup_display_name_too_long
-    SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS -> R.string.signup_display_name_invalid_characters
-    SignupFieldIssue.EMAIL_INVALID -> R.string.signup_email_invalid
-    SignupFieldIssue.PASSWORD_TOO_SHORT -> R.string.signup_password_too_short
-    SignupFieldIssue.PHONE_TOO_SHORT -> R.string.signup_phone_implausible
-    SignupFieldIssue.PHONE_IMPLAUSIBLE -> R.string.signup_phone_implausible
 }

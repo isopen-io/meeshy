@@ -31,7 +31,7 @@ import {
   type TileSize,
 } from '@/lib/calls/call-self-tile';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
-import { useLocalZoom } from '@/lib/calls/self-zoom';
+import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -39,6 +39,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { cameraMirrored } from '@/lib/media/camera-mirror';
 import { sessionStore } from '@/lib/api/session';
+import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 
 /**
  * **LA SCÈNE DE L'APPEL** (#6382, #8063, #8392) — ce que l'écran d'appel montre
@@ -58,8 +59,9 @@ import { sessionStore } from '@/lib/api/session';
  *   dessous (`selfRowsLayout`) ; quand mon image passe en PLEIN ÉCRAN, elles
  *   montent en haut au centre. La vignette se pose 8 rem sous la zone sûre
  *   dans les deux cas : la rangée du haut tient entre elle et l'en-tête.
- * - Mon image en plein écran porte seule le zoom de ma caméra, chargé à part
- *   (`call-self-camera.tsx`). Tout se retire dans un mode.
+ * - Mon image en plein écran, DUO ou GROUPE (ma tuile à la une, #9182), porte
+ *   le zoom de ma caméra, chargé à part (`call-self-camera.tsx`). Tout se
+ *   retire dans un mode.
  */
 
 /** Ce que l'écran d'appel remet à la scène pour MON image. */
@@ -74,6 +76,10 @@ export type SelfView = {
   readonly row: (group?: SelfControlGroup) => ReactNode;
   /** La colonne de la capsule du zoom, sur le bord. */
   readonly column: (capsule: ReactNode) => ReactNode;
+  /** Le zoom de ma caméra courante (#9182) — absent : un témoin qui n'en parle pas (aucun zoom offert, ancien comportement). */
+  readonly local?: LocalZoom;
+  /** Ce que la capsule de capture prend sous l'en-tête (R1) : ma vignette et ses commandes descendent d'autant. Absent : 0. */
+  readonly topInset?: number;
 };
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
@@ -101,6 +107,9 @@ type StageProps = {
   readonly onToggleImmersive: () => void;
   readonly moderation: CallModeration | null;
   readonly self: SelfView;
+  /** Le chrome est-il affiché (#9183) : en grille, décide ce que touche une tuile (la mettre à la une, ou juste rendre le chrome) ; en duo vidéo, chrome retiré, ma vignette passe à sa petite taille (#16663). Défaut `true`. */
+  readonly chromeVisible?: boolean;
+  readonly onRevealChrome?: () => void;
 };
 
 /** Le tempo d'un changement de coin : celui de l'ancienne transition. */
@@ -116,9 +125,10 @@ const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.c
 };
 
 /** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles. */
-function cornerPlace(corner: SelfTileCorner, size: TileSize): { readonly left: string; readonly top: string } {
+function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number): { readonly left: string; readonly top: string } {
   const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width}px)`;
-  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${SELF_TILE_TOP}px)` : `max(calc(env(safe-area-inset-top) + ${SELF_TILE_TOP}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
+  const tileTop = SELF_TILE_TOP + topInset;
+  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
   return { left, top };
 }
 
@@ -158,7 +168,7 @@ function SelfRowSlot({ group, row, tile, children }: { readonly group: SelfContr
   );
 }
 
-const controlsTop = { top: 'calc(env(safe-area-inset-top) + 3.5rem)' } as const;
+const controlsTop = (topInset: number) => ({ top: `calc(env(safe-area-inset-top) + 3.5rem + ${topInset}px)` }) as const;
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
@@ -187,11 +197,12 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   );
 }
 
-function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language' | 'self'>) {
+function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible'>) {
   const swapped = self.full;
   const callId = call.callId ?? '';
   const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
   const corner = useStore(selfTileStore, (state) => selfTileCornerFor(state, callId));
+  const meId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
   const [said, setSaid] = useState('');
   const hint = useId();
   const resize = (next: SelfTileScale): void => {
@@ -206,6 +217,9 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const firstPeer = orderedMembers(call.members)[0];
   const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
   const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
+  /* La vignette du coin porte la couleur de qui s'y montre : la mienne, ou celle du correspondant une fois échangée (#16635). */
+  const cornerOwner = swapped ? (firstPeer?.userId ?? null) : meId;
+  const cornerColor = cornerOwner === null ? SELF_SPEAKER_COLOR : speakerColor(cornerOwner);
   const selfMirrored = selfPreviewMirrored(call);
   const local = useLocalZoom(call.callId, call.facing);
   const you = translate(language, 'call.you');
@@ -215,10 +229,12 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const cornerShown = swapped || call.cameraOn;
   const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
   const screen = viewport();
-  const size = selfTileSize(scale, screen);
-  const rest = selfTileBox({ corner, size, viewport: screen });
+  const compact = !chromeVisible;
+  const size = selfTileSize(compact ? 1 : scale, screen);
+  const topInset = self.topInset ?? 0;
+  const rest = selfTileBox({ corner, size, viewport: screen, topInset });
   const drop = ({ dx, dy }: TileOffset): void => {
-    const next = nearestSelfCorner({ center: { x: rest.x + rest.width / 2 + dx, y: rest.y + rest.height / 2 + dy }, size, viewport: screen });
+    const next = nearestSelfCorner({ center: { x: rest.x + rest.width / 2 + dx, y: rest.y + rest.height / 2 + dy }, size, viewport: screen, topInset });
     if (next !== corner) moveTo(next);
   };
   const drag = useTileDrag(drop);
@@ -248,7 +264,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const peerMuted = firstPeer?.micMuted === true;
   const stageLabel = peerMuted ? `${call.title} · ${translate(language, 'call.peer.muted')}` : call.title;
   const count = (group: SelfControlGroup): number => self.mine.filter((action) => inSelfGroup(group, action)).length;
-  const rows = swapped || !self.controls ? null : selfRowsLayout({ tile: tileBox, bounds: selfRowBounds(screen), effectsWidth: selfRowWidth(count('effects')), cameraWidth: selfRowWidth(count('camera') + 1) });
+  const rows = swapped || !self.controls ? null : selfRowsLayout({ tile: tileBox, bounds: selfRowBounds(screen, topInset), effectsWidth: selfRowWidth(count('effects')), cameraWidth: selfRowWidth(count('camera') + 1) });
   const glyphs = { plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> };
   return (
     <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
@@ -273,7 +289,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
         </Suspense>
       ) : null}
       {swapped && self.controls ? (
-        <div className="absolute left-1/2 z-20 -translate-x-1/2" style={controlsTop}>
+        <div className="absolute left-1/2 z-20 -translate-x-1/2" style={controlsTop(topInset)}>
           {self.row()}
         </div>
       ) : null}
@@ -281,9 +297,10 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
         <div
           ref={cornerFrame}
           className="absolute z-10"
-          style={{ ...cornerPlace(corner, size), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           data-call-corner-frame=""
           data-call-self-tile-corner={corner}
+          data-call-self-tile-compact={compact ? '' : undefined}
           data-call-self-tile-dragging={offset === null ? undefined : ''}
         >
           {rows?.effects ? (
@@ -297,9 +314,9 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
             aria-describedby={swapped ? undefined : hint}
             onClick={self.onToggle}
             onKeyDown={onArrow}
-            className={`relative z-10 grid size-full place-items-center overflow-hidden rounded-card shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
+            className={`relative z-10 grid size-full place-items-center overflow-hidden rounded-card border-2 shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
             {...(swapped ? {} : gestures)}
-            style={{ background: 'var(--color-scrim-soft)', ...(swapped ? {} : { ...pinch.style, transformOrigin: PIN_ORIGIN[corner] }) }}
+            style={{ background: 'var(--color-scrim-soft)', borderColor: cornerColor, ...(swapped ? {} : { ...pinch.style, transformOrigin: PIN_ORIGIN[corner] }) }}
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
@@ -323,14 +340,14 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self }: StageProps) {
+export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined }: StageProps) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   if (layout === 'grid') {
     return (
       <CallGrid
         members={orderedMembers(call.members)}
         remoteStreams={call.remoteStreams}
-        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
+        self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
         selfControls={self.controls ? self.row() : null}
         choice={choice}
         onChoose={onChoose}
@@ -338,10 +355,13 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
         onToggleImmersive={onToggleImmersive}
         moderation={moderation}
         language={language}
+        chromeVisible={chromeVisible}
+        onRevealChrome={onRevealChrome}
+        selfZoom={self.local === undefined ? null : { local: self.local, column: self.column }}
       />
     );
   }
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
-  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} />;
+  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} />;
   return null;
 }

@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
+import me.meeshy.sdk.model.ForwardAttribution
 import org.junit.Test
 
 /**
@@ -31,6 +32,9 @@ class MessageBubbleAccessibilityLabelTest {
         blurred = "blurred",
         edited = "edited",
         pinned = "pinned",
+        forwarded = "forwarded",
+        forwardedFromGroup = "forwarded from %s",
+        forwardedFromPerson = "fwd. from %s",
         ephemeral = "ephemeral",
         reactions = "reactions: %s",
         delivery = BubbleDeliveryA11yStrings(
@@ -69,6 +73,8 @@ class MessageBubbleAccessibilityLabelTest {
         isViewOnceOpenedByMe: Boolean = false,
         replyToIsMe: Boolean = false,
         isSlowSend: Boolean = false,
+        isForwarded: Boolean = false,
+        forwardAttribution: ForwardAttribution = ForwardAttribution.Anonymous,
     ) = BubbleContent(
         messageId = "m1",
         text = text,
@@ -92,6 +98,8 @@ class MessageBubbleAccessibilityLabelTest {
         audios = audios,
         expiresAtIso = expiresAtIso,
         pinnedAtIso = pinnedAtIso,
+        isForwarded = isForwarded,
+        forwardAttribution = forwardAttribution,
         videoCount = videoCount,
         contactCards = contactCards,
         isBlurred = isBlurred,
@@ -106,6 +114,14 @@ class MessageBubbleAccessibilityLabelTest {
 
     private fun image(id: String) = BubbleImage(attachmentId = id, url = "https://x/$id")
     private fun audio(id: String) = BubbleAudio(attachmentId = id)
+
+    @Test
+    fun `TalkBack lit le texte sans la notation markdown`() {
+        val label = compose(content(text = "**bonjour** [doc](https://x.io) # titre"))
+        assertThat(label).contains("bonjour doc # titre")
+        assertThat(label).doesNotContain("**")
+        assertThat(compose(content(text = "# Titre\n- un"))).contains("Titre\nun")
+    }
 
     @Test
     fun `received text message names the sender before the text`() {
@@ -256,6 +272,31 @@ class MessageBubbleAccessibilityLabelTest {
         assertThat(deliveryLabel(DeliveryStatus.Delivered)).isEqualTo("x, delivered")
         assertThat(deliveryLabel(DeliveryStatus.Read)).isEqualTo("x, read")
         assertThat(deliveryLabel(DeliveryStatus.Failed)).isEqualTo("x, failed")
+    }
+
+    @Test
+    fun `a pinned forward is announced pinned first then forwarded`() {
+        val label = compose(
+            content(
+                text = "x", senderName = "Alice", pinnedAtIso = "2026-08-21T09:00:00Z",
+                isForwarded = true, forwardAttribution = ForwardAttribution.Group("Lobby"),
+            ),
+        )
+        assertThat(label).isEqualTo("Alice, x, pinned, forwarded from Lobby")
+    }
+
+    @Test
+    fun `a forward names its person or nobody`() {
+        assertThat(compose(content(text = "x", senderName = "A", isForwarded = true, forwardAttribution = ForwardAttribution.Person("Bo"))))
+            .isEqualTo("A, x, fwd. from Bo")
+        assertThat(compose(content(text = "x", senderName = "A", isForwarded = true)))
+            .isEqualTo("A, x, forwarded")
+    }
+
+    @Test
+    fun `a deleted forward announces no forward`() {
+        assertThat(compose(content(senderName = "A", isDeleted = true, isForwarded = true)))
+            .doesNotContain("forwarded")
     }
 
     @Test

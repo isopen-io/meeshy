@@ -1,13 +1,17 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useStore } from 'zustand/react';
+
+import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
 import { endToEndRegimeLedger, endToEndSealed } from '@/lib/end-to-end-regime-ledger';
 import { translateConversationEncryption } from '@/lib/i18n-conversation-encryption-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { encryptionExplanation, FACT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from '@/lib/view/conversation-encryption-explanation';
+import { encryptionSwitchLock, type EncryptionModeSwitchGesture } from '@/lib/view/conversation-encryption-switch';
 import type { PlaintextDirectGesture } from '@/lib/view/plaintext-direct';
 import { useConversationEncryptionCatalog } from '@/lib/view/use-conversation-encryption-catalog';
 
+import { ConversationEncryptionSwitch } from './conversation-encryption-switch';
 import { PlaintextDirectAction } from './plaintext-direct-action';
 
 /**
@@ -15,8 +19,12 @@ import { PlaintextDirectAction } from './plaintext-direct-action';
  * la fiche Chiffrement d'iOS (`ConversationEncryptionDetailSheet` +
  * `ConversationEncryptionExplanationSections`) : en mots simples, le mode de la
  * conversation ouverte, qui peut la lire, ce qui fonctionne et ce qui manque,
- * ce qui n'est pas encore livré, les appareils et la bascule. Le web ne
- * bascule pas le chiffrement : il l'explique. Le résumé se lit d'emblée, et,
+ * ce qui n'est pas encore livré, les appareils et la bascule. Le web CHANGE le
+ * mode d'une conversation que le serveur lit, tête-à-tête ou groupe, au droit
+ * servi (#14648, `conversation-encryption-switch.tsx`) — hybride → serveur
+ * compris (#14663) —, sans jamais revenir au clair, ni activer ni quitter le
+ * bout en bout. Le résumé se lit
+ * d'emblée, et,
  * pour le bout en bout, sa RÈGLE aussi (il ne se désactive jamais ; une autre
  * conversation, sans chiffrement de bout en bout, reste toujours possible) ;
  * le détail s'ouvre d'un geste (`<details>`, clavier et lecteur d'écran
@@ -34,22 +42,38 @@ const MUTED = 'var(--color-ios-ink-2)';
 export function ConversationEncryptionSection({
   conversation,
   plaintextDirect,
+  modeSwitch,
 }: {
   readonly conversation: { readonly id?: string; readonly type: string; readonly encryptionMode?: string | null };
   readonly plaintextDirect?: PlaintextDirectGesture | undefined;
+  readonly modeSwitch?: EncryptionModeSwitchGesture | undefined;
 }) {
   const language = currentInterfaceLanguage();
   const ready = useConversationEncryptionCatalog(language);
   const headingId = useId();
+  const [shown, setShown] = useState<{ readonly conversationId: string; readonly mode: CreationEncryptionMode; readonly over: string | null } | null>(null);
   const sealedIds = useStore(endToEndRegimeLedger, (state) => state.sealed);
+  const heldIds = useStore(endToEndRegimeLedger, (state) => state.held);
   const sealed = conversation.id !== undefined && endToEndSealed({ sealed: sealedIds }, { conversationId: conversation.id });
+  const switchLocked =
+    conversation.id !== undefined &&
+    encryptionSwitchLock({ sealed: sealedIds, held: heldIds }, { conversationId: conversation.id, servedMode: conversation.encryptionMode }) !== null;
+
+  const showFor =
+    (conversationId: string, over: string | null) =>
+    (mode: CreationEncryptionMode | null): void =>
+      setShown((current) =>
+        mode !== null ? { conversationId, mode, over } : current?.conversationId === conversationId ? null : current,
+      );
 
   if (!ready) return <div aria-busy="true" className="px-4 pb-6" data-conversation-encryption-catalog-loading />;
 
   const t = (key: Parameters<typeof translateConversationEncryption>[1], params?: Readonly<Record<string, string>>): string =>
     translateConversationEncryption(language, key, params);
   const isDirect = conversation.type === 'direct';
-  const explanation = encryptionExplanation({ mode: sealed ? 'e2ee' : conversation.encryptionMode, isDirect });
+  const servedMode = conversation.encryptionMode ?? null;
+  const shownMode = shown !== null && shown.conversationId === conversation.id && shown.over === servedMode ? shown.mode : servedMode;
+  const explanation = encryptionExplanation({ mode: sealed ? 'e2ee' : shownMode, isDirect });
   const offeredGesture = isDirect && explanation.regime === 'end-to-end' ? plaintextDirect : undefined;
 
   return (
@@ -66,6 +90,15 @@ export function ConversationEncryptionSection({
         >
           {t(FACT_KEY[explanation.rule])}
         </p>
+      )}
+      {modeSwitch === undefined || conversation.id === undefined ? null : (
+        <ConversationEncryptionSwitch
+          key={conversation.id}
+          locked={switchLocked}
+          gesture={modeSwitch}
+          t={t}
+          onShownMode={showFor(conversation.id, servedMode)}
+        />
       )}
       <details className="px-4">
         <summary className="cursor-pointer pb-3 text-body font-semibold" style={{ minHeight: 44 }} data-conversation-encryption-summary>

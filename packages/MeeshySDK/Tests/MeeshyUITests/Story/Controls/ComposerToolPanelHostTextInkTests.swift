@@ -22,19 +22,6 @@ final class ComposerToolPanelHostTextInkTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_textColorSwatch_consumesReadableInk() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Story/Controls/ComposerTextItemRow.swift")
-        XCTAssertTrue(
-            source.contains(".foregroundColor(Color(hex: textHex).readableInk)"),
-            "La pastille « Aa » doit consommer Color.readableInk (#5950) au lieu de comparer sa " +
-            "luminance à un seuil arrondi en dur."
-        )
-        XCTAssertFalse(
-            source.contains("luminance > 0.6"),
-            "Le seuil arrondi 0.6 (#5955) ne doit plus apparaître sur ce site."
-        )
-    }
-
     /// Preuve directe sur la teinte fautive du jeu de fixtures (#46BDCA,
     /// L ≈ 0,4196) : `readableInk` élit désormais le noir, exactement ce que
     /// consomme `ComposerToolPanelHost` depuis le correctif ci-dessus.

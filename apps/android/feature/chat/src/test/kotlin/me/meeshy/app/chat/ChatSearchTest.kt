@@ -193,4 +193,23 @@ class ChatSearchTest {
         assertThat(r.activeIndex).isEqualTo(0)
         assertThat(r.activeMessageId).isNull()
     }
+
+    // ---- local + server merge ----
+
+    @Test
+    fun `local matches and server hits merge without a duplicate, local order first`() {
+        val local = ChatSearch.matchIds(corpus, "hello")
+
+        val merged = me.meeshy.sdk.model.search.ConversationSearchResults.mergeIds(local, listOf("m3", "far9", "m1"))
+
+        assertThat(merged).containsExactly("m1", "m3", "far9").inOrder()
+    }
+
+    @Test
+    fun `the local n over N counter stays on the local matches`() {
+        val state = ChatSearchState().activated().withQuery("hello", corpus)
+
+        assertThat(state.matchCount).isEqualTo(2)
+        assertThat(state.currentPosition).isEqualTo(1)
+    }
 }

@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "video_filter_backgroundBlur",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_brightness",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_contrast",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_exposure",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_naturalComplexion",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_naturalComplexion_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_performanceDegraded",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.cool",
+          "androidName": "video_filter_preset_cool",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.muted",
+          "androidName": "video_filter_preset_muted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.natural",
+          "androidName": "video_filter_preset_natural",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.vivid",
+          "androidName": "video_filter_preset_vivid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.warm",
+          "androidName": "video_filter_preset_warm",
+          "status": "adopted"
+        },
+        {
+          "androidName": "video_filter_radius",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_reinit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_reset",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_saturation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_skinSmoothing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_temperature",
+          "status": "android-only"
+        },
+        {
+          "androidName": "video_filter_title",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

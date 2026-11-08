@@ -19,6 +19,7 @@ public enum MessagesEndpoint: MeeshyEndpoint, Sendable {
     case byMessageIdRestoreForMe(messageId: String)
     case byMessageIdStatusDetails(messageId: String)
     case byMessageIdTranslations(messageId: String)
+    case search
 
     public var path: String {
         switch self {
@@ -29,6 +30,7 @@ public enum MessagesEndpoint: MeeshyEndpoint, Sendable {
         case .byMessageIdRestoreForMe(let messageId): return "/api/v1/messages/\(messageId)/restore-for-me"
         case .byMessageIdStatusDetails(let messageId): return "/api/v1/messages/\(messageId)/status-details"
         case .byMessageIdTranslations(let messageId): return "/api/v1/messages/\(messageId)/translations"
+        case .search: return "/api/v1/messages/search"
         }
     }
 }

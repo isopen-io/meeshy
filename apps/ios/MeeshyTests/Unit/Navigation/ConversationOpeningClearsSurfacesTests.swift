@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
@@ -245,11 +246,15 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
 
     // MARK: - Un post ou une story ouverts par une notification (#10543)
 
-    func test_clearPresentedSurfaces_postOpenedFromANotification_closesTheStoryFirst() {
+    /// La feuille du post attend que la story ait fini de descendre (#16676) :
+    /// la seconde levée ne voit plus rien à fermer, mais la story part encore.
+    func test_clearPresentedSurfaces_postOpenedFromANotification_closesTheStoryFirst() async {
         let registry = PresentedSurfaceRegistry()
-        let router = Router(surfaces: registry)
+        let router = Router(surfaces: registry, surfaceHandoff: .zero)
         var events: [String] = []
         _ = registry.declare(.storyViewer, answer: { .closes }) { events.append("story refermée") }
+        let presented = expectation(description: "la feuille du post monte")
+        let watch = router.$presentedPost.compactMap { $0 }.sink { _ in presented.fulfill() }
 
         router.clearPresentedSurfaces { _ in
             events.append("post ouvert")
@@ -257,7 +262,11 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         }
 
         XCTAssertEqual(events, ["story refermée", "post ouvert"])
-        XCTAssertEqual(router.path.count, 1)
+        XCTAssertNil(router.presentedPost, "la feuille ne monte pas pendant que la story descend")
+        await fulfillment(of: [presented], timeout: 2)
+        XCTAssertEqual(router.presentedPost?.postId, "0000000000000000000000e1")
+        XCTAssertTrue(router.path.isEmpty)
+        watch.cancel()
     }
 
     // MARK: - Deux fenêtres, deux routeurs (#10543)
@@ -365,10 +374,12 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         }
     }
 
-    func test_composerClosing_goesThroughTheAtelierExit() throws {
+    func test_composerClosing_writesTheDraftBeforeClosing() throws {
         let host = try appSource("Features/Composer/MeeshyComposerHost+Autosave.swift")
-        XCTAssertTrue(host.contains("ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft"))
-        XCTAssertTrue(host.contains("exitIsArmed: publishTrigger.offersExit"))
+        let compacte = host.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(compacte.contains("close:{flushAutosave()onDismiss()}"),
+                      "Le meuble écrit son brouillon — repris compris — avant de refermer.")
+        XCTAssertTrue(host.contains("keepsStoredDraft: storedDraft.keepsDraft"))
     }
 
     func test_pushOfAConversation_goesThroughTheRouterSite() throws {

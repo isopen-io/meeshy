@@ -35,8 +35,8 @@ class MediaPermissionStringsParityTest {
         return fromRoot
     }
 
-    private fun strings(folder: String): Map<String, String> {
-        val file = File(resDir(), "$folder/strings_media_permissions.xml")
+    private fun strings(folder: String, name: String = "strings_media_permissions.xml"): Map<String, String> {
+        val file = File(resDir(), "$folder/$name")
         check(file.isFile) { "fichier de chaînes manquant : ${file.path}" }
         return stringPattern.findAll(file.readText()).associate { it.groupValues[1] to it.groupValues[2] }
     }
@@ -86,7 +86,7 @@ class MediaPermissionStringsParityTest {
 
     @Test
     fun `every key the pure presenter can ask for exists`() {
-        val keys = strings("values").keys
+        val keys = strings("values").keys + strings("values", "strings_generated.xml").keys
         val wanted = PermissionNature.values().flatMap { nature ->
             PermissionSurface.values().flatMap { surface ->
                 val presentation = PermissionPresentation.of(nature, surface)

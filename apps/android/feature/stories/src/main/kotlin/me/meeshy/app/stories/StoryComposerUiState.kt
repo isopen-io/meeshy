@@ -93,13 +93,27 @@ data class StoryComposerUiState(
     val drawingBoard: StoryDrawingBoard = StoryDrawingBoard(),
     val drawColorHex: String = StoryDrawingPalette.DEFAULT_COLOR,
     val drawWidthDesign: Double = StoryDrawingPalette.DEFAULT_WIDTH,
-    val isUploadingMedia: Boolean = false,
+    /** Le pinceau actif (stylo, marqueur, gomme) et son lissage ; un trait sélectionné est édité à leur place. */
+    val drawTool: me.meeshy.sdk.model.StrokeTool = me.meeshy.sdk.model.StrokeTool.PEN,
+    val drawSmoothing: me.meeshy.sdk.model.StrokeSmoothing = me.meeshy.sdk.model.StrokeSmoothing.CURVE,
+    /** Le panneau d'options déplié sous les bulles du dessin ; `null` ⇒ replié. */
+    val drawingExpandedTool: DrawingEditTool? = null,
+    /** La sélection se prépare sur l'appareil (copie, lecture) : seule cette étape retient l'écran (#15598). */
+    val isPreparingMedia: Boolean = false,
+    /** Les envois de fond en cours, par média en file (`cmid`) ou par piste de son : leurs octets partis (#15598). */
+    val uploadProgress: Map<String, MediaUploadProgress> = emptyMap(),
+    /** Le sticker image dont les octets entrent dans la scène, ou celui qui a échoué (#15597). */
+    val stickerIntake: StickerIntake? = null,
+    /** Les sons posés dont l'envoi de fond n'a pas abouti : ils retiennent Publier et proposent « Réessayer » (#15598). */
+    val failedSounds: Set<String> = emptySet(),
     /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),
     /** Où chaque média de la sélection en cours d'envoi se posera (R4 de #13863), décidé au choix, dans l'ordre des lignes. */
     val mediaLandings: List<ComposerMediaPlacement.Landing> = emptyList(),
     /** Les médias de la sélection en cours d'envoi, dans l'ordre des lignes : leur aperçu et leur poids (R5 de #13863). */
     val incomingMedia: List<MediaUploadItem> = emptyList(),
+    /** Ce que le choix dit de chaque média avant sa copie (#16205) : sa nature et la vignette d'une photo. */
+    val incomingHints: List<IncomingMediaHint> = emptyList(),
     /** Un envoi a échoué et ses octets sont gardés : la ligne d'erreur offre « Réessayer » (R5 de #13863). */
     val canRetryMedia: Boolean = false,
     /** Le réseau est coupé (#13959) : un média en file se dit « Hors ligne » — et seulement alors. */
@@ -146,6 +160,8 @@ data class StoryComposerUiState(
     val restoredFormats: List<ComposerFormat>? = null,
     /** Les formats qu'un geste de publication n'a pas fait partir (#13919) : la scène dit lesquels. */
     val publishFailedFormats: List<ComposerFormat> = emptyList(),
+    /** Combien d'éléments le dernier changement de forme du cadre a repositionnés : la bannière discrète les annonce, 0 : rien. */
+    val repositionedCount: Int = 0,
 ) {
     internal val variant: ComposerFormatVariant get() = ComposerFormatVariant.of(format)
 
@@ -170,12 +186,14 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (writesPostText && postText.isNotBlank() || deck.hasText && captionsSlides || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
+        get() = (writesPostText && postText.isNotBlank() || deck.hasText && captionsSlides || deck.hasPublishMatter) &&
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
-            !isUploadingMedia &&
-            !deck.awaitsStickerImage
+            !intakeBlocks &&
+            !deck.awaitsStickerImage &&
+            !awaitsSoundUpload &&
+            !(editing && uploadProgress.isNotEmpty())
 
     /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
     internal val publishBlock: StoryPublishBlock?

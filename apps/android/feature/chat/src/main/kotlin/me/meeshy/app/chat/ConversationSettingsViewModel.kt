@@ -8,10 +8,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.appearance.AppearanceCatalogLoader
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ConversationSettingsForm
+import me.meeshy.sdk.model.MemberActionPolicy
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.knownUserRole
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
+import me.meeshy.sdk.model.appearance.AppearanceCatalog
+import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
 /** Lifecycle of an admin settings save. */
@@ -21,7 +28,18 @@ data class ConversationSettingsUiState(
     val conversationId: String? = null,
     val form: ConversationSettingsForm? = null,
     val status: SettingsSaveStatus = SettingsSaveStatus.Idle,
+    /** #15269 — la loi des actions accorde l'édition de la conversation à ce lecteur (jamais Global, jamais un direct). */
+    val mayEdit: Boolean = false,
+    /** L'accent PERSONNEL du lecteur ; `null` = « Automatique » (l'accent calculé de la conversation). */
+    val appearance: ConversationAppearance = ConversationAppearance.DEFAULT,
+    val catalog: AppearanceCatalog? = null,
+    /** Recherche LOCALE de la section « Gestion des membres » : filtre le roster déjà chargé, sans requête. */
+    val memberQuery: String = "",
+    /** Le rang du lecteur dans cette conversation (repli membre) : il décide du bouton « Ajouter un membre ». */
+    val viewerRole: MemberRole = MemberRole.MEMBER,
 ) {
+    val mayAddMember: Boolean get() = MemberActionPolicy.mayAddMember(viewerRole)
+
     val isLoaded: Boolean get() = form != null
     val isSaving: Boolean get() = status == SettingsSaveStatus.Saving
     val hasError: Boolean get() = status == SettingsSaveStatus.Error
@@ -44,6 +62,8 @@ data class ConversationSettingsUiState(
 @HiltViewModel
 class ConversationSettingsViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
+    private val sessionRepository: SessionRepository,
+    private val appearanceLoader: AppearanceCatalogLoader,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationSettingsUiState())
@@ -56,15 +76,29 @@ class ConversationSettingsViewModel @Inject constructor(
      */
     fun load(conversationId: String) {
         if (_state.value.conversationId == conversationId) return
-        _state.update { ConversationSettingsUiState(conversationId = conversationId) }
+        _state.update { ConversationSettingsUiState(conversationId = conversationId, catalog = appearanceLoader.current) }
+        viewModelScope.launch {
+            val catalog = runCatching { appearanceLoader.catalog() }.getOrNull()
+            _state.update { it.copy(catalog = catalog) }
+        }
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
-                if (conversation != null && _state.value.form == null) {
-                    _state.update { it.copy(form = ConversationSettingsForm.from(conversation)) }
+                if (conversation == null) return@collect
+                val mayEdit = ConversationRowMenuCapabilities.forViewer(conversation, sessionRepository.currentUser.value).rename
+                val appearance = ConversationAppearance.read(conversation.resolvedPreferences?.appearance)
+                _state.update {
+                    it.copy(
+                        mayEdit = mayEdit,
+                        form = it.form ?: ConversationSettingsForm.from(conversation),
+                        appearance = appearance,
+                        viewerRole = conversation.knownUserRole(sessionRepository.currentUser.value?.id) ?: MemberRole.MEMBER,
+                    )
                 }
             }
         }
     }
+
+    fun setMemberQuery(query: String) = _state.update { it.copy(memberQuery = query) }
 
     fun setWriteRole(role: MemberRole) = editForm { it.withWriteRole(role) }
 
@@ -73,6 +107,22 @@ class ConversationSettingsViewModel @Inject constructor(
     fun setSlowMode(seconds: Int) = editForm { it.withSlowMode(seconds) }
 
     fun setAutoTranslate(enabled: Boolean) = editForm { it.withAutoTranslate(enabled) }
+
+    /**
+     * Écrit l'accent personnel par la mutation optimiste des préférences (la ligne Room se repeint aussitôt :
+     * liste et fil), `null` = Automatique. Sur échec, le choix précédent revient.
+     */
+    fun setAccent(key: String?) {
+        val id = _state.value.conversationId ?: return
+        val previous = _state.value.appearance
+        val next = previous.withAccent(key)
+        if (next == previous) return
+        _state.update { it.copy(appearance = next) }
+        viewModelScope.launch {
+            val written = conversationRepository.setAppearanceOptimistic(id, next)
+            if (!written) _state.update { if (it.appearance == next) it.copy(appearance = previous) else it }
+        }
+    }
 
     private fun editForm(transform: (ConversationSettingsForm) -> ConversationSettingsForm) {
         _state.update { current ->

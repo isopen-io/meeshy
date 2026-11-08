@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net.api
 
+import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
 import me.meeshy.sdk.model.appearance.InstalledPackList
@@ -81,3 +82,25 @@ suspend fun PackApi.catalogue(domain: AppearancePackDomain): ApiResponse<ShopPac
 /** Installer ([installed] vrai) ou retirer un pack de [domain] : PUT / DELETE de la même adresse. */
 suspend fun PackApi.setInstalled(domain: AppearancePackDomain, slug: String, installed: Boolean): ApiResponse<ShopPack> =
     if (installed) install(domain.wire, slug) else uninstall(domain.wire, slug)
+
+/**
+ * Les mêmes adresses que [PackApi], lues SANS modèle : le moteur générique des packs (`PackService`) décode chaque
+ * pack SEUL depuis le JSON servi, pour n'importe quel domaine (`/packs/<domaine>`). Un domaine que la passerelle ne
+ * sert pas répond 404 ; `installed` et `install` ne routent jamais un domaine inconnu (le service le refuse avant).
+ */
+interface PackRawApi {
+    @GET("packs/{domain}")
+    suspend fun catalogue(@Path("domain") domain: String): ApiResponse<JsonElement>
+
+    @GET("packs/{domain}/installed")
+    suspend fun installed(@Path("domain") domain: String): ApiResponse<JsonElement>
+
+    @GET("packs/{domain}/{slug}")
+    suspend fun detail(@Path("domain") domain: String, @Path("slug") slug: String): ApiResponse<JsonElement>
+
+    @PUT("packs/{domain}/{slug}/install")
+    suspend fun install(@Path("domain") domain: String, @Path("slug") slug: String): ApiResponse<JsonElement>
+
+    @DELETE("packs/{domain}/{slug}/install")
+    suspend fun uninstall(@Path("domain") domain: String, @Path("slug") slug: String): ApiResponse<JsonElement>
+}

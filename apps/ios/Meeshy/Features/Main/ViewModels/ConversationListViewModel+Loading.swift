@@ -58,7 +58,6 @@ extension ConversationListViewModel {
 
     // MARK: - Load Conversations
 
-
     func performLoadConversations() async {
         Logger.messages.debug("[ConversationListVM] loadConversations called")
 
@@ -89,7 +88,7 @@ extension ConversationListViewModel {
             if case .fresh = cached { loadState = .cachedFresh } else { loadState = .cachedStale }
             lastFetchedAt = Date()
             Task { [weak self] in
-                await self?.syncEngine.syncSinceLastCheckpoint()
+                await self?.listCatchUp.run()
                 self?.loadState = .loaded
             }
         case .expired:

@@ -272,8 +272,8 @@ class WebRtcCallCoordinatorTest {
     fun `a stale offer arriving after a newer one is dropped`() = runTest(UnconfinedTestDispatcher()) {
         startAsCallee()
 
-        incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-fresh"))
-        incomingSignals.emit(remoteSignal("offer", negotiationId = 1, sdp = "v=0-stale"))
+        incomingSignals.emit(remoteSignal("offer", negotiationId = 3, sdp = "v=0-fresh"))
+        incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-stale"))
 
         coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-fresh" }) }
         coVerify(exactly = 0) { engine.setRemoteDescription(match { it.description == "v=0-stale" }) }

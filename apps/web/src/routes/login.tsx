@@ -23,7 +23,9 @@ import { DeviceAccountList } from '@/components/device-account-list';
 import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/accounts';
 import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
 import { translate } from '@/lib/i18n-catalog';
-import { PublicHeader, useInterfaceLanguage } from '@/components/public-header';
+import { useInterfaceLanguage } from '@/components/public-header';
+import { AuthHeader } from '@/components/auth-header';
+import { AuthSiteFooter } from '@/components/auth-site-footer';
 
 /**
  * L'ÉCRAN DE CONNEXION (#5555) — anatomie de `LoginView.swift:93-166`.
@@ -126,6 +128,10 @@ const FOCUS_TINT = 'var(--ios-purple-600)';
  * `signup.tsx` : `indigo500` nu tombe sous 4,5:1 pour du petit texte dans les
  * DEUX schémas. */
 const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
+
+/** Le retour de la connexion (#16452) — la landing sur le web ; dans la coque,
+ * où `/` renvoie à la liste puis… à la connexion, l'accueil à deux portes. */
+const LOGIN_BACK = __SHELL__ ? 'welcome' : 'home';
 
 /**
  * L'ÉCRAN, tel que le routeur le monte : il LIT l'adresse, et délègue tout le
@@ -289,8 +295,11 @@ export function LoginDoors({
 
   if (ageBlocked) {
     return (
-      <AuthColumn className="justify-center gap-6 px-8">
-        <AgeBlocked language={language} onConfirm={() => setAgeBlocked(false)} />
+      <AuthColumn>
+        <AuthHeader back={LOGIN_BACK} />
+        <div className="flex flex-1 flex-col justify-center gap-6 px-8">
+          <AgeBlocked language={language} onConfirm={() => setAgeBlocked(false)} />
+        </div>
       </AuthColumn>
     );
   }
@@ -307,7 +316,7 @@ export function LoginDoors({
       {/* L'EN-TÊTE PUBLIC (#10007) — la langue, posée EN HAUT : la
           colonne qui suit garde son partage du blanc (`justify-evenly`,
           #8418) sous lui, au lieu de le faire flotter au milieu du vide. */}
-      <PublicHeader language={language} brand={false} />
+      <AuthHeader back={LOGIN_BACK} />
       <div className="flex w-full flex-1 flex-col items-center justify-evenly gap-2">
         {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
             Directive porteur 2026-09-14 : « à la connexion la page doit être
@@ -553,6 +562,7 @@ export function LoginDoors({
 
         <AuthBrandFooter />
       </div>
+      <AuthSiteFooter />
     </AuthColumn>
   );
 }

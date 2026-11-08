@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_effects_panel_shake">Tremor</string>
+    <string name="chat_effects_panel_zoom">Zoom</string>
+    <string name="chat_effects_panel_explode">Explosão</string>
+    <string name="chat_effects_panel_confetti">Confete</string>
+    <string name="chat_effects_panel_fireworks">Fogos de artifício</string>
+    <string name="chat_effects_panel_waoo">Uau</string>
+    <string name="chat_effects_panel_glow">Brilho</string>
+    <string name="chat_effects_panel_pulse">Pulsação</string>
+    <string name="chat_effects_panel_rainbow">Arco-íris</string>
+    <string name="chat_effects_panel_sparkle">Cintilante</string>
+    <string name="chat_effects_panel_section_entry">Animação de entrada</string>
+    <string name="chat_effects_panel_section_permanent">Efeito permanente</string>
+    <string name="chat_effects_panel_clear_all">Limpar tudo</string>
+</resources>

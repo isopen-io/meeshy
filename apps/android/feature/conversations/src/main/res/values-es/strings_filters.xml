@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_filter_row">Filtros de conversaciones</string>
+    <string name="conversations_filter_hint">Toca para añadir o quitar este filtro</string>
+    <string name="conversations_filter_state_selected">Seleccionado</string>
+    <string name="conversations_filter_state_unselected">No seleccionado</string>
+</resources>

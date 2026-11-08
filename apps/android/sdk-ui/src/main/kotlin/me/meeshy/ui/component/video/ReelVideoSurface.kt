@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.video
 
+import android.view.LayoutInflater
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -17,11 +18,11 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.ui.R
+import me.meeshy.ui.component.media.ComposerLiveEffects
 import me.meeshy.ui.component.media.MeeshyMediaCache
-import me.meeshy.ui.component.media.PlayerCensus
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
@@ -87,58 +88,90 @@ fun ReelVideoSurface(
     fit: Boolean = false,
     /** Un autre son (un vocal, un appel) a pris le focus : la vidéo vient de se mettre en pause d'elle-même. */
     onAudioFocusLost: () -> Unit = {},
+    /** Le focus est revenu après une perte PASSAGÈRE (fin d'un appel, d'une alarme) : la vidéo reprend d'elle-même. */
+    onAudioFocusGained: () -> Unit = {},
+    /** La perte est DÉFINITIVE (un autre lecteur a pris le focus pour de bon) : aucun gain ne suivra. */
+    onAudioFocusLostForGood: () -> Unit = {},
     /**
      * `false` : le média ne passe PAS par le cache disque (un contenu protégé — flamme, vue unique — ne laisse
      * aucune copie durable sur l'appareil). Le défaut garde le comportement des réels et des stories.
      */
     cached: Boolean = true,
+    /**
+     * `false` : la surface joue son son SANS demander le focus audio — la scène l'a confié à une autre de ses vidéos
+     * (#14611). Deux surfaces audibles d'une même scène se le disputeraient : la seconde le prendrait, la première se
+     * mettrait en pause et l'hôte figerait la lecture.
+     */
+    holdsAudioFocus: Boolean = true,
+    /**
+     * `true` : l'image passe par une `TextureView` (#14624). Elle se compose dans la hiérarchie — au-dessus d'une autre
+     * vidéo, sous la rotation, le découpage et l'opacité de l'objet qui la porte. Une vidéo POSÉE sur une scène à fond
+     * vidéo en a besoin : deux `SurfaceView` superposées n'ont aucun ordre garanti. Le défaut garde la `SurfaceView` des
+     * réels.
+     */
+    textured: Boolean = false,
+    /** Le gain d'auteur (0..1 ; ExoPlayer n'amplifie pas) — sans effet quand [muted]. */
+    volume: Float = 1f,
+    /**
+     * Le look d'une vidéo réglée du compositeur, que son aperçu peint par le GPU (#14848) : les mêmes effets que la scène
+     * ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]). `null` (une publication, déjà cuite) n'ouvre aucun
+     * pipeline d'effets.
+     */
+    effects: ComposerLiveEffects? = null,
+    /** Le premier plan est lu : l'hôte retire son poster sans que la page se recompose pour autant. */
+    onFirstFrame: () -> Unit = {},
+    /** Le média est arrivé au bout (sans boucle, ou fenêtre de source épuisée) : l'hôte enchaîne. */
+    onPlaybackEnded: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
-    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached) {
+    val painted = effects != null
+    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads, cached, painted) {
         if (!loads) return@remember null
-        PlayerCensus.record()
-        // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(
-                if (cached) mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl)
-                else DefaultMediaSourceFactory(context),
-            )
-            .build().apply {
-            setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
+        // Un composable n'instancie jamais ExoPlayer lui-même : le lecteur vient du pool (borné à trois, FIFO)
+        // et y retourne à la sortie. La source se pose à chaque emprunt, le lecteur n'est donc lié à aucune URL.
+        val sourceFactory =
+            if (cached) mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl)
+            else DefaultMediaSourceFactory(context)
+        ReelPlayers.get(context).acquire().apply {
+            setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
             // **La fenêtre est portée par le MediaItem, jamais par un `seekTo`
             // suivi d'une surveillance.** ExoPlayer coupe alors la source
             // lui-même : la position 0 du player EST le début de la fenêtre, la
             // boucle reboucle sur elle, et aucun code n'a à observer la tête de
             // lecture pour arrêter à temps.
-            setMediaItem(
-                MediaItem.Builder()
-                    .setUri(mediaUrl)
-                    .apply {
-                        if (sourceStartMs != null && sourceEndMs != null) {
-                            setClippingConfiguration(
-                                MediaItem.ClippingConfiguration.Builder()
-                                    .setStartPositionMs(sourceStartMs)
-                                    .setEndPositionMs(sourceEndMs)
-                                    .build(),
-                            )
+            setMediaSource(
+                sourceFactory.createMediaSource(
+                    MediaItem.Builder()
+                        .setUri(mediaUrl)
+                        .apply {
+                            if (sourceStartMs != null && sourceEndMs != null) {
+                                setClippingConfiguration(
+                                    MediaItem.ClippingConfiguration.Builder()
+                                        .setStartPositionMs(sourceStartMs)
+                                        .setEndPositionMs(sourceEndMs)
+                                        .build(),
+                                )
+                            }
                         }
-                    }
-                    .build(),
+                        .build(),
+                ),
             )
             repeatMode = Player.REPEAT_MODE_ONE
-            volume = if (muted) 0f else 1f
+            this.volume = if (muted) 0f else volume.coerceIn(0f, 1f)
             playWhenReady = false
+            if (painted) setVideoEffects(emptyList())
             prepare()
         }
     }
+    LaunchedEffect(player, effects) { effects?.let { player?.setVideoEffects(it.effects) } }
 
     // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
-    LaunchedEffect(player, muted) {
-        player?.volume = if (muted) 0f else 1f
+    LaunchedEffect(player, muted, holdsAudioFocus, volume) {
+        player?.volume = if (muted) 0f else volume.coerceIn(0f, 1f)
         // Le focus suit le son : audible, la lecture le prend ; muet, elle le rend et ne le redemande pas.
-        player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
+        player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
     }
 
     // Hors premier plan (ON_STOP : touche Accueil, autre app), la lecture se suspend et
@@ -156,14 +189,25 @@ fun ReelVideoSurface(
     // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.
     val currentOnPlayer by rememberUpdatedState(onPlayer)
     val currentOnAudioFocusLost by rememberUpdatedState(onAudioFocusLost)
+    val currentOnAudioFocusGained by rememberUpdatedState(onAudioFocusGained)
+    val currentOnAudioFocusLostForGood by rememberUpdatedState(onAudioFocusLostForGood)
+    val currentOnFirstFrame by rememberUpdatedState(onFirstFrame)
+    val currentOnPlaybackEnded by rememberUpdatedState(onPlaybackEnded)
     DisposableEffect(player) {
         val live = player ?: return@DisposableEffect onDispose { }
         val releaseLease = if (cached) mediaCache.lease(mediaUrl) else ({ })
         currentOnPlayer(ReelPlayerHandle(live))
         val focusListener = object : Player.Listener {
+            override fun onRenderedFirstFrame() = currentOnFirstFrame()
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) currentOnPlaybackEnded()
+            }
+
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
+                    currentOnAudioFocusLostForGood()
                 }
             }
 
@@ -173,6 +217,8 @@ fun ReelVideoSurface(
             override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
                 if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
+                } else if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
+                    currentOnAudioFocusGained()
                 }
             }
         }
@@ -181,7 +227,9 @@ fun ReelVideoSurface(
             live.removeListener(focusListener)
             currentOnPlayer(null)
             releaseLease()
-            live.release()
+            // Un lecteur peint par le GPU garde son pipeline d'effets : il ne se remet pas à zéro, il se détruit.
+            val pool = ReelPlayers.get(context)
+            if (painted) pool.discard(live) else pool.release(live)
         }
     }
 
@@ -190,10 +238,14 @@ fun ReelVideoSurface(
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            PlayerView(ctx).apply {
-                useController = false
-                // Sans obturateur noir : le poster posé derrière reste visible jusqu'à la première image.
-                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+            if (textured) {
+                LayoutInflater.from(ctx).inflate(R.layout.composer_live_player_view, null) as PlayerView
+            } else {
+                PlayerView(ctx).apply {
+                    useController = false
+                    // Sans obturateur noir : le poster posé derrière reste visible jusqu'à la première image.
+                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
             }
         },
         update = { view ->

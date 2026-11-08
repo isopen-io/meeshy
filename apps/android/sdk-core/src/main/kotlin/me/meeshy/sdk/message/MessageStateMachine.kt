@@ -16,6 +16,16 @@ public enum class MessageDeliveryState {
     FAILED,
     RETRYING,
     EXHAUSTED,
+    ;
+
+    /** The name written in the row; stable on disk, so a variant is only ever appended. */
+    public val persistedName: String get() = name
+
+    public companion object {
+        /** Tolerant: an unknown or absent name is `null`, never a crash (an older row, a newer build). */
+        public fun fromPersisted(name: String?): MessageDeliveryState? =
+            name?.let { stored -> entries.firstOrNull { it.name == stored } }
+    }
 }
 
 /** An event that may advance a message's [MessageDeliveryState]. */
@@ -79,6 +89,38 @@ public object MessageStateMachine {
         MessageEvent.ReadReceipt -> advanceTo(current, MessageDeliveryState.READ)
     }
 
+    /**
+     * The transition [event] causes, or `null` when it is refused (a regression, a replayed receipt, an invalid move).
+     * A socket receipt goes through here: `null` means "write nothing", which keeps a replay idempotent.
+     */
+    public fun applyEvent(current: MessageDeliveryState, event: MessageEvent): MessageDeliveryState? =
+        transition(current, event).takeIf { it != current }
+
+    /**
+     * The state a stored row stands in: the local send column first (`SENDING` / `FAILED` / `EXHAUSTED`, a retry already
+     * charged reads as `RETRYING`), then the receipt counters for a server-acked row. Read-only and monotone.
+     */
+    public fun derive(
+        sendState: String?,
+        deliveredCount: Int,
+        readCount: Int,
+        retryCount: Int,
+    ): MessageDeliveryState {
+        val local = MessageDeliveryState.fromPersisted(sendState)
+        val fromReceipts = when {
+            readCount > 0 -> MessageDeliveryState.READ
+            deliveredCount > 0 -> MessageDeliveryState.DELIVERED
+            else -> MessageDeliveryState.SENT
+        }
+        return when {
+            local == MessageDeliveryState.SENDING && retryCount > 0 -> MessageDeliveryState.RETRYING
+            local == null -> fromReceipts
+            local in progress && local.ordinal > MessageDeliveryState.SENDING.ordinal ->
+                if (progress.indexOf(fromReceipts) >= progress.indexOf(local)) fromReceipts else local
+            else -> local
+        }
+    }
+
     private fun advanceTo(
         current: MessageDeliveryState,
         target: MessageDeliveryState,
@@ -89,4 +131,25 @@ public object MessageStateMachine {
         if (currentRank == -1) return target
         return if (currentRank >= progress.indexOf(target)) current else target
     }
+}
+
+/**
+ * Correspondence with the iOS vocabulary (`MessageEvent` in `MessageStateMachine.swift`), so a replayed receipt maps to the
+ * same event on both platforms and stays idempotent. iOS `draft` is the state before [MessageDeliveryState.QUEUED];
+ * `enqueue` has no Android event (the outbox row is the enqueue); `delivered(count)` is [MessageEvent.DeliveryReceipt]
+ * only while `count > 0` (the caller checks it); `readBy` is [MessageEvent.ReadReceipt]; `retryExhausted` is
+ * [MessageEvent.Exhausted]; iOS `failed` is Android FAILED (retry left) or EXHAUSTED (spent).
+ */
+public object IosMessageEvents {
+    private val table: Map<String, MessageEvent> = mapOf(
+        "startSending" to MessageEvent.SendStarted,
+        "serverAck" to MessageEvent.GatewayAck,
+        "delivered" to MessageEvent.DeliveryReceipt,
+        "readBy" to MessageEvent.ReadReceipt,
+        "sendFailed" to MessageEvent.SendFailed,
+        "retry" to MessageEvent.RetryScheduled,
+        "retryExhausted" to MessageEvent.Exhausted,
+    )
+
+    public fun event(iosName: String): MessageEvent? = table[iosName]
 }

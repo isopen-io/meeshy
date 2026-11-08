@@ -206,18 +206,6 @@ enum FeedPostEngagementRequests {
         } catch { return false }
     }
 
-    static func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
-        do {
-            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                PostsEndpoint.byPostIdBookmark(postId: postId),
-                method: bookmark ? "POST" : "DELETE"
-            )
-            return true
-        } catch {
-            return false
-        }
-    }
-
     /// Cache-first, never hits the network. `nil` when the cache holds nothing
     /// usable (expired / empty).
     static func cachedBookmarks() async -> [FeedPost]? {
@@ -243,8 +231,8 @@ enum FeedPostEngagementRequests {
     }
 
     /// Pre-populate the bookmarks cache optimistically so the Favoris tab shows
-    /// the post the moment the user opens it. Returns the previous cache content
-    /// (for rollback), or `nil` on the remove path.
+    /// the post the moment the user opens it. Returns the previous cache content,
+    /// or `nil` on the remove path.
     static func prepopulateBookmarkCache(
         postId: String, postSnapshot: FeedPost?, wasBookmarked: Bool
     ) async -> [FeedPost]? {
@@ -263,10 +251,6 @@ enum FeedPostEngagementRequests {
             await bestEffort("feedPostEngagementState.feed.save.2", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
         }
         return current
-    }
-
-    static func restoreBookmarkCache(_ snapshot: [FeedPost]) async {
-        await bestEffort("feedPostEngagementState.feed.save.3", category: .cache) { try await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksCacheKey) }
     }
 
     static func pruneBookmarkFromCache(postId: String) async {

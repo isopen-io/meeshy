@@ -3,7 +3,6 @@ package me.meeshy.sdk.model.reading.focal
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw.Anchor
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw.Pin
-import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw.Rect
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw.Span
 import org.junit.Test
 
@@ -12,16 +11,15 @@ class LongMessageExpansionLawTest {
     private val law = LongMessageExpansionLaw
 
     @Test
-    fun `un seul message est déplié à la fois`() {
-        assertThat(law.nextExpanded(null, "a")).isEqualTo("a")
-        assertThat(law.nextExpanded("a", "a")).isNull()
-        assertThat(law.nextExpanded("a", "b")).isEqualTo("b")
+    fun `#16465 un toucher ajoute le message aux dépliés, plusieurs le restent, rien ne se replie`() {
+        assertThat(law.expanded(emptySet(), "a")).containsExactly("a")
+        assertThat(law.expanded(setOf("a"), "b")).containsExactly("a", "b")
+        assertThat(law.expanded(setOf("a", "b"), "a")).containsExactly("a", "b")
     }
 
     @Test
-    fun `ancre haut à l'ouverture et bas au repli`() {
-        assertThat(law.anchor(isExpanding = true)).isEqualTo(Anchor.Top)
-        assertThat(law.anchor(isExpanding = false)).isEqualTo(Anchor.Bottom)
+    fun `#16465 le haut du déplié est l'ancre, la suite se déroule dessous`() {
+        assertThat(law.ANCHOR).isEqualTo(Anchor.Top)
     }
 
     @Test
@@ -40,26 +38,6 @@ class LongMessageExpansionLawTest {
         assertThat(law.anchoredOffset(10f, 50f, 100f, 0f, 1000f)).isEqualTo(0f)
         assertThat(law.anchoredOffset(990f, 100f, 0f, 0f, 1000f)).isEqualTo(1000f)
         assertThat(law.anchoredOffset(5f, 0f, 0f, 0f, -20f)).isEqualTo(0f)
-    }
-
-    @Test
-    fun `le verre épouse la bulle avec les débords partagés`() {
-        val glass = law.glassFrame(Rect(20f, 100f, 220f, 160f), Rect(0f, 90f, 390f, 170f))
-        assertThat(glass).isEqualTo(Rect(14f, 97f, 226f, 163f))
-    }
-
-    @Test
-    fun `sans bulle le verre retombe sur la rangée moins sa gouttière`() {
-        val row = Rect(0f, 90f, 390f, 170f)
-        assertThat(law.glassFrame(null, row)).isEqualTo(Rect(6f, 90f, 384f, 170f))
-        assertThat(law.glassFrame(Rect(0f, 0f, 0f, 0f), row)).isEqualTo(Rect(6f, 90f, 384f, 170f))
-    }
-
-    @Test
-    fun `l'alpha n'atténue que les autres rangées quand le déplié est visible`() {
-        assertThat(law.alpha(isExpandedCell = false, expansionVisible = true)).isEqualTo(0.62f)
-        assertThat(law.alpha(isExpandedCell = true, expansionVisible = true)).isEqualTo(1f)
-        assertThat(law.alpha(isExpandedCell = false, expansionVisible = false)).isEqualTo(1f)
     }
 
     @Test

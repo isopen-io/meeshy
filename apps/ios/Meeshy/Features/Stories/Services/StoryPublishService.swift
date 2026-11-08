@@ -64,6 +64,10 @@ final class StoryPublishService: ObservableObject {
     /// as `pendingCount` (see `refreshQueueState`).
     @Published private(set) var failedItems: [StoryPublishQueueItem] = []
 
+    /// Les stories EN ATTENTE d'envoi (#10331) — dans la file, ni en échec ni
+    /// revendiquées par un téléversement : celles que l'auteur peut annuler.
+    @Published private(set) var waitingItems: [StoryPublishQueueItem] = []
+
     /// Executor that actually runs queued uploads. Set by the view that owns
     /// the StoryViewModel (typically RootView via .onAppear). Held weakly so
     /// a logout / view-rebuild does not trap stale references.
@@ -114,6 +118,17 @@ final class StoryPublishService: ObservableObject {
         }
     }
 
+    /// Les dossiers médias encore VIVANTS : ceux de la file d'attente ET ceux
+    /// de l'historique d'échecs (#14879), que « Réessayer » et « Reprendre »
+    /// relisent. Un échec n'est pas un orphelin : son média reste jusqu'à
+    /// l'envoi ou l'abandon.
+    nonisolated static func liveTempStoryIds(
+        pending: [StoryPublishQueueItem],
+        failed: [StoryPublishQueueItem]
+    ) -> Set<String> {
+        Set((pending + failed).map(\.tempStoryId))
+    }
+
     /// E10 — balayage one-shot au boot, best-effort et hors chemin critique.
     private func sweepOrphanedQueueMediaDirectories() {
         Task.detached(priority: .utility) {
@@ -123,7 +138,8 @@ final class StoryPublishService: ObservableObject {
             guard let children = try? fm.contentsOfDirectory(
                 at: root, includingPropertiesForKeys: [.contentModificationDateKey]
             ) else { return }
-            let liveTempIds = Set(await StoryPublishQueue.shared.pendingItems.map(\.tempStoryId))
+            let queue = StoryPublishQueue.shared
+            let liveTempIds = Self.liveTempStoryIds(pending: await queue.pendingItems, failed: await queue.failedPendingItems)
             let orphans = Self.orphanedQueueDirectories(
                 children: children,
                 liveTempIds: liveTempIds,
@@ -218,6 +234,18 @@ final class StoryPublishService: ObservableObject {
         await refreshQueueState()
     }
 
+    /// **Annule une story en attente d'envoi** (#10331) : rien ne part au
+    /// retour du réseau. Un item en vol reste à son téléversement.
+    func cancelPending(_ item: StoryPublishQueueItem) async -> StoryPendingCancellation {
+        let verdict = await StoryPublishQueue.shared.cancelPendingItem(item.id)
+        await refreshQueueState()
+        return verdict
+    }
+
+    func refresh() async {
+        await refreshQueueState()
+    }
+
     /// Moves a permanently-failed item back into the active retry queue and
     /// kicks off an immediate drain attempt. Called from `MyStoriesView`'s
     /// failed-items history row.
@@ -309,6 +337,7 @@ final class StoryPublishService: ObservableObject {
     private func refreshQueueState() async {
         pendingCount = await StoryPublishQueue.shared.count
         failedItems = await StoryPublishQueue.shared.failedPendingItems
+        waitingItems = await StoryPublishQueue.shared.waitingItems
     }
 }
 
@@ -323,3 +352,46 @@ final class StoryPublishService: ObservableObject {
 #if canImport(UIKit)
 import UIKit
 #endif
+
+/// **« Annuler l'envoi » d'une story en attente** (#10331). Retirée de la file,
+/// elle ne partira pas au retour du réseau : ses lignes optimistes quittent le
+/// tray et son brouillon redevient éditable (sans erreur — rien n'a échoué,
+/// l'auteur a changé d'avis), comme `StoryViewModel.cancelUpload`.
+@MainActor
+enum StoryWaitingCancellation {
+    @discardableResult
+    static func run(
+        _ item: StoryPublishQueueItem,
+        on viewModel: StoryViewModel,
+        cancel: (StoryPublishQueueItem) async -> StoryPendingCancellation
+    ) async -> Bool {
+        let verdict = await cancel(item)
+        if verdict == .removed {
+            viewModel.removeOptimisticStories(tempStoryId: item.tempStoryId)
+            if let draftId = item.draftId { viewModel.draftStore.clearPendingPublish(draftId: draftId) }
+        }
+        return PendingSendNotice.announce(verdict)
+    }
+
+    /// Depuis le lecteur (#15198), qui ne connaît que l'id de la story : l'item
+    /// est celui de son id temporaire. Plus dans la file, elle est partie.
+    static func run(
+        storyId: String,
+        queued: [StoryPublishQueueItem],
+        on viewModel: StoryViewModel,
+        cancel: (StoryPublishQueueItem) async -> StoryPendingCancellation
+    ) async -> Bool {
+        guard let tempStoryId = PendingStoryMarker.tempStoryId(of: storyId),
+              let item = queued.first(where: { $0.tempStoryId == tempStoryId }) else {
+            return PendingSendNotice.announce(StoryPendingCancellation.notFound)
+        }
+        return await run(item, on: viewModel, cancel: cancel)
+    }
+
+    /// Le lecteur retire une story en attente : elle n'existe pas pour le
+    /// serveur, son envoi s'annule par la file courante, toast de « File » compris.
+    static func cancelQueued(storyId: String, on viewModel: StoryViewModel) async -> Bool {
+        let queued = await StoryPublishQueue.shared.pendingItems
+        return await run(storyId: storyId, queued: queued, on: viewModel) { await StoryPublishService.shared.cancelPending($0) }
+    }
+}

@@ -854,8 +854,8 @@ describe('AuthHandler', () => {
         { conversationId: 'conv-aaa' },
       ]);
 
-      // A permanently failing join must not throw or hang — auth still resolves
-      // and the user is registered (best-effort delivery from later reconnects).
+      // A permanently failing join must not throw or hang. #16687 — « best-effort
+      // delivery from later reconnects » était FAUX : voir AuthHandler.unreachable-rooms.
       await expect(authHandler.handleTokenAuthentication(mockSocket)).resolves.toBeUndefined();
       // Bounded: 1 initial attempt + a finite number of retries, never infinite.
       const total = attemptsByRoom.get('conversation:conv-aaa') ?? 0;
@@ -1489,8 +1489,8 @@ describe('AuthHandler', () => {
       await authenticateGuest(join);
 
       expect(attempts.get('conversation:conv-guest')).toBe(3);
-      // L'échec définitif ne doit pas priver l'invité de sa session : la
-      // décision « refuser la session » est instruite au carnet, pas prise ici.
+      // L'échec définitif ne prive pas l'invité de sa session, mais l'inscription
+      // ne vaut plus « joignable » (#16687) : AuthHandler.unreachable-rooms.
       expect(connectedUsers.has('anon-123')).toBe(true);
     });
 

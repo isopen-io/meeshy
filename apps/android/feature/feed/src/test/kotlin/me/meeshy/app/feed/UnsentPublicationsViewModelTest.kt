@@ -12,6 +12,10 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.session.SessionRepository
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -33,11 +37,13 @@ class UnsentPublicationsViewModelTest {
     private val workManager: WorkManager = mockk(relaxed = true)
     private val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = true)
     private val unsent = MutableStateFlow<List<UnsentPublication>>(emptyList())
+    private val session: SessionRepository = mockk(relaxed = true)
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         every { publications.unsent() } returns unsent
+        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(MeeshyUser(id = "me", username = "amina"))
     }
 
     @After
@@ -53,16 +59,25 @@ class UnsentPublicationsViewModelTest {
         failureReason = "Post refused: HTTP 415",
     )
 
-    private fun viewModel() = UnsentPublicationsViewModel(publications, workManager, network)
+    private fun viewModel() = UnsentPublicationsViewModel(publications, workManager, network, session, MeeshyConfig())
 
     @Test
-    fun `the list follows the publications the device still holds`() = runTest(dispatcher) {
+    fun `the feed cards follow the publications the device still holds, and none is claimed before the first read`() = runTest(dispatcher) {
+        val held = MutableStateFlow<List<UnsentPublication>?>(null)
+        every { publications.unsent() } returns held.filterNotNull()
         val vm = viewModel()
 
-        vm.items.test {
+        vm.cards.test {
+            assertThat(awaitItem()).isNull()
+            held.value = emptyList()
             assertThat(awaitItem()).isEmpty()
-            unsent.value = listOf(failedPost())
-            assertThat(awaitItem().single().cmid).isEqualTo("cmid_p")
+            held.value = listOf(failedPost())
+            val card = awaitItem()!!.single()
+            assertThat(card.post.id).isEqualTo("cmid_p")
+            assertThat(card.post.authorId).isEqualTo("me")
+            assertThat(card.canRetry).isTrue()
+            held.value = emptyList()
+            assertThat(awaitItem()).isEmpty()
             cancelAndIgnoreRemainingEvents()
         }
     }

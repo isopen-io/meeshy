@@ -118,7 +118,10 @@ struct ComposerSceneCameraFrameKey: PreferenceKey {
 struct ComposerSceneQuickCaptureHint: View {
     let hint: ComposerSceneQuickCapture.Hint
 
-    static let railClearance: CGFloat = 64
+    /// La colonne d'outils se pose DANS la scène (son écart au bord, plus 66 pt
+    /// de colonne) ; sur un écran court, l'invite est réduite avec la scène :
+    /// la marge couvre les deux.
+    static let railClearance: CGFloat = 84
 
     var body: some View {
         Label(ComposerSceneCameraCopy.emptySceneLine, systemImage: "camera.viewfinder")

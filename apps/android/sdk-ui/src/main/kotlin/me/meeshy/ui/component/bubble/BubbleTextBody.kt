@@ -26,7 +26,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.text.RainbowLetters
 import me.meeshy.ui.R
+import me.meeshy.ui.component.focal.FocalLongMessage
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -46,7 +49,8 @@ internal class BubbleTextDecor(
  * The text body of a standard bubble. A deleted message reads the italic "Message deleted"
  * tombstone; otherwise the text renders when non-blank or when there is no attachment to carry
  * the bubble — as large free emoji for an emoji-only message (centered under a quote), else as
- * rich text (mentions, links, search highlight).
+ * rich text (mentions, links, search highlight). A very long text opens on its excerpt and « Read more » unfolds it for
+ * good, like the flat row (#16465, iOS `BubbleExpandableText`, #16463).
  */
 @Composable
 internal fun ColumnScope.BubbleTextBody(
@@ -82,15 +86,21 @@ internal fun ColumnScope.BubbleTextBody(
                 },
             )
         } else {
-            RichMessageText(
-                text = content.text,
-                color = onColor,
-                style = MaterialTheme.typography.bodyMedium,
-                highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
-                mentionDisplayNames = decor.mentionDisplayNames,
-                highlightTerm = decor.highlightTerm,
-                trackedLinks = decor.trackedLinks,
-            )
+            FocalLongMessage(messageId = content.messageId, text = content.text, accentColor = onColor, inkColor = onColor) { shown ->
+                RichMessageText(
+                    text = shown,
+                    color = onColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                    highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
+                    mentionDisplayNames = decor.mentionDisplayNames,
+                    highlightTerm = decor.highlightTerm,
+                    trackedLinks = decor.trackedLinks,
+                    rainbowSeed = RainbowLetters.seed(
+                        rainbow = content.effects.has(MessageEffectFlags.RAINBOW),
+                        messageId = content.messageId,
+                    ),
+                )
+            }
         }
     }
 }

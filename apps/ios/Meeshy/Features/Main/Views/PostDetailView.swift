@@ -16,10 +16,6 @@ struct PostDetailView: View {
     /// du parent puis défile jusqu'à ce fil (la réponse y apparaît).
     var targetParentCommentId: String?
 
-    // `internal` et non `private` : les deux écrans d'absence vivent dans
-    // `PostDetailView+AbsenceStates.swift`, et un `private` de portée FICHIER
-    // les rendrait inaccessibles depuis une extension frère (piège documenté
-    // dans `apps/ios/CLAUDE.md`, déjà payé sur `composerFocusTrigger`).
     @State private var showsReactionPalette = false
     @StateObject var viewModel = PostDetailViewModel()
     /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
@@ -130,6 +126,10 @@ struct PostDetailView: View {
     @State var isPostReposted: Bool = false
     @State var isRepostInFlight: Bool = false
     @State private var showRepostOptions: Bool = false
+    /// Publication citée (#15911) : « Citer » ouvre la porte de citation, comme
+    /// au fil — elle publiait une citation SANS commentaire.
+    @State var quotedPost: FeedPost?
+    @Environment(\.meeshyQuoteComposerHost) var quoteHost
     @State var isEditing: Bool = false
     /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
     /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
@@ -141,36 +141,21 @@ struct PostDetailView: View {
         return max(0, post.likes + (postLikeDelta[postId] ?? 0))
     }
 
-    private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
 
 
     // MARK: - Bookmark / Repost / Share (post detail)
 
     @MainActor
     func toggleDetailBookmark() {
-        guard !isBookmarkInFlight else { return }
+        guard !isBookmarkInFlight, !isPendingPublication else { return }
         let wasBookmarked = isPostBookmarked
         isPostBookmarked.toggle()
         isBookmarkInFlight = true
         Task {
             defer { Task { @MainActor in isBookmarkInFlight = false } }
-            let ok: Bool = await {
-                do {
-                    let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        PostsEndpoint.byPostIdBookmark(postId: postId),
-                        method: wasBookmarked ? "DELETE" : "POST"
-                    )
-                    return true
-                } catch { return false }
-            }()
-            if !ok {
+            await PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: displayPost, onRejected: {
                 isPostBookmarked = wasBookmarked
-                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
-            } else {
-                FeedbackToastManager.shared.showSuccess(wasBookmarked
-                    ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
-                    : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
-            }
+            })
         }
     }
 
@@ -186,8 +171,8 @@ struct PostDetailView: View {
     }
 
     @MainActor
-    private func toggleDetailRepost(quote: Bool) {
-        guard !isRepostInFlight else { return }
+    private func toggleDetailRepost() {
+        guard !isRepostInFlight, !isPendingPublication else { return }
         isPostReposted = true
         isRepostInFlight = true
         // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
@@ -204,13 +189,7 @@ struct PostDetailView: View {
             repostOfId: carte?.repost?.id,
             originalRepostOfId: carte?.repost?.originalRepostOfId
         )
-        // « Citer » ouvre une alerte SANS champ de saisie : ce site DÉCLARE la
-        // citation sans recueillir de commentaire. `declaredQuote` porte ce
-        // geste tel qu'il est plutôt que de le normaliser en repartage sec —
-        // `isQuote` change côté serveur où s'enracinent les réactions.
-        let intention: RepostIntent = quote
-            ? RepostIntent.declaredQuote(postId: cible.postId, targetType: cible.targetType, visibility: nil)
-            : RepostIntent.simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+        let intention = RepostIntent.simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
         Task {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
@@ -327,18 +306,25 @@ struct PostDetailView: View {
             }
         }
 
-        // Actions bar
-        actionsBar(post, renderedItem: renderedItem, scrollProxy: scrollProxy)
+        // Actions bar + separator + comments header (ZONE 3) — absents tant
+        // que la publication attend son envoi : rien ne s'y engage encore.
+        if !isPendingPublication {
+            actionsBar(post, renderedItem: renderedItem, scrollProxy: scrollProxy)
 
-        // Separator + Comments (ZONE 3)
-        Rectangle()
-            .fill(theme.inputBorder.opacity(0.5))
-            .frame(height: 1)
-            .padding(.horizontal, MeeshySpacing.lg)
+            Rectangle()
+                .fill(theme.inputBorder.opacity(0.5))
+                .frame(height: 1)
+                .padding(.horizontal, MeeshySpacing.lg)
 
-        commentsHeader
-            .id("commentsSection")
+            commentsHeader
+                .id("commentsSection")
+        }
 
+        commentsThread
+    }
+
+    @ViewBuilder
+    private var commentsThread: some View {
         // Comments (threaded)
         ForEach(viewModel.topLevelComments) { comment in
             PostDetailCommentThread(
@@ -480,7 +466,7 @@ struct PostDetailView: View {
 
             // Le composeur ne survit pas à l'absence de post : commenter ce qui
             // n'existe plus n'aboutirait jamais.
-            if displayPost != nil || viewModel.isLoading {
+            if displayPost != nil || viewModel.isLoading, !PendingPublicationMarker.isPending(postId: postId) {
                 VStack(spacing: 0) {
                     if mentionController.activeQuery != nil {
                         MentionSuggestionPanel(
@@ -491,7 +477,7 @@ struct PostDetailView: View {
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    composer.foldableComment(isReplying: viewModel.replyingTo != nil)
+                    composer.foldableComment(isReplying: viewModel.replyingTo != nil).replacedWhenCommentsClosed(viewModel.commentsClosed)
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
             }
@@ -508,57 +494,55 @@ struct PostDetailView: View {
     /// The `…` menu, lifted out of the old navBar into the header's trailing slot.
     var postMenu: some View {
         Menu {
-            Button {
-                Task { await mintShareLink(action: .copyToPasteboard) }
-            } label: {
-                Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
-            }
-            Button {
-                Task { await mintShareLink(action: .presentShareSheet) }
-            } label: {
-                Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-            }
-            // Dans un MENU, c'est le NOM qui porte l'état du favori — un lecteur
-            // d'écran y entend des commandes, pas des interrupteurs (253i, #4266) ;
-            // la barre d'action de ce fichier varie sur ces mêmes clés.
-            PostSaveMenuItems(
-                title: canSaveMedia
-                    ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                    : (isPostBookmarked
-                        ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
-                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
-                systemImage: canSaveMedia ? "arrow.down.to.line" : (isPostBookmarked ? "bookmark.fill" : "bookmark"),
-                save: { canSaveMedia ? requestSaveMedia() : toggleDetailBookmark() },
-                imager: displayPost.flatMap { PostSaveAction.imagerAction(for: $0, coordinator: mediaSaveCoordinator) }
-            )
-            if displayPost?.authorId == AuthManager.shared.currentUser?.id {
-                Button {
-                    Task { await viewModel.pinPost(postId) }
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
-                }
-                Button {
-                    isEditing = true
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                }
+            if PendingPublicationMarker.isPending(postId: postId) {
                 PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
-                    Task { if await viewModel.deletePost(postId) { router.pop() } }
+                    Task { if await viewModel.deletePost(postId) { router.closePostDetail() } }
                 }, onRemove: nil)
             } else {
-                if let post = displayPost {
-                    PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
-                        if await viewModel.withdrawPost($0, $1) { router.pop() }
-                    })
-                }
-                Divider()
-                Button(role: .destructive) {
-                    HapticFeedback.light()
-                    Task { await viewModel.reportPost(postId) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                PostDetailLinkMenuItems { await mintShareLink(action: $0) }
+                // Dans un MENU, c'est le NOM qui porte l'état du favori — un lecteur
+                // d'écran y entend des commandes, pas des interrupteurs (253i, #4266) ;
+                // la barre d'action de ce fichier varie sur ces mêmes clés.
+                PostSaveMenuItems(
+                    title: canSaveMedia
+                        ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                        : (isPostBookmarked
+                            ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
+                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
+                    systemImage: canSaveMedia ? "arrow.down.to.line" : (isPostBookmarked ? "bookmark.fill" : "bookmark"),
+                    save: { canSaveMedia ? requestSaveMedia() : toggleDetailBookmark() },
+                    imager: displayPost.flatMap { PostSaveAction.imagerAction(for: $0, coordinator: mediaSaveCoordinator) }
+                )
+                CommentSettingsMenuItem.offered(for: displayPost) { Task { await viewModel.toggleComments() } }
+                if displayPost?.authorId == AuthManager.shared.currentUser?.id {
+                    Button {
+                        Task { await viewModel.pinPost(postId) }
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
+                    }
+                    Button {
+                        isEditing = true
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                    }
+                    PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
+                        Task { if await viewModel.deletePost(postId) { router.closePostDetail() } }
+                    }, onRemove: nil)
+                } else {
+                    if let post = displayPost {
+                        PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
+                            if await viewModel.withdrawPost($0, $1) { router.closePostDetail() }
+                        })
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        HapticFeedback.light()
+                        Task { await viewModel.reportPost(postId) }
+                    } label: {
+                        Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                    }
                 }
             }
         } label: {
@@ -811,19 +795,6 @@ EngagementGlyph(
 
             Spacer()
 
-            // **Commentaires — le deuxieme item de la cible `2h`** (#4086).
-            //
-            // La rangee du detail n'en portait que trois (coeur, repost,
-            // signet) la ou la carte du fil en porte cinq et la cible quatre.
-            // Le lecteur qui cherchait le nombre de commentaires devait
-            // defiler dans un cas et pas dans l'autre — meme publication, deux
-            // rangees.
-            //
-            // Il AGIT : le tap amene a la section, deja ancree
-            // `.id("commentsSection")` et deja visee par
-            // `attemptScrollToTargetComment`. Un item de comptage sans effet
-            // aurait fait mentir la rangee entiere (loi 4) — les trois autres
-            // agissent.
             Button {
                 HapticFeedback.light()
                 withAnimation { scrollProxy.scrollTo("commentsSection", anchor: .top) }
@@ -887,15 +858,11 @@ EngagementGlyph(
             .accessibilityLabel(String(localized: "a11y.post.repost", defaultValue: "Republier", bundle: .main))
             .accessibilityValue(isPostReposted ? String(localized: "a11y.post.reposted", defaultValue: "Republié", bundle: .main) : "")
             .accessibilityHint(String(localized: "a11y.post.repost.hint", defaultValue: "Republier ou citer cette publication", bundle: .main))
-            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
-                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
-                    toggleDetailRepost(quote: false)
-                }
-                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) {
-                    toggleDetailRepost(quote: true)
-                }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            }
+            .modifier(RepostChoiceDialog(
+                isPresented: $showRepostOptions,
+                onRepost: { toggleDetailRepost() },
+                onQuote: quoteHost == nil || displayPost == nil ? nil : { quotedPost = displayPost }
+            ))
 
             Spacer()
 
@@ -924,8 +891,7 @@ EngagementGlyph(
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
 
-            // Plus de baffle ici (#9677, directive porteur 2026-10-08) : c'est la
-            // NOTE du crédit, au-dessus de la scène, qui coupe le son de fond.
+            detailImagerButton
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -936,6 +902,21 @@ EngagementGlyph(
                               isDark: theme.mode.isDark,
                               anchor: .bottomLeading,
                               offsetY: -46) { sendDetailReaction($0) }
+    }
+
+    @ViewBuilder
+    private var detailImagerButton: some View {
+        if let post = displayPost, let action = PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) {
+            Spacer()
+            ImagerWandButton(
+                hint: String(localized: "feed.post.imager.hint", defaultValue: "Fait de cette publication une carte image.", bundle: .main),
+                glyphSize: 18,
+                tint: theme.textSecondary,
+                action: action,
+                quick: MessageCardExportMenu.hasDefaultFormat
+                    ? PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator, quick: true) : nil
+            )
+        }
     }
 
     // MARK: - Comments Header

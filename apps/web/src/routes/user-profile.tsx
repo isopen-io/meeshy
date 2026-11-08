@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { Suspense, lazy, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
@@ -36,6 +36,14 @@ import {
   ProfileStatsSection,
 } from '@/routes/user-profile-sections';
 import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
+import { announcementToneOf } from '@/lib/view/announcement-tone';
+
+/* LA LIGNE DU CERCLE (#13940) — chargée à la demande : elle ne pèse sur la fiche que là où un lien peut exister. */
+const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then((m) => ({ default: m.ProfileCircleRow })));
+/* Le Bring (#13936) : son propre chunk, chargé avec le cercle — le serveur dit s'il existe. */
+const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m) => ({ default: m.ProfileBringRow })));
+/* Le talkie (#16641) : son propre chunk, dès Proche — le niveau vient du cache des liens. */
+const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -144,6 +152,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
     mood,
     relation,
     actions,
+    viewerId,
     signedIn,
     busy,
     onAction,
@@ -282,6 +291,39 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           busy={busy}
                           onAction={onAction}
                           onSignIn={onSignIn}
+                          circle={
+                            signedIn && person !== undefined && (relation.kind === 'friend' || relation.kind === 'none') ? (
+                              <Suspense fallback={null}>
+                                <ProfileCircleRow
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                  raisable={relation.kind === 'friend'}
+                                  viewerId={viewerId}
+                                  now={new Date()}
+                                  onNotice={(message) => announce(message, 'error')}
+                                  onOutcome={(outcome) =>
+                                    announce(
+                                      translate(language, outcome === 'done' ? 'discover.announce.sent' : outcome === 'offline' ? 'discover.announce.offline' : 'discover.announce.sendFailed'),
+                                      announcementToneOf(outcome),
+                                    )
+                                  }
+                                />
+                                {relation.kind === 'friend' ? (
+                                  <ProfileTalkieRow
+                                    language={language}
+                                    person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                    onNotice={(message) => announce(message, 'error')}
+                                  />
+                                ) : null}
+                                <ProfileBringRow
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                  friend={relation.kind === 'friend'}
+                                  onNotice={(message) => announce(message, 'error')}
+                                />
+                              </Suspense>
+                            ) : null
+                          }
                         />
                       )}
                       {isSelf || !signedIn || !callsAvailable() ? null : (

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallCaption } from '@/lib/calls/call-captions';
+import type { CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { CallJournalPanel } from './call-journal-panel';
@@ -44,7 +45,7 @@ describe('CallJournalPanel', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean } = {}) => {
+  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean; readonly notes?: readonly CallJournalNote[] } = {}) => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -59,7 +60,8 @@ describe('CallJournalPanel', () => {
             onClose={() => void events.push('close')}
             back={{ label: 'Retour', onPress: () => void events.push('back') }}
             captions={next}
-            colorOf={(line) => (line.mine ? '#fff' : '#f0a')}
+            notes={options.notes ?? []}
+            colorOf={(who) => (who.speakerName === '' ? '#fff' : '#f0a')}
             listening={options.listening ?? true}
             onListen={() => void events.push('listen')}
           />,
@@ -111,6 +113,19 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
+  test('le nom porte la couleur de son auteur ; seule la phrase TRADUITE la prend, l’original et ma parole restent à l’encre de l’appel', () => {
+    const view = mount([caption({ id: 'peer' }), caption({ id: 'raw', original: 'Same', translated: null, pair: null }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null })]);
+    const [peer, raw] = view.all('[data-call-journal-entry="peer"]') as HTMLElement[];
+    const mine = view.find('[data-call-journal-entry="mine"]') as HTMLElement;
+    expect((peer?.querySelector('strong') as HTMLElement).style.color).toBe('#f0a');
+    expect((peer?.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('#f0a');
+    expect((peer?.querySelector('[data-call-journal-original]') as HTMLElement).style.color).not.toBe('#f0a');
+    expect((raw?.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('var(--color-on-media)');
+    expect((mine.querySelector('strong') as HTMLElement).style.color).toBe('#fff');
+    expect((mine.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('var(--color-on-media)');
+    view.done();
+  });
+
   test('en bas, une phrase nouvelle m’y garde', () => {
     const view = mount(lines(3));
     const list = view.find('[data-call-journal]') as HTMLElement;
@@ -146,6 +161,31 @@ describe('CallJournalPanel', () => {
     act(() => (off.find('[data-call-journal-listen]') as HTMLElement).click());
     expect(off.events).toEqual(['listen']);
     off.done();
+  });
+
+  test('#16665 — une capture entre à son heure : datée, pseudo à sa couleur, phrase en encre secondaire', () => {
+    const notes: readonly CallJournalNote[] = [
+      { id: 'n1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 1_500 },
+      { id: 'n2', kind: 'call-recording-started', userId: 'u-awa', name: 'Awa', at: 2_500 },
+    ];
+    const view = mount([caption({ id: 'a', at: 1_000 }), caption({ id: 'b', at: 2_000 })], { notes });
+    const order = view.all('[data-call-journal] > li').map((entry) => entry.getAttribute('data-call-journal-note') ?? entry.getAttribute('data-call-journal-entry'));
+    expect(order).toEqual(['peer', 'screenshot', 'peer', 'call-recording-started']);
+    const capture = view.find('[data-call-journal-note="screenshot"]') as HTMLElement;
+    expect(capture.querySelector('time')?.getAttribute('dateTime')).toBe(new Date(1_500).toISOString());
+    const sentence = capture.querySelector('[data-call-journal-note-text]') as HTMLElement;
+    expect(sentence.textContent).toBe('Karim a capturé l’écran');
+    expect(sentence.style.color).toBe('var(--color-on-media-3)');
+    expect((sentence.querySelector('[data-call-journal-note-name]') as HTMLElement).style.color).toBe('#f0a');
+    expect(view.find('[data-call-journal-note="call-recording-started"] [data-call-journal-note-text]')?.textContent).toBe('L’enregistrement de l’appel a commencé');
+    view.done();
+  });
+
+  test('#16665 — une capture seule suffit à remplir le journal', () => {
+    const view = mount([], { notes: [{ id: 'n1', kind: 'recording', userId: 'u-karim', name: 'Karim', at: 1_000 }] });
+    expect(view.find('[data-call-journal-empty]')).toBeNull();
+    expect(view.find('[data-call-journal-note="recording"]')?.textContent).toContain('Karim enregistre l’écran');
+    view.done();
   });
 
   test('Échap et Fermer ferment ; ‹ revient', () => {

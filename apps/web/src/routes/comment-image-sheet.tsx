@@ -132,7 +132,7 @@ function ComposedCommentImage({ request, composition, handle, onClose, announce,
     <MessageExportSheet
       subject={subject}
       subjectKey={subjectKey}
-      above={bar}
+      content={bar}
       handle={handle}
       conversationTitle={null}
       announce={announce}

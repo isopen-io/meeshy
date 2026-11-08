@@ -1,6 +1,8 @@
 package me.meeshy.sdk.mention
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MentionedUser
 import org.junit.Test
 
@@ -53,5 +55,23 @@ class UserDisplayNameCacheTest {
         threads.forEach { it.start() }
         threads.forEach { it.join() }
         assertThat(cache.allMappings().size).isAtMost(100)
+    }
+
+    @Test
+    fun `les auteurs et les mentions des messages alimentent le cache`() {
+        val cache = UserDisplayNameCache()
+        cache.trackFromMessages(
+            listOf(
+                ApiMessage(
+                    id = "m1",
+                    conversationId = "c1",
+                    sender = ApiMessageSender(id = "p1", username = "Zoe", displayName = "Zoé Martin", type = "user"),
+                    mentionedUsers = listOf(MentionedUser("u9", "ivan", "Ivan Petrov"), MentionedUser("u8", "kim", "kim")),
+                ),
+            ),
+        )
+        assertThat(cache.displayName("zoe")).isEqualTo("Zoé Martin")
+        assertThat(cache.displayName("ivan")).isEqualTo("Ivan Petrov")
+        assertThat(cache.displayName("kim")).isNull()
     }
 }

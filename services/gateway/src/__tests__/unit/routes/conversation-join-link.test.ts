@@ -529,6 +529,7 @@ describe('POST /conversations/join/:linkId — canViewHistory et rejoin', () => 
     // le rang/droits remis à zéro, une ligne périmée ne doit pas décider seule
     // de ce que le revenant lit.
     expect(written.data.historyVisibleFrom).toBeNull();
+    expect([written.data.messageRequestAt, written.data.messageRequestRisk, written.data.messageRequestFromId]).toEqual([null, null, null]);
   });
 });
 

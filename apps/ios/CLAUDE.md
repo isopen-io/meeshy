@@ -442,7 +442,7 @@ final class SomeViewModelTests: XCTestCase {
 
 ## Le composer se pose SUR LA SCÈNE, et la scène prend tout l'écran (directive porteur 2026-10-30, #13839)
 
-**La scène est le plus grand 9:16 de la zone sûre** (`ComposerSceneFit`) : ni carte, ni couloir. Quand le clavier ou un panneau monte, elle se réduit par une échelle ancrée en haut et un décalage, en UNE transaction ; le canvas ne se remet jamais en page pendant le geste.
+**La scène est le plus grand 9:16 de la zone sûre** (`ComposerSceneFit`) : ni carte, ni couloir. Quand le clavier ou une vraie feuille ancrée monte, elle se réduit par une échelle ancrée en haut et un décalage, en UNE transaction ; le canvas ne se remet jamais en page pendant le geste. **Une bande, la frise, les effets, la barre de dessin, les réglages d'un outil ou les propriétés d'un objet sélectionné se posent PAR-DESSUS une scène qui garde sa taille** (#15226, loi `ComposerRestChrome.sceneIsReduced`, même règle qu'Android #15192).
 
 **Au repos, tout se pose SUR la scène** (`ComposerSceneOverlayChrome`, état servi par `ComposerRestChrome`) :
 - ✕ en haut à gauche ; ↶ ↷ en haut à droite, seulement s'il y a un historique (VoiceOver : « Défaire », jamais « Annuler », qui est le mot de la fermeture) ;

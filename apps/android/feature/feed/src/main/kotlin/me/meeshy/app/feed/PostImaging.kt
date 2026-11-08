@@ -14,45 +14,55 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.res.stringResource
+import java.io.File
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.card.PostCardImaging
+import me.meeshy.sdk.model.card.PostCommentCardPost
+import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** Ce qu'« Imager » rend d'une œuvre composée : ses scènes, bout à bout, sur la couleur de son auteur. */
 @Immutable
 data class PostImagerScenes(val items: List<StoryItem>, val accentHex: String?)
 
-/**
- * Ouvre la vue Imager sur des scènes (#14329) : le moteur d'export des stories, que le fil ne connaît pas, et que l'application
- * monte une fois pour tous les menus ⋯ du fil. `null` hors de l'application : aucun menu n'offre alors « Imager ».
- */
-typealias PostSceneImager = (scenes: PostImagerScenes) -> Unit
+typealias SceneCardRenderer = (onRendered: (File?) -> Unit) -> Unit
 
-val LocalPostSceneImager = staticCompositionLocalOf<PostSceneImager?> { null }
+@Immutable
+data class PostImagerRequest(
+    val key: String,
+    val card: PostCommentCardSubject,
+    val scenes: PostImagerScenes? = null,
+    val render: SceneCardRenderer? = null,
+) {
+    val rendersScene: Boolean get() = scenes != null || render != null
+}
 
-/**
- * **« Imager » ne vise qu'une œuvre COMPOSÉE** (iOS `PostSaveAction.imagerAction`) : un post à scène rend toutes ses scènes,
- * un réel composé rend sa scène ; un post ou un réel de médias simple n'a rien à rendre, donc aucune entrée.
- */
+typealias PostCardImager = (request: PostImagerRequest) -> Unit
+
+val LocalPostCardImager = staticCompositionLocalOf<PostCardImager?> { null }
+
 object PostImaging {
-    fun of(scenes: FeedPostScenes?, composedReel: StoryItem?, reelAccentHex: String?): PostImagerScenes? =
+
+    fun scenesOf(scenes: FeedPostScenes?, composedReel: StoryItem?, reelAccentHex: String?): PostImagerScenes? =
         scenes?.takeIf { it.items.isNotEmpty() }?.let { PostImagerScenes(it.items, it.accentHex) }
             ?: composedReel?.let { PostImagerScenes(listOf(it), reelAccentHex) }
+
+    fun of(postId: String, support: PostCommentCardPost, scenes: PostImagerScenes?, ephemeral: Boolean): PostImagerRequest? {
+        val key = "post:$postId"
+        if (scenes == null) return PostCardImaging.cardOf(support, ephemeral)?.let { PostImagerRequest(key, it) }
+        if (ephemeral) return null
+        return PostImagerRequest(key, PostCardImaging.sceneCardOf(support.author, support.text, support.createdAtMillis), scenes)
+    }
 }
 
-/** L'action « Imager » du menu ⋯ de [post], ou `null` quand il n'a rien à rendre ou que l'application ne fournit aucun moteur. */
 @Composable
 internal fun rememberPostImager(post: FeedPostPresentation): (() -> Unit)? {
-    val imager = LocalPostSceneImager.current
-    val scenes = post.imagerScenes
-    return remember(imager, scenes) { if (imager == null || scenes == null) null else { { imager(scenes) } } }
+    val imager = LocalPostCardImager.current
+    val request = post.imager
+    return remember(imager, request) { if (imager == null || request == null) null else { { imager(request) } } }
 }
 
-/**
- * Le menu ⋯ du détail d'un post à scène (iOS `PostDetailView.postMenu`) : « Imager » y ouvre la vue Imager. Un réel porte le
- * sien sur sa carte ; un post sans œuvre composée n'en montre aucun.
- */
 @Composable
 internal fun PostDetailImagerMenu(post: FeedPostPresentation) {
     if (post.showsReelCard) return

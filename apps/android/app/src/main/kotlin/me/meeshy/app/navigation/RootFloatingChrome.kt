@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -70,7 +71,8 @@ internal fun MeeshyFloatingChrome(
         floatingAvatarProfileRoute(currentUser?.id)?.let { route -> navController.navigateToTopLevel(route) }
     }
 
-    BackHandler(enabled = menuExpanded) { menuExpanded = false }
+    // Monte a l'ouverture, donc le dernier inscrit : le retour referme l'echelle avant de quitter le Flux (#16676).
+    if (menuExpanded) BackHandler { menuExpanded = false }
 
     val itemHint = stringResource(R.string.a11y_menu_item_hint)
     MeeshyFloatingButtons(
@@ -100,7 +102,7 @@ internal fun MeeshyFloatingChrome(
         rightSemantics = FloatingButtonSemantics(
             label = stringResource(R.string.a11y_floating_menu),
             hint = stringResource(R.string.a11y_floating_menu_hint),
-            value = if (unread > 0) stringResource(R.string.a11y_floating_menu_notifications_value, unread) else null,
+            value = if (unread > 0) pluralStringResource(R.plurals.a11y_floating_menu_unread, unread, unread) else null,
             actionName = stringResource(R.string.a11y_edit_profile),
         ),
         behindButtons = { MeeshyMenuVeil(expanded = menuExpanded, onDismiss = { menuExpanded = false }) },
@@ -153,15 +155,6 @@ private fun FeedButtonFace(feedOpen: Boolean) {
                 modifier = Modifier.size(MeeshyIconSize.xxl),
             )
         }
-    }
-}
-
-/** Les destinations de premier niveau gardent leur etat (meme semantique que les onglets d'avant). */
-private fun NavController.navigateToTopLevel(route: String) {
-    navigate(route) {
-        popUpTo(graph.startDestinationId) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
     }
 }
 

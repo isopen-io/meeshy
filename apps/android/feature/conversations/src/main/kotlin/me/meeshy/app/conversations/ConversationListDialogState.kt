@@ -27,6 +27,9 @@ sealed interface ConversationListDialog {
         val removal: ConversationRowMenuCapabilities.Removal,
     ) : ConversationListDialog
 
+    /** « Rendre cette conversation obsolète ? » (#14645) : elle disparaît pour tous, son contenu est effacé sous 48 h. */
+    data class Obsolete(override val conversationId: String, val conversationName: String) : ConversationListDialog
+
     /** « Quitter la conversation » : l'historique reste lisible. */
     data class Leave(override val conversationId: String) : ConversationListDialog
 
@@ -54,4 +57,7 @@ sealed interface ConversationListDialogEffect {
 
     /** La conversation s'ouvre après un « Rechercher » franchi par son code : armer la recherche. */
     data class ArmSearch(val conversationId: String) : ConversationListDialogEffect
+
+    /** « Ouvrir dans l'administration » : l'hôte ouvre [url] dans le navigateur. */
+    data class OpenUrl(val url: String) : ConversationListDialogEffect
 }

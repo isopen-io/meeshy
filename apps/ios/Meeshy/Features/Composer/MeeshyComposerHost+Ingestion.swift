@@ -27,7 +27,7 @@ extension MeeshyComposerHost {
             defer { advanceSceneIntake(ajout, done: rang + 1) }
             let declaredType = item.supportedContentTypes.first
             guard let url = await ComposerPhotoLibraryStaging.file(for: item, declaredType: declaredType) else { continue }
-            if rang == 0 { ComposerSceneIntakePreview.request(staged: url, of: item, for: ajout, into: $sceneIntake) }
+            if rang == 0 { ComposerSceneIntakePreview.request(staged: url, for: ajout, into: $sceneIntake) }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
             // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de
@@ -215,7 +215,7 @@ extension MeeshyComposerHost {
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
             let declaredType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
             let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_file_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+                .appendingPathComponent(ImportedCopyName.copyName(of: sourceURL.lastPathComponent, through: .composerDocument))
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)

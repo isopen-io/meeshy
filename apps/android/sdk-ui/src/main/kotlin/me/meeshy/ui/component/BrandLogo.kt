@@ -3,6 +3,7 @@ package me.meeshy.ui.component
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -12,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.brand.BrandMarkGeometry
 import me.meeshy.ui.component.auth.AnimatedBrandLogo
 import me.meeshy.ui.component.auth.rememberAnimationsReduced
+import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -27,7 +29,8 @@ public fun BrandLogo(
     animated: Boolean = false,
 ) {
     val reduced = rememberAnimationsReduced()
-    Box(modifier = modifier.size(size).semantics { contentDescription = "Meeshy" }) {
+    val description = stringResource(R.string.brand_logo_description)
+    Box(modifier = modifier.size(size).semantics { contentDescription = description }) {
         AnimatedBrandLogo(
             modifier = Modifier.size(size),
             color = color,

@@ -14,7 +14,8 @@
  * dans les DEUX schémas et aux deux gabarits de la charte (390 × 844, 320 × 568) :
  *
  *  1. `/discover` rend la découverte — plus l'écran d'attente — sous le titre
- *     « Découvrir », trois onglets dans l'ordre d'iOS, « Découvrir » choisi ;
+ *     « Découvrir », quatre onglets — ceux d'iOS puis « Cercles » (#13938) —,
+ *     « Découvrir » choisi ;
  *  2. AU REPOS, chaque contrôle et chaque texte visible retombe sur lui-même à
  *     son centre (`elementFromPoint`) — aucun disque flottant n'en vole un — et
  *     chaque contrôle fait au moins 44 de haut ;
@@ -184,7 +185,7 @@ try {
       check((await page.$('text=Cet écran arrive bientôt.')) === null, `${label} : l'écran d'attente a disparu`);
       check((await textOf(page, 'header h1')) === 'Découvrir', `${label} : le titre de l'écran`);
       const tabs = await ids(page, '[data-discover-tab]', 'data-discover-tab');
-      check(JSON.stringify(tabs) === JSON.stringify(['discover', 'requests', 'blocked']), `${label} : trois onglets dans l'ordre d'iOS (${JSON.stringify(tabs)})`);
+      check(JSON.stringify(tabs) === JSON.stringify(['discover', 'requests', 'blocked', 'circles']), `${label} : quatre onglets, ceux d'iOS puis « Cercles » (${JSON.stringify(tabs)})`);
       check((await attrOf(page, '[data-discover-tab="discover"]', 'aria-selected')) === 'true', `${label} : « Découvrir » est l'onglet du premier rendu`);
       check((await presenceDots(page)) === 0, `${label} : aucun point de présence au premier rendu`);
       await capture(page, `decouvrir-${slug}`);
@@ -222,12 +223,12 @@ try {
       check((await attrOf(page, '[data-discover-tab="requests"]', 'aria-selected')) === 'true', `${label} : ArrowRight sélectionne l'onglet, pas seulement son focus`);
       await page.keyboard.press('End');
       const afterEnd = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
-      check(afterEnd === 'blocked', `${label} : End va au dernier onglet (${afterEnd})`);
+      check(afterEnd === 'circles', `${label} : End va au dernier onglet (${afterEnd})`);
       await page.keyboard.press('Home');
       const afterHome = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
       check(afterHome === 'discover', `${label} : Home revient au premier onglet (${afterHome})`);
       const tabIndices = await page.$$eval('[data-discover-tab]', (els) => els.map((el) => el.tabIndex));
-      check(JSON.stringify(tabIndices) === JSON.stringify([0, -1, -1]), `${label} : un seul onglet — le sélectionné — reste dans l'ordre de tabulation (${JSON.stringify(tabIndices)})`);
+      check(JSON.stringify(tabIndices) === JSON.stringify([0, -1, -1, -1]), `${label} : un seul onglet — le sélectionné — reste dans l'ordre de tabulation (${JSON.stringify(tabIndices)})`);
 
       // ------------------------------------------------ 3. la recherche rend chaque relation par son geste
       const relations = {};

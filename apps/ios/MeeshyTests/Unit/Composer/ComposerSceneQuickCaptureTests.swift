@@ -41,19 +41,30 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
 
     func test_offers_sceneVideCameraEteinteSansOutil_offreLaCapture() {
         XCTAssertTrue(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .story,
-                                                       stage: .off, toolIsOpen: false))
+                                                       stage: .off, toolIsOpen: false, mediaIsEntering: false))
+    }
+
+    /// **Un média qui entre dans la scène vide retire la capture rapide et son
+    /// indication** : l'espace réservé dit « Préparation… » au centre de la
+    /// scène, là où « Touchez la scène pour la caméra » s'écrivait par-dessus
+    /// (relevé au simulateur iPhone SE, #13864) — comme Android (682e74dd64).
+    func test_offers_unMediaQuiEntre_retireLaCapture() {
+        XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .story,
+                                                        stage: .off, toolIsOpen: false, mediaIsEntering: true))
+        XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .post,
+                                                        stage: .off, toolIsOpen: false, mediaIsEntering: true))
     }
 
     func test_offers_refuseHorsDeSonCas() {
         XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: false, format: .story,
-                                                        stage: .off, toolIsOpen: false))
+                                                        stage: .off, toolIsOpen: false, mediaIsEntering: false))
         XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .story,
-                                                        stage: .armed, toolIsOpen: false),
+                                                        stage: .armed, toolIsOpen: false, mediaIsEntering: false),
                        "viseur déjà là : le geste appartient au déclencheur")
         XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .story,
-                                                        stage: .off, toolIsOpen: true))
+                                                        stage: .off, toolIsOpen: true, mediaIsEntering: false))
         XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .status,
-                                                        stage: .off, toolIsOpen: false),
+                                                        stage: .off, toolIsOpen: false, mediaIsEntering: false),
                        "un statut n'a pas de viseur")
     }
 

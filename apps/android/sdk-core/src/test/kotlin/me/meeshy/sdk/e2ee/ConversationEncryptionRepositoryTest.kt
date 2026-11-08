@@ -82,13 +82,12 @@ class ConversationEncryptionRepositoryTest {
     }
 
     @Test
-    fun `this phone never activates end to end, and does not even ask the gateway`() = runTest {
-        val api = FakeApi()
+    fun `this phone is an encrypted device and asks the gateway for end to end`() = runTest {
+        val api = FakeApi(enable = { served("e2ee") })
 
-        val result = repository(api).enable("c1", ConversationEncryptionModeChoice.E2EE)
+        repository(api).enable("c1", ConversationEncryptionModeChoice.E2EE)
 
-        assertThat((result as NetworkResult.Failure).error.code).isEqualTo(ConversationEncryptionRepository.NOT_AVAILABLE_ON_THIS_PHONE)
-        assertThat(api.calls).isEqualTo(0)
+        assertThat(api.enabled).containsExactly("e2ee")
     }
 
     @Test

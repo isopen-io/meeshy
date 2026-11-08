@@ -412,6 +412,49 @@ final class StoryPublishQueueTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
     }
 
+    // MARK: - #10331 — annuler une story EN ATTENTE d'envoi
+
+    func test_cancelPendingItem_onWaitingItem_removesItAndItsMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_cancel", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        let waiting = await queue.waitingItems
+        XCTAssertEqual(waiting.map(\.id), [item.id], "une story en attente s'offre à l'annulation")
+
+        let verdict = await queue.cancelPendingItem(item.id)
+
+        XCTAssertEqual(verdict, .removed)
+        let pending = await queue.pendingItems
+        XCTAssertFalse(pending.contains { $0.id == item.id }, "rien ne part au retour du réseau")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
+    }
+
+    func test_cancelPendingItem_onItemInFlight_leavesItUnderTheUpload() async {
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.markInFlight(item.id)
+
+        let verdict = await queue.cancelPendingItem(item.id)
+
+        XCTAssertEqual(verdict, .inFlight, "un téléversement en cours n'est pas retiré sous ses pieds")
+        let pending = await queue.pendingItems
+        XCTAssertTrue(pending.contains { $0.id == item.id })
+        let waiting = await queue.waitingItems
+        XCTAssertFalse(waiting.contains { $0.id == item.id }, "un item en vol ne s'offre pas à l'annulation")
+        await queue.clearInFlight(item.id)
+    }
+
+    func test_cancelPendingItem_onUnknownItem_saysNotFound() async {
+        let verdict = await queue.cancelPendingItem("absent")
+
+        XCTAssertEqual(verdict, .notFound)
+    }
+
     /// #13415 — une story non publiée ne quitte l'appareil que par le geste
     /// de son auteur : l'historique des échecs n'a plus de plafond qui jette
     /// la plus ancienne, ni ses médias.

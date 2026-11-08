@@ -1,6 +1,7 @@
 package me.meeshy.sdk.net.api
 
 import me.meeshy.sdk.model.ApiCategory
+import me.meeshy.sdk.model.ApplicationPreferenceSyncBody
 import me.meeshy.sdk.model.AudioPreferenceSyncBody
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CategoryPatchBody
@@ -54,6 +55,10 @@ interface PreferencesApi {
     /** Fusionne la transcription automatique dans le bloc audio (`PATCH /me/preferences/audio`). */
     @PATCH("me/preferences/audio")
     suspend fun updateAudio(@Body body: AudioPreferenceSyncBody): ApiResponse<Unit>
+
+    /** Fusionne le thème dans le bloc application (`PATCH /me/preferences/application`) : le thème seul, jamais un consentement. */
+    @PATCH("me/preferences/application")
+    suspend fun updateApplication(@Body body: ApplicationPreferenceSyncBody): ApiResponse<Unit>
 
     /** Relit le bloc audio ; seule la transcription automatique est lue (le décodeur indulgent ignore le reste). */
     @GET("me/preferences/audio")

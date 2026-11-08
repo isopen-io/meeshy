@@ -316,7 +316,7 @@ describe('ce que chaque personne a fait', () => {
     const prisma = makePrisma({ total: 120 });
     const result = await readViewerInteractions(prisma as unknown as ViewerEngagementPrisma, POST, ADMIN, 2, 10, openGates(), SINCE);
     expect(prisma.postView.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { postId: POST, viewedAt: { gte: SINCE } }, orderBy: { viewedAt: 'desc' }, take: 2, skip: 10 }),
+      expect.objectContaining({ where: expect.objectContaining({ postId: POST, viewedAt: { gte: SINCE } }), orderBy: { viewedAt: 'desc' }, take: 2, skip: 10 }),
     );
     expect(result).toEqual(expect.objectContaining({ total: 120, hasMore: true }));
   });

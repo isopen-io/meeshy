@@ -52,7 +52,7 @@ class BookmarksViewModelTest {
 
     private fun viewModel(): BookmarksViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
-        return BookmarksViewModel(repository, session, config)
+        return BookmarksViewModel(repository, mockk(relaxed = true), session, config, FakeProfileSocial().socket)
     }
 
     @Test

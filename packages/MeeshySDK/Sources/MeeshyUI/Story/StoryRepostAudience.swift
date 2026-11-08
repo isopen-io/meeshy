@@ -45,16 +45,29 @@ public nonisolated enum StoryRepostAudience {
     /// par défaut est `@MainActor`, donc `allCases` n'est pas lisible depuis ce
     /// contexte `nonisolated`.
     private static let everyAudience: [PostVisibility] =
-        [.public, .community, .friends, .except, .only, .private]
+        [.public, .community, .acquaintances, .friends, .close, .blood, .except, .only, .private]
 
     /// Audiences qu'un republieur peut choisir, l'original étant donné.
+    ///
+    /// Les cercles (#13931, RG-18) se rétrécissent vers un cercle plus étroit :
+    /// Proches ⊆ Connaissances, Sang ⊆ Proches, et Proches ⊆ Amis. `FRIENDS`
+    /// n'est PAS sous `ACQUAINTANCES` : il admet aussi les contacts de message
+    /// direct. Un contenu `BLOOD` ne se repartage JAMAIS, pas même en privé.
     public static func allowed(from original: PostVisibility) -> [PostVisibility] {
         switch original {
         case .public:
             return everyAudience
         case .private:
             return [.private]
-        case .community, .friends, .except, .only:
+        case .blood:
+            return []
+        case .acquaintances:
+            return [.acquaintances, .close, .blood, .private]
+        case .friends:
+            return [.friends, .close, .blood, .private]
+        case .close:
+            return [.close, .blood, .private]
+        case .community, .except, .only:
             return [original, .private]
         }
     }

@@ -17,12 +17,13 @@ final class PackShopLauncher: ObservableObject {
         let id = UUID()
         let domain: PackDomain?
         let pack: String?
+        var page: PacksPage = .shop
     }
 
     @Published private(set) var pending: Request?
 
-    func request(domain: PackDomain?, pack: String? = nil) {
-        pending = Request(domain: domain, pack: pack)
+    func request(domain: PackDomain?, pack: String? = nil, page: PacksPage = .shop) {
+        pending = Request(domain: domain, pack: pack, page: page)
     }
 
     func consume() -> Request? {
@@ -33,21 +34,30 @@ final class PackShopLauncher: ObservableObject {
 
 // MARK: - Réglages › Packs et téléchargements (#10150)
 
+/// Les deux pages de la vitrine : ce qui s'acquiert, ce que j'ai (#16433).
+enum PacksPage: Hashable, CaseIterable {
+    case shop
+    case mine
+}
+
 /// **Les deux Boutiques au même endroit** — Stickers et Cadres du jeu — à côté
 /// du téléchargement automatique : un pack est d'abord des octets qu'on garde
-/// sur l'appareil.
+/// sur l'appareil. « Mes packs » range ce qui est installé (#16433).
 struct PacksSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var domain: PackDomain
+    @State private var page: PacksPage
     private let focusedPack: String?
     private var theme: ThemeManager { ThemeManager.shared }
 
     /// `initialDomain` ouvre la vitrine FILTRÉE (lien profond `meeshy://settings/packs?domaine=…`,
     /// « Plus dans la boutique ») ; absent, la vitrine s'ouvre sur les stickers (#10632).
     /// `focusedPack` met CE pack en avant (#10703) : sa rangée est centrée et contourée.
-    init(initialDomain: PackDomain? = nil, focusedPack: String? = nil) {
+    /// `initialPage` ouvre directement « Mes packs » depuis un accès direct (#16433).
+    init(initialDomain: PackDomain? = nil, focusedPack: String? = nil, initialPage: PacksPage = .shop) {
         let opened = initialDomain.flatMap { PackDomain.allCases.contains($0) ? $0 : nil } ?? .sticker
         _domain = State(initialValue: opened)
+        _page = State(initialValue: initialPage)
         self.focusedPack = focusedPack
     }
 
@@ -64,9 +74,34 @@ struct PacksSettingsView: View {
                 content: { content }
             )
         }
+        .packOwnerProfile(PackOwnerProfileContext(
+            presence: { PresenceManager.shared.knownPresenceState(for: $0) },
+            dependencies: .live
+        ))
     }
 
     private var content: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+            Picker(String(localized: "settings.packs.page", defaultValue: "Page", bundle: .main), selection: $page) {
+                Text(String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main)).tag(PacksPage.shop)
+                Text(String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main)).tag(PacksPage.mine)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .accessibilityIdentifier("settings.packs.page")
+
+            switch page {
+            case .shop: shop
+            case .mine:
+                MyPacksView(language: PackShopScreen.language, usageText: FrameUsageCopy.text,
+                            rankName: GameCopy.rankName, designs: GameFramePackElementDesigns())
+                    .padding(.horizontal, MeeshySpacing.lg)
+            }
+        }
+        .padding(.vertical, MeeshySpacing.md)
+    }
+
+    private var shop: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.sm) {
@@ -80,7 +115,6 @@ struct PacksSettingsView: View {
 
             PackShopScreen(domain: domain, focusedPack: focusedPack)
         }
-        .padding(.vertical, MeeshySpacing.md)
     }
 }
 
@@ -131,7 +165,8 @@ struct PackShopScreen: View {
             // La vitrine unique (#10632, #10711) : prix en Meeshes, possession, achat optimiste —
             // les stickers y passent comme les fonds, plus de seconde Boutique.
             UnifiedShopView(initialDomain: domain, domains: [domain], focusedSlug: focusedPack,
-                            language: PackShopScreen.language, rankName: GameCopy.rankName)
+                            language: PackShopScreen.language, rankName: GameCopy.rankName,
+                            designs: GameFramePackElementDesigns(), readsAllDomains: true)
                 .id(domain)
                 .padding(.horizontal, MeeshySpacing.lg)
         case .unknown:
@@ -162,7 +197,8 @@ struct FramePackShopScreen: View {
                 case .shop:
                     UnifiedShopView(initialDomain: .gloryFrame, domains: [.gloryFrame],
                                     focusedSlug: focusedPack, language: language,
-                                    usageText: FrameUsageCopy.text, store: vitrine)
+                                    usageText: FrameUsageCopy.text, store: vitrine,
+                                    designs: GameFramePackElementDesigns(shelf: shelf), readsAllDomains: true)
                 case .pack(let slug):
                     FramePackShelfView(content: shelf.contents[slug] ?? .loading)
                         .task(id: slug) {

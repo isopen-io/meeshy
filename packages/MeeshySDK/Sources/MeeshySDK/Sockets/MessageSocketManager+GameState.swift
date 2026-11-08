@@ -1,6 +1,7 @@
 import Foundation
 
-// Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #10898 ajoute `game:updated` (#10900).
+// Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #10898 ajoute `game:updated` (#10900), le lot
+// #16425 `game:missions-updated`.
 // Responsabilité tenue ici : l'état du Jeu changé AILLEURS — une frappe, un gain, une reprise, un prestige ou une dépense
 // faits sur un autre appareil ou par la passerelle.
 
@@ -29,17 +30,42 @@ public struct GameUpdatedEvent: Decodable, Sendable, Equatable {
     }
 }
 
+/// `game:missions-updated` (#16425) — `{ dayKey }`, émis sur la room personnelle quand une mission du jour avance. Il ne
+/// porte pas l'état : il dit « relis tes défis ». Un `dayKey` absent ou illisible se lit `nil` et l'événement passe quand
+/// même — le relire coûte une lecture, le perdre laisse un défi figé à l'écran.
+public struct GameMissionsUpdatedEvent: Decodable, Sendable, Equatable {
+    public let dayKey: String?
+
+    public init(dayKey: String?) {
+        self.dayKey = dayKey
+    }
+
+    private enum CodingKeys: String, CodingKey { case dayKey }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dayKey = (try? c.decodeIfPresent(String.self, forKey: .dayKey)) ?? nil
+    }
+}
+
 public extension Notification.Name {
     /// `game:updated` — l'objet de la notification est un `GameUpdatedEvent`.
     static let gameStateUpdated = Notification.Name("me.meeshy.gameStateUpdated")
+    /// `game:missions-updated` — l'objet de la notification est un `GameMissionsUpdatedEvent`.
+    static let gameMissionsUpdated = Notification.Name("me.meeshy.gameMissionsUpdated")
 }
 
-extension MessageSocketManager {
+/// Les routes du Jeu tiennent dans la TABLE, pas dans le gestionnaire : elles ne livrent qu'à `NotificationCenter` et
+/// ne lisent rien de lui — comme `relations(_:)`.
+extension MessageSocketRoutes {
 
-    var gameStateRoutes: [SocketInboundRoute] {
+    static func game(_ m: MessageSocketManager) -> [SocketInboundRoute] {
         [
-            route(.gameUpdated, GameUpdatedEvent.self) { _, event in
+            m.route(.gameUpdated, GameUpdatedEvent.self) { _, event in
                 NotificationCenter.default.post(name: .gameStateUpdated, object: event)
+            },
+            m.route(.gameMissionsUpdated, GameMissionsUpdatedEvent.self) { _, event in
+                NotificationCenter.default.post(name: .gameMissionsUpdated, object: event)
             },
         ]
     }

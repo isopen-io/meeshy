@@ -12,6 +12,7 @@ const fr = {
   'rowMenu.manageMembers': 'Gérer les membres',
   'rowMenu.adminOpen': 'Ouvrir dans l’administration',
   'rowMenu.leave': 'Quitter',
+  'rowMenu.obsolete': 'Rendre obsolète',
   'rowMenu.search': 'Rechercher',
   'rowMenu.readingMode': 'Mode de lecture',
   'rowMenu.peek': 'Aperçu de la conversation',

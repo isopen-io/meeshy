@@ -283,7 +283,7 @@ extension StoryViewerView {
         ), author: AuthManager.shared.currentUser)
         Task {
             StoryInteractionService().noteComment(storyId: story.id)
-            if await !commentSession.deliver(payload, media: medias) {
+            if await !commentSession.deliver(payload, media: medias, onCommentsClosed: { StoryCommentSettings.noteClosed(storyId: story.id, in: viewModel) }) {
                 returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
             }
         }
@@ -305,16 +305,14 @@ extension StoryViewerView {
     func deleteCurrentStory(reason: String? = nil) {
         guard let story = currentStory else { return }
         HapticFeedback.light()
-        
         Task {
-            let success = await viewModel.deleteStory(storyId: story.id, reason: reason)
+            let success = PendingStoryMarker.isPending(storyId: story.id)
+                ? await StoryWaitingCancellation.cancelQueued(storyId: story.id, on: viewModel)
+                : await viewModel.deleteStory(storyId: story.id, reason: reason)
             DispatchQueue.main.async {
-                if success {
-                    HapticFeedback.success()
-                    dismissViewer()
-                } else {
-                    HapticFeedback.error()
-                }
+                guard success else { return HapticFeedback.error() }
+                HapticFeedback.success()
+                dismissViewer()
             }
         }
     }
@@ -342,7 +340,7 @@ extension StoryViewerView {
             // ET toute notification qui arrive PENDANT la lecture naît consommée
             // (`activePostId`). Idempotent : le manager ignore une story déjà
             // déclarée active et coalesce les appels serveur.
-            NotificationToastManager.shared.onPostOpened(story.id)
+            if let postId = PendingStoryMarker.serverId(of: story.id) { NotificationToastManager.shared.onPostOpened(postId) }
         }
     }
 }

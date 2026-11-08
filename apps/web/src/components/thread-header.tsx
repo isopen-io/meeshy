@@ -13,6 +13,7 @@ import { ReadingModeChip } from './reading-mode-chip';
 import { ThreadCallButton } from './thread-call-button';
 import { ThreadShareButton } from './thread-share-button';
 import { UnreadBadge } from './unread-badge';
+import { useListeningBand } from '@/lib/now-playing/listening-band';
 import type { ListConversation } from '@/lib/api/list-preview';
 import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
@@ -165,6 +166,8 @@ export function ThreadHeader({
   /* … et son mood, cerné de sa présence (#9065). */
   const peerMood = useAuthorMood(peerKey);
   const peerMoodPostId = useAuthorMoodPostId(peerKey);
+  /* … et ce qu'il écoute ou regarde, au détail que son cercle ouvre (#16729). */
+  const peerListening = useListeningBand(group ? undefined : peerKey, currentInterfaceLanguage());
   /* « N (M) 🔥 » (#8906) — ce que cette conversation a rapporté au lecteur ;
      dans la grappe d'actions repliée, sous le titre déplié. */
   const engagement = useConversationEngagement(conversation);
@@ -236,7 +239,7 @@ export function ThreadHeader({
   const bandToggles = avatarDoor.kind !== 'toggle' && !preview;
   const peerSignals = group
     ? {}
-    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, ...(peerContour === null ? {} : { ring: peerContour }), ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
+    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, ...(peerContour === null ? {} : { ring: peerContour }), ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }), ...(peerListening === undefined ? {} : { listening: peerListening }) };
   const interfaceLanguage = currentInterfaceLanguage();
   const toggleLabel = translate(interfaceLanguage, expanded ? 'thread.header.collapse' : 'thread.header.expand');
   /* LA RECHERCHE DANS LA CONVERSATION — la loupe était un bouton SANS

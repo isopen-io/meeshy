@@ -252,7 +252,7 @@ class AvatarRingDesignValidationTest {
 
         val rings = catalog.ringPacks.flatMap { it.rings }
 
-        assertThat(rings).hasSize(59)
+        assertThat(rings).hasSize(91)
         rings.forEach { assertThat(it.stroke.colors).isNotEmpty() }
     }
 }

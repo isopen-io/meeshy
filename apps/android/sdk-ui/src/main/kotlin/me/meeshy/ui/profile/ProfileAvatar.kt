@@ -31,6 +31,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.appearance.AvatarRingDesign
+import me.meeshy.ui.appearance.AvatarRingLayer
 import me.meeshy.ui.accessibility.decorative
 import me.meeshy.ui.accessibility.meeshyTapTarget
 import me.meeshy.ui.component.MeeshyAvatar
@@ -45,7 +47,7 @@ private val RingExtra = 8.dp
 
 /**
  * L'avatar photo d'un profil : photo (initiales tant qu'elle manque), anneau de story réel, humeur, pastille de
- * présence et emplacement de [decor] (contour). Toucher la photo appelle [onOpenImage] seulement s'il y a une image ;
+ * présence et emplacement de [decor] et [ring] (le contour équipé, masqué si un blocage cache le décor). Toucher la photo appelle [onOpenImage] seulement s'il y a une image ;
  * l'anneau appelle [onViewStory], l'humeur [onMoodTap]. L'entrée en ressort respecte « Réduire les animations ».
  */
 @Composable
@@ -61,6 +63,7 @@ public fun ProfileAvatar(
     isBlockedByMe: Boolean = false,
     isBlockedByTarget: Boolean = false,
     decor: (@Composable BoxScope.() -> Unit)? = null,
+    ring: AvatarRingDesign? = null,
     onOpenImage: (ProfileFullscreenImage) -> Unit = {},
     onViewStory: () -> Unit = {},
     onMoodTap: () -> Unit = {},
@@ -91,8 +94,10 @@ public fun ProfileAvatar(
                     .clickable(role = Role.Button, onClick = onViewStory),
             )
         }
-        Box(Modifier.size(size).clip(CircleShape).then(photoTap).grayscale(signs.isGrayedOut)) {
-            MeeshyAvatar(name = name, size = size, containerColor = signs.accent, imageUrl = photoTarget?.url)
+        AvatarRingLayer(if (signs.showsDecor) ring else null, footprint = size, modifier = Modifier.size(size)) {
+            Box(Modifier.size(size).clip(CircleShape).then(photoTap).grayscale(signs.isGrayedOut)) {
+                MeeshyAvatar(name = name, size = size, containerColor = signs.accent, imageUrl = photoTarget?.url)
+            }
         }
         if (signs.showsDecor && decor != null) Box(Modifier.size(outer).decorative()) { decor() }
         signs.presenceDot?.let { dot ->

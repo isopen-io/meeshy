@@ -148,7 +148,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let mimeType: String
     public let fileSize: Int
     public let filePath: String
-    public let fileUrl: String
+    @ContainerRebasedFileURL public private(set) var fileUrl: String
     public var title: String?
     public var alt: String?
     /// Langue source de `alt` (#12333).
@@ -192,7 +192,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
     public var currentUserReactions: [String]?
     public var thumbnailPath: String?
-    public var thumbnailUrl: String?
+    @ContainerRebasedOptionalFileURL public var thumbnailUrl: String?
     public var thumbHash: String?
     public var duration: Int?
     public var bitrate: Int?
@@ -384,6 +384,16 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         let kb = Double(fileSize) / 1024
         if kb < 1024 { return String(format: "%.1f KB", kb) }
         return String(format: "%.1f MB", kb / 1024)
+    }
+
+    /// La même pièce, lue depuis un autre fichier de l'appareil. La vignette
+    /// qui désignait l'ancien fichier (une image optimiste se sert d'elle-même)
+    /// le suit ; une vignette distincte reste où elle est.
+    public func relocatingLocalFile(to url: URL) -> MeeshyMessageAttachment {
+        var relocated = self
+        relocated.fileUrl = url.absoluteString
+        if thumbnailUrl == fileUrl { relocated.thumbnailUrl = url.absoluteString }
+        return relocated
     }
 }
 

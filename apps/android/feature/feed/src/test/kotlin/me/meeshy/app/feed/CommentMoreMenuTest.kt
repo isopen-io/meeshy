@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -18,7 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** iOS `CommentMoreMenu`: Copy text for all, Imager when the comment composes a card (#13922), Delete for one's own, behind a 44 dp « … ». */
+/** iOS `CommentMoreMenu`: Copy text for all, Delete for one's own, behind a 44 dp « … » — Imager lives in the rail as the wand only (#16541). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class CommentMoreMenuTest {
@@ -46,7 +47,7 @@ class CommentMoreMenuTest {
     )
 
     private fun show(isOwn: Boolean, imaging: CommentImaging? = null) {
-        compose.setContent { MeeshyTheme { CommentMoreMenu(comment(isOwn), onDelete = { deleted += it }, imaging = imaging) } }
+        compose.setContent { MeeshyTheme { Row { CommentMoreMenu(comment(isOwn), onDelete = { deleted += it }, imaging = imaging) } } }
         compose.waitForIdle()
     }
 
@@ -91,19 +92,15 @@ class CommentMoreMenuTest {
     }
 
     @Test
-    fun `a comment that composes a card offers Imager, after Copy and before Delete, and opens its card`() {
-        val opened = mutableListOf<Pair<String, PostCommentCardSubject>>()
-        show(isOwn = true, imaging = CommentImaging(cardOf = { card }, open = { id, composed -> opened += id to composed }))
+    fun `a comment that composes a card keeps Imager out of the menu, which offers Copy then Delete (#16541)`() {
+        show(isOwn = true, imaging = CommentImaging(cardOf = { card }, open = { _, _ -> }))
 
         compose.onNodeWithContentDescription("More options").performClick()
         val copy = compose.onNodeWithText("Copy text").getBoundsInRoot().top
-        val imagine = compose.onNodeWithText("Picture it").getBoundsInRoot().top
         val delete = compose.onNodeWithText("Delete comment").getBoundsInRoot().top
-        compose.onNodeWithText("Picture it").performClick()
 
-        assertThat(copy).isLessThan(imagine)
-        assertThat(imagine).isLessThan(delete)
-        assertThat(opened).containsExactly("c1" to card)
+        compose.onAllNodesWithText("Picture it").assertCountEquals(0)
+        assertThat(copy).isLessThan(delete)
     }
 
     @Test
@@ -120,5 +117,26 @@ class CommentMoreMenuTest {
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onAllNodesWithText("Picture it").assertCountEquals(0)
+    }
+
+    @Test
+    fun `a comment that composes a card carries the wand beside the more button, which opens its card`() {
+        val opened = mutableListOf<Pair<String, PostCommentCardSubject>>()
+        show(isOwn = false, imaging = CommentImaging(cardOf = { card }, open = { id, composed -> opened += id to composed }))
+
+        val wand = compose.onNodeWithContentDescription("Picture it").getBoundsInRoot()
+        val more = compose.onNodeWithContentDescription("More options").getBoundsInRoot()
+        compose.onNodeWithContentDescription("Picture it").performClick()
+
+        assertThat(wand.right).isAtMost(more.left)
+        assertThat(wand.bottom - wand.top).isAtLeast(44.dp)
+        assertThat(opened).containsExactly("c1" to card)
+    }
+
+    @Test
+    fun `a comment that composes nothing carries no wand`() {
+        show(isOwn = false, imaging = CommentImaging(cardOf = { null }, open = { _, _ -> }))
+
+        compose.onNodeWithContentDescription("Picture it").assertDoesNotExist()
     }
 }

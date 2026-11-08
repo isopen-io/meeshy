@@ -225,13 +225,97 @@ class MessageDetailExplorerTest {
     }
 
     @Test
-    fun `with no candidates and empty preferences the fallback language still appears`() {
+    fun `with no candidates and empty preferences no default french row is invented`() {
         val model = build(
             originalLanguage = "en",
             preferences = ExplorerPrefs(systemLanguage = null),
             candidates = emptyList(),
         )
 
-        assertThat(model.rows.map { it.code }).containsExactly("fr")
+        assertThat(model.rows).isEmpty()
+    }
+
+    private fun buildVoice(
+        audio: Map<String, String> = emptyMap(),
+        attachmentId: String? = "att1",
+        translations: List<LanguageResolver.TranslationLike> = emptyList(),
+        selectedCode: String? = null,
+        translatingCodes: Set<String> = emptySet(),
+    ) = MessageDetailExplorer.build(
+        originalLanguage = "en",
+        content = "",
+        transcription = "Hello from the voice note",
+        translations = translations,
+        preferences = french,
+        candidates = candidates,
+        translatingCodes = translatingCodes,
+        selectedCode = selectedCode,
+        audioTranslations = audio,
+        audioAttachmentId = attachmentId,
+    )
+
+    @Test
+    fun `a voice message banner carries its transcription and says so`() {
+        val explorer = buildVoice()
+        assertThat(explorer.originalPreview).isEqualTo("Hello from the voice note")
+        assertThat(explorer.originalIsTranscription).isTrue()
+        assertThat(explorer.audioAttachmentId).isEqualTo("att1")
+    }
+
+    @Test
+    fun `a language with a spoken track shows its transcription and counts as audio`() {
+        val row = buildVoice(audio = mapOf("FR" to "Bonjour la voix")).rows.first { it.code == "fr" }
+        assertThat(row.hasAudio).isTrue()
+        assertThat(row.audioPreview).isEqualTo("Bonjour la voix")
+        assertThat(row.hasContent).isFalse()
+        assertThat(row.canRetranslate).isFalse()
+    }
+
+    @Test
+    fun `the selected card carries the full translated text and the close target`() {
+        val long = "x".repeat(120)
+        val explorer = build(translations = listOf(ExplorerTranslation("fr", long)), selectedCode = "fr")
+        assertThat(explorer.selected?.text).isEqualTo(long)
+        assertThat(explorer.selected?.code).isEqualTo("fr")
+        assertThat(explorer.selected?.isAudio).isFalse()
+        assertThat(explorer.rows.first { it.code == "fr" }.preview).hasLength(61)
+    }
+
+    @Test
+    fun `a selected language with only a spoken track fills the card from the audio transcription`() {
+        val explorer = buildVoice(audio = mapOf("es" to "Hola"), selectedCode = "es")
+        assertThat(explorer.selected?.text).isEqualTo("Hola")
+        assertThat(explorer.selected?.isAudio).isTrue()
+    }
+
+    @Test
+    fun `no card when the selected language has nothing to show`() {
+        assertThat(build(selectedCode = "fr").selected).isNull()
+    }
+
+    @Test
+    fun `touching a row selects what exists, requests the voice by attachment for a voice message, else the text`() {
+        val explorer = buildVoice(audio = mapOf("es" to "Hola"), translations = listOf(ExplorerTranslation("fr", "Salut")))
+        fun action(code: String) = LanguageExplorerRowAction.of(explorer.rows.first { it.code == code }, explorer.audioAttachmentId)
+        assertThat(action("fr")).isEqualTo(LanguageExplorerRowAction.Select)
+        assertThat(action("es")).isEqualTo(LanguageExplorerRowAction.Select)
+        assertThat(action("de")).isEqualTo(LanguageExplorerRowAction.RequestAudio("att1"))
+        val text = build()
+        assertThat(LanguageExplorerRowAction.of(text.rows.first { it.code == "de" }, text.audioAttachmentId))
+            .isEqualTo(LanguageExplorerRowAction.RequestText)
+    }
+
+    @Test
+    fun `a row in flight takes no new request whatever it holds`() {
+        val explorer = buildVoice(translatingCodes = setOf("de"))
+        assertThat(LanguageExplorerRowAction.of(explorer.rows.first { it.code == "de" }, "att1"))
+            .isEqualTo(LanguageExplorerRowAction.None)
+    }
+
+    @Test
+    fun `a post passes its translations in and the projection needs nothing else`() {
+        val explorer = build(translations = listOf(ExplorerTranslation("fr", "Salut")))
+        assertThat(explorer.rows.first { it.code == "fr" }.hasContent).isTrue()
+        assertThat(explorer.audioAttachmentId).isNull()
     }
 }

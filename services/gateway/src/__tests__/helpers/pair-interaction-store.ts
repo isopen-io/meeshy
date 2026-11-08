@@ -30,6 +30,8 @@ export function pairInteractionStore(
     relations?: readonly Row[];
     notifications?: readonly Row[];
     conversations?: readonly Row[];
+    /** `UserPreferences` : { userId, privacy } — le document JSON des réglages. */
+    preferences?: readonly Row[];
     racesOnFirstCreate?: boolean;
     failCreate?: Error;
   } = {},
@@ -40,6 +42,7 @@ export function pairInteractionStore(
     users: [...(seed.users ?? [])].map((r) => ({ ...r })) as Row[],
     notifications: [...(seed.notifications ?? [])].map((r) => ({ ...r })) as Row[],
     conversations: [...(seed.conversations ?? [])].map((r) => ({ ...r })) as Row[],
+    preferences: [...(seed.preferences ?? [])].map((r) => ({ ...r })) as Row[],
     races: seed.racesOnFirstCreate === true,
     sequence: 0,
   };
@@ -115,8 +118,17 @@ export function pairInteractionStore(
     },
   };
 
+  const userPreferences = {
+    findMany: (args: { where?: Row; select?: Record<string, boolean> }): Promise<Row[]> => {
+      const keys = args.select ? Object.keys(args.select) : null;
+      return Promise.resolve(
+        state.preferences.filter((row) => matchesMongoWhere(row, args.where)).map((row) => (keys ? Object.fromEntries(keys.map((k) => [k, row[k]])) : { ...row })),
+      );
+    },
+  };
+
   return {
-    prisma: { ...base.prisma, pairInteractionDay, user, conversation },
+    prisma: { ...base.prisma, pairInteractionDay, user, conversation, userPreferences },
     days: (): readonly Row[] => state.days.map((r) => ({ ...r })),
     relations: base.relations,
   };

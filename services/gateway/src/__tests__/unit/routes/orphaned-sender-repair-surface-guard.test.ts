@@ -88,10 +88,18 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // portée se DÉCOUVRE (`discoverConversationIdsByMessageIds`), jamais connue
   // d'avance.
   'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 1 },
-  // Les 4 lectures cursor/`around` (probes `{ select: { createdAt: true } }`
-  // ou `{ select: { id: true } }`) ne chargent jamais `sender` ; seule la
-  // page principale (déjà réparée depuis #6501) la charge.
-  'conversations/messages-list.ts': { kind: 'applies', reads: 5, applications: 1 },
+  // #16684 — les 3 lectures de la fenêtre `around` ont quitté ce fichier pour
+  // `messages-cursor-window.ts` (ci-dessous). Restent la lecture du curseur
+  // `before` (une sonde `{ id, createdAt, pinnedAt }`, qui ne charge pas
+  // `sender`) et la page principale, réparée depuis #6501.
+  'conversations/messages-list.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #16684 — la résolution de la fenêtre `around`. Ses deux lectures sont des
+  // SONDES d'identifiants (`{ select: { id: true, createdAt: true } }` pour la
+  // cible, `{ select: { id: true } }` pour les deux moitiés) : elles ne
+  // chargent JAMAIS `sender`, donc rien à réparer. La page qui hydrate
+  // réellement les expéditeurs reste celle de `messages-list.ts`, enveloppée
+  // depuis #6501.
+  'conversations/messages-cursor-window.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // Les 2 lectures d'existence (`pinnedAt`/dé-épinglage) ne chargent que des
   // identifiants ; seule la page des épingles charge `sender`.
   'conversations/messages-pin.ts': { kind: 'applies', reads: 3, applications: 1 },
@@ -156,6 +164,10 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // #11381 — la lecture de `translation:request` est partie dans `messaging/atRestTranslationSource.ts`.
   'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'deliverTextTranslation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16706 (cycle 143 bis) — la garde d'ADMISSION de la file hors ligne. Elle lit
+  // `MESSAGE_LIVENESS_SELECT` seul (`deletedAt`, `expiresAt`, `viewOnceBurnedAt`)
+  // et ne sert aucun expéditeur : rien à réparer, par construction.
+  'offlineParticipantQueue.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -164,6 +176,9 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
   // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
   'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16685 — la garde de vivacité du rejeu : elle ne lit que `deletedAt`/`expiresAt`
+  // (`MESSAGE_LIVENESS_SELECT`), jamais `sender`.
+  'queuedMessageLiveness.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
   // celui de sa conversation) pour sceller son entrée de file hors ligne.
   'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -183,6 +198,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #7377 — la liste des favoris de message charge `sender` pour chaque ligne
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #14619 — la recherche de la liste des conversations : ses deux lectures
+  // (contenu, traductions) chargent `sender` pour la ligne de résultat, et un
+  // seul `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée =
+  // les conversations du lecteur.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de
@@ -195,6 +215,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `Participant` par son id. Jamais la relation `sender` — un expéditeur disparu
   // rend « sans auteur ».
   'reports/reportedContentAuthor.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14110 / #14627 — la priorité d'un signalement : `messageType` (une
+  // position ?) et `conversationId` (l'audience). Jamais `sender`.
+  'reports/reportPriority.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // #10726 — le mode de chiffrement du porteur et de sa conversation, pour
   // savoir si la passerelle lit le vocal. Jamais `sender`.
   'attachments/attachmentCarrierServerReadable.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -308,7 +331,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #16557 — la troisième lecture est celle de `loadMessageReadableByReader` (la forme « demande »), même projection sans contenu.
+  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageNotificationFanOut.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageRemovalEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7377 — la pose d'une étoile : `STAR_ADMISSION_MESSAGE_SELECT`, les seules

@@ -273,3 +273,41 @@ class DeliveryStatusResolverTest {
         assertThat(tier).isEqualTo(DeliveryTier.Sent)
     }
 }
+
+class DeliveryStatusResolverIosVectorsTest {
+
+    @Test
+    fun `a group where readers outnumber delivery acks is still delivered once readers cover everyone`() {
+        // iOS : un lecteur compte aussi comme destinataire (plancher max(delivered, read)).
+        val tier = DeliveryStatusResolver.resolve(deliveredCount = 0, readCount = 2, recipientCount = 3)
+        assertThat(tier).isEqualTo(DeliveryTier.Sent)
+        val covered = DeliveryStatusResolver.resolve(deliveredCount = 1, readCount = 3, recipientCount = 3)
+        assertThat(covered).isEqualTo(DeliveryTier.Read)
+    }
+
+    @Test
+    fun `the delivered floor lets reads stand in for missing delivery acks`() {
+        assertThat(DeliveryStatusResolver.effectiveDeliveredCount(0, 2)).isEqualTo(2)
+        assertThat(DeliveryStatusResolver.fromCounts(deliveredCount = 0, readCount = 2, recipientCount = 2)).isEqualTo(DeliveryTier.Read)
+        assertThat(DeliveryStatusResolver.fromCounts(deliveredCount = 1, readCount = 1, recipientCount = 3)).isEqualTo(DeliveryTier.Sent)
+    }
+
+    @Test
+    fun `a third party reading does not make a group message read`() {
+        assertThat(DeliveryStatusResolver.resolve(deliveredCount = 3, readCount = 1, recipientCount = 3)).isEqualTo(DeliveryTier.Delivered)
+        assertThat(DeliveryStatusResolver.resolve(deliveredCount = 1, readCount = 1, recipientCount = 3)).isEqualTo(DeliveryTier.Sent)
+    }
+
+    @Test
+    fun `fromCounts with an unknown denominator advances on a single count`() {
+        assertThat(DeliveryStatusResolver.fromCounts(0, 1, 0)).isEqualTo(DeliveryTier.Read)
+        assertThat(DeliveryStatusResolver.fromCounts(1, 0, 0)).isEqualTo(DeliveryTier.Delivered)
+        assertThat(DeliveryStatusResolver.fromCounts(0, 0, 0)).isEqualTo(DeliveryTier.Sent)
+    }
+
+    @Test
+    fun `reciprocity degrades read to delivered in a group`() {
+        val tier = DeliveryStatusResolver.resolve(deliveredCount = 3, readCount = 3, recipientCount = 3, showReadReceipts = false)
+        assertThat(tier).isEqualTo(DeliveryTier.Delivered)
+    }
+}

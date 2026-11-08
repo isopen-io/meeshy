@@ -1,6 +1,8 @@
 package me.meeshy.core.database.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +27,14 @@ public interface MessageDao {
     public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
 
     /**
+     * Les lignes qui PEUVENT porter [userId] : son propre message (colonne `senderId`) ou une charge qui le nomme
+     * (citation, transfert). Un pré-filtre SQL qui sur-sélectionne — l'id peut figurer dans une URL — ; la loi se
+     * lit sur la charge décodée. [userId] est apparié littéralement : échapper `\`, `%` et `_` par `\` d'abord.
+     */
+    @Query("SELECT * FROM messages WHERE senderId = :rawUserId OR payload LIKE '%' || :userId || '%' ESCAPE '\\'")
+    public suspend fun involving(rawUserId: String, userId: String): List<MessageEntity>
+
+    /**
      * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
      * ou « e2ee » dans la charge : mode du message, d'une pièce, avis d'activation, lignes non encore rétro-remplies
      * comprises). Le filtre de texte ne court que sur la fenêtre, jamais sur tout l'historique : la sous-requête ne trie que
@@ -38,6 +48,16 @@ public interface MessageDao {
             "AND (isEncrypted = 1 OR payload LIKE '%e2ee%' OR payload LIKE '%\"isEncrypted\":true%')",
     )
     public suspend fun endToEndCandidates(conversationId: String, window: Int): List<MessageEntity>
+
+    /**
+     * Le dernier message ACQUITTÉ du fil : celui qu'un résumé de lecture non nommé (passerelle d'avant #7433)
+     * décrit. Un envoi en vol (`sendState` posé, pas d'id serveur) ou supprimé n'est jamais ce message-là.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "AND serverId IS NOT NULL AND deletedAt IS NULL ORDER BY createdAt DESC LIMIT 1",
+    )
+    public suspend fun latestAcknowledged(conversationId: String): MessageEntity?
 
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
@@ -70,6 +90,14 @@ public interface MessageDao {
     )
     public fun observeRecentForConversation(conversationId: String, limit: Int): Flow<List<MessageEntity>>
 
+    /**
+     * INSERT IGNORE : n'écrit que les lignes dont l'identifiant est absent et ne remplace JAMAIS une ligne existante
+     * (préchargement d'un push : jamais d'écrasement d'un payload riche). Rend le rowid de chaque ligne, `-1` pour une
+     * ligne ignorée.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    public suspend fun insertIfAbsent(rows: List<MessageEntity>): List<Long>
+
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
 
@@ -90,6 +118,14 @@ public interface MessageDao {
     /** Ephemeral rows whose deadline has passed — what the retention sweep removes. */
     @Query("SELECT * FROM messages WHERE expiresAt IS NOT NULL AND expiresAt <= :nowMillis")
     public suspend fun expiredBefore(nowMillis: Long): List<MessageEntity>
+
+    /**
+     * The rows that may hold a view-once THIS reader opened: the opening column is set, or the payload says
+     * `consumedByMe` (rows written before the column was derived on every write). The caller decides from the decoded
+     * payload; a row stays a candidate after it is sealed, so the pass that reads this must be idempotent.
+     */
+    @Query("SELECT * FROM messages WHERE viewOnceOpenedAt IS NOT NULL OR payload LIKE '%\"consumedByMe\":true%'")
+    public suspend fun openedViewOnceCandidates(): List<MessageEntity>
 
     /** The reader opened a view-once message: permanent, and invisible to a REST refresh. */
     @Query(
@@ -128,6 +164,72 @@ public interface MessageDao {
     )
     public suspend fun deleteMissingSince(conversationId: String, minCreatedAt: Long, ids: List<String>)
 
+    /** The rows [deleteMissing] would prune, read in the same transaction before it (#14655). */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND id NOT IN (:ids)",
+    )
+    public suspend fun missing(conversationId: String, ids: List<String>): List<MessageEntity>
+
+    /** The rows [deleteMissingSince] would prune, read in the same transaction before it (#14655). */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND createdAt >= :minCreatedAt AND id NOT IN (:ids)",
+    )
+    public suspend fun missingSince(conversationId: String, minCreatedAt: Long, ids: List<String>): List<MessageEntity>
+
+    /**
+     * The rows of a window anchored on an old message (#14670), newest first: [fromMillis] to
+     * [throughMillis], both included. The anchored counterpart of [observeRecentForConversation].
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND createdAt >= :fromMillis AND createdAt <= :throughMillis ORDER BY createdAt DESC",
+    )
+    public fun observeRangeForConversation(
+        conversationId: String,
+        fromMillis: Long,
+        throughMillis: Long,
+    ): Flow<List<MessageEntity>>
+
+    /** Les [limit] lignes strictement plus anciennes que [createdAt], la plus récente d'abord : le côté ancien d'un saut. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND createdAt < :createdAt " +
+            "ORDER BY createdAt DESC LIMIT :limit",
+    )
+    public suspend fun olderThan(conversationId: String, createdAt: Long, limit: Int): List<MessageEntity>
+
+    /** Les [limit] lignes strictement plus récentes que [createdAt], la plus ancienne d'abord : le côté récent d'un saut. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND createdAt > :createdAt " +
+            "ORDER BY createdAt ASC LIMIT :limit",
+    )
+    public suspend fun newerThan(conversationId: String, createdAt: Long, limit: Int): List<MessageEntity>
+
+    /** Les lignes d'une recherche, la plus récente d'abord : le mode `Search(ids)` de la fenêtre. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND id IN (:ids) ORDER BY createdAt DESC",
+    )
+    public fun observeByIds(conversationId: String, ids: List<String>): Flow<List<MessageEntity>>
+
+    /**
+     * Oldest server-acked row among the newest [limit] — the `before` cursor of the RECENT window
+     * (#14670). The cache may hold an older island (a jump to an old message): paging from the
+     * cache's global oldest would leap over the gap between the two.
+     */
+    @Query(
+        "SELECT * FROM (SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "ORDER BY createdAt DESC LIMIT :limit) WHERE sendState IS NULL ORDER BY createdAt ASC LIMIT 1",
+    )
+    public suspend fun oldestSyncedAmongRecent(conversationId: String, limit: Int): MessageEntity?
+
+    /** Oldest server-acked row at or after [fromMillis] — the `before` cursor of an anchored window. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND createdAt >= :fromMillis ORDER BY createdAt ASC LIMIT 1",
+    )
+    public suspend fun oldestSyncedSince(conversationId: String, fromMillis: Long): MessageEntity?
+
     /** Oldest server-acked row — the `before` cursor for backwards pagination. */
     @Query(
         "SELECT * FROM messages WHERE conversationId = :conversationId " +
@@ -150,6 +252,14 @@ public interface MessageDao {
     )
     public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
 
+    /** The ids of the local send bubbles in [sendState] (`SENDING` / `FAILED`) — the boot reconciliation's input. */
+    @Query("SELECT id FROM messages WHERE sendState = :sendState")
+    public suspend fun idsInSendState(sendState: String): List<String>
+
+    /** Réveille les observateurs d'un message dont seule une ligne dédiée (traduction, transcription) a changé. */
+    @Query("UPDATE messages SET changeVersion = changeVersion + 1 WHERE id = :id")
+    public suspend fun bumpChangeVersion(id: String)
+
     @Query("UPDATE messages SET sendState = :sendState, changeVersion = changeVersion + 1 WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)
 
@@ -161,7 +271,44 @@ public interface MessageDao {
 
     @Query("DELETE FROM messages")
     public suspend fun clear()
+
+    /** Purge du cache : une page de charges, toutes lignes confondues (l'attribution des médias les relit). */
+    @Query("SELECT payload FROM messages ORDER BY id LIMIT :limit OFFSET :offset")
+    public suspend fun payloadPage(limit: Int, offset: Int): List<String>
+
+    /** Octets réels des charges que la purge peut retirer : jamais une ligne optimiste ni une vue unique ouverte. */
+    @Query("SELECT COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM messages WHERE sendState IS NULL AND viewOnceOpenedAt IS NULL")
+    public suspend fun purgeablePayloadBytes(): Long
+
+    @Query("DELETE FROM messages WHERE sendState IS NULL AND viewOnceOpenedAt IS NULL")
+    public suspend fun clearPurgeable()
+
+    /** Rétention — les lignes confirmées par le serveur plus vieilles que [cutoff] (une ligne optimiste n'est jamais purgée). */
+    @Query("SELECT id, serverId FROM messages WHERE sendState IS NULL AND createdAt < :cutoff LIMIT :limit")
+    public suspend fun retentionKeysOlderThan(cutoff: Long, limit: Int): List<MessageKeys>
+
+    /** Rétention — les éphémères confirmés dont l'échéance est passée. */
+    @Query("SELECT id, serverId FROM messages WHERE sendState IS NULL AND expiresAt IS NOT NULL AND expiresAt <= :nowMillis LIMIT :limit")
+    public suspend fun retentionKeysExpired(nowMillis: Long, limit: Int): List<MessageKeys>
+
+    /** Rétention — toutes les clés d'un fil, pour purger une conversation entière sans orphelin. */
+    @Query("SELECT id, serverId FROM messages WHERE conversationId = :conversationId")
+    public suspend fun retentionKeysForConversation(conversationId: String): List<MessageKeys>
+
+    /** Rétention — les fils qui dépassent [cap] lignes confirmées. */
+    @Query("SELECT conversationId FROM messages WHERE sendState IS NULL GROUP BY conversationId HAVING COUNT(*) > :cap")
+    public suspend fun conversationsOverCap(cap: Int): List<String>
+
+    /** Rétention — les lignes confirmées au-delà des [keep] plus récentes d'un fil. */
+    @Query(
+        "SELECT id, serverId FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "ORDER BY createdAt DESC LIMIT -1 OFFSET :keep",
+    )
+    public suspend fun retentionKeysBeyondNewest(conversationId: String, keep: Int): List<MessageKeys>
 }
+
+/** Les deux identifiants sous lesquels les tables filles peuvent référencer un message. */
+public data class MessageKeys(val id: String, val serverId: String?)
 
 /**
  * Upserts server-truth rows without erasing what only this device knows (retry counter, last

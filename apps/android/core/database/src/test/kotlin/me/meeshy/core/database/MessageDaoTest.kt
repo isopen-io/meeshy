@@ -83,6 +83,15 @@ class MessageDaoTest {
     }
 
     @Test
+    fun `missing and missingSince name exactly the rows the prunes would remove`() = runTest {
+        dao.upsertAll(listOf(messageRow("a", createdAt = 1), messageRow("b", createdAt = 5), messageRow("c", createdAt = 9)))
+        dao.upsertAll(listOf(messageRow("cid_1", createdAt = 9).copy(sendState = "SENDING")))
+
+        assertThat(dao.missing("c1", listOf("b")).map { it.id }).containsExactly("a", "c")
+        assertThat(dao.missingSince("c1", minCreatedAt = 5, ids = listOf("b")).map { it.id }).containsExactly("c")
+    }
+
+    @Test
     fun `clearConversation removes only that conversation`() = runTest {
         dao.upsertAll(listOf(messageRow("a", "c1"), messageRow("b", "c2")))
 

@@ -15,12 +15,23 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pinch
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.call.montage.CallMontageCaption
+import me.meeshy.sdk.model.call.montage.CallMontageChoice
+import me.meeshy.sdk.model.call.montage.CallMontageStyle
+import me.meeshy.sdk.model.composer.look.ComposerPhotoFrame
+import me.meeshy.sdk.model.composer.look.ComposerPhotoLook
+import me.meeshy.sdk.model.composer.look.ComposerPhotoRecipe
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -50,12 +61,12 @@ class ComposerRetouchScreenTest {
      * la bande et le rail dans un ordre qu'aucun geste ne produisait (« Terminé » jamais revenu, le Crapaud
      * centré mais pas choisi).
      */
-    private fun show() {
+    private fun show(initial: ComposerPhotoRecipe? = null) {
         val photo = Bitmap.createBitmap(90, 160, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.RED) }
         compose.setContent {
             CompositionLocalProvider(LocalRetouchPaintContext provides EmptyCoroutineContext) {
                 MeeshyTheme {
-                    ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ })
+                    ComposerRetouchScreen(source = photo, author = author, onDone = { delivered += it }, onCancel = { cancelled++ }, initial = initial)
                 }
             }
         }
@@ -103,7 +114,26 @@ class ComposerRetouchScreenTest {
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width % 2).isEqualTo(0)
         assertThat(rendered.bitmap.getPixel(rendered.bitmap.width / 2, 1)).isNotEqualTo(Color.RED)
+        assertThat(rendered.recipe.look.frame).isEqualTo(screenFrame)
         assertThat(cancelled).isEqualTo(0)
+    }
+
+    private val screenFrame = ComposerPhotoFrame.Montage(CallMontageChoice.Classic(CallMontageStyle.SCREEN))
+
+    @Test
+    fun `rouvrir une piece retouchee rend son cadre et son texte modifiables, et Termine rend la meme recette`() {
+        val recipe = ComposerPhotoRecipe(look = ComposerPhotoLook(frame = screenFrame), texts = listOf(StoryTextObject(id = "t1", text = "MEESHY")))
+        show(initial = recipe)
+        compose.onNodeWithText("Frames").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Screen").assertIsSelected()
+        compose.onNodeWithText("Frames").performClick()
+        compose.waitForIdle()
+        tapDone()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        assertThat(rendered.recipe).isEqualTo(recipe)
+        assertThat(rendered.bitmap.getPixel(rendered.bitmap.width / 2, 1)).isNotEqualTo(Color.RED)
     }
 
     @Test
@@ -149,6 +179,64 @@ class ComposerRetouchScreenTest {
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width).isEqualTo(rendered.bitmap.height)
         assertThat(rendered.bitmap.width).isEqualTo(90)
+    }
+
+    private fun imageBounds() = compose.onNodeWithTag(RETOUCH_CROP_IMAGE_TAG).fetchSemanticsNode().boundsInRoot
+
+    @Test
+    fun `Recadrer garde la photo en grand, posee entiere sous un cadre fixe`() {
+        show()
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+
+        val image = imageBounds()
+        assertThat(maxOf(image.width / screen.width, image.height / screen.height)).isAtLeast(0.5f)
+        assertThat(image.width / image.height).isWithin(0.01f).of(90f / 160f)
+    }
+
+    @Test
+    fun `pincer zoome la photo sous le cadre, et la fenetre gardee est celle qui part`() {
+        show()
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        val before = imageBounds()
+
+        compose.onNodeWithTag(RETOUCH_CROP_IMAGE_TAG).performTouchInput {
+            val middle = center
+            pinch(middle - Offset(20f, 0f), middle - Offset(120f, 0f), middle + Offset(20f, 0f), middle + Offset(120f, 0f))
+        }
+        compose.waitForIdle()
+
+        assertThat(imageBounds().width).isGreaterThan(before.width * 1.5f)
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        tapDone()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        assertThat(rendered.bitmap.width).isLessThan(90)
+        assertThat(rendered.bitmap.width.toFloat() / rendered.bitmap.height).isWithin(0.05f).of(90f / 160f)
+        assertThat(rendered.recipe.crop).isNotNull()
+    }
+
+    @Test
+    fun `choisir un preset anime le cadre jusqu a ses nouvelles proportions`() {
+        show()
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        val start = imageBounds()
+        compose.mainClock.autoAdvance = false
+
+        compose.onNodeWithText("1:1").performClick()
+        compose.mainClock.advanceTimeBy(120)
+        val midway = imageBounds()
+        compose.mainClock.advanceTimeBy(1_000)
+        val end = imageBounds()
+        compose.mainClock.autoAdvance = true
+
+        assertThat(end.width).isGreaterThan(start.width + 1f)
+        assertThat(midway.width).isGreaterThan(start.width)
+        assertThat(midway.width).isLessThan(end.width)
     }
 
     @Test

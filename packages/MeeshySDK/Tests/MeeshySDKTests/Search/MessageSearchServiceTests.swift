@@ -54,6 +54,40 @@ final class MessageSearchServiceTests: XCTestCase {
             "FTS5 unicode61 remove_diacritics should match accent-stripped query")
     }
 
+    func test_translations_forFoundMessages_groupsTheirTranslationsByMessage() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        try await pool.write { db in
+            try MessageRecordFactory.make(localId: "m1", content: "hello").insert(db)
+            try MessageRecordFactory.make(localId: "m2", content: "hello again").insert(db)
+            try Self.translation(id: "t1", messageLocalId: "m1", language: "fr", text: "bonjour").insert(db)
+            try Self.translation(id: "t2", messageLocalId: "m1", language: "es", text: "hola").insert(db)
+            try Self.translation(id: "t3", messageLocalId: "m2", language: "fr", text: "rebonjour").insert(db)
+        }
+
+        let service = MessageSearchService(reader: pool)
+        let byMessage = try await service.translations(forMessageLocalIds: ["m1"])
+
+        XCTAssertEqual(Set(byMessage.keys), ["m1"], "seules les traductions des messages demandés reviennent")
+        XCTAssertEqual(Set(byMessage["m1"]?.map(\.targetLanguage) ?? []), ["fr", "es"])
+    }
+
+    func test_translations_noIds_returnsEmptyWithoutReading() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let service = MessageSearchService(reader: pool)
+        let byMessage = try await service.translations(forMessageLocalIds: [])
+        XCTAssertTrue(byMessage.isEmpty)
+    }
+
+    private static func translation(id: String, messageLocalId: String, language: String, text: String) -> TranslationRecord {
+        TranslationRecord(
+            id: id, messageLocalId: messageLocalId, messageServerId: nil,
+            targetLanguage: language, translatedContent: text, translationModel: "nllb",
+            confidenceScore: nil, sourceLanguage: "en", receivedAt: Date(timeIntervalSince1970: 0)
+        )
+    }
+
     private func makeFreshPool() throws -> DatabaseQueue {
         let path = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("test_search_\(UUID().uuidString).sqlite").path

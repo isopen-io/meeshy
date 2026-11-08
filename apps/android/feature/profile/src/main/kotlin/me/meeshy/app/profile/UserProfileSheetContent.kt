@@ -18,11 +18,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,16 +37,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import me.meeshy.feature.profile.R
+import me.meeshy.sdk.model.relation.ProfileCircle
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.profile.ProfileActionPlan
@@ -56,11 +53,9 @@ import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.ProfileTab
 import me.meeshy.ui.accessibility.LocalReduceMotion
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.profile.ProfileFullscreenImageViewer
 import me.meeshy.ui.theme.MeeshyMotion
-import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -83,6 +78,7 @@ internal fun ProfileSheetLoadedContent(
     catalog: AppearanceCatalog?,
     isExpanded: Boolean,
     actions: ProfileActionCallbacks,
+    sharedConversations: ProfileSharedConversationsState = ProfileSharedConversationsState(),
 ) {
     val profile = state.profile ?: return
     val header = remember(profile) { ProfileHeaderBuilder.build(profile, System.currentTimeMillis()) }
@@ -100,6 +96,8 @@ internal fun ProfileSheetLoadedContent(
     val signs = ProfileHeaderSigns.of(live, profile, isBlockedByMe, state.isBlockedByTarget, now)
     val showsTabs = plan?.showsTabs ?: true
     val reduceMotion = LocalReduceMotion.current
+    val postsEmit: (LazyListScope.() -> Unit)? =
+        if (showsTabs && tabs.selected == ProfileTab.POSTS) environment.postsItems?.invoke(profile.id, state.isSelf) else null
 
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -145,6 +143,10 @@ internal fun ProfileSheetLoadedContent(
                         topInset = ProfileHeaderMetrics.tabBarTopInsetDp(progress).dp + statusInset * progress.coerceIn(0f, 1f),
                     )
                 }
+                if (postsEmit != null) {
+                    postsEmit.invoke(this)
+                    return@LazyColumn
+                }
                 item(key = "tab-content", contentType = "tab-content") {
                     Column(
                         modifier = Modifier
@@ -168,9 +170,11 @@ internal fun ProfileSheetLoadedContent(
                                     accent = accent,
                                     plan = plan,
                                     isOpeningConversation = actionsState.isOpeningConversation,
+                                    circle = actionsState.circle?.takeIf { actionsState.userId == profile.id },
                                     isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
                                     environment = environment,
                                     actions = actions,
+                                    sharedConversations = sharedConversations.takeIf { it.userId == profile.id },
                                 )
                             }
                         }
@@ -233,18 +237,33 @@ private fun ProfileSheetTabContent(
     accent: Color,
     plan: ProfileActionPlan?,
     isOpeningConversation: Boolean,
+    circle: ProfileCircle?,
     isInteractionDisabled: Boolean,
     environment: ProfileSheetEnvironment,
     actions: ProfileActionCallbacks,
+    sharedConversations: ProfileSharedConversationsState?,
 ) {
     when (tab) {
         ProfileTab.POSTS -> environment.postsContent?.invoke(profile.id)
             ?: ProfilePostsRow(onClick = { environment.onViewPosts(profile.id) })
-        ProfileTab.CONVERSATIONS -> ProfileConversationsEmpty(isInteractionDisabled = isInteractionDisabled)
+        ProfileTab.CONVERSATIONS -> {
+            val rows = sharedConversations?.rows.orEmpty()
+            ProfileConversationsTab(
+                view = ProfileConversationsView.of(
+                    hasRows = rows.isNotEmpty(),
+                    interactionsDisabled = isInteractionDisabled,
+                    canMessage = !state.isSelf && plan?.canMessage == true,
+                ),
+                rows = rows,
+                isOpeningConversation = isOpeningConversation,
+                onOpen = environment.onOpenConversation,
+                onSendMessage = actions.onSendMessage,
+            )
+        }
         ProfileTab.DETAILS -> ProfileDetailsTab(
             details = details,
             accent = accent,
-            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions),
+            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions, circle),
         )
     }
 }
@@ -256,6 +275,7 @@ private fun profileActionsSlot(
     displayName: String,
     isOpeningConversation: Boolean,
     callbacks: ProfileActionCallbacks,
+    circle: ProfileCircle?,
 ): (@Composable () -> Unit)? {
     val shown = plan?.takeIf { !isSelf && it.layout != ProfileLayout.CLOSED } ?: return null
     return {
@@ -264,36 +284,7 @@ private fun profileActionsSlot(
             displayName = displayName,
             isOpeningConversation = isOpeningConversation,
             callbacks = callbacks,
-        )
-    }
-}
-
-/**
- * L'onglet Conversations sans conversation commune (miroir de l'état vide de `conversationsTab`
- * iOS) : « Aucune conversation en commun », ou « Interactions désactivées » quand on ne peut plus
- * échanger. La liste des conversations communes attend son chargeur.
- */
-@Composable
-private fun ProfileConversationsEmpty(isInteractionDisabled: Boolean) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.xxl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
-    ) {
-        Icon(
-            imageVector = if (isInteractionDisabled) MeeshyIcons.Block else MeeshyIcons.ForumFilled,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textMuted.copy(alpha = if (isInteractionDisabled) MeeshyOpacity.medium else MeeshyOpacity.strong),
-            modifier = Modifier.size(40.dp),
-        )
-        Text(
-            text = stringResource(
-                if (isInteractionDisabled) R.string.profile_conversations_interactionsDisabled else R.string.profile_conversations_noShared,
-            ),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
+            circle = circle,
         )
     }
 }

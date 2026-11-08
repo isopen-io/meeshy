@@ -12,9 +12,6 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useDeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
-import { galleryAutoSaveEnabled, setGalleryAutoSaveEnabled } from '@/lib/gallery/auto-save';
-import { browserGalleryStorage } from '@/lib/gallery/auto-save-runtime';
-import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import {
   currentInterfaceLanguage,
@@ -25,6 +22,7 @@ import {
 } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { useDevicePushRow } from '@/lib/push/use-device-push';
+import { useSettingFocusFromAddress } from '@/lib/view/use-setting-focus';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
 import { href, navigate } from '@/routes/route-table';
 import { AccountSwitcherSheet, SwitchAccountButton } from '@/routes/settings-accounts';
@@ -35,6 +33,7 @@ import {
   AppearanceSection,
   DataSection,
   E2EE_DEVICES_PANEL,
+  LICENCES_PANEL,
   LogoutButton,
   NotificationsSection,
   PACKS_PANEL,
@@ -48,7 +47,6 @@ import {
   SettingsContent,
   ToolsSection,
   type BooleanPreference,
-  type GalleryToggle,
   type PreferencesView,
 } from '@/routes/settings-sections';
 
@@ -110,6 +108,19 @@ const SettingsPacks = lazy(() =>
   }),
 );
 
+/**
+ * LES LICENCES (#14628) — la licence de Meeshy, l'offre de source au commit du
+ * bundle et le texte de l'AGPL-3.0, chargés à la demande AVEC leurs libellés :
+ * le texte de la licence ne pèse rien tant qu'on n'ouvre pas le volet.
+ */
+const SettingsLicences = lazy(() =>
+  import('@/routes/settings-licences').then(async (module) => {
+    const language = currentInterfaceLanguage();
+    await module.prepareSettingsLicences(language);
+    return { default: () => <module.SettingsLicencesScreen language={language} /> };
+  }),
+);
+
 const THEME_MODE: Readonly<Record<ThemePreference, ThemeMode>> = { system: 'auto', light: 'light', dark: 'dark' };
 
 const actionDeps = (): PreferenceActionDeps => ({
@@ -124,23 +135,6 @@ const notices = {
   offline: 'settings.offline.body',
   refused: 'settings.save.error',
 } as const satisfies Readonly<Record<string, InterfaceCatalogKey>>;
-
-/** La bascule de galerie (#8308) — `undefined` hors de la coque Android, qui seule sait y écrire. */
-function useGalleryToggle(): GalleryToggle | undefined {
-  const [enabled, setEnabled] = useState(() => {
-    const storage = browserGalleryStorage();
-    return storage === null || galleryAutoSaveEnabled(storage);
-  });
-  if (currentGallerySaver() === null) return undefined;
-  return {
-    enabled,
-    onToggle: (next) => {
-      const storage = browserGalleryStorage();
-      if (storage !== null) setGalleryAutoSaveEnabled(storage, next);
-      setEnabled(next);
-    },
-  };
-}
 
 /**
  * Le volet demandé, lu sur l'adresse à chaque rendu — le routeur rend l'écran
@@ -174,6 +168,13 @@ export default function SettingsScreen() {
       </Suspense>
     );
   }
+  if (panel === LICENCES_PANEL) {
+    return (
+      <Suspense fallback={null}>
+        <SettingsLicences />
+      </Suspense>
+    );
+  }
   return <SettingsHome />;
 }
 
@@ -204,8 +205,8 @@ function SettingsHome() {
   const [confirming, setConfirming] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
-  const gallery = useGalleryToggle();
   const deviceTranslation = useDeviceTranslationSetting();
+  useSettingFocusFromAddress();
 
   useEffect(() => {
     if (notice === null) return undefined;
@@ -283,7 +284,7 @@ function SettingsHome() {
               if (outcome.status !== 'saved') setNotice(translate(language, notices[outcome.status]));
             }}
           />
-          <DataSection language={language} {...(gallery === undefined ? {} : { gallery })} deviceTranslation={deviceTranslation} />
+          <DataSection language={language} deviceTranslation={deviceTranslation} />
           <PacksSection language={language} />
           <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />

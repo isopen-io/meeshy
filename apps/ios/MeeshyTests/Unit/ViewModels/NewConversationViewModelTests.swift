@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -238,6 +239,57 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertEqual(api.postCount, 1)
     }
 
+    // MARK: - openDirect (décision porteur du 2026-11-04, #14646)
+
+    func test_openDirect_oneTap_postsADirectAndOpensIt() async {
+        let (sut, api) = makeSUT(currentUserId: "u-current")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertEqual(api.postCount, 1)
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "direct")
+        XCTAssertEqual(lastPostedBody(api)?["participantIds"] as? [String], ["u-1"])
+        XCTAssertNil(lastPostedBody(api)?["title"])
+        XCTAssertEqual(sut.createdConversation?.id, "conv-1")
+        XCTAssertFalse(sut.isCreating)
+        XCTAssertNil(sut.openingUserId)
+    }
+
+    func test_openDirect_carriesTheCheckedEncryptionMode() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+        sut.chooseEncryptionMode(.hybrid, isGroup: false)
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertEqual(lastPostedBody(api)?["encryptionMode"] as? String, "hybrid")
+    }
+
+    func test_openDirect_marksTheTouchedRowWhileItOpens() async {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+        var seen: [String?] = []
+        let watch = sut.$openingUserId.sink { seen.append($0) }
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+        watch.cancel()
+
+        XCTAssertEqual(seen, [nil, "u-1", nil])
+    }
+
+    func test_openDirect_failure_keepsTheSheetWithTheMessage() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertNil(sut.createdConversation)
+        XCTAssertNotNil(sut.errorMessage)
+        XCTAssertFalse(sut.isCreating)
+        XCTAssertNil(sut.openingUserId)
+    }
+
     // MARK: - Encryption (directive porteur du 2026-11-01)
 
     private func lastPostedBody(_ api: MockAPIClientForApp) -> [String: Any]? {
@@ -352,6 +404,75 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertEqual(api.postCount, 0)
         XCTAssertFalse(sut.isCreating)
         XCTAssertNil(sut.createdConversation)
+    }
+
+    // MARK: - Un groupe dont je suis le seul membre (#14646)
+
+    func test_shape_noInviteeWithoutGroupRequest_isNone() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 0, groupRequested: false), .none)
+    }
+
+    func test_shape_oneInvitee_isDirect_unlessAGroupIsRequested() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 1, groupRequested: false), .direct)
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 1, groupRequested: true), .group)
+    }
+
+    func test_shape_noInviteeWithGroupRequest_isGroup() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 0, groupRequested: true), .group)
+    }
+
+    func test_shape_twoInvitees_isGroup() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 2, groupRequested: false), .group)
+    }
+
+    func test_canCreate_soloGroupWithoutTitle_isFalse() {
+        XCTAssertFalse(NewConversationShape.canCreate(selectedCount: 0, groupRequested: true, groupTitle: "   "))
+    }
+
+    func test_canCreate_soloGroupWithTitle_isTrue() {
+        XCTAssertTrue(NewConversationShape.canCreate(selectedCount: 0, groupRequested: true, groupTitle: "Avis clients"))
+    }
+
+    func test_canCreate_directWithoutTitle_isTrue() {
+        XCTAssertTrue(NewConversationShape.canCreate(selectedCount: 1, groupRequested: false, groupTitle: ""))
+    }
+
+    func test_canCreate_nothingChosen_isFalse() {
+        XCTAssertFalse(NewConversationShape.canCreate(selectedCount: 0, groupRequested: false, groupTitle: "Titre"))
+    }
+
+    func test_createConversation_soloGroupWithTitle_postsAGroupWithoutParticipants() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-solo", type: "group"))
+
+        await sut.createConversation(selectedUsers: [], groupTitle: " Audit ", groupRequested: true)
+
+        let body = lastPostedBody(api)
+        XCTAssertEqual(body?["type"] as? String, "group")
+        XCTAssertEqual(body?["title"] as? String, "Audit")
+        XCTAssertEqual(body?["participantIds"] as? [String], [])
+        XCTAssertEqual(sut.createdConversation?.id, "conv-solo")
+    }
+
+    func test_createConversation_soloGroupWithoutTitle_isNoOp() async {
+        let (sut, api) = makeSUT()
+
+        await sut.createConversation(selectedUsers: [], groupTitle: "  ", groupRequested: true)
+
+        XCTAssertEqual(api.postCount, 0)
+        XCTAssertNil(sut.createdConversation)
+    }
+
+    func test_createConversation_oneInviteeAsGroup_postsAGroup() async {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-g", type: "group"))
+
+        await sut.createConversation(
+            selectedUsers: [Self.makeUser(id: "u-1", username: "alice")], groupTitle: "Duo", groupRequested: true
+        )
+
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "group")
+        XCTAssertEqual(lastPostedBody(api)?["participantIds"] as? [String], ["u-1"])
     }
 
     func test_createConversation_userBlocked_setsBlockSpecificError() async {

@@ -19,6 +19,12 @@ class ComposerLabeledRailTest {
     }
 
     @Test
+    fun `the rail of a post carries the post text after the place, still without the more button`() {
+        assertThat(ComposerLabeledRail.tools(writesPostText = true)).isEqualTo(ComposerLabeledRail.tools + ComposerSceneTool.POST_TEXT)
+        assertThat(ComposerLabeledRail.tools(writesPostText = false)).isEqualTo(ComposerLabeledRail.tools)
+    }
+
+    @Test
     fun `the more menu never repeats a tool of the rail`() {
         val entries = ComposerMoreEntry.entries.map { it.name }
 

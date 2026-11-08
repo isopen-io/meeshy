@@ -263,13 +263,7 @@ extension MessageListViewController {
             .dropFirst()
             .sink { [weak self] new in
                 guard let self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in new where last[msgId] != val {
-                    changed.insert(msgId)
-                }
-                for msgId in last.keys where new[msgId] == nil {
-                    changed.insert(msgId)
-                }
+                let changed = Set(new.keys.filter { last[$0] != new[$0] }).union(last.keys.filter { new[$0] == nil })
                 last = new
                 self.queueReconfigure(for: changed)
             }
@@ -285,5 +279,6 @@ extension MessageListViewController {
         observePerMessageDictionary(vm.$revealedViewOnceIds, initial: vm.revealedViewOnceIds)
         observePerMessageDictionary(vm.$burningEphemeralIds, initial: vm.burningEphemeralIds)
         observePerMessageDictionary(vm.startupDependencies.endToEndClear.$adopted, initial: vm.startupDependencies.endToEndClear.adopted)
+        observePerMessageDictionary(vm.startupDependencies.endToEndClear.hybrid.$layers, initial: vm.startupDependencies.endToEndClear.hybrid.layers)
     }
 }

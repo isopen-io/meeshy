@@ -80,51 +80,33 @@ extension OfflineQueue {
         let now = Date()
         let shouldCoalesce = OutboxMutationRules.coalescesByAnchor(kind: kind)
 
+        let superseded: [String]
         do {
-            try await pool.write { db in
-                var finalPayload: Data = encoded
-                if shouldCoalesce {
-                    // Latest-state-wins kinds (e.g. `markStoryViewed`): drop
-                    // every earlier `.pending` / `.failed` row for the same
-                    // anchor. `.markAsRead` est l'exception (outbox-05) : ses
-                    // messageIds sont des REÇUS de lecture exacte, pas un état
-                    // à jeter — ils sont fusionnés (union) dans le payload
-                    // survivant avant la suppression des rows périmées.
-                    let stale: [OutboxRecord] = try OutboxRecord
-                        .filter(Column("kind") == kind.rawValue)
-                        .filter(Column("conversationId") == anchor)
-                        .filter([OutboxStatus.pending.rawValue, OutboxStatus.failed.rawValue]
-                            .contains(Column("status")))
-                        .fetchAll(db)
-                    if !stale.isEmpty {
-                        if kind == .markAsRead {
-                            finalPayload = OutboxMutationRules.mergeMarkAsReadPayloads(
-                                newest: encoded,
-                                stale: stale.map(\.payload)
-                            )
-                        }
-                        let staleIds = stale.map(\.id)
-                        try OutboxRecord
-                            .filter(staleIds.contains(Column("id")))
-                            .deleteAll(db)
-                    }
-                }
+            superseded = try await pool.write { db -> [String] in
+                let coalesced = try shouldCoalesce
+                    ? OutboxCoalescing.supersedeStaleRows(in: db, kind: kind, anchor: anchor, newest: encoded, cmid: cmid)
+                    : OutboxCoalescing.Outcome(payload: encoded, superseded: [])
                 try OutboxRecord(
                     id: outboxId,
                     kind: kind,
                     conversationId: anchor,
                     messageLocalId: nil,
                     clientMessageId: cmid,
-                    payload: finalPayload,
+                    payload: coalesced.payload,
                     status: .pending,
                     createdAt: now
                 ).insert(db)
+                return coalesced.superseded
             }
         } catch {
             logger.error("Outbox write failed for \(kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw OfflineQueueError.writeFailed(underlying: error)
         }
 
+        // #16010 — une ligne remplacée n'aura jamais d'issue : ceux qui
+        // l'observaient (écrivains du like, du favori) se terminent ici, sans
+        // valeur — donc sans retour arrière —, au lieu d'attendre à vie.
+        superseded.forEach(endOutcomeObservers(for:))
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
         mutationEnqueued.send(())

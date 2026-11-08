@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.rootnav
 
+import me.meeshy.sdk.model.playback.VoicePlaybackCard
+
 /** Le contexte audio actif : la conversation et le message dont la piste joue. */
 data class ActiveAudioContext(val conversationId: String, val messageId: String)
 
@@ -25,6 +27,16 @@ object NowPlayingReturnPolicy {
         if (!isPlaying || context == null) return null
         if (!isKnownConversation(context.conversationId)) return null
         return NowPlayingReturnTarget(context.conversationId, context.messageId)
+    }
+
+    /**
+     * Toucher la notification media : la conversation ET la bulle du vocal qui JOUE, `null` en pause,
+     * sans conversation ou pour un audio de post (la carte ne porte alors aucun identifiant).
+     */
+    fun notificationTarget(card: VoicePlaybackCard, isPlaying: Boolean): NowPlayingReturnTarget? {
+        val conversationId = card.conversationId?.takeIf { it.isNotBlank() }
+        val context = conversationId?.let { ActiveAudioContext(it, card.messageId.orEmpty()) }
+        return target(context, isPlaying) { true }
     }
 
     /** Toucher le mini-lecteur navigue meme en pause : le geste est explicite. */

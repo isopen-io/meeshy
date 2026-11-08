@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "composer.socle.blocked.audience", "androidName": "composer_socle_blocked_audience", "status": "adopted" }
+      ]
+    }
+  }
+}

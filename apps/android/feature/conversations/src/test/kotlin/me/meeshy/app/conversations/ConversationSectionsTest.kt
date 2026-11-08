@@ -266,4 +266,16 @@ class ConversationSectionsTest {
             assertThat(ConversationSections.reorderUpdates(section, from = 0, to = 1)).isEmpty()
         }
     }
+
+    @Test
+    fun `a category section carries its own colour and icon`() {
+        val sections = ConversationSections.of(
+            listOf(conv("a", categoryId = "work")),
+            listOf(CategoryOption(id = "work", name = "Work", color = "#3B82F6", icon = "briefcase")),
+        )
+
+        assertThat(sections.single().color).isEqualTo("#3B82F6")
+        assertThat(sections.single().icon).isEqualTo("briefcase")
+        assertThat(sections.single().sectionId).isEqualTo("work")
+    }
 }

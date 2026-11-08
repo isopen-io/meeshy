@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comment_attach">Attach a photo, video or file</string>
+    <string name="stories_comment_attach_remove">Remove attachment</string>
+    <string name="stories_comment_attach_uploading">Uploading…</string>
+    <string name="stories_comment_attach_failed">Attachment could not be uploaded</string>
+</resources>

@@ -10,20 +10,56 @@ import org.junit.Test
 class NewConversationLogicTest {
 
     @Test
+    fun nobody_picked_and_no_group_asked_is_no_conversation_yet() {
+        assertThat(NewConversationLogic.shape(0, groupRequested = false)).isEqualTo(NewConversationShape.NONE)
+        assertThat(NewConversationLogic.canCreate(0, groupRequested = false, rawTitle = "Mes notes")).isFalse()
+    }
+
+    @Test
     fun one_selected_is_a_direct_conversation() {
+        assertThat(NewConversationLogic.shape(1, groupRequested = false)).isEqualTo(NewConversationShape.DIRECT)
         assertThat(NewConversationLogic.conversationType(1)).isEqualTo(NewConversationLogic.TYPE_DIRECT)
+        assertThat(NewConversationLogic.canCreate(1, groupRequested = false, rawTitle = "")).isTrue()
     }
 
     @Test
     fun two_or_more_selected_is_a_group() {
+        assertThat(NewConversationLogic.shape(2, groupRequested = false)).isEqualTo(NewConversationShape.GROUP)
         assertThat(NewConversationLogic.conversationType(2)).isEqualTo(NewConversationLogic.TYPE_GROUP)
         assertThat(NewConversationLogic.conversationType(5)).isEqualTo(NewConversationLogic.TYPE_GROUP)
     }
 
     @Test
-    fun cannot_create_with_no_participants() {
-        assertThat(NewConversationLogic.canCreate(0)).isFalse()
-        assertThat(NewConversationLogic.canCreate(1)).isTrue()
+    fun the_new_group_switch_makes_a_group_even_of_one_peer_or_of_nobody() {
+        assertThat(NewConversationLogic.shape(0, groupRequested = true)).isEqualTo(NewConversationShape.GROUP)
+        assertThat(NewConversationLogic.shape(1, groupRequested = true)).isEqualTo(NewConversationShape.GROUP)
+        assertThat(NewConversationLogic.conversationType(1, groupRequested = true)).isEqualTo(NewConversationLogic.TYPE_GROUP)
+    }
+
+    @Test
+    fun every_group_needs_its_title_like_ios() {
+        assertThat(NewConversationLogic.canCreate(0, groupRequested = true, rawTitle = "   ")).isFalse()
+        assertThat(NewConversationLogic.canCreate(0, groupRequested = true, rawTitle = "Mes notes")).isTrue()
+        assertThat(NewConversationLogic.canCreate(3, groupRequested = false, rawTitle = "")).isFalse()
+        assertThat(NewConversationLogic.canCreate(3, groupRequested = false, rawTitle = "Team")).isTrue()
+    }
+
+    @Test
+    fun a_group_of_myself_alone_leaves_as_a_titled_group_without_invitees() {
+        val request = NewConversationLogic.request(emptyList(), rawTitle = "  Mes notes  ", groupRequested = true, CreationEncryptionMode.SERVER)
+
+        assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_GROUP)
+        assertThat(request.title).isEqualTo("Mes notes")
+        assertThat(request.participantIds).isEmpty()
+    }
+
+    @Test
+    fun one_peer_with_the_group_switch_leaves_as_a_titled_group() {
+        val request = NewConversationLogic.request(listOf("u1"), rawTitle = "Audit", groupRequested = true, CreationEncryptionMode.SERVER)
+
+        assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_GROUP)
+        assertThat(request.title).isEqualTo("Audit")
+        assertThat(request.participantIds).containsExactly("u1")
     }
 
     @Test
@@ -64,26 +100,27 @@ class NewConversationLogicTest {
     @Test
     fun a_single_peer_is_created_through_the_one_direct_request() {
         // Le titre saisi est ignoré : un direct n'a pas de titre propre.
-        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "Ignoré", CreationEncryptionMode.SERVER))
+        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "Ignoré", groupRequested = false, CreationEncryptionMode.SERVER))
             .isEqualTo(directConversationRequest("u1").copy(encryptionMode = "server"))
     }
 
     @Test
     fun the_creation_screen_sends_the_checked_mode_while_the_shared_direct_request_sends_none() {
-        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "", CreationEncryptionMode.HYBRID).encryptionMode)
+        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "", groupRequested = false, CreationEncryptionMode.HYBRID).encryptionMode)
             .isEqualTo("hybrid")
-        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "", CreationEncryptionMode.SERVER).encryptionMode)
+        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "", groupRequested = false, CreationEncryptionMode.SERVER).encryptionMode)
             .isEqualTo("server")
         assertThat(directConversationRequest("u1").encryptionMode).isNull()
     }
 
     @Test
-    fun this_phone_offers_end_to_end_as_soon_only() {
+    fun this_phone_offers_end_to_end_for_a_direct_conversation() {
         val offer = NewConversationLogic.encryptionOffer(platformRole = "ADMIN", selectedCount = 1)
 
-        assertThat(NewConversationLogic.END_TO_END_SUPPORTED).isFalse()
-        assertThat(offer.choices.last().unavailability).isEqualTo(CreationEncryptionUnavailability.CLIENT_NOT_YET)
-        assertThat(offer.defaultMode).isEqualTo(CreationEncryptionMode.SERVER)
+        assertThat(NewConversationLogic.END_TO_END_SUPPORTED).isTrue()
+        assertThat(offer.choices.last().mode).isEqualTo(CreationEncryptionMode.E2EE)
+        assertThat(offer.choices.last().available).isTrue()
+        assertThat(offer.defaultMode).isEqualTo(CreationEncryptionMode.E2EE)
     }
 
     @Test
@@ -104,7 +141,7 @@ class NewConversationLogicTest {
 
     @Test
     fun the_direct_request_has_no_title_and_only_the_peer() {
-        val request = NewConversationLogic.request(listOf("u1"), rawTitle = "", CreationEncryptionMode.SERVER)
+        val request = NewConversationLogic.request(listOf("u1"), rawTitle = "", groupRequested = false, CreationEncryptionMode.SERVER)
 
         assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_DIRECT)
         assertThat(request.title).isNull()
@@ -113,7 +150,7 @@ class NewConversationLogicTest {
 
     @Test
     fun several_peers_are_created_as_a_titled_group() {
-        val request = NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  Team  ", CreationEncryptionMode.SERVER)
+        val request = NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  Team  ", groupRequested = false, CreationEncryptionMode.SERVER)
 
         assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_GROUP)
         assertThat(request.title).isEqualTo("Team")
@@ -122,7 +159,7 @@ class NewConversationLogicTest {
 
     @Test
     fun a_group_without_a_typed_title_has_none() {
-        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  ", CreationEncryptionMode.SERVER).title).isNull()
+        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  ", groupRequested = false, CreationEncryptionMode.SERVER).title).isNull()
     }
 
     @Test
@@ -138,5 +175,21 @@ class NewConversationLogicTest {
         assertThat(rows[0].servedPresence?.lastActiveAt).isEqualTo("2026-10-29T10:00:00Z")
         assertThat(rows[1].servedPresence?.state(0L)).isNotEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
         assertThat(rows[1].lastActiveAt).isNull()
+    }
+
+    @Test
+    fun `a blocked row is not selectable and a normal one is`() {
+        val row = SelectableUser("a", "Ann", "ann", null, isOnline = false)
+        assertThat(NewConversationLogic.isSelectable(row)).isTrue()
+        assertThat(NewConversationLogic.isSelectable(row.copy(isBlocked = true))).isFalse()
+    }
+
+    @Test
+    fun `the accessibility label composes name, handle and the blocked or online status`() {
+        val row = SelectableUser("a", "Ann", "ann", null, isOnline = true)
+        assertThat(NewConversationLogic.rowAccessibilityLabel(row, true, "Blocked", "online")).isEqualTo("Ann, @ann, online")
+        assertThat(NewConversationLogic.rowAccessibilityLabel(row, false, "Blocked", "online")).isEqualTo("Ann, @ann")
+        assertThat(NewConversationLogic.rowAccessibilityLabel(row.copy(isBlocked = true), true, "Blocked", "online"))
+            .isEqualTo("Ann, @ann, Blocked")
     }
 }

@@ -200,6 +200,23 @@ data class CachePolicy(
             keepForMillis = 6 * HOUR,
         )
 
+        // The devices signed in to the account: a security surface, so fresh for only a minute
+        // (a return to the screen revalidates quickly), yet kept a day so a cold or offline
+        // open still paints the last list while it revalidates. No iOS twin.
+        val Sessions = CachePolicy(
+            freshForMillis = MINUTE,
+            keepForMillis = DAY,
+            maxItemCount = 50,
+        )
+
+        // The people a search query found, replayed offline for the same query: a minute fresh so a retyped
+        // query revalidates quickly, kept a day, room for the 20 rows a query asks for (the store keeps the TAIL when it truncates). No iOS twin.
+        val UserSearch = CachePolicy(
+            freshForMillis = MINUTE,
+            keepForMillis = DAY,
+            maxItemCount = 50,
+        )
+
         // ── File-cache media (iOS `.disk`): no stale window, fresh until the TTL ──
 
         val MediaImages = CachePolicy(

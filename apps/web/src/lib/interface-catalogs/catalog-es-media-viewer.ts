@@ -11,6 +11,7 @@ const esMediaViewer = {
   'media.viewer.compose': 'Crear con este medio',
   'media.viewer.imager': 'Crear imagen',
   'media.viewer.saved': 'Guardado',
+  'media.viewer.already_saved': 'Ya guardado',
   'media.viewer.save_failed': 'No se pudo guardar',
   'media.viewer.offline': 'Sin conexión: inténtalo de nuevo cuando estés conectado',
   'media.viewer.retry': 'Toca de nuevo para guardar',

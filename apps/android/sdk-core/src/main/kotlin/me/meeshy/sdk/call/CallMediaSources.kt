@@ -1,6 +1,8 @@
 package me.meeshy.sdk.call
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import me.meeshy.sdk.call.camera.CallCameraZoom
 import me.meeshy.sdk.call.camera.CameraLensDiscovery
 import me.meeshy.sdk.call.camera.CameraZoomActuator
@@ -10,6 +12,7 @@ import me.meeshy.sdk.call.effects.CallMotionPreference
 import me.meeshy.sdk.call.effects.CallVideoEffectsProcessor
 import me.meeshy.sdk.call.effects.MlKitFaceDetector
 import me.meeshy.sdk.call.effects.MlKitPersonSegmenter
+import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.camera.CameraLensClassifier
 import me.meeshy.sdk.model.call.camera.CameraFacing
@@ -91,13 +94,19 @@ internal class CallMediaSources(
         localAudioTrack = factory.createAudioTrack(AUDIO_TRACK_ID, source)
     }
 
-    /** Démarre la caméra et crée sa piste, SANS la poser sur un pair. Sans caméra : appel audio seul. */
-    fun prepareVideo() {
-        if (localVideoTrack != null) return
+    /**
+     * Démarre la caméra et crée sa piste, SANS la poser sur un pair. `null` : la caméra tourne. Sinon la raison
+     * pour laquelle l'appel continue en audio seul (accès refusé, aucune caméra) : elle ne termine jamais l'appel.
+     */
+    fun prepareVideo(): CallVideoFallback? {
+        if (localVideoTrack != null) return null
+        if (appContext.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            return CallVideoFallback.CameraPermissionDenied
+        }
         val names = enumerator.deviceNames.toList()
         lensProbes = CameraLensDiscovery.probes(appContext, names)
-        val name = flipTarget(front = true) ?: flipTarget(front = false) ?: return
-        val capturer = enumerator.createCapturer(name, null) ?: return
+        val name = flipTarget(front = true) ?: flipTarget(front = false) ?: return CallVideoFallback.NoCamera
+        val capturer = enumerator.createCapturer(name, null) ?: return CallVideoFallback.NoCamera
         val current = stack.value
         val helper = SurfaceTextureHelper.create("MeeshyCapture", current.eglBase.eglBaseContext)
         val source = current.factory.createVideoSource(false)
@@ -123,6 +132,36 @@ internal class CallMediaSources(
         openCameraName = name
         localVideoTrack = current.factory.createVideoTrack(VIDEO_TRACK_ID, source)
         attachZoom(name)
+        return null
+    }
+
+    /**
+     * Audio vers vidéo en plein appel (iOS `enableLocalVideo`) : la caméra est acquise à la demande, sa piste prend
+     * l'émetteur vidéo réservé du pair (ou en ouvre un), sans toucher à l'audio. Une caméra déjà posée est seulement
+     * rallumée : rien à renégocier.
+     */
+    fun upgradeToVideo(peer: PeerConnection): VideoUpgrade {
+        prepareVideo()?.let { return VideoUpgrade.Failed(it) }
+        val track = localVideoTrack ?: return VideoUpgrade.Failed(CallVideoFallback.NoCamera)
+        setVideoEnabled(true)
+        if (videoAttached) return VideoUpgrade.AlreadyAttached
+        if (!LocalVideoRoute.attach(peer, track, STREAM_ID)) {
+            releaseVideo()
+            return VideoUpgrade.Failed(CallVideoFallback.NoCamera)
+        }
+        videoAttached = true
+        return VideoUpgrade.Attached
+    }
+
+    /**
+     * Vidéo vers audio (iOS `disableLocalVideo`) : l'émetteur vidéo lâche la piste, la caméra est libérée (voyant
+     * éteint). `true` quand une piste a quitté le pair : une offre doit suivre.
+     */
+    fun downgradeFromVideo(peer: PeerConnection): Boolean {
+        val track = localVideoTrack ?: return false
+        val detached = LocalVideoRoute.detach(peer, track)
+        releaseVideo()
+        return detached
     }
 
     /**

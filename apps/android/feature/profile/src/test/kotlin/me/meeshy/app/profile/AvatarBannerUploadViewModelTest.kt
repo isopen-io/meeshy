@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -373,5 +374,45 @@ class AvatarBannerUploadViewModelTest {
 
         assertThat(session.flow.value).isNull()
         assertThat(vm.state.value.uploading).isNull()
+    }
+
+    @Test
+    fun aConfirmedUpload_emitsASucceededEffectForItsTarget() = runTest(dispatcher) {
+        val media = mockk<MediaRepository>()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("https://cdn/b.jpg")))
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.updateBanner(any()) } returns NetworkResult.Success(user(banner = "https://cdn/b.jpg"))
+        val vm = vm(media, userRepo, SessionFixture(user()).repository)
+
+        vm.effects.test {
+            vm.onImagePicked(ImageUploadTarget.BANNER, item())
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(AvatarBannerUploadEffect.Succeeded(ImageUploadTarget.BANNER))
+        }
+    }
+
+    @Test
+    fun anOfflineUploadFailure_emitsAFailedEffect_andLeavesTheSessionUntouched() = runTest(dispatcher) {
+        val media = mockk<MediaRepository>()
+        coEvery { media.upload(any()) } returns failure()
+        val session = SessionFixture(user())
+        val vm = vm(media, mockk(relaxed = true), session.repository)
+
+        vm.effects.test {
+            vm.onImagePicked(ImageUploadTarget.AVATAR, item())
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(AvatarBannerUploadEffect.Failed(ImageUploadError.UPLOAD_FAILED))
+        }
+        assertThat(session.adopts).isEmpty()
+    }
+
+    @Test
+    fun aRejectedPick_emitsAFailedEffect() = runTest(dispatcher) {
+        val vm = vm(mockk(relaxed = true), mockk(relaxed = true), SessionFixture(user()).repository)
+
+        vm.effects.test {
+            vm.onImagePicked(ImageUploadTarget.AVATAR, item(mime = "video/mp4"))
+            assertThat(awaitItem()).isEqualTo(AvatarBannerUploadEffect.Failed(ImageUploadError.UNSUPPORTED_TYPE))
+        }
     }
 }

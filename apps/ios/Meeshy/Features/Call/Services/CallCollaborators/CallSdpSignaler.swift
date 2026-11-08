@@ -69,11 +69,11 @@ final class CallSdpSignaler: CallSdpSignalerProviding {
     /// (older than the high-water mark). Advances the mark on accept. The first
     /// signal of a call (generation 0 or 1) is always accepted.
     func acceptIncomingNegotiation(_ generation: Int, isOffer: Bool = false) -> Bool {
-        if CallManager.isStaleNegotiation(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer) {
+        if CallNegotiationRules.isStaleNegotiation(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer) {
             Logger.calls.info("[CALL-DIAG] dropping stale signal gen=\(generation) < current=\(self.negotiationId)")
             return false
         }
-        let freshLink = CallManager.isFreshLinkOffer(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer)
+        let freshLink = CallNegotiationRules.isFreshLinkOffer(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer)
         negotiationId = max(negotiationId, generation)
         if freshLink { negotiationId = generation }
         return true

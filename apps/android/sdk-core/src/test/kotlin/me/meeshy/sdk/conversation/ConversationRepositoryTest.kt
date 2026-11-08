@@ -30,6 +30,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
+import me.meeshy.sdk.net.api.MarkReadBody
 import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -63,7 +64,15 @@ private abstract class StubConversationApi : ConversationApi {
         body: me.meeshy.sdk.model.HistoryGrantUpdate,
     ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
 
+    override suspend fun updateParticipantRight(
+        id: String,
+        participantId: String,
+        body: me.meeshy.sdk.model.ParticipantRightsUpdate,
+    ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
+
     override suspend fun directWith(type: String, withUserId: String, limit: Int) =
+        ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun sharedWith(withUserId: String, limit: Int) =
         ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) =
         ApiResponse<List<ApiConversation>>(success = false)
@@ -81,6 +90,7 @@ private abstract class StubConversationApi : ConversationApi {
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun markReadDeclaring(id: String, body: MarkReadBody) = ApiResponse<Unit>(success = false)
     override suspend fun markReceived(id: String) =
         ApiResponse<me.meeshy.sdk.model.MarkedCountResult>(success = false)
     override suspend fun markUnread(id: String) = ApiResponse<Unit>(success = false)
@@ -459,10 +469,17 @@ private class CountingConversationDao(private val delegate: ConversationDao) : C
     override suspend fun deleteByIds(ids: List<String>) = delegate.deleteByIds(ids)
     override suspend fun clear() = delegate.clear()
 
+    override fun totalUnreadExcludingOpen(openIds: List<String>): Flow<Int> =
+        delegate.totalUnreadExcludingOpen(openIds)
+
     override fun totalUnreadCount(): Flow<Int> {
         totalUnreadCountCalls++
         return delegate.totalUnreadCount()
     }
+
+    override fun unreadConversationCount(): Flow<Int> = delegate.unreadConversationCount()
+    override suspend fun payloadPage(limit: Int, offset: Int): List<String> = delegate.payloadPage(limit, offset)
+    override suspend fun payloadBytes(): Long = delegate.payloadBytes()
 }
 
 @RunWith(RobolectricTestRunner::class)

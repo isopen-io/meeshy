@@ -21,12 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +39,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.Role
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.support.SupportActionKind
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -117,7 +124,7 @@ fun SupportScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
                 presentation.linkSections.forEach { section ->
-                    LinkSectionCard(section)
+                    LinkSectionCard(section, applicationId = context.packageName)
                 }
 
                 InfoSectionCard(presentation.infoRows)
@@ -129,12 +136,27 @@ fun SupportScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun LinkSectionCard(section: SupportLinkSection) {
+private fun LinkSectionCard(section: SupportLinkSection, applicationId: String) {
     val accent = section.key.accent()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val haptics = rememberMeeshyHaptics()
     SectionCard(title = stringResource(section.key.titleRes()), accent = accent) {
         section.links.forEachIndexed { index, link ->
             if (index > 0) Spacer(Modifier.height(MeeshySpacing.sm))
             LinkRow(link = link, label = stringResource(link.kind.labelRes()), accent = accent)
+        }
+        section.actions.forEach { action ->
+            if (section.links.isNotEmpty()) Spacer(Modifier.height(MeeshySpacing.sm))
+            ActionRow(
+                icon = action.icon(),
+                label = stringResource(action.labelRes()),
+                accent = accent,
+                onClick = {
+                    haptics.light()
+                    scope.launch { AppRatingLauncher.rate(context, applicationId) }
+                },
+            )
         }
     }
 }
@@ -179,7 +201,7 @@ private fun LinkRow(link: SupportLink, label: String, accent: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
+            .clickable(onClickLabel = stringResource(R.string.support_a11y_opens, label), role = Role.Button) {
                 context.openExternalLink(link.url)
             },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -190,6 +212,27 @@ private fun LinkRow(link: SupportLink, label: String, accent: Color) {
         Spacer(Modifier.weight(1f))
         Icon(
             Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun ActionRow(icon: ImageVector, label: String, accent: Color, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textPrimary)
+        Spacer(Modifier.weight(1f))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = accent,
             modifier = Modifier.size(16.dp),
@@ -239,6 +282,14 @@ private fun SupportLinkKind.icon(): ImageVector = when (this) {
     SupportLinkKind.TWITTER -> Icons.Filled.AlternateEmail
     SupportLinkKind.BUG_REPORT -> Icons.Filled.BugReport
     SupportLinkKind.FEATURE_REQUEST -> Icons.Filled.Lightbulb
+}
+
+private fun SupportActionKind.labelRes(): Int = when (this) {
+    SupportActionKind.RATE_APP -> R.string.support_help_rate
+}
+
+private fun SupportActionKind.icon(): ImageVector = when (this) {
+    SupportActionKind.RATE_APP -> Icons.Filled.Star
 }
 
 private fun SupportInfoKey.labelRes(): Int = when (this) {

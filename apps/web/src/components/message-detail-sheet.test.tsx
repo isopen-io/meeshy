@@ -12,6 +12,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { MessagePinEntry } from '@/lib/view/use-message-pin';
 import type { MessageStarEntry } from '@/lib/view/use-message-star';
 
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { MessageDetailSheet } from './message-detail-sheet';
 
 /**
@@ -218,6 +219,14 @@ describe('« Plus… » déplie Composer ET Imager (#8693)', () => {
     expect(entries.map((el) => el.textContent)).toEqual(['Composer', 'Imager']);
     await mounter.click(entries[1] ?? null);
     expect(journal).toEqual(['image', 'close']);
+  });
+
+  test('#16333 — « Composer » porte l’icône de POST (plus la baguette) ; « Imager » garde son icône d’IMAGE', async () => {
+    const host = await mountSheet(null, SERVER_MESSAGE_ID, { create: { onCompose: () => undefined, onImage: () => undefined } });
+    const traceOf = (body: string): string | undefined => /d="([^"]+)"/.exec(body)?.[1];
+    const traceIn = (id: string): string | null | undefined => host.querySelector(`[data-message-create="${id}"] svg path`)?.getAttribute('d');
+    expect(traceIn('compose')).toBe(traceOf(THREAD_MENU_GLYPHS.notePencil.body));
+    expect(traceIn('image')).toBe(traceOf(THREAD_MENU_GLYPHS.imageSquare.body));
   });
 
   test('un message sans média à composer n’offre que « Imager » ; un message protégé, rien', async () => {

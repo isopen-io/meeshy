@@ -73,6 +73,12 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// visiteurs ». `nil` d'un serveur antérieur — aucune ligne.
     public var anonymousViewCount: Int? = nil
 
+    /// Les commentaires de CETTE story sont fermés (#16541), et ceux de la
+    /// story qu'elle republie (`sourceCommentsDisabled`). La règle effective
+    /// est `commentsClosed`. `nil` sur les charges et caches antérieurs : ouvert.
+    public var commentsDisabled: Bool? = nil
+    public var sourceCommentsDisabled: Bool? = nil
+
     /// Count of reposts that pointed back to this story (Partager label).
     /// `nil` when not yet enriched.
     public var repostCount: Int?
@@ -256,6 +262,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             mentions: mentions, trackingLinks: trackingLinks
         )
         copy.anonymousViewCount = anonymousViewCount
+        copy.commentsDisabled = commentsDisabled
+        copy.sourceCommentsDisabled = sourceCommentsDisabled
         return copy
     }
 
@@ -289,6 +297,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             mentions: mentions, trackingLinks: trackingLinks
         )
         copy.anonymousViewCount = anonymousViewCount
+        copy.commentsDisabled = commentsDisabled
+        copy.sourceCommentsDisabled = sourceCommentsDisabled
         return copy
     }
 }
@@ -338,17 +348,7 @@ extension Array where Element == APIPost {
             let ownMediaIds = Set(ownMedia.map(\.id))
             let repostMedia = (repostSource?.media ?? []).filter { !ownMediaIds.contains($0.id) }
             let mediaSource: [APIPostMedia] = hasOwnContent ? ownMedia + repostMedia : (repostSource?.media ?? [])
-            let media: [FeedMedia] = mediaSource.map { m in
-                // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
-                // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur
-                // `url` (souvent une vidéo) ou sur l'avatar du profil.
-                // Bug user-reporté 2026-05-27 « la tray doit montrer la
-                // miniature de la dernière story du groupe ».
-                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl,
-                          thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
-                          thumbnailColor: "4ECDC4",
-                          width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
-            }
+            let media = Self.trayMedia(mediaSource)
             let storyTranslations: [StoryTranslation]? = post.translations.map { dict in
                 dict.map { lang, entry in StoryTranslation(language: lang, content: entry.text) }
             }
@@ -384,6 +384,8 @@ extension Array where Element == APIPost {
                                  mentions: post.mentions,
                                  trackingLinks: post.trackingLinks)
             item.anonymousViewCount = post.anonymousViewCount
+            item.commentsDisabled = post.commentsDisabled
+            item.sourceCommentsDisabled = post.repostOf?.commentsDisabled
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {
@@ -411,6 +413,23 @@ extension Array where Element == APIPost {
             return (a.latestStory?.createdAt ?? .distantPast) > (b.latestStory?.createdAt ?? .distantPast)
         }
         return groups
+    }
+}
+
+extension Array where Element == APIPost {
+    /// Les médias d'une story du plateau.
+    fileprivate static func trayMedia(_ mediaSource: [APIPostMedia]) -> [FeedMedia] {
+        mediaSource.map { m in
+            // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
+            // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur
+            // `url` (souvent une vidéo) ou sur l'avatar du profil.
+            // Bug user-reporté 2026-05-27 « la tray doit montrer la
+            // miniature de la dernière story du groupe ».
+            FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl,
+                      thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
+                      thumbnailColor: "4ECDC4",
+                      width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+        }
     }
 }
 

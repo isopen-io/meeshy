@@ -52,3 +52,23 @@ fun StoryViewerWire.toStoryViewer(): StoryViewer = StoryViewer(
     viewedAt = viewedAt?.takeIf { it.isNotBlank() },
     reactionEmoji = reaction?.takeIf { it.isNotBlank() },
 )
+
+/**
+ * Ce que la liste des vues d'une story rend, à TROIS issues — port de iOS `ViewerListOutcome`
+ * (`StoryInteractionService.loadViewerList`). Le refus (403 : la liste n'est pas pour ce lecteur)
+ * se distingue de la panne, pour que la feuille le DISE au lieu de se montrer vide comme si
+ * personne n'avait rien vu.
+ */
+sealed interface StoryViewersOutcome {
+    data class Loaded(val viewers: List<StoryViewer>) : StoryViewersOutcome
+    data object Forbidden : StoryViewersOutcome
+    data object Failed : StoryViewersOutcome
+
+    companion object {
+        const val FORBIDDEN_STATUS: Int = 403
+
+        /** Classe un statut HTTP de refus : 403 est le seul refus qui a sa propre issue. */
+        fun failure(httpStatus: Int?): StoryViewersOutcome =
+            if (httpStatus == FORBIDDEN_STATUS) Forbidden else Failed
+    }
+}

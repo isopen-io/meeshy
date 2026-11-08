@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -27,14 +29,16 @@ import kotlinx.serialization.Serializable
  * The four bounds are read **together or not at all**. A crop missing one bound has
  * no sensible fallback: completing it would fabricate a framing nobody posed, and
  * make it indistinguishable from a real one — the worst of both, since it would look
- * like an intention.
+ * like an intention. The wire therefore always carries the four, even those equal to
+ * their default: the gateway refuses a crop missing one.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class StoryMediaCrop(
-    val x: Double = 0.0,
-    val y: Double = 0.0,
-    val width: Double = 1.0,
-    val height: Double = 1.0,
+    @EncodeDefault val x: Double = 0.0,
+    @EncodeDefault val y: Double = 0.0,
+    @EncodeDefault val width: Double = 1.0,
+    @EncodeDefault val height: Double = 1.0,
 ) {
     /** The whole source — the absence of a crop, expressed. */
     val isFull: Boolean get() = x == 0.0 && y == 0.0 && width == 1.0 && height == 1.0

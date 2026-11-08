@@ -249,6 +249,18 @@ class FriendshipCache @Inject constructor(
         bumpVersion()
     }
 
+    /**
+     * `friend-request:cancelled` : l'événement ne dit pas de quel côté se trouve le lecteur, donc la demande de
+     * [otherUserId] est retirée dans les DEUX sens (chacun est sans effet quand la clé est absente).
+     */
+    fun didWithdrawRequest(otherUserId: String) {
+        synchronized(lock) {
+            sentPending.remove(otherUserId)
+            receivedPending.remove(otherUserId)
+        }
+        bumpVersion()
+    }
+
     fun didReceiveRequest(senderId: String, requestId: String) {
         synchronized(lock) { receivedPending[senderId] = requestId }
         bumpVersion()

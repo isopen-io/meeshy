@@ -103,6 +103,10 @@ public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     /// payloads carrying the legacy `_count` shape still decode.
     public let memberCount: Int?
     public let conversationCount: Int?
+    /// Le rôle ACTIF du lecteur (`admin`, `moderator`, `member`), `nil` s'il
+    /// n'est pas membre — servi par `GET /communities/:id` (#6378). `members`
+    /// n'est jamais servi : c'est ce champ qui dit « Rejoindre » ou « Quitter ».
+    public var currentUserRole: String? = nil
 }
 
 extension APICommunity {

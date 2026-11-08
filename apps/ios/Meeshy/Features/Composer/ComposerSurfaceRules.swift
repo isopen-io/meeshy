@@ -9,14 +9,12 @@ import ImageIO
 // l'audience se souvient. Toutes pures, toutes éprouvables sans monter la
 // moindre vue : c'est pour cela qu'elles vivent hors du fichier de la VUE.
 
-/// Les TROIS surfaces du meuble : la scène, le document et le mood.
+/// Les DEUX surfaces du meuble : la scène (`.document`) et le mood.
 ///
-/// La scène est l'atelier du SDK (`StoryComposerView`). Le document — un
-/// texte, des pièces jointes — est la surface de `.feedComposer`, la porte la
-/// plus utilisée de l'app : la router vers l'atelier serait une régression
-/// sèche. La spec v1 le pose mot pour mot : « le host n'a pas de surface
-/// document sans scène, et recâbler la porte la plus utilisée sans elle serait
-/// une régression ».
+/// `.document` monte toujours la scène du meuble (`ComposerMountedView`) : la
+/// story, le post et le réel s'y composent, quelle que soit la porte. L'atelier
+/// du SDK (`StoryComposerView`), troisième surface jusqu'au #15629, a quitté le
+/// dépôt avec la reprise d'un brouillon et la modification d'une story.
 ///
 /// **Le mood a sa PROPRE surface.** Un mood n'a NI pièce jointe
 /// (`allowsCapture: false`, `ComposerIntent.swift`), NI rangée d'outils à
@@ -24,9 +22,7 @@ import ImageIO
 /// caractères. Lui monter l'éditeur du document afficherait un `TextEditor`
 /// vide là où l'auteur attend des emojis.
 nonisolated enum ComposerSurfaceKind: Equatable {
-    /// L'atelier : un canvas, des diapositives, une timeline.
-    case scene
-    /// Le document : un texte long, des pièces jointes, aucune scène.
+    /// La scène du meuble : story, post et réel, quelle que soit la porte.
     case document
     /// Le mood : une grille d'emojis, 122 caractères, aucune pièce jointe.
     case mood
@@ -36,104 +32,33 @@ nonisolated enum ComposerSurfaceKind: Equatable {
 /// porte a décidé (`opensWith`) et du format COURANT (loi 9 : le format est un
 /// champ, pas une identité).
 ///
-/// Trois règles, et l'ordre entre elles est le fond de l'affaire :
+/// **Le format décide, et il décide à DEUX issues** (#15629) : la story, le
+/// post et le réel se composent sur la scène du meuble ; le mood a sa PROPRE
+/// surface — dix emojis, 122 caractères, aucune pièce. Une reprise, une capture
+/// ou un média semé suivent la même règle : basculer une story en post ne
+/// détruit rien, puisque la scène reste montée (loi 9).
 ///
-/// 1. **Une porte qui a ouvert une CAPTURE — ou qui a DÉJÀ posé son média —
-///    a une scène, quel que soit le format.** Basculer une story en post ne
-///    détruit pas le canvas déjà composé : la loi 9 autorise à changer de
-///    format, jamais à jeter ce qui est composé. Faire décider le format seul
-///    aurait vidé l'écran de quiconque tape « Post » depuis le tray. C'est la
-///    même raison, un cran plus littéral, qui range `.mediaSeeded` ici : le
-///    document ne porte NI `mediaIds`, NI fichier, NI lieu, si bien qu'un
-///    « Post » routé vers lui ferait disparaître le média semé de l'écran ET de
-///    la publication.
-/// 2. **Une REPRISE monte la surface où la composition reprise vit
-///    RÉELLEMENT.** Le seul mécanisme de reprise du meuble est
-///    `StoryComposerViewModel.adoptDraft`, qui repeuple l'ATELIER. Laisser le
-///    format décider ici poserait une mine :
-///    `.draft`/`.share` sont les deux seules portes `routesToLegacy: nil` qui
-///    ouvrent en `.resume`, et leur `initialFormat` est le `.post` TRANSITOIRE
-///    — rouvrir un brouillon afficherait un éditeur de texte VIDE pendant que
-///    le brouillon adopté attend dans l'atelier, juste derrière. **Condition
-///    de levée nommée** : le jour où le meuble sait adopter un brouillon de
-///    DOCUMENT (et non plus seulement de scène), `.resume` redescend sous la
-///    règle 3.
-/// 3. **Sinon le format décide, et il décide à TROIS issues.** Une story et un
-///    réel SONT des scènes (des pages, une prise continue) ; un post est un
-///    document — du texte long et des pièces, sans canvas ; un mood est sa
-///    PROPRE surface — dix emojis, 122 caractères, aucune pièce.
+/// Le mood ne partage avec la scène ni la rangée d'outils, ni la capture, ni
+/// le plafond de saisie : le ranger avec elle ferait monter un éditeur vide là
+/// où il attend des emojis. `ComposerDocumentSurfaceTests`
+/// `.test_leCommentaireDeRegle_naffirmePlus_queLeMoodEstUnDocument` garde cette
+/// phrase contre toute formulation qui rangerait le mood au document.
 ///
-///    Le mood ne partage avec le document ni la rangée d'outils, ni la
-///    capture, ni le plafond de saisie : le ranger du côté du document ferait
-///    monter un éditeur de texte vide là où il attend des emojis. Un
-///    commentaire de règle laissé sous un code qui le dément devient la loi que
-///    lira la session suivante : `ComposerDocumentSurfaceTests`
-///    `.test_leCommentaireDeRegle_naffirmePlus_queLeMoodEstUnDocument` garde
-///    cette phrase contre toute formulation qui rangerait le mood au document.
-///
-///    Le `switch` sur le format reste exhaustif : un cinquième format casserait
-///    la compilation ICI, et c'est la propriété qu'on veut.
-///
-/// `.feedComposer` (clavier sur contenu, format `.post`) monte le DOCUMENT, et
-/// bascule sur la scène le jour où son auteur choisit « Story » dans
-/// l'éventail. C'est la seconde condition de levée de la garde négative de
-/// l'éventail.
+/// Le `switch` sur le format reste exhaustif : un cinquième format casserait la
+/// compilation ICI, et c'est la propriété qu'on veut.
 nonisolated enum ComposerSurfaceRouting {
 
     static func surface(opening: ComposerOpening, format: ComposerFormat) -> ComposerSurfaceKind {
         switch opening {
-        // **Une ouverture qui porte déjà de la MATIÈRE ou une capture vidéo garde la
-        // scène** — une dette nommée, plus une exemption raisonnée.
-        //
-        // Une reprise arrive avec un brouillon repeuplé, et l'atelier est le seul
-        // écran qui le tienne déjà : le meuble ne sait adopter un brouillon que dans
-        // l'atelier. Leur retirer la scène ferait perdre à l'auteur ce qu'il vient de
-        // confier.
-        //
-        // Elles tomberont quand le meuble saura REPRENDRE et SEMER : c'est à ce
-        // moment-là qu'on retournera leur témoin, jamais avant.
-        case .videoCameraReady, .resume:
-            return .scene
-        // **`.cameraReady` et `.mediaSeeded` suivent le format, comme
-        // `.keyboardOnContent` et `.moodGrid`.**
-        //
-        // L'argument de l'exemption — « elle arrive avec de la matière que le meuble
-        // ne tient pas » — ne vaut pour aucune des deux. La caméra n'arrive avec RIEN :
-        // elle promet un viseur, et le meuble sait l'ouvrir (`presentMediaIntake(.camera)`).
-        // La promesse est tenue DANS le meuble, par un GESTE — l'appui long sur la
-        // scène vide —, jamais par un viseur présenté au montage : la porte annonçait
-        // un appareil photo et l'auteur qui venait composer devrait fermer un plein
-        // écran noir.
-        //
-        // > Une exemption qui couvre plusieurs cas d'un seul argument se vérifie sur
-        // > chacun d'eux.
-        //
-        // **Ici, l'auteur CHOISIT.** `.scene` monte `StoryComposerView`, l'atelier du
-        // SDK, la vue de composition de story qui préexiste au meuble. Y router une
-        // story ferait composer une story dans un composer et un post dans un autre,
-        // sur un écran que l'auteur croit unique.
-        //
-        // Le média semé n'est pas non plus une matière que le document ignore :
-        // `ComposerDocumentDraft` porte `localMedia`, `location` et `storyEffects`.
-        //
-        // > Un doc-comment qui EXEMPTE une unité d'une règle se vérifie comme une
-        // > affirmation, pas comme une décision.
-        //
-        // Ce qui compte est le CHEMIN : la graine saute l'intake, donc son fichier
-        // n'entrerait jamais dans `documentLocalMedia`, la seule liste que la voie
-        // document téléverse. `ComposerSeedIngestion` l'y met — et c'est ce qui rend
-        // ce routage sûr, là où le faire seul ferait disparaître le média semé de la
-        // publication.
-        case .cameraReady, .keyboardOnContent, .moodGrid, .mediaSeeded:
+        // **Une REPRISE suit le format, comme toute ouverture** (#15629). Elle
+        // gardait l'atelier du SDK parce que le meuble ne savait reprendre un brouillon
+        // que là : `ComposerStoredDraftKeeper` le repose désormais sur la scène du
+        // meuble, et une story publiée qu'on modifie s'y compose comme celle qu'on
+        // crée. `.videoCameraReady` la suit : le viseur s'ouvre par un geste de la
+        // scène, jamais au montage, quelle que soit la promesse de la porte.
+        case .cameraReady, .videoCameraReady, .keyboardOnContent, .moodGrid, .mediaSeeded, .resume:
             switch format {
-            case .story: return .document
-            // **Le RÉEL suit le meuble comme la story.** Sa timeline y vit :
-            // `ComposerSceneBand` porte une bande `timeline`, montée sous la scène.
-            //
-            // Le garder à part ferait changer de COMPOSER en changeant de format, sur un
-            // écran que l'auteur croit unique.
-            case .reel: return .document
-            case .post: return .document
+            case .story, .reel, .post: return .document
             case .status: return .mood
             }
         }
@@ -144,7 +69,7 @@ nonisolated enum ComposerSurfaceRouting {
     /// recouvrirait le document qu'on vient de rouvrir pour le relire.
     ///
     /// `.mediaSeeded` ne le lève pas davantage, et c'est le sens même du cas :
-    /// il n'existe aucun champ « contenu » sous l'atelier — on y écrit en
+    /// il n'existe aucun champ « contenu » sur la scène — on y écrit en
     /// posant un OBJET TEXTE.
     ///
     /// `.moodGrid` ne le lève pas non plus : on choisit un emoji avant
@@ -155,6 +80,16 @@ nonisolated enum ComposerSurfaceRouting {
         case .keyboardOnContent: return true
         case .cameraReady, .videoCameraReady, .moodGrid, .resume, .mediaSeeded: return false
         }
+    }
+
+    /// **Le clavier se lève à l'ouverture seulement sur une surface SANS
+    /// scène** (#16207, miroir d'Android `ComposerProfile.raisesKeyboardOnOpen`).
+    /// La story, le post et le réel s'ouvrent sur la MÊME scène au repos, quelle
+    /// que soit la porte : un clavier levé au montage réduirait la scène et
+    /// retirerait ses outils et Publier. La promesse de la porte
+    /// (`focusesContentOnAppear`) ne vaut donc que hors scène.
+    static func raisesKeyboardOnOpen(opening: ComposerOpening, format: ComposerFormat) -> Bool {
+        focusesContentOnAppear(opening: opening) && !ComposerFormatVariant.of(format).composesOnScene
     }
 
     /// **Aucun viseur ne se lève AU MONTAGE.** Il n'existe pas de règle
@@ -220,47 +155,27 @@ nonisolated enum ComposerCameraMode {
     }
 }
 
-/// **QUI peint le chrome de publication — audience, aperçu, flèche — sous la
-/// surface que le meuble a montée.**
-///
-/// La règle vit ICI, à côté de `ComposerSurfaceRouting`, pour exactement la même
-/// raison qu'elle : elle est éprouvable sans monter la moindre vue. Elle
-/// Une constante unique (`chromeOwner: ComposerChromeOwner = .atelier`)
-/// porterait, pour les trois surfaces, une raison qui n'en concerne qu'une : les
-/// blocages de la SCÈNE, tous deux dans `MeeshyUI` (voir `owner(for:)`). Sous le
-/// document et sous le mood, **il n'y a pas d'atelier** — rien à retirer à
-/// personne, aucun média local à précharger. Une raison qui ne vaut que pour
-/// l'une des trois surfaces n'a rien à faire dans une constante qui les
-/// gouverne toutes.
-nonisolated enum ComposerChromeOwnership {
+/// **Les commandes de publication que le socle peut peindre.** L'aperçu n'en
+/// est pas : il est servi par le `⋯` (`ComposerOverflowEntry.preview`).
+nonisolated enum ComposerTopBarControl: Equatable, CaseIterable {
+    case audience
+    case publish
+}
 
-    /// Les TROIS surfaces reviennent au meuble.
-    ///
-    /// Ce n'est pas « le host publie » : c'est « le host PEINT le chrome ».
-    /// L'envoi reste une fermeture que le site de montage fournit
-    /// (`MeeshyComposerHost.onPublishDocument`) — le meuble transmet.
-    ///
-    /// La bascule tient en une ligne parce que deux blocages MESURÉS sont levés,
-    /// pas contournés :
-    /// | le sélecteur de l'atelier, UNIQUE écrivain de sa `visibility` | `ComposerPublishTrigger.requestedVisibility` : le socle apporte l'audience AU MOMENT DU GESTE, et `publishedVisibility(requested:atelier:)` dit laquelle est servie |
-    /// | l'œil de l'atelier rend l'aperçu avec SES médias préchargés | `requestPreview()` : l'atelier EXÉCUTE l'aperçu, le meuble ne fait que presser |
-    ///
-    /// Le premier n'est pas un défaut d'affichage mais une fuite de
-    /// confidentialité : un contenu « Amis » publié en « Public » ne se
-    /// rattrape pas. C'est pourquoi il se prouve sur la valeur SERVIE, jamais
-    /// sur ce que le socle affiche.
-    static func owner(for surface: ComposerSurfaceKind) -> ComposerChromeOwner {
-        .host
-    }
+/// **Ce que le socle peint sous la surface que le meuble a montée.**
+///
+/// La règle vit ICI, à côté de `ComposerSurfaceRouting`, pour la même raison
+/// qu'elle : elle est éprouvable sans monter la moindre vue. Le meuble peint
+/// seul le chrome de publication sous ses deux surfaces (#15629) : l'atelier du
+/// SDK, qui assemblait le sien, a quitté le dépôt.
+nonisolated enum ComposerChromeOwnership {
 
     /// Les zones que le socle peint RÉELLEMENT sous une surface donnée.
     ///
     /// La loi 5 dit que le socle ne varie jamais selon la PORTE ; il ne peint pas
     /// pour autant une commande sans objet. La même phrase, tenue jusqu'au bout,
-    /// donne les trois lignes ci-dessous.
+    /// donne les deux lignes ci-dessous.
     ///
-    /// - `.scene` — l'audience et la flèche. `owner(for:)` rend `.host` partout :
-    ///   l'atelier n'en assemble aucune, donc les peindre ici n'en double aucune.
     /// - `.document` — l'audience et la flèche. L'audience CHOISIT
     ///   (`MeeshyComposerHost.audienceChip`), avec la mémoire du format post
     ///   (`ComposerAudienceMemory.postKey`).
@@ -274,25 +189,19 @@ nonisolated enum ComposerChromeOwnership {
     ///   à droite de la croix) : deux zones du chrome de publication qui vivent
     ///   dans le corps de la vue plutôt que dans une rangée basse séparée, ce qui
     ///   laisse la place, sous la saisie, de voir les mentions sans faire défiler
-    ///   la feuille. `headerPaintsPublish(for:)` dit où elle vit ; le chrome reste
-    ///   `.host` (`owner(for:)`) — c'est la MÊME main qui peint, à un autre endroit
-    ///   de l'écran.
+    ///   la feuille. `headerPaintsPublish(for:)` dit où elle vit — c'est la MÊME
+    ///   main qui peint, à un autre endroit de l'écran.
     ///
     /// **Aucune zone ne porte l'œil.** L'aperçu est servi par le `⋯`
     /// (`ComposerOverflowEntry.preview`). Un mood n'a pas de canvas, et la loi 6
     /// interdit d'en fabriquer un aperçu : l'aperçu remet les slides au LECTEUR
     /// (`StoryViewerView`, `isPreviewMode: true`), un seul chemin de rendu.
     ///
-    /// `atelierOffersPreview` et `documentHasScene` restent au contrat sans décider
-    /// de la rangée. Leur défaut `false` est le sens sûr, et ils restent dans la
-    /// RÈGLE plutôt que dans un `if` du `body`, donc éprouvables sans monter une
-    /// vue, ce que la note en tête de ce type demande.
+    /// `documentHasScene` reste au contrat sans décider de la rangée. Son défaut
+    /// `false` est le sens sûr.
     static func socleZones(
         for surface: ComposerSurfaceKind,
         documentHasScene: Bool = false,
-        /// Sans effet sur la rangée : l'aperçu est servi par le `⋯`
-        /// (`ComposerOverflowEntry.preview`). Défaut `false`, le sens sûr.
-        atelierOffersPreview: Bool = false,
         /// **Écrire n'est pas publier** : lorsqu'on écrit une légende, on n'a pas
         /// besoin de voir le bouton publier, aperçu ou audience.
         ///
@@ -317,16 +226,6 @@ nonisolated enum ComposerChromeOwnership {
     ) -> [ComposerTopBarControl] {
         guard !writesText, !panelIsOpen else { return [] }
         switch surface {
-        case .scene:
-            // Le socle y peint l'audience et la flèche : `owner(for:)` rend `.host`
-            // partout, donc l'atelier n'en assemble aucune, et les peindre ici n'en
-            // double aucune. Ne pas les peindre les ferait disparaître.
-            //
-            // **Le socle ne porte pas l'œil.** L'aperçu est servi par le `⋯`
-            // (`ComposerOverflowEntry.preview`). `atelierOffersPreview` et
-            // `documentHasScene` restent au contrat, et ne décident pas de la rangée.
-            _ = atelierOffersPreview
-            return [.audience, .publish]
         case .document:
             _ = documentHasScene
             return [.audience, .publish]
@@ -342,13 +241,12 @@ nonisolated enum ComposerChromeOwnership {
     /// OÙ va ce qu'il ne peint plus. Les deux doivent rester cohérentes —
     /// `MeeshyComposerHostGuardTests
     /// .test_lesZonesDuSocle_sontVides_exactementLaOuLaPublicationEstAssembleeAilleurs`
-    /// le tient : le socle est vide exactement là où l'atelier OU l'en-tête de
-    /// la surface publie.
+    /// le tient : le socle est vide exactement là où l'en-tête de la surface
+    /// publie.
     ///
-    /// Seul `.mood` répond `true` aujourd'hui : le document garde sa flèche au
-    /// socle (sa surface n'a pas d'en-tête propre à elle — le chrome du repos
-    /// est PARTAGÉ, pas celui du document seul),
-    /// et la scène publie par l'atelier, jamais par ceci.
+    /// Seul `.mood` répond `true` : la scène garde sa flèche au socle (sa
+    /// surface n'a pas d'en-tête propre à elle — le chrome du repos est
+    /// PARTAGÉ).
     static func headerPaintsPublish(for surface: ComposerSurfaceKind) -> Bool {
         surface == .mood
     }
@@ -490,7 +388,7 @@ nonisolated enum ComposerSoundCredit {
 ///   emporte aussi le texte, le fond, le lieu et la transcription.
 nonisolated enum ComposerOverflowEntry: Equatable, CaseIterable {
     /// **Voir la scène COMME ELLE SERA LUE** — l'aperçu, servi ici et non au
-    /// socle : le socle ne porte que ce qui décide de l'envoi et le texte du post.
+    /// socle : le socle ne porte que ce qui décide de l'envoi.
     case preview
     case pickBackground
     case removeBackground
@@ -636,12 +534,10 @@ nonisolated enum ComposerAudienceMemory {
     /// la lise plus tard comme une régression de la feuille historique.
     static let postKey = "lastPostVisibility"
 
-    /// `nil` sous la scène, et c'est une RÉPONSE, pas un trou : l'atelier reçoit
-    /// sa graine par `initialVisibility`, que le tray alimente depuis
-    /// `lastComposerVisibility`. Le socle n'y peint aucune audience
-    /// (`ComposerChromeOwnership.socleZones(for: .scene)` est vide), et lui
-    /// inventer une mémoire ici en ferait une seconde à faire diverger de celle
-    /// du tray.
+    /// `nil` pour une story et un réel, et c'est une RÉPONSE, pas un trou : leur
+    /// graine arrive par `initialVisibility`, que le tray alimente depuis
+    /// `lastComposerVisibility`. Leur inventer une mémoire ici en ferait une
+    /// seconde à faire diverger de celle du tray.
     ///
     /// Le `switch` reste exhaustif : un cinquième format casse la compilation
     /// ICI, avant de pouvoir hériter d'une mémoire par défaut.
@@ -717,6 +613,17 @@ nonisolated enum ComposerAudienceMemory {
     /// peut donc pas rentrer par cette porte-là.
     static func seed(rememberedRaw: String?, doorRaw: String?) -> PostVisibility {
         selectable(rememberedRaw) ?? selectable(doorRaw) ?? .public
+    }
+
+    /// **L'audience qu'une publication rouverte IMPOSE**, liste nominative
+    /// comprise. Une mémoire ne garde jamais `EXCEPT` ni `ONLY` — leur portée
+    /// est la liste, qu'elle n'a pas —, mais une story qu'on modifie porte la
+    /// SIENNE : la rabattre sur `PUBLIC` élargirait en silence son audience
+    /// (#15629). `nil` quand rien n'est imposé ou que la liste manque.
+    static func imposed(_ rawValue: String?, userIds: [String]) -> PostVisibility? {
+        guard let rawValue, let value = PostVisibility(rawValue: rawValue),
+              PostVisibility.composerSelectableCases.contains(value) else { return nil }
+        return value.requiresUserSelection && userIds.isEmpty ? nil : value
     }
 }
 

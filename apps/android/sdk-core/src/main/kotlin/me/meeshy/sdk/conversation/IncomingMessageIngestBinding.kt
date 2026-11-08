@@ -16,6 +16,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
+import me.meeshy.sdk.media.MediaAdoption
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
@@ -55,9 +58,20 @@ class IncomingMessageIngestBinding internal constructor(
         @IoDispatcher io: CoroutineDispatcher,
         fence: AccountFence,
         regime: EndToEndRegimeKeeper,
+        events: MessageEventBuffer,
+        erasures: PlaintextErasureLedger,
+        /** #16012 — mon propre envoi revenu par `message:new` avant son accusé : ses fichiers locaux suivent la ligne servie. */
+        adoption: MediaAdoption,
+        previews: PendingMediaPreviewing,
     ) : this(
         socket = socket,
-        pipeline = MessageIngestPipeline(database, regime = regime),
+        pipeline = MessageIngestPipeline(
+            database,
+            regime = regime,
+            events = events,
+            erasures = erasures,
+            media = AcknowledgedBubbleMedia(adoption, previews, AcknowledgedBubbleMedia.ORIGIN_MESSAGE_NEW),
+        ),
         clock = clock,
         signal = signal,
         scope = CoroutineScope(SupervisorJob() + io),

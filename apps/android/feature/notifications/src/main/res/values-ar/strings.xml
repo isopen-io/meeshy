@@ -1,27 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="notifications_title">الإشعارات</string>
     <string name="notifications_mark_all_read">تعليم الكل كمقروء</string>
-    <string name="notifications_empty">لا توجد إشعارات</string>
-    <string name="notifications_system_sender">النظام</string>
-    <string name="notifications_action_delete">حذف</string>
     <string name="notifications_action_mark_read">مقروء</string>
     <string name="notifications_empty_category">لا توجد إشعارات هنا</string>
-    <string name="notifications_category_all">الكل</string>
-    <string name="notifications_category_unread">غير المقروءة</string>
-    <string name="notifications_category_messages">الرسائل</string>
-    <string name="notifications_category_reactions">التفاعلات</string>
-    <string name="notifications_category_mentions">الإشارات</string>
-    <string name="notifications_category_social">اجتماعي</string>
-    <string name="notifications_category_contacts">جهات الاتصال</string>
-    <string name="notifications_category_groups">المجموعات</string>
-    <string name="notifications_category_calls">المكالمات</string>
-    <string name="notifications_category_translations">الترجمات</string>
-    <string name="notifications_category_system">النظام</string>
-    <string name="notification_banner_in_conversation">%1$s في %2$s</string>
-    <string name="notification_banner_media_photo">📷 صورة</string>
-    <string name="notification_banner_media_video">🎥 فيديو</string>
-    <string name="notification_banner_media_audio">🎵 صوت</string>
     <string name="notification_banner_preview_hidden">إشعار جديد</string>
     <string name="notifications_unread_prefix">غير مقروء.</string>
     <string name="notifications_error_title">الإشعارات غير متاحة</string>

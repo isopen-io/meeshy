@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lot image-editeur-ecran-et-outils : libellés propres à Android (iOS les écrit en dur). -->
+    <string name="image_editor_mode_simple">الوضع البسيط</string>
+    <string name="image_editor_mode_pro">الوضع الاحترافي</string>
+    <string name="image_editor_mode_group">وضع التحرير</string>
+    <string name="image_editor_ratio_free">حر</string>
+    <string name="image_editor_close">إغلاق</string>
+    <string name="image_editor_title">محرر الصور</string>
+    <string name="image_editor_adjust_exposure">التعريض</string>
+    <string name="image_editor_adjust_vibrance">الحيوية</string>
+    <string name="image_editor_adjust_temperature">درجة الحرارة</string>
+    <string name="image_editor_adjust_blur">التمويه</string>
+    <string name="image_editor_effect_none">بدون</string>
+    <string name="image_editor_effect_blur">تمويه</string>
+    <string name="image_editor_effect_vignette">تظليل الحواف</string>
+    <string name="image_editor_effect_sharpen">حدة</string>
+    <string name="image_editor_effect_bloom">توهج</string>
+    <string name="image_editor_effect_grain">حبيبات</string>
+    <string name="image_editor_filter_original">الأصل</string>
+    <string name="image_editor_filter_vivid">نابض</string>
+    <string name="image_editor_filter_dramatic">درامي</string>
+    <string name="image_editor_filter_mono">أحادي</string>
+    <string name="image_editor_filter_noir">نوار</string>
+    <string name="image_editor_filter_sepia">سيبيا</string>
+    <string name="image_editor_filter_warm">دافئ</string>
+    <string name="image_editor_filter_cool">بارد</string>
+    <string name="image_editor_filter_fade">باهت</string>
+    <string name="image_editor_filter_chrome">كروم</string>
+    <string name="image_editor_filter_process">معالجة</string>
+    <string name="image_editor_filter_instant">فوري</string>
+    <string name="image_editor_adjust_brightness">السطوع</string>
+    <string name="image_editor_adjust_contrast">التباين</string>
+    <string name="image_editor_adjust_saturation">التشبع</string>
+    <string name="image_editor_adjust_sharpness">الحدة</string>
+    <string name="image_editor_adjust_vignette">تظليل الحواف</string>
+</resources>

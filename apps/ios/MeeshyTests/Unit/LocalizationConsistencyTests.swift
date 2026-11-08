@@ -248,7 +248,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift",  // 8
         // #13907 — les mots du rail ont quitté sa vue retirée ; le cliquet les suit.
         "apps/ios/Meeshy/Features/Composer/ComposerRailCopy.swift",  // 7
-        "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
@@ -275,6 +274,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
         "apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift",  // 6
+        // #14628 — l'AGPL-3.0 de libsignal : la licence de Meeshy, l'offre de source, les avis.
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesAGPLSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesLibsignalSection.swift",
         "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
         "apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
@@ -427,12 +429,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Rules.swift",
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Sentiment.swift",
         "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift",  // 31
-        // #6040 — la feuille est sortie de `FeedView+Attachments.swift` : les
-        // deux moitiés portent des littéraux, les deux restent dans la liste.
         "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",  // 26
-        // Cohésion de `FeedComposerSheet` : la clé de retrait d'une pièce a suivi la rangée.
-        "apps/ios/Meeshy/Features/Main/Views/FeedComposerAttachmentsRow.swift",  // 1
+        // #15628 — la citation a quitté la feuille pour le compositeur : ses
+        // mots partent avec elle.
+        "apps/ios/Meeshy/Features/Composer/QuoteComposerDoor.swift",
+        "apps/ios/Meeshy/Features/Composer/ComposerQuotedPublicationCard.swift",
         "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
         "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",  // 29
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift",  // 29
@@ -504,7 +505,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Découpe de la racine : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/RootConversationOpener.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/RootFloatingChrome.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/RootPendingBanners.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/RootPendingBanners.swift",  // 2
         // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
         // propre fichier (RootView.swift dépassait le plafond dur de 1200
         // lignes). Le cliquet suit le CODE, pas le chemin : sans cette ligne,
@@ -528,7 +529,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",  // 16
         "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",  // 16
         "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
@@ -538,6 +538,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         // #9727 — la feuille « Vues » quitte l'hôte ci-dessus et naît certifiée :
         // ce que chaque personne a fait, sept locales, `defaultValue` alignés sur le `fr`.
         "apps/ios/Meeshy/Features/Main/Views/PublicationViewersSheet.swift",  // 23
+        // #16386 — le détail d'une personne (plein écran) et l'en-tête chiffré
+        // quittent l'hôte avec leurs clés : le cliquet suit le code.
+        "apps/ios/Meeshy/Features/Main/Views/ViewerEngagementDetailScreen.swift",
+        "apps/ios/Meeshy/Features/Main/Views/PublicationViewersStats.swift",
         // #8582 — la ligne de commentaire de story a QUITTÉ l'hôte ci-dessus
         // avec ses quatre clés : le cliquet suit le code (leçon 578).
         "apps/ios/Meeshy/Features/Stories/Views/StoryCommentRowView.swift",  // 7
@@ -574,7 +578,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift",  // 8
         "apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift",  // 7

@@ -512,6 +512,9 @@ export function registerSharingRoutes(
         engagement,
         key: linkId,
         authContext: userToken,
+        // `getIO?.()` : l'éventail est accessoire et ne fait pas échouer une
+        // adhésion déjà persistée (#16837).
+        arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
         requestIp: resolveClientIp(request),
         profile: {
           firstName: '',

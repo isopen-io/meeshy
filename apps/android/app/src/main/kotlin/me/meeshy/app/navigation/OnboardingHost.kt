@@ -20,7 +20,7 @@ import me.meeshy.sdk.session.SessionRepository
 
 /** Ce que la racine sait décider de l'onboarding, sans le modèle : où il passe, ce qu'il recouvre. */
 internal object OnboardingRootRules {
-    fun isStoryComposer(route: String?): Boolean = route?.startsWith(Routes.STORY_COMPOSER) == true
+    fun isStoryComposer(route: String?): Boolean = route?.let { it.startsWith(Routes.STORY_COMPOSER) || it == Routes.COMPOSER } == true
 
     /** Un lien profond ou un push qui a mené ailleurs que les onglets : le calque attend le retour. */
     fun isRoutedElsewhere(route: String?): Boolean = route != null && route !in tabRoutes

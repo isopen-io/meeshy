@@ -407,17 +407,19 @@ final class RouterTests: XCTestCase {
         XCTAssertEqual(router.currentRoute, .dataExport)
     }
 
-    func test_push_postDetail_addsToPath() {
-        let router = Router()
+    /// Le détail d'un post s'ouvre en FEUILLE, jamais dans la pile (#16676).
+    func test_push_postDetail_presentsTheSheet_andLeavesThePathUntouched() {
+        let router = makeIsolatedRouter()
         router.push(.postDetail("post123"))
-        XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .postDetail("post123"))
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(router.presentedPost?.postId, "post123")
     }
 
-    func test_push_postDetail_withShowComments_addsToPath() {
-        let router = Router()
+    func test_push_postDetail_withShowComments_presentsTheSheetOnComments() {
+        let router = makeIsolatedRouter()
         router.push(.postDetail("post123", showComments: true))
-        XCTAssertEqual(router.path.count, 1)
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(router.presentedPost?.showComments, true)
     }
 
     func test_push_bookmarks_addsToPath() {
@@ -556,6 +558,13 @@ final class RouterTests: XCTestCase {
 
     /// iPad two-column mode (`onRouteRequested` set) keeps forwarding the
     /// route via the callback instead of mutating `path`.
+    ///
+    /// The forwarding is SYNCHRONOUS (same single step as the iPhone path,
+    /// see `test_navigateToConversation_replacesPathInOneSynchronousStep`).
+    /// The witness used to wait for a 0.2 s main-queue timer under a 1 s
+    /// bound — a timer, not the event: on a loaded CI runner the main queue
+    /// was starved past the bound and the test failed while the route had
+    /// already been forwarded (dev run 42116853798). It now reads the event.
     func test_navigateToConversation_iPad_forwardsViaOnRouteRequested() {
         let router = makeIsolatedRouter()
         var interceptedRoute: Route?
@@ -563,12 +572,8 @@ final class RouterTests: XCTestCase {
             interceptedRoute = route
             return true
         }
-        let forwarded = expectation(description: "route forwarded to callback")
 
         router.navigateToConversation(makeConversation(id: "000000000000000000000099"))
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { forwarded.fulfill() }
-        wait(for: [forwarded], timeout: 1.0)
 
         XCTAssertTrue(router.path.isEmpty)
         if case .conversation = interceptedRoute {} else {
@@ -595,7 +600,7 @@ final class RouterTests: XCTestCase {
         router.navigateToConversation(makeConversation(id: "000000000000000000000098"))
         let settled = expectation(description: "le différé de 50 ms aurait eu le temps de tirer")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { settled.fulfill() }
-        wait(for: [settled], timeout: 1.0)
+        wait(for: [settled], timeout: 10.0)
 
         XCTAssertFalse(popRequested, "la colonne de détail n'est jamais vidée entre deux conversations")
         XCTAssertEqual(forwarded.count, 1, "la conversation est remise d'un seul geste")

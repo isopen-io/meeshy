@@ -10,19 +10,19 @@ import type { Message } from '@/lib/api/types';
 import type { Viewer } from '@/lib/api/viewer';
 import type { PlacedMessage } from '@/lib/grouping';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
-import { collapseUnfolded } from '@/lib/view/unfold-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ThreadModes } from './thread-modes';
 
 /**
- * UN MESSAGE LONG SE DÉPLIE SUR PLACE, EN FOCAL (#8147) — directive porteur
- * 2026-09-26 : l'extrait n'en montre qu'un quart, coupé au mot, suivi de
- * « … Lire la suite » ; toucher DÉPLIE dans le fil, « Réduire » replie ; le
- * message déplié reçoit l'effet Focal (bloc de verre, voisins atténués) —
- * dans TOUS les modes qui rendent des rangées, d'où le passage par
- * `ThreadModes`, le nœud qui enveloppe les deux peaux.
+ * UN MESSAGE LONG SE DÉPLIE SUR PLACE (#8147, #16464) — l'extrait n'en montre
+ * qu'un quart, coupé au mot, suivi de « … Lire la suite ». Directive porteur
+ * 2026-11-06 : toucher affiche le message ENTIER, rendu comme un message
+ * ordinaire du mode courant — ni verre, ni loupe, ni voisins atténués —, et
+ * il le reste : aucun « Réduire », plusieurs dépliés ensemble, repliés
+ * seulement à la réouverture du fil. Dans TOUS les modes qui rendent des
+ * rangées, d'où le passage par `ThreadModes`, le nœud des deux peaux.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -71,7 +71,6 @@ beforeEach(() => {
 const mounter = createActMounter();
 afterEach(() => {
   mounter.unmountAll();
-  collapseUnfolded();
   (globalThis as unknown as { Element: { prototype: Record<string, unknown> } }).Element.prototype.animate = nativeAnimate;
   (globalThis as unknown as { matchMedia: unknown }).matchMedia = nativeMatchMedia;
 });
@@ -182,76 +181,45 @@ for (const mode of ROW_MODES) {
       expect(toggleOf(host, 'm-court')).toBeNull();
     });
 
-    test('toucher « Lire la suite » déplie EN PLACE, sous un bloc de verre, voisins atténués', async () => {
+    test('toucher « Lire la suite » déplie EN PLACE, comme un message ordinaire : ni verre, ni loupe, ni voisin atténué', async () => {
       const host = await monte(mode);
       await press(toggleOf(host, 'm-long'));
 
       expect(rowOf(host, 'm-long')?.textContent).toContain('FIN-DU-MESSAGE');
-      const toggle = toggleOf(host, 'm-long');
-      expect(toggle?.textContent).toBe('Réduire');
-      expect(toggle?.getAttribute('aria-expanded')).toBe('true');
-
-      const stage = rowOf(host, 'm-long')?.querySelector('[data-unfold-stage]');
-      expect(stage?.hasAttribute('data-unfolded')).toBe(true);
-      const glass = stage?.querySelector('[data-unfold-glass]');
-      expect(glass?.classList.contains('glass')).toBe(true);
-      expect(glass?.classList.contains('glass-card')).toBe(true);
-      expect(glass?.getAttribute('aria-hidden')).toBe('true');
-
-      expect(host.querySelectorAll('ol [data-unfolded]')).toHaveLength(1);
-      expect(rowOf(host, 'm-court')?.querySelector('[data-unfold-stage]')?.hasAttribute('data-unfolded')).toBe(false);
-      expect(rowOf(host, 'm-court')?.querySelector('[data-unfold-glass]')).toBeNull();
+      expect(host.querySelector('[data-unfold-stage], [data-unfold-glass], [data-unfolded]')).toBeNull();
+      expect(rowOf(host, 'm-long')?.querySelector<HTMLElement>('[data-long-message]')?.style.transform ?? '').toBe('');
     });
 
-    test('« Réduire » replie : l’extrait revient, le verre et l’atténuation s’en vont', async () => {
+    test('aucun contrôle ne replie : le bouton s’en va, et aucun « Réduire » n’apparaît', async () => {
       const host = await monte(mode);
       await press(toggleOf(host, 'm-long'));
-      await press(toggleOf(host, 'm-long'));
 
-      expect(rowOf(host, 'm-long')?.textContent).not.toContain('FIN-DU-MESSAGE');
-      expect(toggleOf(host, 'm-long')?.getAttribute('aria-expanded')).toBe('false');
-      expect(rowOf(host, 'm-long')?.querySelector('[data-unfold-glass]')).toBeNull();
-      expect(host.querySelectorAll('ol [data-unfolded]')).toHaveLength(0);
+      expect(toggleOf(host, 'm-long')).toBeNull();
+      expect(rowOf(host, 'm-long')?.textContent).not.toContain('Réduire');
+      expect(rowOf(host, 'm-long')?.textContent).toContain('FIN-DU-MESSAGE');
     });
 
-    test('un seul déplié à la fois : déplier le second replie le premier', async () => {
+    test('déplier deux messages : les deux restent dépliés', async () => {
       const host = await monte(mode);
       await press(toggleOf(host, 'm-long'));
       await press(toggleOf(host, 'm-long-2'));
 
-      expect(rowOf(host, 'm-long')?.textContent).not.toContain('FIN-DU-MESSAGE');
+      expect(rowOf(host, 'm-long')?.textContent).toContain('FIN-DU-MESSAGE');
       expect(rowOf(host, 'm-long-2')?.textContent).toContain('QUEUE-DU-SECOND');
-      expect(host.querySelectorAll('[data-unfold-glass]')).toHaveLength(1);
     });
 
-    test('le dépliage se joue en opacity, jamais en hauteur (#11314), au tempo partagé ; sous Réduire le mouvement, rien ne bouge', async () => {
+    test('le dépliage se joue en opacity, jamais en hauteur (#11314), au tempo partagé avec iOS (#8232) ; sous Réduire le mouvement, rien ne bouge', async () => {
       const host = await monte(mode);
       await press(toggleOf(host, 'm-long'));
-      expect(played.some((entry) => entry.keyframes.some((frame) => frame.opacity !== undefined))).toBe(true);
+      const fades = played.filter((entry) => entry.keyframes.some((frame) => frame.opacity !== undefined));
+      expect(fades).toHaveLength(1);
+      expect(fades[0]?.options).toEqual({ duration: FOCAL_METRICS.expandDurationMs, easing: focalExpandEasingCss() });
       expect(played.some((entry) => entry.keyframes.some((frame) => frame.height !== undefined))).toBe(false);
 
       played = [];
       reduceMotion = true;
-      await press(toggleOf(host, 'm-long'));
+      await press(toggleOf(host, 'm-long-2'));
       expect(played).toHaveLength(0);
-    });
-
-    test('déplier et replier jouent le MÊME fondu, à la durée et à la courbe partagées avec iOS (#8232)', async () => {
-      const host = await monte(mode);
-      await press(toggleOf(host, 'm-long'));
-      await press(toggleOf(host, 'm-long'));
-      const fades = played.filter((entry) => entry.keyframes.some((frame) => frame.opacity !== undefined));
-      expect(fades).toHaveLength(2);
-      for (const entry of fades) {
-        expect(entry.options).toEqual({ duration: FOCAL_METRICS.expandDurationMs, easing: focalExpandEasingCss() });
-      }
-    });
-
-    test('le verre prend la géométrie partagée avec iOS', async () => {
-      const host = await monte(mode);
-      await press(toggleOf(host, 'm-long'));
-      const glass = rowOf(host, 'm-long')?.querySelector<HTMLElement>('[data-unfold-glass]');
-      expect(glass?.style.borderRadius).toBe(`${FOCAL_METRICS.glassRadius}px`);
     });
   });
 }
@@ -279,7 +247,32 @@ test('le texte tronqué est le texte SERVI par le Prisme, jamais l’original', 
   expect(rowOf(host, 'm-long')?.textContent).toContain('FIN-TRADUITE');
 });
 
-test('quitter le fil replie le message déplié', async () => {
+test('le haut du message déplié reste en place : la mesure qui suit le dépliage n’est pas compensée par le virtualiseur', async () => {
+  const virtualizer = virtualizerOf(THREAD.length);
+  const host = await mounter.mount(
+    <ThreadModes
+      mode="script"
+      viewer={VIEWER}
+      placed={THREAD.map(placeOf)}
+      virtualizer={virtualizer}
+      scene={SCENE}
+      readerLanguages={['fr']}
+      group={false}
+      highlightedId={null}
+      expiredIds={new Set()}
+      jumpToMessage={() => {}}
+      typists={[]}
+    />,
+  );
+  const straddling = { key: 'm-long', index: 0, start: 4400, end: 4488, size: 88, lane: 0 };
+  const instance = { scrollOffset: 4500, scrollAdjustments: 0 } as unknown as Virtualizer<HTMLElement, Element>;
+  const compensates = () => virtualizer.shouldAdjustScrollPositionOnItemSizeChange?.(straddling, 600, instance);
+  await press(toggleOf(host, 'm-long'));
+  expect(compensates()).toBe(false);
+  expect(compensates()).toBe(true);
+});
+
+test('rouvrir le fil (une nouvelle instance) rend le message replié', async () => {
   const host = await monte('script');
   await press(toggleOf(host, 'm-long'));
   mounter.unmountAll();

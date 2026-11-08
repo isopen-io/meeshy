@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signup_verified_open_failed">Sua conta está validada, mas este aparelho não conseguiu abrir a sessão. Tente novamente.</string>
+    <string name="signup_verified_no_session">Sua conta está validada. Entre para continuar.</string>
+</resources>

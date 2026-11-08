@@ -41,6 +41,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryTransitionEffect
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.sdk.model.composer.scene.SceneEffectChoice
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
@@ -208,20 +209,25 @@ private fun EffectCarousel(
 
 @Composable
 private fun TransitionRow(title: String, selection: StoryTransitionEffect?, onSelect: (StoryTransitionEffect?) -> Unit) {
+    val haptics = rememberMeeshyHaptics()
+    val choose: (StoryTransitionEffect?) -> Unit = { effect ->
+        onSelect(effect)
+        haptics.light()
+    }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(title, style = MaterialTheme.typography.labelMedium)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 FilterChip(
                     selected = selection == null,
-                    onClick = { onSelect(null) },
+                    onClick = { choose(null) },
                     label = { Text(stringResource(R.string.stories_scene_opening_none)) },
                 )
             }
             items(StoryTransitionEffect.entries, key = { it.name }) { effect ->
                 FilterChip(
                     selected = selection == effect,
-                    onClick = { onSelect(effect) },
+                    onClick = { choose(effect) },
                     label = { Text(transitionLabel(effect)) },
                 )
             }

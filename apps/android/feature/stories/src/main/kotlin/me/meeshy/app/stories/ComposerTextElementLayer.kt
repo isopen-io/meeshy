@@ -5,11 +5,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
+import me.meeshy.ui.story.canvas.SceneTextFontResolver
 import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import kotlin.math.roundToInt
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.scene.InlineEditLayout
+import me.meeshy.sdk.model.scene.InlineEditZone
 import me.meeshy.sdk.model.scene.StoryTextDirection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
@@ -65,6 +69,9 @@ internal fun TextElementLayer(
     onTransform: (Float, Float) -> Unit,
     onMeasured: (IntSize) -> Unit = {},
     onTextChange: (String) -> Unit = {},
+    recentered: Boolean = false,
+    editZone: InlineEditZone? = null,
+    onInlineEditYield: () -> Unit = {},
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     val haptics = rememberMeeshyHaptics()
@@ -75,32 +82,49 @@ internal fun TextElementLayer(
     val currentTransform by rememberUpdatedState(onTransform)
     val currentScale by rememberUpdatedState(element.scale)
     val currentRotation by rememberUpdatedState(element.rotationDeg)
+    val currentRecentered by rememberUpdatedState(recentered)
+    val currentYield by rememberUpdatedState(onInlineEditYield)
+    val density = LocalDensity.current
     Box(
         modifier = Modifier
             .offset {
-                IntOffset(
-                    x = (element.x * canvasWidthPx - sizePx.width / 2f).roundToInt(),
-                    y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
-                )
+                if (recentered) {
+                    // Saisie : le texte rejoint la bande libre, droit et à l'échelle d'édition, sans toucher au modèle.
+                    val placement = InlineEditLayout.place(editZone, canvasWidthPx, canvasHeightPx, sizePx.height.toFloat())
+                    IntOffset(
+                        x = (placement.centerX - sizePx.width / 2f).roundToInt(),
+                        y = (placement.centerY - sizePx.height / 2f).roundToInt(),
+                    )
+                } else {
+                    IntOffset(
+                        x = (element.x * canvasWidthPx - sizePx.width / 2f).roundToInt(),
+                        y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
+                    )
+                }
             }
             .graphicsLayer {
-                scaleX = element.scale
-                scaleY = element.scale
-                rotationZ = element.rotationDeg
+                scaleX = if (recentered) 1f else element.scale
+                scaleY = if (recentered) 1f else element.scale
+                rotationZ = if (recentered) 0f else element.rotationDeg
             }
+            .then(
+                if (recentered && editZone != null) Modifier.heightIn(max = with(density) { editZone.height.toDp() }) else Modifier,
+            )
             .onSizeChanged {
                 sizePx = it
                 onMeasured(it)
             }
             .sceneObjectGestures(
                 key = element.id,
-                pose = { SceneObjectPose(currentScale, currentRotation) },
+                pose = { if (currentRecentered) SceneObjectPose(1f, 0f) else SceneObjectPose(currentScale, currentRotation) },
                 onTap = { currentTap() },
                 onLongPress = {
                     haptics.medium()
                     currentLongPress()
                 },
                 onMove = { pan, zoom, rotation ->
+                    // Un geste qui transforme cède la saisie : le texte retrouve sa place réelle et suit le doigt.
+                    if (currentRecentered) currentYield()
                     currentDrag(pan.x, pan.y)
                     currentTransform(zoom, rotation)
                 },
@@ -123,7 +147,6 @@ internal fun TextElementLayer(
         // The base size in wire design units (1080-referential) mapped onto the REAL scene
         // width — the reader's own law (StoryTextMetrics) — with the element's graphicsLayer
         // `scale` above multiplying on top: iOS `fontSize × scale`, identical on both sides.
-        val density = LocalDensity.current
         val canvasFontSizePx = element.previewFontPx(canvasWidthPx)
         val canvasFontSize = with(density) { canvasFontSizePx.toSp() }
         // Edited in place while selected (and no context menu is up) — iOS inline editor.
@@ -153,7 +176,7 @@ internal fun TextElementLayer(
                 fontSize = canvasFontSize,
                 fontWeight = FontWeight(typography.fontWeight),
                 fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                fontFamily = typography.family.toFontFamily(),
+                fontFamily = SceneTextFontResolver.familyOf(typography.face),
                 letterSpacing = typography.letterSpacingEm.em,
             ),
         ) {
@@ -167,7 +190,7 @@ internal fun TextElementLayer(
                     fontSize = canvasFontSize,
                     fontWeight = FontWeight(typography.fontWeight),
                     fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                    fontFamily = typography.family.toFontFamily(),
+                    fontFamily = SceneTextFontResolver.familyOf(typography.face),
                     letterSpacing = typography.letterSpacingEm.em,
                     textAlign = element.align.toTextAlign(),
                     style = baseStyle.copy(drawStyle = Stroke(width = element.previewOutlinePx(canvasWidthPx))),
@@ -183,7 +206,7 @@ internal fun TextElementLayer(
                         fontSize = canvasFontSize,
                         fontWeight = FontWeight(typography.fontWeight),
                         fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                        fontFamily = typography.family.toFontFamily(),
+                        fontFamily = SceneTextFontResolver.familyOf(typography.face),
                         letterSpacing = typography.letterSpacingEm.em,
                         textAlign = element.align.toTextAlign(),
                     ),
@@ -194,7 +217,7 @@ internal fun TextElementLayer(
                             fontSize = canvasFontSize,
                             fontWeight = FontWeight(typography.fontWeight),
                             fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                            fontFamily = typography.family.toFontFamily(),
+                            fontFamily = SceneTextFontResolver.familyOf(typography.face),
                             letterSpacing = typography.letterSpacingEm.em,
                             textAlign = element.align.toTextAlign(),
                             drawStyle = Stroke(width = element.previewOutlinePx(canvasWidthPx)),
@@ -210,7 +233,7 @@ internal fun TextElementLayer(
                     fontSize = canvasFontSize,
                     fontWeight = FontWeight(typography.fontWeight),
                     fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-                    fontFamily = typography.family.toFontFamily(),
+                    fontFamily = SceneTextFontResolver.familyOf(typography.face),
                     letterSpacing = typography.letterSpacingEm.em,
                     textAlign = element.align.toTextAlign(),
                     style = baseStyle,

@@ -1,6 +1,14 @@
 package me.meeshy.app.chat
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.composer.ComposerTileCascade
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -55,8 +63,10 @@ internal fun ComposerAttachmentTray(
     onTileClick: (AttachmentTileKind) -> Unit,
     modifier: Modifier = Modifier,
     recentMedia: (@Composable () -> Unit)? = null,
+    handle: (@Composable () -> Unit)? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
+        handle?.invoke()
         AttachmentTileRow(tiles = tiles, onTileClick = onTileClick)
         recentMedia?.invoke()
     }
@@ -74,10 +84,31 @@ private fun AttachmentTileRow(
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
     ) {
-        tiles.forEach { tile ->
-            AttachmentTileButton(tile = tile, onClick = { onTileClick(tile.kind) })
+        val reduceMotion = LocalReduceMotion.current
+        tiles.forEachIndexed { index, tile ->
+            CascadeIn(delayMs = ComposerTileCascade.delayMs(index, reduceMotion)) {
+                AttachmentTileButton(tile = tile, onClick = { onTileClick(tile.kind) })
+            }
         }
     }
+}
+
+/** Fait apparaître une tuile en fondu et léger gonflement après [delayMs] ; sans délai ni animation en mouvement réduit. */
+@Composable
+private fun CascadeIn(delayMs: Int, content: @Composable () -> Unit) {
+    val reduceMotion = LocalReduceMotion.current
+    val progress = remember { Animatable(if (reduceMotion) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!reduceMotion) progress.animateTo(1f, tween(durationMillis = 220, delayMillis = delayMs))
+    }
+    Box(
+        Modifier.graphicsLayer {
+            alpha = progress.value
+            val scale = 0.8f + 0.2f * progress.value
+            scaleX = scale
+            scaleY = scale
+        },
+    ) { content() }
 }
 
 @Composable

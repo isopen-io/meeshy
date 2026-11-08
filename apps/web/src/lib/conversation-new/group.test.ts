@@ -85,14 +85,24 @@ describe('validateGroupDraft — le corps EXACT, ou le champ à blâmer', () => 
     });
   });
 
-  /* Le serveur accepte `participantIds: []` — il créerait un groupe d'une seule
-     personne. Ce n'est pas un groupe, c'est une note. */
-  test('aucun participant désigne la liste, même si le serveur l’accepterait', () => {
-    expect(validateGroupDraft(draft({ participantIds: [] }), VIEWER)).toEqual({ ok: false, field: 'participants' });
+  /* #14646 — un groupe dont je suis le seul membre se crée, pourvu qu'il ait un
+     titre : la passerelle l'accepte, et le refuse en 400 sans titre. */
+  test('aucun participant : le groupe part avec moi seul', () => {
+    expect(validateGroupDraft(draft({ title: 'Mes notes', participantIds: [] }), VIEWER)).toEqual({
+      ok: true,
+      body: { title: 'Mes notes', participantIds: [] },
+    });
   });
 
-  test('une liste réduite au SEUL lecteur est vide une fois filtrée', () => {
-    expect(validateGroupDraft(draft({ participantIds: [VIEWER] }), VIEWER)).toEqual({ ok: false, field: 'participants' });
+  test('seul, le titre reste obligatoire', () => {
+    expect(validateGroupDraft(draft({ title: '  ', participantIds: [] }), VIEWER)).toEqual({ ok: false, field: 'title' });
+  });
+
+  test('une liste réduite au SEUL lecteur part vide : la passerelle l’ajoute elle-même', () => {
+    expect(validateGroupDraft(draft({ title: 'Moi', participantIds: [VIEWER] }), VIEWER)).toEqual({
+      ok: true,
+      body: { title: 'Moi', participantIds: [] },
+    });
   });
 
   test(`plus de ${GROUP_PARTICIPANTS_MAX} participants désigne la liste`, () => {

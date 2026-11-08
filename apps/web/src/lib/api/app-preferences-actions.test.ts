@@ -28,6 +28,7 @@ const cached: AppPreferences = {
   contactActivityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
+  saveMediaToGallery: false,
 };
 
 const deferred = () => {

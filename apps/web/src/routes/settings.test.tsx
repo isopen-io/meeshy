@@ -58,6 +58,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   contactActivityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
+  saveMediaToGallery: false,
   ...overrides,
 });
 
@@ -250,6 +251,29 @@ describe('la confidentialité — les bascules que la passerelle obéit', () => 
     }
   });
 
+  /* #14641 — « Sauvegarder média », au même endroit et sous le même nom
+     qu'iOS (`PrivacySettingsView.mediaSection`), synchronisé par
+     `/me/preferences` : il gouverne l'enregistrement des médias reçus. */
+  const SAVE_MEDIA = 'Sauvegarder média';
+
+  test('« Sauvegarder média » annonce son état et porte SA clé, synchronisée', () => {
+    const host = dom(<PrivacySection language="fr" view={ready({ saveMediaToGallery: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, SAVE_MEDIA);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('saveMediaToGallery');
+    const on = dom(<PrivacySection language="fr" view={ready({ saveMediaToGallery: true })} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(on, SAVE_MEDIA)?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('« Sauvegarder média » se dit dans chaque langue du catalogue, avec le libellé d’iOS', async () => {
+    const IOS = { en: 'Save media', es: 'Guardar multimedia', de: 'Medien sichern', it: 'Salva contenuto', pt: 'Salvar mídia', ar: 'حفظ الوسائط' } as const;
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      expect(host.querySelector('[data-setting="saveMediaToGallery"]')?.getAttribute('aria-label')).toBe(IOS[language]);
+    }
+  });
+
   test('hors ligne, aucune bascule n’est actionnable', () => {
     const host = dom(<PrivacySection language="fr" view={ready()} disabled onToggle={noop} onRetry={noop} />);
     expect(NAMES.every((name) => switchNamed(host, name)?.hasAttribute('disabled'))).toBe(true);
@@ -311,20 +335,25 @@ describe('les packs et téléchargements (#10149)', () => {
   });
 });
 
-describe('la galerie de la coque Android (#8308)', () => {
-  test('hors coque Android, aucune bascule de galerie n’est offerte', () => {
+describe('la galerie (#8308, #14641)', () => {
+  test('la section Données n’a plus de bascule LOCALE de galerie — le réglage est synchronisé, sous la confidentialité', () => {
     const host = dom(<DataSection language="fr" />);
     expect(host.querySelector('[data-setting="galleryAutoSave"]')).toBeNull();
+    expect(host.querySelector('[data-setting="saveMediaToGallery"]')).toBeNull();
   });
+});
 
-  test('sur la coque, la bascule s’annonce avec son état et sa légende', () => {
-    const on = dom(<DataSection language="fr" gallery={{ enabled: true, onToggle: noop }} />);
-    const toggle = switchNamed(on, 'Enregistrer dans la galerie');
-    expect(toggle?.getAttribute('aria-checked')).toBe('true');
-    expect(toggle?.getAttribute('data-setting')).toBe('galleryAutoSave');
-    expect(on.textContent).toContain('album Meeshy');
-    const off = dom(<DataSection language="fr" gallery={{ enabled: false, onToggle: noop }} />);
-    expect(switchNamed(off, 'Enregistrer dans la galerie')?.getAttribute('aria-checked')).toBe('false');
+describe('le téléchargement automatique des médias (#6333)', () => {
+  test('la section Données porte une politique par type, images puis vidéos, aux défauts d’iOS', () => {
+    const host = dom(<DataSection language="fr" />);
+    const row = host.querySelector('[data-settings-media-download]');
+    expect(row?.textContent).toContain('Téléchargement automatique des médias');
+    expect(row?.textContent).toContain('Sous 100 Ko');
+    const images = host.querySelector<HTMLSelectElement>('[data-media-download="image"]');
+    const videos = host.querySelector<HTMLSelectElement>('[data-media-download="video"]');
+    expect([...(images?.options ?? [])].map((o) => o.textContent)).toEqual(['Toujours', 'Wi-Fi + bon cellulaire', 'Wi-Fi uniquement', 'Jamais']);
+    expect(images?.querySelector('option[selected]')?.getAttribute('value')).toBe('wifiAndGoodCellular');
+    expect(videos?.querySelector('option[selected]')?.getAttribute('value')).toBe('wifiOnly');
   });
 });
 

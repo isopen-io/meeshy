@@ -348,12 +348,7 @@ nonisolated enum ComposerDocumentPublishGate {
     }
 
     /// - Parameters:
-    ///   - surface: la surface MONTÉE. `.scene` rend toujours `false`, et ce
-    ///     n'est pas une précaution gratuite : le jour où le socle publiera sous
-    ///     la scène, il devra passer par le gate de l'atelier (`canPublish`,
-    ///     `internal` à `MeeshyUI`) et non par celui-ci, qui ne voit ni les
-    ///     diapositives ni la timeline. Rendre `false` REFUSE ; il n'invente pas
-    ///     une réponse qu'il n'a pas.
+    ///   - surface: la surface MONTÉE — la scène du meuble ou le mood.
     ///   - visibility: l'audience COURANTE du meuble.
     ///   - visibilityUserIds: sa liste nominative. Elle et l'audience sont SANS
     ///     valeur par défaut : un défaut les aurait fait disparaître d'un site
@@ -382,16 +377,6 @@ nonisolated enum ComposerDocumentPublishGate {
         visibilityUserIds: [String],
         isPublishing: Bool,
         repostOfId: String?,
-        /// **La matière de l'ATELIER, RELAYÉE** (#4135) — jamais recalculée ici.
-        /// Le meuble ne voit ni le son de fond ni les traits de dessin : il
-        /// conclurait « rien à publier » sur une story « fond + musique »
-        /// parfaitement publiable. `StoryComposerView.canPublish` reste
-        /// l'unique juge, et la télécommande le transporte.
-        ///
-        /// Défaut `false`, et c'est le sens SÛR : un appelant qui l'ignore
-        /// obtient une flèche INERTE sur la scène, jamais une flèche armée
-        /// au-dessus d'une composition vide.
-        atelierHasMatter: Bool = false,
         /// **La matière du DOCUMENT — des pièces jointes, un lieu (#4514).**
         ///
         /// Elle manquait, et le défaut était silencieux : un post de deux photos
@@ -408,8 +393,6 @@ nonisolated enum ComposerDocumentPublishGate {
         guard !isPublishing else { return false }
         guard audienceIsComplete(visibility, userIds: visibilityUserIds) else { return false }
         switch surface {
-        case .scene:
-            return atelierHasMatter
         case .mood:
             return ComposerMoodPolicy.canPublish(emoji: emoji, isPublishing: isPublishing)
         case .document:
@@ -595,6 +578,22 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// d'un site d'appel sans casser la moindre compilation, exactement le
     /// mode de panne que ce champ vient corriger sur la voie DOCUMENT.
     let allowSoundExtraction: Bool?
+
+    /// **« Désactiver les commentaires »** (#16541), le choix de ⋯. Défaut
+    /// `false` — et c'est une exception assumée à la discipline du type :
+    /// l'absence vaut « ouvert » côté passerelle, aucun site ne peut donc la
+    /// perdre en publiant ouvert ce qu'on voulait ouvert. Le meuble la pose sur
+    /// le brouillon qu'il compose (`documentDraft(for:)`).
+    var commentsDisabled = false
+
+    /// Le brouillon fermé aux commentaires quand l'auteur l'a choisi et que
+    /// son format le porte (`ComposerCommentSettings`) — un mood ne l'est jamais.
+    func closingComments(_ chosen: Bool) -> ComposerDocumentDraft {
+        guard chosen, format == .post || format == .reel else { return self }
+        var closed = self
+        closed.commentsDisabled = true
+        return closed
+    }
 
     /// Le brouillon d'un MOOD.
     ///

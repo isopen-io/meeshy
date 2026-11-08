@@ -72,6 +72,7 @@ class PreferenceSettingsRefusalTest {
             outboxRepository = outbox,
             notificationStore = notificationStore,
             privacyStore = privacyStore,
+            audioStore = me.meeshy.sdk.audio.InMemoryAudioPreferencesStore(),
             scope = this,
         )
         return Fixture(api, notificationStore, privacyStore, coordinator)

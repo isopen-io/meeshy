@@ -21,9 +21,19 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// 8d3c42a8ba — le chargeur d'images est injecté (`MediaImageLoading`) :
+    /// l'appel porte désormais `imageLoader:`. La propriété gardée ne change
+    /// pas — `autoLoad: true` en dur sur l'image plein écran — et se lit sur
+    /// la source SANS commentaires, dont l'un formule littéralement
+    /// « autoLoad: true » et ferait passer la garde par chance de prose.
     func test_imageFullscreen_forcesAutoLoad_bypassingPolicyGate() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
-        XCTAssertTrue(source.contains("CachedAsyncImage(url: url.absoluteString, autoLoad: true)"),
+        let source = ComposerSourceGuard.stripComments(
+            try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
+        )
+        let fullscreen = try XCTUnwrap(source.range(of: "public struct ImageFullscreen: View {"),
+                                       "ImageFullscreen doit rester déclarée dans ImageViewerView.swift")
+        XCTAssertTrue(source[fullscreen.upperBound...].contains(
+            "CachedAsyncImage(url: url.absoluteString, autoLoad: true, imageLoader: imageLoader)"),
                       "ImageFullscreen must force autoLoad:true — a manual tap overrides the network policy gate (contract §14.1); otherwise Low Data Mode leaves the fullscreen viewer spinning forever.")
     }
 

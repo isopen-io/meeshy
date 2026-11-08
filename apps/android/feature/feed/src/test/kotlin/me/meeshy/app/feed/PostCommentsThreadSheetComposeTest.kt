@@ -60,4 +60,29 @@ class PostCommentsThreadSheetComposeTest {
         assertThat(spec.effectiveConfiguration.offers(ComposerCapability.PHOTO_LIBRARY)).isTrue()
         assertThat(spec.effectiveConfiguration.offers(ComposerCapability.VOICE)).isTrue()
     }
+
+    @Test
+    fun `le composeur du commentaire a la géométrie de la barre de message — langue, emojis rapides et chevron`() {
+        val mounted = mutableListOf<UniversalComposerSpec>()
+        val composer: UniversalComposer = { spec, _ -> mounted += spec }
+        val vm = RecetteCommentThread.loadedViewModel()
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalUniversalComposer provides composer) {
+                    PostCommentsThreadSheet(viewModel = vm, title = "2 commentaires", onDismiss = {})
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        val spec = mounted.last()
+        assertThat(spec.effectiveConfiguration.offers(ComposerCapability.LANGUAGE)).isTrue()
+        assertThat(spec.effectiveConfiguration.offers(ComposerCapability.QUICK_EMOJIS)).isTrue()
+        // Le ⌄ est celui de la barre de commentaire (FoldableCommentBar), pas celui du composeur universel.
+        assertThat(spec.foldable).isFalse()
+
+        compose.runOnIdle { spec.onPickLanguage?.invoke("es") }
+        compose.waitForIdle()
+        assertThat(mounted.last().languageCode).isEqualTo("es")
+    }
 }

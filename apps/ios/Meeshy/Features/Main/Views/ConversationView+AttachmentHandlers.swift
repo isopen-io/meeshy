@@ -83,10 +83,6 @@ extension ConversationView {
     func sendMessageWithAttachments() {
         let text = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(text.count, privacy: .public) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmInFlightSends=\(viewModel.sendActivity.inFlight, privacy: .public)")
-        guard !composerState.isUploading else {
-            Logger.messages.error("SendTap BLOCKED guard=isUploading convId=\(viewModel.conversationId, privacy: .public)")
-            return
-        }
         let place = composerState.pendingPlace
         guard SendEligibility.canSend(text: text, attachmentIds: composerState.pendingAttachments.map(\.id), location: place) else {
             Logger.messages.error("SendTap BLOCKED guard=emptyContent convId=\(viewModel.conversationId, privacy: .public)")
@@ -154,11 +150,11 @@ extension ConversationView {
         HapticFeedback.light()
     }
 
-    /// Les pièces restent visibles pendant l'envoi ; chaque bulle est posée dans le MÊME tour
-    /// MainActor que sa transcription locale, sans `await` entre les deux.
+    /// Chaque bulle est posée dans le MÊME tour MainActor que sa transcription locale, sans
+    /// `await` entre les deux. Le plateau se vide dans ce tour : on compose la suite pendant
+    /// que ce lot se téléverse (#14696).
     private func stageAttachmentBubbles(_ intent: AttachmentSendIntent) -> AttachmentSendBatch {
         clearComposerForSend()
-        composerState.isUploading = true
         let currentUser = AuthManager.shared.currentUser
         let thumbnails = composerState.pendingThumbnails
         let mediaGroupSends = OutgoingMediaGroup.sendable(
@@ -166,6 +162,7 @@ extension ConversationView {
             currentUserId: currentUser?.id ?? "",
             senderColor: DynamicColorGenerator.colorForName(currentUser?.displayName ?? "?")
         )
+        viewModel.collaborators.uploadProgress.begin(mediaGroupSends.map(\.tempId))
         insertOptimisticMediaBubbles(mediaGroupSends, intent: intent)
         let textGroup = intent.plan.first(where: { $0.kind == .text })
         let textTempId = AttachmentSendBatch.textTempId(textGroup: textGroup, place: intent.place, generate: ClientMessageId.generate)
@@ -225,23 +222,27 @@ extension ConversationView {
         )
     }
 
+    /// Plusieurs lots se téléversent ensemble (#14696) ; chaque bulle reçoit la progression de
+    /// SA session (#14702).
     private func launchAttachmentSend(_ batch: AttachmentSendBatch) {
+        let upload = UUID()
+        let bubbles = batch.mediaGroupSends.map(\.tempId)
+        let progress = viewModel.collaborators.uploadProgress
+        composerState.uploads.begin(upload, mediaIds: Set(batch.mediaFiles.keys))
         let runner = AttachmentSendRunner(host: viewModel, callbacks: AttachmentSendCallbacks(
             restorePlace: { place, sent in restorePlaceTile(place, sent: sent) },
-            setProgress: { progress in composerState.uploadProgress = progress },
-            abortUpload: { composerState.isUploading = false }
+            setProgress: { tempId, sent, total in progress.report(sent: sent, total: total, for: tempId) },
+            abortUpload: { settleUpload(upload, bubbles: bubbles) }
         ))
         Task {
-            defer {
-                Task { @MainActor in
-                    composerState.pendingMediaFiles.removeAll()
-                    composerState.uploadProgress = nil
-                    composerState.isUploading = false
-                    purgeDraftAttachmentMedia()
-                }
-            }
+            defer { Task { @MainActor in settleUpload(upload, bubbles: bubbles) } }
             await runner.run(batch)
         }
+    }
+
+    private func settleUpload(_ upload: UUID, bubbles: [String]) {
+        viewModel.collaborators.uploadProgress.end(bubbles)
+        if composerState.settleUpload(upload) { purgeDraftAttachmentMedia() }
     }
 
     // `formatRecordingTime(_:)` a vécu ici sans site d'appel. Le compteur de

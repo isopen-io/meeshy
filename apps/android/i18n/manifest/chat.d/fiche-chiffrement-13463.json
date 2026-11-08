@@ -423,7 +423,7 @@
           "status": "adopted"
         },
         {
-          "androidName": "encryption_e2ee_unavailable_here",
+          "androidName": "encryption_e2ee_direct_only_here",
           "status": "android-only"
         },
         {

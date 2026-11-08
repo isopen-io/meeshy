@@ -20,12 +20,115 @@ final class ComposerCaptureTopRowTests: XCTestCase {
 
     func test_trailing_putsTheFlipRightOfTheFlash_atTheEdge() {
         let droite = ComposerCaptureTopRow.trailing(Self.input())
-        XCTAssertEqual(droite, [.size, .flash, .flip])
+        XCTAssertEqual(droite, [.more, .flash, .flip])
         XCTAssertEqual(droite.last, .flip, "le retournement touche le bord droit")
     }
 
-    func test_trailing_withoutSizeToggle_isFlashThenFlip() {
-        XCTAssertEqual(ComposerCaptureTopRow.trailing(Self.input(size: false)), [.flash, .flip])
+    func test_trailing_withoutSizeToggle_stillOffersTheMenu_forTheGrid() {
+        XCTAssertEqual(ComposerCaptureTopRow.trailing(Self.input(size: false)), [.more, .flash, .flip])
+    }
+
+    // MARK: - (5) `⋯` remplace `[ ]` au viseur (décision porteur 2026-11-07, OPUS-6)
+
+    func test_theViewfinder_neverShowsTheSizeToggleInTheRow_itLivesInTheMenu() {
+        XCTAssertFalse(ComposerCaptureTopRow.trailing(Self.input()).contains(.size))
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: true), [.grid, .selfTimer, .size])
+    }
+
+    func test_theMenu_withoutACardToReturnTo_offersTheGridAndTheTimer() {
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: false), [.grid, .selfTimer])
+    }
+
+    // MARK: - (7) Le retardateur (CAM-4)
+
+    private static func timerDefaults(_ delai: ComposerCaptureSelfTimerDelay) -> UserDefaults {
+        let defaults = UserDefaults(suiteName: "ComposerCaptureSelfTimer.\(UUID().uuidString)") ?? .standard
+        defaults.set(delai.rawValue, forKey: ComposerCaptureSelfTimerDelay.storageKey)
+        return defaults
+    }
+
+    func test_theSelfTimer_offersThreeAndTenSeconds_andIsOffForAnUnknownValue() {
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.allCases, [.off, .three, .ten])
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay(stored: 0), .off)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay(stored: 7), .off)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay(stored: 10), .ten)
+    }
+
+    func test_theSelfTimer_countsDownEverySecond_toOne() {
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.three.ticks, [3, 2, 1])
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.ten.ticks.count, 10)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.off.ticks, [])
+    }
+
+    func test_withTheTimerOff_thePhotoLeavesAtOnce() {
+        let minuterie = ComposerCaptureSelfTimer(defaults: Self.timerDefaults(.off))
+        var prises = 0
+        minuterie.run { prises += 1 }
+        XCTAssertEqual(prises, 1)
+        XCTAssertNil(minuterie.remaining)
+    }
+
+    func test_withTheTimerOn_thePhotoWaitsForTheCount_thenLeavesOnce() async {
+        let minuterie = ComposerCaptureSelfTimer(defaults: Self.timerDefaults(.three), tick: .milliseconds(5))
+        let partie = expectation(description: "la photo part après le compte")
+        var prises = 0
+        minuterie.run {
+            prises += 1
+            partie.fulfill()
+        }
+        XCTAssertEqual(minuterie.remaining, 3, "le premier chiffre paraît tout de suite")
+        XCTAssertEqual(prises, 0)
+        await fulfillment(of: [partie], timeout: 2)
+        XCTAssertEqual(prises, 1)
+        XCTAssertNil(minuterie.remaining)
+        XCTAssertFalse(minuterie.isCounting)
+    }
+
+    func test_aSecondPressDuringTheCount_cancelsIt_andNothingIsTaken() async throws {
+        let minuterie = ComposerCaptureSelfTimer(defaults: Self.timerDefaults(.three), tick: .milliseconds(5))
+        var prises = 0
+        minuterie.run { prises += 1 }
+        minuterie.run { prises += 1 }
+        XCTAssertFalse(minuterie.isCounting)
+        XCTAssertNil(minuterie.remaining)
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(prises, 0, "le compte annulé ne prend rien")
+    }
+
+    func test_theTimerOptions_readAsSecondsInTheLocale() {
+        XCTAssertEqual(ComposerSceneCameraCopy.selfTimerOption(.three, locale: Locale(identifier: "fr_FR")), "3 s")
+        XCTAssertFalse(ComposerSceneCameraCopy.selfTimerOption(.off).isEmpty)
+    }
+
+    func test_inRetouch_theSizeToggleStaysInTheRow_andThereIsNoMenu() {
+        let retouche = ComposerCaptureTopRow.trailing(Self.input(editing: true))
+        XCTAssertTrue(retouche.contains(.size))
+        XCTAssertFalse(retouche.contains(.more))
+    }
+
+    // MARK: - (6) La grille des tiers (CAM-2)
+
+    func test_theGrid_fallsOnTheThirdsOfTheFullImage() {
+        let lignes = ComposerCaptureGrid.lines(in: CGRect(x: 0, y: 0, width: 300, height: 600))
+        XCTAssertEqual(lignes.vertical, [100, 200])
+        XCTAssertEqual(lignes.horizontal, [200, 400])
+    }
+
+    func test_theGrid_fallsOnTheThirdsOfAFrameHole_notOfTheScreen() {
+        let lignes = ComposerCaptureGrid.lines(in: CGRect(x: 30, y: 60, width: 240, height: 360))
+        XCTAssertEqual(lignes.vertical, [110, 190])
+        XCTAssertEqual(lignes.horizontal, [180, 300])
+    }
+
+    func test_theGrid_drawsNothingInAnEmptyZone() {
+        XCTAssertEqual(ComposerCaptureGrid.lines(in: .zero), ComposerCaptureGrid.Lines(vertical: [], horizontal: []))
+    }
+
+    func test_theGrid_isOffByDefault_andNeverShowsInRetouch() {
+        XCTAssertEqual(ComposerCaptureGrid.storageKey, "composer.camera.grid")
+        XCTAssertFalse(ComposerCaptureGrid.shows(enabled: false, editing: false), "désactivée par défaut")
+        XCTAssertTrue(ComposerCaptureGrid.shows(enabled: true, editing: false))
+        XCTAssertFalse(ComposerCaptureGrid.shows(enabled: true, editing: true), "on ne cadre plus en retouche")
     }
 
     // MARK: - (3) Les contrôleurs de segment à GAUCHE des deux boutons
@@ -36,7 +139,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         let flash = droite.firstIndex(of: .flash) ?? 0
         XCTAssertLessThan(droite.firstIndex(of: .dropSegment) ?? .max, flash)
         XCTAssertLessThan(droite.firstIndex(of: .validate) ?? .max, flash)
-        XCTAssertFalse(droite.contains(.size), "sept contrôles tiennent sur un iPhone, pas huit : [ ] cède")
+        XCTAssertFalse(droite.contains(.more), "sept contrôles tiennent sur un iPhone, pas huit : ⋯ cède")
     }
 
     func test_whileRecording_onlyTheCrossAndTheChronoRemain() {

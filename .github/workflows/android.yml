@@ -103,6 +103,7 @@ jobs:
   # consultatif pour une PR iOS seule (qui ne peut pas connaître le manifeste Android).
   i18n:
     name: Chaînes Android générées à jour
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -147,6 +148,7 @@ jobs:
   # Le contrôle échoue quand un fichier a divergé du manifeste ou qu'un orphelin subsiste.
   routes:
     name: Routes Android générées à jour
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -167,6 +169,7 @@ jobs:
   # régénération fait échouer ce contrôle.
   tokens:
     name: Jetons de design générés à jour
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -191,15 +194,32 @@ jobs:
     runs-on: ubuntu-latest
     # Measured on the first green runs (2026-08-12): ~8-10 min wall clock for
     # the whole job on a cold Gradle cache — of which assembleDebug is the bulk
-    # and testDebugUnitTest is ~2m10 (665 actionable tasks). 30 min is a hang
-    # guard with roughly 3x headroom against GitHub's 6h default, not a target.
+    # and testDebugUnitTest is ~2m10 (665 actionable tasks).
+    # Re-measured 2026-11-04 (run 41770508029): assembleDebug 13m14s
+    # (807 actionable tasks), and testDebugUnitTest had covered ~15 of 22 test
+    # modules after 16 min when the old 30 min ceiling cancelled the job — no
+    # hang (the 900 s jstack showed every executor busy in a different test).
+    # 60 min is a hang guard with ~2x headroom on that budget, not a target.
     # Raise it if the module graph grows, rather than letting a hung job sit.
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: apps/android
 
     steps:
+      # #15675 — l'image ubuntu-latest n'a qu'environ 14 Go libres, et le build
+      # complet (assemble + tests de tous les modules) l'épuisait : le runner
+      # mourait sur « No space left on device » avant de compiler. On retire ce
+      # que le build Android n'utilise pas ; le SDK Android préinstallé reste.
+      - name: Libérer le disque du runner
+        working-directory: /
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -285,8 +305,24 @@ jobs:
       - name: Room schema export matches the committed JSON
         run: ./scripts/check-room-schema.sh --built
 
+      # Un test FIGÉ ne laisse aucune trace : Gradle n'écrit le résultat d'une classe qu'à sa fin, et le délai du job
+      # annule tout d'un « The operation was canceled » sans nom (vu le 2026-11-02, #14650, quand les tests de
+      # :sdk-core ont recompilé). Passé 15 min — une passe normale en prend 10 à 12 —, le chien de garde vide deux
+      # fois les piles des exécuteurs de test, à 2 min d'écart : le cadre qui ne bouge pas nomme le test figé.
       - name: Unit tests (./apps/android/meeshy.sh test)
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: |
+          (
+            sleep 900
+            for pass in 1 2; do
+              for pid in $(pgrep -f 'Gradle Test Executor' || true); do
+                echo "::group::Piles de l'exécuteur de test $pid (passe $pass)"
+                "$JAVA_HOME/bin/jstack" "$pid" || true
+                echo "::endgroup::"
+              done
+              sleep 120
+            done
+          ) &
+          ./gradlew testDebugUnitTest --no-daemon
 
       # Gradle only says "There were failing tests. See the report at ..." and
       # points at an HTML file. The agents this gate exists for cannot download

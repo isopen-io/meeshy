@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_fold">Nascondi l’area dei commenti</string>
+    <string name="story_composer_fold_hint">Chiude la tastiera e riduce l’area dei commenti a una bolla</string>
+    <string name="story_composer_unfold">Mostra l’area dei commenti</string>
+    <string name="story_composer_unfold_hint">Riapre l’area dei commenti senza aprire la tastiera</string>
+    <string name="story_composer_unfold_recording">Registrazione vocale in corso</string>
+    <string name="story_composer_unfold_replying">Risposta in corso</string>
+</resources>

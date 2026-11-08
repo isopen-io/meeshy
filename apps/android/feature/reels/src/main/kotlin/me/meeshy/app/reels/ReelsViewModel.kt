@@ -7,17 +7,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.ReelThreadOrder
+import me.meeshy.sdk.model.PostType
+import me.meeshy.app.feed.QuoteComposerState
+import me.meeshy.app.feed.RepostCommand
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.model.ContentFetchFailure
+import me.meeshy.sdk.post.PostPage
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.PostCommentSettingsRepository
+import me.meeshy.sdk.model.PostCommentSettings
+import me.meeshy.sdk.model.commentsClosed
+import me.meeshy.feature.feed.R as FeedR
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -37,7 +46,11 @@ import me.meeshy.feature.reels.R
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.chrome.InMemoryFloatingButtonPositionStore
+import me.meeshy.sdk.playback.PlaybackCoordinator
 import javax.inject.Inject
+import me.meeshy.sdk.call.CallActivityGate
 
 data class ReelsUiState(
     val reels: List<ReelPresentation> = emptyList(),
@@ -53,6 +66,8 @@ data class ReelsUiState(
      * posee, le lecteur dit la cause au lieu d'atterrir sur un autre reel (iOS `ReelOpenFailureView`).
      */
     val seedFailure: ContentFetchFailure? = null,
+    /** Le compositeur de citation ouvert depuis le rail (« Citer », #12234) ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
 )
 
 @HiltViewModel
@@ -65,7 +80,25 @@ class ReelsViewModel @Inject constructor(
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     private val reportRepository: ReportRepository,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
+    private val playbackCoordinator: PlaybackCoordinator = PlaybackCoordinator(),
+    floatingButtonPositions: FloatingButtonPositionStore = InMemoryFloatingButtonPositionStore(),
+    callGate: CallActivityGate = CallActivityGate(),
+    private val commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
+
+    /** Un appel est en cours : aucun réel ne démarre sous la voix, et la lecture reprend à sa fin. */
+    val isCallActive: StateFlow<Boolean> = callGate.isActiveFlow
+
+    /** Où le bouton Flux est rangé : le dévoilement des réels naît à son centre exact (iOS `feedButtonPosition`). */
+    val feedButtonStorage: StateFlow<String> = floatingButtonPositions.leftStorage
+
+    /**
+     * La fermeture coupe tout ce qui joue — vidéo partagée ET réel-audio (iOS `SharedAVPlayerManager.pause()` +
+     * `PlaybackCoordinator.stopAllAudio()`) : pendant le rétrécissement du disque, rien ne doit encore sonner.
+     */
+    fun stopAllMedia() {
+        playbackCoordinator.stopAll()
+    }
 
     /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
     val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
@@ -128,12 +161,15 @@ class ReelsViewModel @Inject constructor(
      * Feed's in-memory cache already holds [seed], the thread renders from it INSTANTLY —
      * moved to the front, no spinner — while the real affinity thread loads in the background.
      * When [seed] is NOT in that cache (a notification opens a reel the Feed never rendered —
-     * the common case), it is fetched explicitly by id ([loadSeedAndPrepend]) rather than
+     * the common case), it is fetched explicitly by id ([resolveSeed]) rather than
      * assumed to be in the network page: the gateway's `getReels` EXCLUDES [seed] from every
      * page it returns ("already shown by the client, entry point of the thread"), so a thread
      * opened straight from a notification would otherwise never contain the very reel the user
-     * tapped. Either way, once [seed] is present in [ReelsUiState.reels] (from the cache or
-     * from [loadSeedAndPrepend]), the network page is APPENDED to it (deduplicated, like
+     * tapped. Until that fetch settles, the thread is HELD (recette S8, #13863): the pager keys its pages by id, so a
+     * reel shown before the seed would stay under the finger while the seed slid in above it — the player would open on
+     * another reel than the one touched. The page is fetched concurrently and applied once the seed has landed. Either
+     * way, once [seed] is present in [ReelsUiState.reels] (from the cache or
+     * from [resolveSeed]), the network page is APPENDED to it (deduplicated, like
      * [loadMore]) rather than replacing it — a page that legitimately excludes [seed] must
      * never evict it from the thread.
      */
@@ -148,40 +184,49 @@ class ReelsViewModel @Inject constructor(
             .orEmpty()
         val seedInCache = seed != null && cachedFeed.any { it.id == seed }
         val cached = ReelBuilder.withSeedFirst(cachedFeed, seed)
+        val heldSeed = seed?.takeIf { !seedInCache && _state.value.reels.none { reel -> reel.id == it } }
         _state.update {
             // Une relecture garde ce que le lecteur affiche deja : l'ordre ne bouge que par refreshed.
-            val shown = if (cached.isEmpty()) it.reels else cached
+            val shown = when {
+                heldSeed != null -> emptyList()
+                cached.isEmpty() -> it.reels
+                else -> cached
+            }
             it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty(), seedFailure = null)
         }
 
-        if (seed != null && !seedInCache) loadSeedAndPrepend(seed)
-
         viewModelScope.launch {
-            when (val result = postRepository.getReelsPage(seed = seed)) {
-                is NetworkResult.Success -> {
-                    val page = result.data
-                    hasLoadedFirstPage = true
-                    nextCursor = page.nextCursor
-                    hasMoreReels = page.hasMore
-                    val fresh = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
-                    _state.update { current ->
-                        val seedAlreadyPresent = seed != null && current.reels.any { it.id == seed }
-                        // Le reel regarde et ceux qui le precedent ne bougent jamais ; sans reel
-                        // regarde, une graine presente garde tout le fil deja a l'ecran.
-                        val anchorId = currentReelId ?: current.reels.lastOrNull()?.id.takeIf { seedAlreadyPresent }
-                        val reels = ReelThreadOrder.refreshed(current.reels, anchorId, fresh) { it.id }
-                        current.copy(reels = reels, isLoading = false, loadFailure = null, hasLoadedOnce = true)
-                    }
+            val firstPage = async { postRepository.getReelsPage(seed = seed) }
+            heldSeed?.let { resolveSeed(it, held = cached) }
+            applyFirstPage(firstPage.await(), seed)
+        }
+    }
+
+    private fun applyFirstPage(result: NetworkResult<PostPage>, seed: String?) {
+        when (result) {
+            is NetworkResult.Success -> {
+                val page = result.data
+                hasLoadedFirstPage = true
+                nextCursor = page.nextCursor
+                hasMoreReels = page.hasMore
+                val fresh = ReelBuilder.build(page.posts, config.apiBaseUrl, sessionRepository.currentUser.value)
+                _state.update { current ->
+                    val seedAlreadyPresent = seed != null && current.reels.any { it.id == seed }
+                    // Le reel regarde et ceux qui le precedent ne bougent jamais ; sans reel
+                    // regarde, une graine presente garde tout le fil deja a l'ecran.
+                    val anchorId = currentReelId ?: current.reels.lastOrNull()?.id.takeIf { seedAlreadyPresent }
+                    val reels = ReelThreadOrder.refreshed(current.reels, anchorId, fresh) { it.id }
+                    current.copy(reels = reels, isLoading = false, loadFailure = null, hasLoadedOnce = true)
                 }
-                is NetworkResult.Failure -> _state.update {
-                    // The cache-seeded reels (if any) are left in place rather than cleared —
-                    // a network failure degrades to what the Feed already had, never to blank.
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = if (it.reels.isEmpty()) result.error.message else it.errorMessage,
-                        loadFailure = if (it.reels.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
-                    )
-                }
+            }
+            is NetworkResult.Failure -> _state.update {
+                // The cache-seeded reels (if any) are left in place rather than cleared —
+                // a network failure degrades to what the Feed already had, never to blank.
+                it.copy(
+                    isLoading = false,
+                    errorMessage = if (it.reels.isEmpty()) result.error.message else it.errorMessage,
+                    loadFailure = if (it.reels.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
+                )
             }
         }
     }
@@ -192,26 +237,19 @@ class ReelsViewModel @Inject constructor(
     fun retry() = load(currentSeed)
 
     /**
-     * Fetches [seedId] by id and pins it at the front of the thread, for the cold-start case
-     * where [load] found it absent from the Feed cache. Best-effort and order-agnostic against
-     * the concurrent [load] page fetch — whichever of the two lands second still sees (and
-     * dedupes against) whatever the other already wrote, since both read [ReelsUiState.reels]
-     * fresh inside their own [MutableStateFlow.update] transform. A non-REEL post (filtered out
-     * by [ReelBuilder.build]) or a failed fetch simply leaves the thread as the page populates it.
+     * Fetches [seedId] by id and pins it at the front of the thread, for the cold-start case where [load] found it absent
+     * from the Feed cache, then releases the [held] cache-seeded reels behind it. A non-REEL post (filtered out by
+     * [ReelBuilder.build]) releases the thread as it is; a failed fetch says why ([ReelsUiState.seedFailure]).
      */
-    private fun loadSeedAndPrepend(seedId: String) {
-        viewModelScope.launch {
-            val result = postRepository.getPost(seedId)
-            if (result is NetworkResult.Failure) {
-                _state.update { it.copy(seedFailure = result.error.toContentFetchFailure()) }
-                return@launch
-            }
-            if (result !is NetworkResult.Success) return@launch
-            val seedReel = ReelBuilder.build(listOf(result.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() ?: return@launch
-            _state.update { current ->
-                if (current.reels.any { it.id == seedReel.id }) return@update current
-                current.copy(reels = listOf(seedReel) + current.reels, isLoading = false)
-            }
+    private suspend fun resolveSeed(seedId: String, held: List<ReelPresentation>) {
+        val result = postRepository.getPost(seedId)
+        val seedReel = (result as? NetworkResult.Success)
+            ?.let { ReelBuilder.build(listOf(it.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() }
+        _state.update { current ->
+            val released = ReelThreadOrder.appended(current.reels, held) { it.id }
+            val reels = seedReel?.let { listOf(it) + released.filterNot { reel -> reel.id == it.id } } ?: released
+            val failure = (result as? NetworkResult.Failure)?.error?.toContentFetchFailure()
+            current.copy(reels = reels, isLoading = reels.isEmpty() && failure == null, hasLoadedOnce = reels.isNotEmpty(), seedFailure = failure)
         }
     }
 
@@ -345,6 +383,18 @@ class ReelsViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            // #16541 — l'auteur ou la modération a fermé (ou rouvert) les commentaires : `post:updated` porte le post entier.
+            try {
+                socialSocket.postUpdated.collect { event ->
+                    updateReel(event.post.id) { it.copy(commentsDisabled = event.post.commentsDisabled, commentsClosed = event.post.commentsClosed) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Unit
+            }
+        }
     }
 
     private fun mine(actorId: String, liked: Boolean): Boolean? =
@@ -424,16 +474,74 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Repost simple : compteur optimiste, rollback si echec. */
+    /**
+     * Repost simple, EN RÉEL et vers l'original quand ce réel en republie un autre (iOS `ReelsViewModel.repost`,
+     * #14443, #14456) : compteur et marque au geste, confirmés ou rendus, et l'issue dite. Un second geste pendant
+     * l'envoi n'envoie rien.
+     */
     fun repost(reelId: String) {
         val before = _state.value.reels.firstOrNull { it.id == reelId } ?: return
-        updateReel(reelId) { it.copy(repostCount = before.repostCount + 1) }
+        sendRepost(before, RepostCommand.of(reelId, before.repostOf, quote = false, commentary = null, cardType = PostType.REEL.name))
+    }
+
+    /**
+     * « Citer » depuis le rail (iOS `QuoteComposerCover` monté par le lecteur, #15869) : le compositeur s'ouvre sur la
+     * carte de la RACINE quand ce réel en republie un autre. Rien ne part avant [submitQuote].
+     */
+    fun beginQuote(reelId: String) {
+        val reel = _state.value.reels.firstOrNull { it.id == reelId } ?: return
+        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(reel.id, reel.authorName, reel.caption, reel.repostOf, sessionRepository.currentUser.value)) }
+    }
+
+    fun onQuoteTextChange(text: String) {
+        _state.update { s -> s.quoteComposer?.let { s.copy(quoteComposer = it.copy(text = text)) } ?: s }
+    }
+
+    fun cancelQuote() {
+        _state.update { it.copy(quoteComposer = null) }
+    }
+
+    /** La citation part EN RÉEL vers la racine, avec son commentaire ; le compteur et la marque bougent comme un repost. */
+    fun submitQuote() {
+        val composer = _state.value.quoteComposer ?: return
+        _state.update { it.copy(quoteComposer = null) }
+        val before = _state.value.reels.firstOrNull { it.id == composer.postId } ?: return
+        sendRepost(
+            before,
+            RepostCommand.of(before.id, before.repostOf, quote = true, commentary = composer.text, cardType = PostType.REEL.name),
+        )
+    }
+
+    private fun sendRepost(before: ReelPresentation, command: RepostCommand) {
+        val reelId = before.id
+        if (!repostsInFlight.add(reelId)) return
+        updateReel(reelId) { it.copy(repostCount = it.repostCount + 1, isReposted = true) }
         viewModelScope.launch {
-            if (postRepository.repost(reelId) is NetworkResult.Failure) {
-                updateReel(reelId) { it.copy(repostCount = before.repostCount) }
+            val refused = try {
+                postRepository.repost(
+                    command.targetId,
+                    targetType = command.targetType,
+                    content = command.content,
+                    isQuote = command.isQuote,
+                ) is NetworkResult.Failure
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                true
+            }
+            repostsInFlight.remove(reelId)
+            if (refused) {
+                updateReel(reelId) {
+                    it.copy(repostCount = (it.repostCount - 1).coerceAtLeast(0), isReposted = before.isReposted)
+                }
+                toast(R.string.reels_toast_repost_failed, FeedbackKind.Error)
+            } else {
+                toast(R.string.reels_toast_reposted, FeedbackKind.Success)
             }
         }
     }
+
+    private val repostsInFlight = mutableSetOf<String>()
 
     private fun updateReel(reelId: String, transform: (ReelPresentation) -> ReelPresentation) {
         _state.update { state ->
@@ -474,10 +582,45 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Signalement direct, motif « inapproprié » comme sur iOS (`reportPost`). */
-    fun report(reelId: String) {
+    /** Le rôle de plateforme du lecteur : la modération ferme les commentaires d'un réel d'autrui (#16541). */
+    val viewerRole: String? get() = sessionRepository.currentUser.value?.role
+
+    /** L'hôte sait fermer ou rouvrir les commentaires : sans le dépôt, l'entrée du menu n'existe pas. */
+    val canToggleComments: Boolean get() = commentSettings != null
+
+    /**
+     * #16541 — ferme ou rouvre les commentaires du réel : la page bascule avant le réseau (le menu, le composeur de la
+     * feuille), la passerelle dit l'état appliqué, un refus le remet — sauf si une diffusion a dit autre chose entre-temps.
+     */
+    fun toggleComments(reelId: String) {
+        val settings = commentSettings ?: return
+        val before = _state.value.reels.firstOrNull { it.id == reelId }?.commentsDisabled ?: return
+        val target = !before
+        updateReel(reelId) { it.withCommentsDisabled(target) }
         viewModelScope.launch {
-            when (reportRepository.reportPost(reelId, ReportReason.INAPPROPRIATE, details = null)) {
+            val result = try {
+                settings.setCommentsDisabled(reelId, target)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (result is NetworkResult.Success) {
+                updateReel(reelId) { it.withCommentsDisabled(result.data) }
+            } else {
+                updateReel(reelId) { it.withCommentsDisabled(PostCommentSettings.rolledBack(it.commentsDisabled, target, before)) }
+                toast(FeedR.string.feed_comment_settings_failed, FeedbackKind.Error)
+            }
+        }
+    }
+
+    /** Un commentaire parti depuis la feuille : le compteur du rail gagne 1 aussitôt (iOS `onCommentSent`). */
+    fun commentSent(reelId: String) = updateReel(reelId) { it.copy(commentCount = it.commentCount + 1) }
+
+    /** Signalement : le motif choisi dans le dialogue, « inapproprié » par défaut comme sur iOS (`reportPost`). */
+    fun report(reelId: String, reason: ReportReason = ReportReason.INAPPROPRIATE) {
+        viewModelScope.launch {
+            when (reportRepository.reportPost(reelId, reason, details = null)) {
                 is NetworkResult.Success -> toast(R.string.reels_toast_reported, FeedbackKind.Success)
                 else -> toast(R.string.reels_toast_report_failed, FeedbackKind.Error)
             }

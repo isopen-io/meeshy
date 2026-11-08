@@ -1,6 +1,9 @@
 package me.meeshy.app.push
 
+import me.meeshy.sdk.model.MeeshyNotificationCategory
+import me.meeshy.sdk.model.NotificationChannelPlan
 import me.meeshy.sdk.model.push.PushChannelCategory
+import me.meeshy.sdk.model.push.PushPayload
 
 /**
  * Canonical Android notification-channel identifiers (ARCHITECTURE.md §18 — "~80
@@ -53,6 +56,12 @@ object NotificationChannelIds {
     const val CHANNEL_SOCIAL_V2: String = "meeshy_social_v2"
     const val CHANNEL_SYSTEM_V2: String = "meeshy_system_v2"
 
+    /**
+     * Le Bring (#13936) : une sonnerie FORCÉE pour l'urgence extrême, catégorie alarme. Le canal est muet — le service
+     * au premier plan joue le son sur le flux alarme — et passe Ne pas déranger quand le système l'accorde.
+     */
+    const val CHANNEL_BRING: String = "meeshy_bring"
+
     /** Les notifications en cours (envoi long, vocal en cours d'enregistrement) : discrètes, sans son. */
     const val CHANNEL_ONGOING: String = "meeshy_ongoing"
 
@@ -72,4 +81,20 @@ object NotificationChannelIds {
         PushChannelCategory.SOCIAL -> CHANNEL_SOCIAL_V2
         PushChannelCategory.SYSTEM -> CHANNEL_SYSTEM_V2
     }
+
+    /** Les canaux ajoutés par la taxonomie iOS (catégories `MEESHY_*`) ; leurs identifiants vivent dans le plan pur. */
+    const val CHANNEL_MENTIONS: String = NotificationChannelPlan.MENTIONS
+    const val CHANNEL_EPHEMERAL: String = NotificationChannelPlan.EPHEMERAL
+    const val CHANNEL_FRIENDS: String = NotificationChannelPlan.FRIENDS
+    const val CHANNEL_CALLS_MISSED: String = NotificationChannelPlan.CALLS_MISSED
+    const val CHANNEL_INVITATIONS: String = NotificationChannelPlan.INVITATIONS
+
+    /**
+     * Le canal d'un push : sa catégorie `MEESHY_*` (dérivée du type de la passerelle ; un message à
+     * durée de vie est éphémère) mène à UN canal du plan. Un type inconnu — ancien binaire, type
+     * neuf — tombe sur le canal générique des messages, jamais perdu.
+     */
+    fun forPayload(payload: PushPayload): String = NotificationChannelPlan.channelIdFor(
+        MeeshyNotificationCategory.of(type = payload.type, ephemeral = (payload.ephemeralDuration ?: 0) > 0),
+    )
 }

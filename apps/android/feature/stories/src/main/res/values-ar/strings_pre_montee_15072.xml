@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_preupload_unit_kb">ك.ب</string>
+    <string name="composer_preupload_unit_mb">م.ب</string>
+    <string name="composer_preupload_unit_gb">ج.ب</string>
+</resources>

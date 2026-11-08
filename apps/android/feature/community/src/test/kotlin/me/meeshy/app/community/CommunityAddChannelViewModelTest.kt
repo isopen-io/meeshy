@@ -109,4 +109,21 @@ class CommunityAddChannelViewModelTest {
         assertThat(vm.state.value.candidates.map { it.id }).contains("a")
         assertThat(vm.state.value.addingId).isNull()
     }
+
+    @Test
+    fun `the list reveals twenty rows at a time and a new search starts over`() = runTest {
+        every { session.currentUserId } returns "me"
+        every { conversations.cachedConversations() } returns flowOf((1..45).map { convo("id$it", "Room $it") })
+        val vm = CommunityAddChannelViewModel(conversations, repository, cache, session).also { it.start("c1") }
+
+        assertThat(vm.state.value.visible).hasSize(20)
+        assertThat(vm.state.value.hasMore).isTrue()
+        vm.loadMore()
+        vm.loadMore()
+        assertThat(vm.state.value.visible).hasSize(45)
+        assertThat(vm.state.value.hasMore).isFalse()
+        vm.onQuery("Room 4")
+        assertThat(vm.state.value.pages).isEqualTo(1)
+        assertThat(vm.state.value.visible.map { it.title }).contains("Room 45")
+    }
 }

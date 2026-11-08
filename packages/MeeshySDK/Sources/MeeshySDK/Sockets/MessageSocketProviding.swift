@@ -90,6 +90,7 @@ public protocol MessageSocketProviding: Sendable {
     var participantBanned: PassthroughSubject<ParticipantBannedEvent, Never> { get }
     var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
     var conversationClosed: PassthroughSubject<ConversationClosedEvent, Never> { get }
+    var conversationObsoleted: PassthroughSubject<ConversationObsoletedEvent, Never> { get }
     /// `conversation:deleted` — the conversation is gone server-side. Exposed on
     /// the protocol (not just the concrete manager) so the disk-cache writer can
     /// subscribe: routed only to the in-memory `ConversationStore`, a deletion
@@ -199,7 +200,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitRequestIceServers(callId: String)
     func emitCallBackgrounded(callId: String, participantId: String)
     func emitCallForegrounded(callId: String, participantId: String)
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind)
     func emitCallAnalytics(callId: String, payload: [String: Any])
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload)
     func emitCallTranscriptionActive(callId: String, active: Bool)
@@ -246,7 +247,7 @@ public extension MessageSocketProviding {
     func emitRequestIceServers(callId: String) {}
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {}
     func emitCallAnalytics(callId: String, payload: [String: Any]) {}
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
     func emitCallTranscriptionActive(callId: String, active: Bool) {}
@@ -351,5 +352,14 @@ public extension MessageSocketProviding {
             location: location,
             sticker: nil
         )
+    }
+}
+
+extension MessageSocketProviding {
+    /// `conversation:obsoleted` (#14645) vit dans son canal, hors de
+    /// `MessageSocketManager` (au-delà de son budget de cohésion) ; un double
+    /// de test le redéclare pour le piloter.
+    public var conversationObsoleted: PassthroughSubject<ConversationObsoletedEvent, Never> {
+        ConversationObsolescenceChannel.shared.obsoleted
     }
 }

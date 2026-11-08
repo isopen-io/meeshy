@@ -254,7 +254,8 @@ describe('GET /admin/users/:userId/preferences', () => {
     expect(Object.keys(data).sort()).toEqual(
       ['application', 'audio', 'document', 'message', 'notification', 'privacy', 'video']
     );
-    expect(data.privacy).toEqual({ ...PRIVACY_PREFERENCE_DEFAULTS, showOnlineStatus: false });
+    // #14406 — la valeur EFFECTIVE de la Connaissance automatique (clé sans défaut stocké, résolue par l'âge).
+    expect(data.privacy).toEqual({ ...PRIVACY_PREFERENCE_DEFAULTS, showOnlineStatus: false, autoAcquaintance: true });
     expect(data.notification).toEqual({ ...NOTIFICATION_PREFERENCE_DEFAULTS, dndEnabled: true });
     expect(data.application).toEqual(APPLICATION_PREFERENCE_DEFAULTS);
   });
@@ -344,6 +345,15 @@ describe('PATCH /admin/users/:userId/preferences/:category', () => {
   it('refuse d\'écrire la famille chiffrement au nom du membre (403), sans rien écrire', async () => {
     const prisma = createMockPrisma();
     const res = await call(prisma, 'BIGBOSS', 'PATCH', url('privacy'), { encryptionPreference: 'disabled', showLastSeen: false });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(expect.objectContaining({ success: false, error: 'ADMIN_READ_ONLY_PREFERENCE' }));
+    expect(prisma.userPreferences.upsert).not.toHaveBeenCalled();
+    expect(auditRows(prisma)).toHaveLength(0);
+  });
+
+  it('#13936 — refuse de rouvrir « Recevoir des Bring » au nom du membre (403), sans rien écrire', async () => {
+    const prisma = createMockPrisma();
+    const res = await call(prisma, 'BIGBOSS', 'PATCH', url('notification'), { bringEnabled: true });
     expect(res.statusCode).toBe(403);
     expect(res.json()).toEqual(expect.objectContaining({ success: false, error: 'ADMIN_READ_ONLY_PREFERENCE' }));
     expect(prisma.userPreferences.upsert).not.toHaveBeenCalled();

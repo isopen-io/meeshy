@@ -76,7 +76,6 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
 import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
-import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
 import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
@@ -381,7 +380,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     getItemKey: (index) => (placed[index] === undefined ? index : threadRowKeyOf(placed[index].message)),
     anchorTo,
   });
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;
 
   /**
    * LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au défilement soutenu
@@ -524,7 +522,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * la PIÈCE quand les verdicts du menu l'admettent (#11372) ; valeur STABLE,
    * lue par chaque grille de médias (`Attachments`).
    */
-  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation, actionScope: messageMenu.scope });
+  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation, actionScope: messageMenu.scope, imaging: { messages, menuContextOf: messageMenu.menuContextOf, setExportFor: messageMenu.setExportFor } });
 
   /**
    * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695, #7429) — miroir
@@ -938,7 +936,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             (#6537, « supprimer ces voiles, non pas simplement les rendre
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation} messages={threadData.messages} viewerId={viewer.id ?? ''} title={title}>
-        <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+        <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur} fold={{ conversationId }}>
           <MessageEditDock edit={compose.edit}>
           <Composer
             preferred={readerLanguages}

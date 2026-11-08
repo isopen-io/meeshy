@@ -1,12 +1,14 @@
 package me.meeshy.ui.component.viewer
 
+import me.meeshy.sdk.model.fullscreen.ImageViewerDismissLaw
+
 /**
  * Pure zoom/pan math for the fullscreen image viewer — keeps the gesture
  * handling in [MeeshyImageViewer] declarative and testable.
  */
 public object ImageViewerTransform {
     public const val MIN_SCALE: Float = 1f
-    public const val MAX_SCALE: Float = 5f
+    public const val MAX_SCALE: Float = 4f
     public const val DOUBLE_TAP_SCALE: Float = 2.5f
 
     public fun clampScale(scale: Float): Float = scale.coerceIn(MIN_SCALE, MAX_SCALE)
@@ -24,7 +26,7 @@ public object ImageViewerTransform {
      * Le glissement vertical (fermer) n'existe qu'au repos : un média agrandi se DÉPLACE
      * sous le doigt (iOS `stageDragGesture`, inactif quand `isTransformed`).
      */
-    public fun dismissDragEnabled(scale: Float): Boolean = scale <= MIN_SCALE
+    public fun dismissDragEnabled(scale: Float): Boolean = ImageViewerDismissLaw.isDragEnabled(scale)
 
     /** Double-tap zooms to the preset from rest, and back to rest from anywhere else. */
     public fun doubleTapTarget(currentScale: Float): Float =

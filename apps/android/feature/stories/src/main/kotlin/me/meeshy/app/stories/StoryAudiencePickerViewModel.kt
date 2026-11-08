@@ -125,7 +125,7 @@ class StoryAudiencePickerViewModel @Inject constructor(
         username.trim().takeIf { it.isNotEmpty() }?.let { AudienceCandidate(id, it, displayName, avatar) }
 
     private companion object {
-        const val SEARCH_DEBOUNCE_MS = 250L
+        const val SEARCH_DEBOUNCE_MS = 350L
         const val SEARCH_LIMIT = 20
     }
 }

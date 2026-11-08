@@ -11,6 +11,7 @@ const ptMediaViewer = {
   'media.viewer.compose': 'Criar com esta mídia',
   'media.viewer.imager': 'Criar imagem',
   'media.viewer.saved': 'Salvo',
+  'media.viewer.already_saved': 'Já salvo',
   'media.viewer.save_failed': 'Não foi possível salvar',
   'media.viewer.offline': 'Sem conexão — tente de novo quando estiver conectado',
   'media.viewer.retry': 'Toque de novo para salvar',

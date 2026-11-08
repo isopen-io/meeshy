@@ -73,17 +73,13 @@ struct ComposerCaptureMount<Content: View>: View {
                             } else if ComposerCapturePlacement.showsFloor(size: taille, screenFlash: screenFlash) {
                                 Color(white: session.floorWhite)
                             }
-                            image(rect: aspect.map { proportions in
-                                // Cette couche ignore les marges système, la règle
-                                // les lui rend pour tomber sous les crochets.
-                                ComposerEditScene.rect(
-                                    aspect: proportions,
-                                    in: ComposerEditScene.area(container: proxy.size, top: marges.safeAreaInsets.top,
-                                                               bottom: marges.safeAreaInsets.bottom,
-                                                               panels: session.editPanels,
-                                                               framed: session.editFramesScene,
-                                                               playback: session.offersEditPlayback))
-                            } ?? rect(card: proxy[ancre], in: proxy.size, taille), taille)
+                            let cadre = aspect.map { editRect($0, in: proxy.size, insets: marges.safeAreaInsets) }
+                            // **Hors du cadre, la prise voilée** (#15355), sous l'image qui seule part.
+                            if let cadre, ComposerCropOverflowLayout.shows(framesScene: session.editFramesScene,
+                                                                           look: session.look) {
+                                ComposerCropOverflow(session: session, frame: cadre, screen: proxy.size)
+                            }
+                            image(rect: cadre ?? rect(card: proxy[ancre], in: proxy.size, taille), taille)
                             // En plein écran, l'écran ne blanchit qu'à la prise.
                             if aspect == nil,
                                ComposerCapturePlacement.showsBurst(bursting: session.screenFlashBurst, size: taille) {
@@ -108,6 +104,16 @@ struct ComposerCaptureMount<Content: View>: View {
             }
     }
 
+    /// Le cadre de la retouche. Cette couche ignore les marges système : la
+    /// règle les lui rend pour tomber sous les crochets.
+    private func editRect(_ proportions: CGFloat, in etendue: CGSize, insets: EdgeInsets) -> CGRect {
+        ComposerEditScene.rect(
+            aspect: proportions,
+            in: ComposerEditScene.area(container: etendue, top: insets.top, bottom: insets.bottom,
+                                       panels: session.editPanels, framed: session.editFramesScene,
+                                       playback: session.offersEditPlayback))
+    }
+
     private func rect(card ancre: CGRect, in etendue: CGSize, _ taille: ComposerSceneCameraSize) -> CGRect {
         let plein = CGRect(origin: .zero, size: etendue)
         return ComposerSceneCameraFrame.rect(
@@ -121,6 +127,10 @@ struct ComposerCaptureMount<Content: View>: View {
         ComposerCaptureStage(session: session, layer: .image, size: taille,
                              onDisarm: onDisarm, onDeliver: onDeliver)
             .frame(width: rect.width, height: rect.height)
+            // Le cadre blanchit quand l'obturateur part (#16482) : sur le CADRE,
+            // car l'image qui se charge n'a pas encore de taille, et sous les
+            // commandes, qui restent lisibles.
+            .overlay { ComposerShutterFlash(tick: session.camera.shutterCount) }
             .position(x: rect.midX, y: rect.midY)
     }
 

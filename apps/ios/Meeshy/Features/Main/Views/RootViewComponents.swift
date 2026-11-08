@@ -40,6 +40,33 @@ struct ThemedFeedOverlay: View {
         guard router.consumePendingFeedComposer() else { return }
         showFullComposer = true
     }
+
+    /// Le fil retenu est-il à l'écran (#16676) ? Caché, il n'élit aucun réel.
+    @Environment(\.feedIsShown) private var feedIsShown
+
+    /// Le fil se cache SANS se démonter (#16676) : rien ne joue derrière
+    /// l'écran qui le recouvre, et la lecture comptée s'arrête là — ce que
+    /// faisait sa disparition quand le cacher le détruisait.
+    private func feedDidHide() {
+        reelAutoplay.clear()
+        Task { await impressions.flushNow() }
+        ListingScrollTracker.feed.finish()
+    }
+
+    /// Le fil quitte vraiment l'écran (un plein écran par-dessus, le démontage) :
+    /// la salle du fil est quittée, et la lecture comptée s'arrête.
+    private func feedDidDisappear() {
+        viewModel.unsubscribeFromSocketEvents()
+        Task { await impressions.flushNow() }
+        ListingScrollTracker.feed.finish()
+    }
+
+    /// Lu plus bas que sa tête, ou caché, le fil TIENT sa tête : ce qui arrive
+    /// en haut attend que le lecteur y remonte (`FeedHeadHold`).
+    private func holdFeedHead(_ holds: Bool) {
+        guard let shown = viewModel.headHold.settingHolding(holds, over: viewModel.posts) else { return }
+        viewModel.posts = shown
+    }
     @State private var quoteOriginalPost: FeedPost?
     /// Offset de défilement relayé au header SANS invalider ce body :
     /// `@State` retient la référence sans s'y abonner, et seul le
@@ -67,7 +94,6 @@ struct ThemedFeedOverlay: View {
     @State private var editingPost: FeedPost?
 
     private struct LikeRESTPayload: Decodable { let liked: Bool? }
-    private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
 
     @MainActor
     private func togglePostHeart(post: FeedPost) {
@@ -167,73 +193,22 @@ struct ThemedFeedOverlay: View {
             postBookmarkDelta[postId, default: 0] += 1
         }
         postBookmarkInFlightIds.insert(postId)
+        // L'écrivain unique (#15994) : envoi, cache des favoris, toasts. La
+        // carte se lit DANS le `Task`, sur le MainActor : un `post:updated`
+        // peut l'avoir remplacée entre le toucher et l'écriture du cache.
         Task {
-            defer { Task { @MainActor in postBookmarkInFlightIds.remove(postId) } }
-            // Capture inside the Task to avoid a race where a `post:updated`
-            // socket mutates viewModel.posts between tap and cache save.
-            let postSnapshot = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
-            // Pre-populate the bookmarks cache so the Favoris tab reflects
-            // the add instantly. Mirror the pre-fix FeedViewModel logic.
-            let snapshotCache: [FeedPost]? = await {
-                if wasBookmarked { return nil }
-                guard let p = postSnapshot else { return [] }
-                let key = "bookmarks"
-                let r = await CacheCoordinator.shared.feed.load(for: key)
-                let current: [FeedPost]
-                switch r {
-                case .fresh(let v, _), .stale(let v, _): current = v
-                case .expired, .empty: current = []
-                }
-                if !current.contains(where: { $0.id == postId }) {
-                    var updated = current
-                    updated.insert(p, at: 0)
-                    await bestEffort("rootViewComponents.feed.insertBookmark", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
-                }
-                return current
-            }()
-
-            let ok: Bool = await {
-                do {
-                    let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        PostsEndpoint.byPostIdBookmark(postId: postId),
-                        method: wasBookmarked ? "DELETE" : "POST"
-                    )
-                    return true
-                } catch { return false }
-            }()
-            if !ok {
+            defer { postBookmarkInFlightIds.remove(postId) }
+            let shown = viewModel.posts.first(where: { $0.id == postId })
+            await PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown, onRejected: {
                 if wasBookmarked {
                     postBookmarkedIds.insert(postId)
                     postBookmarkDelta[postId, default: 0] += 1
                 } else {
                     postBookmarkedIds.remove(postId)
                     postBookmarkDelta[postId, default: 0] -= 1
-                    if let snap = snapshotCache {
-                        await bestEffort("rootViewComponents.feed.restoreBookmarks", category: .cache) { try await CacheCoordinator.shared.feed.save(snap, for: "bookmarks") }
-                    }
                 }
-                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
-            } else {
-                if wasBookmarked {
-                    await pruneBookmarkFromCache(postId: postId)
-                }
-                FeedbackToastManager.shared.showSuccess(wasBookmarked
-                    ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
-                    : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
-            }
+            })
         }
-    }
-
-    private func pruneBookmarkFromCache(postId: String) async {
-        let key = "bookmarks"
-        let result = await CacheCoordinator.shared.feed.load(for: key)
-        let current: [FeedPost]
-        switch result {
-        case .fresh(let v, _), .stale(let v, _): current = v
-        case .expired, .empty: return
-        }
-        let updated = current.filter { $0.id != postId }
-        await bestEffort("rootViewComponents.feed.pruneBookmark", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
     }
 
     @MainActor
@@ -435,6 +410,9 @@ struct ThemedFeedOverlay: View {
                 }
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
+            onQuote: { postId in
+                quoteOriginalPost = viewModel.posts.first(where: { $0.id == postId })
+            },
             onBookmark: { postId in togglePostBookmark(postId: postId) },
             onShare: { postId in sharePostWithLink(postId: postId) },
             onTapAuthor: { authorId in
@@ -455,7 +433,8 @@ struct ThemedFeedOverlay: View {
             } : nil,
             onPin: isOwnPost ? { postId in
                 Task { await viewModel.pinPost(postId) }
-            } : nil
+            } : nil,
+            onToggleComments: CommentSettingsToggle.feedAction(for: post, in: viewModel)
         )
         // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
         // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
@@ -465,7 +444,7 @@ struct ThemedFeedOverlay: View {
 
     // MARK: - Standard post card
 
-    private func standardFeedPostCardView(for post: FeedPost) -> FeedPostCard {
+    private func standardFeedPostCardView(for post: FeedPost) -> some View {
         FeedPostCard(
             post: post,
             onSeeNearby: { place in
@@ -539,6 +518,8 @@ struct ThemedFeedOverlay: View {
             // joue. Une élection tenue mais jamais servie ne se voit nulle part.
             reelAutoplay: reelAutoplay
         )
+        .equatable()
+        .environment(\.commentSettingsAction, CommentSettingsToggle.feedAction(for: post, in: viewModel))
     }
 
     var body: some View {
@@ -620,7 +601,6 @@ struct ThemedFeedOverlay: View {
                                 reelFeedCardView(for: post)
                             } else {
                                 standardFeedPostCardView(for: post)
-                                    .equatable()
                             }
                         }
                         .onAppear {
@@ -643,7 +623,7 @@ struct ThemedFeedOverlay: View {
                 }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
                     reelAutoplay.update(
-                        frames: frames,
+                        frames: feedIsShown ? frames : [],
                         viewportMinY: viewportFrame.minY,
                         viewportMaxY: viewportFrame.maxY
                     )
@@ -755,32 +735,15 @@ struct ThemedFeedOverlay: View {
                 postLikedIds.remove(event.postId)
             }
         }
-        .onDisappear {
-            viewModel.unsubscribeFromSocketEvents()
-            Task { await impressions.flushNow() }
-            ListingScrollTracker.feed.finish()
-        }
+        .modifier(FeedRetentionHooks(relay: scrollRelay, onHidden: feedDidHide, onGone: feedDidDisappear, onHoldingHead: holdFeedHead))
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external
             // touchpoint funnels through `meeshy.me/l/<token>`.
             ShareSheet(activityItems: link.activityItems)
         }
         // #6700 — une story ouvre le meuble, un post l'ancien éditeur.
-        .postEditCover(item: $editingPost) { post in
-            EditPostSheet(
-                originalContent: post.content,
-                originalLanguage: post.originalLanguage,
-                originalType: post.type,
-                media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
-                originalLocation: post.location,
-                originalVisibility: post.visibility,
-                originalVisibilityUserIds: post.visibilityUserIds ?? [],
-                isRepost: post.repost != nil,
-                onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                },
-                onDismiss: { editingPost = nil }
-            )
+        .postEditCover(item: $editingPost) { post, draft in
+            await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
         }
         // Story viewer : présentation unifiée via StoryViewerCoordinator au root
         // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
@@ -803,8 +766,8 @@ struct ThemedFeedOverlay: View {
                 .presentationDragIndicator(.visible)
         }
         // T3.1 — le PLEIN composer du fil, la porte la plus utilisée de l'app,
-        // passe par le meuble. La citation juste en-dessous reste sur
-        // `FeedComposerSheet` (T3.2, distincte). `DocumentComposerDoor` se
+        // passe par le meuble, comme la citation juste en-dessous
+        // (`QuoteComposerDoor`). `DocumentComposerDoor` se
         // referme SEULE via `@Environment(\.dismiss)` : pas de binding
         // `onDismiss` à porter ici, le `dismiss()` referme ce `fullScreenCover`
         // et ramène `showFullComposer` à `false` par le binding.
@@ -822,47 +785,17 @@ struct ThemedFeedOverlay: View {
                 statusViewModel: statusViewModel
             )
         }
-        // **La CITATION revient à `FeedComposerSheet` — la migration T3.2 était
-        // PRÉMATURÉE** (2026-09-06).
-        //
-        // La directive porteur du même jour — « dans tous les cas iPad et iOS
-        // doivent utiliser le nouveau composer à présent » — reste la cible, et
-        // ce qu'elle répare est réel : l'ancien composer publie avec
-        // `storyEffects: nil`, donc sans scène, sans légende par média et hors
-        // mosaïque. Mais la condition technique qu'elle suppose n'est pas
-        // remplie, et `DocumentComposerDoor` l'écrit noir sur blanc : elle NE
-        // sert PAS la citation tant que la **levée 7.5** — un écrivain durable
-        // du repost — n'existe pas.
-        //
-        // Mesuré, la chaîne entière : une citation pose `repostOfId`, donc
-        // `ComposerDocumentSendRouting.path(isQuote: true)` rend
-        // `.quotedRepost`, dont `isDurable` vaut `false`, donc
-        // `ComposerDocumentSendPlan` rend `.refuse(.nonDurablePath)`, donc
-        // `publishDocument` appelle `refuse()`. **Citer un post était devenu
-        // impossible** : l'auteur écrivait sa citation et recevait « publication
-        // impossible » à chaque envoi.
-        //
-        // > Une directive de MIGRATION ne demande pas de casser la
-        // > fonctionnalité qu'elle migre. Le chemin cible est le bon ; il
-        // > s'ouvrira quand le repost aura sa file durable (`ComposerIntent`
-        // > l'énonce toujours : « 7.5 n'a pas d'écrivain durable du repost »).
-        // > D'ici là, la citation part par le chemin qui la publie.
-        //
-        // Deux gardes le disaient déjà et redeviennent vertes d'elles-mêmes :
-        // celles qui exigent une citation sur `FeedComposerSheet` dans chaque
-        // racine. La troisième, révisée le matin même, verrouillait l'état
-        // CIBLE (`ancienComposer == 0`) — donc l'état CASSÉ ; elle mesure
-        // désormais ce que le produit fait, et repassera à zéro quand 7.5 sera
-        // livrée.
+        // La CITATION ouvre le même meuble, la source affichée sur sa scène ;
+        // elle part par l'écrivain durable du repost, jamais par la file du
+        // document qui la refuse.
         .fullScreenCover(item: $quoteOriginalPost) { quoted in
-            FeedComposerSheet(
-                viewModel: viewModel,
-                initialText: "",
-                pendingAttachmentType: nil,
-                quotePost: quoted,
-                onDismiss: {
-                    quoteOriginalPost = nil
-                }
+            QuoteComposerDoor(
+                quoted: quoted,
+                storyViewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationListViewModel,
+                statusViewModel: statusViewModel,
+                onFinish: { quoteOriginalPost = nil }
             )
         }
     }
@@ -871,8 +804,9 @@ struct ThemedFeedOverlay: View {
 // MARK: - Composer placeholder
 
 extension ThemedFeedOverlay {
-    /// La porte du composeur — et, juste dessous, les publications encore sur
-    /// l'appareil (#13415). Sortie de `body` pour qu'il reste lisible.
+    /// La porte du composeur. Sortie de `body` pour qu'il reste lisible. Une
+    /// publication en attente ne se signale que par l'horloge de sa carte
+    /// (décision du porteur, #14879).
     var composerPlaceholder: some View {
         Group {
             // Composer placeholder — tap to open full composer
@@ -912,9 +846,6 @@ extension ThemedFeedOverlay {
             .buttonStyle(.plain)
             .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityIdentifier("feed.composer.placeholder")
-
-            // #13415 — les publications encore sur l'appareil, et leur reprise.
-            UnsentPublicationsEntry(openComposer: { showFullComposer = true })
         }
     }
 }

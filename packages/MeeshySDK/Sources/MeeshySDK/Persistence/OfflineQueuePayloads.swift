@@ -190,6 +190,17 @@ public enum OfflineQueueError: Error, Sendable {
     /// the outbox table — either it succeeded, was manually cleared, or the
     /// caller passed a stale id.
     case itemNotFound
+    /// #16749 — la ligne existe, et un dispatcher la PORTE en ce moment.
+    ///
+    /// Distinct d'`itemNotFound`, parce que la suite est différente : il n'y a
+    /// rien à réparer et rien à redemander, l'envoi est déjà en vol. Une surface
+    /// qui l'attrape ne doit donc PAS proposer « réessayer » — elle doit dire
+    /// que ça part. Le confondre avec `itemNotFound` aurait fait afficher « ce
+    /// contenu n'existe plus » sur un média en cours de téléversement.
+    ///
+    /// Le verdict est rendu par SQLite au moment de l'écriture, jamais par un
+    /// instantané lu avant : c'est toute la correction du lot.
+    case itemInFlight
 }
 
 // MARK: - Outcome

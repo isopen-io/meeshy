@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.RealtimeBinding
 import timber.log.Timber
@@ -18,14 +20,23 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Applique `user:updated` au cache des rosters même quand aucun écran n'est ouvert : le renommage
+ * Applique `user:updated` au cache des rosters, aux messages (expéditeur, citations, transferts) et aux conversations même quand aucun écran n'est ouvert : le renommage
  * ou la nouvelle photo d'un pair est déjà là à l'ouverture suivante, sans relecture.
  */
 @Singleton
-class UserRepaintBinding @Inject constructor(
+class UserRepaintBinding internal constructor(
     private val socket: MessageSocketManager,
     private val rosters: ParticipantCacheRepository,
+    private val senders: SenderRepaint,
 ) : RealtimeBinding {
+    @Inject
+    constructor(
+        socket: MessageSocketManager,
+        rosters: ParticipantCacheRepository,
+        database: MeeshyDatabase,
+        fence: AccountFence,
+    ) : this(socket, rosters, SenderRepaint(database, CachedMessageUpdater(database, database.messageDao(), fence)))
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
 
@@ -35,6 +46,7 @@ class UserRepaintBinding @Inject constructor(
             socket.userUpdated.collect { event ->
                 try {
                     rosters.repaint(event)
+                    senders.repaint(event)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {

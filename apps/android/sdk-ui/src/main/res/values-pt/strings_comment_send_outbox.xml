@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_unsent_pending">Aguardando</string>
+    <string name="comment_unsent_cancel_send">Cancelar o envio</string>
+    <string name="comment_unsent_error">Não foi possível enviar o comentário</string>
+    <string name="comment_unsent_retry">Tentar novamente</string>
+    <string name="comment_unsent_resume">Retomar</string>
+    <string name="comment_unsent_delete">Excluir</string>
+</resources>

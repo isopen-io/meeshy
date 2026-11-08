@@ -1,42 +1,23 @@
 package me.meeshy.app.conversations
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AlternateEmail
-import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.ManageAccounts
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.MarkChatRead
-import androidx.compose.material.icons.filled.MarkChatUnread
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,7 +26,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,25 +33,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.conversation.LocalMessage
-import me.meeshy.sdk.model.CategoryOption
-import me.meeshy.sdk.model.ConversationCategoryPicker
+import me.meeshy.sdk.model.reading.mode.ReadingModeChoice
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.conversationoptions.CategoryReassignment
+import me.meeshy.sdk.model.conversationoptions.ConversationMoveMenu
 import me.meeshy.sdk.model.conversationoptions.ConversationTagsEditor
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** Fixed favorite-reaction choices — parity iOS `ConversationListView+Overlays`'s "Favori" submenu. */
-private val favoriteReactionChoices = listOf("⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡")
+/**
+ * Le menu contextuel d'une rangée : l'aperçu d'abord, puis [ConversationMenuContent], dessiné depuis
+ * le [ConversationMenuModel]. Les gestes qui ouvrent un dialogue (renommer, quitter, supprimer,
+ * bloquer, signaler, verrouiller) passent par [ConversationRowActions] et le contrôleur de dialogues
+ * de la liste ; ne restent ici que les confirmations propres au menu (supprimer pour tous, rendre
+ * obsolète) et l'éditeur d'étiquettes.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ConversationContextMenu(
@@ -80,58 +64,44 @@ internal fun ConversationContextMenu(
     title: String,
     isPinned: Boolean,
     isMuted: Boolean,
-    mentionsOnly: Boolean,
-    isArchived: Boolean,
-    hasUnread: Boolean,
-    hasDraft: Boolean,
-    categories: List<CategoryOption>,
-    currentCategoryId: String?,
+    model: ConversationMenuModel,
+    panelState: ConversationMenuPanelState,
+    accent: Color,
     previewMessages: List<LocalMessage>?,
+    previewUnavailable: Boolean,
     previewShowSender: Boolean,
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
     previewLabels: LastMessagePreviewLabels,
-    isCreator: Boolean,
-    onTogglePin: () -> Unit,
-    onToggleMute: () -> Unit,
-    onToggleMentionsOnly: () -> Unit,
-    onToggleArchive: () -> Unit,
-    onLeaveConversation: () -> Unit,
-    onDeleteForMe: () -> Unit,
-    onDeleteForAll: () -> Unit,
-    onRename: (String) -> Unit,
-    currentCustomName: String?,
-    onSetReaction: (String?) -> Unit,
-    currentReaction: String?,
-    onSetTags: (List<String>) -> Unit,
-    currentTags: List<String>,
-    onMarkRead: () -> Unit,
-    onMarkUnread: () -> Unit,
-    onDiscardDraft: () -> Unit,
-    onAssignCategory: (String) -> Unit,
-    onCreateCategory: (String) -> Unit,
     isLocked: Boolean,
-    onRemoveCategory: () -> Unit = {},
-    onLockToggle: () -> Unit,
-    onViewInfo: (() -> Unit)? = null,
-    onViewProfile: (() -> Unit)? = null,
-    onCreateShareLink: (() -> Unit)? = null,
-    onManageMembers: (() -> Unit)? = null,
+    currentTags: List<String>,
+    actions: ConversationRowActions,
+    onManageMembers: (() -> Unit)?,
+    onSelectReadingMode: (ReadingModeChoice) -> Unit = {},
 ) {
-    var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
-    var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
+    var showObsoleteConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForAllConfirm by remember(expanded) { mutableStateOf(false) }
-    var showRenameDialog by remember(expanded) { mutableStateOf(false) }
-    var renameText by remember(expanded) { mutableStateOf(currentCustomName.orEmpty()) }
     var showTagsDialog by remember(expanded) { mutableStateOf(false) }
     var editedTags by remember(expanded) { mutableStateOf(currentTags) }
     var newTagText by remember(expanded) { mutableStateOf("") }
+    val onEntry: (ConversationMenuEntry) -> Unit = { entry ->
+        when (entry) {
+            ConversationMenuEntry.TAGS -> showTagsDialog = true
+            ConversationMenuEntry.DELETE_FOR_ALL -> showDeleteForAllConfirm = true
+            ConversationMenuEntry.MAKE_OBSOLETE -> showObsoleteConfirm = true
+            else -> {
+                actions.perform(entry, onManageMembers)
+                onDismiss()
+            }
+        }
+    }
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         ConversationPreviewCard(
             title = title,
             isPinned = isPinned,
             isMuted = isMuted,
             messages = previewMessages,
+            isUnavailable = previewUnavailable,
             isSealed = isLocked,
             showSender = previewShowSender,
             currentUserId = currentUserId,
@@ -139,324 +109,43 @@ internal fun ConversationContextMenu(
             labels = previewLabels,
         )
         HorizontalDivider()
-        onViewInfo?.let { open ->
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.row_menu_info)) },
-                onClick = {
-                    onDismiss()
-                    open()
-                },
-            )
-        }
-        onViewProfile?.let { open ->
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.row_menu_view_profile)) },
-                onClick = {
-                    onDismiss()
-                    open()
-                },
-            )
-        }
-        onCreateShareLink?.let { open ->
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.conversations_create_share_link)) },
-                onClick = {
-                    onDismiss()
-                    open()
-                },
-            )
-        }
-        DropdownMenuItem(
-            text = {
-                Text(
-                    stringResource(
-                        if (isPinned) R.string.conversations_action_unpin
-                        else R.string.conversations_action_pin,
-                    ),
-                )
-            },
-            leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-            onClick = { onTogglePin(); onDismiss() },
-        )
-        DropdownMenuItem(
-            text = {
-                Text(
-                    stringResource(
-                        if (isMuted) R.string.conversations_action_unmute
-                        else R.string.conversations_action_mute,
-                    ),
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    if (isMuted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
-                    contentDescription = null,
-                )
-            },
-            onClick = { onToggleMute(); onDismiss() },
-        )
-        // Mentions-only is meaningless while fully muted (parity iOS
-        // `ConversationPreferencesTab`'s `isEnabled: !isMuted` gate on the same
-        // toggle) — hidden rather than disabled: this menu has no established
-        // pattern for a disabled row, whereas conditional visibility is already
-        // used below for hasUnread/hasDraft.
-        if (!isMuted) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            if (mentionsOnly) R.string.conversations_action_all_notifications
-                            else R.string.conversations_action_mentions_only,
-                        ),
-                    )
-                },
-                leadingIcon = { Icon(Icons.Filled.AlternateEmail, contentDescription = null) },
-                onClick = { onToggleMentionsOnly(); onDismiss() },
-            )
-        }
-        if (hasUnread) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.conversations_action_mark_read)) },
-                leadingIcon = { Icon(Icons.Filled.MarkChatRead, contentDescription = null) },
-                onClick = { onMarkRead(); onDismiss() },
-            )
-        } else {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.conversations_action_mark_unread)) },
-                leadingIcon = { Icon(Icons.Filled.MarkChatUnread, contentDescription = null) },
-                onClick = { onMarkUnread(); onDismiss() },
-            )
-        }
-        if (hasDraft) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.conversations_action_discard_draft)) },
-                leadingIcon = { Icon(Icons.Filled.DeleteSweep, contentDescription = null) },
-                onClick = { onDiscardDraft(); onDismiss() },
-            )
-        }
-        DropdownMenuItem(
-            text = {
-                Text(
-                    stringResource(
-                        if (isArchived) R.string.conversations_action_unarchive
-                        else R.string.conversations_action_archive,
-                    ),
-                )
-            },
-            leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
-            onClick = { onToggleArchive(); onDismiss() },
-        )
-        // Lock / unlock (parity iOS `ConversationLockSheet`): opens the PIN sheet
-        // in the ViewModel-resolved mode (unlock a locked row, prompt for a code
-        // on an unlocked one, or run first-time master-PIN setup then chain into
-        // the code). The row's lock glyph re-derives from the store's live flow.
-        DropdownMenuItem(
-            text = {
-                Text(
-                    stringResource(
-                        if (isLocked) R.string.conversations_action_unlock
-                        else R.string.conversations_action_lock,
-                    ),
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    if (isLocked) Icons.Filled.LockOpen else Icons.Filled.Lock,
-                    contentDescription = null,
-                )
-            },
-            onClick = { onLockToggle(); onDismiss() },
-        )
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.conversations_action_rename)) },
-            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-            onClick = { showRenameDialog = true },
-        )
-        // « Gérer les membres » (parity iOS `ConversationMenuCatalog`, #12631): right after
-        // Rename, before Favorite — present only when the law grants it (#12865).
-        onManageMembers?.let { open ->
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.row_menu_manage_members)) },
-                leadingIcon = { Icon(Icons.Filled.ManageAccounts, contentDescription = null) },
-                onClick = {
-                    onDismiss()
-                    open()
-                },
-            )
-        }
-        // Favorite reaction (parity iOS `ConversationListView+Overlays`'s "Favori"
-        // menu): a fixed 8-emoji set — no full picker, matching iOS exactly — plus
-        // a conditional "Remove favorite" row shown only once one is set. Drives
-        // the ConversationFilter.FAVORITES tab, which was previously unreachable
-        // (nothing wrote ApiConversationPreferences.reaction).
-        HorizontalDivider()
-        Text(
-            text = stringResource(R.string.conversations_action_favorite),
-            style = MaterialTheme.typography.labelSmall,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(
-                horizontal = MeeshySpacing.md,
-                vertical = MeeshySpacing.xs,
-            ),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            favoriteReactionChoices.forEach { emoji ->
-                val setLabel = stringResource(R.string.conversations_favorite_set_content_description, emoji)
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable { onSetReaction(emoji); onDismiss() }
-                        .semantics { contentDescription = setLabel },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(text = emoji, fontSize = 18.sp)
+        ConversationMenuContent(
+            model = model,
+            panelState = panelState,
+            accent = accent,
+            onEntry = onEntry,
+            onSetReaction = { emoji -> actions.onSetReaction(emoji); onDismiss() },
+            onMove = { target ->
+                when (val outcome = ConversationMoveMenu.reassignment(panelState.currentCategoryId, target)) {
+                    is CategoryReassignment.AssignTo -> actions.onAssignCategory(outcome.categoryId)
+                    CategoryReassignment.Clear -> actions.onRemoveCategory()
+                    CategoryReassignment.Unchanged -> Unit
                 }
-            }
-        }
-        if (!currentReaction.isNullOrBlank()) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.conversations_action_remove_favorite)) },
-                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
-                onClick = { onSetReaction(null); onDismiss() },
-            )
-        }
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.conversations_action_tags)) },
-            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) },
-            onClick = { showTagsDialog = true },
-        )
-        // Move-to-category / create-category (parity iOS `CategoryPickerField` +
-        // `ConversationOptionsViewModel.setCategory`/`createCategoryAndSelect`): a
-        // search field filters the pure ConversationCategoryPicker SSOT's displayed
-        // list (every category but the current one), and a "Create …" row appears
-        // whenever the trimmed query matches no known category name. Always shown
-        // (not gated on a non-empty catalogue) so a user with zero categories can
-        // create their first one from here. Idempotency on selecting an existing
-        // category is enforced by ConversationCategoryReassignment (core:model) in the shared writer.
-        var categoryQuery by remember(expanded) { mutableStateOf("") }
-        val picker = ConversationCategoryPicker.resolve(categories, currentCategoryId, categoryQuery)
-        HorizontalDivider()
-        Text(
-            text = stringResource(R.string.conversations_action_move_to_category),
-            style = MaterialTheme.typography.labelSmall,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(
-                horizontal = MeeshySpacing.md,
-                vertical = MeeshySpacing.xs,
-            ),
-        )
-        TextField(
-            value = categoryQuery,
-            onValueChange = { categoryQuery = it },
-            singleLine = true,
-            placeholder = { Text(stringResource(R.string.conversations_category_search_hint)) },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            colors = TextFieldDefaults.colors(
-                unfocusedContainerColor = MeeshyTheme.tokens.backgroundTertiary,
-                focusedContainerColor = MeeshyTheme.tokens.backgroundTertiary,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-        )
-        if (picker.canCreate) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            R.string.conversations_action_create_category,
-                            categoryQuery.trim(),
-                        ),
-                    )
-                },
-                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                onClick = { onCreateCategory(categoryQuery.trim()); onDismiss() },
-            )
-        }
-        picker.displayed.forEach { category ->
-            DropdownMenuItem(
-                text = { Text(category.name) },
-                leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                onClick = { onAssignCategory(category.id); onDismiss() },
-            )
-        }
-        categories.firstOrNull { it.id == currentCategoryId }?.let { current ->
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.conversations_action_remove_category, current.name)) },
-                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
-                onClick = { onRemoveCategory(); onDismiss() },
-            )
-        }
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.conversations_action_leave)) },
-            leadingIcon = {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                onDismiss()
             },
-            onClick = { showLeaveConfirm = true },
-        )
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.conversations_action_delete_for_me)) },
-            leadingIcon = { Icon(Icons.Filled.DeleteForever, contentDescription = null) },
-            onClick = { showDeleteForMeConfirm = true },
-        )
-        if (isCreator) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.conversations_action_delete_for_all)) },
-                leadingIcon = { Icon(Icons.Filled.DeleteForever, contentDescription = null) },
-                onClick = { showDeleteForAllConfirm = true },
-            )
-        }
-    }
-
-    if (showLeaveConfirm) {
-        AlertDialog(
-            onDismissRequest = { showLeaveConfirm = false },
-            title = { Text(stringResource(R.string.conversations_leave_confirm_title)) },
-            text = { Text(stringResource(R.string.conversations_leave_confirm_message, title)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showLeaveConfirm = false
-                        onLeaveConversation()
-                        onDismiss()
-                    },
-                ) {
-                    Text(stringResource(R.string.conversations_leave_confirm_button))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLeaveConfirm = false }) {
-                    Text(stringResource(R.string.conversations_leave_cancel_button))
-                }
-            },
+            onCreateCategory = { name -> actions.onCreateCategory(name); onDismiss() },
+            onSelectReadingMode = { choice -> onSelectReadingMode(choice); onDismiss() },
         )
     }
 
-    if (showDeleteForMeConfirm) {
+    if (showObsoleteConfirm) {
         AlertDialog(
-            onDismissRequest = { showDeleteForMeConfirm = false },
-            title = { Text(stringResource(R.string.conversations_delete_for_me_confirm_title)) },
-            text = { Text(stringResource(R.string.conversations_delete_for_me_confirm_message, title)) },
+            onDismissRequest = { showObsoleteConfirm = false },
+            title = { Text(stringResource(R.string.conversations_obsolete_confirm_title)) },
+            text = { Text(stringResource(R.string.conversations_obsolete_confirm_message, title)) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showDeleteForMeConfirm = false
-                        onDeleteForMe()
+                        showObsoleteConfirm = false
+                        actions.onMakeObsolete()
                         onDismiss()
                     },
                 ) {
-                    Text(stringResource(R.string.conversations_delete_for_me_confirm_button))
+                    Text(stringResource(R.string.conversations_obsolete_confirm_button), color = MeeshyPalette.Error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteForMeConfirm = false }) {
+                TextButton(onClick = { showObsoleteConfirm = false }) {
                     Text(stringResource(R.string.conversations_leave_cancel_button))
                 }
             },
@@ -472,7 +161,7 @@ internal fun ConversationContextMenu(
                 TextButton(
                     onClick = {
                         showDeleteForAllConfirm = false
-                        onDeleteForAll()
+                        actions.onDeleteForAll()
                         onDismiss()
                     },
                 ) {
@@ -481,38 +170,6 @@ internal fun ConversationContextMenu(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteForAllConfirm = false }) {
-                    Text(stringResource(R.string.conversations_leave_cancel_button))
-                }
-            },
-        )
-    }
-
-    if (showRenameDialog) {
-        AlertDialog(
-            onDismissRequest = { showRenameDialog = false },
-            title = { Text(stringResource(R.string.conversations_rename_dialog_title)) },
-            text = {
-                TextField(
-                    value = renameText,
-                    onValueChange = { renameText = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.conversations_rename_field_label)) },
-                    placeholder = { Text(title) },
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showRenameDialog = false
-                        onRename(renameText)
-                        onDismiss()
-                    },
-                ) {
-                    Text(stringResource(R.string.conversations_rename_confirm_button))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRenameDialog = false }) {
                     Text(stringResource(R.string.conversations_leave_cancel_button))
                 }
             },
@@ -574,7 +231,7 @@ internal fun ConversationContextMenu(
                 TextButton(
                     onClick = {
                         showTagsDialog = false
-                        onSetTags(editedTags)
+                        actions.onSetTags(editedTags)
                         onDismiss()
                     },
                 ) {
@@ -606,6 +263,7 @@ private fun ConversationPreviewCard(
     isPinned: Boolean,
     isMuted: Boolean,
     messages: List<LocalMessage>?,
+    isUnavailable: Boolean,
     isSealed: Boolean,
     showSender: Boolean,
     currentUserId: String?,
@@ -665,6 +323,11 @@ private fun ConversationPreviewCard(
                     color = MeeshyTheme.tokens.textMuted,
                 )
             }
+            messages == null && isUnavailable -> Text(
+                text = stringResource(R.string.preview_messages_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
             messages == null -> Text(
                 text = stringResource(R.string.conversations_preview_loading),
                 style = MaterialTheme.typography.bodySmall,

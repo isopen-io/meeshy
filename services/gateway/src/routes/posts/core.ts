@@ -6,7 +6,6 @@ import { PostService } from '../../services/PostService';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { decideContentRemoval, MODERATION_REASON_MESSAGE, notifyContentRemoved, removedPostContentType } from '../../services/moderation/contentRemoval';
 import { withViewerPoints } from '../../services/engagement/viewerPostPoints';
-import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import {
   runPublicationEffects,
@@ -838,10 +837,10 @@ export function registerCoreRoutes(
           WIRE_BROADCAST
         ) as unknown as Post;
         if (updatedPostType === 'STORY') {
-          // Même prédicat que le reset d'engagement du service — les deux ne
-          // peuvent pas diverger sur un même payload.
+          // #16386 — une édition garde l'engagement : `false` dit aux clients,
+          // anciens compris, de garder la story « vue » et ses compteurs.
           socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
-            engagementReset: storyContentEditRequested(parsed.data),
+            engagementReset: false,
           }).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast story updated failed', err));
         } else if (updatedPostType === 'STATUS') {
           socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast status updated failed', err));

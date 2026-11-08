@@ -38,6 +38,7 @@ import { rateLimitRefusalResponse } from './utils/rate-limit-refusal';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
+import { setSharedTranslationCache } from './services/message-translation/translationCacheRegistry';
 import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
@@ -74,6 +75,7 @@ import { backfillSearchTokens } from './jobs/backfill-search-tokens';
 import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
+import { setSharedDeliveryQueue } from './services/delivery-queue-registry';
 import { gatewayDeliveryQueueSealer } from './services/deliveryQueueSealing';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
@@ -248,6 +250,7 @@ class MeeshyServer {
 
     // Initialiser le service de traduction avec le cache partagé
     this.translationService = new MessageTranslationService(this.prisma, this.jobMappingCache);
+    setSharedTranslationCache(this.translationService); // #16557 — un retrait purge la copie en mémoire de ses traductions
 
     // Initialiser le service de messaging
     this.messagingService = new MessagingService(this.prisma, this.translationService);
@@ -266,6 +269,14 @@ class MeeshyServer {
 
     // Initialiser la delivery queue Redis
     this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma));
+    // #16706 — l'instance VIVANTE est celle-ci : c'est elle que
+    // `manager.setDeliveryQueue` fait descendre jusqu'aux quatre handlers qui
+    // enfilent, donc la seule dont la tranche MÉMOIRE porte des entrées de
+    // message. Les sites qui détruisent un contenu la retrouvent par le registre
+    // (`applyMessageRemovalEffects`, la purge de vue unique) : aucun d'eux ne
+    // reçoit la file en paramètre, et une purge qu'un appelant peut omettre
+    // n'est pas une purge.
+    setSharedDeliveryQueue(this.deliveryQueue);
 
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();

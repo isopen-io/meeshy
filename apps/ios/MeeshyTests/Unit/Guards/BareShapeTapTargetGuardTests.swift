@@ -204,9 +204,8 @@ final class TapZoneButtonGuardTests: XCTestCase {
 
     private static let convertedSites: [(file: String, action: String)] = [
         ("Features/Main/Views/GlobalSearchView.swift", "handleMessageTap(result)"),
-        ("Features/Main/Views/GlobalSearchView.swift", "handleConversationTap(result)"),
+        ("Features/Main/Views/GlobalSearchView.swift", "handlePostTap(result)"),
         ("Features/Main/Views/GlobalSearchView.swift", "handleUserTap(result)"),
-        ("Features/Main/Views/FeedComposerAttachmentsRow.swift", "onOpenThumbnail(attachment)"),
         ("Features/Main/Components/MediaHub/ConversationMediaHubView.swift", "open(item)"),
     ]
 

@@ -51,17 +51,23 @@ extension iPadRootView {
     // MARK: - Sync Pill
 
     /// Ouvre la cible d'une entrée de la pastille de synchronisation. Miroir
-    /// iPad de `RootView.handleSyncPillTap` : sans lui, `ConnectionBanner` était
-    /// construit sans `onItemTap` et taper « Envoi dans <conversation> » ne
-    /// menait nulle part (la pastille se contentait d'avancer d'un cran).
-    func handleSyncPillTap(_ source: OutboxUIItem.Source) {
-        switch source {
-        case .conversation(let id, let messageId):
+    /// iPad de `RootView.handleSyncPillTap` : la DÉCISION sort de
+    /// `SyncPillDestination` (loi unique), seule la présentation diffère. Rend
+    /// `false` quand rien n'a été ouvert — la pastille avance alors sa rotation.
+    @discardableResult
+    func handleSyncPillTap(_ source: OutboxUIItem.Source) -> Bool {
+        let destination = SyncPillDestination.resolve(
+            source: source,
+            knownConversationIds: Set(conversationViewModel.conversations.map(\.id)),
+            currentUserId: AuthManager.shared.currentUser?.id
+        )
+        switch destination {
+        case .openConversation(let id, let messageId):
             guard let conv = conversationViewModel.conversations.first(where: { $0.id == id }) else {
-                Logger.messages.info("syncPill tap: conversation \(id, privacy: .public) not in cache, skipping")
-                return
+                navigateToConversationById(id, highlightMessageId: messageId)
+                return true
             }
-        // #4027 — l'entrée mène à sa CIBLE EXACTE. Le surlignage est posé
+            // #4027 — l'entrée mène à sa CIBLE EXACTE. Le surlignage est posé
             // AVANT la navigation et SCOPÉ à la conversation visée : sans le
             // scope, une ancre survivrait à une ouverture différente et ferait
             // sauter un autre fil sur un id qui n'est pas le sien.
@@ -73,14 +79,18 @@ extension iPadRootView {
                 router.pendingHighlightConversationId = id
             }
             openConversation(conv)
-        case .post(let id):
+            return true
+        case .openConversationById(let id, let messageId):
+            navigateToConversationById(id, highlightMessageId: messageId)
+            return true
+        case .openPost(let id):
             rightPanelRoute = .postDetail(id, nil, showComments: false)
-        case .story:
-            // Parité RootView : ouvrir une story exige un StoryIntent + un
-            // StoryNotificationContext que la pastille ne transporte pas.
-            Logger.messages.info("syncPill tap: story open not yet supported")
-        case .unknown:
-            break
+            return true
+        case .openOwnStories(let userId):
+            storyViewerCoordinator.present(StoryViewerRequest(id: userId, singleGroup: true))
+            return true
+        case .none:
+            return false
         }
     }
 

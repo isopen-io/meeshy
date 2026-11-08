@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS } from '@/lib/profile-decor/catalog';
 
-import { AvatarRing, AvatarRingFrame, ringBoxSize, ringedAvatarSize } from './avatar-ring';
+import { Avatar } from './avatar';
+import { AvatarRing, AvatarRingFrame, ringBoxSize, ringDecorSpill, ringedAvatarSize } from './avatar-ring';
 import { bannerSvgMarkup, ProfileBannerDesign } from './profile-banner-design';
 
 const filet = BUILTIN_RING_PACKS[0]!.items[0]!;
@@ -46,11 +47,79 @@ describe('le contour autour de l’avatar', () => {
       expect(front).toBeGreaterThan(avatar);
       expect(html).toContain(`data-lottie-layer="${masque.decor!.back!.src}"`);
       expect(html).toContain(`data-lottie-layer="${masque.decor!.front!.src}"`);
-      expect(html.match(/inset:-20%/g)).toHaveLength(2);
+      expect(html.match(/inset:0px/g)).toHaveLength(2);
       expect(html).toContain('z-index:-1');
       expect(html).toContain('isolation:isolate');
     }
     expect(renderToStaticMarkup(<AvatarRing ring={masque} size={84}><i /></AvatarRing>)).toContain('width:100px');
+  });
+
+  test('un cadre illustré tient dans la boîte de l’anneau seul : l’avatar et ses films se réduisent ensemble, rien ne déborde (#15157)', () => {
+    const html = renderToStaticMarkup(<AvatarRing ring={masque} size={84}><i data-avatar /></AvatarRing>);
+    expect(html).toContain('width:100px');
+    expect(html.match(/inset:0px/g)).toHaveLength(2);
+    expect(html).toContain(`transform:scale(${1 / masque.decor!.reach})`);
+    expect(html.indexOf('transform:scale')).toBeLessThan(html.indexOf('data-avatar="true"'));
+  });
+
+  test('la place que l’hôte déclare libre se prend, jamais plus que le film ne la demande (#15157)', () => {
+    const html = renderToStaticMarkup(<AvatarRing ring={masque} size={84} room={10}><i data-avatar /></AvatarRing>);
+    expect(html.match(/inset:-10px/g)).toHaveLength(2);
+    expect(html).toContain(`transform:scale(${120 / 140})`);
+    const wide = renderToStaticMarkup(<AvatarRingFrame ring={masque} size={100} room={40}><i data-avatar /></AvatarRingFrame>);
+    expect(wide.match(/inset:-20px/g)).toHaveLength(2);
+    expect(wide).not.toContain('transform:scale');
+  });
+
+  test('l’anneau fixe de repli ne se dessine pas sous un film qui s’affiche (#15157)', () => {
+    const color = masque.stroke.colors[0]!;
+    expect(renderToStaticMarkup(<AvatarRing ring={masque} size={84}><i /></AvatarRing>)).not.toContain(color);
+    expect(renderToStaticMarkup(<AvatarRingFrame ring={masque} size={84}><i /></AvatarRingFrame>)).not.toContain(color);
+  });
+
+  test('le cadre illustré s’affiche entier à toutes les tailles — liste, bulle, mini-avatar — dans sa boîte (#16114)', () => {
+    for (const size of [52, 32, 22, 18]) {
+      const html = renderToStaticMarkup(<AvatarRingFrame ring={masque} size={size}><i data-avatar /></AvatarRingFrame>);
+      expect(html).toContain('data-ring-decor="front"');
+      expect(html.match(/inset:0px/g)).toHaveLength(2);
+      expect(html).toContain(`transform:scale(${1 / masque.decor!.reach})`);
+    }
+    const bubble = renderToStaticMarkup(<Avatar initials="JC" color="#6366F1" size={28} ring={masque} />);
+    expect(bubble).toContain('data-ring-decor="front"');
+  });
+
+  test('la cellule de frappe retire les films : l’anneau fixe seul, à sa taille (#16114)', () => {
+    const html = renderToStaticMarkup(<Avatar initials="JC" color="#6366F1" size={22} ring={masque} ringDecor={false} />);
+    expect(html).not.toContain('data-ring-decor');
+    expect(html).not.toContain('transform:scale');
+    expect(html).toContain('data-avatar-ring="masque-felin"');
+    expect(html).toContain(masque.stroke.colors[0]!);
+  });
+
+  test('sous « Réduire les animations », aucun film : l’anneau fixe reste l’image, à sa taille (#15157)', () => {
+    const host = globalThis as { window?: unknown };
+    const original = host.window;
+    host.window = { matchMedia: (query: string) => ({ matches: query.includes('reduce'), media: query }) };
+    try {
+      const html = renderToStaticMarkup(<AvatarRing ring={masque} size={84}><i data-avatar /></AvatarRing>);
+      expect(html).not.toContain('data-ring-decor');
+      expect(html).not.toContain('transform:scale');
+      expect(html).toContain('data-frame-art');
+    } finally {
+      host.window = original;
+    }
+  });
+
+  test('l’hôte qui réserve tout le débordement montre le cadre à sa taille, l’avatar intact (profil, rangée des stories — #15157)', () => {
+    expect(ringDecorSpill(masque, 100)).toBeCloseTo(20, 9);
+    expect(ringDecorSpill(filet, 100)).toBe(0);
+    expect(ringDecorSpill(null, 100)).toBe(0);
+    const profile = renderToStaticMarkup(<AvatarRing ring={masque} size={84} room={ringDecorSpill(masque, 100)}><i data-avatar /></AvatarRing>);
+    expect(profile).not.toContain('transform:scale');
+    expect(profile.match(/inset:-20px/g)).toHaveLength(2);
+    const tile = renderToStaticMarkup(<Avatar initials="JC" color="#6366F1" size={88} ring={masque} ringRoom={ringDecorSpill(masque, 88)} />);
+    expect(tile).not.toContain('transform:scale');
+    expect(tile).toContain('data-ring-decor="front"');
   });
 
   test('un contour sans calques illustrés garde son rendu d’avant, sans enrobage de plus', () => {

@@ -21,11 +21,18 @@ import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
+import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
 import { selectForFields, restrictFields, isFieldServed, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { loadReaderReactionsByMessage } from '../conversations/messages-reader-reactions';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
 import { AT_REST_MESSAGE_SELECT, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import {
+  keepAliveForReaderAcrossConversations,
+  withInheritedExpiry,
+} from '../../services/messaging/quoteCascade';
+import { mapMessageProtectionFields } from '../conversations/messageProtectionProjection';
+import type { EphemeralReaderResolution } from '../conversations/ephemeralReaderDeadlines';
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 
 /**
@@ -199,7 +206,16 @@ export const SYNC_MESSAGE_SERVED_FIELDS = Object.keys(syncMessageSelect) as read
 // #11269 — `viewOnceBurnedAt` aussi : la projection par lecteur retient tout
 // d'une vue unique purgée, quelle que soit la projection demandée. Lue, jamais
 // servie (`syncMessageSchema` ne la déclare pas).
-const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt', 'viewOnceBurnedAt'] as const;
+// #16586 — `ephemeralDuration`, `effectFlags` et `replyToId` aussi, et pour la
+// même raison que les deux précédentes : la COUPURE DE SERVICE par lecteur de
+// l'éphémère (`keepAliveForReaderAcrossConversations`) décide si la ligne a le
+// droit de partir, et elle doit pouvoir décider QUELLE QUE SOIT la projection
+// demandée. Sans les deux premières, `hasPerReaderEphemeralDeadline` rend faux
+// sur une ligne qui PORTE une flamme et la coupure ne s'applique pas ; sans
+// `replyToId`, la coupure de CITATION (#8630) ne peut pas remonter la chaîne et
+// une réponse survivrait à ce qu'elle cite. Lues pour la MÉCANIQUE, jamais
+// servies hors projection (`servedPinnedFor` est inchangé).
+const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt', 'viewOnceBurnedAt', 'ephemeralDuration', 'effectFlags', 'replyToId'] as const;
 
 /**
  * Les SIX colonnes de `MESSAGE_PROTECTION_SELECT`, relevées mécaniquement
@@ -300,6 +316,7 @@ function serializeSyncMessage(
   readerParticipantId: string | undefined,
   signer: ReaderFileUrlSigner | null,
   editReader: EditAttributionReader | undefined,
+  ephemeralReader: EphemeralReaderResolution | undefined,
 ): Record<string, unknown> {
   // `translations` et `attachments` sont des colonnes PROJETABLES depuis
   // #4173 : une projection qui ne les nomme pas les laisse absentes de la
@@ -311,6 +328,13 @@ function serializeSyncMessage(
     // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes ; lues
     // (profil par défaut), elles se servent PAR LECTEUR, sinon rien ne part.
     ...(brut.thirdPartyEditorId === undefined ? message : withServedEditAttribution(message, editReader)),
+    // #16586 — `expiresAt` n'est PAS la colonne, pour un éphémère : elle porte
+    // l'heure INTERNE de destruction (#7451), qui vaut le plafond de rétention
+    // de sept jours tant que personne n'a reçu. Ce qui se sert est l'échéance
+    // du LECTEUR, et la projection partagée est la seule à la savoir dire.
+    // Appliquée AVANT `restrictFields` : une projection qui ne sert pas le bloc
+    // de protection le retire ensuite, comme avant ce lot.
+    ...(brut.isViewOnce === undefined ? {} : mapMessageProtectionFields(message, ephemeralReader)),
     ...(brut.translations === undefined
       ? {}
       : {
@@ -364,11 +388,19 @@ const syncMessageSchema = {
     // eux le delta dit « combien » sans « qui », et « ma réaction » se devine.
     currentUserReactions: { type: 'array', items: { type: 'string' } },
     validatedMentions: { type: 'array', items: { type: 'string' } },
-    // Les SIX champs de `MESSAGE_PROTECTION_SELECT`, aux types que le schéma
-    // partagé leur donne (`api-schemas/message.ts:354-364`, `:443-447`) : un
-    // champ chargé mais non DÉCLARÉ est strippé en silence par
-    // fast-json-stringify — c'est exactement ce que ce fichier documente déjà
-    // pour `metadata`, et ce que #4885 a mesuré pour `effectFlags`.
+    // Les SEPT champs de `MESSAGE_PROTECTION_SELECT`, aux types que le schéma
+    // partagé leur donne (`api-schemas/message.ts`) : un champ chargé mais non
+    // DÉCLARÉ est strippé en silence par fast-json-stringify — c'est exactement
+    // ce que ce fichier documente déjà pour `metadata`, et ce que #4885 a mesuré
+    // pour `effectFlags`.
+    //
+    // SEPT, et non six : ce commentaire COMPTAIT, et son compte était faux
+    // (#16586). `ephemeralDuration` était chargé (`syncMessagePlan.columns.content`),
+    // SERVI par `servedPinnedFor`, DÉCLARÉ nulle part — donc strippé à chaque
+    // ligne. C'est le seul champ dont les trois clients dérivent leur décompte
+    // local (#7451), et le témoin de `sync-sparse-fieldset.test.ts` affirmait sur
+    // place qu'« un client qui reçoit une ligne sans elle ne sait pas que le
+    // message décompte » : il assertait le `select`, jamais la valeur SERVIE.
     isViewOnce: { type: 'boolean' },
     maxViewOnceCount: { type: 'number', nullable: true },
     viewOnceCount: { type: 'number' },
@@ -382,6 +414,7 @@ const syncMessageSchema = {
     isBlurred: { type: 'boolean' },
     effectFlags: { type: 'number' },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    ephemeralDuration: { type: 'integer', nullable: true },
     location: {
       ...sharedPlaceResponseSchema,
       description: 'Lieu partagé — hissé depuis metadata.location par hoistLocationOnto, la même projection que messages-list',
@@ -600,6 +633,24 @@ export async function syncMessages(opts: {
   const readerParticipantIdByConversation = new Map(
     memberships.map((m) => [m.conversationId, m.id] as const),
   );
+  // #16586 — LES DEUX COUPURES DE SERVICE PAR LECTEUR DE L'ÉPHÉMÈRE : l'échu
+  // pour CE lecteur (#7451, `D(u) + 1 h`) et la réponse à ce qui est mort pour
+  // lui (#8630). APRÈS le keyset et le budget, comme le masquage personnel et
+  // les avis de capture : la page peut donc être COURTE, et le curseur avance
+  // sur la dernière ligne LUE — aucune ligne n'est sautée.
+  //
+  // La forme QUI TRAVERSE les conversations, jamais une clé unique :
+  // `MessageStatusEntry` est indexé par `Participant.id`, lui-même scopé par
+  // conversation, et cette page en mêle plusieurs. Une clé unique ferait
+  // paraître « décompte pas démarré » — donc servi — tout message des AUTRES
+  // conversations : la porte échouerait en montrant PLUS (#16583). La carte est
+  // celle que le handler tient déjà de son appartenance ; rien n'est relu.
+  const readerPage = await keepAliveForReaderAcrossConversations(
+    prisma,
+    visible,
+    readerParticipantIdByConversation,
+  );
+  const alive = readerPage.alive;
   // La restriction s'applique APRÈS la sérialisation, et sur la MÊME liste qui
   // a gouverné le `select` : le `select` décide de ce qu'on LIT, celle-ci de ce
   // qu'on SERT. Les deux passes sont nécessaires — une colonne épinglée est lue
@@ -617,7 +668,7 @@ export async function syncMessages(opts: {
   // lecteur est sa ligne DANS la conversation du message.
   const viewOnceStates = await loadViewOnceReaderStates(
     prisma,
-    visible,
+    alive,
     (conversationId) => readerParticipantIdByConversation.get(conversationId),
     (err) => logger.warn('view-once reader states failed — served closed', { err }),
   );
@@ -626,7 +677,7 @@ export async function syncMessages(opts: {
   const servesReactions = isFieldServed(fields, 'reactionSummary', servedPinned);
   const readerReactions = servesReactions
     ? await loadReaderReactionsByMessage(prisma, {
-        messageIds: visible.map((m) => m.id),
+        messageIds: alive.map((m) => m.id),
         readerParticipantIds: [...new Set(readerParticipantIdByConversation.values())],
       })
     : null;
@@ -634,7 +685,7 @@ export async function syncMessages(opts: {
     readerReactions === null ? served : { ...served, currentUserReactions: readerReactions.get(m.id) ?? [] };
   // #7950 — la citation d'une story RETIRÉE par son auteur sort expurgée de
   // `metadata.postReplyTo` : UNE requête pour la page.
-  const withdrawnCitations = await loadWithdrawnCitations(prisma, visible);
+  const withdrawnCitations = await loadWithdrawnCitations(prisma, alive);
   const fileUrlSigner = readerFileUrlSignerFromEnv(new Date());
   const serialize = (m: SyncMessage): Record<string, unknown> =>
     projectViewOnceForReader(
@@ -642,7 +693,20 @@ export async function syncMessages(opts: {
         withReaderReactions(
           m,
           restrictFields(
-            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId), fileUrlSigner, opts.editAttributionReader),
+            // #16586 — l'échéance SERVIE d'une réponse est la plus PROCHE de la
+            // sienne et de celle de ce qu'elle cite : les clients la retirent
+            // alors comme ils retirent un éphémère échu. N'allonge jamais une
+            // vie, et passe par `restrictFields` comme le reste.
+            withInheritedExpiry(
+              serializeSyncMessage(
+                m,
+                readerParticipantIdByConversation.get(m.conversationId),
+                fileUrlSigner,
+                opts.editAttributionReader,
+                readerPage.deadlines.get(m.id),
+              ) as Record<string, unknown> & { id: string },
+              readerPage.inherited,
+            ),
             fields,
             servedPinned,
           ),
@@ -654,7 +718,9 @@ export async function syncMessages(opts: {
   // added = créé après `since` ; modified = pré-existant mais modifié.
   // #11381, #12822 — un message `server`/`hybrid` et ses traductions sortent en
   // clair pour le membre, ou SCELLÉS ; jamais leur chiffré présenté comme du texte.
-  const opened = await revealAtRestRows(visible, gatewayKeyring(prisma));
+  // #16421 — une ligne d'arrivées écrite avant que le pseudo y voyage reçoit
+  // celui du compte de chaque arrivant (une requête pour la page).
+  const opened = await withNoticeUsernames(prisma, await revealAtRestRows(alive, gatewayKeyring(prisma)));
   const added = opened.filter((m) => m.createdAt > sinceDate).map(serialize);
   const modified = opened.filter((m) => m.createdAt <= sinceDate).map(serialize);
 

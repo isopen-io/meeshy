@@ -1,12 +1,8 @@
 package me.meeshy.app.notifications
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,14 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -36,25 +25,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.navigation.compose.hiltViewModel
+import me.meeshy.sdk.model.NotificationListPane
+import me.meeshy.sdk.model.NotificationListStateReducer
+import me.meeshy.sdk.model.chrome.CollapsibleHeaderMetrics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.story.StoryNotificationContext
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.component.chrome.MeeshyTopBar
+import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
-import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
-private enum class ListPane { Skeleton, Error, Empty, Rows }
-
 private const val PREFETCH_DISTANCE = 4
+private const val LIST_ANIMATION_MS = 250
 
 /**
  * @param onOpenConversation Navigate to a conversation ([NotificationDestination.Conversation]) — also
@@ -80,10 +69,11 @@ fun NotificationsScreen(
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenProfile: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
+    onOpenStoryContent: ((NotificationDestination.StoryContent, StoryNotificationContext) -> Unit)? = null,
     revealTap: EngagementRevealTapViewModel = hiltViewModel(),
+    toasts: NotificationFeedbackToasts = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
     val openConversation by rememberUpdatedState(onOpenConversation)
@@ -93,23 +83,19 @@ fun NotificationsScreen(
     val openMood by rememberUpdatedState(onOpenMood)
     val openProfile by rememberUpdatedState(onOpenProfile)
     val openGame by rememberUpdatedState(onOpenGame)
+    val openStoryContent by rememberUpdatedState(onOpenStoryContent)
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
                 is NotificationsEvent.ActionFailed -> {
                     haptics.error()
-                    snackbar.showSnackbar(context.getString(event.message))
+                    toasts.failure(context.getString(event.message))
                 }
                 is NotificationsEvent.OpenConversation -> openConversation(event.conversationId)
             }
         }
     }
-    LaunchedEffect(state.errorMessage) {
-        val message = state.errorMessage
-        if (message != null && state.notifications.isNotEmpty()) snackbar.showSnackbar(message)
-    }
-
     val onOpen = remember(viewModel, revealTap, haptics) {
         { notification: ApiNotification ->
             haptics.light()
@@ -123,6 +109,10 @@ fun NotificationsScreen(
                 onOpenProfile = { openProfile(it) },
                 onOpenMood = { openMood(it) },
                 onOpenGame = { openGame(it) },
+                onOpenStoryContent = { target ->
+                    openStoryContent?.invoke(target, StoryNotificationContext.from(notification, System.currentTimeMillis()))
+                        ?: openPost(target.postId)
+                },
             )
         }
     }
@@ -157,51 +147,34 @@ fun NotificationsScreen(
         }
     }
     val onRetry = remember(viewModel) { viewModel::load }
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current.density
+    val scrollOffsetDp by remember(listState, density) {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) -CollapsibleHeaderMetrics.COLLAPSE_THRESHOLD
+            else -listState.firstVisibleItemScrollOffset / density
+        }
+    }
 
     MeeshyBackground {
         Scaffold(
-            topBar = {
-                MeeshyTopBar(
-                    title = stringResource(R.string.notifications_title),
-                    onBack = onBack,
-                    actions = {
-                        AnimatedVisibility(visible = state.unreadCount > 0, enter = fadeIn(), exit = fadeOut()) {
-                            IconButton(onClick = onMarkAllRead) {
-                                Icon(
-                                    imageVector = MeeshyIcons.CheckCircle,
-                                    contentDescription = stringResource(R.string.notifications_mark_all_read),
-                                    tint = MeeshyPalette.Indigo500,
-                                )
-                            }
-                        }
-                    },
-                )
-            },
-            snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent,
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                AnimatedVisibility(
-                    visible = state.unreadCount > 0,
-                    enter = fadeIn(tween(200)) + expandVertically(tween(200)),
-                    exit = fadeOut(tween(150)) + shrinkVertically(tween(150)),
-                ) {
-                    Text(
-                        text = pluralStringResource(R.plurals.notifications_unread_count, state.unreadCount, state.unreadCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyPalette.Indigo500,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = MeeshySpacing.xs),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                }
+                NotificationListHeader(
+                    scrollOffsetDp = scrollOffsetDp,
+                    unreadCount = state.unreadCount,
+                    onBack = onBack,
+                    onMarkAllRead = onMarkAllRead,
+                )
                 NotificationCategoryBar(selected = state.selectedCategory, onSelect = onSelectCategory)
-                PullToRefreshBox(
-                    isRefreshing = state.isSyncing && state.notifications.isNotEmpty(),
-                    onRefresh = onRetry,
+                MeeshyRefreshableBox(
+                    onRefresh = viewModel::pullRefresh,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     NotificationPanes(
                         state = state,
+                        listState = listState,
                         onOpen = onOpen,
                         onMarkRead = onMarkRead,
                         onDelete = onDelete,
@@ -224,15 +197,14 @@ private fun NotificationPanes(
     onQuickAction: (ApiNotification, NotificationQuickAction) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
 ) {
     val rows = remember(state.selectedCategory, state.notifications, state.categoryRows) { state.filteredNotifications }
-    val pane = when {
-        (state.isLoading || state.isCategoryLoading) && rows.isEmpty() -> ListPane.Skeleton
-        state.loadDidFail && rows.isEmpty() -> ListPane.Error
-        rows.isEmpty() -> ListPane.Empty
-        else -> ListPane.Rows
-    }
-    val listState = rememberLazyListState()
+    val pane = NotificationListStateReducer.pane(
+        hasRows = rows.isNotEmpty(),
+        isLoading = state.isLoading || state.isCategoryLoading,
+        loadDidFail = state.loadDidFail,
+    )
 
     LaunchedEffect(state.selectedCategory) { listState.scrollToItem(0) }
     LaunchedEffect(rows.firstOrNull()?.id) {
@@ -249,10 +221,10 @@ private fun NotificationPanes(
 
     Crossfade(targetState = pane, animationSpec = tween(200), label = "notification-pane", modifier = Modifier.fillMaxSize()) { target ->
         when (target) {
-            ListPane.Skeleton -> NotificationListSkeleton()
-            ListPane.Error -> NotificationListErrorState(onRetry = onRetry)
-            ListPane.Empty -> NotificationListEmptyState(state.selectedCategory)
-            ListPane.Rows -> LazyColumn(
+            NotificationListPane.Skeleton -> NotificationListSkeleton()
+            NotificationListPane.Error -> NotificationListErrorState(onRetry = onRetry)
+            NotificationListPane.Empty -> NotificationListEmptyState(state.selectedCategory)
+            NotificationListPane.Content -> LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
             ) {
@@ -265,10 +237,14 @@ private fun NotificationPanes(
                         onMarkRead = onMarkRead,
                         onDelete = onDelete,
                         onQuickAction = onQuickAction,
-                        modifier = Modifier.animateItem(),
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = tween(LIST_ANIMATION_MS, easing = EaseInOut),
+                            placementSpec = tween(LIST_ANIMATION_MS, easing = EaseInOut),
+                            fadeOutSpec = tween(LIST_ANIMATION_MS, easing = EaseInOut),
+                        ),
                     )
                 }
-                if (state.isLoadingMore) {
+                if (state.canLoadMore || state.isLoadingMore) {
                     item(key = "loading-more", contentType = "loading") {
                         Box(Modifier.fillMaxWidth().padding(MeeshySpacing.md), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp))

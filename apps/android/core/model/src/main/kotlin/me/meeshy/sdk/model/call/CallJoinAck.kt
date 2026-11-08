@@ -2,11 +2,10 @@ package me.meeshy.sdk.model.call
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
+import me.meeshy.sdk.model.socket.SocketAck
+import me.meeshy.sdk.model.socket.SocketAckParsing
+import me.meeshy.sdk.model.socket.SocketAckPayloadSource
 
 /**
  * The outcome of emitting `call:join` and awaiting the gateway ACK. The callee
@@ -47,31 +46,15 @@ object CallJoinAckParser {
 
     fun parse(rawJson: String?): CallJoinResult {
         if (rawJson == null) return CallJoinResult.Failure(NO_ACK)
-        return runCatching {
-            val response = json.decodeFromString<JoinAckResponse>(rawJson)
-            if (response.success) {
-                CallJoinResult.Success(response.data?.iceServers ?: emptyList())
-            } else {
-                CallJoinResult.Failure(messageOf(response.error), fieldOf(response.error, "code"), fieldOf(response.error, "endReason"))
-            }
-        }.getOrElse { CallJoinResult.Failure(UNKNOWN_ERROR) }
+        return when (val ack = SocketAckParsing.parse(rawJson, SocketAckPayloadSource.DATA)) {
+            is SocketAck.Timeout -> CallJoinResult.Failure(UNKNOWN_ERROR)
+            is SocketAck.Refused -> ack.refusal.let { CallJoinResult.Failure(it.message ?: UNKNOWN_ERROR, it.errorCode, it.endReason) }
+            is SocketAck.Accepted -> runCatching {
+                val data = ack.payload?.let { json.decodeFromJsonElement<JoinAckData>(it) }
+                CallJoinResult.Success(data?.iceServers ?: emptyList())
+            }.getOrElse { CallJoinResult.Failure(UNKNOWN_ERROR) }
+        }
     }
-
-    private fun messageOf(error: JsonElement?): String = when (error) {
-        is JsonObject -> error["message"]?.jsonPrimitive?.contentOrNull ?: UNKNOWN_ERROR
-        is JsonPrimitive -> error.contentOrNull?.takeIf { error.isString } ?: UNKNOWN_ERROR
-        else -> UNKNOWN_ERROR
-    }
-
-    private fun fieldOf(error: JsonElement?, key: String): String? =
-        (error as? JsonObject)?.get(key)?.jsonPrimitive?.contentOrNull
-
-    @Serializable
-    private data class JoinAckResponse(
-        val success: Boolean = false,
-        val data: JoinAckData? = null,
-        val error: JsonElement? = null,
-    )
 
     @Serializable
     private data class JoinAckData(

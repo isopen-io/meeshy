@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_camera_rail_fold_label">أدوات الكاميرا</string>
+    <string name="call_camera_rail_folded">مطوية</string>
+    <string name="call_camera_rail_unfolded">موسعة</string>
+</resources>

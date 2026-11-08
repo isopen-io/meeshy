@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_fold">Masquer la zone de commentaire</string>
+    <string name="story_composer_fold_hint">Ferme le clavier et replie la zone de commentaire en bulle</string>
+    <string name="story_composer_unfold">Afficher la zone de commentaire</string>
+    <string name="story_composer_unfold_hint">Rouvre la zone de commentaire sans ouvrir le clavier</string>
+    <string name="story_composer_unfold_recording">Enregistrement vocal en cours</string>
+    <string name="story_composer_unfold_replying">Réponse en cours</string>
+</resources>

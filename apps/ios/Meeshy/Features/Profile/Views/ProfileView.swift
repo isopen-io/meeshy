@@ -28,6 +28,8 @@ struct ProfileView: View {
     @State private var showRegionalLanguagePicker = false
     @State private var showCustomLanguagePicker = false
     @State private var pendingRequestCount: Int = 0
+    /// #16264 — mon décor d'un pack non embarqué se repeint dès son contrat arrivé.
+    @StateObject private var servedAppearance = ServedAppearanceRefresh()
 
     // Avatar
     @State private var avatarItem: PhotosPickerItem?
@@ -219,6 +221,9 @@ struct ProfileView: View {
                         .transition(.opacity)
                 } else {
                     bannerAndAvatarSection
+                    if ProfilePackShortcuts.isShown(viewerId: authManager.currentUser?.id, profileUserId: user?.id) {
+                        ProfilePackShortcuts(onShop: { router.openPackShop(domain: nil) }, onMine: { router.openMyPacks() })
+                    }
                     identitySection
                     contactSection
                     languagesSection
@@ -314,7 +319,7 @@ struct ProfileView: View {
                 }
             }
             .offset(y: -45)
-            .padding(.bottom, -45)
+            .padding(.bottom, -45 + ProfileOwnAvatar.reserveBelow(user))
 
             if !isEditing {
                 VStack(spacing: MeeshySpacing.xs) {
@@ -335,6 +340,7 @@ struct ProfileView: View {
 
     private var bannerImage: some View {
         ProfileOwnBanner(user: user, accentColor: user?.profileAccentHex ?? accentColor, isDark: theme.mode.isDark)
+            .task(id: user?.profileDecor) { await servedAppearance.load(decor: user?.profileDecor) }
     }
 
     // MARK: - Identity Section

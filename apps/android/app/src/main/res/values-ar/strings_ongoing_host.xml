@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: ongoing-activity-host — boutons et textes des notifications en cours. -->
+<resources>
+    <string name="ongoing_action_cancel">إلغاء</string>
+    <string name="ongoing_action_pause">إيقاف مؤقت</string>
+    <string name="ongoing_action_resume">استئناف</string>
+    <string name="ongoing_action_close">إغلاق</string>
+    <string name="ongoing_action_hang_up">إنهاء المكالمة</string>
+    <string name="ongoing_action_mute">كتم الصوت</string>
+    <string name="ongoing_action_unmute">إلغاء الكتم</string>
+    <string name="ongoing_outbox_sent_of_total">تم إرسال %1$d من %2$d</string>
+    <string name="ongoing_playback_protected">رسالة صوتية</string>
+</resources>

@@ -431,5 +431,23 @@ describe('MessagingService.handleMessage — familles des pièces jointes d’un
       expect(copiedMimeTypes()).toEqual(['image/jpeg']);
       expect(mockPrisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
     });
+
+    it('#14107 (audit B5) — l\'expéditeur d\'une demande vers un mineur, médias fermés, ne transfère pas une image', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue({
+        ...account(),
+        permissions: { canSendMessages: true, canSendFiles: false, canSendImages: false, canSendVideos: false, canSendAudios: false },
+      });
+      storeAttachments([sourceAttachment('image/jpeg')]);
+      readableSource();
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: '', forwardedFromId: SOURCE_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(false);
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      expect(copiedMimeTypes()).toEqual([]);
+    });
   });
 });

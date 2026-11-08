@@ -15,6 +15,8 @@ public struct StickerPackShopView: View {
     let pending: Set<String>
     let showsFailure: Bool
     let onToggle: (StickerPack) -> Void
+    /// La fiche d'un pack et le plein écran de ses stickers (#16268).
+    @StateObject private var showcase = PackShowcaseModel()
 
     public init(packs: [StickerPack]?, pending: Set<String>, showsFailure: Bool,
                 onToggle: @escaping (StickerPack) -> Void) {
@@ -25,9 +27,18 @@ public struct StickerPackShopView: View {
     }
 
     public var body: some View {
-        PackShopView(rows: packs?.map(Self.row), pending: pending, showsFailure: showsFailure) { slug in
-            if let pack = packs?.first(where: { $0.slug == slug }) { onToggle(pack) }
-        }
+        PackShopView(rows: packs?.map(Self.row), pending: pending, showsFailure: showsFailure,
+                     onOpen: { showcase.openDetail(domain: .sticker, slug: $0) },
+                     onOpenCover: { showcase.openViewer(domain: .sticker, slug: $0) },
+                     onToggle: toggle)
+            .task(id: packs) { showcase.seed(stickerPacks: packs ?? []) }
+            .packShowcase(showcase) { _ in
+                PackShowcaseContext(rows: packs?.map(Self.row) ?? [], pending: pending, wearer: .current, onToggle: toggle)
+            }
+    }
+
+    private func toggle(_ slug: String) {
+        if let pack = packs?.first(where: { $0.slug == slug }) { onToggle(pack) }
     }
 
     /// Un pack de stickers en rangée de Boutique.
@@ -36,6 +47,7 @@ public struct StickerPackShopView: View {
             ? .mee(slug: pack.slug)
             : .remote(pack.coverUrl ?? pack.items.first?.fileUrl)
         return PackRow(slug: pack.slug, name: pack.name, author: pack.author, description: pack.description,
-                       installed: pack.installed, removable: pack.removable, cover: cover)
+                       installed: pack.installed, removable: pack.removable, cover: cover,
+                       bundled: pack.isBuiltin)
     }
 }

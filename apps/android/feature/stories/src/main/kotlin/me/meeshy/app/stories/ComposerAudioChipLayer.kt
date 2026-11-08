@@ -1,28 +1,22 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
-import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.scene.SceneAudioChipPose
 
 /**
  * La pastille d'un son posé sur la scène, dans le compositeur (R4 de #13863) : la MÊME que celle que le lecteur peint
- * ([StoryAudioChipLayer]), à sa place dans la pile, et qui se touche et se glisse comme un sticker. Le son d'ambiance ne
- * vient jamais ici : il ne se pose pas sur la scène.
+ * ([StoryAudioChipLayer]), à sa place dans la pile. Elle se touche, se glisse, se pince et se tourne par le pipeline de
+ * tout objet de la scène ([sceneObjectGestures], #16293), toute son échelle portée par le calque comme un sticker ; son
+ * chrono lit la tête du lecteur vivant du son ([clock]). Le son d'ambiance ne vient jamais ici : il ne se pose pas sur la
+ * scène.
  */
 @Composable
 internal fun ComposerAudioChipLayer(
@@ -32,36 +26,35 @@ internal fun ComposerAudioChipLayer(
     canvasHeightPx: Float,
     onTap: () -> Unit,
     onDrag: (Float, Float) -> Unit,
+    onTransform: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
+    clock: AudioChipClock = AudioChipClock.Still,
 ) {
     val currentTap by rememberUpdatedState(onTap)
     val currentDrag by rememberUpdatedState(onDrag)
+    val currentTransform by rememberUpdatedState(onTransform)
     val currentDragEnd by rememberUpdatedState(onDragEnd)
-    val spoken = stringResource(R.string.story_composer_scene_voice_a11y)
+    val currentPose by rememberUpdatedState(
+        SceneObjectPose(SceneAudioChipPose.scale(track).toFloat(), SceneAudioChipPose.rotation(track).toFloat()),
+    )
     StoryAudioChipLayer(
         chip = StorySceneObjectsProjection.audioChip(track),
+        clock = clock,
+        layoutScaled = false,
         chipModifier = Modifier
             .testTag(sceneObjectTag(ComposerObjectKind.AUDIO, track.id))
-            .pointerInput(track.id) { detectTapGestures(onTap = { currentTap() }) }
-            .pointerInput(track.id) {
-                detectDragGestures { change, amount ->
-                    change.consume()
-                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) currentDrag(amount.x / canvasWidthPx, amount.y / canvasHeightPx)
-                }
-            }
-            .pointerInput(track.id) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Final)
-                    } while (event.changes.any { it.pressed })
-                    currentDragEnd()
-                }
-            }
-            .semantics {
-                contentDescription = spoken
-                onClick { currentTap(); true }
-            }
+            .sceneObjectGestures(
+                key = track.id,
+                pose = { currentPose },
+                onTap = { currentTap() },
+                onLongPress = null,
+                onMove = { pan, zoom, rotation ->
+                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) currentDrag(pan.x / canvasWidthPx, pan.y / canvasHeightPx)
+                    currentTransform(zoom, rotation)
+                },
+                onEnd = { currentDragEnd() },
+            )
+            .semantics { onClick { currentTap(); true } }
             .sceneSelection(selected),
     )
 }
@@ -77,4 +70,10 @@ internal fun StoryComposerViewModel.onSoundMoved(id: String, dx: Float, dy: Floa
                 it.copy(x = (it.x + dx).coerceIn(0.0, 1.0), y = (it.y + dy).coerceIn(0.0, 1.0))
             },
         )
+    }
+
+/** Pince et tourne la pastille du son [id] comme tout objet de la scène (#16293), dans le même cran que son glissé. */
+internal fun StoryComposerViewModel.onSoundTransformed(id: String, scaleBy: Float, rotateByDeg: Float) =
+    onSceneGesture("sound:$id") { state ->
+        state.copy(deck = state.deck.updateSelectedSound(id) { SceneAudioChipPose.transformed(it, scaleBy, rotateByDeg) })
     }

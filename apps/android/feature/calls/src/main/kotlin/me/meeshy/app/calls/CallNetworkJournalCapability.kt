@@ -14,15 +14,18 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.call.CallDataProfileFeed
 import me.meeshy.sdk.call.CallNetworkJournalStore
 import me.meeshy.sdk.call.CallQualityStatsFeed
 import me.meeshy.sdk.call.WebRtcEngine
+import me.meeshy.sdk.model.call.CallDataProfile
 import me.meeshy.sdk.model.call.CallNetworkEvent
 import me.meeshy.sdk.model.call.CallNetworkJournalInput
 import me.meeshy.sdk.model.call.CallNetworkJournalRecorder
@@ -51,15 +54,22 @@ class CallNetworkJournalRecording internal constructor(
     private val sink: CallNetworkJournalSink,
     private val scope: CoroutineScope,
     private val now: () -> Long,
+    private val profiles: Flow<CallDataProfile?> = emptyFlow(),
 ) : CallFeatureController {
 
     @Inject
-    constructor(feed: CallQualityStatsFeed, engine: WebRtcEngine, store: CallNetworkJournalStore) : this(
+    constructor(
+        feed: CallQualityStatsFeed,
+        engine: WebRtcEngine,
+        store: CallNetworkJournalStore,
+        profileFeed: CallDataProfileFeed,
+    ) : this(
         readings = feed.readings,
         links = engine.iceConnectionState.map(::linkOf),
         sink = CallNetworkJournalSink(store::append),
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
         now = System::currentTimeMillis,
+        profiles = profileFeed.profile,
     )
 
     private var recorder = CallNetworkJournalRecorder.Idle
@@ -93,6 +103,7 @@ class CallNetworkJournalRecording internal constructor(
         feeds = merge(
             links.filterNotNull().map { CallNetworkJournalInput.Link(it) },
             readings.filterNotNull().map { CallNetworkJournalInput.Reading(it) },
+            profiles.filterNotNull().map { CallNetworkJournalInput.Profile(it) },
         ).onEach { input ->
             record(input)
             if (input is CallNetworkJournalInput.Reading) record(CallNetworkJournalInput.Tier(tierOf(input.reading)))

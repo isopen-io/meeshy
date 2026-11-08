@@ -16,7 +16,7 @@ fun MoodComposerContent(
     drafts: StatusComposerDraftsViewModel = hiltViewModel(),
 ) {
     val seed by produceState<StatusComposerDraft?>(null, drafts) {
-        val restored = drafts.restorable() ?: StatusComposerDraft()
+        val restored = drafts.restorable() ?: viewModel.recoverStuckMood() ?: StatusComposerDraft()
         value = if (seedText.isNotBlank() && seedText != restored.text) restored.withText(seedText) else restored
     }
     val initial = seed ?: return
@@ -30,6 +30,8 @@ fun MoodComposerContent(
                 audioUrl = request.audioUrl,
                 repostOfId = request.repostOfId,
                 viaUsername = request.viaUsername,
+                visibilityUserIds = request.visibilityUserIds,
+                mentions = request.mentions,
             )
             drafts.discard()
             onClose()

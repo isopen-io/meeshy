@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import kotlin.random.Random
 import me.meeshy.sdk.model.mood.MoodEmojiRain
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.sdk.model.mood.MoodEmojiRainState
 
 /**
@@ -37,7 +38,7 @@ internal fun MoodEmojiRainLayer(emoji: String, modifier: Modifier = Modifier) {
             Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
         }.getOrDefault(true)
     }
-    if (!animationsOn || emoji.isBlank()) return
+    if (!animationsOn || LocalReduceMotion.current || emoji.isBlank()) return
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current.density
     var state by remember(emoji) { mutableStateOf(MoodEmojiRainState()) }

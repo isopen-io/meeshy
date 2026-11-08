@@ -67,7 +67,7 @@ public class SendFriendRequestHandler @Inject constructor(
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<FriendRequestPayload>(row) { payload ->
-            val result = friendRepository.sendFriendRequest(row.targetId, payload.message)
+            val result = friendRepository.sendFriendRequest(row.targetId, payload.message, payload.targetLevel)
             when (val delivery = FriendRequestSend.classify(result)) {
                 is FriendRequestDelivery.Delivered -> {
                     friendshipCache.didSendRequest(row.targetId, delivery.requestId)

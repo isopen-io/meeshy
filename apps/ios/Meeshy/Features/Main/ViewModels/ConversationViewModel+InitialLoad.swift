@@ -182,34 +182,33 @@ extension ConversationViewModel {
         lastOlderPaginationTime = now
 
         isLoadingOlder = true
-        let cursor = nextMessageCursor ?? oldestMsg.id
-        // Cache-first : la fenêtre GRDB suivante se sert AVANT le réseau, qui ne fait que l'étendre.
-        if await messageStore.loadOlder(before: oldestMsg.createdAt) { prefetchRecentMedia() }
-        await extendOlderWindow(before: cursor, anchor: oldestMsg.createdAt)
+        let servedFromCache = await messageStore.loadOlder(before: oldestMsg.createdAt)
+        let flight = olderHistory.joinOrLaunch { [weak self, cursor = nextMessageCursor ?? oldestMsg.id] in await self?.fetchOlderHistory(before: cursor) }
+        if !servedFromCache { await flight.value }
+        let served = servedFromCache ? true : await messageStore.loadOlder(before: messages.first?.createdAt ?? oldestMsg.createdAt)
+        if served { prefetchRecentMedia() }
         isLoadingOlder = false
 
         guard !anticipated, hasOlderMessages, !isCurrentlyNearBottom else { return }
         Task { [weak self] in
-            guard await cancellableSleep(for: .milliseconds(150)) else { return }
+            guard await cancellableSleep(for: .milliseconds(Int(Self.paginationDebounceInterval * 1000))) else { return }
             guard let self, !self.isLoadingOlder else { return }
             await self.loadOlderMessages(anticipated: true)
         }
     }
 
-    private func extendOlderWindow(before cursor: String, anchor: Date) async {
+    private func fetchOlderHistory(before cursor: String) async {
         do {
             let page = try await historyLoader.fetchOlder(before: cursor)
             let readerPrism = preferredLanguages
             async let persisted: Void = historyLoader.persist(page.messages, readerPrism: readerPrism)
             async let processed = processAPIMessages(page.messages)
-            _ = await persisted
-            let olderProcessed = await processed
+            let (_, olderProcessed) = await (persisted, processed)
 
             extractAttachmentTranscriptions(from: page.messages)
             extractTextTranslations(from: page.messages)
             scheduleTranscriptionRetry(for: page.messages)
             await historyLoader.mergeIntoMessageCache(olderProcessed, placement: .older)
-            if await messageStore.loadOlder(before: anchor) { prefetchRecentMedia() }
             nextMessageCursor = page.nextCursor
             hasOlderMessages = page.hasMore
         } catch {

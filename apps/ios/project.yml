@@ -146,7 +146,7 @@ settings:
   # pourtant exactement cela ; c'est la CLI qui ne l'atteint pas. Créer la
   # version sur ASC d'abord, puis relancer `version set` pour les fichiers :
   # il constate alors « already reads 1.0.9 » et écrit les trois sites.
-  MARKETING_VERSION: "1.1.4"
+  MARKETING_VERSION: "1.1.6"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
@@ -235,8 +235,22 @@ targets:
       # App Group, l'extension de widgets la LIT par `context.activityID`. Une
       # Live Activity ne fait pas de réseau. Garde : `LiveActivityAvatarStoreTests`.
       - path: MeeshyWidgets/LiveActivityAvatarStore.swift
+      # #14628 — l'AGPL-3.0 de libsignal : le texte officiel de la licence et
+      # les avis de libsignal publiés par Signal au tag épinglé voyagent DANS
+      # l'app (écran Réglages › À propos › Licences), jamais téléchargés. Une
+      # seule source chacun : `LICENSES/` à la racine et `packages/LibSignalClient/`.
+      - path: ../../LICENSES/AGPL-3.0.txt
+        buildPhase: resources
+      - path: ../../packages/LibSignalClient/acknowledgments-ios.plist
+        buildPhase: resources
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
+      # #14628 — le commit EXACT du build, lu par l'offre de source de l'écran
+      # Licences (`SourceOffer`, clé `MeeshySourceCommit` de l'Info.plist).
+      # Xcode Cloud pose `CI_COMMIT`, GitHub Actions `GITHUB_SHA` ; un build
+      # local n'en a aucun et l'écran renvoie au dépôt. Deux valeurs posées à la
+      # fois ne forment plus un SHA-1 et sont tenues pour absentes.
+      MEESHY_SOURCE_COMMIT: "$(CI_COMMIT)$(GITHUB_SHA)"
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

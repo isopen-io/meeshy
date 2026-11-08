@@ -24,12 +24,10 @@ final class MessageListViewController: UIViewController {
     let storyViewModel: StoryViewModel
     let statusViewModel: StatusViewModel
     let conversationListViewModel: ConversationListViewModel?  // #7006 — remis aux cellules, jamais lu ici ; nil hors liste montée.
-    /// `internal` car le cluster snapshot vit dans un autre fichier : en Swift,
-    /// `private` porte sur le FICHIER.
+    /// `internal` : le cluster snapshot vit dans un autre fichier.
     var cancellables = Set<AnyCancellable>()
     var isLoadingOlder = false
-    /// Tracks the item count from the last snapshot so we can detect that the
-    /// snapshot grew at all.
+    /// Item count of the last snapshot, to detect that it grew at all.
     var previousSnapshotCount: Int = 0
     /// Newest item (index 0, inverted) of the last snapshot: a new message changes it, older pagination does not —
     /// deterministic, unlike `isLoadingOlder`, which the ViewModel's anticipatory prefetch bypasses.
@@ -287,6 +285,7 @@ final class MessageListViewController: UIViewController {
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet (transcript-aware) for that message, via `ConversationView`.
     var onCallDetailRequest: ((String) -> Void)?
+    var onGreetArrivals: ((String) -> Void)?
     /// Live source of dynamic per-message data (translations, transcriptions,
     /// audio translations, last-message gating). Held weakly: the cell
     /// registration closure runs on the main runloop alongside the VM, but

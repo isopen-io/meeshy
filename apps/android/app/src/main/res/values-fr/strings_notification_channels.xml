@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: canaux-et-categories-de-notification — groupes et canaux par catégorie MEESHY_*. -->
+<resources>
+    <string name="push_group_messages">Messages</string>
+    <string name="push_group_social">Social</string>
+    <string name="push_group_friends">Amis</string>
+    <string name="push_group_calls">Appels</string>
+    <string name="push_group_others">Autres</string>
+    <string name="push_channel_mentions_name">Mentions</string>
+    <string name="push_channel_mentions_description">Quelqu’un vous a mentionné</string>
+    <string name="push_channel_ephemeral_name">Messages éphémères</string>
+    <string name="push_channel_ephemeral_description">Messages qui disparaissent</string>
+    <string name="push_channel_friends_name">Demandes d’ami</string>
+    <string name="push_channel_friends_description">Demandes d’ami et contacts qui rejoignent Meeshy</string>
+    <string name="push_channel_calls_missed_name">Appels manqués</string>
+    <string name="push_channel_calls_missed_description">Appels auxquels vous n’avez pas répondu</string>
+    <string name="push_channel_invitations_name">Invitations</string>
+    <string name="push_channel_invitations_description">Invitations à rejoindre des conversations et des communautés</string>
+</resources>

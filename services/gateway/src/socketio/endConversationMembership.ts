@@ -108,6 +108,16 @@ export interface DepartedMemberEphemeralState {
    * échecs (voir `CallEventsHandler.endCallParticipationForDepartedMember`).
    */
   endCallParticipationForDepartedMember?(conversationId: string, userId: string): Promise<void> | void;
+  /**
+   * Le TROISIÈME état vivant (#16654) : le registre « ici » (#8892, #9061),
+   * arrivé APRÈS cette convergence et jamais inscrit à son inventaire. Il ne
+   * pouvait pas l'être : toute la surface du registre était clavetée par
+   * SOCKET, donc aucune route ne savait rétracter un spectateur.
+   *
+   * Même contrat que ci-dessus : NE REJETTE JAMAIS. L'implémentation absorbe
+   * ses propres échecs (`ConversationViewingHandler.retractViewingForDepartedMember`).
+   */
+  retractViewingForDepartedMember?(conversationId: string, userId: string): Promise<void> | void;
   invalidateParticipantCache?(userId: string, conversationId: string): void;
 }
 
@@ -124,7 +134,7 @@ export interface ConversationMembershipEnd {
   readonly userId: string;
 }
 
-/** Éteint (position, appel), puis sort, puis invalide. */
+/** Éteint (position, appel, « ici »), puis sort, puis invalide. */
 export async function endConversationMembership(
   params: ConversationMembershipEnd
 ): Promise<void> {
@@ -141,6 +151,14 @@ export async function endConversationMembership(
   // sur l'appartenance au fil). Diffuse avant d'évincer, pour la même raison
   // que la position vive — voir l'en-tête.
   await manager?.endCallParticipationForDepartedMember?.(conversationId, userId);
+
+  // Puis « ici » (#16654). Le registre est un état SERVEUR, comme le registre
+  // des partages : il ne se vide pas parce que le partant n'a plus d'appareil
+  // au premier plan, et c'est lui qui nommait le retiré à TOUT pair ouvrant le
+  // fil ensuite (`viewing:snapshot`) — sans attendre la coopération d'aucun
+  // client. Diffuse avant d'évincer, pour la même raison que la position vive :
+  // le `viewing:stop` voyage par la room de la conversation.
+  await manager?.retractViewingForDepartedMember?.(conversationId, userId);
 
   if (io) {
     const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();

@@ -5,9 +5,11 @@ import { togglePost, withServedCount } from '@/lib/feed/interactions';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { mergeServedPost, removeCardPost, replaceCardContent, updateCardPost, writeCardCache } from './card-caches';
+import { applyServedCommentSetting } from './comment-settings';
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
+import { STORY_TRAY_QUERY_KEY } from './stories';
 import { mergedTranslations, nonEmpty, translationDeliveryOf, type TranslationDelivery } from './translation-delivery';
 
 /**
@@ -139,6 +141,8 @@ export function applyPostUpdated(queryClient: QueryClient, payload: unknown): vo
   if (incoming === null) return;
 
   replaceCardContent(queryClient, incoming.id, (held) => mergeServedPost(incoming, held));
+  /* LE RÉGLAGE DES COMMENTAIRES (#16541) n'est pas un contenu neuf : il atteint aussi le fil gelé des Réels et les stories. */
+  applyServedCommentSetting(queryClient, incoming);
 }
 
 /**
@@ -423,4 +427,49 @@ export function applyMediaCaptionTranslation(queryClient: QueryClient, payload: 
     const captionTranslations = held === undefined ? null : mergedTranslations(held.captionTranslations, delivery);
     return captionTranslations === null ? post : { ...post, media: media.map((m) => (m === held ? { ...m, captionTranslations } : m)) };
   });
+}
+
+/**
+ * `media:alt-translation-updated` — LE TEXTE ALTERNATIF d'un média (#7392,
+ * #6737). Jumelle EXACTE de `applyMediaCaptionTranslation` ci-dessus, sur un
+ * champ DISTINCT : la carte `altTranslations` traduit `PostMedia.alt`, jamais
+ * `caption`, jamais `Post.content` — trois contenus que la directive porteur
+ * #6280 interdit de confondre même à chaînes égales.
+ *
+ * **Ce canal n'avait aucun auditeur, sur aucun client**, alors que la
+ * passerelle le diffuse depuis #6737 et que son type se déclare lui-même
+ * jumelle de celui de la légende. La légende a reçu ses deux lecteurs (web,
+ * iOS) ; le texte alternatif, zéro — c'est la quatrième question du Prisme
+ * (cycle 122) : qui AFFICHE ce que le résolveur élit ?
+ *
+ * Et c'est la chaîne la plus coûteuse à laisser brute, parce qu'elle est la
+ * seule qu'un lecteur d'écran PRONONCE.
+ *
+ * Comme la légende, la loi ne fait que RANGER : ce que le lecteur entend est
+ * redescendu à chaque peinture par `resolveMediaAlt`. Un média de COMMENTAIRE
+ * (`commentId` présent) voyage avec le `postId` de la publication porteuse —
+ * aucune carte ne le tient, donc rien n'est parcouru.
+ */
+export function applyMediaAltTranslation(queryClient: QueryClient, payload: unknown): void {
+  const delivery = deliveryOf(payload);
+  const mediaId = objectOf(payload)?.mediaId;
+  if (delivery === null || !nonEmpty(mediaId) || typeof objectOf(payload)?.commentId === 'string') return;
+
+  updateCardPost(queryClient, delivery.postId, (post) => {
+    const media = post.media ?? [];
+    const held = media.find((m) => m.id === mediaId);
+    const altTranslations = held === undefined ? null : mergedTranslations(held.altTranslations, delivery);
+    return altTranslations === null ? post : { ...post, media: media.map((m) => (m === held ? { ...m, altTranslations } : m)) };
+  });
+}
+
+/**
+ * `story:*` / `status:updated` (#5652, #16541) — le plateau se relit (une
+ * invalidation, jamais une reconstruction locale du corpus, D-14), et le
+ * réglage des commentaires que porte la publication diffusée se pose partout.
+ */
+export function applyStoryChanged(queryClient: QueryClient, payload: unknown): void {
+  void queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+  const event = objectOf(payload);
+  applyServedCommentSetting(queryClient, event?.story ?? event?.status);
 }

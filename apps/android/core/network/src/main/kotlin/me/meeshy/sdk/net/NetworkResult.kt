@@ -1,6 +1,7 @@
 package me.meeshy.sdk.net
 
 import me.meeshy.sdk.model.ApiViolation
+import me.meeshy.sdk.model.net.MaskedEmailOwner
 
 /** Outcome of a network call — explicit success/failure, no exceptions leaking to callers. */
 sealed interface NetworkResult<out T> {
@@ -42,4 +43,12 @@ data class ApiError(
     /** Plafond et dépassement d'un refus de quota, quand la passerelle les donne (#14169). */
     val limit: Int? = null,
     val unlinked: Int? = null,
+    /** Le détenteur MASQUÉ d'un `EMAIL_TAKEN` : de quoi demander « Est-ce vous ? » sans rien révéler de plus. */
+    val emailOwner: MaskedEmailOwner? = null,
+    /** L'instant de remise à zéro d'une limite du jour (`DAILY_*_LIMIT`), en millisecondes epoch. */
+    val resetAtEpochMillis: Long? = null,
+    /** Les secondes avant de pouvoir réessayer (`NEWCOMER_SLOW_MODE`, plancher d'une seconde ; limites du jour). */
+    val retryAfterSeconds: Int? = null,
+    /** Les consentements qu'un 403 demande (null = refus ordinaire). */
+    val requiredConsents: List<String>? = null,
 )

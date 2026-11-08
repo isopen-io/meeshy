@@ -1,7 +1,8 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { ADMIN_PERMISSIONS_QUERY_KEY, type AdminIdentity } from '@/lib/api/admin';
 import {
   conversationMembersQueryOptions,
   flattenConversationMembers,
@@ -10,17 +11,19 @@ import {
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
-import { departureKindsOf, type DepartureKind } from '@/lib/conversation-departure';
+import { departureKindsOf, departureStore, type DepartureKind } from '@/lib/conversation-departure';
 import { conversationStore, effectiveFlagsOf } from '@/lib/conversation-store';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateConversationManage } from '@/lib/i18n-conversation-manage-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { managementOf } from '@/lib/view/conversation-management';
+import { rowConversationActions } from '@/lib/view/row-actions';
 import { shareConversationLink, type ConversationShareOutcome } from '@/lib/view/conversation-share-link';
 import type { PortailPartage } from '@/lib/view/invitation';
 import { canCreateShareLink } from '@/lib/view/share-link-eligibility';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useConversationManageCatalog } from '@/lib/view/use-conversation-manage-catalog';
+import { encryptionModeSwitchGesture } from '@/lib/view/conversation-encryption-switch-gesture';
 import { plaintextDirectGesture } from '@/lib/view/plaintext-direct-gesture';
 import { href, navigate } from '@/routes/route-table';
 
@@ -177,7 +180,30 @@ export function ConversationDetailsSheet({
     },
   });
 
-  const departures = onRequestDeparture === undefined ? [] : departureKindsOf(conversation);
+  /* #14648 — monter le mode d'une conversation que le serveur lit (tête-à-tête ou groupe, au droit servi) ; une identité stable, l'état servi se lit une fois. */
+  const modeSwitch = useMemo(
+    () => encryptionModeSwitchGesture({ deps, queryClient, conversationId: conversation.id, online: () => navigator.onLine }),
+    [deps, queryClient, conversation.id],
+  );
+
+  /* RENDRE OBSOLÈTE (#14645, #14653) — la loi du menu de la ligne (`obsolete`), le mot du catalogue de gestion ;
+     un refus de la passerelle le retire aussitôt, feuille ouverte (#14690). */
+  const obsoleteRefused = useStore(departureStore, (state) => state.obsoleteRefused.includes(conversation.id));
+  const mayObsolete =
+    manageReady &&
+    !obsoleteRefused &&
+    rowConversationActions({
+      conversation,
+      viewer: {
+        id: viewerId,
+        hasAccount: true,
+        isAnonymous: false,
+        platformRole: queryClient.getQueryData<AdminIdentity>(ADMIN_PERMISSIONS_QUERY_KEY)?.role ?? null,
+      },
+    }).obsolete;
+  const departures: readonly DepartureKind[] =
+    onRequestDeparture === undefined ? [] : [...departureKindsOf(conversation), ...(mayObsolete ? (['obsolete'] as const) : [])];
+  const closing = departures.filter((kind) => kind !== 'leave');
   const canLeave = departures.includes('leave');
   const canShare = canCreateShareLink(conversation);
   const [share, setShare] = useState<ShareState>({ busy: false, feedback: null });
@@ -249,7 +275,7 @@ export function ConversationDetailsSheet({
         ) : null}
 
         <Suspense fallback={null}>
-          <ConversationEncryptionSection conversation={conversation} plaintextDirect={plaintextDirect} />
+          <ConversationEncryptionSection conversation={conversation} plaintextDirect={plaintextDirect} modeSwitch={modeSwitch} />
         </Suspense>
 
         <ConversationMediaSection
@@ -293,9 +319,11 @@ export function ConversationDetailsSheet({
 
         {signedIn ? <ConversationAppearanceEntry conversation={conversation} accent={accent} deps={deps} language={language} /> : null}
 
-        {departures.includes('delete') ? (
-          <div className="flex justify-center px-4 pb-8">
-            <DepartureButton kind="delete" language={language} onPress={() => onRequestDeparture?.('delete')} />
+        {closing.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-2 px-4 pb-8">
+            {closing.map((kind) => (
+              <DepartureButton key={kind} kind={kind} language={language} onPress={() => onRequestDeparture?.(kind)} />
+            ))}
           </div>
         ) : null}
       </div>
@@ -334,7 +362,9 @@ function DepartureButton({
       <span aria-hidden className="grid place-items-center">
         <GlyphSvg glyph={kind === 'leave' ? SETTINGS_GLYPHS.signOut : CALLS_GLYPHS.trash} size={18} />
       </span>
-      {translate(language, kind === 'leave' ? 'conversation.departure.leave' : 'conversation.departure.delete')}
+      {kind === 'obsolete'
+        ? translateConversationManage(language, 'conversationManage.obsolete')
+        : translate(language, kind === 'leave' ? 'conversation.departure.leave' : 'conversation.departure.delete')}
     </button>
   );
 }

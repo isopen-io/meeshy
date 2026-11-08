@@ -41,6 +41,18 @@ object FrameLuminance {
         height: Int,
         rowStride: Int = width,
         step: Int = DEFAULT_SAMPLE_STEP,
+    ): Float? = averageOfYPlane(java.nio.ByteBuffer.wrap(yPlane), width, height, rowStride, step)
+
+    /**
+     * Même mesure sur le tampon direct d'une trame de capture (`I420Buffer.dataY`), sans copier le plan :
+     * seuls les pixels échantillonnés sont lus, par accès absolu (la position du tampon ne bouge pas).
+     */
+    fun averageOfYPlane(
+        yPlane: java.nio.ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int = width,
+        step: Int = DEFAULT_SAMPLE_STEP,
     ): Float? {
         if (width <= 0 || height <= 0 || step <= 0 || rowStride < width) return null
 
@@ -52,8 +64,8 @@ object FrameLuminance {
             var x = 0
             while (x < width) {
                 val offset = rowBase + x
-                if (offset >= yPlane.size) return null
-                sum += (yPlane[offset].toInt() and 0xFF)
+                if (offset >= yPlane.limit()) return null
+                sum += (yPlane.get(offset).toInt() and 0xFF)
                 count++
                 x += step
             }

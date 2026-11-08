@@ -11,6 +11,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { simulateLayout } from '@/test-support/simulated-layout';
 
 import { AdminConversationReading } from './admin-conversation-reading';
 
@@ -32,22 +33,11 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 let restaureLaMiseEnPage: (() => void) | null = null;
 
-function simuleLaMiseEnPage(): () => void {
-  const proto = HTMLElement.prototype as unknown as object;
-  const hauteur = Object.getOwnPropertyDescriptor(proto, 'offsetHeight');
-  const largeur = Object.getOwnPropertyDescriptor(proto, 'offsetWidth');
-  Object.defineProperty(proto, 'offsetHeight', { configurable: true, get: () => 800 });
-  Object.defineProperty(proto, 'offsetWidth', { configurable: true, get: () => 390 });
-  return () => {
-    if (hauteur !== undefined) Object.defineProperty(proto, 'offsetHeight', hauteur);
-    if (largeur !== undefined) Object.defineProperty(proto, 'offsetWidth', largeur);
-  };
-}
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  restaureLaMiseEnPage = simuleLaMiseEnPage();
+  restaureLaMiseEnPage = simulateLayout({ height: 800, width: 390 });
   await loadAdminInterfaceCatalog('fr');
 });
 

@@ -171,4 +171,21 @@ class ClientIdFormatTest {
     }
 
     // endregion
+
+    // region derived cid
+
+    @Test
+    fun `a derived cid is valid and stable for one seed`() {
+        val first = ClientIdFormat.derivedCid("share|a|c1|0")
+
+        assertThat(ClientIdFormat.isValidCid(first)).isTrue()
+        assertThat(ClientIdFormat.derivedCid("share|a|c1|0")).isEqualTo(first)
+    }
+
+    @Test
+    fun `two seeds give two derived cids`() {
+        assertThat(ClientIdFormat.derivedCid("share|a|c1|0")).isNotEqualTo(ClientIdFormat.derivedCid("share|a|c1|1"))
+    }
+
+    // endregion
 }

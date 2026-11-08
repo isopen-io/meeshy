@@ -1,3 +1,4 @@
+import { POST_VISIBILITIES } from '@meeshy/shared/types/post';
 import { ADMIN_POST_STATES } from '@meeshy/shared/types/admin-publication-states';
 
 import { defineListSpec, type ListState } from './list-state';
@@ -19,7 +20,8 @@ import { defineListSpec, type ListState } from './list-state';
  * la passerelle ne trie pas serait un contrôle sans effet (loi 4).
  */
 export const POST_TYPES = ['POST', 'STORY', 'REEL', 'STATUS'] as const;
-export const POST_VISIBILITIES = ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'] as const;
+/** Les audiences filtrables : la liste PARTAGÉE (`@meeshy/shared/types/post`), cercles compris (#13931, #13939) — jamais une copie qui retarde. */
+export { POST_VISIBILITIES };
 export const POST_PERIODS = ['today', 'week', 'month'] as const;
 
 export const POST_LIST_SPEC = defineListSpec({

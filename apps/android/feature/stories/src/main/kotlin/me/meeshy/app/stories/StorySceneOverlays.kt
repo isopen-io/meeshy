@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 
 /**
@@ -21,9 +22,15 @@ internal fun StorySceneOverlays(
     muted: Boolean,
     rewindWhenInactive: Boolean = false,
     onAudioFocusLost: () -> Unit = {},
+    onAudioFocusGained: () -> Unit = {},
+    onAudioFocusLostForGood: () -> Unit = {},
     players: Boolean = true,
+    mutedTracks: Set<String> = emptySet(),
+    onToggleTrack: ((String) -> Unit)? = null,
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
+    val focusHolder = StorySceneAudioFocus.holder(slide)
+    val chipClock = remember(progress, slideDurationMs) { AudioChipClock.Playhead({ progress.value * slideDurationMs / 1000.0 }) }
 
     StorySceneLayerOrder.order(slide).forEach { layer ->
         key(layer.key) {
@@ -36,7 +43,11 @@ internal fun StorySceneOverlays(
                         muted = muted,
                         rewindWhenInactive = rewindWhenInactive,
                         onAudioFocusLost = onAudioFocusLost,
+                        onAudioFocusGained = onAudioFocusGained,
+                        onAudioFocusLostForGood = onAudioFocusLostForGood,
                         players = players,
+                        holdsAudioFocus = focusHolder == StorySceneAudioFocus.Holder.Placed(layer.view.id),
+                        looks = slide.composerLooks,
                     )
                 }
                 is StorySceneLayer.Text -> if (layer.view.isVisible(playheadSeconds)) {
@@ -49,7 +60,15 @@ internal fun StorySceneOverlays(
                     StoryPlaceObjectLayer(place = layer.view)
                 }
                 is StorySceneLayer.Audio -> if (layer.view.isVisible(playheadSeconds)) {
-                    StoryAudioChipLayer(chip = layer.view)
+                    StoryAudioChipLayer(
+                        chip = layer.view,
+                        muted = layer.view.id in mutedTracks,
+                        clock = chipClock,
+                        chipModifier = Modifier.storyAudioChipTap(
+                            muted = layer.view.id in mutedTracks,
+                            onToggle = onToggleTrack?.let { toggle -> { toggle(layer.view.id) } },
+                        ),
+                    )
                 }
             }
         }

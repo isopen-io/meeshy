@@ -34,22 +34,32 @@ data class SnapResult(
  * so they are unit-tested in one place and the Composable stays glue. No Android, no
  * I/O, no mutation.
  *
- * Guides are the rule-of-thirds lines plus the centre on each axis (parity with iOS's
- * centre + thirds alignment aids), expressed as normalised positions in `0f..1f`.
+ * Objects snap to the iOS magnetic targets `0.18 / 0.25 / 0.5 / 0.75 / 0.82` at `0.02`;
+ * the background framing snaps to `0 / 0.5 / 1` at the wider `0.035` ([resolveBackground]),
+ * all normalised positions in `0f..1f`. The old rule-of-thirds guides are gone.
  */
 object StorySnapResolver {
 
-    /** Vertical guide lines (candidate `x` positions): left third, centre, right third. */
-    val VERTICAL_GUIDES: List<Float> = listOf(1f / 3f, 0.5f, 2f / 3f)
+    /** The iOS object snap targets (`StoryCanvasUIView.snapTargets`), shared by both axes. */
+    val OBJECT_TARGETS: List<Float> = listOf(0.18f, 0.25f, 0.5f, 0.75f, 0.82f)
 
-    /** Horizontal guide lines (candidate `y` positions): top third, centre, bottom third. */
-    val HORIZONTAL_GUIDES: List<Float> = listOf(1f / 3f, 0.5f, 2f / 3f)
+    /** Vertical guide lines (candidate `x` positions). */
+    val VERTICAL_GUIDES: List<Float> = OBJECT_TARGETS
+
+    /** Horizontal guide lines (candidate `y` positions). */
+    val HORIZONTAL_GUIDES: List<Float> = OBJECT_TARGETS
+
+    /** Background framing targets (`backgroundSnapTargets`): centred, or glued to an edge. */
+    val BACKGROUND_TARGETS: List<Float> = listOf(0f, 0.5f, 1f)
+
+    /** Background framing tolerance (`backgroundSnapTolerance`): wider, the bg pan is slowed. */
+    const val BACKGROUND_SNAP_THRESHOLD: Float = 0.035f
 
     /**
      * Magnetic radius: a centre within this normalised distance of a guide snaps to it.
      * Small enough that deliberate placement away from a guide is never hijacked.
      */
-    const val SNAP_THRESHOLD: Float = 0.015f
+    const val SNAP_THRESHOLD: Float = 0.02f
 
     /**
      * Edge margin: a centre nearer than this to any canvas edge is out of the safe
@@ -83,6 +93,16 @@ object StorySnapResolver {
             withinSafeZone = withinSafeZone(sx, sy, safeZoneInset),
         )
     }
+
+    /** Snaps a background framing offset (`x`/`y`) to the centre or an edge, per axis, within the wider tolerance. */
+    fun resolveBackground(x: Float, y: Float): SnapResult = resolve(
+        x = x,
+        y = y,
+        verticalGuides = BACKGROUND_TARGETS,
+        horizontalGuides = BACKGROUND_TARGETS,
+        threshold = BACKGROUND_SNAP_THRESHOLD,
+        safeZoneInset = 0f,
+    )
 
     private fun snapAxis(raw: Float, guides: List<Float>, threshold: Float): Pair<Float, Float?> {
         val clamped = clampCoord(raw)

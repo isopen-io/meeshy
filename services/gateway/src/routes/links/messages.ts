@@ -12,6 +12,7 @@ import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
+import { startedGroupAnnouncer } from '../../services/conversations/announceStartedGroup';
 import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
 import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
 import {
@@ -20,6 +21,7 @@ import {
   describeConversationWriteRefusal,
   writeRefusalHttpResponse
 } from '../../services/messaging/conversationWriteAdmission.js';
+import { sealMessageIfConversationObsoleted } from '../../services/conversations/obsoleteMessageSeal';
 import type { ConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
 import { sharedSendReservations } from '../../services/messaging/newcomerSendReservations.js';
 import { resolveParticipantRights } from '../../services/participantRights.js';
@@ -431,6 +433,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           }
         }
       });
+      // #14643 — admis quand la conversation était ouverte, écrit pendant son obsolescence : né effacé, diffusé à personne.
+      if (await sealMessageIfConversationObsoleted(fastify.prisma, { conversationId: participantShareLink.conversationId, messageId: stored.id })) {
+        return sendWriteRefusal(reply, { admitted: false, reason: 'conversation-closed' });
+      }
+
       // L'invité, `message:new` et la traduction reçoivent le CLAIR ; la notification, la ligne scellée.
       const message = sealedText ? servedClearAtRest(stored, body.content) : stored;
 
@@ -477,6 +484,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       runMessagePostSaveEffects({
         prisma: fastify.prisma,
         translationService: fastify.translationService,
+        startedGroupAnnouncer: startedGroupAnnouncer(() => ({
+          prisma: fastify.prisma,
+          io: fastify.socketIOHandler?.getManager()?.getIO(),
+          notificationService: fastify.notificationService,
+        })),
         message: {
           id: message.id,
           conversationId: participantShareLink.conversationId,

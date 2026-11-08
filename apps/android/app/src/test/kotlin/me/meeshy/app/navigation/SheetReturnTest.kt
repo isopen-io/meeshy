@@ -88,6 +88,7 @@ class SheetReturnTest {
                 composable("root") {}
                 composable("detail") {}
                 sheetComposable(Routes.DASHBOARD, self) { _, _ -> }
+                sheetComposable(Routes.GLOBAL_SEARCH, self) { _, _ -> }
                 sheetComposable(
                     route = Routes.USER_POSTS,
                     navController = self,
@@ -131,6 +132,38 @@ class SheetReturnTest {
         assertThat(after.destination.route).isEqualTo(Routes.DASHBOARD)
         assertThat(after.viewModelStore).isSameInstanceAs(before.viewModelStore)
         assertThat(after.savedStateHandle.get<Int>("scroll")).isEqualTo(12)
+        job.cancel()
+    }
+
+    @Test
+    fun `real navigation - a result opened from the global search comes back to the same results`() {
+        val nav = navigation()
+        val job = nav.followSheetReturns()
+        nav.navigate(Routes.GLOBAL_SEARCH)
+        val search = nav.currentBackStackEntry!!
+        search.savedStateHandle["query"] = "recette"
+
+        nav.navigateKeepingSheet("detail")
+        nav.popBackStack()
+
+        val back = nav.currentBackStackEntry!!
+        assertThat(back.destination.route).isEqualTo(Routes.GLOBAL_SEARCH)
+        assertThat(back.viewModelStore).isSameInstanceAs(search.viewModelStore)
+        assertThat(back.savedStateHandle.get<String>("query")).isEqualTo("recette")
+        job.cancel()
+    }
+
+    @Test
+    fun `real navigation - a conversation opened from the global search closes it for good`() {
+        val nav = navigation()
+        val job = nav.followSheetReturns()
+        nav.navigate(Routes.GLOBAL_SEARCH)
+
+        nav.navigateClosingSheet("detail")
+        assertThat(nav.currentDestination?.route).isEqualTo("detail")
+        nav.popBackStack()
+
+        assertThat(nav.currentDestination?.route).isEqualTo("root")
         job.cancel()
     }
 

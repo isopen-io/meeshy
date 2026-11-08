@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
@@ -46,12 +47,17 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryBackgroundPalette
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.hexColor
 
+/** Les crans du cercle (#13939) suivent les glyphes d'iOS : main levée (👋), flamme (🔥), goutte (🩸). */
 internal fun StoryVisibility.icon(): ImageVector = when (this) {
     StoryVisibility.PUBLIC -> Icons.Filled.Public
     StoryVisibility.FRIENDS -> Icons.Filled.People
     StoryVisibility.COMMUNITY -> Icons.Filled.Groups
+    StoryVisibility.ACQUAINTANCES -> MeeshyIcons.Hand
+    StoryVisibility.CLOSE -> MeeshyIcons.FlameFilled
+    StoryVisibility.BLOOD -> Icons.Filled.Opacity
     StoryVisibility.ONLY -> Icons.Filled.PersonAdd
     StoryVisibility.EXCEPT -> Icons.Filled.PersonRemove
     StoryVisibility.PRIVATE -> Icons.Filled.Lock
@@ -61,6 +67,9 @@ internal fun StoryVisibility.labelRes(): Int = when (this) {
     StoryVisibility.PUBLIC -> R.string.stories_visibility_public
     StoryVisibility.FRIENDS -> R.string.stories_visibility_friends
     StoryVisibility.COMMUNITY -> R.string.stories_visibility_community
+    StoryVisibility.ACQUAINTANCES -> R.string.stories_visibility_acquaintances
+    StoryVisibility.CLOSE -> R.string.stories_visibility_close
+    StoryVisibility.BLOOD -> R.string.stories_visibility_blood
     StoryVisibility.PRIVATE -> R.string.stories_visibility_private
     StoryVisibility.ONLY -> R.string.stories_visibility_only
     StoryVisibility.EXCEPT -> R.string.stories_visibility_except

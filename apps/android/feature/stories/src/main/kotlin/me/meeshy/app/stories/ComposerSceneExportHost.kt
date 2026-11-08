@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntry
+import me.meeshy.ui.component.retouch.composerLookAuthor
 
 /**
  * L'export du compositeur vu de l'écran (#13897) : ses entrées (Enregistrer, Partager) et leur lancement. Le rendu, le
@@ -25,7 +26,8 @@ internal fun rememberSceneExportHost(state: StoryComposerUiState, viewModel: Sto
     val current by rememberUpdatedState(state)
     val export = rememberSceneVideoExport(key = COMPOSER_EXPORT_KEY) {
         val projector = StorySlideProjector(viewModel.mediaBaseUrl)
-        ComposerSceneExport.scenes(current, viewModel.resolvePublishLanguage(), viewModel.authorFloor) { item ->
+        val author = composerLookAuthor(viewModel.lookPerson)
+        ComposerSceneExport.scenes(current, viewModel.resolvePublishLanguage(), viewModel.authorFloor, viewModel.mediaBaseUrl, author) { item ->
             projector.project(item, viewModel.authorAccentHex.orEmpty(), NoContentPreferences)
         }
     }

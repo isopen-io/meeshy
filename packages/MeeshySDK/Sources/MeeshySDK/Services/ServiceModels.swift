@@ -153,8 +153,13 @@ public struct CreatePostRequest: Encodable {
     /// non nul rendrait trouvable un contenu que personne n'a choisi de
     /// rendre trouvable.
     public let discoverabilityPrecision: DiscoverabilityPrecision?
+    /// L'auteur ferme les commentaires dès la publication (#16541, miroir de
+    /// `CreatePostSchema.commentsDisabled`). `nil` OMET la clé : ouvert, ce
+    /// que tout client antérieur publie.
+    public let commentsDisabled: Bool?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil, commentsDisabled: Bool? = nil) {
+        self.commentsDisabled = commentsDisabled
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
@@ -309,6 +314,9 @@ public struct UpdatePostRequest: Encodable, Sendable {
     /// LÉGENDE par média à l'édition (#4055) — même tri-état que `mediaAlt` :
     /// clé absente = « n'y touche pas ».
     public let mediaCaption: [String: String]?
+    /// Fermer / rouvrir les commentaires à l'édition (#16541) — `nil` =
+    /// inchangé (miroir de `UpdatePostSchema.commentsDisabled`).
+    public let commentsDisabled: Bool?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
@@ -316,7 +324,9 @@ public struct UpdatePostRequest: Encodable, Sendable {
                 mediaIds: [String]? = nil, location: PostLocationUpdate? = nil,
                 mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil,
                 mediaAlt: [String: String]? = nil,
-                mediaCaption: [String: String]? = nil) {
+                mediaCaption: [String: String]? = nil,
+                commentsDisabled: Bool? = nil) {
+        self.commentsDisabled = commentsDisabled
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
@@ -335,7 +345,7 @@ public struct UpdatePostRequest: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case content, visibility, visibilityUserIds, moodEmoji, originalLanguage
         case type, removeMediaIds, storyEffects, mediaIds, location, mentions
-        case allowSoundExtraction, mediaAlt, mediaCaption
+        case allowSoundExtraction, mediaAlt, mediaCaption, commentsDisabled
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -359,6 +369,7 @@ public struct UpdatePostRequest: Encodable, Sendable {
         // jamais — sans erreur, sans témoin. C'est cette ligne qui fait
         // voyager la légende à l'édition.
         try c.encodeIfPresent(mediaCaption, forKey: .mediaCaption)
+        try c.encodeIfPresent(commentsDisabled, forKey: .commentsDisabled)
         switch location {
         case .set(let place): try c.encode(place, forKey: .location)
         case .remove: try c.encodeNil(forKey: .location)

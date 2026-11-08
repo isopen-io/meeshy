@@ -14,8 +14,6 @@ struct MediaDownloadSettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     @ObservedObject private var store: MediaDownloadPreferencesStore
-    /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy. Actif par défaut.
-    @AppStorage(ReceivedMediaAutoSaveUserSetting.key) private var autoSaveToAlbum = true
     /// #9684 — à la prise de vue : l'original (défaut : non) et la version avec effets et cadre.
     @AppStorage(CaptureSavePolicy.savesOriginalKey) private var captureSavesOriginal = CaptureSavePolicy.standard.savesOriginal
     @AppStorage(CaptureSavePolicy.renderedModeKey) private var captureRenderedMode = CaptureSavePolicy.standard.renderedMode
@@ -112,7 +110,9 @@ struct MediaDownloadSettingsView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "settings.media.autosave.header", defaultValue: "Galerie", bundle: .main),
                           icon: "photo.on.rectangle", color: accentColor)
-            Toggle(isOn: $autoSaveToAlbum) {
+            // #14640 — la préférence SERVEUR, la même que Réglages › Confidentialité. Coupée par défaut.
+            Toggle(isOn: Binding(get: { preferences.privacy.saveMediaToGallery },
+                                 set: { enregistre in preferences.updatePrivacy { $0.saveMediaToGallery = enregistre } })) {
                 HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("square.and.arrow.down.on.square.fill", color: accentColor)
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

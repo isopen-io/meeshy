@@ -3,10 +3,10 @@ package me.meeshy.app.navigation.graph
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
-import me.meeshy.app.settings.LocationSharingSettingsSheet
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -14,11 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import me.meeshy.app.auth.AuthViewModel
-import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
-import me.meeshy.app.chat.conversationcard.ProvideConversationLinkCards
-import me.meeshy.app.chat.ChatScreen
-import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.chat.ConversationMembersPresenter
 import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.conversations.ConversationListScreen
@@ -32,17 +28,21 @@ import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.conversations.ShareLinkArrivalsScreen
 import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
-import me.meeshy.app.navigation.CallRoute
-import me.meeshy.app.navigation.ChatRouteArgs
-import me.meeshy.app.navigation.ReportsConversationViewing
+import me.meeshy.app.navigation.MeeshyPinnedStoryBand
 import me.meeshy.app.navigation.MeeshyStoryRail
-import me.meeshy.app.navigation.ProvideConversationMoods
+import me.meeshy.app.navigation.chatDestination
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.navigateClosingSheet
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
+import me.meeshy.app.feed.MoodLookup
 import me.meeshy.app.feed.StatusesViewModel
+import me.meeshy.app.navigation.rememberStatusBubbleController
+import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.search.PostSearchDestination
+import me.meeshy.sdk.model.settings.SettingsInvite
 import me.meeshy.app.stories.StoriesViewModel
 
 /** Liste, recherche, tableau de bord, liens de partage, fil de discussion et messages favoris. */
@@ -72,6 +72,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onDismiss = { membersTarget = null },
             )
         }
+        // Le toucher de l'avatar d'une ligne (#15989) : la fiche Conversation s'ouvre sur la liste, hors du fil.
+        var infoTarget by remember { mutableStateOf<Pair<ApiConversation, String?>?>(null) }
+        infoTarget?.let { (conversation, readerId) ->
+            ConversationInfoFromList(conversation, readerId, navController) { infoTarget = null }
+        }
+        // La bulle d'humeur du badge d'avatar : les humeurs se lisent au toucher (`state.value`), jamais ici,
+        // pour qu'une humeur qui change ne recompose pas les lignes ; la bulle se dessine à la racine.
+        val moodBubble = rememberStatusBubbleController()
+        val moodsNow = { MoodLookup.from(statusesViewModel.state.value) }
+        val openProfile = rememberProfileOpenerOverSheet(navController)
         ConversationListScreen(
             onConversationClick = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
@@ -84,16 +94,30 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             header = {
                 MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel, statusesViewModel = statusesViewModel)
             },
+            pinnedBand = { reveal -> MeeshyPinnedStoryBand(navController, storiesViewModel, reveal, statusesViewModel = statusesViewModel) },
             onRefresh = {
                 storiesViewModel.refresh()
                 statusesViewModel.refresh()
             },
             rowNavigation = ConversationRowNavigation(
                 onManageMembers = { conversationId, accent -> membersTarget = conversationId to accent },
-                onViewProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+                onViewProfile = openProfile,
                 onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
+                // #14897 : « Détails » ouvre la conversation (sa feuille d'infos est à un geste de l'en-tête) ;
+                // « Appeler » compose l'appel audio du pair sans passer par le chat.
+                onViewInfo = { id -> navController.navigate(Routes.chat(id)) },
+                onCall = { id, peerName -> navController.navigate(Routes.call(id, peerName, false)) },
+                onViewConversationInfo = { conversation, readerId -> infoTarget = conversation to readerId },
+                onViewStory = { userId -> navController.navigate(Routes.story(userId)) },
+                onMoodBadgeTap = { userId ->
+                    moodsNow().entryOf(userId)?.let(moodBubble::show)
+                },
+                onMoodShown = { userId -> moodsNow().statusIdOf(userId)?.let(statusesViewModel::trackAvatarImpression) },
             ),
-            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+            onOpenSettings = { navController.navigate(Routes.settingsFocus(SettingsInvite.MASTER_PIN)) },
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
+            },
         )
     }
     sheetComposable(Routes.SHARE_LINK_PICKER, navController) { _, dismiss ->
@@ -104,10 +128,24 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         )
     }
     sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { _, dismiss ->
+        // #14671 — un post, un réel ou une story ouverts depuis les résultats y reviennent (même requête, même
+        // onglet) ; une conversation ouverte ferme la recherche, comme iOS.
         GlobalSearchScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigate(Routes.chat(conversationId))
+                navController.navigateClosingSheet(Routes.chat(conversationId))
+            },
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigateClosingSheet(Routes.chat(conversationId, highlightMessageId = messageId))
+            },
+            onOpenPost = { destination ->
+                navController.navigateKeepingSheet(
+                    when (destination) {
+                        is PostSearchDestination.Post -> Routes.postDetail(destination.postId)
+                        is PostSearchDestination.Reel -> Routes.reels(seed = destination.postId)
+                        is PostSearchDestination.Story -> Routes.story(destination.authorId, destination.storyId)
+                    },
+                )
             },
             onOpenUser = rememberProfileOpenerOverSheet(navController),
         )
@@ -175,60 +213,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             },
         )
     }
-    composable(
-        route = Routes.CHAT,
-        arguments = listOf(
-            navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
-            navArgument(ChatViewModel.DRAFT_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
-            navArgument(ChatRouteArgs.HIGHLIGHT_MESSAGE_ID) { type = NavType.StringType; nullable = true; defaultValue = null },
-        ),
-        deepLinks = listOf(
-            navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.CONVERSATION_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.CONVERSATION_SINGULAR_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.CONVERSATION_SHORT_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.CONVERSATION_DRAFT_DEEP_LINK },
-        ),
-    ) { entry ->
-        val conversationId = entry.arguments
-            ?.getString(ChatViewModel.CONVERSATION_ID_ARG)
-            .orEmpty()
-        ReportsConversationViewing(conversationId)
-        ProvideConversationMoods(navController, entry) {
-            ProvideConversationLinkCards {
-                ChatScreen(
-                    onBack = { navController.popBackStack() },
-                    onStartCall = { peerName, isVideo ->
-                        navController.navigate(Routes.call(conversationId, peerName, isVideo))
-                    },
-                    onRejoinCall = { call, peerName ->
-                        // Rejoin an existing, still-live call: reuse the incoming
-                        // deep-link with autoAnswer so the shared join path adopts
-                        // the server callId and connects straight away — never a
-                        // new outgoing call.
-                        navController.navigate(
-                            CallRoute.incoming(
-                                callId = call.id,
-                                conversationId = conversationId,
-                                callerName = peerName,
-                                isVideo = call.isVideo,
-                                autoAnswer = true,
-                            ),
-                        )
-                    },
-                    onCreateShareLink = {
-                        navController.navigate(Routes.createShareLink(conversationId))
-                    },
-                    // A live local call (minimised/floating) suppresses the rejoin
-                    // pill — don't offer to rejoin the call this device is in.
-                    hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
-                    locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
-                    onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
-                    onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
-                )
-            }
-        }
-    }
+    chatDestination(navController, callStatus)
     composable(Routes.STARRED) {
         StarredMessagesScreen(
             onBack = { navController.popBackStack() },

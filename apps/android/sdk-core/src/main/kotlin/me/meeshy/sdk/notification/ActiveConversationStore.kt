@@ -9,7 +9,7 @@ import javax.inject.Singleton
 /**
  * Process-level record of the conversation currently on screen (feature-parity §M).
  *
- * The in-app notification surfaces ([NotificationBannerViewModel] / [NotificationToastViewModel])
+ * The in-app notification surfaces ([NotificationBannerViewModel])
  * track the active thread inside their own ViewModel, but a background component — the FCM push
  * service — has no ViewModel to read. This singleton is the seam that carries that one nav truth
  * across the process boundary so a FOREGROUND push for the thread the reader is already looking at
@@ -25,6 +25,16 @@ public class ActiveConversationStore @Inject constructor() {
 
     /** The conversation currently on screen, or `null` when none is. */
     public val conversationId: StateFlow<String?> = _conversationId.asStateFlow()
+
+    private val _postId = MutableStateFlow<String?>(null)
+
+    /** The post, story or status currently on screen, or `null` when none is (its notifications are consumed on open). */
+    public val postId: StateFlow<String?> = _postId.asStateFlow()
+
+    /** Records the post now on screen (or `null` when leaving it). */
+    public fun setActivePost(postId: String?) {
+        _postId.value = postId
+    }
 
     /** Records the conversation now on screen (or `null` when leaving all threads). */
     public fun setActive(conversationId: String?) {

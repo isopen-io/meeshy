@@ -9,6 +9,9 @@ import type { SystemRow } from '@/lib/view/message-badges';
 import { systemRowLabel, systemRowText } from '@/lib/view/message-badges';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
+import { withoutTrailingInvite } from '@/lib/view/arrival-greeting';
+
+import { ArrivalGreetingInvite, useArrivalGreeting } from './arrival-greeting-invite';
 import { Attachments } from './attachment-blocks';
 import { Glyph, GlyphSvg } from './glyph';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
@@ -47,8 +50,15 @@ export function SystemNotice({
   readonly language?: InterfaceLanguage;
 }) {
   const label = systemRowLabel(row, language);
-  const action = row.kind === 'call' && callTarget !== null && callsAvailable() ? <CallNoticeAction target={callTarget} languages={languages} /> : null;
-  const content = <SystemNoticeContent row={row} language={language} />;
+  /* « DIS-LUI SALUT » (#16338) — sous la phrase, comme « Rappeler » : un bouton nommé, jamais caché sous `aria-hidden`. */
+  const greeting = useArrivalGreeting(row);
+  const action =
+    row.kind === 'call' && callTarget !== null && callsAvailable() ? (
+      <CallNoticeAction target={callTarget} languages={languages} />
+    ) : greeting !== null ? (
+      <ArrivalGreetingInvite greeting={greeting} language={language} />
+    ) : null;
+  const content = <SystemNoticeContent row={row} language={language} invitesApart={greeting !== null} />;
   /* LA TEINTE (revue-correction #5936, défaut majeur 5) — `--color-ios-ink-2`
      à `META_TEXT_OPACITY` (0,55), le cran MÉTA déjà dérivé et déjà tenu pour
      AA ailleurs dans le fil (`.focal-meta`, `EditedMark`), JAMAIS
@@ -105,7 +115,16 @@ export function SystemNotice({
 }
 
 /** Le contenu visuel — glyphe (appel, avis d'arrivée, arrivées regroupées) puis texte. */
-function SystemNoticeContent({ row, language }: { readonly row: SystemRow; readonly language: InterfaceLanguage }) {
+function SystemNoticeContent({
+  row,
+  language,
+  invitesApart = false,
+}: {
+  readonly row: SystemRow;
+  readonly language: InterfaceLanguage;
+  /** L'invite « dis-leur salut » est un bouton à part : la phrase ne la répète pas (#16338). */
+  readonly invitesApart?: boolean;
+}) {
   if (row.kind === 'call') {
     return (
       <>
@@ -166,7 +185,7 @@ function SystemNoticeContent({ row, language }: { readonly row: SystemRow; reado
     return (
       <>
         <GlyphSvg glyph={THREAD_STATES_GLYPHS.userPlus} size={13} />
-        <span>{systemRowText(row, language)}</span>
+        <span>{invitesApart ? withoutTrailingInvite(systemRowText(row, language)) : systemRowText(row, language)}</span>
       </>
     );
   }

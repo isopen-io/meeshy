@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +53,7 @@ internal fun ReportReasonGlyph.imageVector(): ImageVector = when (this) {
     ReportReasonGlyph.ELLIPSE -> Icons.Filled.MoreHoriz
     ReportReasonGlyph.BOLT -> Icons.Filled.Bolt
     ReportReasonGlyph.SPEECH_BUBBLE -> Icons.Filled.ChatBubble
+    ReportReasonGlyph.MASK -> Icons.Filled.PersonOff
 }
 
 /**

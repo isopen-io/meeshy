@@ -67,6 +67,11 @@ const de = {
   'conversationManage.options.pin': 'Anheften',
   'conversationManage.options.mute': 'Stummschalten',
   'conversationManage.options.archive': 'Archivieren',
+  'conversationManage.obsolete': 'Als veraltet entfernen',
+  'conversationManage.obsolete.title': 'Unterhaltung als veraltet entfernen?',
+  'conversationManage.obsolete.message': 'Sie verschwindet für alle Teilnehmenden. Der Inhalt wird sofort unlesbar und innerhalb von 48 Stunden gelöscht.',
+  'conversationManage.obsolete.error': 'Die Unterhaltung konnte nicht entfernt werden.',
+  'conversationManage.obsolete.requestSender': 'Nur die Person, die die Anfrage erhalten hat, kann diese Unterhaltung löschen.',
   'conversationManage.header.created_on': 'Erstellt am {date}',
   'conversationManage.header.muted': 'Benachrichtigungen aus',
 } satisfies ConversationManageCatalog;

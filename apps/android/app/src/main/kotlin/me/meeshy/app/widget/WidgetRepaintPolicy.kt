@@ -19,7 +19,7 @@ import me.meeshy.sdk.model.PresenceState
  */
 internal object WidgetRepaintPolicy {
 
-    const val BURST_WINDOW_MILLIS: Long = 400
+    const val BURST_WINDOW_MILLIS: Long = 200
 
     @OptIn(FlowPreview::class)
     fun triggers(

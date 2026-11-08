@@ -1,5 +1,6 @@
 package me.meeshy.sdk.story
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -14,13 +15,22 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.PostTranslationMerge
+import me.meeshy.sdk.model.StoryRealtimeFold
 import me.meeshy.sdk.model.StoryTranslationMerge
 import me.meeshy.sdk.model.StoryUpdateMerge
+import me.meeshy.sdk.model.ContentRemovalRequest
 import me.meeshy.sdk.model.StoryViewer
+import me.meeshy.sdk.model.StoryViewersOutcome
+import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.deletionCall
+import me.meeshy.sdk.net.api.StoryTranslationRequest
 import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.net.api.CreateCommentRequest
@@ -55,6 +65,8 @@ class StoryRepository @Inject constructor(
     private val translationApi: TranslationApi,
     private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
     private val fence: me.meeshy.sdk.session.AccountFence? = null,
+    private val postCache: StoryPostCache = StoryPostCache(),
+    private val session: me.meeshy.sdk.session.SessionRepository? = null,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -63,6 +75,7 @@ class StoryRepository @Inject constructor(
         storyApi = storyApi,
         clock = SystemCacheClock,
         fence = fence,
+        viewerId = { session?.currentUserId },
     )
 
     /**
@@ -107,17 +120,28 @@ class StoryRepository @Inject constructor(
     }
 
     /**
+     * Folds a realtime `post:reposted` into the tray cache (#14466): the gateway announces a
+     * republication only by `post:reposted`, never by `story:created`, to the reposter's
+     * visibility-filtered audience. A repost served as a story joins the tray like an announced
+     * story ([adoptAnnounced]); a repost into the feed stays out. Returns whether the cache changed.
+     */
+    suspend fun adoptAnnouncedRepost(repost: ApiPost): Boolean =
+        postTypeFromWire(repost.type) == PostType.STORY && adoptAnnounced(repost)
+
+    /**
      * Folds a realtime `story:deleted` into the authoritative Room cache so the tray
      * stream repaints without the removed story. Idempotent and inert for an unknown id
      * (over-broadcast delivery). Mirrors the viewer's `StoryPlayback.removingSlide`, but
      * for the Room-backed tray. Port of iOS `StoryViewModel.storyDeleted → purgeDeadStories`.
      */
     suspend fun removeCachedStory(storyId: String) {
+        postCache.invalidate(setOf(storyId))
         cacheSource.deleteLocal(storyId, cacheSource.ticket())
     }
 
     /** [removeCachedStory] sous [ticket], pris AVANT la requête dont la réponse retire la story (#13560). */
     suspend fun removeCachedStory(storyId: String, ticket: me.meeshy.sdk.session.AccountTicket?) {
+        postCache.invalidate(setOf(storyId))
         cacheSource.deleteLocal(storyId, ticket)
     }
 
@@ -150,6 +174,37 @@ class StoryRepository @Inject constructor(
     }
 
     /**
+     * Balayage d'expiration (chaque minute, iOS) : retire du cache les stories devenues mortes, sauf celles du
+     * lecteur, et rend leurs ids. Le plateau se repeint sans elles ; aucun réseau.
+     */
+    suspend fun sweepExpired(): List<String> =
+        cacheSource.sweepExpired().also { postCache.invalidate(it.toSet()) }
+
+    /** `story:viewed` : le total de vues autoritatif de l'événement, chez l'auteur qui regarde son compteur bouger. */
+    suspend fun applyStoryViewed(storyId: String, viewCount: Int?): Boolean =
+        foldLocal(storyId) { StoryRealtimeFold.viewed(it, viewCount) }
+
+    /** `story:reacted` (+1) / `story:unreacted` (−1) : compteur par emoji, et mes réactions si l'acteur est le lecteur. */
+    suspend fun applyStoryReaction(storyId: String, emoji: String, actorId: String, myId: String?, delta: Int): Boolean =
+        foldLocal(storyId) { StoryRealtimeFold.reactionDelta(it, emoji, actorId, myId, delta) }
+
+    /** `comment:added` / `comment:deleted` : le total de commentaires est autoritatif (jamais un ±1 qui dérive). */
+    suspend fun applyStoryCommentCount(storyId: String, commentCount: Int): Boolean =
+        foldLocal(storyId) { post -> post.takeIf { it.commentCount != commentCount }?.copy(commentCount = commentCount) }
+
+    /** `post:translation-updated` d'une story tenue : sa légende gagne la langue sans nouvelle requête. */
+    suspend fun applyStoryTranslation(storyId: String, language: String, entry: me.meeshy.sdk.model.ApiPostTranslationEntry): Boolean =
+        foldLocal(storyId) { PostTranslationMerge.mergeTranslation(it, language, entry) }
+
+    private suspend fun foldLocal(storyId: String, fold: (ApiPost) -> ApiPost?): Boolean {
+        val ticket = cacheSource.ticket()
+        val previous = cacheSource.findLocal(storyId) ?: return false
+        val next = fold(previous) ?: return false
+        cacheSource.upsertLocal(next, ticket)
+        return true
+    }
+
+    /**
      * Les stories déjà en main dans le cache de la barre, sans réseau : le lecteur s'ouvre
      * sur ce que l'anneau touché montrait, hors ligne compris (iOS
      * `StoryViewerContainer.ensureGroupAvailable`, cache d'abord).
@@ -157,11 +212,51 @@ class StoryRepository @Inject constructor(
     suspend fun cachedStories(): List<ApiPost> = cacheSource.readLocal()
 
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
-        apiCall { storyApi.list(cursor, limit) }
+        apiCall { storyApi.list(cursor, limit) }.alsoCaching()
+
+    /**
+     * Synchronisation par delta (iOS `StoryService.list(updatedSince:)`) : [updatedSince] est un instant
+     * ISO8601 ; la passerelle ne rend que les stories créées ou modifiées depuis, et `meta.deletedStoryIds`
+     * porte les disparitions. Les stories annoncées supprimées sont évincées du cache par id.
+     */
+    suspend fun listDelta(updatedSince: String, cursor: String? = null, limit: Int = 50): NetworkResult<StoryDelta> =
+        when (val result = pagedApiCall { storyApi.list(cursor, limit, updatedSince) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> {
+                val page = result.data
+                val tombstones = page.meta?.storyTombstones
+                postCache.putAll(page.data)
+                tombstones?.let { postCache.invalidate(it.ids.toSet()) }
+                NetworkResult.Success(
+                    StoryDelta(
+                        posts = page.data,
+                        tombstones = tombstones,
+                        nextCursor = page.pagination?.nextCursor,
+                        hasMore = page.pagination?.hasMore ?: false,
+                    ),
+                )
+            }
+        }
+
+    private fun NetworkResult<List<ApiPost>>.alsoCaching(): NetworkResult<List<ApiPost>> {
+        if (this is NetworkResult.Success) postCache.putAll(data)
+        return this
+    }
+
+    /** La story déjà en mémoire par id (deep-link de notification), sans réseau. */
+    fun cachedPost(id: String): ApiPost? = postCache.get(id)
+
+    /** Pose une story dans le cache par id (ex. story préchargée par une notification). */
+    fun cache(post: ApiPost) = postCache.put(post)
+
+    /** Évince des stories du cache par id : une story supprimée ne ressuscite pas au premier lien. */
+    fun invalidate(ids: Set<String>) = postCache.invalidate(ids)
 
     /** One cursor page of the caller's own stories (`GET posts/stories/mine`), pagination kept. */
     suspend fun listMine(cursor: String? = null, limit: Int = 50): NetworkResult<PagedResult<List<ApiPost>>> =
-        pagedApiCall { storyApi.listMine(cursor, limit) }
+        pagedApiCall { storyApi.listMine(cursor, limit) }.also { result ->
+            if (result is NetworkResult.Success) postCache.putAll(result.data.data)
+        }
 
     /** The last drained « Mes stories » archive, served instantly while a drain revalidates. */
     suspend fun cachedMyStories(): List<ApiPost>? = archiveCache.read()
@@ -213,7 +308,9 @@ class StoryRepository @Inject constructor(
 
     /** `POST posts/{id}/republish` — the same story, fresh dates, zeroed engagement. */
     suspend fun republish(storyId: String): NetworkResult<ApiPost> =
-        apiCall { storyApi.republish(storyId) }
+        apiCall { storyApi.republish(storyId) }.also { result ->
+            if (result is NetworkResult.Success) postCache.put(result.data)
+        }
 
     /**
      * La vue est appliquée au cache de la barre AVANT l'appel réseau : l'anneau et ses
@@ -234,10 +331,50 @@ class StoryRepository @Inject constructor(
     }
 
     suspend fun delete(storyId: String): NetworkResult<Unit> =
-        apiCall { storyApi.delete(storyId) }
+        apiCall { storyApi.delete(storyId) }.also { if (it is NetworkResult.Success) postCache.invalidate(setOf(storyId)) }
+
+    /**
+     * Retrait de la story d'un AUTRE avec son motif (#11151). Sans motif exploitable (absent ou blanc), le
+     * DELETE part sans corps, à l'octet près comme [delete] — rétrocompatible avec une passerelle qui n'en lit pas.
+     */
+    suspend fun delete(storyId: String, reason: String?): NetworkResult<Unit> {
+        val body = ContentRemovalRequest.forReason(reason) ?: return delete(storyId)
+        return when (val result = deletionCall { storyApi.deleteWithReason(storyId, body) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> {
+                postCache.invalidate(setOf(storyId))
+                NetworkResult.Success(Unit)
+            }
+        }
+    }
 
     suspend fun react(storyId: String, emoji: String): NetworkResult<Unit> =
         apiCall { storyApi.react(storyId, StoryLikeRequest(emoji)) }
+
+    /**
+     * [react] avec son issue triée (iOS `StoryReactionRecovery`) : un REFUS du serveur (409
+     * `REACTION_LIMIT_REACHED`, 403, 404…) se distingue d'une PANNE de transport, pour que l'appelant
+     * rembobine l'un et mette l'autre en file.
+     */
+    suspend fun reactOutcome(storyId: String, emoji: String): StoryReactionOutcome =
+        when (val result = react(storyId, emoji)) {
+            is NetworkResult.Success -> StoryReactionOutcome.Applied
+            is NetworkResult.Failure -> StoryReactionOutcome.of(result.error)
+        }
+
+    /**
+     * Demande la traduction serveur d'une story (`POST /posts/:id/translate`), `force` rejouant une langue
+     * DÉJÀ traduite (« Retraduire »). La charge arrive par le socket social : un 2xx suffit.
+     */
+    suspend fun requestTranslation(storyId: String, targetLanguage: String, force: Boolean = false): NetworkResult<Unit> {
+        val target = targetLanguage.trim()
+        if (target.isEmpty()) return NetworkResult.Failure(ApiError(message = "Empty target language", code = "INVALID_LANGUAGE"))
+        val body = StoryTranslationRequest(target, force.takeIf { it })
+        return when (val result = deletionCall { storyApi.requestTranslation(storyId, body) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> NetworkResult.Success(Unit)
+        }
+    }
 
     suspend fun comment(storyId: String, content: String): NetworkResult<ApiPostComment> =
         apiCall { storyApi.comment(storyId, CreateCommentRequest(content)) }
@@ -250,11 +387,36 @@ class StoryRepository @Inject constructor(
     ): NetworkResult<List<ApiPostComment>> =
         apiCall { storyApi.comments(storyId, cursor, limit) }
 
+    /**
+     * Republie la story EN STORY (iOS `StoryDirectRepost`) : sans `targetType`, la passerelle en ferait un post. La story
+     * que la passerelle rend en 201 rejoint aussitôt la barre (#14458) : une republication ne s'annonce que par
+     * `post:reposted`, jamais par `story:created`, et rien d'autre ne l'apporterait avant la revalidation suivante.
+     */
     suspend fun repost(storyId: String): NetworkResult<Unit> =
-        apiCall { storyApi.repost(storyId, RepostPostRequest()) }
+        when (val result = apiCall { storyApi.repost(storyId, RepostPostRequest(targetType = PostType.STORY.name)) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> {
+                adoptRepost(result.data)
+                NetworkResult.Success(Unit)
+            }
+        }
+
+    /** Une republication faite ne devient pas un échec parce que le cache local a refusé l'écriture. */
+    internal suspend fun adoptRepost(story: ApiPost) {
+        if (postTypeFromWire(story.type) != PostType.STORY) return
+        try {
+            adoptPublished(story)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "story repost: tray adoption failed")
+        }
+    }
 
     suspend fun fetchPost(id: String): NetworkResult<ApiPost> =
-        apiCall { storyApi.fetchPost(id) }
+        apiCall { storyApi.fetchPost(id) }.also { result ->
+            if (result is NetworkResult.Success) postCache.put(result.data)
+        }
 
     /**
      * Durably enqueues a story publish on the outbox (ARCHITECTURE.md §5): the
@@ -342,6 +504,7 @@ class StoryRepository @Inject constructor(
             originalLanguage = request.originalLanguage,
             createdAtMillis = createdAt,
             mediaIds = request.mediaIds,
+            cmid = cmid,
         )
     }
 
@@ -365,6 +528,20 @@ class StoryRepository @Inject constructor(
 
     /** Permanently discards an exhausted publish the user no longer wants to retry. */
     suspend fun discardPublish(cmid: String) = outboxRepository.discard(cmid)
+
+    /** Ce qu'un échec de publication portait, pour le reprendre en brouillon ; `null` si la ligne n'est plus un échec lisible. */
+    suspend fun failedPublishRequest(cmid: String): StoryFailedRequest? {
+        val row = outboxRepository.row(cmid)?.takeIf { it.kindEnum == OutboxKind.PUBLISH_STORY && it.stateEnum == OutboxState.EXHAUSTED }
+            ?: return null
+        val request = runCatching { MeeshyApi.json.decodeFromString<CreateStoryRequest>(row.payload) }.getOrNull() ?: return null
+        return StoryFailedRequest(
+            content = request.content,
+            mediaIds = request.mediaIds.orEmpty(),
+            visibility = request.visibility,
+            visibilityUserIds = request.visibilityUserIds.orEmpty(),
+            repostOfId = request.repostOfId,
+        )
+    }
 
     private fun OutboxEntity.toFailedStoryPublish(): FailedStoryPublish? {
         val request = decodeStoryPublish() ?: return null
@@ -412,6 +589,13 @@ class StoryRepository @Inject constructor(
      */
     suspend fun viewers(storyId: String): NetworkResult<List<StoryViewer>> =
         apiCall { storyApi.viewers(storyId) }.map { it.viewers.map { wire -> wire.toStoryViewer() } }
+
+    /** La liste des vues à trois issues (iOS `loadViewerList`) : chargée, refusée (403) ou en panne. */
+    suspend fun viewerList(storyId: String): StoryViewersOutcome =
+        when (val result = viewers(storyId)) {
+            is NetworkResult.Success -> StoryViewersOutcome.Loaded(result.data)
+            is NetworkResult.Failure -> StoryViewersOutcome.failure(result.error.httpStatus)
+        }
 
     /**
      * On-demand story translation (Prisme, pull side): the viewer tapped a configured

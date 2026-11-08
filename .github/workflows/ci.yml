@@ -124,7 +124,8 @@ jobs:
   # ===========================================================================
   changes:
     name: Zones touchées
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -191,7 +192,8 @@ jobs:
   # ===========================================================================
   quality:
     name: Qualité TS (${{ github.event.inputs.package_manager || 'bun' }})
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -400,7 +402,8 @@ jobs:
   # échoue : installation, build de shared, lint, types, jetons web, dette `any`.
   gardes-depot:
     name: Gardes du dépôt
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -599,6 +602,11 @@ jobs:
       - name: Docker prune & deploy-only-on-dev guard
         run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
 
+      # #14878 — un build Docker lancé sur `dev` va jusqu'au déploiement du
+      # staging : jamais `cancel-in-progress: true` sur `docker.yml`.
+      - name: Docker build never cancelled guard
+        run: node scripts/check-docker-build-never-cancelled.mjs --self-test && node scripts/check-docker-build-never-cancelled.mjs
+
       # #9825, #10048 — un tag `sha-…` épinglé dans le `.env` de l'hôte de
       # staging faisait tirer et garder une image figée sous un déploiement
       # vert. Le verdict de `docker.yml` (job deploy-staging) refuse tout
@@ -634,7 +642,7 @@ jobs:
   # visite : c'est exactement ce que ce job fait.
   web-navigateur:
     name: Web · gardes navigateur (Playwright) · tranche ${{ matrix.tranche }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # #12555 — QUATRE TRANCHES PARALLÈLES. En série, les gardes prenaient
     # ~37 min sur un job de 38 (médiane de 10 runs verts de dev, 23-24 octobre),
     # et ce job fixait la durée de tout le run. Chaque garde lève son propre
@@ -1374,7 +1382,7 @@ jobs:
   # `scripts/ci-affected.mjs`). iOS reste local (runner macOS, #5657).
   shell-android:
     name: Android coque · APK de recette
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: needs.changes.outputs.shell_android == 'true'
     timeout-minutes: 30
@@ -1493,7 +1501,7 @@ jobs:
   # des textes de décor sous `packages/shared/design/glory-frames/`.
   glory-frames:
     name: Cadres de gloire · empiètement
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: needs.changes.outputs.glory_frames == 'true'
     # 60 : plafond de secours au-dessus du jeu complet des cibles (40 min, sur
@@ -1688,7 +1696,7 @@ jobs:
   # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
   test:
     name: Tests · ${{ matrix.package.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quality, changes]
     timeout-minutes: ${{ matrix.package.timeoutMinutes }}
     # #12558 — web et passerelle ne tournent que si leur ZONE est touchée
@@ -1789,8 +1797,20 @@ jobs:
       - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
         if: ${{ matrix.package.path == 'services/gateway' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265
+          # Un miroir apt qui CALE (2026-11-05, run 42104330831 : 19 min sur
+          # 97 paquets, tranche 1/3 tuée par le délai du job, couverture
+          # fusionnée privée d'un tiers) doit échouer VITE et se retenter, pas
+          # consommer le budget des tests : délai réseau court, reprises, et
+          # chaque tentative bornée.
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+          for i in 1 2 3; do
+            sudo timeout 240 apt-get "${APT_OPTS[@]}" update \
+              && sudo timeout 300 apt-get "${APT_OPTS[@]}" install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265 \
+              && break
+            [ "$i" = 3 ] && exit 1
+            echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
+            sleep 10
+          done
           ffprobe -version | head -1
           jpegtran -version 2>&1 | head -1
           command -v heif-convert
@@ -1849,9 +1869,9 @@ jobs:
   # tranche manquante est rouge (`--attendu 3`).
   test-gateway-coverage:
     name: Tests · gateway · couverture fusionnée
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes, test]
-    if: ${{ !cancelled() && needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true' }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true') }}
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -1895,7 +1915,8 @@ jobs:
   # tient pas à la main. Sans `needs` : elle ne lit rien d'un autre job.
   test-parite:
     name: Tests · voie de parité (web et passerelle)
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -1925,8 +1946,20 @@ jobs:
 
       - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265
+          # Un miroir apt qui CALE (2026-11-05, run 42104330831 : 19 min sur
+          # 97 paquets, tranche 1/3 tuée par le délai du job, couverture
+          # fusionnée privée d'un tiers) doit échouer VITE et se retenter, pas
+          # consommer le budget des tests : délai réseau court, reprises, et
+          # chaque tentative bornée.
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+          for i in 1 2 3; do
+            sudo timeout 240 apt-get "${APT_OPTS[@]}" update \
+              && sudo timeout 300 apt-get "${APT_OPTS[@]}" install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265 \
+              && break
+            [ "$i" = 3 ] && exit 1
+            echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
+            sleep 10
+          done
 
       - name: Parity lane self-test
         run: node scripts/ci/voie-parite.mjs --self-test
@@ -1967,7 +2000,7 @@ jobs:
   # ===========================================================================
   test-python:
     name: Traducteur · tests Python
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
     steps:
@@ -2081,7 +2114,7 @@ jobs:
   # ===========================================================================
   test-audio-pipeline:
     name: Traducteur · pipeline audio
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
     steps:
@@ -2207,7 +2240,7 @@ jobs:
   # ===========================================================================
   test-tts-stt:
     name: Traducteur · TTS et STT
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
     steps:
@@ -2345,7 +2378,7 @@ jobs:
   # ===========================================================================
   test-voice-api:
     name: Traducteur · API vocale
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quality, changes]
     if: needs.changes.outputs.translator == 'true'
     steps:
@@ -2477,7 +2510,7 @@ jobs:
   # ===========================================================================
   test-voice-e2e:
     name: Traducteur · banc vocal de bout en bout
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quality, test-voice-api]
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]')
     steps:
@@ -2514,7 +2547,8 @@ jobs:
   # ===========================================================================
   security:
     name: Sécurité · Trivy du dépôt
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-24.04
     # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
     # dev (« Resource not accessible by integration », masqué par
     # continue-on-error) : dev n'a alors AUCUNE analyse Trivy de référence, et
@@ -2528,9 +2562,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Install Trivy
+        uses: ./.github/actions/installer-trivy
+
       - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
+          skip-setup-trivy: true
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
@@ -2538,7 +2576,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.39.1
+        uses: github/codeql-action/upload-sarif@v4.39.3
         if: always()
         continue-on-error: true
         with:
@@ -2549,7 +2587,7 @@ jobs:
   # ===========================================================================
   prisma:
     name: Prisma · schéma et client
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: quality
     steps:
       - name: Checkout
@@ -2585,7 +2623,7 @@ jobs:
   # ===========================================================================
   build:
     name: Build · shared, passerelle, agent (${{ github.event.inputs.package_manager || 'bun' }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [quality, test, prisma]
     steps:
       - name: Checkout
@@ -2652,17 +2690,19 @@ jobs:
   # ===========================================================================
   summary:
     name: Verdict CI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes, quality, gardes-depot, web-navigateur, shell-android, glory-frames, test, test-gateway-coverage, test-parite, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Checkout (le script du verdict seul)
         uses: actions/checkout@v7
+        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
         with:
           sparse-checkout: scripts/ci
           fetch-depth: 1
 
       - name: Tableau
+        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
         run: |
           echo "## CI — verdict" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -2688,6 +2728,7 @@ jobs:
           echo "| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build · shared, passerelle, agent | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
       - name: Verdict
+        if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: node scripts/ci/needs-verdict.mjs

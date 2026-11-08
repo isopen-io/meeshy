@@ -4,6 +4,8 @@ import androidx.compose.runtime.Stable
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 
 /**
  * La prise que [ReelVideoSurface] tend à son hôte sur son lecteur vivant : de quoi dessiner une
@@ -30,12 +32,47 @@ public class ReelPlayerHandle internal constructor(private val player: Player) {
         player.seekTo(positionMs)
     }
 
+    /**
+     * Un seek TOLÉRANT, pour parcourir une vidéo en pause au rythme du doigt : un seek exact à chaque mouvement gèlerait
+     * sur la décompression du GOP. [endTolerantSeek] rend au lecteur son seek exact.
+     */
+    public fun seekTolerant(positionMs: Long, toleranceMs: Long) {
+        (player as? ExoPlayer)?.setSeekParameters(SeekParameters(toleranceMs, toleranceMs))
+        player.seekTo(positionMs)
+    }
+
+    public fun endTolerantSeek() {
+        (player as? ExoPlayer)?.setSeekParameters(SeekParameters.DEFAULT)
+    }
+
     /** Appelle [onChange] à chaque bascule lecture/pause ; la valeur retournée se désabonne. */
     public fun observePlaying(onChange: (Boolean) -> Unit): () -> Unit {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = onChange(isPlaying)
         }
         player.addListener(listener)
+        return { player.removeListener(listener) }
+    }
+
+    /**
+     * Dit si le lecteur ATTEND des données (mise en mémoire tampon, premier chargement) : `true` d'abord pendant la
+     * préparation, puis à chaque famine ; `false` dès qu'il peut jouer. Annoncé tout de suite à l'abonnement, puis à
+     * chaque changement. La valeur retournée se désabonne.
+     */
+    public fun observeBuffering(onChange: (Boolean) -> Unit): () -> Unit {
+        var last: Boolean? = null
+        fun report() {
+            val buffering = player.playbackState == Player.STATE_BUFFERING
+            if (buffering != last) {
+                last = buffering
+                onChange(buffering)
+            }
+        }
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) = report()
+        }
+        player.addListener(listener)
+        report()
         return { player.removeListener(listener) }
     }
 

@@ -4,13 +4,11 @@ import { useEffect, useId, useState } from 'react';
 import {
   CIRCLE_NOTIFY_FAMILIES,
   RELATION_AUDIENCE_CHOICES,
-  RELATION_LEVEL_LABELS,
   circleNotifyKey,
   type CircleNotifyAction,
   type CircleNotifyFamily,
   type CircleNotifyKey,
   type RelationAudienceChoice,
-  type RelationLabelLanguage,
 } from '@meeshy/shared/utils/relation-levels';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -31,6 +29,7 @@ import {
   type CircleNotifyCatalogKey,
 } from '@/lib/i18n-circle-notify-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { relationLevelLabel } from '@/lib/relations/level-labels';
 
 /**
  * **« QUI EST PRÉVENU »** (#14063) — Réglages › Notifications. Trois
@@ -57,20 +56,10 @@ export type CircleNotifyView =
 
 const FAMILIES = Object.keys(CIRCLE_NOTIFY_FAMILIES) as readonly CircleNotifyFamily[];
 
-const LABEL_LANGUAGE: Readonly<Record<InterfaceLanguage, RelationLabelLanguage>> = {
-  fr: 'fr',
-  en: 'en',
-  es: 'es',
-  pt: 'pt-BR',
-  de: 'de',
-  it: 'it',
-  ar: 'ar',
-};
-
 const t = (language: InterfaceLanguage, key: CircleNotifyCatalogKey): string => translateCircleNotify(language, key);
 
 function choiceLabel(language: InterfaceLanguage, choice: RelationAudienceChoice): string {
-  return choice === 'NOBODY' ? t(language, 'circleNotify.choice.NOBODY') : RELATION_LEVEL_LABELS[LABEL_LANGUAGE[language]][choice];
+  return choice === 'NOBODY' ? t(language, 'circleNotify.choice.NOBODY') : relationLevelLabel(language, choice);
 }
 
 function explanationKey(choice: RelationAudienceChoice): CircleNotifyCatalogKey | null {

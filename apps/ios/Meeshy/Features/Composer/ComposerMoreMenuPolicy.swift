@@ -17,6 +17,9 @@ nonisolated enum ComposerMoreMenuEntry: String, CaseIterable, Equatable, Sendabl
     case slideDuration
     case legend
     case hashtags
+    case soundReuse
+    /// « Désactiver les commentaires » (#16541) — une coche, comme la reprise du son.
+    case commentsOff
     case preview
     case pickBackground
     case removeBackground
@@ -55,6 +58,10 @@ nonisolated enum ComposerMoreMenuPolicy {
         var backgroundMedia: ComposerSceneEffects.Background?
         var offeredDoors: [ComposerRailDoor]
         var overflow: [ComposerOverflowEntry]
+        /// Une vidéo est composée : sa bande-son peut être reprise (#4756).
+        var offersSoundReuse = false
+        /// La publication part par le document et naît ouverte (#16541).
+        var offersCommentSettings = false
     }
 
     static func entries(_ context: Context) -> [ComposerMoreMenuEntry] {
@@ -63,6 +70,8 @@ nonisolated enum ComposerMoreMenuPolicy {
             + background(context.backgroundMedia) + [.animation, .slideDuration, .legend]
         let publication = [ComposerMoreMenuEntry.hashtags]
             .filter { entree in entree.door.map(doors.contains) ?? false }
+            + (context.offersSoundReuse ? [.soundReuse] : [])
+            + (context.offersCommentSettings ? [.commentsOff] : [])
         let export = context.overflow.map(ComposerMoreMenuEntry.init)
         return scene + publication + export
     }
@@ -116,6 +125,10 @@ nonisolated enum ComposerMoreMenuCopy {
             return String(localized: "composer.more.slideDuration", defaultValue: "Durée", bundle: .main)
         case .legend:
             return String(localized: "composer.more.legend", defaultValue: "Légende", bundle: .main)
+        case .soundReuse:
+            return String(localized: "composer.more.soundReuse", defaultValue: "Autoriser la reprise du son", bundle: .main)
+        case .commentsOff:
+            return CommentSettingsToggle.Copy.disable
         case .removeBackground:
             return String(localized: "composer.more.removeBackground",
                           defaultValue: "Retirer le fond de la scène", bundle: .main)
@@ -143,6 +156,8 @@ nonisolated enum ComposerMoreMenuCopy {
         case .animation: return "film.stack"
         case .slideDuration: return "timer"
         case .legend: return "text.bubble"
+        case .soundReuse: return "waveform"
+        case .commentsOff: return CommentSettingsToggle.Copy.symbol(closed: false)
         case .preview: return ComposerOverflowCopy.icon(.preview)
         case .pickBackground: return ComposerOverflowCopy.icon(.pickBackground)
         case .removeBackground: return ComposerOverflowCopy.icon(.removeBackground)
@@ -151,6 +166,18 @@ nonisolated enum ComposerMoreMenuCopy {
         case .clearAll: return ComposerOverflowCopy.icon(.clearAll)
         case .hashtags: return ""
         }
+    }
+
+    static var soundReuseHint: String {
+        String(localized: "composer.more.soundReuse.hint",
+               defaultValue: "D'autres personnes pourront réutiliser la bande-son des vidéos de ce post dans leurs propres publications.",
+               bundle: .main)
+    }
+
+    static var commentsOffHint: String {
+        String(localized: "composer.more.commentsOff.hint",
+               defaultValue: "Personne ne pourra commenter cette publication. Vous pourrez les réactiver depuis son menu.",
+               bundle: .main)
     }
 
     static var animationOn: String {
@@ -172,5 +199,34 @@ nonisolated enum ComposerMoreMenuCopy {
     static var clearAllConfirm: String {
         String(localized: "composer.more.clearAll.confirm",
                defaultValue: "Tout effacer de la scène ?", bundle: .main)
+    }
+}
+
+/// **La reprise du son d'une publication** (#4756, #8012). La passerelle verse
+/// la bande-son des VIDÉOS d'une publication publique à la bibliothèque, sauf
+/// REFUS explicite : l'absence vaut accord, d'où `nil` tant que l'auteur n'a
+/// rien touché. Le choix n'est offert que là où il a un effet — une vidéo
+/// composée (loi 4).
+nonisolated enum ComposerSoundReuse {
+    static func isOffered(slides: [StorySlide]) -> Bool {
+        slides.contains { ($0.effects.mediaObjects ?? []).contains { $0.kind == .video } }
+    }
+
+    static func isAllowed(_ choice: Bool?) -> Bool { choice != false }
+
+    static func toggled(_ choice: Bool?) -> Bool { !isAllowed(choice) }
+}
+
+/// **« Désactiver les commentaires » à la création** (#16541). Le choix ne
+/// voyage que par le canal DOCUMENT (post, réel) : la scène d'une story publie
+/// par un autre chemin, une citation part par `POST /posts/:id/repost`, et
+/// l'édition passe par le menu ⋯ de la publication — rouvrir le composer
+/// d'édition sur un post fermé ne doit rien rouvrir.
+nonisolated enum ComposerCommentSettings {
+    static func isOffered(format: ComposerFormat, origin: ComposerOrigin) -> Bool {
+        switch origin {
+        case .edit, .repost: return false
+        default: return format == .post || format == .reel
+        }
     }
 }

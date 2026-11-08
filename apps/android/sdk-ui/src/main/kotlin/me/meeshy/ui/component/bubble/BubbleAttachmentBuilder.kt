@@ -20,6 +20,7 @@ internal class BubbleAttachments(
     val locations: List<BubbleLocation>,
     val audios: List<BubbleAudio>,
     val contactCards: List<BubbleContactCard>,
+    val videos: List<BubbleVideo> = emptyList(),
 )
 
 /**
@@ -43,10 +44,12 @@ internal object BubbleAttachmentBuilder {
         mediaBaseUrl: String?,
         displayDensity: Float,
         contactScope: ContactCardResolutionScope = ContactCardResolutionScope.Unknown,
+        /** La bascule de langue posée par un drapeau : texte, karaoké et piste des vocaux la suivent d'une seule descente. */
+        manualLanguage: String? = null,
     ): BubbleAttachments {
         // #13106 — un blob chiffré de bout en bout n'est aucun genre de pièce : ni nom, ni lien.
         val openable = visibleAttachments.filterNot { it.isEndToEndBlob }
-        return project(openable, effects, preferences, mediaBaseUrl, displayDensity, contactScope)
+        return project(openable, effects, preferences, mediaBaseUrl, displayDensity, contactScope, manualLanguage)
     }
 
     private fun project(
@@ -56,6 +59,7 @@ internal object BubbleAttachmentBuilder {
         mediaBaseUrl: String?,
         displayDensity: Float,
         contactScope: ContactCardResolutionScope,
+        manualLanguage: String?,
     ): BubbleAttachments {
         val files = visibleAttachments
             .filterNot { it.isImage || it.isLocation || it.isAudio }
@@ -74,6 +78,8 @@ internal object BubbleAttachmentBuilder {
                     thumbnailUrl = if (sealed) null else attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = if (sealed) null else attachment.width,
                     height = if (sealed) null else attachment.height,
+                    mimeType = if (sealed) null else attachment.mimeType,
+                    pageCount = if (sealed) null else attachment.pageCount,
                 )
             }
         return BubbleAttachments(
@@ -91,7 +97,26 @@ internal object BubbleAttachmentBuilder {
                 },
             audios = visibleAttachments
                 .filter { it.isAudio }
-                .map { attachment -> buildAudio(attachment, preferences, mediaBaseUrl) },
+                .map { attachment -> buildAudio(attachment, preferences, mediaBaseUrl, manualLanguage) },
+            videos = visibleAttachments
+                .filter { it.isVideo && !it.isContactCard && !PieceSealing.isSealed(it) }
+                .map { attachment ->
+                    BubbleVideo(
+                        attachmentId = attachment.id,
+                        url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                        thumbnailUrl = attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                        width = attachment.width,
+                        height = attachment.height,
+                        durationSeconds = attachment.duration?.let { it / 1000 },
+                        sizeBytes = attachment.fileSize,
+                        isProtected = attachment.isProtected,
+                        isOnDevice = attachment.fileUrl.isLocalUri() || attachment.awaitsUpload,
+                        servedConsumption = attachment.currentUserConsumption,
+                        isBlurred = attachment.declaresBlur,
+                        isViewOnce = attachment.declaresViewOnce,
+                        viewOnceCount = attachment.viewOnceCount ?: 0,
+                    )
+                },
             contactCards = visibleAttachments
                 .filter { it.isContactCard }
                 .map { attachment ->
@@ -110,7 +135,7 @@ internal object BubbleAttachmentBuilder {
         mediaBaseUrl: String?,
         displayDensity: Float,
     ): List<BubbleImage> {
-        val imageAttachments = visibleAttachments.filter { it.isImage && it.fileUrl != null }
+        val imageAttachments = visibleAttachments.filter { it.isImage && it.paintableUrl != null }
         // La vignette d'une bulle est la plus petite variante qui COUVRE la case, jamais
         // l'original multi-Mo. Un message flouté ou à vue unique garde ses URL d'avant :
         // aucune URL de plus ne part pour un contenu protégé.
@@ -122,20 +147,32 @@ internal object BubbleAttachmentBuilder {
             !effects.has(MessageEffectFlags.BLURRED) &&
             !effects.has(MessageEffectFlags.VIEW_ONCE)
         return imageAttachments
-            .map { attachment ->
+            .mapNotNull { attachment ->
+                val paintable = attachment.paintableUrl ?: return@mapNotNull null
                 val lighterPreview = if (lighterPreviewsAllowed) attachment.lighterPreviewUrl(previewWidthPx) else null
                 BubbleImage(
                     attachmentId = attachment.id,
-                    url = resolveMediaUrl(attachment.fileUrl!!, mediaBaseUrl),
+                    url = resolveMediaUrl(paintable, mediaBaseUrl),
                     thumbnailUrl = (lighterPreview ?: attachment.thumbnailUrl)
                         ?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = attachment.width,
                     height = attachment.height,
                     alt = attachment.alt?.trim()?.ifBlank { null },
                     reactionLabel = if (lighterPreviewsAllowed && attachment.showsItsContent()) tileReactionLabel(attachment.reactionSummary) else null,
+                    sizeBytes = attachment.fileSize?.toLong(),
+                    isBlurred = attachment.declaresBlur,
+                    isViewOnce = attachment.declaresViewOnce,
+                    viewOnceCount = attachment.viewOnceCount ?: 0,
                 )
             }
     }
+
+    /** Le flou déclaré par la pièce : son drapeau booléen OU le bit du bitfield (les canaux sont un OU). */
+    private val ApiMessageAttachment.declaresBlur: Boolean
+        get() = isBlurred == true || MessageEffectFlags.has(effectFlags ?: 0L, MessageEffectFlags.BLURRED)
+
+    private val ApiMessageAttachment.declaresViewOnce: Boolean
+        get() = isViewOnce == true || MessageEffectFlags.has(effectFlags ?: 0L, MessageEffectFlags.VIEW_ONCE)
 
     /** Une pièce à vue unique, floutée ou à effets ne montre rien d'elle, réactions comprises. */
     private fun ApiMessageAttachment.showsItsContent(): Boolean =
@@ -162,13 +199,14 @@ internal object BubbleAttachmentBuilder {
      * attachment carries no explicit `duration`, matching the gateway's two sources.
      * Both are milliseconds (`MessageAttachment.duration`, packages/shared/prisma/schema.prisma).
      */
-    private fun buildAudio(
+    internal fun buildAudio(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
+        manualLanguage: String? = null,
     ): BubbleAudio {
-        val resolved = resolveTranscription(attachment, preferences)
-        val translatedAudio = resolveTranslatedAudio(attachment, preferences)
+        val voice = AttachmentTranscriptPrism.servedVoice(attachment.transcription, attachment.translations, preferences, manualLanguage)
+        val translatedAudio = voice.track
         val playableUrl = translatedAudio?.url ?: attachment.fileUrl
         val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
             ?: attachment.duration?.let { it / 1000 }
@@ -178,32 +216,39 @@ internal object BubbleAttachmentBuilder {
             url = playableUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
             durationSeconds = durationSeconds,
             sizeBytes = attachment.fileSize,
-            transcriptionText = resolved?.text,
-            transcriptionLanguage = resolved?.language,
-            isTranscriptionTranslated = resolved?.isTranslated == true,
+            transcriptionText = voice.text,
+            transcriptionLanguage = voice.textLanguage,
+            isTranscriptionTranslated = voice.isTranslated,
             isAudioTranslated = translatedAudio != null,
-            audioLanguage = translatedAudio?.language ?: resolved?.language,
-            transcriptionSegments = servedSegments(attachment, resolved, playedLanguage = translatedAudio?.language),
+            audioLanguage = translatedAudio?.language ?: voice.textLanguage,
+            transcriptionSegments = servedSegments(attachment, voice),
+            lastPlayPositionMs = attachment.currentUserConsumption?.lastPlayPositionMs,
+            listenedComplete = attachment.currentUserConsumption?.listenedComplete == true,
+            originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null },
+            translatedLanguages = attachment.translations.orEmpty()
+                .filter { (_, track) -> !track.url.isNullOrBlank() }
+                .keys.map { it.trim() }.filter { it.isNotEmpty() },
         )
     }
 
     /**
      * Les segments du texte servi (#13878) : ceux de la transcription d'origine, ou ceux de la traduction servie. Leurs
-     * horodatages ne valent que sur la piste qu'ils décrivent ; servis au-dessus d'une autre voix, ils les perdent et le
-     * karaoké avance à la progression plutôt que d'allumer un mot à contretemps.
+     * horodatages ne valent que sur la piste qu'ils décrivent ([AttachmentTranscriptPrism.ServedVoice.segmentsDescribeTrack]) ;
+     * servis au-dessus d'une autre voix, ils les perdent et le karaoké avance à la progression plutôt que d'allumer un
+     * mot à contretemps.
      */
     private fun servedSegments(
         attachment: ApiMessageAttachment,
-        served: AttachmentTranscriptPrism.Served?,
-        playedLanguage: String?,
+        voice: AttachmentTranscriptPrism.ServedVoice,
     ): List<MessageTranscriptionSegment> {
-        served ?: return emptyList()
-        val segments = if (served.isTranslated) {
-            attachment.translations.orEmpty().entries.firstOrNull { it.key.equals(served.language, ignoreCase = true) }?.value?.segments
-        } else {
+        voice.text ?: return emptyList()
+        val language = voice.segmentsLanguage
+        val segments = if (language == null) {
             attachment.transcription?.segments
+        } else {
+            attachment.translations.orEmpty().entries.firstOrNull { it.key.equals(language, ignoreCase = true) }?.value?.segments
         }
-        val describesPlayedTrack = if (served.isTranslated) served.language.equals(playedLanguage, ignoreCase = true) else playedLanguage == null
+        val describesPlayedTrack = voice.segmentsDescribeTrack
         return segments.orEmpty().mapNotNull { segment ->
             segment.text.trim().ifBlank { null }?.let { text ->
                 MessageTranscriptionSegment(
@@ -216,48 +261,6 @@ internal object BubbleAttachmentBuilder {
         }
     }
 
-    private data class ResolvedAudio(
-        val url: String,
-        val language: String,
-        val durationMs: Int?,
-    )
-
-    /**
-     * Prisme rule 1 for the audio source: prefer a cloned-voice translation targeting one
-     * of the viewer's preferred languages (in priority order). When the highest-priority
-     * preferred language is the attachment's original transcription language the original
-     * voice wins (returns null) — never an arbitrary translation. Returns null when no
-     * preferred-language translation carries a playable audio url, in which case the
-     * caller falls back to the original voice note. Mirrors [resolveTranscription] so the
-     * played voice and the surfaced transcription line resolve to the same language.
-     */
-    private fun resolveTranslatedAudio(
-        attachment: ApiMessageAttachment,
-        preferences: LanguageResolver.ContentLanguagePreferences,
-    ): ResolvedAudio? {
-        val originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null }
-        val translations = attachment.translations.orEmpty()
-
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
-            if (originalLanguage != null && originalLanguage.equals(language, ignoreCase = true)) {
-                return null
-            }
-            val translated = translations.entries
-                .firstOrNull { it.key.equals(language, ignoreCase = true) }
-                ?.value
-            val url = translated?.url?.trim()?.ifBlank { null }
-            if (url != null) return ResolvedAudio(url, language, translated.durationMs)
-        }
-        return null
-    }
-
-    /** The Prisme-served transcription line — [AttachmentTranscriptPrism], the site the transcription fiche reads too. */
-    private fun resolveTranscription(
-        attachment: ApiMessageAttachment,
-        preferences: LanguageResolver.ContentLanguagePreferences,
-    ): AttachmentTranscriptPrism.Served? =
-        AttachmentTranscriptPrism.served(attachment.transcription, attachment.translations, preferences)
-
     /**
      * L'URL de la variante WebP d'aperçu quand elle est plus légère que l'original, `null`
      * sinon. Une image chiffrée n'a pas de variante ; une pièce qui n'a pas PROUVÉ qu'elle
@@ -267,6 +270,14 @@ internal object BubbleAttachmentBuilder {
         if (isEncrypted == true || isProtected) return null
         return ImageVariantPicker.lighterPreviewUrl(imageVariants, fileUrl.orEmpty(), width, targetWidthPx)
     }
+
+    /** Le fichier de l'image ; en attente d'envoi, ses octets scellés, l'aperçu local qui le remplace (#15104). */
+    private val ApiMessageAttachment.paintableUrl: String?
+        get() = fileUrl ?: thumbnailUrl?.takeIf { it.isLocalUri() }
+
+    /** En attente d'envoi : ses octets sont scellés sur l'appareil, seul son aperçu local se lit (#15104). */
+    private val ApiMessageAttachment.awaitsUpload: Boolean
+        get() = fileUrl == null && thumbnailUrl.isLocalUri()
 
     private fun String?.isLocalUri(): Boolean = this != null && (startsWith("file://") || startsWith("content://"))
 

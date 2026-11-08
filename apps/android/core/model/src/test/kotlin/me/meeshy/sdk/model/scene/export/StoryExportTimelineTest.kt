@@ -192,4 +192,20 @@ class StoryExportTimelineTest {
         assertThat(StoryExportTimeline.plan(listOf(photo)).still).isTrue()
         assertThat(StoryExportTimeline.plan(listOf(StoryExportSlideSource(null))).still).isTrue()
     }
+
+    @Test fun `une diapo a video de fond sans effet dure toute sa video, pas six secondes`() {
+        val bare = StoryExportSlideSource(effects = null, legacyBackgroundVideo = "fond.mp4")
+        assertThat(StoryExportTimeline.plan(listOf(bare), mapOf("fond.mp4" to 29.913)).totalMillis).isEqualTo(29_913)
+
+        val captioned = StoryExportSlideSource(StoryEffects(textObjects = listOf(StoryTextObject(id = "t", text = "Bonjour"))), legacyBackgroundVideo = "fond.mp4")
+        assertThat(StoryExportTimeline.plan(listOf(captioned), mapOf("fond.mp4" to 29.913)).totalMillis).isEqualTo(29_913)
+    }
+
+    @Test fun `une video de fond heritee plus courte que six secondes tourne en tours entiers, et une duree epinglee fait autorite`() {
+        val short = StoryExportSlideSource(effects = null, legacyBackgroundVideo = "fond.mp4")
+        assertThat(StoryExportTimeline.plan(listOf(short), mapOf("fond.mp4" to 4.0)).totalMillis).isEqualTo(8_000)
+
+        val pinned = StoryExportSlideSource(StoryEffects(timelineDuration = 10.0), legacyBackgroundVideo = "fond.mp4")
+        assertThat(StoryExportTimeline.plan(listOf(pinned), mapOf("fond.mp4" to 29.913)).totalMillis).isEqualTo(10_000)
+    }
 }

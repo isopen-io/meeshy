@@ -217,6 +217,9 @@ const f = {
   'admin.enum.postVisibility.EXCEPT.explain': 'Visible to friends, except a list of excluded people.',
   'admin.enum.postVisibility.ONLY': 'Some friends',
   'admin.enum.postVisibility.ONLY.explain': 'Visible only to a chosen list of friends.',
+  'admin.enum.postVisibility.ACQUAINTANCES': 'Acquaintances',
+  'admin.enum.postVisibility.CLOSE': 'Close',
+  'admin.enum.postVisibility.BLOOD': 'Blood',
 
   'admin.enum.postState.published': 'Published',
   'admin.enum.postState.offline': 'Offline',

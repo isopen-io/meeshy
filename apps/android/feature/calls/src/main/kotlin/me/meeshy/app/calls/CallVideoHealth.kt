@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import me.meeshy.sdk.model.call.CallVideoNotice
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +21,16 @@ import javax.inject.Singleton
  */
 interface CallVideoHealth {
     val isVideoAutoPaused: StateFlow<Boolean>
+
+    /** L'indicateur discret : image réduite par la chaleur, ou lumière insuffisante. */
+    val videoNotice: StateFlow<CallVideoNotice> get() = QUIET_NOTICE
+
+    /** `true` tant que les effets avancés de ma caméra doivent rester coupés (chaleur, budget de trame). */
+    val effectsDegraded: StateFlow<Boolean> get() = NOT_DEGRADED
 }
+
+private val QUIET_NOTICE: StateFlow<CallVideoNotice> = MutableStateFlow(CallVideoNotice.None).asStateFlow()
+private val NOT_DEGRADED: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
 
 /**
  * Interim health: never paused, until the capability that watches the link swaps

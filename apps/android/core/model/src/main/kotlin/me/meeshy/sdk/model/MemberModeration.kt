@@ -37,14 +37,27 @@ object MemberModeration {
     }
 
     /**
+     * The key every management route is addressed by: the `User.id` of an account, else the
+     * `Participant.id` of a visitor who has no account (expel and ban resolve both columns).
+     * Shared with [MemberActionPolicy] so the swipe/list path and the settings section agree.
+     */
+    fun addressKey(member: PaginatedParticipant): String = member.userId ?: member.id
+
+    /**
      * Role changes offered on a member's row, ported from iOS
      * `ParticipantsView.contextMenuItems`: the creator may move anyone between
      * member / moderator / admin; a conversation admin may do the same except on
      * another admin (peers cannot demote each other); moderators and members get
      * nothing.
      */
-    fun roleActions(actor: MemberRole, target: MemberRole, isSelf: Boolean): List<MemberRoleAction> = when {
+    fun roleActions(
+        actor: MemberRole,
+        target: MemberRole,
+        isSelf: Boolean,
+        hasAccount: Boolean = true,
+    ): List<MemberRoleAction> = when {
         isSelf -> emptyList()
+        !hasAccount -> emptyList()
         target == MemberRole.CREATOR -> emptyList()
         actor == MemberRole.CREATOR -> creatorActions(target)
         actor == MemberRole.ADMIN && target != MemberRole.ADMIN -> creatorActions(target)

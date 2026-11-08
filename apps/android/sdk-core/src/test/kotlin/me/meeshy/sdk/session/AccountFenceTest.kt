@@ -196,4 +196,48 @@ class AccountFenceTest {
         /** A write that waits on itself or on its neighbour never ends: fail in seconds, not after the default minute. */
         val DEADLOCK_TIMEOUT = 5.seconds
     }
+
+    @Test
+    fun `a session opening waits for the close in progress, wipe included`() = runTest {
+        val fence = AccountFence(Owner("A"))
+        val order = mutableListOf<String>()
+        val wiping = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+
+        val closing = launch { fence.close { wiping.complete(Unit); release.await(); order += "wiped" } }
+        wiping.await()
+        val opening = launch { fence.opening { order += "opened" } }
+        runCurrent()
+
+        assertThat(order).isEmpty()
+        release.complete(Unit)
+        closing.join()
+        opening.join()
+        assertThat(order).containsExactly("wiped", "opened").inOrder()
+    }
+
+    @Test
+    fun `a close that is not admitted retires no ticket and cancels no send`() = runTest {
+        val fence = AccountFence(Owner("A"))
+        val ticket = fence.ticket()
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val sending = async {
+            fence.guard(ticket) {
+                started.complete(Unit)
+                release.await()
+                "delivered"
+            }
+        }
+        started.await()
+        var wiped = false
+
+        val closed = fence.closeIf(admitted = { false }) { wiped = true }
+        release.complete(Unit)
+
+        assertThat(closed).isFalse()
+        assertThat(wiped).isFalse()
+        assertThat(fence.isCurrent(ticket)).isTrue()
+        assertThat(sending.await()).isEqualTo("delivered")
+    }
 }

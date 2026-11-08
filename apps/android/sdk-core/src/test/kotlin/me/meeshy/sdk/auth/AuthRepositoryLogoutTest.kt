@@ -5,6 +5,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MeeshyUser
@@ -154,5 +156,84 @@ class AuthRepositoryLogoutTest {
         s.repository.logout()
 
         coVerify(exactly = 1) { s.api.logout(null, "sess-a") }
+    }
+
+    @Test
+    fun `la deconnexion delegue a l'executeur de fermeture, jetons deja vides, avant la purge des caches`() = runTest {
+        val order = mutableListOf<String>()
+        var tokensWhenClosing: String? = "unset"
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a")
+        val api = mockk<AuthApi>().apply { coEvery { logout(any(), any()) } returns ApiResponse(success = true) }
+        val teardown = object : SessionTeardown {
+            override suspend fun wipe() {
+                order += "wipe"
+            }
+        }
+        val closing = me.meeshy.sdk.session.SessionClosing {
+            order += "close"
+            tokensWhenClosing = store.jwt
+        }
+        val repository = AuthRepository(
+            api, store, SessionRepository(api, store), teardown, SyncSeqTracker(), sessionClosing = closing,
+        )
+
+        repository.logout()
+
+        assertThat(order).containsExactly("close", "wipe").inOrder()
+        assertThat(tokensWhenClosing).isNull()
+    }
+
+    @Test
+    fun `avec l'executeur de fermeture, la deconnexion rend la main et lui remet les jetons d'avant l'effacement`() = runTest {
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a")
+        val api = mockk<AuthApi>()
+        val handed = mutableListOf<Pair<String?, String?>>()
+        val scheduler = object : ServerLogoutScheduler {
+            override fun schedule(jwt: String?, sessionToken: String?) {
+                handed += jwt to sessionToken
+            }
+        }
+        val quiet = object : ServerLogoutLog {
+            override fun info(message: String) = Unit
+            override fun warn(message: String) = Unit
+            override fun error(message: String) = Unit
+        }
+        coEvery { api.logout(any(), any()) } throws IOException("offline")
+        val serverLogout = ServerLogout(api, scheduler, quiet, backgroundScope)
+        val repository = AuthRepository(
+            api, store, SessionRepository(api, store), RecordingTeardown(), SyncSeqTracker(), serverLogout = serverLogout,
+        )
+
+        repository.logout()
+
+        assertThat(store.isAuthenticated).isFalse()
+        // Les tâches du backgroundScope sont ignorées par advanceUntilIdle : on avance le temps virtuel (0 s, 1 s, 5 s).
+        advanceTimeBy(6_001)
+        runCurrent()
+        coVerify(exactly = 3) { api.logout("Bearer jwt-a", "sess-a") }
+        assertThat(handed).containsExactly("jwt-a" to "sess-a")
+    }
+
+    @Test
+    fun `la deconnexion efface le profil gardé du compte qui part, pas celui des autres`() = runTest {
+        val forgotten = mutableListOf<String>()
+        val identities = object : me.meeshy.sdk.session.SignedInIdentityStore {
+            override suspend fun recall(userId: String): MeeshyUser? = null
+            override fun remember(user: MeeshyUser) = Unit
+            override suspend fun forget(userId: String) {
+                forgotten += userId
+            }
+        }
+        val store = InMemoryTokenStore(jwt = "jwt-a", sessionToken = "sess-a", userId = "A")
+        val api = mockk<AuthApi>().apply { coEvery { logout(any(), any()) } returns ApiResponse(success = true) }
+        val session = SessionRepository(
+            api, store, me.meeshy.sdk.net.SessionTransitionFlags(),
+            me.meeshy.sdk.session.PendingProfileEdits.NONE, identities,
+        )
+        val repository = AuthRepository(api, store, session, RecordingTeardown(), SyncSeqTracker())
+
+        repository.logout()
+
+        assertThat(forgotten).containsExactly("A")
     }
 }

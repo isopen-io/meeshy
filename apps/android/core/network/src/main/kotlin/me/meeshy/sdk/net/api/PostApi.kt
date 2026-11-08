@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.PostStoryEffectsWireSerializer
 import me.meeshy.sdk.model.StoryEditEffectsWireSerializer
 import me.meeshy.sdk.model.StoryEffectsWireSerializer
+import me.meeshy.sdk.net.routes.ApiRoutesPosts
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -68,6 +69,8 @@ data class CreatePostRequest(
     /** Légende visible par média, clé = un id de [mediaIds]. */
     val mediaCaption: Map<String, String>? = null,
     val discoverabilityPrecision: DiscoverabilityPrecision? = null,
+    /** `true` : le post naît commentaires fermés (#16541) ; absent = le défaut du serveur (ouverts). */
+    val commentsDisabled: Boolean? = null,
 )
 
 /** Le modèle vit dans :core:model ; ces alias gardent les imports historiques valides. */
@@ -100,6 +103,8 @@ data class CreateStoryRequest(
     val alsoAsReel: Boolean? = null,
     /** La transcription faite sur l'appareil du premier son du post (même champ qu'iOS) ; absente, la passerelle transcrit. */
     val mobileTranscription: MobileTranscriptionPayload? = null,
+    /** `true` : la story naît commentaires fermés (#16541) ; absent = ouverts. */
+    val commentsDisabled: Boolean? = null,
 )
 
 /** Update a post — port of UpdatePostRequest (ServiceModels.swift). */
@@ -122,6 +127,19 @@ data class UpdatePostRequest(
     val allowSoundExtraction: Boolean? = null,
     val mediaAlt: Map<String, String>? = null,
     val mediaCaption: Map<String, String>? = null,
+    /** Fermer (`true`) ou rouvrir (`false`) les commentaires à l'édition (#16541) ; `null` = clé absente. */
+    val commentsDisabled: Boolean? = null,
+)
+
+/** Fermer ou rouvrir les commentaires d'une publication (`PATCH /posts/:postId/comment-settings`, #16541). */
+@Serializable
+data class CommentSettingsRequest(val commentsDisabled: Boolean)
+
+/** Ce que la passerelle rend du réglage : l'état appliqué, qui fait foi. */
+@Serializable
+data class CommentSettingsResult(
+    val postId: String = "",
+    val commentsDisabled: Boolean = false,
 )
 
 /** Create a comment — port of CreateCommentRequest (ServiceModels.swift). */
@@ -134,7 +152,17 @@ data class CreateCommentRequest(
     val originalLanguage: String? = null,
     /** Les médias téléversés sous le contexte `comment` qui partent avec le commentaire (#12972). */
     val attachmentIds: List<String>? = null,
+    /** Le lieu joint au commentaire (#14387, iOS `location: place`) ; la passerelle le hisse en `location`. */
+    val location: SharedPlace? = null,
+    /** L'ancre du média du post que ce commentaire CITE (#6578) : le serveur attend un objet `{ postMediaId }`. */
+    val quotedPostMedia: QuotedPostMediaAnchor? = null,
+    /** La transcription faite sur l'appareil d'un vocal joint, utile seulement avec [attachmentIds]. */
+    val mobileTranscription: MobileTranscriptionPayload? = null,
 )
+
+/** L'ancre figée d'un média cité, telle que la passerelle la valide (`quotedPostMedia: { postMediaId }`). */
+@Serializable
+data class QuotedPostMediaAnchor(val postMediaId: String)
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
 @Serializable
@@ -266,6 +294,19 @@ interface PostApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
+    /**
+     * La recherche générale des publications (#14620) : posts, réels et stories dont le texte
+     * (contenu, légende, traduction en clair) correspond, filtrés par la loi de visibilité du fil.
+     * [types] : `POST`, `REEL`, `STORY` séparés par des virgules ; absent, les trois.
+     */
+    @GET("posts/search")
+    suspend fun search(
+        @Query("q") query: String,
+        @Query("types") types: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null,
+    ): ApiResponse<List<ApiPost>>
+
     @POST("posts")
     suspend fun create(
         @Body body: CreatePostRequest,
@@ -377,6 +418,8 @@ interface PostApi {
         @Path("id") postId: String,
         @Body body: CreateCommentRequest,
         @Header(CLIENT_MUTATION_ID_HEADER) clientMutationId: String? = null,
+        /** `Bearer <jwt>` : épingle la requête à CE jeton (jamais celui du compte courant), sans rafraîchissement. */
+        @Header("Authorization") authorization: String? = null,
     ): ApiResponse<ApiPostComment>
 
     @GET("posts/{id}/comments/{commentId}/replies")
@@ -468,6 +511,13 @@ interface PostApi {
     /** Publie une pièce jointe de conversation ; soumis à la porte e-mail côté intercepteur, pas ici. */
     @POST("posts/from-attachment")
     suspend fun publishAttachment(@Body body: PublishAttachmentRequest): ApiResponse<ApiPost>
+
+    /** Fermer ou rouvrir les commentaires (#16541) : l'auteur, ou la modération qui le dépasse ; 403 `FORBIDDEN` sinon. */
+    @PATCH(ApiRoutesPosts.BY_POST_ID_COMMENT_SETTINGS)
+    suspend fun updateCommentSettings(
+        @Path("postId") postId: String,
+        @Body body: CommentSettingsRequest,
+    ): ApiResponse<CommentSettingsResult>
 
     /** Rendre privée la publication d'un autre : la même porte que la console d'administration. */
     @POST("admin/users/{authorId}/publications/moderation")

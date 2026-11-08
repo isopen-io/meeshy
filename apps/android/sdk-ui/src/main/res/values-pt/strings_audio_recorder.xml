@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_recorder_cancel">Cancelar a gravação</string>
+    <string name="audio_recorder_edit">Editar</string>
+    <string name="audio_recorder_accept">Usar esta gravação</string>
+    <string name="audio_recorder_redo">Gravar novamente</string>
+    <string name="audio_recorder_preview_play">Reproduzir a prévia</string>
+    <string name="audio_recorder_preview_pause">Pausar a prévia</string>
+    <string name="audio_recorder_spoken_language">Idioma falado</string>
+    <string name="audio_recorder_close">Fechar o gravador</string>
+</resources>

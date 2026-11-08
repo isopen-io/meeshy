@@ -24,4 +24,7 @@ object VoiceRecordingFile {
 
     /** e.g. `next(1700000000000L) == "voice_1700000000000.m4a"`. */
     fun next(nowMillis: Long): String = "$PREFIX$nowMillis$EXTENSION"
+
+    /** Même nom pour un autre conteneur (`.ogg` du préréglage Opus, dormant). */
+    fun next(nowMillis: Long, extension: String): String = "$PREFIX$nowMillis$extension"
 }

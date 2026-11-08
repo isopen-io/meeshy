@@ -27,6 +27,10 @@ data class CallTranscriptLine(
     val original: String,
     val translated: String?,
     val translatedLanguage: String?,
+    /** Who spoke: the post-call journal keeps the speaker's colour (#16634). */
+    val speakerId: String = "",
+    /** #16665 — a capture line: [speakerName] is who captured (blank for a call-recording bound), no text. */
+    val captureKind: CallCaptureKind? = null,
 ) {
     /** What the row shows: the original when asked for, or when nothing was translated. */
     fun text(showOriginal: Boolean): String = if (showOriginal) original else translated ?: original
@@ -50,9 +54,8 @@ object CallTranscriptReplay {
     ): List<CallTranscriptLine> {
         val startMs = isoToEpochMillisOrNull(page.callStartedAt) ?: isoToEpochMillisOrNull(recordStartedAt)
         val readerId = reader.userId?.takeIf { it.isNotBlank() }
-        return page.segments
+        val speech = page.segments
             .filter { it.text.isNotBlank() }
-            .sortedBy { it.capturedAtMs }
             .map { segment ->
                 val isLocal = readerId != null && segment.speakerId == readerId
                 val translation = if (isLocal) null else served(segment, reader.prism)
@@ -67,8 +70,44 @@ object CallTranscriptReplay {
                     original = segment.text,
                     translated = translation?.text,
                     translatedLanguage = translation?.language,
-                )
+                    speakerId = segment.speakerId,
+                ).let { segment.capturedAtMs to it }
             }
+        val captures = page.captures.mapNotNull { capture(it, startMs, readerId, reader.name, youLabel, participantLabel) }
+        return (speech + captures).sortedBy { it.first }.map { it.second }
+    }
+
+    /**
+     * #16665 — a capture takes its place among the sentences, at its instant (or the call
+     * start plus its offset). The reader's own capture carries the reader's name.
+     */
+    private fun capture(
+        capture: PersistedTranscriptCapture,
+        startMs: Long?,
+        readerId: String?,
+        readerName: String?,
+        youLabel: String,
+        participantLabel: String,
+    ): Pair<Long, CallTranscriptLine>? {
+        val kind = CallCaptureKind.fromWire(capture.kind) ?: return null
+        val atMs = isoToEpochMillisOrNull(capture.at) ?: startMs?.plus(capture.offsetMs) ?: return null
+        val capturerId = capture.userId?.takeIf { it.isNotBlank() } ?: capture.participantId
+        val isLocal = readerId != null && capturerId == readerId
+        val name = when {
+            !kind.namesCapturer -> ""
+            isLocal -> readerName?.takeIf { it.isNotBlank() } ?: youLabel
+            else -> capture.displayName?.takeIf { it.isNotBlank() } ?: participantLabel
+        }
+        return atMs to CallTranscriptLine(
+            speakerName = name,
+            isLocal = isLocal,
+            elapsedLabel = startMs?.let { CallDuration.clock(maxOf(0L, atMs - it) / MILLIS_PER_SECOND) },
+            original = "",
+            translated = null,
+            translatedLanguage = null,
+            speakerId = capturerId,
+            captureKind = kind,
+        )
     }
 
     private fun served(segment: PersistedTranscriptSegment, prism: List<String>) =

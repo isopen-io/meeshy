@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "bubble.meta.forwarded.from",
+          "androidName": "bubble_forwarded_from_person",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.meta.pinned.a11y",
+          "androidName": "bubble_meta_pinned_a11y",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

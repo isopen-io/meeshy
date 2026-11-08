@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { decideDirectOpening, requestRecipientFields } from '../../services/messaging/messageRequests';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -19,11 +20,17 @@ import {
 } from '../../services/conversations/conversationEntryAdmission';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { announceMemberArrival } from './memberArrivalFanOut';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
+import {
+  applyCommunityAdmission,
+  loadSalonCommunity,
+  planSalonEntry,
+} from '../../services/conversations/communityMembershipSync';
 
 const logger = enhancedLogger.child({ module: 'ConversationInviteRoute' });
 
@@ -196,6 +203,9 @@ export function registerInviteRoute(
       if (!userToInvite) {
         return sendNotFound(reply, 'User not found');
       }
+      // #14107 (MSG-03, RG-22) — invité par quelqu'un qui n'est pas au moins sa
+      // Connaissance : il entre par sa boîte de demandes, et l'invitation ne s'annonce pas.
+      const opening = await decideDirectOpening(fastify.prisma, { senderId: inviterId, recipientId: userId });
 
       // `conversation.participants` est chargé avec `where: { isActive: true }` :
       // il ne pouvait donc PAS voir la ligne d'un banni ni celle d'un ancien
@@ -224,6 +234,16 @@ export function registerInviteRoute(
         return sendBadRequest(reply, 'This user is already a member of the conversation');
       }
 
+      // #16695 — entrer dans un salon d'une communauté privée, c'est y être
+      // admis : la loi de `POST …/participants` et de la création, une fois.
+      const community = await loadSalonCommunity(fastify.prisma, { communityId: conversation.communityId, actorId: inviterId });
+      const communityAdmission = await planSalonEntry(fastify.prisma, community, { kind: 'registered', userId });
+      if (communityAdmission.kind === 'refused') {
+        return communityAdmission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendNotFound(reply, 'User not found');
+      }
+
       // #4174 — la table de droits vient du site UNIQUE
       // (`services/participantRights.ts`). Elle était écrite ICI, et elle
       // DIFFÉRAIT de celle que `POST …/participants` posait pour le même
@@ -239,7 +259,8 @@ export function registerInviteRoute(
         // #9711 — la langue de l'INVITÉ, descendue de son prisme, jamais le
         // défaut `"en"` du schéma.
         language: recipientLanguage(userToInvite, 'fr'),
-        permissions: { ...NEW_MEMBER_PERMISSIONS }
+        permissions: { ...NEW_MEMBER_PERMISSIONS },
+        ...requestRecipientFields(opening, new Date(), inviterId)
       };
 
       // La mise en garde qui vivait ici — « ne rien charger qu'aucune surface ne
@@ -270,7 +291,7 @@ export function registerInviteRoute(
       const newMember = entry.outcome === 'rejoin' && entry.participantId
         ? await fastify.prisma.participant.update({
             where: { id: entry.participantId },
-            data: { ...invitedMemberFields, ...REJOIN_PARTICIPANT_STATE },
+            data: { ...REJOIN_PARTICIPANT_STATE, ...invitedMemberFields },
             include: invitedMemberInclude
           })
         : await fastify.prisma.participant.create({
@@ -287,6 +308,7 @@ export function registerInviteRoute(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
+      if (community) await applyCommunityAdmission(fastify.prisma, community.communityId, communityAdmission);
       announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language, readerUserId: userId });
 
       // `social.conversation_invite` (#8959) — même crédit que
@@ -325,8 +347,26 @@ export function registerInviteRoute(
         );
       }
 
+      // #16837 — l'éventail d'ARRIVÉE, par son site unique. Le commentaire
+      // ci-dessus annonçait « mirrors POST /conversations/:id/participants » :
+      // la jumelle avait donc été ouverte et à moitié reprise — l'auto-join en
+      // est venu, les trois diffusions sont restées derrière. La question juste
+      // n'était pas « que fait la jumelle pour mon problème ? » mais « que
+      // fait-elle, tout court, APRÈS cette écriture ? ».
+      await announceMemberArrival({
+        prisma: fastify.prisma,
+        io: inviteSocketManager?.getIO?.(),
+        conversationId,
+        arrival: {
+          userId,
+          displayName: invitedMemberFields.displayName,
+          joinedAt: newMember.joinedAt ?? new Date(),
+        },
+        onError: (error) => logger.warn('member arrival fan-out failed on invite', { userId, conversationId, err: error }),
+      });
+
       // Envoyer une notification à l'utilisateur invité
-      const notificationService = fastify.notificationService;
+      const notificationService = opening.kind === 'direct' ? fastify.notificationService : undefined;
       if (notificationService) {
         try {
           // Récupérer les informations de l'inviteur

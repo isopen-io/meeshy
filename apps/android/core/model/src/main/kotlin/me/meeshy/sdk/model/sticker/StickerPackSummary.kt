@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import me.meeshy.sdk.model.BUILTIN_STICKER_PACK_SLUGS
 import me.meeshy.sdk.model.StickerPackInfo
+import me.meeshy.sdk.model.pack.InstallablePack
 
 /** Un sticker d'un pack installé (genre : `static`, `cinematic`, `instant`, ou un genre plus récent). */
 @Serializable
@@ -27,9 +28,9 @@ data class StickerPackItemSummary(
 /** Un pack, tel que `GET /sticker-packs/installed` (ou la Boutique, `GET /sticker-packs`) le sert — tout est additif (vieille passerelle). */
 @Serializable
 data class StickerPackSummary(
-    val slug: String,
+    override val slug: String,
     val name: String = "",
-    val installed: Boolean = false,
+    override val installed: Boolean = false,
     val builtin: Boolean = false,
     val removable: Boolean? = null,
     val items: List<StickerPackItemSummary> = emptyList(),
@@ -37,7 +38,15 @@ data class StickerPackSummary(
     val author: String? = null,
     val description: String? = null,
     val coverUrl: String? = null,
-) {
+    /** Additif : la Boutique compte les installations ; absent sur une vieille passerelle. */
+    override val installCount: Int = 0,
+) : InstallablePack<StickerPackSummary> {
+    /** Mee, Meo et leurs duos sont dessinés par le client. */
+    override val isBundled: Boolean get() = builtin || slug in BUILTIN_STICKER_PACK_SLUGS_SET
+
+    override fun withInstall(installed: Boolean, installCount: Int): StickerPackSummary =
+        copy(installed = installed, installCount = installCount)
+
     val title: String get() = name.ifBlank { slug }
     val sendableItems: List<StickerPackItemSummary> get() = items.filter { it.isSendable }
 

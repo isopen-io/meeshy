@@ -79,7 +79,7 @@ class ReducedSceneBareComposeTest {
             ErrorResult(null, chain.request, IllegalStateException("not loaded in a test"))
     }
 
-    private val restingOnTheScene = listOf("Close", "Undo", "Redo", "Publication scenes", "Text", "Media", "Sticker", "More options", "Publish story")
+    private val restingOnTheScene = listOf("Close", "Undo", "Redo", "Publication scenes", "Add text", "Add media", "Add a sticker", "More options", "Publish story")
 
     private fun viewModel(): StoryComposerViewModel {
         val session: SessionRepository = mockk(relaxed = true)
@@ -133,7 +133,7 @@ class ReducedSceneBareComposeTest {
         val vm = twoSlidesWithHistory()
         show(vm)
 
-        compose.onNodeWithContentDescription("Background").performClick()
+        compose.onNodeWithContentDescription("Choose a background").performClick()
         compose.waitForIdle()
 
         assertThat(vm.state.value.band.activeTool).isEqualTo(StoryToolMode.TEXTURE)

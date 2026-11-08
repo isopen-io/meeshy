@@ -83,6 +83,21 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    /// #14708 — la relecture du régime d'une réponse rapide ne distingue un
+    /// 404 SERVI par la passerelle d'un 404 de Traefik que si elle demande
+    /// les refus typés : perdre l'enveloppe `TypedRefusals` doit rougir.
+    func testGetByIdTypedRefusalsAsksTheSameAddressForStructuredRefusals() async throws {
+        let response = APIResponse(success: true, data: makeConversation(id: "abc456"), error: nil)
+        mock.stub("/conversations/abc456", result: response)
+
+        _ = try await service.getByIdTypedRefusals("abc456")
+        _ = try await service.getById("abc456")
+
+        XCTAssertEqual(mock.requests.map(\.endpoint), ["/conversations/abc456", "/conversations/abc456"])
+        XCTAssertEqual(mock.requests.map(\.rejectionPolicy), [.structured, .opaque],
+                       "seule la relecture typée change la forme des refus ; les autres appelants gardent la leur")
+    }
+
     // MARK: - create
 
     func testCreateReturnsNewConversation() async throws {
@@ -123,6 +138,31 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv789")
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+    }
+
+    // MARK: - obsolete (#14645)
+
+    func test_obsolete_validId_callsDeleteObsoleteAndReturnsTheDates() async throws {
+        let expected = ConversationObsoleteResult(
+            conversationId: "conv789", obsoletedAt: "2026-11-02T10:00:00.000Z", purgeAfter: "2026-11-04T10:00:00.000Z"
+        )
+        mock.stub("/conversations/conv789/obsolete", result: APIResponse(success: true, data: expected, error: nil))
+
+        let result = try await service.obsolete(conversationId: "conv789")
+
+        XCTAssertEqual(result, expected)
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv789/obsolete")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+    }
+
+    func test_obsolete_forbidden_throws() async {
+        mock.stubError("/conversations/conv789/obsolete", error: MeeshyError.forbidden(reason: nil, body: nil))
+
+        do {
+            _ = try await service.obsolete(conversationId: "conv789")
+            XCTFail("un refus de la passerelle doit remonter")
+        } catch {}
     }
 
     // MARK: - markRead
@@ -489,7 +529,7 @@ final class ConversationServiceTests: XCTestCase {
     }
 
     func test_updateParticipantRole_uppercaseRole_sendsLowercaseWireValue() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/conversations/conv1/participants/user1/role", result: response)
 
         try await service.updateParticipantRole(conversationId: "conv1", userId: "user1", role: "MODERATOR")
@@ -499,7 +539,7 @@ final class ConversationServiceTests: XCTestCase {
     }
 
     func test_updateParticipantRole_lowercaseRole_leftUnchanged() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/conversations/conv1/participants/user1/role", result: response)
 
         try await service.updateParticipantRole(conversationId: "conv1", userId: "user1", role: "admin")

@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
+import { GlobalSearchOverlay, ListMessageSearchMount } from '@/components/list-search-mounts';
 import { SearchCommunitiesBand } from '@/components/search-communities-band';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
@@ -796,6 +797,8 @@ export default function ConversationsScreen() {
           au-dessus d'« Aucune conversation ne correspond à… » — le pendant
           du double « Réessayer » qu'iOS documente explicitement éviter.
         */}
+        {/* LES MESSAGES QUI CONTIENNENT LA RECHERCHE (#14619) — sous les conversations qu'elle filtre par leur nom. */}
+        <ListMessageSearchMount language={interfaceLanguage} query={search} />
         {visible.length > 0 ? (
           <LensPaginationFooter
             state={paginationState}
@@ -1041,6 +1044,7 @@ export default function ConversationsScreen() {
           focus={detailsFocus}
         />
       )}
+      <GlobalSearchOverlay />
     </div>
   );
 }

@@ -3,6 +3,7 @@ package me.meeshy.sdk.net.api
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
+import me.meeshy.sdk.model.session.UserSessionsPayload
 import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.MeEnvelope
@@ -69,32 +70,6 @@ data class MagicLinkRequestBody(
 data class MagicLinkRequestData(
     val expiresInSeconds: Int? = null,
     val pendingSessionToken: String? = null,
-)
-
-/** Une session active du compte — sous-ensemble utile de GET auth/sessions. */
-@Serializable
-data class ActiveSessionInfo(
-    val id: String,
-    val deviceType: String? = null,
-    val deviceVendor: String? = null,
-    val deviceModel: String? = null,
-    val osName: String? = null,
-    val osVersion: String? = null,
-    val browserName: String? = null,
-    val isMobile: Boolean? = null,
-    val ipAddress: String? = null,
-    val country: String? = null,
-    val city: String? = null,
-    val createdAt: String? = null,
-    val lastActivityAt: String? = null,
-    val isCurrentSession: Boolean = false,
-)
-
-/** Enveloppe data de GET auth/sessions. */
-@Serializable
-data class SessionsListData(
-    val sessions: List<ActiveSessionInfo> = emptyList(),
-    val totalCount: Int = 0,
 )
 
 /**
@@ -268,7 +243,7 @@ interface AuthApi {
     suspend fun requestMagicLink(@Body body: MagicLinkRequestBody): ApiResponse<MagicLinkRequestData>
 
     @GET("auth/sessions")
-    suspend fun listSessions(): ApiResponse<SessionsListData>
+    suspend fun listSessions(): ApiResponse<UserSessionsPayload>
 
     @DELETE("auth/sessions/{id}")
     suspend fun revokeSession(@Path("id") sessionId: String): ApiResponse<Unit>

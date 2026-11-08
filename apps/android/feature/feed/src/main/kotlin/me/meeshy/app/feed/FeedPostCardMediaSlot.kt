@@ -29,7 +29,15 @@ internal fun FeedPostCardMediaSlot(
     if (scenes != null) {
         Spacer(Modifier.height(MeeshySpacing.md))
         val live by rememberSceneLive(post.id)
-        PostScenesView(scenes = scenes, live = live, modifier = Modifier.sceneFrame(post.id))
+        PostScenesView(scenes = scenes, live = live, modifier = Modifier.sceneFrame(post.id), imager = rememberPostImager(post))
+    } else if (!post.isReel && post.media.isNotEmpty()) {
+        Spacer(Modifier.height(MeeshySpacing.md))
+        FeedCardMedia(
+            media = post.media,
+            accentHex = post.accentHex,
+            carrierLanguage = post.originalLanguage,
+            onMediaTap = onImageTap,
+        )
     } else if (post.images.isNotEmpty()) {
         Spacer(Modifier.height(MeeshySpacing.md))
         PostImageLayout(images = post.images, layout = post.layout, onImageTap = onImageTap)

@@ -35,6 +35,16 @@ struct ProfileOwnAvatar: View {
             moodEmoji: mood,
             onMoodTap: mood == nil ? nil : moodTapResolver?(userId)
         )
-        .avatarRing(ProfileDecorResolver.ring(user?.profileDecor?.avatarRing), avatarSize: AvatarContext.profileBanner.size)
+        .avatarRing(ring, avatarSize: Self.size, decorRoom: AvatarRingLayout.fullSpill(ring, box: Self.size * 100 / 84))
+    }
+
+    static let size: CGFloat = AvatarContext.profileBanner.size
+
+    private var ring: AvatarRingDesign? { ProfileDecorResolver.ring(user?.profileDecor?.avatarRing) }
+
+    /// #15157 — ce que le cadre illustré peint sous l'avatar : l'écran le réserve avant le nom.
+    /// Vers le haut, le cadre déborde sur la bannière ; sur les côtés, l'écran est libre.
+    static func reserveBelow(_ user: MeeshyUser?) -> CGFloat {
+        AvatarRingLayout.paintBeyondAvatar(ProfileDecorResolver.ring(user?.profileDecor?.avatarRing), avatarSize: size)
     }
 }

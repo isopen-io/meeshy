@@ -9,7 +9,9 @@ import me.meeshy.sdk.net.api.CallHistoryApi
 import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.DataExportApi
+import me.meeshy.sdk.net.api.EngagementApi
 import me.meeshy.sdk.net.api.FriendApi
+import me.meeshy.sdk.net.api.GameApi
 import me.meeshy.sdk.net.api.LinkApi
 import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
@@ -52,6 +54,8 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
     val dataExport: DataExportApi = retrofit.create()
     val shareLinks: ShareLinkApi = retrofit.create()
     val links: LinkApi = retrofit.create()
+    val game: GameApi = retrofit.create()
+    val engagement: EngagementApi = retrofit.create()
 
     /**
      * Une interface Retrofit neuve sur le MÊME client authentifié (jeton, rafraîchissement,
@@ -110,7 +114,7 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
         fun buildRetrofit(config: MeeshyConfig, client: OkHttpClient): Retrofit =
             Retrofit.Builder()
                 .baseUrl(config.apiBaseUrl)
-                .client(client)
+                .callFactory(MutationIdCallFactory(client))
                 .addConverterFactory(JsonConverterFactory(json, "application/json".toMediaType()))
                 .build()
 

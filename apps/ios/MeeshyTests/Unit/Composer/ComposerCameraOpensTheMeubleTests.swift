@@ -93,12 +93,12 @@ final class ComposerCameraOpensTheMeubleTests: XCTestCase {
     /// Le § ne tranche PAS qui exécutera la projection (#4733). Ce témoin ne
     /// doit donc pas se lire comme attendant une implémentation décidée : il
     /// garde un état de fait, et le document dit lequel.
-    func test_lesTroisAutresOuvertures_restentSurLAtelier_dettesNOMMEES() {
+    func test_lesAutresOuvertures_rejoignentLeMeuble_dettesSOLDEES() {
         for opening in [ComposerOpening.resume, .videoCameraReady] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: opening, format: .story),
-                .scene,
-                "\(opening) porte de la matière que le meuble ne reprend pas encore (#4751)")
+                .document,
+                "\(opening) se compose dans le meuble : il reprend désormais le brouillon (#15629)")
         }
     }
 

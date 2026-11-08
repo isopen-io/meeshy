@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le fil n'a rien en cache et le réseau n'a pas répondu : un texte traduit, jamais l'exception brute (#15105). -->
+<resources>
+    <string name="chat_history_offline">Vous êtes hors ligne. Cette conversation se chargera dès le retour du réseau.</string>
+    <string name="chat_history_unavailable">Cette conversation n\'a pas pu être chargée.</string>
+</resources>

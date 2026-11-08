@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_reaction_limit_reached">لقد بلغت حد التفاعلات لهذه القصة.</string>
+    <string name="story_reaction_unavailable">هذه القصة لم تعد متاحة.</string>
+    <string name="story_reaction_failed">تعذر إرسال التفاعل.</string>
+</resources>

@@ -80,6 +80,42 @@ class ChangePasswordFormTest {
     }
 
     @Test
+    fun `un compte sans mot de passe n exige pas l actuel`() {
+        val v = ChangePasswordForm.validate("", "newpass12", "newpass12", hasPassword = false)
+        assertThat(v.isCurrentPresent).isTrue()
+        assertThat(v.canSubmit).isTrue()
+    }
+
+    @Test
+    fun `sans mot de passe actuel la regle different est inerte`() {
+        val v = ChangePasswordForm.validate("newpass12", "newpass12", "newpass12", hasPassword = false)
+        assertThat(v.isNewDifferent).isTrue()
+        assertThat(v.canSubmit).isTrue()
+    }
+
+    @Test
+    fun `sans mot de passe actuel le minimum et la confirmation restent obligatoires`() {
+        assertThat(ChangePasswordForm.validate("", "short", "short", hasPassword = false).canSubmit).isFalse()
+        assertThat(ChangePasswordForm.validate("", "newpass12", "autre1234", hasPassword = false).canSubmit).isFalse()
+    }
+
+    @Test
+    fun `une lecture inconnue de hasPassword garde le comportement actuel`() {
+        assertThat(ChangePasswordForm.validate("", "newpass12", "newpass12", hasPassword = null).canSubmit).isFalse()
+        assertThat(ChangePasswordForm.validate("", "newpass12", "newpass12", hasPassword = true).canSubmit).isFalse()
+        assertThat(ChangePasswordForm.asksCurrentPassword(null)).isTrue()
+        assertThat(ChangePasswordForm.asksCurrentPassword(true)).isTrue()
+        assertThat(ChangePasswordForm.asksCurrentPassword(false)).isFalse()
+    }
+
+    @Test
+    fun `la valeur soumise du mot de passe actuel est nulle quand le compte n en a pas`() {
+        assertThat(ChangePasswordForm.submittedCurrent("saisi", hasPassword = false)).isNull()
+        assertThat(ChangePasswordForm.submittedCurrent("saisi", hasPassword = true)).isEqualTo("saisi")
+        assertThat(ChangePasswordForm.submittedCurrent("saisi", hasPassword = null)).isEqualTo("saisi")
+    }
+
+    @Test
     fun minLength_matchesTheGatewayContract() {
         assertThat(ChangePasswordValidation.MIN_LENGTH).isEqualTo(8)
     }

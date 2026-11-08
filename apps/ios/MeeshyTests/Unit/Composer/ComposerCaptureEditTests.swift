@@ -279,7 +279,7 @@ final class ComposerCaptureEditTests: XCTestCase {
     func test_editArea_liesBetweenTheTopRowAndTheTools_insideTheSafeArea() {
         let ecran = CGSize(width: 402, height: 874)
         let zone = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [])
-        XCTAssertEqual(zone.minY, 62 + ComposerEditScene.topBand)
+        XCTAssertEqual(zone.minY, 62 + ComposerEditScene.gap, "la rangée haute s'efface en recadrage : le cadre monte (#15193)")
         XCTAssertEqual(zone.maxY, 874 - 34 - ComposerEditScene.bottomReserve([]))
         XCTAssertEqual(zone.minX, ComposerEditScene.margin)
         XCTAssertEqual(zone.width, 402 - ComposerEditScene.margin * 2)
@@ -302,10 +302,12 @@ final class ComposerCaptureEditTests: XCTestCase {
 
     func test_editPanels_stackTheirHeights_andTheBandFoldsThem() {
         XCTAssertEqual(ComposerEditScene.bottomReserve([]), ComposerEditScene.toolsRow + ComposerEditScene.gap * 2)
-        let tous: [ComposerEditPanel] = [.presets, .sound, .trim]
+        let montes: [ComposerEditPanel] = [.sound, .trim]
         let attendu = ComposerEditScene.toolsRow + ComposerEditScene.gap * 2
-            + tous.map { ComposerEditScene.panelHeight($0) + ComposerEditScene.gap }.reduce(0, +)
-        XCTAssertEqual(ComposerEditScene.bottomReserve(tous), attendu, "chaque panneau montré prend sa place")
+            + montes.map { ComposerEditScene.panelHeight($0) + ComposerEditScene.gap }.reduce(0, +)
+        XCTAssertEqual(ComposerEditScene.bottomReserve(montes), attendu, "chaque panneau montré prend sa place")
+        XCTAssertEqual(ComposerEditScene.bottomReserve([.presets] + montes), attendu,
+                       "les formats flottent sur le cadre : ils ne prennent rien (#15193)")
         XCTAssertGreaterThan(ComposerEditScene.bottomReserve([.band]), ComposerEditScene.bottomReserve([]))
     }
 
@@ -361,9 +363,9 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(session.editAspect), 0.46, accuracy: 0.0001, "on retouche ce qu'on a cadré")
         session.setEditAspect(0.01)
         XCTAssertEqual(try XCTUnwrap(session.editAspect), ComposerEditScene.aspectRange.lowerBound, accuracy: 0.0001)
-        session.applyCropPreset(.original)
+        ComposerCropFlow.apply(.original, to: session)
         XCTAssertEqual(try XCTUnwrap(session.editAspect), 0.75, accuracy: 0.0001)
-        session.applyCropPreset(.square)
+        ComposerCropFlow.apply(.square, to: session)
         XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001)
         session.cancelEditing()
         XCTAssertNil(session.editAspect, "la scène de retouche part avec la retouche")
@@ -388,7 +390,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(session.openFamily, .filters, "et laisse la bande")
         session.toggleEditTool(.crop)
         XCTAssertNil(session.openFamily, "rallumer Crop replie la bande pour montrer ses proportions")
-        XCTAssertEqual(session.editPanels, [.presets], "les proportions retiennent leur bande sous la scène")
+        XCTAssertEqual(session.editPanels, [.presets], "les proportions reviennent sur le cadre")
         session.cancelEditing()
         XCTAssertEqual(session.activeEditTools, [])
     }
@@ -399,7 +401,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         let avant = session.editAspect
         session.isRenderingLook = true
         session.setEditAspect(1.5)
-        session.applyCropPreset(.landscape)
+        ComposerCropFlow.apply(.landscape, to: session)
         XCTAssertEqual(session.editAspect, avant, "ce qui part est ce qu'on voyait en validant")
     }
 

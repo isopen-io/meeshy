@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.lock.LockPinState
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiConversation
@@ -7,6 +8,7 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
+import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
@@ -45,7 +47,7 @@ data class ConversationListUiState(
      * without a second session read at render time.
      */
     val currentUser: MeeshyUser? = null,
-    val selectedFilter: ConversationFilter = ConversationFilter.ALL,
+    val selectedFilters: Set<ConversationFilter> = ConversationFilterComposition.neutral,
     val searchText: String = "",
     val isSearchActive: Boolean = false,
     val drafts: Map<String, ConversationDraft> = emptyMap(),
@@ -68,6 +70,8 @@ data class ConversationListUiState(
      * flight); present-but-empty = loaded, genuinely no cached messages.
      */
     val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
+    /** Aperçus dont la lecture a échoué sur une ligne froide : « Impossible de charger les messages », pas « vide ». */
+    val previewUnavailable: Set<String> = emptySet(),
     /**
      * Live mirror of [me.meeshy.sdk.lock.ConversationLockStore.lockedConversationIdsFlow] —
      * port of iOS `ConversationListView` observing `ConversationLockManager` directly so a
@@ -175,6 +179,10 @@ data class ConversationListUiState(
     fun previewFor(conversationId: String): List<LocalMessage>? =
         if (isLocked(conversationId)) null else previewMessages[conversationId]
 
+    /** La lecture de l'aperçu de [conversationId] a échoué et rien n'est en cache. */
+    fun isPreviewUnavailable(conversationId: String): Boolean =
+        !isLocked(conversationId) && conversationId in previewUnavailable
+
     /**
      * The peer's story-ring state on [conversation]'s row avatar (parity iOS
      * `ConversationListView.storyRingState(for:)`), derived from the live
@@ -206,7 +214,7 @@ data class ConversationListUiState(
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
         get() = conversations.isEmpty() && !showSkeleton && errorMessage == null &&
-            (selectedFilter != ConversationFilter.ALL || searchText.isNotBlank())
+            (!ConversationFilterComposition.isNeutral(selectedFilters) || searchText.isNotBlank())
 }
 
 /** Extracts the list carried by a [CacheResult], keeping [fallback] when a sync carries no value yet. */
@@ -229,8 +237,9 @@ internal fun ConversationListUiState.withVisible(raw: List<ApiConversation>): Co
     return copy(
         pendingRemovals = stillPending,
         conversations = DraftAwareOrdering.apply(
-            ConversationFilters.apply(kept, selectedFilter, searchText, currentUserId),
+            ConversationFilters.apply(kept, selectedFilters, searchText, currentUserId),
             drafts,
+            currentUserId,
         ),
     )
 }

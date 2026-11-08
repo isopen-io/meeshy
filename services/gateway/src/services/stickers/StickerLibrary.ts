@@ -26,6 +26,7 @@ import {
   type StickerMimeType,
   type StickerOrigin,
 } from '@meeshy/shared/types/sticker-definition';
+import type { StickerLibraryUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { normalizeStickerImage, type StickerImageOutcome, type StickerImageRefusal } from './stickerImage';
 import { EngagementService } from '../engagement/EngagementService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -33,6 +34,21 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 const logger = enhancedLogger.child({ module: 'StickerLibrary' });
 
 type StickerEngagement = Pick<EngagementService, 'recordActivity'>;
+
+/**
+ * Pose l'événement `sticker:library-updated` sur la room personnelle du
+ * compte. Le TRANSPORT est injecté — le service reste sans Fastify et sans
+ * Socket.IO — mais l'OBLIGATION vit ici, chez l'écrivain unique de
+ * `UserSticker` : un cinquième chemin d'écriture ne peut plus honorer la
+ * persistance sans la diffusion.
+ *
+ * Elle est APPELÉE pour chaque écriture qui a réellement eu lieu, et jamais
+ * pour un identifiant inconnu ou le sticker d'autrui — un « rien n'a changé »
+ * diffusé enverrait les autres appareils réconcilier un non-événement.
+ *
+ * @see services/stickers/stickerLibraryAnnounce.ts — le transport de production.
+ */
+export type StickerLibraryAnnounce = (event: StickerLibraryUpdatedEventData) => void;
 
 export interface StickerFileStore {
   write(relativePath: string, bytes: Buffer): Promise<void>;
@@ -73,6 +89,8 @@ export type StickerLibraryDeps = {
   readonly newFileId?: () => string;
   /** Un double en test ; absent ⇒ le moteur de `prisma`, créé au premier crédit. */
   readonly engagement?: StickerEngagement;
+  /** Absent ⇒ les écritures se font sans rien diffuser (doubles de test, scripts). */
+  readonly announce?: StickerLibraryAnnounce;
 };
 
 const EXTENSION: Readonly<Record<StickerMimeType, string>> = {
@@ -115,6 +133,7 @@ export class StickerLibrary {
   private readonly now: () => Date;
   private readonly newFileId: () => string;
   private engagement?: StickerEngagement;
+  private readonly announce?: StickerLibraryAnnounce;
 
   constructor(deps: StickerLibraryDeps) {
     this.prisma = deps.prisma;
@@ -123,6 +142,7 @@ export class StickerLibrary {
     this.now = deps.now ?? (() => new Date());
     this.newFileId = deps.newFileId ?? randomUUID;
     this.engagement = deps.engagement;
+    this.announce = deps.announce;
   }
 
   async list(userId: string): Promise<readonly StickerDefinition[]> {
@@ -168,7 +188,9 @@ export class StickerLibrary {
         },
       });
       if (input.origin !== 'received') this.creditCreation(userId);
-      return { kind: 'created', sticker: toStickerDefinition(row) };
+      const sticker = toStickerDefinition(row);
+      this.tell({ userId, change: 'added', sticker, at: sticker.createdAt });
+      return { kind: 'created', sticker };
     } catch (error) {
       await this.files.remove(filePath).catch(() => undefined);
       if (!isUniqueViolation(error)) throw error;
@@ -182,7 +204,9 @@ export class StickerLibrary {
     const owned = await this.prisma.userSticker.findFirst({ where: { id: stickerId, userId }, select: { id: true } });
     if (!owned) return null;
     const row = await this.prisma.userSticker.update({ where: { id: owned.id }, data: { lastUsedAt: this.now() } });
-    return toStickerDefinition(row);
+    const sticker = toStickerDefinition(row);
+    this.tell({ userId, change: 'promoted', sticker, at: sticker.lastUsedAt });
+    return sticker;
   }
 
   async remove(userId: string, stickerId: string): Promise<boolean> {
@@ -193,6 +217,7 @@ export class StickerLibrary {
     if (!owned) return false;
     await this.prisma.userSticker.delete({ where: { id: owned.id } });
     await this.files.remove(owned.filePath).catch(() => undefined);
+    this.tell({ userId, change: 'removed', stickerId: owned.id, at: this.now().toISOString() });
     return true;
   }
 
@@ -216,6 +241,23 @@ export class StickerLibrary {
     const existing = await this.prisma.userSticker.findFirst({ where: { userId, contentHash }, select: { id: true } });
     if (!existing) return null;
     const row = await this.prisma.userSticker.update({ where: { id: existing.id }, data: { lastUsedAt: this.now() } });
-    return toStickerDefinition(row);
+    const sticker = toStickerDefinition(row);
+    this.tell({ userId, change: 'promoted', sticker, at: sticker.lastUsedAt });
+    return sticker;
+  }
+
+  /**
+   * La diffusion est un canal LATÉRAL : une écriture qui a eu lieu ne se
+   * rapporte jamais comme un échec — l'utilisateur rejouerait un geste qui a
+   * déjà pris effet. Le `try` est ici, au SITE D'APPEL, et non délégué à la
+   * bonne volonté du transport : qu'un collaborateur avale ses erreurs est
+   * une propriété du collaborateur, pas une garantie du site d'appel.
+   */
+  private tell(event: StickerLibraryUpdatedEventData): void {
+    try {
+      this.announce?.(event);
+    } catch (error) {
+      logger.warn('sticker:library-updated non diffusé', { error, change: event.change });
+    }
   }
 }

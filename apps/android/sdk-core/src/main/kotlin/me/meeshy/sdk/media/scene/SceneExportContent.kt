@@ -81,16 +81,20 @@ internal object SceneExportContent {
             "(luminance ${first.expected}), le rendu n'y montre rien"
     }
 
+    /** L'élément de la séquence vidéo qui remplit l'image à [atMillis]. */
+    fun itemAt(items: List<SceneVideoItem>, atMillis: Long): SceneVideoItem? {
+        val starts = items.runningFold(0L) { start, item -> start + item.spanMillis }
+        return items.indices.lastOrNull { starts[it] <= atMillis }?.let(items::get)
+    }
+
     /** Ce qui remplit l'image à [atMillis] sous tous les calques : le fond tenu ou l'image de la vidéo de fond. */
     fun fillAt(items: List<SceneVideoItem>, atMillis: Long): SceneContentProbe? {
-        val starts = items.runningFold(0L) { start, item -> start + spanOf(item) }
+        val starts = items.runningFold(0L) { start, item -> start + item.spanMillis }
         val index = items.indices.lastOrNull { starts[it] <= atMillis } ?: return null
         val item = items[index]
         val clip = item.clip ?: return SceneContentProbe.Picture(item.file)
         return SceneContentProbe.VideoFrame(item.file, clip.startMillis + (atMillis - starts[index]).coerceAtMost(clip.durationMillis))
     }
-
-    private fun spanOf(item: SceneVideoItem): Long = item.clip?.durationMillis ?: item.imageMillis ?: 0L
 
     /** Le calque que [TimedBitmapOverlay] sert à cet instant : celui qui le couvre, le dernier au-delà, le premier avant. */
     fun layerAt(overlays: List<SceneExportOverlay>, atMillis: Long): SceneContentProbe? {

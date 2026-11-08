@@ -220,7 +220,8 @@ extension StoryViewModel {
     ///
     /// - Returns: `true` si le serveur a accepté le changement.
     func applyVisibility(storyId: String, visibility: String, userIds: [String]?) async -> Bool {
-        guard let groupIndex = storyGroups.firstIndex(where: { $0.stories.contains { $0.id == storyId } }),
+        guard !PendingStoryMarker.isPending(storyId: storyId),
+              let groupIndex = storyGroups.firstIndex(where: { $0.stories.contains { $0.id == storyId } }),
               let storyIndex = storyGroups[groupIndex].stories.firstIndex(where: { $0.id == storyId })
         else { return false }
 

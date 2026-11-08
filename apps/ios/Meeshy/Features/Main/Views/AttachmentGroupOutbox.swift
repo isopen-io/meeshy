@@ -16,6 +16,10 @@ struct AttachmentGroupOutbox {
     let originalLanguage: String
     let replyToId: String?
     let protection: MessageProtectionIntent
+    var mediaQueue: any OfflineMessageQueueing = OfflineQueue.shared
+    var relocator: any PendingBubbleMediaRelocating = PendingBubbleMediaRelocator(
+        persistence: DependencyContainer.shared.messagePersistence
+    )
 
     /// A3 / S7b ST2 — écriture durable d'un groupe quand l'appareil est HORS
     /// LIGNE : jamais le chemin TUS, qui échouerait aussitôt. Un passage en
@@ -23,23 +27,25 @@ struct AttachmentGroupOutbox {
     /// vide la file au cycle suivant. Rend `true` si le groupe est en file.
     func enqueueOffline(_ send: OutgoingMediaGroup, mediaFiles: [String: URL]) async -> Bool {
         if send.group.kind == .audio {
-            let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
+            let tracks = mediaSources(of: send, mediaFiles: mediaFiles)
             // Offline: NEVER fall through to the TUS path (it would just
             // fail).
-            guard !urls.isEmpty else {
+            guard !tracks.isEmpty else {
                 Logger.messages.warning("Audio group offline but no source URLs — skipping \(send.tempId)")
                 return false
             }
             do {
-                _ = try await OfflineQueue.shared.enqueueAudios(
-                    sourceAudioURLs: urls,
+                let queued = try await OfflineQueue.shared.enqueueAudios(
+                    sourceAudioURLs: tracks.map { $0.url },
                     conversationId: conversationId,
                     content: send.group.text,
                     clientMessageId: send.tempId,
                     originalLanguage: originalLanguage,
                     replyToId: send.group.carriesReply ? replyToId : nil,
-                    protection: protection
+                    protection: protection,
+                    originalNames: tracks.map { $0.name }
                 )
+                await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localAudioPaths)
                 Logger.messages.info("Audio group queued offline for \(send.tempId)")
                 return true
             } catch {
@@ -58,7 +64,7 @@ struct AttachmentGroupOutbox {
             return false
         }
         do {
-            _ = try await OfflineQueue.shared.enqueueMedia(
+            let queued = try await mediaQueue.enqueueMedia(
                 sourceMediaURLs: pairs.map { $0.url },
                 kinds: pairs.map { $0.kind },
                 conversationId: conversationId,
@@ -66,8 +72,10 @@ struct AttachmentGroupOutbox {
                 clientMessageId: send.tempId,
                 originalLanguage: originalLanguage,
                 replyToId: send.group.carriesReply ? replyToId : nil,
-                protection: protection
+                protection: protection,
+                originalNames: pairs.map { $0.name }
             )
+            await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localMediaPaths)
             Logger.messages.info("Visual group queued offline for \(send.tempId)")
             return true
         } catch {
@@ -86,21 +94,24 @@ struct AttachmentGroupOutbox {
     /// sources disparus, disque plein, encodage) : état terminal, retry manuel.
     func requeueAfterOnlineFailure(_ send: OutgoingMediaGroup, mediaFiles: [String: URL]) async -> Bool {
         if send.group.kind == .audio {
-            let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
-            guard !urls.isEmpty else { return false }
-            return (try? await OfflineQueue.shared.enqueueAudios(
-                sourceAudioURLs: urls,
+            let tracks = mediaSources(of: send, mediaFiles: mediaFiles)
+            guard !tracks.isEmpty else { return false }
+            guard let queued = try? await OfflineQueue.shared.enqueueAudios(
+                sourceAudioURLs: tracks.map { $0.url },
                 conversationId: conversationId,
                 content: send.group.text,
                 clientMessageId: send.tempId,
                 originalLanguage: originalLanguage,
                 replyToId: send.group.carriesReply ? replyToId : nil,
-                protection: protection
-            )) != nil
+                protection: protection,
+                originalNames: tracks.map { $0.name }
+            ) else { return false }
+            await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localAudioPaths)
+            return true
         }
         let pairs = mediaSources(of: send, mediaFiles: mediaFiles)
         guard !pairs.isEmpty else { return false }
-        return (try? await OfflineQueue.shared.enqueueMedia(
+        guard let queued = try? await mediaQueue.enqueueMedia(
             sourceMediaURLs: pairs.map { $0.url },
             kinds: pairs.map { $0.kind },
             conversationId: conversationId,
@@ -108,15 +119,50 @@ struct AttachmentGroupOutbox {
             clientMessageId: send.tempId,
             originalLanguage: originalLanguage,
             replyToId: send.group.carriesReply ? replyToId : nil,
-            protection: protection
-        )) != nil
+            protection: protection,
+            originalNames: pairs.map { $0.name }
+        ) else { return false }
+        await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localMediaPaths)
+        return true
     }
 
-    private func mediaSources(of send: OutgoingMediaGroup, mediaFiles: [String: URL]) -> [(url: URL, kind: String)] {
+    private func mediaSources(of send: OutgoingMediaGroup, mediaFiles: [String: URL]) -> [(url: URL, kind: String, name: String?)] {
         send.group.attachments.compactMap { att in
             guard let url = mediaFiles[att.id] else { return nil }
             let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
-            return (url, kind)
+            return (url, kind, MediaGroupUploadItem.chosenName(of: att, sentAs: url))
         }
+    }
+}
+
+private extension OfflineMessageQueueing {
+    func enqueueMedia(
+        sourceMediaURLs: [URL],
+        kinds: [String],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String?,
+        replyToId: String?,
+        protection: MessageProtectionIntent,
+        originalNames: [String?]
+    ) async throws -> OfflineQueue.EnqueueMediaResult {
+        try await enqueueMedia(
+            sourceMediaURLs: sourceMediaURLs,
+            kinds: kinds,
+            conversationId: conversationId,
+            content: content,
+            clientMessageId: clientMessageId,
+            originalLanguage: originalLanguage,
+            replyToId: replyToId,
+            forwardedFromId: nil,
+            forwardedFromConversationId: nil,
+            copyAttachmentsFromClientMessageId: nil,
+            sticker: nil,
+            deletesSourceFiles: true,
+            createdAt: nil,
+            protection: protection,
+            originalNames: originalNames
+        )
     }
 }

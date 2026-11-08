@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_failed_initiate_timed_out">The call could not be placed: no answer from the server</string>
+    <string name="call_failed_initiate_malformed">The call could not be placed: unexpected server reply</string>
+    <string name="call_failed_connect_timed_out">The connection could not be established</string>
+    <string name="call_failed_join_refused">The call could not be joined</string>
+    <string name="call_failed_media_setup">Microphone or camera unavailable</string>
+</resources>

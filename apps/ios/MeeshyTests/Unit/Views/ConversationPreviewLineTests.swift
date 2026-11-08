@@ -102,12 +102,12 @@ final class ConversationPreviewLineTests: XCTestCase {
     func test_spokenText_saysTheAuthorAndTheSegments_withoutAnyGlyph() {
         let preview = ConversationPreview(
             kind: .message, icon: .voice, author: .member(id: "p", label: "Alice"),
-            segments: [.label("Message vocal"), .label("48 Ko")]
+            segments: [.label("Message vocal"), .label("Mémo")]
         )
 
         let spoken = ConversationPreviewLine.spokenText(preview, strings: strings())
 
-        XCTAssertEqual(spoken, "Alice : Message vocal, 48 Ko")
+        XCTAssertEqual(spoken, "Alice : Message vocal, Mémo")
         XCTAssertFalse(spoken.contains(ConversationPreviewIcon.voice.glyph))
     }
 
@@ -159,5 +159,174 @@ final class ConversationPreviewLineTests: XCTestCase {
 
         XCTAssertTrue(ConversationPreviewLine.isItalic(viewOnce))
         XCTAssertFalse(ConversationPreviewLine.isItalic(text))
+    }
+
+    // MARK: - Les détails d'une pièce, dits en mots (#15760)
+
+    private static let timesSign = "\u{00A0}×\u{00A0}"
+    private static let sayDimensions = "%1$@ sur %2$@"
+
+    /// Le catalogue français, explicite : la ligne se compose dans la langue du
+    /// bundle de test, pas dans celle que ce témoin vérifie.
+    private func frenchStrings() -> ConversationPreviewStrings {
+        ConversationPreviewStrings(language: "fr") { key in
+            switch key {
+            case .lineAuthor: return "{author} : {line}"
+            case .authorSelf: return "Vous"
+            case .attachmentPhoto: return "Photo"
+            case .unitMinute: return "{count} min"
+            default: return key.rawValue
+            }
+        }
+    }
+
+    private func photoRow(
+        senderName: String? = "Alice", caption: String? = "Au bord du lac",
+        type: Conversation.ConversationType = .direct, ephemeralDuration: Int? = nil
+    ) -> Conversation {
+        var row = Conversation(
+            id: "c-photo", identifier: "c-photo", type: type,
+            lastMessagePreview: caption,
+            lastMessageAttachments: [
+                MeeshyMessageAttachment(
+                    id: "a1", mimeType: "image/jpeg", fileSize: 239_616, width: 450, height: 456, uploadedBy: "u-alice"
+                )
+            ],
+            lastMessageAttachmentCount: 1,
+            lastMessageId: "m-photo",
+            lastMessageSenderName: senderName,
+            lastMessageSenderUserId: "u-alice"
+        )
+        row.lastMessageNature = LastMessageNature(messageType: "image", ephemeralDuration: ephemeralDuration)
+        return row
+    }
+
+    private func composed(_ row: Conversation) -> ConversationPreview {
+        ConversationPreviewLine.preview(
+            for: row, viewerId: "me", preferredLanguages: ["fr"], now: start, strings: frenchStrings(),
+            receipts: EphemeralReceiptLedger(defaults: UserDefaults(suiteName: "preview-line-\(UUID().uuidString)")),
+            memory: EndToEndRegimeMemory(defaults: nil)
+        )
+    }
+
+    func test_dimensions_readsOnlyTheComposersForm() {
+        let width = ConversationPreviewLine.dimensions("1920\(Self.timesSign)1080")
+        XCTAssertEqual(width?.width, "1920")
+        XCTAssertEqual(width?.height, "1080")
+        XCTAssertNil(ConversationPreviewLine.dimensions("1920×1080"))
+        XCTAssertNil(ConversationPreviewLine.dimensions("1920 x 1080"))
+        XCTAssertNil(ConversationPreviewLine.dimensions("Réunion 3\(Self.timesSign)4 pers."))
+        XCTAssertNil(ConversationPreviewLine.dimensions("\(Self.timesSign)4"))
+    }
+
+    @MainActor
+    func test_spokenText_dimensions_readsInWords() {
+        let preview = ConversationPreview(
+            kind: .message, icon: .photo, segments: [.label("Photo"), .label("1920\(Self.timesSign)1080")]
+        )
+
+        let spoken = ConversationPreviewLine.spokenText(preview, strings: strings(), dimensions: Self.sayDimensions)
+
+        XCTAssertEqual(spoken, "Photo, 1920 sur 1080")
+        XCTAssertFalse(spoken.contains("×"), "VoiceOver dirait « fois » ou « multiplié par »")
+    }
+
+    @MainActor
+    func test_spokenText_aUsersOwnText_isSaidAsTyped() {
+        let typed = "3\(Self.timesSign)4"
+        let preview = ConversationPreview(kind: .message, segments: [.text(typed, language: nil), .text("12 Ko", language: nil)])
+
+        let spoken = ConversationPreviewLine.spokenText(preview, strings: strings(), dimensions: Self.sayDimensions)
+
+        XCTAssertEqual(spoken, "\(typed), 12 Ko")
+    }
+
+    func test_spokenFileSize_readsOnlyAWeight() {
+        let english = Locale(identifier: "en_US")
+        XCTAssertNotNil(ConversationPreviewLine.spokenFileSize("234 KB", locale: english))
+        XCTAssertNotNil(ConversationPreviewLine.spokenFileSize("1.4 MB", locale: english))
+        XCTAssertNotNil(ConversationPreviewLine.spokenFileSize("512 B", locale: english))
+        XCTAssertNotNil(ConversationPreviewLine.spokenFileSize("512 o", locale: english))
+        XCTAssertNotNil(ConversationPreviewLine.spokenFileSize("1,4 Mo", locale: english))
+        XCTAssertNil(ConversationPreviewLine.spokenFileSize("2 Mo restants", locale: english))
+        XCTAssertNil(ConversationPreviewLine.spokenFileSize("Mo", locale: english))
+        XCTAssertNil(ConversationPreviewLine.spokenFileSize("1.45 MB", locale: english))
+        XCTAssertNil(ConversationPreviewLine.spokenFileSize("4 min", locale: english))
+    }
+
+    @MainActor
+    func test_spokenText_fileSize_readsInWords() {
+        let preview = ConversationPreview(kind: .message, icon: .photo, segments: [.label("Photo"), .label("234 KB")])
+        let english = ConversationPreviewLine.spokenText(
+            preview, strings: strings(), locale: Locale(identifier: "en_US"), dimensions: Self.sayDimensions
+        )
+        XCTAssertTrue(english.lowercased().contains("kilobyte"), english)
+        XCTAssertFalse(english.contains("KB"), english)
+
+        let french = ConversationPreviewLine.spokenText(
+            ConversationPreview(kind: .message, icon: .photo, segments: [.label("Photo"), .label("1,4 Mo")]),
+            strings: strings(), locale: Locale(identifier: "fr_FR"), dimensions: Self.sayDimensions
+        )
+        XCTAssertTrue(french.contains("mégaoctet"), french)
+        XCTAssertTrue(french.contains("1,4"), french)
+        XCTAssertFalse(french.contains("Mo"), french)
+    }
+
+    @MainActor
+    func test_spokenText_aClockStaysADuration_nextToAWeight() {
+        let locale = Locale(identifier: "en_US")
+        let preview = ConversationPreview(kind: .message, icon: .voice, segments: [.label("0:12"), .label("48 KB")])
+
+        let spoken = ConversationPreviewLine.spokenText(preview, strings: strings(), locale: locale, dimensions: Self.sayDimensions)
+
+        XCTAssertTrue(spoken.hasPrefix(MediaFormat.duration(12, style: .spoken, locale: locale) + ", "), spoken)
+    }
+
+    // Non-régression : la loi du composeur (SDK) est déjà fusionnée, ces trois
+    // témoins sont verts dès leur écriture — ils figent ce que la ligne DIT.
+
+    @MainActor
+    func test_preview_directConversation_prefixesPeerAuthor() {
+        let peer = composed(photoRow(senderName: "Alice"))
+        XCTAssertTrue(ConversationPreviewLine.seenText(peer, strings: frenchStrings()).hasPrefix("Alice : "))
+        XCTAssertTrue(ConversationPreviewLine.spokenText(peer, strings: frenchStrings()).hasPrefix("Alice : "))
+
+        let mine = composed(photoRow(senderName: ConversationListAuthor.readerLabel))
+        let prefix = "\(ConversationListAuthor.readerLabel) : "
+        XCTAssertTrue(ConversationPreviewLine.seenText(mine, strings: frenchStrings()).hasPrefix(prefix))
+        XCTAssertTrue(ConversationPreviewLine.spokenText(mine, strings: frenchStrings()).hasPrefix(prefix))
+    }
+
+    @MainActor
+    func test_preview_captionedPhoto_keepsDetails() {
+        let preview = composed(photoRow())
+
+        XCTAssertEqual(
+            ConversationPreviewLine.seenText(preview, strings: frenchStrings()),
+            "Alice : Au bord du lac · 450\(Self.timesSign)456 · 234 Ko"
+        )
+        let spoken = ConversationPreviewLine.spokenText(
+            preview, strings: frenchStrings(), locale: Locale(identifier: "fr_FR"), dimensions: Self.sayDimensions
+        )
+        XCTAssertTrue(spoken.contains("450 sur 456"), spoken)
+        XCTAssertTrue(spoken.contains("kilooctet"), spoken)
+    }
+
+    @MainActor
+    func test_preview_ephemeralPhoto_hidesDetails() {
+        let preview = composed(photoRow(ephemeralDuration: 240))
+        let seen = ConversationPreviewLine.seenText(preview, strings: frenchStrings())
+        let spoken = ConversationPreviewLine.spokenText(
+            preview, strings: frenchStrings(), locale: Locale(identifier: "fr_FR"), dimensions: Self.sayDimensions
+        )
+
+        for said in [seen, spoken] {
+            XCTAssertFalse(said.contains("×"), said)
+            XCTAssertFalse(said.contains("450"), said)
+            XCTAssertFalse(said.contains("Ko"), said)
+            XCTAssertFalse(said.contains("octet"), said)
+            XCTAssertFalse(said.contains(" sur "), said)
+        }
+        XCTAssertEqual(seen.replacingOccurrences(of: ConversationPreviewLine.segmentSeparator, with: ", "), spoken)
     }
 }

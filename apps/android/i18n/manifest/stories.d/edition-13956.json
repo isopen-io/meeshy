@@ -5,15 +5,7 @@
       "resDir": "feature/stories/src/main/res",
       "entries": [
         {
-          "androidName": "composer_editing_announce",
-          "status": "android-only"
-        },
-        {
           "androidName": "composer_editing_back",
-          "status": "android-only"
-        },
-        {
-          "androidName": "composer_editing_done",
           "status": "android-only"
         }
       ]

@@ -1,6 +1,8 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.chat.GestureRefusalCenter
+import me.meeshy.sdk.model.feedback.DailyGestureLimit
 import me.meeshy.sdk.session.AccountFence
 import timber.log.Timber
 import javax.inject.Inject
@@ -16,6 +18,8 @@ public class MutationSenderRegistry @Inject constructor(
     private val ownerSource: OutboxOwnerSource? = null,
     private val plaintextAdmission: OutboxPlaintextAdmission? = null,
     private val fence: AccountFence? = null,
+    private val dailyLimits: DailyGestureLimitLedger? = null,
+    private val refusals: GestureRefusalCenter? = null,
 ) {
     /** The kinds that have a registered handler. */
     public val registeredKinds: Set<OutboxKind> get() = handlers.keys
@@ -30,6 +34,10 @@ public class MutationSenderRegistry @Inject constructor(
     /** Rolls back the optimistic effect of an exhausted [row] through its kind's handler. */
     public suspend fun onExhausted(row: OutboxEntity) {
         row.kindEnum?.let { handlers[it] }?.onExhausted(row)
+        DailyGestureLimit.fromReason(row.lastError)?.let { limit ->
+            dailyLimits?.record(limit, row.cmid)
+            refusals?.report(limit)
+        }
     }
 
     /**

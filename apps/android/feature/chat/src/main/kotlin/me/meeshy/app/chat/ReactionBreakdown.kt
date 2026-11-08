@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.ReactionGroup
+import me.meeshy.sdk.model.ReactionRow
 import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUserDetail
 
@@ -138,6 +139,22 @@ data class ReactionBreakdown(val tabs: List<ReactionTab>) {
                 reactors = emojiTabs.flatMap { it.reactors }.selfFirst(),
             )
             return ReactionBreakdown(listOf(all) + emojiTabs)
+        }
+
+        /**
+         * La liste « qui a réagi » dressée des lignes PERSISTÉES du message, sans réseau : l'auteur n'a pas de nom
+         * ici (la feuille affiche « Inconnu » tant que le détail du serveur n'est pas arrivé), et une ligne sans
+         * auteur (reconstruction REST) compte sans se nommer. Même ordre et mêmes règles que [of].
+         */
+        fun fromRows(rows: List<ReactionRow>, currentUserId: String): ReactionBreakdown {
+            val groups = rows.groupBy { it.emoji.trim() }.filterKeys { it.isNotEmpty() }.map { (emoji, group) ->
+                ReactionGroup(
+                    emoji = emoji,
+                    count = group.size,
+                    users = group.mapNotNull { it.participantId?.let { id -> ReactionUserDetail(userId = id) } },
+                )
+            }
+            return of(ReactionSyncResponse(messageId = rows.firstOrNull()?.messageId.orEmpty(), reactions = groups), currentUserId)
         }
 
         private fun List<ReactionReactor>.selfFirst(): List<ReactionReactor> {

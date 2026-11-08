@@ -34,9 +34,16 @@ android {
             isReturnDefaultValues = true
         }
     }
+    sourceSets {
+        getByName("test") {
+            java.srcDir(rootProject.file("test-support/compose-robolectric/kotlin"))
+            resources.srcDir(rootProject.file("test-support/compose-robolectric/resources"))
+        }
+    }
 }
 
 dependencies {
+    implementation(project(":core:common"))
     implementation(project(":sdk-core"))
     implementation(project(":sdk-ui"))
 

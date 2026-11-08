@@ -438,4 +438,37 @@ class CanvasReprojectorTest {
     }
 
     // endregion
+
+    @Test
+    fun `a repost moves from portrait to landscape keeping its centre and clamping the overflow`() {
+        val reprojector = CanvasReprojector.between(CanvasFormat.PORTRAIT, CanvasFormat.LANDSCAPE)
+
+        val centred = reprojector.reproject(text(0.5, 0.5))
+        val near = reprojector.reproject(text(0.4, 0.45))
+        val far = reprojector.reproject(text(0.5, 0.1))
+
+        assertThat(centred.value.y).isWithin(1e-9).of(0.5)
+        assertThat(centred.warning).isNull()
+        assertThat(near.value.y).isWithin(1e-6).of(0.5 + (0.45 - 0.5) * (1920.0 / 607.5))
+        assertThat(near.warning).isNull()
+        assertThat(far.value.y).isEqualTo(0.0)
+        assertThat(far.warning).isInstanceOf(ReprojectionWarning.Clamped::class.java)
+    }
+
+    @Test
+    fun `the canvas format follows the imported background size`() {
+        assertThat(CanvasFormat.fromSourceSize(1920.0, 1080.0)).isEqualTo(CanvasFormat.LANDSCAPE)
+        assertThat(CanvasFormat.fromSourceSize(1080.0, 1920.0)).isEqualTo(CanvasFormat.PORTRAIT)
+        assertThat(CanvasFormat.fromSourceSize(1000.0, 1000.0)).isEqualTo(CanvasFormat.PORTRAIT)
+        assertThat(CanvasFormat.fromSourceSize(null, 1080.0)).isEqualTo(CanvasFormat.PORTRAIT)
+        assertThat(CanvasFormat.fromSourceSize(Double.NaN, 1080.0)).isEqualTo(CanvasFormat.PORTRAIT)
+    }
+
+    @Test
+    fun `an unknown wire name reads as portrait and only landscape is persisted`() {
+        assertThat(CanvasFormat.fromWire("weird")).isEqualTo(CanvasFormat.PORTRAIT)
+        assertThat(CanvasFormat.fromWire(null)).isEqualTo(CanvasFormat.PORTRAIT)
+        assertThat(CanvasFormat.PORTRAIT.wire).isNull()
+        assertThat(CanvasFormat.fromWire(CanvasFormat.LANDSCAPE.wire)).isEqualTo(CanvasFormat.LANDSCAPE)
+    }
 }

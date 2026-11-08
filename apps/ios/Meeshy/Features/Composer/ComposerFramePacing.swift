@@ -115,6 +115,11 @@ enum ComposerCaptureCopy {
                defaultValue: "Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet.", bundle: .main)
     }
 
+    /// Le soleil d'exposition, à côté de l'anneau de mise au point (OPUS-5).
+    static var exposure: String {
+        String(localized: "composer.capture.exposure", defaultValue: "Exposition", bundle: .main)
+    }
+
     /// La vidéo se rend avec son look : le `✓` attend, et le dit.
     static var rendering: String {
         String(localized: "composer.capture.looks.rendering", defaultValue: "Application du filtre…", bundle: .main)
@@ -128,6 +133,12 @@ enum ComposerCaptureCopy {
     /// La croix, en édition : elle abandonne la retouche et revient viser.
     static var cancelEdit: String {
         String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
+    }
+
+    /// « Annuler » du recadrage, tel que VoiceOver le lit : il rend le cadre
+    /// d'avant, la retouche reste (#15355).
+    static var cancelCrop: String {
+        String(localized: "composer.capture.crop.cancel.a11y", defaultValue: "Annuler le recadrage", bundle: .main)
     }
 
     /// Ce que VoiceOver lit de la scène en édition : le média s'y recadre.

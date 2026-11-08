@@ -133,6 +133,17 @@ const REQUEST_TYPES: ReadonlySet<string> = new Set(['friend_request', 'contact_r
  */
 const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active']);
 
+/**
+ * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177, suite de #9115) — une
+ * invitée non membre, sans DM avec l'inviteur (amitié acceptée sans
+ * conversation directe, ou DM quittée/supprimée). La passerelle ne pose alors
+ * AUCUN `conversationId` (`call-invite-lifecycle.ts`, `missedCallConversationId`)
+ * plutôt que de nommer la conversation de l'appel, injoignable pour elle.
+ * Repli SEULEMENT quand la branche `conversationId` ci-dessus n'a rien rendu —
+ * le cas nominal (membre, ou amitié avec DM) ouvre déjà le fil.
+ */
+const MISSED_CALL_TYPES: ReadonlySet<string> = new Set(['missed_call', 'CALL_MISSED', 'call_declined']);
+
 const PROGRESSION_TYPES: ReadonlySet<string> = new Set([
   'achievement_unlocked',
   'ACHIEVEMENT_UNLOCKED',
@@ -247,6 +258,7 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
 
   const username = present(input.senderUsername);
   if (PROFILE_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
+  if (MISSED_CALL_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
 
   if (GAME_LEAGUE_TYPES.has(type)) return { route: 'progressionLigue' };
   if (GAME_SEASON_TYPES.has(type)) return { route: 'progressionSaison' };

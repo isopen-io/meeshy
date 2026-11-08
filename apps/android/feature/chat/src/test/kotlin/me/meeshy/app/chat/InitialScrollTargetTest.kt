@@ -109,4 +109,31 @@ class InitialScrollTargetTest {
     fun `BottomUp -- an empty list has no scroll target`() {
         assertThat(InitialScrollTarget.of(emptyList(), ChatListOrientation.BottomUp)).isNull()
     }
+
+    @Test
+    fun `a loaded landing message wins over the unread separator and the bottom`() {
+        val items = listOf(row("m1"), row("m2"), ChatListItem.UnreadSeparator(2), row("m3"), row("m4"))
+
+        assertThat(InitialScrollTarget.of(items, ChatListOrientation.TopDown, landingMessageId = "m2")).isEqualTo(1)
+    }
+
+    @Test
+    fun `a landing message that is not loaded falls back to the ordinary open scroll`() {
+        val items = listOf(row("m1"), ChatListItem.UnreadSeparator(1), row("m2"))
+
+        assertThat(InitialScrollTarget.of(items, ChatListOrientation.TopDown, landingMessageId = "gone")).isEqualTo(1)
+        assertThat(InitialScrollTarget.of(listOf(row("m1"), row("m2")), ChatListOrientation.TopDown, landingMessageId = "gone")).isEqualTo(1)
+    }
+
+    @Test
+    fun `the landing index follows the rendered orientation`() {
+        val rendered = listOf(row("m3"), row("m2"), row("m1"))
+
+        assertThat(InitialScrollTarget.of(rendered, ChatListOrientation.BottomUp, landingMessageId = "m2")).isEqualTo(1)
+    }
+
+    @Test
+    fun `no landing message keeps the historical target`() {
+        assertThat(InitialScrollTarget.of(listOf(row("m1"), row("m2")), ChatListOrientation.TopDown, landingMessageId = null)).isEqualTo(1)
+    }
 }

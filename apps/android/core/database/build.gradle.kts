@@ -11,6 +11,9 @@ android {
 
     defaultConfig {
         minSdk = 26
+        // Le seul banc du vrai SQLCipher (bibliothèque native) : `connectedDebugAndroidTest`, lancé sur émulateur par le
+        // workflow « Android SQLCipher sur émulateur » (.github/workflows/android-sqlcipher-device.yml), hors d'android.yml.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -43,6 +46,10 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.androidx.sqlite.framework)
+    implementation(libs.sqlcipher.android)
+    implementation(project(":core:model"))
+    implementation(project(":core:datastore"))
     ksp(libs.room.compiler)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
@@ -54,4 +61,9 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.truth)
 }

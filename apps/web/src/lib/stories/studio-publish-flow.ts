@@ -119,6 +119,8 @@ export function publishStudioPlan(params: {
    * (`alsoAsReelTravels`) : une séquence de plusieurs pages partirait en
    * autant de réels. */
   readonly alsoAsReel?: boolean;
+  /** « Désactiver les commentaires » (#16541) — la clé ne part que cochée. */
+  readonly commentsDisabled?: boolean;
   readonly onPublished?: (event: StudioPublishedEvent) => void;
   readonly signal?: AbortSignal;
   /** L'ANNULATION de l'auteur (#10316) — la seule qui coupe une requête EN
@@ -152,6 +154,7 @@ export function publishStudioPlan(params: {
         ...(publication.mediaCaption !== undefined ? { mediaCaption: publication.mediaCaption } : {}),
         ...(publication.mediaAlt !== undefined ? { mediaAlt: publication.mediaAlt } : {}),
         ...(alsoAsReel ? { alsoAsReel: true } : {}),
+        ...(params.commentsDisabled === true ? { commentsDisabled: true } : {}),
         storyEffects: publication.storyEffects,
         mediaIds: publication.mediaIds,
       };

@@ -7,15 +7,20 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.CallQualityStatsFeed
+import me.meeshy.sdk.call.CallStatsCollector
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
+import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.ThermalState
 import me.meeshy.sdk.model.call.WebRtcError
+import me.meeshy.sdk.playback.CallHandoff
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -35,16 +40,25 @@ import javax.inject.Inject
  */
 class WebRtcCallCoordinator @Inject constructor(
     private val engine: WebRtcEngine,
-    signals: CallSignalManager,
+    private val signals: CallSignalManager,
     @ApplicationContext appContext: Context,
     names: GroupCallNameSource,
     statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
-) {
+    private val handoff: CallHandoff? = null,
+    private val dataProfile: CallDataProfileController? = null,
+    private val videoHealth: CallVideoHealthImpl? = null,
+    private val thermalMonitor: ThermalStateMonitor? = null,
+) : CallReliabilityMedia {
     private val negotiator = CallNegotiator(engine, signals)
     private val iceMonitor = CallIceStateMonitor(engine, signals)
+    private val statsCollector = CallStatsCollector(engine)
+    /** Le focus audio est perdu ou rendu (appel GSM, alarme) : la mise en attente de l'appel s'en nourrit. */
+    var onAudioFocusChanged: ((hasFocus: Boolean) -> Unit)? = null
+
     private val audio = CallAudioSession(appContext) { hasFocus ->
         interrupted = !hasFocus
         applyMicrophone()
+        onAudioFocusChanged?.invoke(hasFocus)
     }
 
     private var userMuted = false
@@ -82,9 +96,12 @@ class WebRtcCallCoordinator @Inject constructor(
     /** L'échelle adaptative de ma caméra et la survie vidéo, propagée au maillage (#13767, #13752). */
     private val videoEncoding = CallVideoEncodingController(
         ticks = statsFeed.ticks,
-        thermal = { appContext.callThermalState() },
-        apply = { budget, frozen -> engine.setCameraVideoBudget(budget, frozen) },
-        onSurvivalFloor = { mesh.setSurvivalFloor(it) },
+        thermal = { thermalMonitor?.state?.value ?: appContext.callThermalState() },
+        apply = { budget, frozen -> engine.setCameraVideoBudget(dataProfile?.capVideo(budget) ?: budget, frozen) },
+        onSurvivalFloor = {
+            mesh.setSurvivalFloor(it)
+            videoHealth?.setAutoPaused(it)
+        },
     )
 
     init {
@@ -93,6 +110,9 @@ class WebRtcCallCoordinator @Inject constructor(
 
     /** Ce que la scène d'un appel de groupe lit : registre, principal, vidéo de chaque membre du maillage. */
     val groupMesh: StateFlow<GroupCallMeshUi> get() = mesh.ui
+
+    /** L'appel est prouvé réunir plus de deux personnes (le plafond de reconnexion quitte au lieu de raccrocher). */
+    val isGroupCall: Boolean get() = mesh.isGroup
 
     /** Le principal a quitté un groupe qui continue : sa connexion n'est plus surveillée, l'appel tient par le maillage. */
     var onPrimaryVacated: (() -> Unit)? = null
@@ -104,6 +124,18 @@ class WebRtcCallCoordinator @Inject constructor(
 
     /** L'installation du pair a échoué (fabrique sans pair) : message précis, l'appel est abandonné. */
     var onSetupFailed: ((message: String) -> Unit)? = null
+
+    /**
+     * La caméra demandée n'a pas pu démarrer (accès refusé, aucune caméra) : l'appel continue en audio seul, le
+     * pair doit l'apprendre comme une caméra coupée (iOS `continueAudioOnly`).
+     */
+    var onVideoUnavailable: ((CallVideoFallback) -> Unit)? = null
+
+    /**
+     * L'appareil est au palier critique : la vidéo ne peut plus continuer. L'hôte coupe la caméra, prévient le
+     * pair et dit pourquoi ; l'appel continue en audio (iOS `shouldDisableVideo`).
+     */
+    var onThermalCritical: (() -> Unit)? = null
 
     /** Les entrées de sous-titres reçues du pair sur le canal de données. */
     val peerCaptions get() = dataChannel.captions
@@ -172,7 +204,10 @@ class WebRtcCallCoordinator @Inject constructor(
         speakerOn: Boolean,
         conversationId: String,
     ) {
+        val mutedBeforeTrack = userMuted
         teardown()
+        handoff?.onCallStarted()
+        userMuted = mutedBeforeTrack
         negotiator.begin(callId, peerId, selfId, isCaller)
         iceMonitor.begin(callId, selfId, onMediaConnected, onMediaStalled)
         val cs = scope + SupervisorJob(scope.coroutineContext[Job])
@@ -183,20 +218,41 @@ class WebRtcCallCoordinator @Inject constructor(
         // it is already known (e.g. the user toggled the speaker button while
         // `accept()` was still awaiting the join ACK, before this ran).
         audio.route(speakerOn = speakerOn, isVideo = isVideo)
-        try {
+        val videoUnavailable = try {
             engine.createConnection(iceServers, enableVideo = isVideo)
         } catch (error: WebRtcError) {
             end()
             onSetupFailed?.invoke(error.message ?: "WebRTC setup failed")
             return
         }
+        applyMicrophone()
+        if (mutedBeforeTrack) signals.emitToggleAudio(callId, enabled = false)
+        val sendsVideo = isVideo && !videoUnavailable
         mesh.bind(cs, callId, selfId, isOutgoing = isCaller, primaryUserId = peerId, iceServers = iceServers,
-            sendsAudio = !userMuted && !interrupted, sendsVideo = isVideo, conversationId = conversationId)
-        videoEncoding.begin(cs, wantsVideo = isVideo)
+            sendsAudio = !userMuted && !interrupted, sendsVideo = sendsVideo, conversationId = conversationId)
+        dataProfile?.let {
+            it.onChanged = videoEncoding::reapply
+            it.begin(cs)
+        }
+        videoEncoding.begin(cs, wantsVideo = sendsVideo)
+        watchThermal(cs)
+        videoEncoding.reapply()
         negotiator.observe(cs)
         iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
         dataChannel.observe(cs) { reason ->
             if (mesh.primaryDidLeave()) vacatePrimary() else onRemoteBye?.invoke(reason)
+        }
+        if (videoUnavailable) onVideoUnavailable?.invoke(engine.videoFallback ?: CallVideoFallback.NoCamera)
+    }
+
+    private fun watchThermal(scope: CoroutineScope) {
+        val monitor = thermalMonitor ?: return
+        monitor.start()
+        scope.launch {
+            monitor.state.collect { state ->
+                videoHealth?.setThermal(state)
+                if (state == ThermalState.CRITICAL) onThermalCritical?.invoke()
+            }
         }
     }
 
@@ -259,6 +315,25 @@ class WebRtcCallCoordinator @Inject constructor(
         videoEncoding.setUserWantsVideo(enabled)
     }
 
+    /**
+     * Audio vers vidéo en plein appel (iOS `upgradeToVideo`) : la caméra est acquise, sa piste prend l'émetteur vidéo
+     * et le négociateur émet l'offre, sans couper l'audio. `null` : fait ; sinon pourquoi l'appel reste en audio.
+     */
+    fun upgradeToVideo(): CallVideoFallback? {
+        val failure = engine.upgradeToVideo()
+        if (failure != null) return failure
+        mesh.setSendsVideo(true)
+        videoEncoding.setUserWantsVideo(true)
+        return null
+    }
+
+    /** Vidéo vers audio (iOS `downgradeFromVideo`) : la caméra est libérée (voyant éteint) et le pair renégocie. */
+    fun downgradeFromVideo() {
+        engine.downgradeFromVideo()
+        mesh.setSendsVideo(false)
+        videoEncoding.setUserWantsVideo(false)
+    }
+
     /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
     val cameraZoom get() = engine.cameraZoom
 
@@ -286,7 +361,10 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     private fun teardown() {
+        thermalMonitor?.stop()
+        videoHealth?.reset()
         videoEncoding.end()
+        dataProfile?.end()
         mesh.teardown()
         callScope?.cancel()
         callScope = null
@@ -295,6 +373,7 @@ class WebRtcCallCoordinator @Inject constructor(
         engine.close()
         iceMonitor.end()
         audio.restore()
+        handoff?.onCallEnded()
     }
 
     /**
@@ -322,4 +401,20 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     private fun restartIceAndRenegotiate() = negotiator.restartIce(callScope)
+
+    override val peerConnected: Boolean get() = iceMonitor.isPeerConnected
+
+    override val awaitingRemoteOffer: Boolean get() = callScope == null || negotiator.awaitingRemoteOffer
+
+    override suspend fun packetCounts(): CallPacketCounts? =
+        statsCollector.collect()?.let { CallPacketCounts(it.inboundPacketsReceived, it.outboundPacketsSent) }
+
+    override fun beginReconnectCycle() = iceMonitor.beginExternalCycle()
+
+    override fun catchUpConnected() = iceMonitor.catchUpConnected()
+
+    override fun restartIceNow() {
+        if (callScope == null || mesh.isPrimaryVacated) return
+        restartIceAndRenegotiate()
+    }
 }

@@ -395,6 +395,37 @@ final class StoryUploadQueueTests: XCTestCase {
         XCTAssertTrue(claimed, "Une story partiellement commise ne repart JAMAIS par la queue")
     }
 
+    /// #4773 — l'application tuée après une publication PARTIELLE : le drain de
+    /// démarrage rejoue l'item entier. Chaque slide doit repartir sous la MÊME
+    /// clé d'idempotence qu'au premier passage, sans quoi la passerelle
+    /// (`withMutationVerdict`) écrit une seconde story là où elle devait
+    /// resservir la première.
+    func test_queuedReplay_afterPartialCommit_resendsEachSlideUnderItsFirstKey() async throws {
+        mockPostService.createStoryResultsQueue = [
+            .success(Self.makeStoryAPIPost(id: "slide-0")),
+            .failure(URLError(.timedOut)),
+        ]
+        publish(slides: [StorySlide(), StorySlide()])
+        await waitUntil("la story échoue après commit partiel") { [self] in
+            sut.activeUploads.contains { if case .failed = $0.phase { return true }; return false }
+        }
+        let firstPass = mockPostService.createCanvasClientMutationIds
+        XCTAssertEqual(firstPass.count, 2, "Précondition : les deux slides ont été tentées")
+        let queueId = try XCTUnwrap(sut.activeUploads.first?.queueId)
+        let pending = await StoryPublishQueue.shared.pendingItems
+        let item = try XCTUnwrap(pending.first { $0.id == queueId })
+
+        mockPostService.createStoryResultsQueue = [
+            .success(Self.makeStoryAPIPost(id: "slide-0")),
+            .success(Self.makeStoryAPIPost(id: "slide-1")),
+        ]
+        _ = try await sut.executeQueuedPublish(item: item)
+
+        let replay = Array(mockPostService.createCanvasClientMutationIds.dropFirst(firstPass.count))
+        XCTAssertEqual(replay, firstPass,
+                       "La slide déjà publiée repart sous sa clé : la passerelle la resert au lieu de la dupliquer")
+    }
+
     func test_retryUpload_whenQueueAlreadyOwnsItem_doesNotStartASecondUpload() async {
         guard let upload = await failedUploadReleasedToTheQueue() else { return }
         // Le drain de fond revendique l'item entre-temps.
@@ -691,14 +722,14 @@ final class StoryUploadQueueTests: XCTestCase {
         XCTAssertFalse(StoryPublishCopy.queuedForOffline(.post).localizedCaseInsensitiveContains("story"))
     }
 
-    /// **#8522 — VoiceOver annonce ce que l'auteur publie** (atelier du SDK).
-    func test_publishStartedAnnouncement_suitLeTypePublie() {
-        XCTAssertNotEqual(StoryComposerView.publishStartedAnnouncement(for: .post),
-                          StoryComposerView.publishStartedAnnouncement(for: .story))
-        XCTAssertFalse(StoryComposerView.publishStartedAnnouncement(for: .post)
-            .localizedCaseInsensitiveContains("story"))
-        XCTAssertFalse(StoryComposerView.publishStartedAnnouncement(for: .reel)
-            .localizedCaseInsensitiveContains("story"))
+    /// **#8522 — VoiceOver annonce ce que l'auteur publie** (la scène du meuble).
+    func test_publishStartedAnnouncement_suitLeTypePublie() throws {
+        XCTAssertNotEqual(ComposerFormatWording(.post).publishStarted, ComposerFormatWording(.story).publishStarted)
+        XCTAssertFalse(ComposerFormatWording(.post).publishStarted.localizedCaseInsensitiveContains("story"))
+        XCTAssertFalse(ComposerFormatWording(.reel).publishStarted.localizedCaseInsensitiveContains("story"))
+        let scene = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(scene.contains("AdaptiveAccessibility.announce(ComposerFormatWording(format.postType).publishStarted)"),
+                      "La publication d'une scène s'annonce par le type servi.")
     }
 
     private static func makeGIF(frames: Int) throws -> Data {

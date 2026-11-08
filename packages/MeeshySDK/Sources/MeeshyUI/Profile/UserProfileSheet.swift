@@ -65,6 +65,7 @@ public struct UserProfileSheet: View {
     @ResolvedThemePalette var theme
     /// L'emplacement du jeu (#9481) — fourni par l'app, vide sinon.
     @Environment(\.profileGameSection) var gameSection
+    @Environment(\.profileRelationSection) var relationSection
     @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
     @State var selectedTab: ProfileTab = .details

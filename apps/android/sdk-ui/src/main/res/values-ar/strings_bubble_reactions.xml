@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_reactions_add_hint">اضغط للتفاعل بسرعة، واستمر بالضغط لاختيار إيموجي</string>
+    <string name="bubble_reactions_pick_emoji">اختر إيموجي</string>
+    <string name="bubble_reactions_more_count">%1$d تفاعلات أخرى</string>
+    <string name="bubble_reactions_view_all_hint">عرض كل التفاعلات</string>
+    <string name="bubble_reactions_chip">%1$s %2$d تفاعلات</string>
+    <string name="bubble_reactions_chip_mine">%1$s %2$d تفاعلات، لقد تفاعلت</string>
+    <string name="bubble_reactions_toggle_hint">اضغط للتبديل، واستمر بالضغط لرؤية كل التفاعلات</string>
+</resources>

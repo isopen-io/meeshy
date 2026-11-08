@@ -34,9 +34,11 @@ import {
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
 import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
+import { applyConversationGone, conversationGoneOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
+  applyMediaAltTranslation,
   applyMediaCaptionTranslation,
   applyPostCreated,
   applyPostDeleted,
@@ -46,6 +48,7 @@ import {
   applyServedBookmark,
   applyServedLike,
   applyServedRepost,
+  applyStoryChanged,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
@@ -88,8 +91,8 @@ import {
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
 import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp } from './realtime-thread-catch-up';
+import { viewerRoleUpdatedListener } from './realtime-viewer-role';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
-import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
 /**
@@ -210,6 +213,8 @@ export type RealtimeDeps = {
   /** Le compte NOMMÉ supprimé (#10237) : `error { code: ACCOUNT_DELETED, accountId }`
    * ou `auth:session-revoked { deletedAccountId }` — jamais le compte actif. */
   readonly onAccountDeleted?: (accountId: string) => void;
+  /** `conversation:closed` / `conversation:obsoleted` (#14645) : le fil ouvert de cette conversation se referme. */
+  readonly onConversationGone?: (conversationId: string) => void;
   /** Le compte de la session qui a OUVERT la connexion — seul nommable (audit #10237) ; `null` pour un invité. */
   readonly account?: string | null;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
@@ -343,8 +348,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
     noteEphemeralDelivery(payload, now());
     /* LA GALERIE DE LA COQUE ANDROID (#8308) — à la RÉCEPTION, une seule fois,
-       jamais un média protégé ni le mien ; sans effet hors de la coque. */
-    noteGalleryReception(payload, deps.viewerId());
+       jamais un média protégé ni le mien, seulement si « Sauvegarder média »
+       est ouvert (#14641) ; sans effet hors de la coque. */
+    noteGalleryReception(payload, deps.viewerId(), deps.queryClient);
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {
@@ -494,6 +500,14 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onParticipantDeparture = (payload: unknown): void => {
     const ended = viewerMembershipEndedOf(payload, deps.viewerId());
     if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
+  };
+
+  /** `conversation:closed` / `-obsoleted` (#14645) — ligne, détail et messages partent. Règle : `realtime-conversation-gone.ts`. */
+  const onConversationGone = (payload: unknown): void => {
+    const id = conversationGoneOf(payload);
+    if (id === null) return;
+    deps.onConversationGone?.(id);
+    applyConversationGone(deps.queryClient, id);
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -659,17 +673,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onStoryUnreacted = onStoryReactionChanged('remove');
 
   /**
-   * `story:*` (#5652, bloc E ; #6080) — LE RAIL SUIT LE FIL EN DIRECT :
-   * `story:created`/`story:updated`/`story:deleted`/`story:viewed` invalident
-   * `STORY_TRAY_QUERY_KEY`. Miroir du motif `onAuthenticated` ci-dessous : UNE
-   * invalidation par famille, jamais une reconstruction locale du corpus
-   * depuis la charge de l'événement — `groupStoriesByAuthor`
-   * (`lib/view/story-tray.ts`) reste le SEUL site qui sait regrouper des
-   * stories par auteur (D-14), un événement isolé ne porte qu'UNE story,
-   * jamais le groupe entier.
+   * `story:*`/`status:updated` (#5652, #6080, #16541) — LE RAIL SUIT LE FIL EN DIRECT : une
+   * invalidation du plateau par famille, jamais une reconstruction locale du corpus
+   * (`groupStoriesByAuthor` reste le SEUL site qui regroupe, D-14) ; seul le
+   * réglage des commentaires se pose (`feed-realtime.ts#applyStoryChanged`).
    */
-  const onStoryChanged = (): void => {
-    void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+  const onStoryChanged = (payload?: unknown): void => {
+    applyStoryChanged(deps.queryClient, payload);
   };
   /* `story:viewed` (#7116, revue) — le plateau comme ci-dessus, ET le compte
      des vues de l'auteur + sa feuille ouverte (`publication-views-realtime.ts`,
@@ -804,9 +814,15 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * charge porte pourtant `postId` depuis sa naissance — c'est la garde locale
    * qui ne le lisait pas.
    *
+   * **Et `media:alt-translation-updated` depuis #7392** — le TROISIÈME contenu
+   * d'un média, qui n'avait AUCUN auditeur sur aucun client alors que la
+   * passerelle le diffuse depuis #6737. C'est la chaîne qu'un lecteur d'écran
+   * PRONONCE : la laisser muette revenait à faire élire une traduction par le
+   * pipeline, la ranger, la pousser sur le fil — et n'en rien afficher.
+   *
    * Les lois vivent dans `feed-realtime.ts` (validation, fusion par langue,
    * registre des caisses) ; ces écouteurs ne tiennent que le branchement
-   * (D-98). Deux contenus, deux cartes de traduction, jamais mélangées.
+   * (D-98). TROIS contenus, trois cartes de traduction, jamais mélangées.
    */
   const onPostTranslationUpdated = (payload: unknown): void => {
     applyPostTranslation(deps.queryClient, payload);
@@ -814,6 +830,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
     applyMediaCaptionTranslation(deps.queryClient, payload);
+  };
+
+  const onMediaAltTranslationUpdated = (payload: unknown): void => {
+    applyMediaAltTranslation(deps.queryClient, payload);
   };
 
   /**
@@ -1009,6 +1029,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     if (isEncryptionChanged(payload)) applyEncryptionChanged(deps.queryClient, endToEndRegimeLedger, payload);
   };
 
+  const onViewerRoleUpdated = viewerRoleUpdatedListener(deps.queryClient, deps.viewerId); /* #15987 — `realtime-viewer-role.ts` */
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_NEW, onMessageNew);
   socket.on<unknown>(SERVER_EVENTS.TYPING_START, onTypingStart);
@@ -1016,6 +1037,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
+  socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -1033,6 +1055,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1048,6 +1072,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
   socket.on<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
@@ -1064,6 +1089,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
+  socket.on<unknown>(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, onMediaAltTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
@@ -1111,6 +1137,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
+      socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -1128,6 +1155,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1146,6 +1175,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
       socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
+      socket.off<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
       socket.off<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
@@ -1159,6 +1189,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
+      socket.off<unknown>(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, onMediaAltTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);

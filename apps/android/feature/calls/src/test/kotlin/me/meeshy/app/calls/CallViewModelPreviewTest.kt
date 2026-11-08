@@ -82,6 +82,7 @@ class CallViewModelPreviewTest {
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns MutableSharedFlow()
         every { signalManager.iceServersRefreshed } returns MutableSharedFlow<IceServersRefreshedPayload>()
+        every { signalManager.callErrors } returns MutableSharedFlow<me.meeshy.sdk.model.call.CallErrorSignal>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()
@@ -114,7 +115,7 @@ class CallViewModelPreviewTest {
         }),
         CallWaitingController(signalManager, silentTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, object : CallHeartbeatTicker { override val beats: Flow<Unit> = emptyFlow() }, silentTimer, silentTimer),
-        CallAnalyticsController(signalManager, clock),
+        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
         CallExtensionPoints(
             controllers = CallFeatureControllerRegistry(emptySet()),
             overlays = CallOverlayRegistry(emptySet()),
@@ -127,6 +128,8 @@ class CallViewModelPreviewTest {
         recordingCallPreview(links, signaling),
         silentTurnCredentials(signalManager),
         testGroupTitleWording,
+        CallEndReconciler(signalManager),
+        CallTeardownController(emptySet()),
     )
 
     private fun offer() = CallSignalEnvelope("call-9", CallSignalPayload(type = "offer", sdp = "v=0", from = "caller", to = "me", negotiationId = 1))

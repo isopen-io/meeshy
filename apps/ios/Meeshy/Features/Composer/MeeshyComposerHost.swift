@@ -172,7 +172,6 @@ struct MeeshyComposerHost: View {
     /// lisent tous par `selectedFormat` / `armedChoice`. La disposition des
     /// scènes et le réel d'accompagnement voyagent avec lui.
     @State var formatState: ComposerFormatState
-    @State var atelierFanOut = ComposerAtelierFanOut()
 
     /// Le format que la PORTE a ouvert, gardé pour la bascule automatique vers
     /// le réel : désarmée, elle rend la porte (`ComposerReelAutoSwitch`).
@@ -316,7 +315,7 @@ struct MeeshyComposerHost: View {
     /// `ComposerCaptureSession`. `@StateObject` et non `.shared` : une session
     /// de capture appartient à CETTE composition, et le modèle de caméra est
     /// construit MUET tant que l'auteur n'a pas armé.
-    @StateObject var sceneCapture = ComposerCaptureSession()
+    @StateObject var sceneCapture = ComposerWarmCapture.session()
 
     /// La taille du viseur — propre à la scène, le plein écran n'en a qu'une.
     /// REPOSÉE à chaque armement : un plein écran qui survivrait ferait naître
@@ -663,28 +662,16 @@ struct MeeshyComposerHost: View {
 
     /// « Tout effacer » demande confirmation depuis ⋯ (#13839).
     @State var sceneClearAllAsked = false
+    /// La reprise du son des vidéos (#4756) : `nil` tant que l'auteur n'a rien touché.
+    @State var soundExtractionChoice: Bool?
     @State var sceneLayout = ComposerSceneLayoutState()
-
-    /// La hauteur RENDUE de la zone de saisie — déclarée à l'atelier en
-    /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
-    /// d'être recouvert.
-    @State var sceneDescriptionEditorHeight: CGFloat = 0
-
-    /// **La télécommande de publication de l'atelier.**
-    ///
-    /// `@StateObject` et non `@State` : le meuble doit se re-rendre quand
-    /// l'atelier RAPPORTE sa matière (`canPublish`) ou arme son œil, sinon la
-    /// flèche du socle resterait grise sur une composition devenue publiable —
-    /// une commande qui ment sur son propre état.
-    ///
-    /// Elle est CONSTRUITE ici et pressée ici ; c'est l'atelier qui l'arme avec
-    /// `publishAllSlides` et `presentPreview`. Le meuble ne recompose rien : ni
-    /// le rabattement des effets du canvas, ni la langue, ni les médias
-    /// préchargés — trois choses qu'il ne voit pas.
-    @StateObject var publishTrigger = ComposerPublishTrigger()
+    @State var commentsDisabledChoice = false
 
     /// La sauvegarde automatique de la création en cours.
     @StateObject var autosave = ComposerAutosaveController()
+
+    /// Le brouillon de « Mes stories » repris, ou l'édition d'une story (#15629).
+    @StateObject var storedDraft = ComposerStoredDraftKeeper()
 
     /// **La section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
@@ -763,7 +750,7 @@ struct MeeshyComposerHost: View {
         // faisait un jour — et ce verdict-là est le seul qui ne perde rien.
         let composer: StoryComposerViewModel
         switch hydration {
-        case .editingStory(let hydrate):
+        case .editingStory(let hydrate), .editingPublication(let hydrate, _):
             // Le meuble n'en construit PAS un second : il adopte celui que la
             // porte lui remet, déjà hydraté depuis la story publiée. L'invariant
             // « un seul objet, un seul site d'adoption » tient — `adoptDraft`
@@ -771,7 +758,7 @@ struct MeeshyComposerHost: View {
             composer = hydrate
         case .repostingStory(let story, _):
             composer = StoryComposerViewModel(reposting: story)
-        case nil:
+        case .quotingPublication, nil:
             if let mediaSeed {
                 composer = StoryComposerViewModel(seeding: mediaSeed)
             } else {
@@ -785,7 +772,7 @@ struct MeeshyComposerHost: View {
         // republier en post »). La borne — un format hors éventail est ignoré — vit chez l'intention :
         // la refaire ici en ferait une seconde écriture, celle du meuble qu'on oublierait de tenir à jour.
         let ouverture = intent.openingFormat(
-            compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
+            compositionQualifiesAsReel: hydration?.publicationReelGate(slides: composer.slides) ?? ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
         )
         _formatState = State(initialValue: .opening(ouverture))
         _doorFormat = State(initialValue: ouverture)
@@ -820,30 +807,22 @@ struct MeeshyComposerHost: View {
         // autres (`selectable`, dans `seed`) et non à côté : la chaîne vient
         // d'un `StoryItem`, donc du réseau, et un rawValue inconnu doit
         // retomber comme n'importe quel autre plutôt que de traverser en l'état.
-        let hydratee = hydration?.initialVisibility
-        _composerVisibility = State(initialValue: ComposerAudienceMemory.seed(
-            // La mémoire est NEUTRALISÉE quand l'hydratation impose une
-            // audience : c'est ce que « gagne sur » veut dire ici. La laisser
-            // en premier rang la ferait gagner, elle.
-            rememberedRaw: hydratee == nil
-                ? ComposerAudienceMemory.key(for: ouverture)
-                    .flatMap { UserDefaults.standard.string(forKey: $0) }
-                : nil,
-            doorRaw: hydratee ?? initialVisibility
-        ))
+        let document = ComposerDocumentOpening.of(hydration: hydration, format: ouverture,
+                                                  doorVisibility: initialVisibility)
+        _composerVisibility = State(initialValue: document.visibility)
+        _composerVisibilityUserIds = State(initialValue: document.visibilityUserIds)
+        _documentText = State(initialValue: document.text)
+        _documentLanguage = State(initialValue: document.language)
+        _documentLocation = State(initialValue: document.location)
     }
 
     var tint: PlateauTint {
         PlateauTint(rawValue: storedTint) ?? .defaultTint
     }
 
-    /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne.**
-    ///
-    /// Un TOGGLE, et c'est ce qui le rend utilisable : rien de sélectionné et
-    /// un fond média ⇒ on le sélectionne ; sinon ⇒ on efface. L'auteur entre et
-    /// sort de l'inspecteur par le même geste, sur la même cible — sans quoi
-    /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
-    /// zone contextuelle restant montée pour toujours.
+    /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne** — un TOGGLE : rien de
+    /// sélectionné et un fond média ⇒ on le sélectionne ; sinon ⇒ on efface. L'auteur entre et
+    /// sort de l'inspecteur par le même geste, sur la même cible.
     func handleSceneBackgroundTap() {
         // **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5) et referme la bande ; la règle
         // se lit AVANT d'effacer, sinon elle verrait toujours « rien ».
@@ -852,7 +831,9 @@ struct MeeshyComposerHost: View {
             effectIsOpen: openSceneEffect != nil,
             quickCaptureOffered: sceneQuickCaptureIsOffered,
             backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil,
-            bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil)
+            bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil,
+            writesText: writesText)
+        if issue == .endWriting { return endSceneWriting() }
         if ComposerSceneEmptyTap.closesBand(issue) { requestedSceneBand = nil }
         if issue == .armViewfinder, handleSceneQuickTap() { return }
         // Le document sélectionne son fond par KIND (#4035).
@@ -865,7 +846,7 @@ struct MeeshyComposerHost: View {
         switch issue {
         case .deselect:                   sceneSelectionRelay.deselectSceneItem()
         case .selectBackground(let fond): sceneSelectionRelay.selectSceneItem(fond)
-        case .closeEffect, .closeBand, .armViewfinder, .nothing:
+        case .endWriting, .closeEffect, .closeBand, .armViewfinder, .nothing:
             selectedSceneItemId = nil
             inlineEdit = nil
         }
@@ -934,14 +915,10 @@ struct MeeshyComposerHost: View {
         .adaptiveOnChange(of: ComposerSceneCamera.initialMode(for: selectedFormat) != nil, initial: true) { _, filme in
             if filme { sceneCapture.prewarm() }
         }
-        // Le report du contenu vers la scène, en UN seul site :
-        // dès que `mountedSurface` DEVIENT `.scene` (par l'éventail STORY/RÉEL
-        // ou par une couleur de fond), le texte et le média composés suivent.
-        // `mountedSurface` est calculée à chaque passe ; `initial: true` couvre
-        // les portes qui OUVRENT déjà sur la scène (storyTray, reprise, graine).
-        .adaptiveOnChange(of: mountedSurface, initial: true) { _, surface in
-            guard surface == .scene else { return }
-            carryContentIntoSceneIfNeeded()
+        // E1 — la scène prend la langue DÉCLARÉE au composer comme défaut de
+        // tout objet posé ; une story qu'on modifie garde donc la sienne.
+        .adaptiveOnChange(of: documentLanguage, initial: true) { _, langue in
+            viewModel.declaredContentLanguage = langue
         }
         // En Post, chaque média ingéré devient SA slide. Site UNIQUE :
         // les trois portes d'ingestion (photothèque, caméra, importateur)

@@ -1,27 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="notifications_title">Benachrichtigungen</string>
     <string name="notifications_mark_all_read">Alle als gelesen markieren</string>
-    <string name="notifications_empty">Keine Benachrichtigungen</string>
-    <string name="notifications_system_sender">System</string>
-    <string name="notifications_action_delete">Löschen</string>
     <string name="notifications_action_mark_read">Gelesen</string>
     <string name="notifications_empty_category">Hier gibt es keine Benachrichtigungen</string>
-    <string name="notifications_category_all">Alle</string>
-    <string name="notifications_category_unread">Ungelesen</string>
-    <string name="notifications_category_messages">Nachrichten</string>
-    <string name="notifications_category_reactions">Reaktionen</string>
-    <string name="notifications_category_mentions">Erwähnungen</string>
-    <string name="notifications_category_social">Sozial</string>
-    <string name="notifications_category_contacts">Kontakte</string>
-    <string name="notifications_category_groups">Gruppen</string>
-    <string name="notifications_category_calls">Anrufe</string>
-    <string name="notifications_category_translations">Übersetzungen</string>
-    <string name="notifications_category_system">System</string>
-    <string name="notification_banner_in_conversation">%1$s in %2$s</string>
-    <string name="notification_banner_media_photo">📷 Foto</string>
-    <string name="notification_banner_media_video">🎥 Video</string>
-    <string name="notification_banner_media_audio">🎵 Audio</string>
     <string name="notification_banner_preview_hidden">Neue Benachrichtigung</string>
     <string name="notifications_unread_prefix">Ungelesen.</string>
     <string name="notifications_error_title">Mitteilungen nicht verfügbar</string>

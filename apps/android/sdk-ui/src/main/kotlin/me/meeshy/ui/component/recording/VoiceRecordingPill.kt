@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
+import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -85,7 +87,7 @@ public fun VoiceRecordingPill(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
-                        contentDescription = "Cancel recording",
+                        contentDescription = stringResource(R.string.composer_recording_cancel),
                         tint = tokens.error,
                         modifier = Modifier.size(16.dp),
                     )
@@ -130,7 +132,7 @@ public fun VoiceRecordingPill(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Stop,
-                        contentDescription = "Stop and add to attachments",
+                        contentDescription = stringResource(R.string.composer_recording_stop_and_attach),
                         tint = accentColor.copy(alpha = if (canSend) 1f else 0.4f),
                         modifier = Modifier.size(14.dp),
                     )
@@ -147,7 +149,7 @@ public fun VoiceRecordingPill(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send voice message",
+                        contentDescription = stringResource(R.string.composer_recording_send),
                         tint = Color.White,
                         modifier = Modifier.size(16.dp),
                     )

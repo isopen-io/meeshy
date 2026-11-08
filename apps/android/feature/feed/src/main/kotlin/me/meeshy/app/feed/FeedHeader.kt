@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -15,10 +16,10 @@ import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.story.PinnedBandReveal
 import me.meeshy.ui.component.chrome.CollapsibleHeader
 import me.meeshy.ui.component.chrome.CollapsibleHeaderActionButton
 import me.meeshy.ui.component.chrome.CollapsibleHeaderDefaults
-import me.meeshy.ui.component.chrome.CollapsibleHeaderMotion
 import me.meeshy.ui.component.chrome.ScrollMotionVisibility
 
 /**
@@ -33,16 +34,24 @@ internal fun FeedHeader(
     listState: LazyListState,
     onOpenReels: () -> Unit,
     onOpenNearby: () -> Unit,
+    pinnedBand: (@Composable (reveal: Float) -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val thresholdPx = remember(density) {
         with(density) { CollapsibleHeaderDefaults.CollapseThreshold.roundToPx() }
     }
-    val progress = CollapsibleHeaderMotion.collapseProgress(
-        firstVisibleItemIndex = listState.firstVisibleItemIndex,
-        firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset,
-        thresholdPx = thresholdPx,
-    )
+    // Relayé seulement quand la valeur change : le décalage brut bouge à chaque image, le progrès non.
+    val progress by remember(listState, thresholdPx) {
+        derivedStateOf {
+            FeedHeaderCollapseState.of(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset,
+                thresholdPx = thresholdPx,
+                isScrollInProgress = false,
+                quietMillis = ScrollMotionVisibility.STILLNESS_THRESHOLD_MS,
+            ).progress
+        }
+    }
     var quietMillis by remember { mutableLongStateOf(ScrollMotionVisibility.STILLNESS_THRESHOLD_MS) }
     LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress) {
@@ -55,12 +64,28 @@ internal fun FeedHeader(
             }
         }
     }
-    val actionsVisible = ScrollMotionVisibility.isVisible(listState.isScrollInProgress, quietMillis)
+    val actionsVisible = FeedHeaderCollapseState.of(
+        firstVisibleItemIndex = 0,
+        firstVisibleItemScrollOffsetPx = 0,
+        thresholdPx = thresholdPx,
+        isScrollInProgress = listState.isScrollInProgress,
+        quietMillis = quietMillis,
+    ).actionsVisible
 
+    val pinnedOffsetDp by remember(listState, density) {
+        derivedStateOf {
+            PinnedBandReveal.scrollOffsetDp(
+                listState.firstVisibleItemIndex,
+                with(density) { listState.firstVisibleItemScrollOffset.toDp().value },
+            )
+        }
+    }
     CollapsibleHeader(
         title = stringResource(R.string.feed_title),
         scrollProgress = progress,
         actionsVisible = actionsVisible,
+        scrollOffsetDp = pinnedBand?.let { pinnedOffsetDp },
+        titleAccessory = pinnedBand,
     ) {
         feedHeaderActions().forEach { action ->
             when (action) {

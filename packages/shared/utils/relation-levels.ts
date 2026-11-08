@@ -26,6 +26,12 @@ export const RELATION_FEATURES = [
   'relay.commentersOnMyPosts',
   'relay.myCommentsElsewhere',
   'dm.direct',
+  'dm.request',
+  'dm.readReceipts',
+  'dm.typing',
+  'presence.dnd',
+  'call.ring',
+  'views.identity',
   'audience.acquaintances',
   'audience.close',
   'audience.blood',
@@ -55,6 +61,12 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   'relay.commentersOnMyPosts': 'CLOSE',
   'relay.myCommentsElsewhere': 'BLOOD',
   'dm.direct': 'ACQUAINTANCE',
+  'dm.request': 'PUBLIC',
+  'dm.readReceipts': 'ACQUAINTANCE',
+  'dm.typing': 'ACQUAINTANCE',
+  'presence.dnd': 'ACQUAINTANCE',
+  'call.ring': 'PUBLIC',
+  'views.identity': 'COMMUNITY',
   'audience.acquaintances': 'ACQUAINTANCE',
   'audience.close': 'CLOSE',
   'audience.blood': 'BLOOD',
@@ -95,11 +107,40 @@ export const postCircleAudienceFloor = (visibility: unknown): RelationLevel | nu
     : null;
 
 /**
- * Les features qui exigent un CONSENTEMENT explicite et refusable, à tout âge
- * (§ 1.8) : Bring (à l'entrée en Ami), talkie et catégorie d'écoute (à l'entrée
- * en Proche), titre d'écoute et position (au rituel Sang). La loi dit le
- * PLAFOND ; `RelationFeatureSetting` dit si la personne l'active — les deux sont
- * requis. Ce n'est JAMAIS un refus d'âge.
+ * Deux NATURES derrière l'entrée `consent` de la loi (analyse de conformité #13942,
+ * écart E9, #14407) — la loi les traite de même (refus tant que `consent` ne vaut
+ * pas `'granted'`), l'orchestrateur ne les RÉSOUT pas de même :
+ *
+ * 1. le CONSENTEMENT RGPD de l'ÉMETTEUR (art. 7) — ce que je partage de moi :
+ *    catégorie et titre d'écoute, position, historique, proximité. Recueilli
+ *    explicitement (écran à l'entrée en Proche, rituel du Sang), FAUX par défaut,
+ *    retirable ; `consent: 'granted'` seulement sur un accord stocké ;
+ * 2. la PRÉFÉRENCE DE RÉCEPTION du DESTINATAIRE — ce que j'accepte de recevoir :
+ *    Bring, talkie. Base : l'exécution du contrat (art. 6(1)(b)), pas un
+ *    consentement ; ACTIVE par défaut, coupée par personne ou globalement ;
+ *    l'orchestrateur la traduit en `consent: 'granted'` tant qu'elle n'est pas
+ *    coupée. L'interface la nomme « autorisation », jamais « consentement ».
+ *
+ * La loi dit le PLAFOND ; l'une ou l'autre dit si la personne l'ouvre — les deux
+ * sont requis. Ce n'est JAMAIS un refus d'âge.
+ */
+export const RELATION_RECEPTION_PREFERENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'bring',
+  'talkie',
+]);
+
+export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'listening.category',
+  'listening.title',
+  'location.live',
+  'location.history',
+  'location.proximity',
+]);
+
+/**
+ * Les features dont la loi exige `consent: 'granted'` — l'UNION des deux natures
+ * ci-dessus (témoin : `__tests__/bring-contract.test.ts`). Écrite en LITTÉRAL : les
+ * miroirs Swift et Kotlin relisent cette liste dans ce fichier.
  */
 export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
   'bring',
@@ -116,12 +157,61 @@ export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<
   'bring',
   'talkie',
   'acquaintance.auto',
+  'dm.request',
+  'call.ring',
 ]);
+
+/**
+ * LE BOUCLIER DES MINEURS (RG-21, colonne « Règle mineurs » du classeur) — le
+ * niveau EFFECTIF qu'un viewer qui n'est PAS mineur déclaré doit atteindre pour
+ * s'adresser à un mineur DÉCLARÉ (`targetMinor === 'minor'`). Il RELÈVE le
+ * minimum de la matrice, ne l'abaisse jamais. Un âge inconnu n'est pas un
+ * mineur ici : sans date de naissance, personne ne serait joignable.
+ *
+ * - `dm.request` : une demande de message d'un inconnu vers un mineur est
+ *   CONTENUE (MSG-01, RG-21) tant qu'ils ne sont pas Connaissance — la porte
+ *   répond comme pour un majeur (aucune issue ne distingue un mineur), et la
+ *   demande est rangée filtrée, sans média, sans son, sans appel. Une
+ *   communauté commune n'y suffit pas : n'importe quel membre peut en fabriquer
+ *   une (audit #14107, B3).
+ * - `call.ring` : pas d'appel d'un majeur qui n'est pas Ami vers un mineur
+ *   (CAL-01/02, colonne « Règle mineurs ») — l'appel ne sonne pas, et rien ne le
+ *   distingue d'un appel resté sans réponse.
+ *
+ * Le refus rend `reason: 'level'`, jamais `'minor'` : le dire apprendrait à un
+ * inconnu l'âge de la personne qu'il cherche à joindre.
+ */
+export const RELATION_MINOR_TARGET_MIN_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
+  'dm.request': 'ACQUAINTANCE',
+  'call.ring': 'FRIEND',
+};
 
 /** Les seules features qu'un ADMIN/BIGBOSS lit sans lien (loi du 2026-08-25). */
 export const RELATION_PRESENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
   'presence.online',
   'presence.detailed',
+]);
+
+/**
+ * CE QUE LE PRIVILÈGE D'ÉQUIPE N'OUVRE PAS (#16623). Entre deux comptes de l'équipe
+ * (`isPlatformTeam`), le niveau effectif d'un OUTIL vaut Sang sans lien à construire.
+ * Une AUDIENCE, elle, reste au lien réel : ces features diffusent du contenu ou font
+ * naître un lien, et un rôle n'y fait entrer personne.
+ *
+ * - `audience.*` : une publication « Proches » ne part pas chez un collègue ;
+ * - `notify.newContent`, `relay.*` : aucune notification d'entourage vers l'équipe ;
+ * - `acquaintance.auto` : un rôle ne crée aucun lien.
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
+export const RELATION_TEAM_CLOSED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'notify.newContent',
+  'relay.commentersOnMyPosts',
+  'relay.myCommentsElsewhere',
+  'audience.acquaintances',
+  'audience.close',
+  'audience.blood',
+  'acquaintance.auto',
 ]);
 
 /**

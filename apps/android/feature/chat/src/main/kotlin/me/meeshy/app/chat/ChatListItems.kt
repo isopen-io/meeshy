@@ -13,7 +13,14 @@ import me.meeshy.ui.component.bubble.BubbleContent
 sealed class ChatListItem {
     abstract val key: String
 
+    /**
+     * Le type de composition de la rangée : `LazyColumn` ne réutilise une composition que d'un item
+     * de MÊME type, donc une bulle ne recompose jamais en séparateur de jour (ni l'inverse).
+     */
+    abstract val contentType: String
+
     data class DayHeader(val dayMillis: Long) : ChatListItem() {
+        override val contentType: String get() = "day"
         override val key: String get() = "day-$dayMillis"
     }
 
@@ -23,16 +30,29 @@ sealed class ChatListItem {
      * (`UnreadCountLabel.messages`); 0 falls back to the plain label.
      */
     data class UnreadSeparator(val count: Int = 0) : ChatListItem() {
+        override val contentType: String get() = "unread"
         override val key: String get() = "unread-separator"
     }
 
     /** The end-to-end-encryption notice, pinned at the very top once the reader
      * has reached the start of an encrypted conversation's history. */
     data object EncryptionNotice : ChatListItem() {
+        override val contentType: String get() = "encryption-notice"
         override val key: String get() = "encryption-notice"
     }
 
+    /**
+     * « Début de la conversation avec <nom> » (iOS `FocalConversationStartRow`) : le marqueur posé
+     * en tête du fil quand l'historique est entièrement chargé. [firstMessageDayMillis] est le jour
+     * du premier message chargé, nul si son horodatage est illisible.
+     */
+    data class ConversationStart(val conversationName: String, val firstMessageDayMillis: Long?) : ChatListItem() {
+        override val contentType: String get() = "conversation-start"
+        override val key: String get() = "conversation-start"
+    }
+
     data class Message(val bubble: BubbleContent) : ChatListItem() {
+        override val contentType: String get() = "bubble"
         override val key: String get() = bubble.messageId
     }
 }
@@ -46,6 +66,9 @@ sealed class ChatListItem {
  * is inserted directly above it (below that message's day header, if any). An id
  * absent from [bubbles] inserts nothing.
  *
+ * [serverUnreadCount] is the count the separator announces (the server's, #7525); the window count only
+ * stands in when the server count is unknown or zero.
+ *
  * When [showEncryptionNotice] is true, a single [ChatListItem.EncryptionNotice]
  * is prepended above everything (including the first day header) — the reader is at
  * the start of an encrypted conversation's history.
@@ -55,14 +78,24 @@ fun buildChatListItems(
     zone: ZoneId,
     firstUnreadId: String? = null,
     showEncryptionNotice: Boolean = false,
+    conversationStartName: String? = null,
+    serverUnreadCount: Int? = null,
 ): List<ChatListItem> {
     val items = mutableListOf<ChatListItem>()
     if (showEncryptionNotice) {
         items += ChatListItem.EncryptionNotice
     }
+    if (conversationStartName != null && bubbles.isNotEmpty()) {
+        val firstMillis = isoToEpochMillis(bubbles.first().createdAtIso)
+        items += ChatListItem.ConversationStart(
+            conversationName = conversationStartName,
+            firstMessageDayMillis = firstMillis.takeIf { it > 0L },
+        )
+    }
     var currentDay: LocalDate? = null
     val unreadIndex = firstUnreadId?.let { id -> bubbles.indexOfFirst { it.messageId == id } } ?: -1
-    val unreadCount = if (unreadIndex < 0) 0 else bubbles.subList(unreadIndex, bubbles.size).count { !it.isOutgoing }
+    val windowUnreadCount = if (unreadIndex < 0) 0 else bubbles.subList(unreadIndex, bubbles.size).count { !it.isOutgoing }
+    val unreadCount = serverUnreadCount?.takeIf { it > 0 } ?: windowUnreadCount
     bubbles.forEach { bubble ->
         val millis = isoToEpochMillis(bubble.createdAtIso)
         if (millis > 0L) {
@@ -78,6 +111,16 @@ fun buildChatListItems(
         items += ChatListItem.Message(bubble)
     }
     return items
+}
+
+/**
+ * Le nom que porte la rangée de début de conversation : seulement quand tout l'historique est
+ * chargé ([hasMoreOlder] faux), hors squelette de démarrage à froid, et que la conversation a un
+ * titre. Sinon `null` : aucune rangée.
+ */
+internal object ConversationStartName {
+    fun of(title: String?, hasMoreOlder: Boolean, isLoadingInitial: Boolean): String? =
+        title?.trim()?.takeIf { it.isNotEmpty() && !hasMoreOlder && !isLoadingInitial }
 }
 
 /**
@@ -143,3 +186,6 @@ internal fun layoutKeys(items: List<ChatListItem>): List<String> {
         candidate
     }
 }
+
+/** Le type de composition du spinner « historique plus ancien » posé au-dessus du fil. */
+internal const val LOADING_OLDER_CONTENT_TYPE = "loading-older"

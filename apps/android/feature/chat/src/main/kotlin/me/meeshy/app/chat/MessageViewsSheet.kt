@@ -62,6 +62,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
+import me.meeshy.ui.component.bubble.SendHistoryPresenter
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.RelativeTimeStrings
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -113,12 +114,15 @@ internal fun MessageViewsSheet(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     androidx.compose.runtime.DisposableEffect(bubble.messageId, conversationId) {
-        viewModel.bind(bubble.messageId, conversationId)
+        viewModel.bind(bubble.messageId, conversationId, bubble.clientMessageId ?: bubble.messageId)
         onDispose { viewModel.unbind() }
     }
     val haptics = rememberMeeshyHaptics()
     val data = state.status.data
     val filter = state.filter
+    val sendHistory = remember(state.sendAttempts, bubble.isOutgoing) {
+        SendHistoryPresenter.present(state.sendAttempts, isMine = bubble.isOutgoing)
+    }
 
     Column(modifier = modifier.fillMaxWidth().padding(bottom = MeeshySpacing.lg)) {
         Text(
@@ -160,7 +164,10 @@ internal fun MessageViewsSheet(
             modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
         ) { current ->
             when {
-                current == MessageViewsFilter.Sent -> SentTab(bubble, accentColor)
+                current == MessageViewsFilter.Sent -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                    SentTab(bubble, accentColor)
+                    sendHistory?.let { MessageViewsSendAttemptsCard(it, accentColor) }
+                }
                 state.status.showsSpinner -> Loading(accentColor)
                 data == null -> LoadError(state.status.failure, accentColor, viewModel::retry)
                 else -> ViewerList(current, data, state.membersByParticipant, accentColor)

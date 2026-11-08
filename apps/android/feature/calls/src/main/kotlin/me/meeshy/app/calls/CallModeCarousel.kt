@@ -50,7 +50,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
-import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
+import me.meeshy.sdk.model.call.CallModeCarouselRule
 import me.meeshy.sdk.model.call.montage.CallModeGesture
 import me.meeshy.sdk.model.call.montage.CallModeGestureOutcome
 import me.meeshy.sdk.model.call.montage.CallModeGestureRule
@@ -58,8 +58,6 @@ import kotlin.math.abs
 
 private val ITEM = 60.dp
 private val SPACING = 14.dp
-private const val NEIGHBOUR_SCALE = 0.78f
-private const val NEIGHBOUR_ALPHA = 0.6f
 
 /** Ce qu'un carrousel déclenche sur son élément centré (#13733) : deux tapes photographient, un appui long filme. */
 internal class CallModeShots(val isRecording: Boolean, val onCapturePhoto: () -> Unit, val onStartRecording: () -> Unit)
@@ -166,7 +164,7 @@ internal fun <T> CallModeCarousel(
     val photoLabel = stringResource(R.string.call_mode_photo)
     val recordLabel = stringResource(R.string.call_mode_record)
     fun step(by: Int): Boolean {
-        val next = CallEffectsModeRule.stepping(selection, items, by)
+        val next = CallModeCarouselRule.stepping(selection, items, by)
         if (next == selection) return false
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         onSelect(next)
@@ -198,7 +196,7 @@ internal fun <T> CallModeCarousel(
         Text(shownName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink, maxLines = 1)
         hint?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = CallPalette.InkSecondary, maxLines = 1) }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val inset = (maxWidth - itemWidth) / 2
+            val inset = CallModeCarouselRule.sideInset(maxWidth.value, itemWidth.value).dp
             CompositionLocalProvider(LocalViewConfiguration provides configuration) {
                 LazyRow(
                     state = list,
@@ -235,10 +233,10 @@ internal fun <T> CallModeCarousel(
                             modifier = Modifier
                                 .size(itemWidth, itemHeight)
                                 .graphicsLayer {
-                                    val scale = if (isShown) 1f else NEIGHBOUR_SCALE
+                                    val scale = CallModeCarouselRule.scale(isShown)
                                     scaleX = scale
                                     scaleY = scale
-                                    alpha = if (isShown) 1f else NEIGHBOUR_ALPHA
+                                    alpha = CallModeCarouselRule.opacity(isShown)
                                 }
                                 .then(gestures),
                         ) { cell(item, isShown) }

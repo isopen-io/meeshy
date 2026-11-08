@@ -182,11 +182,11 @@ extension CallManager {
     func answerBufferedOffer(
         _ remoteOffer: SessionDescription, callId: String, userId: String, path: OfferAnswerPath
     ) async -> Bool {
-        // Phase 2 fix — Bug 2: wait for local media transceivers before
-        // createAnswer (emitCallJoin is decoupled from startLocalMedia). CallKit
-        // gives ample time for CXAnswerCallAction (10s+), so awaiting camera/mic
-        // warmup here is safe on that path too.
+        // Phase 2 fix — Bug 2: wait for local media transceivers before createAnswer
+        // (emitCallJoin is decoupled from startLocalMedia); CallKit allows 10s+ for
+        // CXAnswerCallAction, so awaiting camera/mic warmup is safe there too.
         await self.localMediaTask?.value
+        await CallAnswerWithoutVideo(call: self).withholdLocalVideoIfDeclined(callId: callId)
         guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
             guard self.currentCallId == callId else { return false }
             // Local SDP generation failure is invisible to the peer — without
@@ -207,7 +207,6 @@ extension CallManager {
         await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
         return true
     }
-
 }
 
 /// Who answers the caller's offer: the in-app Accept button, CallKit's answer

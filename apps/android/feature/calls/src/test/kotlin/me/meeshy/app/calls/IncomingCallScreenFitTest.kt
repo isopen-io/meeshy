@@ -40,7 +40,7 @@ class IncomingCallScreenFitTest {
     private val decline = "Decline. Declines the incoming call"
     private val accept = "Accept. Answers the incoming call"
     private val message = "Decline with a message"
-    private val sound = "Turn on sound"
+    private val sound = "Turn sound on"
 
     private fun smallScreen(fontScale: Float) = rule.setContent {
         val density = LocalDensity.current

@@ -1,10 +1,8 @@
 package me.meeshy.app.chat
 
-import android.content.Context
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
@@ -19,13 +17,19 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
 import me.meeshy.sdk.model.reading.mode.LensRow
 import me.meeshy.sdk.model.reading.mode.OrchestratorDecision
+import me.meeshy.sdk.model.reading.mode.OrchestratorDecisionReason
 import me.meeshy.sdk.model.reading.mode.ReadingModeCapabilities
 import me.meeshy.sdk.model.reading.mode.ReadingModeConversationType
 import me.meeshy.sdk.model.reading.mode.ReadingModeCycle
 import me.meeshy.sdk.model.reading.mode.ReadingModeLensCatalog
+import me.meeshy.sdk.model.reading.mode.ReadingModeMenuEntry
+import me.meeshy.sdk.model.reading.mode.ReadingModeMenuModel
 import me.meeshy.sdk.model.reading.mode.ReadingModeOpening
 import me.meeshy.sdk.model.reading.mode.ReadingModeOrchestrator
 import me.meeshy.sdk.model.reading.mode.ReadingModePreferenceScope
+import me.meeshy.sdk.reading.ReadingModeFlags
+import me.meeshy.sdk.reading.ReadingModePreferenceStoring
+import me.meeshy.sdk.reading.SharedPreferencesReadingModeStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 
@@ -36,70 +40,7 @@ import me.meeshy.sdk.session.SessionRepository
  * plus sur Script ([ReadingModeOpening.deliver]) ni ne reste grisée dans le menu du chip, sauf quand
  * la conversation ou l'interrupteur de réglages ne l'offre pas (`RiverModeGate`).
  */
-internal val DELIVERED_READING_MODES: Set<ConversationReadingMode> = setOf(
-    ConversationReadingMode.BUBBLES,
-    ConversationReadingMode.SCRIPT,
-    ConversationReadingMode.FOCAL,
-    ConversationReadingMode.SUMMARY,
-    ConversationReadingMode.RIVER,
-)
-
-/**
- * Stockage local, scopé par lecteur, du mode de lecture — miroir de
- * `FocalReadingModePreferenceStoring` (iOS). `null` = rien de mémorisé = Automatique.
- */
-interface ReadingModePreferenceStoring {
-    fun mode(conversationId: String, scope: ReadingModePreferenceScope): ConversationReadingMode?
-    fun setMode(mode: ConversationReadingMode?, conversationId: String, scope: ReadingModePreferenceScope)
-    fun lastOpenedAtMs(conversationId: String, scope: ReadingModePreferenceScope): Long?
-    fun noteOpened(conversationId: String, scope: ReadingModePreferenceScope, atMs: Long)
-}
-
-/** Les drapeaux des modes de lecture — miroir de `LentilleFeatureFlag` : actifs tant qu'aucune valeur n'est écrite. */
-interface ReadingModeFlags {
-    val isReadingModesEnabled: Boolean
-    val isRiviereModeEnabled: Boolean
-}
-
-/**
- * Le stockage `SharedPreferences` : clés `meeshy_readmode_<scope>_<id>` (valeur = mode rendu
- * `focal|script|summary|river|bubbles`) et `meeshy_lastopen_<scope>_<id>` (epoch en ms), et les
- * drapeaux `meeshy.flag.reading_modes` / `meeshy.flag.riviere_mode` (défaut : actifs).
- */
-class SharedPreferencesReadingModeStore @Inject constructor(
-    @ApplicationContext context: Context,
-) : ReadingModePreferenceStoring, ReadingModeFlags {
-
-    private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-    override fun mode(conversationId: String, scope: ReadingModePreferenceScope): ConversationReadingMode? =
-        ConversationReadingMode.fromWire(prefs.getString(ReadingModePreferenceScope.modeKey(scope, conversationId), null))
-
-    override fun setMode(mode: ConversationReadingMode?, conversationId: String, scope: ReadingModePreferenceScope) {
-        if (conversationId.isEmpty()) return
-        val key = ReadingModePreferenceScope.modeKey(scope, conversationId)
-        prefs.edit().apply { if (mode == null) remove(key) else putString(key, mode.wire) }.apply()
-    }
-
-    override fun lastOpenedAtMs(conversationId: String, scope: ReadingModePreferenceScope): Long? {
-        val key = ReadingModePreferenceScope.lastOpenedKey(scope, conversationId)
-        return if (prefs.contains(key)) prefs.getLong(key, 0L) else null
-    }
-
-    override fun noteOpened(conversationId: String, scope: ReadingModePreferenceScope, atMs: Long) {
-        if (conversationId.isEmpty()) return
-        prefs.edit().putLong(ReadingModePreferenceScope.lastOpenedKey(scope, conversationId), atMs).apply()
-    }
-
-    override val isReadingModesEnabled: Boolean get() = prefs.getBoolean(FLAG_READING_MODES, true)
-    override val isRiviereModeEnabled: Boolean get() = prefs.getBoolean(FLAG_RIVIERE_MODE, true)
-
-    private companion object {
-        const val PREFS = "meeshy.readingModes"
-        const val FLAG_READING_MODES = "meeshy.flag.reading_modes"
-        const val FLAG_RIVIERE_MODE = "meeshy.flag.riviere_mode"
-    }
-}
+internal val DELIVERED_READING_MODES: Set<ConversationReadingMode> = ReadingModeMenuModel.DELIVERED
 
 /** Ce que le chip montre : la décision courante, les capacités figées à l'ouverture, le menu. */
 data class ReadingModeUiState(
@@ -112,6 +53,10 @@ data class ReadingModeUiState(
     val showsChip: Boolean get() = ReadingModeLensCatalog.showsChip(capabilities)
     val rows: List<LensRow> get() = ReadingModeLensCatalog.rows(capabilities, decision.mode, delivered)
 
+    /** Le menu de la puce : le MÊME catalogue que le sous-menu de la liste (Auto coché tant qu'aucun choix n'est figé). */
+    val menuEntries: List<ReadingModeMenuEntry>
+        get() = ReadingModeMenuModel.build(capabilities, ReadingModeMenuModel.preferenceOf(decision), delivered)
+
     /** Le mode vers lequel le tap fait passer, ou `null` s'il n'y a rien vers quoi cycler. */
     val nextInCycle: ConversationReadingMode?
         get() = ReadingModeCycle.next(decision.mode, ReadingModeLensCatalog.cycle(capabilities, delivered))
@@ -121,6 +66,8 @@ data class ReadingModeUiState(
  * Le mode de lecture d'UNE conversation ouverte — miroir de `ReadingModeController` (iOS). Les
  * entrées (non-lus, capacités, drapeau) sont figées à l'ouverture ; [select] écrit la préférence
  * collante puis recalcule, [resetToAuto] efface la clé puis recalcule. Pur hors du [store].
+ * [forcedMode] (ouverture depuis une notification ou un aperçu) est ÉPHÉMÈRE : il décide de
+ * l'ouverture seulement, n'est jamais écrit, et le premier choix manuel reprend la loi.
  */
 class ReadingModeSession(
     private val conversationId: String,
@@ -132,9 +79,15 @@ class ReadingModeSession(
     private val now: () -> Long,
     private val delivered: Set<ConversationReadingMode> = DELIVERED_READING_MODES,
     landsOnMessage: Boolean = false,
+    forcedMode: ConversationReadingMode? = null,
 ) {
     private val _state = MutableStateFlow(
-        ReadingModeUiState(compute(landsOnMessage), capabilities, delivered),
+        ReadingModeUiState(
+            forcedMode?.let { ReadingModeOpening.deliver(OrchestratorDecision(it, OrchestratorDecisionReason.DEFAULT), delivered) }
+                ?: compute(landsOnMessage),
+            capabilities,
+            delivered,
+        ),
     )
     val state: StateFlow<ReadingModeUiState> = _state.asStateFlow()
 
@@ -183,6 +136,7 @@ class ReadingModeSession(
             store: ReadingModePreferenceStoring,
             now: () -> Long,
             delivered: Set<ConversationReadingMode> = DELIVERED_READING_MODES,
+            forcedMode: ConversationReadingMode? = null,
         ): ReadingModeSession {
             val capabilities = ReadingModeOrchestrator.resolveCapabilities(
                 isAnonymous = scope is ReadingModePreferenceScope.Anonymous,
@@ -200,6 +154,7 @@ class ReadingModeSession(
                 store = store,
                 now = now,
                 delivered = delivered,
+                forcedMode = forcedMode,
             ).also { it.noteOpened() }
         }
     }
@@ -216,12 +171,12 @@ class ReadingModeController @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val anonymousSessionStore: AnonymousSessionStore,
     private val store: SharedPreferencesReadingModeStore,
-) : ChatController {
+) : ChatController, ThreadReadingModeSource {
 
     private val _state = MutableStateFlow<ReadingModeUiState?>(null)
 
     /** `null` tant que l'ouverture n'est pas résolue : pas de chip. */
-    val state: StateFlow<ReadingModeUiState?> = _state.asStateFlow()
+    override val state: StateFlow<ReadingModeUiState?> = _state.asStateFlow()
 
     private var session: ReadingModeSession? = null
 
@@ -254,11 +209,11 @@ class ReadingModeController @Inject constructor(
         }
     }
 
-    fun select(mode: ConversationReadingMode) {
+    override fun select(mode: ConversationReadingMode) {
         session?.select(mode)
     }
 
-    fun resetToAuto() {
+    override fun resetToAuto() {
         session?.resetToAuto()
     }
 }

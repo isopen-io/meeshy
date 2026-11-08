@@ -145,14 +145,34 @@ final class MeeshyVideoPosterWiringTests: XCTestCase {
     /// `MeeshyVideoThumbnail` relisait son poster persisté par `cachedData`
     /// (NSCache mémoire, vide à chaque relance) : le poster était re-extrait
     /// (1 Mo réseau) à chaque ouverture froide. La relecture passe par le DISQUE.
+    ///
+    /// 8d3c42a8ba — le magasin est injecté (`MediaImageLoading`) : la vignette
+    /// demande `persistedFileURL(for:)` à son chargeur, et le chargeur par
+    /// défaut (`CoordinatorImageLoader`) le résout par `cachedFileURL(for:)`
+    /// du `DiskCacheStore`. La propriété se garde donc aux DEUX bouts du
+    /// câblage ; le comportement de `persistedPoster` (aucun décodage sans
+    /// fichier) est tenu par `MediaImageLoadingInjectionTests`.
     func test_videoThumbnail_rereadsThePersistedPosterFromDisk() throws {
         let source = ComposerSourceGuard.stripComments(
             try sdkSource("Sources/MeeshyUI/Media/MeeshyVideoThumbnail.swift")
         )
-        XCTAssertTrue(source.contains("cachedFileURL(for: thumbKey)"),
-                      "la relecture du poster persisté doit interroger le disque (`cachedFileURL`)")
-        XCTAssertFalse(source.contains("cachedData(for: thumbKey)"),
+        XCTAssertTrue(source.contains("Self.persistedPoster(forKey: thumbKey, using: imageLoader)"),
+                      "la relecture du poster persisté passe par l'atome `persistedPoster`")
+        let reread = try block(from: "static func persistedPoster(", upTo: "static func extractRemoteFirstFrame(", in: source)
+        XCTAssertTrue(reread.contains("guard await loader.persistedFileURL(for: key) != nil else { return nil }"),
+                      "la relecture du poster persisté doit interroger le disque (`persistedFileURL`)")
+        XCTAssertFalse(source.contains("cachedData("),
                        "`cachedData` ne voit que la NSCache mémoire — le poster disque était invisible après relance")
+
+        let loader = ComposerSourceGuard.stripComments(
+            try sdkSource("Sources/MeeshyUI/Primitives/MediaImageLoading.swift")
+        )
+        let persisted = try block(from: "public func persistedFileURL(for key: String) async -> URL? {",
+                                  upTo: "}", in: loader)
+        XCTAssertTrue(persisted.contains("diskStore().cachedFileURL(for: key)"),
+                      "le chargeur par défaut résout le fichier persisté sur le DISQUE (`cachedFileURL`)")
+        XCTAssertFalse(loader.contains("cachedData("),
+                       "le chargeur ne relit jamais la seule NSCache mémoire")
         XCTAssertTrue(source.contains("static func extractRemoteFirstFrame("),
                       "l'extraction distante par Range est un atome réutilisable (cascade poster côté app)")
     }

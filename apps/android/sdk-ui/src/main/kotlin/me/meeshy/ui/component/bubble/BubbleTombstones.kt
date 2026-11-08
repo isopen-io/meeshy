@@ -1,7 +1,9 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -65,6 +67,53 @@ internal fun BubbleBurnedView(isOutgoing: Boolean, modifier: Modifier = Modifier
                 style = MaterialTheme.typography.bodySmall,
                 fontStyle = FontStyle.Italic,
                 color = MeeshyTheme.tokens.textMuted,
+            )
+        }
+    }
+}
+
+/**
+ * « Message supprimé » — une capsule AUTONOME, hors de la bulle colorée (iOS `BubbleDeletedView`) :
+ * glyphe interdit, texte italique `textMuted`, fond de surface et liseré hairline, alignée du côté de
+ * l'expéditeur. Un appui long garde les options du message ; un message supprimé n'a ni réaction ni
+ * pied.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun BubbleDeletedView(isOutgoing: Boolean, onLongPress: (() -> Unit)?, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.bubble_message_deleted)
+    val muted = MeeshyTheme.tokens.textMuted
+    val capsule = RoundedCornerShape(MeeshyRadius.pill)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xxs),
+        horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .clip(capsule)
+                .background(MeeshyTheme.tokens.surfaceFill)
+                .border(0.5.dp, MeeshyTheme.tokens.hairline, capsule)
+                .let { base ->
+                    if (onLongPress == null) base else base.combinedClickable(onClick = {}, onLongClick = onLongPress)
+                }
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+                .semantics(mergeDescendants = true) { contentDescription = label },
+        ) {
+            Icon(
+                imageVector = MeeshyIcons.Block,
+                contentDescription = null,
+                tint = muted,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = muted,
             )
         }
     }

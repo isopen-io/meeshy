@@ -1085,6 +1085,1108 @@
           }
         }
       ]
+    },
+    {
+      "slug": "fonds-noel",
+      "order": 5,
+      "installedByDefault": false,
+      "removable": true,
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
+      "designs": [
+        {
+          "key": "flocons-cristal",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F6F9FC",
+              "ink": "#1E3A8A",
+              "soft": "#E6EEF6"
+            },
+            "dark": {
+              "base": "#0A0F1A",
+              "ink": "#BFDBFE",
+              "soft": "#121A2A"
+            }
+          },
+          "tile": {
+            "width": 64,
+            "height": 64,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M18 26L18 10M11.07 22L24.93 14M11.07 14L24.93 22M24.48 19.78L22.16 20.4L22.78 22.72M19.7 24.5L18 22.8L16.3 24.5M13.22 22.72L13.84 20.4L11.52 19.78M11.52 16.22L13.84 15.6L13.22 13.28M16.3 11.5L18 13.2L19.7 11.5M22.78 13.28L22.16 15.6L24.48 16.22",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M50 53.5L50 42.5M45.24 50.75L54.76 45.25M45.24 45.25L54.76 50.75M54.45 49.22L52.86 49.65L53.28 51.24M51.17 52.47L50 51.3L48.83 52.47M46.72 51.24L47.14 49.65L45.55 49.22M45.55 46.78L47.14 46.35L46.72 44.76M48.83 43.53L50 44.7L51.17 43.53M53.28 44.76L52.86 46.35L54.45 46.78",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.6
+              },
+              {
+                "d": "M49.2 14A0.8 0.8 0 1 0 50.8 14A0.8 0.8 0 1 0 49.2 14ZM13.2 50A0.8 0.8 0 1 0 14.8 50A0.8 0.8 0 1 0 13.2 50Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "guirlande-etoilee",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FBF8F1",
+              "ink": "#92400E",
+              "soft": "#F3ECDD"
+            },
+            "dark": {
+              "base": "#100D08",
+              "ink": "#FCD34D",
+              "soft": "#1B160E"
+            }
+          },
+          "tile": {
+            "width": 80,
+            "height": 56,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M0 8C13 20 27 20 40 8C53 20 67 20 80 8",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.6
+              },
+              {
+                "d": "M17.4 20.5A2.6 2.6 0 1 0 22.6 20.5A2.6 2.6 0 1 0 17.4 20.5ZM57.4 20.5A2.6 2.6 0 1 0 62.6 20.5A2.6 2.6 0 1 0 57.4 20.5Z",
+                "role": "ink",
+                "opacity": 0.08
+              },
+              {
+                "d": "M40 33.5L40.99 37.01L44.5 38L40.99 38.99L40 42.5L39.01 38.99L35.5 38L39.01 37.01Z",
+                "role": "ink",
+                "opacity": 0.07
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "sucre-d-orge-raye",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FCF7F7",
+              "ink": "#B91C1C",
+              "soft": "#F4E6E6"
+            },
+            "dark": {
+              "base": "#120A0B",
+              "ink": "#FCA5A5",
+              "soft": "#1E1213"
+            }
+          },
+          "tile": {
+            "width": 32,
+            "height": 32,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M-4 4L4 -4M0 32L32 0M28 36L36 28",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 3
+              },
+              {
+                "d": "M0 16L16 0M16 32L32 16",
+                "role": "ink",
+                "opacity": 0.08,
+                "width": 0.6
+              }
+            ]
+          },
+          "fit": "fill"
+        }
+      ]
+    },
+    {
+      "slug": "fonds-noel-vivants",
+      "order": 6,
+      "installedByDefault": false,
+      "removable": true,
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
+      "designs": [
+        {
+          "key": "neige-de-noel",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F3F7FC",
+              "ink": "#D7E3F1",
+              "soft": "#E7EEF7"
+            },
+            "dark": {
+              "base": "#0A1020",
+              "ink": "#16223D",
+              "soft": "#0E1730"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.9,
+                "role": "ink",
+                "opacity": 0.45
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "76356c212acf9bf9.json",
+            "bytes": 30773,
+            "sha256": "76356c212acf9bf941f1aca7dbac0d522d6e1b0530667ab180d8d661705cf4ae"
+          }
+        },
+        {
+          "key": "ampoules-de-noel",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FBF8F1",
+              "ink": "#F3E3BC",
+              "soft": "#F1EBDD"
+            },
+            "dark": {
+              "base": "#0F0D0A",
+              "ink": "#2A2010",
+              "soft": "#17140F"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.05,
+                "r": 0.8,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "3f315eaf529d3947.json",
+            "bytes": 19538,
+            "sha256": "3f315eaf529d394789b9c6feb418258ac2a2d9ec98caaaf60bbb05ca8dff7ca1"
+          }
+        },
+        {
+          "key": "etincelles-atelier",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FCF8F6",
+              "ink": "#F6DCD5",
+              "soft": "#EFEDE4"
+            },
+            "dark": {
+              "base": "#110B0B",
+              "ink": "#2B1414",
+              "soft": "#121611"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "cf5704f84d5d73bb.json",
+            "bytes": 22882,
+            "sha256": "cf5704f84d5d73bbb0e4c20a2b91707663a9fc9a140e0ee8452c314d9dd9652e"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "meeshy-fonds",
+      "order": 7,
+      "installedByDefault": false,
+      "removable": true,
+      "designs": [
+        {
+          "key": "soie",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FAF7F2",
+              "ink": "#E8D9C2",
+              "soft": "#F2EBE0"
+            },
+            "dark": {
+              "base": "#121014",
+              "ink": "#2B2330",
+              "soft": "#1A171D"
+            }
+          },
+          "gradient": {
+            "angle": 165,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.15,
+                "y": 0.08,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.45
+              },
+              {
+                "x": 0.92,
+                "y": 0.95,
+                "r": 0.7,
+                "role": "accent",
+                "opacity": 0.06
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "pointille",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F7F8FA",
+              "ink": "#334155",
+              "soft": "#E9ECF1"
+            },
+            "dark": {
+              "base": "#0E1116",
+              "ink": "#CBD5E1",
+              "soft": "#171B22"
+            }
+          },
+          "tile": {
+            "width": 22,
+            "height": 22,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M4.6 5.5A0.9 0.9 0 1 0 6.4 5.5A0.9 0.9 0 1 0 4.6 5.5ZM15.6 16.5A0.9 0.9 0 1 0 17.4 16.5A0.9 0.9 0 1 0 15.6 16.5Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "vagues-fines",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F4F8FA",
+              "ink": "#155E75",
+              "soft": "#E3EEF2"
+            },
+            "dark": {
+              "base": "#0B1418",
+              "ink": "#A5F3FC",
+              "soft": "#12202A"
+            }
+          },
+          "tile": {
+            "width": 60,
+            "height": 22,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M0 11C10 5 20 5 30 11S50 17 60 11",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.8
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "cannage",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FAF7F1",
+              "ink": "#6B4E2E",
+              "soft": "#EFE6D6"
+            },
+            "dark": {
+              "base": "#14110D",
+              "ink": "#D8C3A0",
+              "soft": "#1F1A14"
+            }
+          },
+          "tile": {
+            "width": 36,
+            "height": 36,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M0 0L36 36M36 0L0 36M18 0V36M0 18H36",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.55
+              },
+              {
+                "d": "M11.5 18A6.5 6.5 0 1 0 24.5 18A6.5 6.5 0 1 0 11.5 18Z",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.55
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "terrazzo",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F8F6F3",
+              "ink": "#57534E",
+              "soft": "#ECE8E2"
+            },
+            "dark": {
+              "base": "#111010",
+              "ink": "#D6D3D1",
+              "soft": "#1C1A19"
+            }
+          },
+          "tile": {
+            "width": 96,
+            "height": 96,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M8 10L15 7L17 13L10 15Z",
+                "role": "ink",
+                "opacity": 0.06
+              },
+              {
+                "d": "M46 6L52 9L49 14L43 12Z",
+                "role": "accent",
+                "opacity": 0.08
+              },
+              {
+                "d": "M78 18L86 16L88 22L80 25Z",
+                "role": "ink",
+                "opacity": 0.06
+              },
+              {
+                "d": "M22 40L30 37L33 44L26 47L21 45Z",
+                "role": "accent",
+                "opacity": 0.07
+              },
+              {
+                "d": "M60 44L66 40L70 47L64 50Z",
+                "role": "ink",
+                "opacity": 0.06
+              },
+              {
+                "d": "M86 58L92 60L89 66Z",
+                "role": "accent",
+                "opacity": 0.08
+              },
+              {
+                "d": "M10 72L17 70L19 77L12 80Z",
+                "role": "ink",
+                "opacity": 0.06
+              },
+              {
+                "d": "M44 76L52 72L56 80L48 84Z",
+                "role": "ink",
+                "opacity": 0.06
+              },
+              {
+                "d": "M74 84L80 82L82 88L76 90Z",
+                "role": "accent",
+                "opacity": 0.07
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "crepuscule",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FBF7F4",
+              "ink": "#F3D3C8",
+              "soft": "#ECE4F4"
+            },
+            "dark": {
+              "base": "#120E18",
+              "ink": "#3A1F36",
+              "soft": "#1E1A33"
+            }
+          },
+          "gradient": {
+            "angle": 200,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.85,
+                "y": 0.05,
+                "r": 0.8,
+                "role": "ink",
+                "opacity": 0.5
+              },
+              {
+                "x": 0.1,
+                "y": 0.9,
+                "r": 0.7,
+                "role": "soft",
+                "opacity": 0.6
+              }
+            ]
+          },
+          "fit": "fill"
+        }
+      ]
+    },
+    {
+      "slug": "meeshy-fonds-vivants",
+      "order": 8,
+      "installedByDefault": false,
+      "removable": true,
+      "designs": [
+        {
+          "key": "lucioles",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F8F6EF",
+              "ink": "#F1DDB0",
+              "soft": "#EFE8D8"
+            },
+            "dark": {
+              "base": "#0D0F14",
+              "ink": "#2E2614",
+              "soft": "#151922"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.2,
+                "y": 0.85,
+                "r": 0.7,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "fb8b374e8c0b841a.json",
+            "bytes": 25632,
+            "sha256": "fb8b374e8c0b841a6fe5e57fc11018ad890a38f8bc0924ff5e34f65a4fca2f23"
+          }
+        },
+        {
+          "key": "voile-aurore",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F3F7F8",
+              "ink": "#BDF3E9",
+              "soft": "#E4DEFB"
+            },
+            "dark": {
+              "base": "#071318",
+              "ink": "#0F3B3A",
+              "soft": "#221047"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.3,
+                "y": 0.2,
+                "r": 0.7,
+                "role": "ink",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "2303e844e384560e.json",
+            "bytes": 2914,
+            "sha256": "2303e844e384560e5453a3e7abc55d08be435efc263c9e8543a28eb56f703d24"
+          }
+        },
+        {
+          "key": "neige-douce",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F4F7FB",
+              "ink": "#DCE3EC",
+              "soft": "#E9EEF4"
+            },
+            "dark": {
+              "base": "#0B1220",
+              "ink": "#18233A",
+              "soft": "#0F172A"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.9,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "4b9367a69e99f1d8.json",
+            "bytes": 11493,
+            "sha256": "4b9367a69e99f1d851486d0a0046b7a654cb61ca1d7b3030131dccb4ae8b3466"
+          }
+        },
+        {
+          "key": "ondes",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F5F6FF",
+              "ink": "#DDE3FD",
+              "soft": "#EBEEFF"
+            },
+            "dark": {
+              "base": "#0B0D1F",
+              "ink": "#1C1B4A",
+              "soft": "#15133A"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.2,
+                "y": 0.25,
+                "r": 0.6,
+                "role": "ink",
+                "opacity": 0.4
+              },
+              {
+                "x": 0.85,
+                "y": 0.75,
+                "r": 0.6,
+                "role": "ink",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "ba80a0826eb7398b.json",
+            "bytes": 4784,
+            "sha256": "ba80a0826eb7398b5afe48be3aa6605a0b57aeff72505486773da455743f165e"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-fonds",
+      "order": 9,
+      "installedByDefault": false,
+      "removable": true,
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
+      "designs": [
+        {
+          "key": "fond-artifice",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F7F7FB",
+              "ink": "#4338CA",
+              "soft": "#ECECF6"
+            },
+            "dark": {
+              "base": "#08091A",
+              "ink": "#FDE68A",
+              "soft": "#12142B"
+            }
+          },
+          "tile": {
+            "width": 76,
+            "height": 76,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M23 20L29 20M22.6 21.5L27.79 24.5M21.5 22.6L24.5 27.79M20 23L20 29M18.5 22.6L15.5 27.79M17.4 21.5L12.21 24.5M17 20L11 20M17.4 18.5L12.21 15.5M18.5 17.4L15.5 12.21M20 17L20 11M21.5 17.4L24.5 12.21M22.6 18.5L27.79 15.5",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M57.85 54.75L61.1 56.06M56.78 55.84L58.15 59.06M55.25 55.85L53.94 59.1M54.16 54.78L50.94 56.15M54.15 53.25L50.9 51.94M55.22 52.16L53.85 48.94M56.75 52.15L58.06 48.9M57.84 53.22L61.06 51.85",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.6
+              },
+              {
+                "d": "M19 20A1 1 0 1 0 21 20A1 1 0 1 0 19 20ZM55.2 54A0.8 0.8 0 1 0 56.8 54A0.8 0.8 0 1 0 55.2 54ZM57.3 14A0.7 0.7 0 1 0 58.7 14A0.7 0.7 0 1 0 57.3 14ZM11.3 62A0.7 0.7 0 1 0 12.7 62A0.7 0.7 0 1 0 11.3 62Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "fond-confettis",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FDF9FB",
+              "ink": "#BE185D",
+              "soft": "#F6EAF0"
+            },
+            "dark": {
+              "base": "#120A10",
+              "ink": "#F9A8D4",
+              "soft": "#1E121B"
+            }
+          },
+          "tile": {
+            "width": 64,
+            "height": 64,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M9.83 11.55L15.27 14.09L14.17 16.45L8.73 13.91ZM41.38 10.76L45.21 7.55L46.62 9.24L42.79 12.45ZM30.2 36.74L32.25 42.37L29.8 43.26L27.75 37.63ZM51.73 50.48L56.65 51.35L56.27 53.52L51.35 52.65Z",
+                "role": "ink",
+                "opacity": 0.07
+              },
+              {
+                "d": "M22.6 24A1.4 1.4 0 1 0 25.4 24A1.4 1.4 0 1 0 22.6 24ZM50.8 30A1.2 1.2 0 1 0 53.2 30A1.2 1.2 0 1 0 50.8 30ZM8.6 50A1.4 1.4 0 1 0 11.4 50A1.4 1.4 0 1 0 8.6 50Z",
+                "role": "ink",
+                "opacity": 0.08
+              },
+              {
+                "d": "M34 58C37 54 40 62 43 58C46 54 49 62 52 58",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.7
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "fond-minuit",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F5F7FC",
+              "ink": "#1E3A8A",
+              "soft": "#E7ECF7"
+            },
+            "dark": {
+              "base": "#070A16",
+              "ink": "#C7D2FE",
+              "soft": "#10152A"
+            }
+          },
+          "tile": {
+            "width": 84,
+            "height": 84,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M14 26A10 10 0 1 0 34 26A10 10 0 1 0 14 26Z",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.7
+              },
+              {
+                "d": "M31.8 26L33.2 26M30.75 29.9L31.97 30.6M27.9 32.75L28.6 33.97M24 33.8L24 35.2M20.1 32.75L19.4 33.97M17.25 29.9L16.03 30.6M16.2 26L14.8 26M17.25 22.1L16.03 21.4M20.1 19.25L19.4 18.03M24 18.2L24 16.8M27.9 19.25L28.6 18.03M30.75 22.1L31.97 21.4M24 26L24 18.8M24 26L21.5 21.67",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M62 57.5L62.99 61.01L66.5 62L62.99 62.99L62 66.5L61.01 62.99L57.5 62L61.01 61.01ZM66 15.5L66.55 17.45L68.5 18L66.55 18.55L66 20.5L65.45 18.55L63.5 18L65.45 17.45ZM16 63.5L16.55 65.45L18.5 66L16.55 66.55L16 68.5L15.45 66.55L13.5 66L15.45 65.45Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "fond-champagne",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FCFAF4",
+              "ink": "#92650A",
+              "soft": "#F4EEDD"
+            },
+            "dark": {
+              "base": "#0F0C06",
+              "ink": "#FDE68A",
+              "soft": "#1A160C"
+            }
+          },
+          "tile": {
+            "width": 60,
+            "height": 76,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M10 22L26 22Q25.2 29.2 18.64 30L18.64 38L22.8 39.6L13.2 39.6L17.36 38L17.36 30Q10.8 29.2 10 22Z",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M41.6 16A2.4 2.4 0 1 0 46.4 16A2.4 2.4 0 1 0 41.6 16ZM48.4 30A1.6 1.6 0 1 0 51.6 30A1.6 1.6 0 1 0 48.4 30ZM39 42A3 3 0 1 0 45 42A3 3 0 1 0 39 42ZM50.2 58A1.8 1.8 0 1 0 53.8 58A1.8 1.8 0 1 0 50.2 58ZM17.8 56A2.2 2.2 0 1 0 22.2 56A2.2 2.2 0 1 0 17.8 56ZM10.6 68A1.4 1.4 0 1 0 13.4 68A1.4 1.4 0 1 0 10.6 68Z",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.6
+              },
+              {
+                "d": "M29.2 6A0.8 0.8 0 1 0 30.8 6A0.8 0.8 0 1 0 29.2 6ZM5.2 40A0.8 0.8 0 1 0 6.8 40A0.8 0.8 0 1 0 5.2 40ZM33.2 66A0.8 0.8 0 1 0 34.8 66A0.8 0.8 0 1 0 33.2 66Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-fonds-vifs",
+      "order": 10,
+      "installedByDefault": false,
+      "removable": true,
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
+      "designs": [
+        {
+          "key": "fond-artifice-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F6F6FB",
+              "ink": "#E4E1F6",
+              "soft": "#ECEAF5"
+            },
+            "dark": {
+              "base": "#07081A",
+              "ink": "#1A1840",
+              "soft": "#0D0E24"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.1,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "bc1df90d8f33543c.json",
+            "bytes": 26676,
+            "sha256": "bc1df90d8f33543ca8d88a42427643d723634590a95ac76d2620854fca1866eb"
+          }
+        },
+        {
+          "key": "fond-confettis-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FDF8FA",
+              "ink": "#F8E1EC",
+              "soft": "#F5EEF3"
+            },
+            "dark": {
+              "base": "#110910",
+              "ink": "#2A1424",
+              "soft": "#170E15"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "26384b343577fca7.json",
+            "bytes": 24357,
+            "sha256": "26384b343577fca7683a52b4fb444b97f577e454fb29728828ca420ee9d138e8"
+          }
+        },
+        {
+          "key": "fond-minuit-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F4F6FC",
+              "ink": "#DCE3F5",
+              "soft": "#E9EDF8"
+            },
+            "dark": {
+              "base": "#060915",
+              "ink": "#151C3A",
+              "soft": "#0B1022"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.05,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "9cad567abaf81ac2.json",
+            "bytes": 21074,
+            "sha256": "9cad567abaf81ac2761dcb8847c6764261788613ffa85aa020bc84b6101260f1"
+          }
+        },
+        {
+          "key": "fond-champagne-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FCFAF3",
+              "ink": "#F4E8C8",
+              "soft": "#F3EEDF"
+            },
+            "dark": {
+              "base": "#0E0B05",
+              "ink": "#2A210C",
+              "soft": "#15120A"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "e05a213914daec54.json",
+            "bytes": 17262,
+            "sha256": "e05a213914daec5431965847fb11772f6369dfa4b58eb0c16258d70b01802523"
+          }
+        }
+      ]
     }
   ]
 }

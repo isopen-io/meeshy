@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "ageGate.body", "androidName": "ageGate_body", "status": "adopted" }
+      ]
+    }
+  }
+}

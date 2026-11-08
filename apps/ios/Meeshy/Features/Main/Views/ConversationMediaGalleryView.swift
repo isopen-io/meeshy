@@ -157,6 +157,8 @@ struct ConversationMediaGalleryView: View {
 
     /// **Transférer la pièce** (#12420) — rail et ⋯. `nil` ⇒ aucune entrée (loi 4).
     var onForwardMedia: ((MessageAttachment) -> Void)?
+    var onImagerMedia: ((MessageAttachment) -> Void)?
+    var imageableMedia: ((MessageAttachment) -> Bool)?
 
     /// **La publication dont la galerie montre les SCÈNES** — `nil` hors
     /// d'un post. Une pièce dont l'identité est dans `scenes` est une page scène
@@ -288,6 +290,8 @@ struct ConversationMediaGalleryView: View {
         replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
         onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
         onForwardMedia: ((MessageAttachment) -> Void)? = nil,
+        onImagerMedia: ((MessageAttachment) -> Void)? = nil,
+        imageableMedia: ((MessageAttachment) -> Bool)? = nil,
         replyableMedia: ((MessageAttachment) -> Bool)? = nil,
         composableMedia: ((MessageAttachment) -> Bool)? = nil,
         reactableMedia: ((MessageAttachment) -> Bool)? = nil,
@@ -315,6 +319,8 @@ struct ConversationMediaGalleryView: View {
         self.composableMedia = composableMedia
         self.reactableMedia = reactableMedia
         self.onForwardMedia = onForwardMedia
+        self.onImagerMedia = onImagerMedia
+        self.imageableMedia = imageableMedia
         self.forwardableMedia = forwardableMedia
         self.sceneContext = sceneContext
         let positions = Dictionary(uniqueKeysWithValues: pages.enumerated().map { ($0.element.id, $0.offset) })
@@ -543,7 +549,6 @@ struct ConversationMediaGalleryView: View {
                 // `activeURL` set → `hasPlayingInlineVideo` stayed true.
                 videoManager.release(urlString: oldAtt.fileUrl)
             }
-            HapticFeedback.light()
         }
 
         if oldID != newID { trackImageOpen(leaving: oldID, entering: newID) }
@@ -788,7 +793,6 @@ struct ConversationMediaGalleryView: View {
     /// ce choix : elle gouverne le COMPOSER, où un contrôle posé sur la scène entre
     /// en concurrence avec le geste d'ÉDITION. En lecture il n'y a aucune édition à
     /// protéger, et le lecteur de story pose sa colonne sur son canvas.
-    ///
     /// Une colonne vide ne prend RIEN — ni largeur, ni hauteur (loi 4).
     var cadreActionColumn: some View {
         FullscreenActionRail {
@@ -799,10 +803,10 @@ struct ConversationMediaGalleryView: View {
                                        offersSave: currentSaveSubject != nil,
                                        offersForward: currentOffersForward,
                                        onSave: requestSaveCurrent,
-                                       onForward: forwardCurrent)
+                                       onForward: forwardCurrent,
+                                       onImager: GalleryImagerOffer.action(for: currentAttachment, onImagerMedia, offered: imageableMedia))
             }
-            // #9577 — le son et (...) se rangent sous les actions (`+Transport.swift`).
-            cadreTransportRail
+            cadreTransportRail // #9577 — le son se range sous les actions
         }
         // La colonne MESURE sa place sur le plateau : c'est elle, et non le
         // média de la page, qui dit ce qui est peint sous ses boutons.
@@ -826,9 +830,6 @@ struct ConversationMediaGalleryView: View {
                            : nil)
     }
 
-    /// Les trois actions, chacune derrière sa propre closure optionnelle : un
-    /// hôte n'en câble que ce qu'il sait servir, et ce qu'il ne câble pas
-    /// n'existe pas (loi 4).
     @ViewBuilder
     private func mediaActions(_ att: MessageAttachment) -> some View {
         // **« Réagir » est une ACTION, pas un ornement** : les réactions sur les
@@ -913,8 +914,7 @@ struct ConversationMediaGalleryView: View {
                 }
             }
         }
-        // `composableMedia` (#6709) : un hôte de post n'offre « Créer avec ce média »
-        // que sur une pièce qui a sa cible — jamais un bouton qui n'armerait rien.
+        // `composableMedia` (#6709) : « Créer avec ce média » seulement sur une pièce qui a sa cible.
         if let onComposeWithMedia, composableMedia?(att) ?? true {
             FullscreenActionButton(
                 systemImage: FullscreenChromeSymbol.compose,

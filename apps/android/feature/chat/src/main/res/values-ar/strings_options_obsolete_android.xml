@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_obsolete">جعلها متقادمة</string>
+    <string name="conversation_options_obsolete_title">هل تريد جعل هذه المحادثة متقادمة؟</string>
+    <string name="conversation_options_obsolete_message">تختفي فورًا لدى جميع أعضائها ويُمحى محتواها خلال 48 ساعة. لا يمكن التراجع عن ذلك.</string>
+    <string name="conversation_options_error_obsolete">تعذّر جعل المحادثة متقادمة.</string>
+</resources>

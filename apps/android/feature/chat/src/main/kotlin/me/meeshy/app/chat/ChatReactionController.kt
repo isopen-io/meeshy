@@ -11,12 +11,15 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
+import me.meeshy.sdk.model.ReactionAnimationGate
+import me.meeshy.sdk.model.ReactionLedger
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.OwnReactionWithdrawal
 import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.reaction.ReactionRowStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.collectArrived
@@ -41,6 +44,8 @@ internal class ChatReactionController(
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val ownReactionWithdrawals: OwnReactionWithdrawals,
+    private val animationGate: ReactionAnimationGate = ReactionAnimationGate.Shared,
+    private val rowStore: ReactionRowStore? = null,
 ) {
 
     private val mutableOwnReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
@@ -91,12 +96,27 @@ internal class ChatReactionController(
     }
 
     /**
-     * Own echoes are skipped — the optimistic toggle already moved the cached
-     * summary; replaying the echo would double-count it.
+     * The echo lands in the persisted rows first (who reacted, offline): my own add already has its optimistic row,
+     * so it never counts twice; the same echo coming from ANOTHER device of mine finds no row and moves the summary
+     * once. A peer's echo moves the summary as before.
      */
     private suspend fun applyPeerReactionEvent(event: ReactionUpdateEvent, delta: Int) {
         if (event.conversationId != conversationId) return
-        if (event.userId == sessionRepository.currentUser.value?.id) return
+        val me = sessionRepository.currentUser.value?.id
+        val rowsMoved = rowStore?.record(
+            messageId = event.messageId,
+            emoji = event.emoji,
+            adding = delta > 0,
+            participantId = event.participantId,
+            ownerUserId = event.userId,
+            currentUserId = me,
+            aggregate = event.aggregation?.let { ReactionLedger.Aggregate(it.count, it.participantIds) },
+        ) ?: false
+        if (event.userId == me) {
+            if (rowsMoved) messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
+            return
+        }
+        if (delta > 0) animationGate.markAdded(event.messageId, event.emoji)
         messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
     }
 
@@ -142,7 +162,10 @@ internal class ChatReactionController(
         }
         val mine = mutableOwnReactions.value[messageId] ?: emptySet()
         val isAdding = emoji !in mine
-        if (isAdding) emojiUsageStore.record(emoji)
+        if (isAdding) {
+            emojiUsageStore.record(emoji)
+            animationGate.markAdded(messageId, emoji)
+        }
         mutableOwnReactions.update { it + (messageId to if (isAdding) mine + emoji else mine - emoji) }
         applySelfToOpenDetails(messageId, emoji, present = isAdding)
         state.update { it.copy(actionMessageId = null, emojiPickerMessageId = null) }
@@ -201,29 +224,43 @@ internal class ChatReactionController(
      * fetch to refresh [ownReactions] too. See [ReactionBreakdown].
      */
     fun openDetails(messageId: String) {
+        val cachedBreakdown = ReactionBreakdown(emptyList())
         state.update {
             it.copy(
                 reactionDetails = ReactionDetailsUiState(
                     messageId = messageId,
                     isLoading = true,
-                    breakdown = ReactionBreakdown(emptyList()),
+                    breakdown = cachedBreakdown,
                     quickEmojis = emojiUsageStore.top(DETAIL_QUICK_REACTION_COUNT),
                 ),
             )
         }
         scope.launch {
+            val currentUser = sessionRepository.currentUser.value?.id.orEmpty()
+            val persisted = rowStore?.rows(messageId)?.takeIf { it.isNotEmpty() }
+                ?.let { ReactionBreakdown.fromRows(it, currentUser) }
+            if (persisted != null) showPersisted(messageId, persisted)
             val details = reactionRepository.fetchDetails(messageId).getOrNull()
             if (details != null) {
                 mutableOwnReactions.update { it + (messageId to details.userReactions.toSet()) }
             }
             val currentUserId = sessionRepository.currentUser.value?.id.orEmpty()
             val breakdown = details?.let { ReactionBreakdown.of(it, currentUserId) }
+                ?: persisted
                 ?: ReactionBreakdown(emptyList())
             state.update { current ->
                 val open = current.reactionDetails
                 if (open == null || open.messageId != messageId) return@update current
                 current.copy(reactionDetails = open.copy(isLoading = false, breakdown = breakdown))
             }
+        }
+    }
+
+    /** The persisted rows paint the open sheet at once, while the server detail is still on its way. */
+    private fun showPersisted(messageId: String, breakdown: ReactionBreakdown) {
+        state.update { current ->
+            val open = current.reactionDetails?.takeIf { it.messageId == messageId } ?: return@update current
+            current.copy(reactionDetails = open.copy(breakdown = breakdown))
         }
     }
 

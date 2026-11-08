@@ -57,7 +57,11 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
     case makePrivate
     /// #11151 — la modération retire la story d'un autre, avec un motif.
     case remove
+    /// #16541 — l'auteur ou la modération ferme / rouvre les commentaires.
+    case commentSettings
     case delete
+    /// #15198 — « Supprimer » une story en attente : annuler son envoi par la file.
+    case cancelSend
     case close
 }
 
@@ -74,15 +78,35 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         isOwnStory: Bool,
         hasAudioTranscript: Bool,
         canCompose: Bool,
-        canRemove: Bool = false
+        canRemove: Bool = false,
+        isPending: Bool = false,
+        canToggleComments: Bool = false
     ) -> StoryOptionsMenuPlan {
         let reading: [StoryOptionsMenuEntry] = hasAudioTranscript ? [.fullscreen, .transcript] : [.fullscreen]
         guard hasStory else {
             return StoryOptionsMenuPlan(sections: [reading, [.close]])
         }
+        guard !isPending else {
+            return StoryOptionsMenuPlan(sections: [reading, [.cancelSend], [.close]])
+        }
         let making: [StoryOptionsMenuEntry] = canCompose ? [.share, .compose, .exportVideo, .imager] : [.share, .exportVideo, .imager]
-        let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
+        let moderation: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
+        let acting = (canToggleComments ? [StoryOptionsMenuEntry.commentSettings] : []) + moderation
         return StoryOptionsMenuPlan(sections: [reading, making, acting, [.close]])
+    }
+}
+
+/// **L'heure d'une story en attente est une horloge** (#15198) — celle d'un
+/// message en envoi, à la place de l'heure (#14879) : elle n'a pas d'heure
+/// de publication, et aucun libellé ne le dit.
+nonisolated enum StoryHeaderTime {
+    static func subtitle(of story: StoryItem?) -> String? {
+        guard !showsPendingClock(for: story) else { return nil }
+        return story?.timeAgo
+    }
+
+    static func showsPendingClock(for story: StoryItem?) -> Bool {
+        story.map { PendingStoryMarker.isPending(storyId: $0.id) } ?? false
     }
 }
 
@@ -137,6 +161,8 @@ struct StoryHeaderView: View {
     let deleteCurrentStory: (_ reason: String?) -> Void
     /// #11535 — la modération rend la story d'un autre privée, avec un motif.
     let makeCurrentStoryPrivate: (_ reason: String) -> Void
+    /// #16541 — « Désactiver / Réactiver les commentaires », `nil` = absente.
+    var toggleComments: (() -> Void)? = nil
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
@@ -190,6 +216,11 @@ struct StoryHeaderView: View {
     /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
     /// republication (icône + @handle visuels que ce label unique remplace).
     private func computeProfileLabel(for group: StoryGroup) -> String {
+        let label = authorLabel(for: group)
+        return StoryHeaderTime.showsPendingClock(for: currentStory) ? "\(label), \(UnsentPublicationsCopy.waiting)" : label
+    }
+
+    private func authorLabel(for group: StoryGroup) -> String {
         guard let story = currentStory, story.repostOfId != nil,
               let handle = story.repostAuthorUsername ?? story.repostAuthorName else {
             return String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main)
@@ -214,29 +245,10 @@ struct StoryHeaderView: View {
                     // "@handle", sans « via » (directive user 2026-07-13).
                     FullscreenIdentityRow(
                         name: DisplayName.truncated(group.username),
-                        subtitle: currentStory?.timeAgo,
+                        subtitle: StoryHeaderTime.subtitle(of: currentStory),
                         avatar: {
                             ZStack {
-                                // Glow radial au long press
-                                if avatarLongPressGlow {
-                                    Circle()
-                                        .fill(
-                                            RadialGradient(
-                                                colors: [
-                                                    Color(hex: group.avatarColor).opacity(0.4),
-                                                    MeeshyColors.indigo500.opacity(0.2),
-                                                    .clear
-                                                ],
-                                                center: .center,
-                                                startRadius: 15,
-                                                endRadius: 35
-                                            )
-                                        )
-                                        .frame(width: 70, height: 70)
-                                        .blur(radius: 8)
-                                        .transition(.scale(scale: 0.8).combined(with: .opacity))
-                                        .allowsHitTesting(false)
-                                }
+                                if avatarLongPressGlow { avatarGlow(colorHex: group.avatarColor) }
 
                                 // Pas de bordure gradient autour de l'avatar dans la
                                 // slide : on est déjà dans la story de l'utilisateur,
@@ -274,6 +286,7 @@ struct StoryHeaderView: View {
                                 }
                             }
                         },
+                        nameBadge: { pendingClock },
                         accessory: {
                             if let story = currentStory, story.repostOfId != nil {
                                 HStack(spacing: MeeshySpacing.xsPlus) {
@@ -361,11 +374,7 @@ struct StoryHeaderView: View {
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
                 onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
@@ -393,13 +402,39 @@ struct StoryHeaderView: View {
         }
     }
 
+    @ViewBuilder
+    private var pendingClock: some View {
+        if StoryHeaderTime.showsPendingClock(for: currentStory) {
+            PendingSendClock(color: MeeshyColors.mediaChromeTertiary)
+        }
+    }
+
+    /// Glow radial au long press de l'avatar.
+    private func avatarGlow(colorHex: String) -> some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [Color(hex: colorHex).opacity(0.4), MeeshyColors.indigo500.opacity(0.2), .clear],
+                    center: .center,
+                    startRadius: 15,
+                    endRadius: 35
+                )
+            )
+            .frame(width: 70, height: 70)
+            .blur(radius: 8)
+            .transition(.scale(scale: 0.8).combined(with: .opacity))
+            .allowsHitTesting(false)
+    }
+
     private var optionsMenuPlan: StoryOptionsMenuPlan {
         StoryOptionsMenuPlan.resolve(
             hasStory: currentStory != nil && currentGroup != nil,
             isOwnStory: isOwnStory,
             hasAudioTranscript: hasAudioTranscript,
             canCompose: composableSlide != nil && demanderComposer != nil,
-            canRemove: ContentRemovalPolicy.mayRemovePublication(authoredByViewer: isOwnStory, platformRole: AuthManager.shared.currentUser?.role)
+            canRemove: ContentRemovalPolicy.mayRemovePublication(authoredByViewer: isOwnStory, platformRole: AuthManager.shared.currentUser?.role),
+            isPending: StoryHeaderTime.showsPendingClock(for: currentStory),
+            canToggleComments: toggleComments != nil
         )
     }
 
@@ -462,7 +497,7 @@ struct StoryHeaderView: View {
                     demanderComposer(cible)
                 } label: {
                     Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
-                          systemImage: "wand.and.stars")
+                          systemImage: FullscreenChromeSymbol.compose)
                 }
             }
         case .share:
@@ -482,12 +517,12 @@ struct StoryHeaderView: View {
             if let story = currentStory {
                 Button {
                     HapticFeedback.light()
-                    StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map { StoryExportAuthor.served(from: $0) })
+                    MessageCardExportPresenter.present(ImagerCardRequest.story(story, author: currentGroup.map { StoryExportAuthor.served(from: $0) }, accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
                 } label: {
                     Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
                 }
             }
-        case .report, .makePrivate, .remove, .delete:
+        case .report, .makePrivate, .remove, .delete, .cancelSend, .commentSettings:
             actingMenuItem(entry)
         case .close:
             Button {
@@ -504,6 +539,10 @@ struct StoryHeaderView: View {
     @ViewBuilder
     private func actingMenuItem(_ entry: StoryOptionsMenuEntry) -> some View {
         switch entry {
+        case .commentSettings:
+            if let toggleComments {
+                CommentSettingsMenuItem(commentsDisabled: currentStory?.commentsDisabled ?? false, onToggle: toggleComments)
+            }
         case .makePrivate:
             Button {
                 HapticFeedback.medium()
@@ -523,6 +562,12 @@ struct StoryHeaderView: View {
                 deleteCurrentStory(nil)
             } label: {
                 Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        case .cancelSend:
+            Button(role: .destructive) {
+                deleteCurrentStory(nil)
+            } label: {
+                Label(WaitingStoryCopy.cancel, systemImage: "xmark.circle")
             }
         case .report:
             Button(role: .destructive) {

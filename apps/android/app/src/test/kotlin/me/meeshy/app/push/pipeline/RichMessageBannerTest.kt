@@ -107,7 +107,7 @@ class RichMessageBannerTest {
 
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(child())!!
         assertThat(style.isGroupConversation).isTrue()
-        assertThat(style.conversationTitle.toString()).isEqualTo("Équipe")
+        assertThat(style.conversationTitle.toString()).isEqualTo("👥 Équipe")
     }
 
     @Test

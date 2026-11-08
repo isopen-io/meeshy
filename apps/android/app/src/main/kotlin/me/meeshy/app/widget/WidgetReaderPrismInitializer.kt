@@ -1,5 +1,6 @@
 package me.meeshy.app.widget
 
+import me.meeshy.sdk.lang.ReaderPrism
 import android.content.Context
 import dagger.Binds
 import dagger.Module
@@ -16,7 +17,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.app.startup.AppInitializer
 import me.meeshy.app.widget.kit.WidgetReaderPrismStore
-import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.session.SessionRepository
 
 /**
@@ -33,7 +33,7 @@ class WidgetReaderPrismInitializer @Inject constructor(
         val store = WidgetReaderPrismStore(context)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             session.currentUser
-                .map { user -> user?.let(LanguageResolver::preferredContentLanguages).orEmpty() }
+                .map { user -> user?.let { ReaderPrism.resolve(it, java.util.Locale.getDefault()) }.orEmpty() }
                 .distinctUntilChanged()
                 .collect { prism -> if (store.save(prism)) refresher.request() }
         }

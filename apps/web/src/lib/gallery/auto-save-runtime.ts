@@ -1,3 +1,7 @@
+import type { QueryClient } from '@tanstack/react-query';
+
+import { APP_PREFERENCES_QUERY_KEY, type AppPreferences } from '@/lib/api/app-preferences';
+
 import { createGalleryAutoSave, type GalleryAttachment, type GalleryMessage, type GalleryStorage } from './auto-save';
 import { currentGallerySaver } from './gallery-saver';
 
@@ -37,6 +41,10 @@ const autoSave = createGalleryAutoSave({
   fetchBlob: fetchAttachmentBlob,
 });
 
-export function noteGalleryReception(message: GalleryMessage, viewerId: string): void {
-  autoSave(message, viewerId);
+/** « Sauvegarder média » (#14641), lu dans le cache des réglages synchronisés — absent ⇒ coupé. */
+export const galleryConsentOf = (queryClient: QueryClient): boolean =>
+  queryClient.getQueryData<AppPreferences>(APP_PREFERENCES_QUERY_KEY)?.saveMediaToGallery === true;
+
+export function noteGalleryReception(message: GalleryMessage, viewerId: string, queryClient: QueryClient): void {
+  autoSave(message, viewerId, galleryConsentOf(queryClient));
 }

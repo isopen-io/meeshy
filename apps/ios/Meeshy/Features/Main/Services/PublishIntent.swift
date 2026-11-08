@@ -185,6 +185,11 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// l'auteur croyait décider et le serveur ne l'apprenait jamais.
     let allowSoundExtraction: Bool?
 
+    /// **La publication naît fermée aux commentaires** (#16541), décidé une
+    /// fois pour la publication. `PublishIntent.document` reçoit le choix de ⋯
+    /// et rend `nil` pour une publication ouverte : la clé reste hors du corps.
+    let commentsDisabled: Bool?
+
     private init(
         clientMutationId: String,
         type: String,
@@ -202,7 +207,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         mediaCaptions: [String?],
         mediaAlts: [String?],
         mediaObjectIds: [String?],
-        allowSoundExtraction: Bool?
+        allowSoundExtraction: Bool?,
+        commentsDisabled: Bool?
     ) {
         self.clientMutationId = clientMutationId
         self.type = type
@@ -221,6 +227,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         self.mediaAlts = mediaAlts
         self.mediaObjectIds = mediaObjectIds
         self.allowSoundExtraction = allowSoundExtraction
+        self.commentsDisabled = commentsDisabled
     }
 
     /// Le geste « **j'ai composé un document** » — un post ou un réel né du
@@ -277,7 +284,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         /// (`nil` ⇒ l'auteur n'a rien décidé). La règle 1 de ce fichier
         /// interdit un défaut : un site qui n'expose aucun toggle l'écrit
         /// `nil` en toutes lettres.
-        allowSoundExtraction: Bool?
+        allowSoundExtraction: Bool?, commentsDisabled: Bool
     ) -> PublishIntent {
         // La règle de composition vit dans `ReelComposition`, jamais ici —
         // un `"REEL"`/`"POST"` codé en dur ferait diverger la surface
@@ -340,7 +347,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             // ordre — un quatrième tableau écrit séparément se décalerait au
             // premier fichier sauté.
             mediaObjectIds: localMedia.map { mediaObjectIds[$0.url] },
-            allowSoundExtraction: allowSoundExtraction
+            allowSoundExtraction: allowSoundExtraction, commentsDisabled: commentsDisabled ? true : nil
         )
     }
 
@@ -410,7 +417,10 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             // Un vocal n'a rien à EXTRAIRE, il EST déjà l'audio : aucun toggle
             // ne s'offre sur ce geste, donc `nil` — « aucune décision » —
             // plutôt qu'un `false` qui affirmerait un refus jamais exprimé.
-            allowSoundExtraction: nil
+            allowSoundExtraction: nil,
+            // Un vocal ne s'offre pas ce choix : il naît ouvert, comme le veut
+            // la passerelle.
+            commentsDisabled: nil
         )
     }
 }

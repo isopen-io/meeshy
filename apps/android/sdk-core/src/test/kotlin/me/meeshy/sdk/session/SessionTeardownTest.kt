@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.InMemoryCategorySnapshotStore
@@ -71,6 +72,9 @@ class SessionTeardownTest {
             me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore(),
         perAccountCaches: Set<PerAccountCache> = emptySet(),
         guestSessions: AnonymousSessionStore? = null,
+        feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter? = null,
+        lostSends: LostSendsNotifier? = null,
+        fence: AccountFence? = null,
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -83,7 +87,15 @@ class SessionTeardownTest {
         preferenceSnapshots,
         perAccountCaches,
         guestSessions,
+        fence = fence,
+        feedbackToasts = feedbackToasts,
+        lostSends = lostSends,
     )
+
+    private fun pendingSend() = OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1")
+
+    private fun notifier(toasts: me.meeshy.sdk.feedback.FeedbackToastCenter) =
+        LostSendsNotifier(toasts) { count -> "perdus:$count" }
 
     private class RecordingCache(private val failure: Exception? = null) : PerAccountCache {
         var clears = 0
@@ -117,6 +129,20 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_purgesThePendingToastAndItsTapHandler() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        var taps = 0
+        toasts.show("de A", onTap = { taps++ })
+        val id = toasts.current.value!!.id
+
+        teardown(feedbackToasts = toasts).wipe()
+        toasts.tap(id)
+
+        assertThat(toasts.current.value).isNull()
+        assertThat(taps).isEqualTo(0)
+    }
+
+    @Test
     fun wipe_clearsEveryRoomTable() = runTest {
         outboxRepository.enqueue(
             OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
@@ -126,6 +152,56 @@ class SessionTeardownTest {
         teardown().wipe()
 
         assertThat(outboxRepository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun wipe_clearsTheStoryPostCache() = runTest {
+        val cache = me.meeshy.sdk.story.StoryPostCache()
+        cache.put(me.meeshy.sdk.model.ApiPost(id = "s1", type = "STORY"))
+
+        teardown(perAccountCaches = setOf(cache)).wipe()
+
+        assertThat(cache.get("s1")).isNull()
+    }
+
+    @Test
+    fun wipe_erasesPendingSharesAndTheirCopies() = runTest {
+        val root = java.nio.file.Files.createTempDirectory("share-teardown").toFile().resolve("root")
+        val store = me.meeshy.sdk.share.SharePendingShareStore(root)
+        store.commit(
+            me.meeshy.sdk.model.share.SharePendingShare.make("s1", 1L, "u1", "hi", emptyList(), listOf("c1")),
+        )
+        store.mediaDirectory("s1").apply { mkdirs() }.resolve("a.jpg").writeText("x")
+
+        teardown(perAccountCaches = setOf(store)).wipe()
+
+        assertThat(store.pending("u1")).isEmpty()
+        assertThat(root.exists()).isFalse()
+    }
+
+    @Test
+    fun wipe_emptiesTheMultiDraftStoryStore() = runTest {
+        val root = java.nio.file.Files.createTempDirectory("story-drafts-teardown").toFile()
+        val store = me.meeshy.sdk.story.StoryDraftDiskStore(root.resolve("files"), root.resolve("sessions"), kotlinx.serialization.json.Json)
+        val draft = StoryComposerDraftSnapshot(slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "le brouillon de A")), selectedId = "s1")
+        store.save("a", draft, mapOf("m.jpg" to root.resolve("m.jpg").apply { writeText("A") }))
+
+        teardown(perAccountCaches = setOf(me.meeshy.sdk.story.StoryDraftStoreTeardown(store))).wipe()
+
+        assertThat(store.isEmpty()).isTrue()
+        assertThat(store.load("a")).isNull()
+        assertThat(root.resolve("files/StoryDrafts").exists()).isFalse()
+    }
+
+    @Test
+    fun wipe_clearsTheActiveSessionsSnapshot() = runTest {
+        val sessions = InMemoryUserSessionsSnapshotStore()
+        sessions.save(me.meeshy.sdk.model.session.UserSessionsPayload(listOf(me.meeshy.sdk.model.session.UserSession("a"))), 5L)
+
+        teardown(perAccountCaches = setOf(sessions)).wipe()
+
+        assertThat(sessions.observe().first()).isNull()
+        assertThat(sessions.lastSyncedAt().first()).isNull()
     }
 
     @Test
@@ -314,5 +390,186 @@ class SessionTeardownTest {
 
         assertThat(db.keyedJsonCacheDao().find("community:list", "k")).isNull()
         assertThat(db.cacheEntryDao().itemCount("ns")).isEqualTo(0)
+    }
+
+    /**
+     * #14655 — the vault outlives the session, so do the erasures it still owes to an account (identifiers only, stamped
+     * with their account) ; an unstamped row could be drained by the next account, so it goes.
+     */
+    @Test
+    fun wipe_keepsThePlaintextErasuresOwedToAnAccount() = runTest {
+        val erasures = db.plaintextErasureDao()
+        erasures.recordMessages(
+            listOf(
+                me.meeshy.core.database.entity.PlaintextErasureEntity("alice", "message", "m1", "cid_1", "alice", recordedAt = 1L),
+                me.meeshy.core.database.entity.PlaintextErasureEntity("", "message", "m2", recordedAt = 1L),
+            ),
+        )
+
+        teardown().wipe()
+
+        assertThat(erasures.pending("alice", 10).map { it.itemId to it.clientMessageId }).containsExactly("m1" to "cid_1")
+        assertThat(erasures.pending("bob", 10)).isEmpty()
+    }
+
+    @Test
+    fun wipe_passesThroughTheCacheStoreRegistryAndDropsItsMemory() = runTest {
+        val registry = me.meeshy.sdk.cache.store.CacheStoreRegistry(kotlinx.coroutines.Dispatchers.Unconfined)
+        val store = registry.roomStore(
+            db.cacheEntryDao(), "registry-ns", me.meeshy.sdk.cache.CachePolicy(1_000, 10_000, 10),
+            kotlinx.serialization.serializer<String>(), { it },
+        )
+        store.save(listOf("a"), "k")
+        store.load("k")
+
+        teardown(perAccountCaches = setOf(registry)).wipe()
+
+        assertThat(store.load("k")).isEqualTo(me.meeshy.sdk.cache.CacheResult.Empty)
+    }
+
+    @Test
+    fun wipeAfterServerInvalidation_withPendingSendsWarnsOfTheLoss() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        outboxRepository.enqueue(pendingSend())
+
+        teardown(lostSends = notifier(toasts)).wipeAfterServerInvalidation()
+
+        assertThat(toasts.current.value?.message).isEqualTo("perdus:1")
+        assertThat(outboxRepository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun wipeAfterServerInvalidation_withAnEmptyQueueStaysSilentButStillPurges() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        val cache = RecordingCache()
+
+        teardown(lostSends = notifier(toasts), perAccountCaches = setOf(cache)).wipeAfterServerInvalidation()
+
+        assertThat(toasts.current.value).isNull()
+        assertThat(cache.clears).isEqualTo(1)
+    }
+
+    @Test
+    fun voluntaryWipe_neverWarnsEvenWithPendingSends() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        outboxRepository.enqueue(pendingSend())
+
+        teardown(lostSends = notifier(toasts)).wipe()
+
+        assertThat(toasts.current.value).isNull()
+        assertThat(outboxRepository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun wipe_deletesTheUnencryptedDatabaseCopiesLeftByARecovery() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("teardown-leftovers.db").also { it.parentFile?.mkdirs() }
+        val quarantined = java.io.File(primary.path + ".corrupted.7").apply { writeText("history of A") }
+        val fallback = java.io.File(context.cacheDir, "teardown-fallback.db").apply { writeText("history of A") }
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, fallback)
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipe()
+
+        assertThat(quarantined.exists()).isFalse()
+        assertThat(fallback.exists()).isFalse()
+    }
+
+    @Test
+    fun wipe_duringAnInMemoryLaunchLeavesTheDiskDatabasePurgeDue() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("teardown-memory-launch.db").also { it.parentFile?.mkdirs() }
+        primary.writeText("history of A, still on disk")
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, java.io.File(context.cacheDir, "absent-memory.db"))
+        leftovers.markInUse(null)
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipe()
+
+        assertThat(me.meeshy.core.database.PendingDiskPurge.isDue(primary)).isTrue()
+    }
+
+    @Test
+    fun wipe_aCorruptionMarkerLeftOnAFileTheVacuumHealedIsCleared() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        db.close()
+        db = Room.databaseBuilder(context, MeeshyDatabase::class.java, "teardown-marker.db").allowMainThreadQueries().build()
+        val file = java.io.File(requireNotNull(db.openHelper.writableDatabase.path))
+        me.meeshy.core.database.DatabaseRecovery.markCorrupted(file)
+
+        teardown().wipe()
+
+        assertThat(me.meeshy.core.database.DatabaseRecovery.isMarkedCorrupted(file)).isFalse()
+    }
+
+    @Test
+    fun wipeAfterServerInvalidation_aDeletedAccountLeavesNoDatabaseCopyBehind() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("deleted-leftovers.db").also { it.parentFile?.mkdirs() }
+        val quarantined = java.io.File(primary.path + ".corrupted.8-wal").apply { writeText("history of A") }
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, java.io.File(context.cacheDir, "absent.db"))
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipeAfterServerInvalidation()
+
+        assertThat(quarantined.exists()).isFalse()
+    }
+
+    @Test
+    fun wipeIfStillSignedOut_rereadsTheSessionUnderTheFenceAndSparesOneRestoredMeanwhile() = runTest {
+        val fence = AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { "A" })
+        var restored = false
+        outboxRepository.enqueue(pendingSend())
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val send = launch {
+            fence.guard(fence.ticket()) {
+                started.complete(Unit)
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    restored = true
+                }
+            }
+        }
+        started.await()
+
+        val purged = teardown(fence = fence).wipeIfStillSignedOut { !restored }
+
+        assertThat(purged).isFalse()
+        assertThat(outboxRepository.observeAll().first()).isNotEmpty()
+        send.join()
+    }
+
+    @Test
+    fun wipeIfStillSignedOut_purgesADeviceThatIsStillSignedOut() = runTest {
+        outboxRepository.enqueue(pendingSend())
+
+        val purged = teardown(fence = AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { null }))
+            .wipeIfStillSignedOut { true }
+
+        assertThat(purged).isTrue()
+        assertThat(outboxRepository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun wipeIfStillSignedOut_aRefusedPurgeLeavesTheAccountGenerationAsItWas() = runTest {
+        val fence = AccountFence(me.meeshy.sdk.outbox.OutboxOwnerSource { "A" })
+        val before = fence.ticket()
+        outboxRepository.enqueue(pendingSend())
+
+        val purged = teardown(fence = fence).wipeIfStillSignedOut { false }
+
+        assertThat(purged).isFalse()
+        assertThat(fence.isCurrent(before)).isTrue()
+        assertThat(outboxRepository.observeAll().first()).isNotEmpty()
+    }
+
+    @Test
+    fun `la deconnexion vide la copie en memoire des traductions retenues`() = runTest {
+        val layer = me.meeshy.sdk.conversation.TranslationLayer.of(db)
+        layer.saveText("m1", me.meeshy.sdk.model.StoredTextTranslation("m1", "fr", "Bonjour de A"), 1L)
+        check(layer.heldMessageCount() > 0)
+
+        teardown().wipe()
+
+        assertThat(layer.heldMessageCount()).isEqualTo(0)
+        assertThat(db.messageTranslationDao().textsFor(listOf("m1"))).isEmpty()
     }
 }

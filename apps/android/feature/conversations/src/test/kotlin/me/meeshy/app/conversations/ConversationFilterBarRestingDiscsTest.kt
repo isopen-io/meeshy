@@ -21,7 +21,7 @@ class ConversationFilterBarRestingDiscsTest {
 
     @Test
     fun `la rangee de puces prend toute la largeur sous les disques, sans reserve laterale`() {
-        compose.setContentBesideRestingDiscs { ConversationFilterBar(selected = ConversationFilter.ALL, onSelect = {}) }
+        compose.setContentBesideRestingDiscs { ConversationFilterBar(selected = setOf(ConversationFilter.ALL), onToggle = {}) }
         val (leftDisc, _) = compose.restingDiscBounds()
         val scroller = compose.scrollerBounds()
         assertThat(scroller.sharesHeightWith(leftDisc)).isTrue()

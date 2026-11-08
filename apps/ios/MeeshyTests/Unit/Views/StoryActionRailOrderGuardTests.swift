@@ -47,6 +47,17 @@ final class StoryActionRailOrderGuardTests: XCTestCase {
         }
     }
 
+    /// **« Envoyer » obéit au plan comme les autres boutons** (#15198). Monté sans
+    /// condition, il offrait sur une story EN ATTENTE un partage portant son
+    /// identifiant local (`pending_…`) vers le serveur, alors que le plan l'éteint.
+    func test_sidebarContent_pendingStory_mountsSendOnlyUnderTheForwardFlag() throws {
+        let corps = try XCTUnwrap(corpsDeSidebarContent(try sidebarSource()))
+        let drapeau = try XCTUnwrap(corps.range(of: "if railPlan.showsForward {"),
+                                    "« Envoyer » doit se monter sous `railPlan.showsForward`.")
+        let bouton = try XCTUnwrap(corps.range(of: "\"paperplane.fill\""))
+        XCTAssertLessThan(drapeau.lowerBound, bouton.lowerBound)
+    }
+
     /// **Garde d'aveuglement.** Si `sidebarContent` est renommée ou déplacée, le
     /// témoin ci-dessus tomberait sur un `XCTFail` explicite plutôt que de
     /// passer au vert sur une chaîne absente. Celui-ci le dit tout court.

@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model
 
 import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.lang.LanguageIdentifying
 
 /**
  * Pure SSOT for the composer's live source language — the "smart context zone"
@@ -35,6 +36,14 @@ public data class ComposerLanguageState(
      * chain of iOS `displayLanguage`.
      */
     public fun display(fallback: String): String = manualOverride ?: detected ?: fallback
+
+    /**
+     * La langue avec laquelle un contenu PART (#14502, iOS `composerLanguage`) : la pastille choisie, sinon la
+     * détection confiante de [identifier] sur [text], sinon ce que la pastille AFFICHE — jamais rien. Ce que
+     * l'auteur voit sur la pastille au moment d'envoyer est ce qui part, et il peut le corriger d'un toucher.
+     */
+    public suspend fun atSend(text: String, fallback: String, identifier: LanguageIdentifying): String =
+        manualOverride ?: ComposeLanguageDetector.authoredLanguage(text, identifier) ?: display(fallback)
 
     /**
      * Re-derive the state for a new [draft]. A blank draft releases the detection

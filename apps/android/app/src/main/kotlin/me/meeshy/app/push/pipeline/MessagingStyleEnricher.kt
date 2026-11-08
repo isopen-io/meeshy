@@ -9,7 +9,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import me.meeshy.app.R
 import me.meeshy.app.push.media.CircularAvatar
 import me.meeshy.app.push.media.PushMediaFetcher
+import me.meeshy.sdk.model.push.ConversationShortcutId
 import me.meeshy.sdk.model.push.PushNotificationActions
+import me.meeshy.sdk.model.push.PushPresentationText
 import javax.inject.Inject
 
 /**
@@ -32,11 +34,13 @@ class MessagingStyleEnricher @Inject constructor(
         if (!appliesTo(request)) return
         val payload = request.push.payload
         val text = request.push.notificationBody ?: payload.body ?: return
-        val senderName = PushNotificationActions.senderName(payload) ?: return
+        val servedName = PushNotificationActions.senderName(payload) ?: return
+        val showName = request.preferences.showSenderName
+        val senderName = if (showName) servedName else context.getString(R.string.push_someone)
         val sender = Person.Builder()
             .setName(senderName)
-            .setKey(payload.senderId ?: senderName)
-            .apply { avatarOf(request)?.let(::setIcon) }
+            .setKey(if (showName) payload.senderId ?: servedName else "anonymous")
+            .apply { if (showName) avatarOf(request)?.let(::setIcon) }
             .build()
 
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName(context.getString(R.string.push_message_you)).build())
@@ -44,10 +48,12 @@ class MessagingStyleEnricher @Inject constructor(
         style.addMessage(text, PushNotificationActions.timestampMillis(payload, System.currentTimeMillis()), sender)
         if (!payload.isDirectConversation) {
             style.isGroupConversation = true
-            style.conversationTitle = payload.conversationTitle ?: request.push.notificationTitle
+            style.conversationTitle = payload.conversationTitle
+                ?.let { "${PushPresentationText.groupMarker(payload.conversationType)} $it".trim() }
+                ?: request.push.notificationTitle
         }
         builder.setStyle(style)
-        payload.conversationId?.let(builder::setShortcutId)
+        ConversationShortcutId.of(payload.conversationId)?.let(builder::setShortcutId)
     }
 
     private fun previousMessages(request: EnrichmentRequest): List<NotificationCompat.MessagingStyle.Message> {

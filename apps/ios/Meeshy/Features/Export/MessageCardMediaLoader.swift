@@ -128,6 +128,11 @@ nonisolated enum MessageCardMediaLoader {
         return MessageCardLoadedSound(samples: await samples(of: file), duration: duration, file: file)
     }
 
+    static func localURL(_ string: String) -> URL? {
+        guard let url = URL(string: string), url.isFileURL else { return nil }
+        return url
+    }
+
     static func resolved(_ string: String) -> String {
         MeeshyConfig.resolveMediaURL(string)?.absoluteString ?? string
     }
@@ -136,6 +141,10 @@ nonisolated enum MessageCardMediaLoader {
     /// Une PHOTO dont le fichier ne se charge pas retombe sur sa vignette (`posterURL`) —
     /// jamais sur `AVAssetImageGenerator`, qui ne lit que des vidéos (#10915).
     private static func picture(_ item: MessageCardSubjectMedia) async -> CGImage? {
+        if let local = localURL(item.fileURL) {
+            guard item.media.kind == .video else { return UIImage(contentsOfFile: local.path)?.cgImage }
+            return await VideoThumbnailGenerator.shared.image(for: .firstFrame(of: local, maxDimension: 1080))?.cgImage
+        }
         if item.media.kind == .image {
             if let image = await CacheCoordinator.shared.images.image(for: resolved(item.fileURL), maxPixelSize: 1080)?.cgImage { return image }
             guard let poster = item.posterURL else { return nil }
@@ -152,6 +161,7 @@ nonisolated enum MessageCardMediaLoader {
     /// Le fichier d'un son ou d'une vidéo, copié avec son EXTENSION : AVFoundation
     /// ne reconnaît pas un fichier de cache nommé par son empreinte.
     static func localFile(_ fileURL: String, kind: MessageCardMediaKind) async -> URL? {
+        if let local = localURL(fileURL) { return local }
         let key = resolved(fileURL)
         let store = await (kind == .audio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video)
         guard let data = try? await store.data(for: key), !data.isEmpty else { return nil }

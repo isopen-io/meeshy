@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_resume_failed">Impossibile convertire questa storia in bozza. Resta nella tua coda.</string>
+    <string name="my_stories_draft_open_failed">Impossibile aprire questa bozza.</string>
+</resources>

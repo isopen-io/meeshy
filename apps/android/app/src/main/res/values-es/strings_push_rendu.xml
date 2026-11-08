@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: rendu-notification-systeme — libellés génériques et substituts des messages protégés (#15182). -->
+<resources>
+    <string name="push_new_message">Mensaje nuevo</string>
+    <string name="push_someone">Alguien</string>
+    <string name="push_voice_message">Mensaje de voz</string>
+    <string name="push_sender_in_group">%1$s en %2$s</string>
+    <string name="push_placeholder_view_once">Mensaje de una sola vista</string>
+    <string name="push_placeholder_ephemeral">Mensaje efímero</string>
+    <string name="push_placeholder_hidden">Mensaje oculto</string>
+    <string name="push_placeholder_encrypted">Mensaje cifrado</string>
+</resources>

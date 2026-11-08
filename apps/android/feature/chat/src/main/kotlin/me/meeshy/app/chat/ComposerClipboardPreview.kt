@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,7 +73,7 @@ internal fun ClipboardContentPreview(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = stringResource(R.string.chat_clipboard_char_count, clip.charCount),
+                text = pluralStringResource(R.plurals.chat_clipboard_char_count, clip.charCount, clip.charCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = accentColor,
             )

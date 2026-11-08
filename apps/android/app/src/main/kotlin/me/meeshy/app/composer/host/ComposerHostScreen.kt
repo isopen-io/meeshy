@@ -13,7 +13,7 @@ import me.meeshy.app.feed.MoodComposerContent
 import me.meeshy.app.feed.StatusComposerDraftsViewModel
 import me.meeshy.app.feed.StatusesViewModel
 import me.meeshy.app.stories.StoryComposerContent
-import me.meeshy.sdk.model.composer.ComposerFormatVariant
+import me.meeshy.sdk.model.composer.ComposerStoryCanvas
 import me.meeshy.ui.component.composer.HostedSelection
 import me.meeshy.ui.component.composer.LocalHostedSelection
 import me.meeshy.ui.component.composer.LocalOnComposerPlateau
@@ -52,7 +52,7 @@ fun ComposerHostScreen(
     }
     val hostedSelection = remember(viewModel) { HostedSelection(initial = { viewModel.selection }, onChange = viewModel::onSelection) }
     CompositionLocalProvider(LocalHostedSelection provides hostedSelection, LocalOnComposerPlateau provides true) {
-        if (ComposerFormatVariant.of(state.selectedFormat).composesOnScene) {
+        if (ComposerStoryCanvas.showsCanvas(state.selectedFormat, state.hasScene)) {
             StoryComposerContent(
                 formats = state.publishedFormats,
                 layout = state.layout,

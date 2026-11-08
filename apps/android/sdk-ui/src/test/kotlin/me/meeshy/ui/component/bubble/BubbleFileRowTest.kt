@@ -1,9 +1,13 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
@@ -71,5 +75,75 @@ class BubbleFileRowTest {
         }
 
         compose.onNodeWithText("rapport.pdf").assertIsDisplayed()
+    }
+
+    @Test
+    fun `un PDF montre sa famille, sa taille et son nombre de pages`() {
+        compose.setContent {
+            MeeshyTheme {
+                BubbleFileRow(
+                    file = BubbleFile(attachmentId = "p", name = "rapport.pdf", sizeBytes = 2048, mimeType = "application/pdf", pageCount = 12),
+                    onColor = Color.Black,
+                    onClick = null,
+                )
+            }
+        }
+
+        compose.onNodeWithText("PDF", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("12 pages", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `un Word se distingue d'un PDF par son libelle de famille`() {
+        compose.setContent {
+            MeeshyTheme {
+                BubbleFileRow(
+                    file = BubbleFile(attachmentId = "w", name = "lettre.docx", mimeType = "application/octet-stream"),
+                    onColor = Color.Black,
+                    onClick = null,
+                )
+            }
+        }
+
+        compose.onNodeWithText("Word", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `un document sans nom montre le libelle de son type`() {
+        compose.setContent {
+            MeeshyTheme {
+                BubbleFileRow(
+                    file = BubbleFile(attachmentId = "n", name = null, mimeType = "application/vnd.ms-excel"),
+                    onColor = Color.Black,
+                    onClick = null,
+                )
+            }
+        }
+
+        val labels = compose.onAllNodesWithText("Excel")
+        labels.assertCountEquals(2)
+        labels.onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun `la carte du composer se supprime par sa croix etiquetee`() {
+        var deleted = 0
+        compose.setContent {
+            MeeshyTheme {
+                DocumentComposerCard(name = "a.pdf", mimeType = "application/pdf", onColor = Color.Black, onDelete = { deleted++ })
+            }
+        }
+
+        compose.onNodeWithContentDescription("Delete attachment").assertHasClickAction().performClick()
+        assertThat(deleted).isEqualTo(1)
+    }
+
+    @Test
+    fun `la carte du composer sans suppression n'offre aucune croix`() {
+        compose.setContent {
+            MeeshyTheme { DocumentComposerCard(name = "a.pdf", mimeType = "application/pdf", onColor = Color.Black) }
+        }
+
+        compose.onNodeWithContentDescription("Delete attachment").assertDoesNotExist()
     }
 }

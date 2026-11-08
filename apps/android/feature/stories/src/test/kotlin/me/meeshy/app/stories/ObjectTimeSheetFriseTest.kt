@@ -101,7 +101,6 @@ class ObjectTimeSheetFriseTest {
                         val state by vm.state.collectAsState()
                         StorySceneFirstLayout(
                             onDismiss = {},
-                            reduced = false,
                             scene = { modifier -> Box(modifier) },
                             top = {},
                             trailing = {},

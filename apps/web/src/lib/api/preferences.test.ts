@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { categoryIdOf, customNameOf, flagsOf, pushConversationFlags, pushRead, pushUnread } from './preferences';
+import { categoryIdOf, customNameOf, flagsOf } from './preferences';
+import { pushConversationFlags, pushRead, pushUnread } from './preference-ports';
 import type { Transport } from '../net/transport';
 import type { Conversation } from './types';
 

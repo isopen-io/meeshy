@@ -34,6 +34,22 @@ data class ConversationRowMenuCapabilities(
      * de plateforme privilégié vaut créateur une fois DANS (#11217).
      */
     val manageMembers: Boolean,
+    /**
+     * « Rendre obsolète » (#14645, #14653) : la porte de `DELETE /conversations/:id/obsolete` —
+     * l'administrateur d'un groupe, d'une conversation publique ou d'une chaîne encore ouverts
+     * (`deleteForAll`), ou, dans un tête-à-tête ouvert, l'un OU l'autre des deux membres inscrits
+     * et actifs (`hide`) ; jamais Global. Quand la passerelle sert `viewerCapabilities.canMakeObsolete`
+     * (#14690), c'est elle seule qui décide ; absente, la règle locale reste.
+     */
+    val obsolete: Boolean = false,
+    /**
+     * « Appeler » : l'appel du menu compose UN pair, donc jamais un groupe ni soi-même
+     * (`CallPermission.canStartCall`, miroir de `ConversationRowMenuCapabilities.call` d'iOS).
+     */
+    val call: Boolean = false,
+    val videoCall: Boolean = false,
+    /** « Supprimer pour tous » : la porte de la loi (administrateur et plus d'un type à autorité, ouvert). */
+    val deleteForAll: Boolean = false,
 ) {
 
     /**
@@ -68,6 +84,8 @@ data class ConversationRowMenuCapabilities(
             val direct = conversation.isDirect
             val talksToSelf = direct && currentUser != null && conversation.participants.isNotEmpty() &&
                 conversation.participants.all { it.userId == currentUser.id }
+            val talksToPeer = direct && !talksToSelf && currentUser != null &&
+                conversation.participants.any { it.userId != currentUser.id }
             return ConversationRowMenuCapabilities(
                 rename = actions.rename,
                 invite = actions.invite,
@@ -77,7 +95,21 @@ data class ConversationRowMenuCapabilities(
                 removal = if (!actions.hide) null else if (direct) Removal.DELETE else Removal.HIDE,
                 canToggleArchive = !conversation.isArchiveImposed,
                 manageMembers = actions.manageMembers,
+                obsolete = conversation.viewerCapabilities?.canMakeObsolete
+                    ?: (actions.deleteForAll || (direct && !conversation.actionPolicyConversation.isClosed && actions.hide)),
+                deleteForAll = actions.deleteForAll,
+                call = actions.call && talksToPeer,
+                videoCall = actions.videoCall && talksToPeer,
             )
+        }
+
+        /**
+         * Les verdicts pour le lecteur d'une conversation OUVERTE : le rôle servi sur la ligne, à défaut celui de sa
+         * participation (#15269). Une conversation qui ne le dit pas laisse le lecteur simple membre — fermé par défaut.
+         */
+        fun forViewer(conversation: ApiConversation, currentUser: MeeshyUser?): ConversationRowMenuCapabilities {
+            val participantRole = conversation.participants.firstOrNull { currentUser != null && it.userId == currentUser.id }?.role
+            return make(conversation.copy(currentUserRole = conversation.currentUserRole ?: participantRole), currentUser)
         }
 
         /** Le lecteur tel que la loi le lit, pour une rangée de SA liste. */

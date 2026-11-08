@@ -2,6 +2,7 @@ import Foundation
 import MetricKit
 import os
 import MeeshySDK
+import MeeshyUI
 
 /// Captures, persists and surfaces crash & hang reports through two layers:
 ///
@@ -38,6 +39,10 @@ protocol CrashReporting: Sendable {
 
     /// Free-form breadcrumb attached to the next crash report.
     nonisolated func log(_ message: String)
+
+    /// A COUNTED non-fatal: a degradation the app survived but must not hide
+    /// (e.g. a story exported without its brand wrapping, #14488).
+    nonisolated func recordNonFatal(_ error: NSError)
 }
 
 /// Default reporter when no remote backend is configured. Every call is a
@@ -51,6 +56,7 @@ nonisolated struct NoOpCrashReporter: CrashReporting {
     func record(_ diagnostic: CrashDiagnostic) {}
     func setUserID(_ userID: String?) {}
     func log(_ message: String) {}
+    func recordNonFatal(_ error: NSError) {}
 }
 
 // MARK: - Diagnostic model (top-level so Codable is nonisolated)
@@ -138,6 +144,7 @@ final class CrashDiagnosticsManager: NSObject {
         Self.setReporter(crashReporter)
         loadPersisted()
         installNSExceptionHandler()
+        StoryExportBrandingFallback.reporter = { CrashDiagnosticsManager.recordBrandingFallback($0) }
         MXMetricManager.shared.add(self)
         Logger.crash.info("CrashDiagnostics installed (\(self.pending.count, privacy: .public) pending report(s))")
     }
@@ -169,6 +176,24 @@ final class CrashDiagnosticsManager: NSObject {
     nonisolated func log(_ message: String) {
         Self.reporter.log(message)
     }
+
+    /// Un export de story parti sans sa marque (#14488) : compté en non-fatal,
+    /// un code par chemin d'export, la cause d'encodage dans le contexte.
+    nonisolated static func recordBrandingFallback(_ failure: StoryExportBrandingFailure) {
+        reporter.recordNonFatal(NSError(
+            domain: brandingFallbackDomain,
+            code: failure.path == .shareOrSave ? 1 : 2,
+            userInfo: [
+                NSLocalizedDescriptionKey: "story exportée sans son emballage de marque (\(failure.path.rawValue))",
+                "slide_id": failure.slideId,
+                "cause_domain": failure.errorDomain,
+                "cause_code": failure.errorCode,
+                "cause": String(failure.reason.prefix(300))
+            ]
+        ))
+    }
+
+    nonisolated static let brandingFallbackDomain = "Meeshy.StoryExportBranding"
 
 
     // MARK: - NSException

@@ -371,6 +371,20 @@ struct OutboxUIItemMappingTests {
         #expect(item.titlePreview == "🎉")
     }
 
+    /// #10331 — une publication en file désigne sa carte optimiste, dont l'id
+    /// est le cmid de sa ligne : c'est ce que l'annulation de la pastille vise.
+    @Test func test_from_createPost_pointsAtItsPendingCardByCmid() {
+        let r = record(kind: .createPost, payload: createPostPayload(content: "Hello"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .post(id: "cmid_post"))
+    }
+
+    @Test func test_from_createPost_corruptPayload_fallsBackToUnknownSource() {
+        let r = record(kind: .createPost, payload: Data("not json".utf8))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .unknown)
+    }
+
     // MARK: - repostPost (fil rouge du repost, lot 7 tâche 7.5)
 
     private func repostPostPayload(
@@ -391,8 +405,9 @@ struct OutboxUIItemMappingTests {
         return try! JSONEncoder().encode(payload)
     }
 
-    /// Contrairement à `.createPost` (`source: .unknown` — l'id serveur
-    /// n'existe pas encore), l'id SOURCE d'un repost est connu à l'enfilage :
+    /// Contrairement à `.createPost` (qui vise sa carte optimiste par son cmid —
+    /// l'id serveur n'existe pas encore), l'id SOURCE d'un repost est un id
+    /// SERVEUR connu à l'enfilage :
     /// la pastille doit rester navigable vers le post reposté, jamais tomber
     /// sur `.unknown` (le repli de `mapOther`, qui perd la destination —
     /// défaut mesuré en prod sur `markStoryViewed`).

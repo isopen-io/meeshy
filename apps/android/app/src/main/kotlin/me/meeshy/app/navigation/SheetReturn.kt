@@ -22,7 +22,7 @@ import androidx.navigation.NavHostController
  * retirée en GARDANT son état (ViewModel, état sauvegardé, défilement) et la réouverture le restaure, comme le
  * `.sheet` iOS resté monté. Si l'écran empilé est remplacé, l'état gardé est libéré.
  */
-internal val returningSheetRoutes: Set<String> = setOf(Routes.USER_POSTS, Routes.MY_STORIES, Routes.DASHBOARD)
+internal val returningSheetRoutes: Set<String> = setOf(Routes.USER_POSTS, Routes.MY_STORIES, Routes.DASHBOARD, Routes.GLOBAL_SEARCH)
 
 internal data class StackEntry(
     val id: String,
@@ -125,6 +125,16 @@ internal fun NavHostController.navigateKeepingSheet(route: String) {
             }
         }
     }
+}
+
+/**
+ * Quitte la feuille au sommet pour [route], sans qu'elle revienne au retour (#14671) : la recherche générale qui
+ * ouvre une conversation se ferme, comme iOS (`closesForConversationOpening`). La feuille est d'abord dépilée,
+ * l'écran ensuite empilé sur ce qu'elle recouvrait : aucun remplacement à rejouer.
+ */
+internal fun NavHostController.navigateClosingSheet(route: String) {
+    currentBackStackEntry?.takeIf { it.destination.navigatorName == NAVIGATOR_DIALOG }?.let { popBackStack() }
+    navigate(route)
 }
 
 @Composable

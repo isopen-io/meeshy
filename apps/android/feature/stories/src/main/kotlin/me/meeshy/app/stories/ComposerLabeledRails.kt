@@ -2,17 +2,18 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,13 +26,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerLabeledRail
 import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
@@ -50,7 +52,8 @@ private val RAIL_GAP = ComposerLabeledRail.GAP.dp
 /**
  * Ce que le rail gauche du grand écran montre (#13837), en valeurs primitives : [showsClose] et [showsTools] se taisent
  * le pinceau en main ; [activeTool] et [openEntry] surlignent l'outil ouvert, ou « Plus » quand il range l'entrée ouverte ; [moreEntries] sont celles du « ⋯ »
- * de la scène, que le rail range derrière « Plus » (Fond, Mention et Lieu sont des outils du rail, #14049).
+ * de la scène, que le rail range derrière « Plus » (Fond, Mention et Lieu sont des outils du rail, #14049). [writesPostText] ajoute
+ * « Texte du post » après Lieu, qui porte [postText] (#14457).
  */
 internal data class LeadingRailModel(
     val showsClose: Boolean,
@@ -61,6 +64,8 @@ internal data class LeadingRailModel(
     val animated: Boolean,
     val exportEnabled: Boolean,
     val cameraServed: Boolean = false,
+    val writesPostText: Boolean = false,
+    val postText: String = "",
 )
 
 /**
@@ -77,10 +82,10 @@ internal fun StoryLeadingRail(
     onMediaSource: (ComposerMediaSource) -> Unit = {},
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().composerScrollEdgeCue(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) {
-        if (rail.showsClose) LabeledRailItem(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose)
+        if (rail.showsClose) LabeledRailItem(MeeshyIcons.Close, stringResource(SceneChromeName.CLOSE.label), onClose)
         if (rail.showsTools) LeadingRailTools(rail, onTool, onEntry, onMediaSource)
     }
 }
@@ -92,9 +97,13 @@ private fun LeadingRailTools(
     onEntry: (ComposerMoreEntry) -> Unit,
     onMediaSource: (ComposerMediaSource) -> Unit,
 ) {
-    ComposerLabeledRail.tools.forEach { tool ->
+    ComposerLabeledRail.tools(rail.writesPostText).forEach { tool ->
         MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, rail.cameraServed), onMediaSource) { press ->
-            LabeledRailItem(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == rail.activeTool, press = press)
+            LabeledRailItem(
+                tool.glyph(), tool.label(), { onTool(tool) }, active = tool == rail.activeTool, press = press,
+                value = rail.postText.takeIf { tool == ComposerSceneTool.POST_TEXT },
+                title = tool.railTitle(),
+            )
         }
     }
     val overflow = rail.moreEntries
@@ -104,7 +113,7 @@ private fun LeadingRailTools(
             animated = rail.animated,
             exportEnabled = rail.exportEnabled,
             anchor = { expanded, open ->
-                LabeledRailItem(MeeshyIcons.MoreHorizontal, stringResource(R.string.composer_rail_more), open, active = expanded || rail.openEntry in overflow)
+                LabeledRailItem(MeeshyIcons.MoreHorizontal, stringResource(SceneChromeName.RAIL_MORE.label), open, active = expanded || rail.openEntry in overflow)
             },
             onPick = onEntry,
         )
@@ -136,7 +145,7 @@ internal fun ColumnScope.StoryTrailingRail(
 @Composable
 internal fun StoryEditingRail(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).composerScrollEdgeCue(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
     ) { SelectionRailBlock(bar, tools, onAction) }
 }
@@ -144,7 +153,7 @@ internal fun StoryEditingRail(bar: SceneSelectionBar, tools: List<RailTool>, onA
 @Composable
 private fun SelectionRailBlock(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Text(
-        text = stringResource(R.string.composer_rail_selection),
+        text = stringResource(SceneChromeName.RAIL_SELECTION.label),
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = Color.White.copy(alpha = 0.6f),
@@ -169,7 +178,8 @@ private fun RailActionItem(action: ComposerSelectionAction, onClick: () -> Unit)
 /**
  * Une rangée de rail : une icône et son mot, une cible de 48 dp ; l'outil ouvert est surligné et annoncé comme tel. Les
  * autres ne portent aucun état : une action (Modifier, Retirer, Fermer) n'est jamais lue « non sélectionnée ». [press] : son
- * appui long (Média, #13845).
+ * appui long (Média, #13845). [title] : le mot court affiché (« Média ») ; TalkBack lit [label], la phrase d'iOS
+ * (« Ajouter un média », #15599) : la description prime sur le texte affiché.
  */
 @Composable
 internal fun LabeledRailItem(
@@ -179,7 +189,10 @@ internal fun LabeledRailItem(
     active: Boolean = false,
     tint: Color = Color.White,
     press: ToolLongPress? = null,
+    value: String? = null,
+    title: String = label,
 ) {
+    val carried = value?.takeIf { it.isNotBlank() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -187,14 +200,19 @@ internal fun LabeledRailItem(
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .background(if (active) ComposerPlateauInk.accent.copy(alpha = 0.55f) else Color.Transparent)
             .toolPress(onClick, press = press)
+            .semantics { contentDescription = label }
             .then(if (active) Modifier.semantics { selected = true } else Modifier)
+            .then(if (carried != null) Modifier.semantics { stateDescription = carried } else Modifier)
             .padding(horizontal = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        Box {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+            if (carried != null) CarriedDot(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-3).dp))
+        }
         Text(
-            text = label,
+            text = title,
             color = tint,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,

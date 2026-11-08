@@ -101,12 +101,14 @@ describe('la section dit le mode de la conversation ouverte, en mots simples', (
     expect(text('[data-conversation-encryption]')).not.toMatch(/peut (les )?lire|Meeshy peut/u);
   });
 
-  test('hybride : son résumé, et la promesse du double chiffrement à venir', async () => {
+  test('hybride : sur le web, aucune promesse de vérification sur cet appareil, ni « chaque message » ni bout en bout (#14369)', async () => {
     await mount({ type: 'direct', encryptionMode: 'hybrid' });
     expect(text('[data-conversation-encryption-summary]')).toBe('Chiffrée sur nos serveurs (mode hybride)');
     expect(text('[data-conversation-encryption-fact="hybridIsServerToday"]')).toBe(
-      'Le mode hybride chiffre aujourd’hui comme le mode Serveur ; le double chiffrement par vos appareils arrive bientôt.',
+      'Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; cet appareil ne la porte pas encore, et rien n’y est présenté comme vérifié.',
     );
+    expect(text('[data-conversation-encryption-summary]')).not.toMatch(/bout en bout|chaque message|vérifi/u);
+    expect(text('[data-conversation-encryption]')).not.toMatch(/bientôt|chaque message/u);
   });
 
   test('ancienne conversation sans mode : dite d’avant le chiffrement systématique', async () => {

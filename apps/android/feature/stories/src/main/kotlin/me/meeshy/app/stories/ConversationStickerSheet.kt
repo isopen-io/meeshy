@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -34,7 +35,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.MessageSticker
+import me.meeshy.sdk.model.sticker.MeeInstantCatalog
+import me.meeshy.sdk.model.sticker.MeeSlot
 import me.meeshy.ui.component.composer.ComposerStickerPick
+import me.meeshy.ui.sticker.MeeInstantStill
 import me.meeshy.ui.sticker.StickerPlacementDestination
 import me.meeshy.ui.sticker.StickerSheet
 import me.meeshy.ui.sticker.StickerTemplateArtwork
@@ -44,7 +48,7 @@ private class PendingConversationSticker(val route: StickerChoiceRoute, val stic
 
 /**
  * La feuille de stickers que le composeur universel ouvre (#14320, #14334) : la MÊME que la scène des stories, avec
- * toutes ses capacités — Smileys, Mee, Meo, packs, Personnalisés (gabarits, Mes stickers) et Boutique. Un choix ferme
+ * toutes ses capacités — Smileys, Mee, Meo, packs, Personnalisés (gabarits, Mes stickers, Instants de Mee) et Boutique. Un choix ferme
  * la feuille, puis son image se peint (emoji, gabarit, image fixe du film, sticker de pack, vignette) et le sticker
  * PRÊT remonte par [onPick] avec sa recette `MessageSticker` (iOS `ConversationView+Sticker`). Un choix qui ne peint
  * rien rend la main par [onDismiss].
@@ -68,7 +72,7 @@ fun ConversationStickerSheet(onPick: (ComposerStickerPick) -> Unit, onDismiss: (
         containerColor = Color.Transparent,
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
-        val capabilities = rememberStoryStickerCapabilities(kit, imageModel)
+        val capabilities = rememberStoryStickerCapabilities(kit, imageModel, instants = true)
         val destination = remember(kit, locale) {
             StickerPlacementDestination { choice ->
                 val packs = kit.entryPoint.stickerPackStore().packs.value
@@ -101,7 +105,7 @@ private fun PaintConversationSticker(
             onPainted(bitmap?.let { withContext(Dispatchers.IO) { ConversationStickerFiles.png(it, directory, chosen.sticker) } })
         }
         else -> LaunchedEffect(chosen) {
-            onPainted(ConversationStickerFiles.paint(route, chosen.sticker, kit.images, imageModel, directory))
+            onPainted(ConversationStickerFiles.paint(route, chosen.sticker, kit.images, imageModel, directory, context))
         }
     }
 }
@@ -151,6 +155,7 @@ internal object ConversationStickerFiles {
         images: StoryStickerImages,
         imageModel: (String) -> Any?,
         directory: File,
+        context: Context,
     ): ComposerStickerPick? = withContext(Dispatchers.IO) {
         when (route) {
             is StickerChoiceRoute.Glyph -> runCatching { ComposerEmojiSticker.render(route.emoji, directory) }.getOrNull()?.let { file ->
@@ -160,7 +165,17 @@ internal object ConversationStickerFiles {
             is StickerChoiceRoute.PackImage -> (imageModel(route.fileUrl) as? String)
                 ?.let { images.packPose(it, route.emoji).produce() }?.let { bytes(it.bytes, directory, sticker) }
             is StickerChoiceRoute.LibraryImage -> images.libraryPose(route.itemId)?.produce()?.let { bytes(it.bytes, directory, sticker) }
+            is StickerChoiceRoute.InstantImage -> instant(route, sticker, directory, context)
             is StickerChoiceRoute.Template -> null
+        }
+    }
+
+    /** L'image fixe de l'Instant et ses mots (iOS `sendMeeInstant`) ; un film illisible part en emoji, comme iOS. */
+    private suspend fun instant(route: StickerChoiceRoute.InstantImage, sticker: MessageSticker?, directory: File, context: Context): ComposerStickerPick? {
+        val instant = MeeInstantCatalog.byId(route.instantId) ?: return null
+        MeeInstantStill.png(context, instant, MeeSlot.slots(route.slots))?.let { png -> return bytes(png, directory, sticker) }
+        return runCatching { ComposerEmojiSticker.render(instant.emoji, directory) }.getOrNull()?.let { file ->
+            ComposerStickerPick(file, MIME, MessageSticker(emoji = instant.emoji), ComposerEmojiSticker.SIDE, ComposerEmojiSticker.SIDE)
         }
     }
 

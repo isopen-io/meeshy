@@ -160,117 +160,6 @@ private fun ConversationLinkCardFrame(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ConversationLinkCardActionsRow(
-    actions: ConversationCardActions,
-    joinAccount: ConversationCardJoinAccount?,
-    isExpired: Boolean,
-    pending: Pending,
-    error: CardError?,
-    accent: Color,
-    onJoin: () -> Unit,
-    onJoinAnonymously: (identifier: String) -> Unit,
-    onLeave: () -> Unit,
-    onOpen: (conversationId: String) -> Unit,
-) {
-    val tokens = MeeshyTheme.tokens
-    val busy = pending != Pending.NONE
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        when {
-            isExpired -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs, Alignment.CenterHorizontally),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) {
-                Icon(MeeshyIcons.TimerOff, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(16.dp))
-                Text(
-                    stringResource(R.string.conversation_card_expired),
-                    color = tokens.textSecondary,
-                    fontSize = MeeshyFontSize.subhead,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            actions is ConversationCardActions.Join -> {
-                Text(
-                    stringResource(R.string.conversation_card_join_prompt),
-                    color = tokens.textPrimary,
-                    fontSize = MeeshyFontSize.subhead,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.semantics { heading() },
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                    if (actions.allowsAnonymous) {
-                        CardButton(
-                            title = stringResource(R.string.conversation_card_join_choice_anonymous),
-                            spoken = stringResource(R.string.conversation_card_a11y_join_anonymously),
-                            icon = MeeshyIcons.Theater,
-                            tint = accent,
-                            filled = false,
-                            enabled = !busy,
-                            busy = false,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onJoinAnonymously(actions.identifier) },
-                        )
-                    }
-                    CardButton(
-                        title = joinAccount?.title ?: stringResource(R.string.conversation_card_join_choice_account),
-                        spoken = joinAccount?.let { stringResource(R.string.conversation_card_a11y_join_with_named_account, it.spokenName) }
-                            ?: stringResource(R.string.conversation_card_a11y_join_with_account),
-                        icon = MeeshyIcons.Account,
-                        tint = accent,
-                        filled = true,
-                        enabled = !busy,
-                        busy = pending == Pending.JOINING,
-                        modifier = Modifier.weight(1f),
-                        onClick = onJoin,
-                    )
-                }
-            }
-            actions is ConversationCardActions.LeaveOrOpen -> Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                val leave = stringResource(R.string.conversation_card_leave)
-                CardButton(
-                    title = leave,
-                    spoken = leave,
-                    icon = MeeshyIcons.SignOut,
-                    tint = tokens.errorInk,
-                    filled = false,
-                    enabled = !busy,
-                    busy = pending == Pending.LEAVING,
-                    modifier = Modifier.weight(1f),
-                    onClick = onLeave,
-                )
-                val open = stringResource(R.string.conversation_card_open)
-                CardButton(
-                    title = open,
-                    spoken = open,
-                    icon = MeeshyIcons.ArrowUpRight,
-                    tint = accent,
-                    filled = true,
-                    enabled = !busy,
-                    busy = false,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onOpen(actions.conversationId) },
-                )
-            }
-            else -> Unit
-        }
-        error?.let { reason ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = tokens.errorInk, modifier = Modifier.size(14.dp))
-                Text(stringResource(reason.messageRes()), color = tokens.errorInk, fontSize = MeeshyFontSize.small, fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
-private fun CardError.messageRes(): Int = when (this) {
-    CardError.LINK_NOT_FOUND -> R.string.conversation_card_error_not_found
-    CardError.LINK_INACTIVE -> R.string.conversation_card_error_inactive
-    CardError.FORBIDDEN -> R.string.conversation_card_error_forbidden
-    CardError.JOIN_FAILED -> R.string.conversation_card_error_join
-    CardError.LEAVE_FAILED -> R.string.conversation_card_error_leave
-}
-
-@Composable
 private fun LeaveConfirmation(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val tokens = MeeshyTheme.tokens
     AlertDialog(
@@ -306,7 +195,7 @@ private fun ConversationLinkCardSkeleton(accent: Color) {
             .padding(MeeshySpacing.sm)
             .semantics { contentDescription = spoken },
     ) {
-        Box(Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(MeeshyRadius.smPlus)).background(accent.copy(alpha = 0.25f)))
+        Box(Modifier.fillMaxWidth().height(76.dp).clip(RoundedCornerShape(MeeshyRadius.smPlus)).background(accent.copy(alpha = 0.25f)))
         Box(Modifier.width(140.dp).height(14.dp).clip(RoundedCornerShape(MeeshyRadius.xxs)).background(placeholder))
         Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(MeeshyRadius.xxs)).background(placeholder))
         Box(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(MeeshyRadius.sm)).background(placeholder))

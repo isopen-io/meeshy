@@ -55,7 +55,7 @@ public protocol OfflineQueueing: Sendable {
     @discardableResult
     /// `location` fait partie de l'exigence : une valeur par défaut sur
     /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
-    /// Swift, et les appelants (`FeedViewModel.createOfflineMediaPost`) passent
+    /// Swift, et les appelants (`FeedViewModel.publish(_:)`) passent
     /// la position à travers ce protocole.
     /// `mentions` fait partie de la REQUIREMENT et non d'un défaut concret :
     /// `location` avait été ajoutée à l'implémentation seule, et le protocole
@@ -131,7 +131,10 @@ public protocol OfflineQueueing: Sendable {
         /// seulement sur l'implémentation concrète serait ignoré par tout
         /// appelant typé sur le protocole (les mocks des tests) — chaque
         /// appelant DÉCLARE donc explicitement `nil` ou sa vraie valeur.
-        allowSoundExtraction: Bool?
+        allowSoundExtraction: Bool?,
+        /// La publication naît fermée aux commentaires (#16541). Sans défaut,
+        /// même discipline : `nil` s'écrit, et vaut « ouverte ».
+        commentsDisabled: Bool?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose

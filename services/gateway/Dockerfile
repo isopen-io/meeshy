@@ -25,7 +25,7 @@ LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       org.opencontainers.image.source="https://github.com/isopen-io/meeshy" \
       org.opencontainers.image.documentation="https://docs.meeshy.me/gateway" \
       org.opencontainers.image.vendor="Meeshy" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="MIT AND AGPL-3.0-only" \
       org.opencontainers.image.title="Meeshy Gateway" \
       org.opencontainers.image.description="Fastify API gateway for Meeshy platform"
 

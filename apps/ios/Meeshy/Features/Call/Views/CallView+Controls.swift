@@ -4,7 +4,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-// Les commandes des écrans de sonnerie et de connexion (Filtres, Raccrocher).
+// Les commandes des écrans de sonnerie et de connexion (Effets, Raccrocher).
 // La pilule de l'appel établi vit dans `CallView+Pill.swift` (#8394).
 
 extension CallView {
@@ -20,34 +20,27 @@ extension CallView {
         return config.isEnabled || config.hasAdvancedFilters
     }
 
-    var effectsToggleButton: some View {
+    /// OPUS-4 — avant la connexion, « Effets » ouvre le MÊME mode que l'appel
+    /// établi (carrousel « Effets de ma caméra ») : plus de second panneau.
+    var effectsModeButton: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showEffectsToolbar.toggle()
-            }
+            enterMode(.effects)
         } label: {
             VStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
+                Image(systemName: "camera.filters")
                     // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
                     .font(.system(size: 24, weight: .medium))
                     .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
                     .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
 
-                Text(String(localized: "call.filters", defaultValue: "Filtres", bundle: .main))
+                Text(CallControlsCopy.effectsCaption)
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
         .buttonStyle(CallPressButtonStyle())
-        .accessibilityLabel(String(localized: "call.filters.a11y", defaultValue: "Filtres vidéo", bundle: .main))
-        .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main))
-        // L'indice disait « ouvre OU ferme » — ambigu précisément parce que
-        // l'état n'était pas exposé : le glyphe passe de `camera.filters` à
-        // `xmark` et rien ne le disait (253i, #4266). L'état porté ici est celui
-        // que le bouton BASCULE (la barre), jamais `hasActiveEffects`, qui est
-        // un fait VOISIN — la teinte le montre, et l'annoncer ici ferait dire au
-        // contrôle un état qui n'est pas le sien.
-        .toggleStateAccessibility(isToggle: true, isActive: showEffectsToolbar)
+        .accessibilityLabel(CallControlsCopy.effects)
+        .accessibilityHint(CallControlsCopy.effectsHint)
     }
 
     var endCallButton: some View {

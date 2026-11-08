@@ -11,6 +11,7 @@ const arMediaViewer = {
   'media.viewer.compose': 'أنشئ بهذه الوسائط',
   'media.viewer.imager': 'حوِّل إلى صورة',
   'media.viewer.saved': 'تم الحفظ',
+  'media.viewer.already_saved': 'محفوظ مسبقًا',
   'media.viewer.save_failed': 'تعذّر الحفظ',
   'media.viewer.offline': 'غير متصل — أعد المحاولة عند الاتصال',
   'media.viewer.retry': 'انقر مرة أخرى للحفظ',

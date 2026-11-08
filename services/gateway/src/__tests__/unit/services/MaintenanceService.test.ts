@@ -115,6 +115,12 @@ function makePrisma(overrides: {
     pairInteractionDay: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    relationFeatureSetting: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    friendRequest: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
@@ -709,34 +715,38 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 
+  // La purge refuse un identifiant qui n'est pas un ObjectId (audit #14448 M2) : ces deux
+  // témoins portent donc un vrai identifiant de compte.
+  const PURGED_ID = '507f1f77bcf86cd799439aaa';
+
   it('purge les tables ISOLÉES (sessions, profil vocal, liens de partage, notifications, carnet — #8284) de chaque compte expiré, sans attendre un clic sur « supprimer maintenant » (#3632)', async () => {
     const prisma = makePrisma();
-    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', PURGED_ID)]);
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
     sut.setSessionRevoker(makeRevoker([]));
 
     await sweepDeletions(sut);
 
-    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
-    expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
+    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: PURGED_ID } });
+    expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: PURGED_ID } });
     // #10492 — les liens du compte sont LUS, leurs invités révoqués, puis supprimés.
-    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' }, select: { id: true } });
-    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
-    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: 'user-a' } });
-    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { recipientId: 'user-a' } });
-    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { joinerId: 'user-a' } });
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith({ where: { createdBy: PURGED_ID }, select: { id: true } });
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: PURGED_ID } });
+    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: PURGED_ID } });
+    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { recipientId: PURGED_ID } });
+    expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { joinerId: PURGED_ID } });
   });
 
   it("un échec de la purge isolée ne fait pas compter l'expiration comme ratée — le lot continue", async () => {
     const prisma = makePrisma();
-    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', PURGED_ID)]);
     prisma.userSession.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
     sut.setSessionRevoker(makeRevoker([]));
 
     await expect(sweepDeletions(sut)).resolves.toBeUndefined();
 
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(PURGED_ID), expect.any(Error));
   });
 
   it('sans révocateur injecté, le lot expire les demandes sans lever', async () => {

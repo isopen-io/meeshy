@@ -10,6 +10,8 @@
     <!-- Lecture d'un vocal en arrière-plan : service de premier plan « mediaPlayback » + CPU éveillé (#13393). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- lot: ongoing-activity-host — envoi long porté par le service unique des notifications en cours (type dataSync). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Audio/video calls (WebRTC media capture) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -38,6 +40,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
+    <!-- lot: routeur-de-navigation-hubs-et-cibles-differees : enableOnBackInvokedCallback arme le retour prédictif (API 34+) -->
     <application
         android:name=".MeeshyApplication"
         android:allowBackup="false"
@@ -47,6 +50,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
+        android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.Meeshy">
 
         <activity
@@ -189,6 +194,32 @@
                 <data android:scheme="https" android:host="meeshy.me" android:path="/world" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:path="/world" />
             </intent-filter>
+            <!-- lot: racine-liens-profonds-android — App Links des destinations de DeepLinkParser que le graphe ne
+                 lit pas : la racine (DeepLinkRouter) les ouvre. Les hôtes et les chemins se combinent ; un lien à
+                 jeton d'e-mail n'est JAMAIS ici (filtres dédiés plus haut). /share n'est pas revendiqué. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="meeshy.me" />
+                <data android:host="www.meeshy.me" />
+                <data android:host="app.meeshy.me" />
+                <data android:path="/me" />
+                <data android:pathPrefix="/me/" />
+                <data android:pathPrefix="/c/" />
+                <data android:pathPrefix="/conversation/" />
+                <data android:pathPrefix="/l/" />
+                <data android:pathPrefix="/p/" />
+                <data android:pathPrefix="/s/" />
+                <data android:pathPrefix="/stories/" />
+                <data android:pathPrefix="/users/" />
+                <data android:pathPrefix="/reels" />
+                <data android:pathPrefix="/community/" />
+                <data android:pathPrefix="/communities/" />
+                <data android:pathPrefix="/hashtag/" />
+                <data android:pathPrefix="/signup" />
+            </intent-filter>
         </activity>
 
         <!-- "Share to Meeshy" target (feature-parity §O, #13585) : texte, lien, images, vidéos et FICHIERS quelconques,
@@ -200,7 +231,7 @@
             android:exported="true"
             android:theme="@style/Theme.Meeshy"
             android:excludeFromRecents="true"
-            android:label="@string/app_name">
+            android:label="@string/share_target_label">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -216,6 +247,26 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+            <!-- lot: share-intake-activity — les types usuels nommés, pour que Meeshy apparaisse dans le sélecteur des apps
+                 qui filtrent par type (photos, vidéos, sons, PDF, contacts) sans dépendre du seul joker. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="text/vcard" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="text/vcard" />
+            </intent-filter>
         </activity>
 
         <!-- Session média + notification de lecture d'un vocal écouté (#13393). -->
@@ -229,6 +280,44 @@
             android:name=".ongoing.VoiceRecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- lot: ongoing-activity-host — UN service de premier plan typé pour les notifications en cours ;
+             le masque réellement passé à startForeground suit les activités ET les permissions (ForegroundTypeLaw). -->
+        <service
+            android:name=".ongoing.OngoingActivityService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone|camera|mediaPlayback|mediaProjection|dataSync" />
+
+        <!-- L'envoi de média en arrière-plan (MediaUploadLeaseNotifications) passe par le service de WorkManager en dataSync :
+             le type est redit ici, le lint vital de la release ne lisant pas celui déclaré par :sdk-core. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <!-- Boutons des notifications en cours (Annuler, Arrêter, Raccrocher...) : un seul récepteur, sans gestionnaire = sans effet. -->
+        <receiver
+            android:name=".ongoing.OngoingCommandReceiver"
+            android:exported="false" />
+
+        <!-- Le Bring (#13936) : sonne sur le flux alarme (service au premier plan, mediaPlayback), écran plein par-dessus
+             le verrouillage, « Arrêter » d'un geste. Aucun n'est exporté : seul un push FCM du compte connecté les lève. -->
+        <service
+            android:name=".bring.BringRingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <receiver
+            android:name=".bring.BringStopReceiver"
+            android:exported="false" />
+
+        <activity
+            android:name=".bring.BringRingActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="me.meeshy.bring"
+            android:theme="@style/Theme.Meeshy" />
 
         <!-- FCM Push -->
         <service
@@ -255,6 +344,11 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="meeshy_messages_v2" />
+
+        <!-- lot: routage-du-tap-notification -->
+        <receiver
+            android:name=".push.PushDismissReceiver"
+            android:exported="false" />
 
         <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
         <receiver

@@ -11,6 +11,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -21,6 +22,8 @@ import me.meeshy.sdk.model.MessageSegment
 import me.meeshy.sdk.model.MessageTextParser
 import me.meeshy.sdk.model.TextStyles
 import me.meeshy.sdk.model.text.LinkDisplayLaw
+import me.meeshy.sdk.model.text.RainbowLetters
+import me.meeshy.sdk.model.text.TextBlocks
 
 /**
  * Renders a message body as rich text — markdown emphasis, `@mention` /
@@ -47,20 +50,44 @@ public fun RichMessageText(
     mentionDisplayNames: Map<String, String>? = null,
     highlightTerm: String? = null,
     trackedLinks: Map<String, String>? = null,
+    mentionColor: Color = linkColor,
+    hashtagColor: Color = linkColor,
+    validUsernames: Set<String>? = null,
+    rainbowSeed: String? = null,
+    onHashtagClick: ((String) -> Unit)? = null,
+    onMentionClick: ((String) -> Unit)? = null,
+    /** Budget de lignes du texte simple (la citation plate en offre deux) ; les blocs structurés ne le portent pas. */
+    maxLines: Int = Int.MAX_VALUE,
 ) {
-    val annotated = remember(
-        text, color, linkColor, highlightColor, mentionDisplayNames, highlightTerm, trackedLinks,
-    ) {
-        buildMessageAnnotatedString(
-            segments = MessageTextParser.parse(text, mentionDisplayNames),
-            baseColor = color,
+    val rich = RichTextSpec(
+        look = RichTextLook(
+            color = color,
             linkColor = linkColor,
+            mentionColor = mentionColor,
+            hashtagColor = hashtagColor,
             highlightColor = highlightColor,
             highlightTerm = highlightTerm,
+            mentionDisplayNames = mentionDisplayNames,
+            validUsernames = validUsernames,
             trackedLinks = trackedLinks,
+            rainbowSeed = rainbowSeed,
+        ),
+        onHashtagClick = onHashtagClick,
+        onMentionClick = onMentionClick,
+    )
+    if (TextBlocks.hasBlockSyntax(text)) {
+        RichTextBlocks(text = text, spec = rich, style = style, modifier = modifier)
+    } else {
+        val annotated = rememberRichAnnotated(text, rich)
+        Text(
+            text = annotated,
+            color = color,
+            style = style,
+            modifier = modifier,
+            maxLines = maxLines,
+            overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
         )
     }
-    Text(text = annotated, color = color, style = style, modifier = modifier)
 }
 
 /**
@@ -76,9 +103,17 @@ internal fun buildMessageAnnotatedString(
     highlightColor: Color,
     highlightTerm: String?,
     trackedLinks: Map<String, String>?,
+    mentionColor: Color = linkColor,
+    hashtagColor: Color = linkColor,
+    rainbowSeed: String? = null,
+    rainbowPalette: List<Color> = emptyList(),
+    onHashtagClick: ((String) -> Unit)? = null,
+    onMentionClick: ((String) -> Unit)? = null,
 ): AnnotatedString {
+    val segmentStarts = IntArray(segments.size)
     val styled = buildAnnotatedString {
-        segments.forEach { segment ->
+        segments.forEachIndexed { position, segment ->
+            segmentStarts[position] = length
             when (segment) {
                 is MessageSegment.Text -> {
                     val start = length
@@ -86,7 +121,11 @@ internal fun buildMessageAnnotatedString(
                     addStyle(spanStyleFor(segment.styles, baseColor), start, length)
                 }
                 is MessageSegment.MentionLink ->
-                    appendLink(segment.display, segment.url, linkColor, FontWeight.SemiBold)
+                    if (onMentionClick != null) {
+                        appendAction(segment.display, mentionColor, FontWeight.SemiBold) { onMentionClick(segment.username) }
+                    } else {
+                        appendLink(segment.display, segment.url, mentionColor, FontWeight.SemiBold)
+                    }
                 is MessageSegment.MeeshyTokenLink ->
                     appendLink(segment.display, segment.url, linkColor, FontWeight.Medium)
                 is MessageSegment.Code -> {
@@ -95,7 +134,11 @@ internal fun buildMessageAnnotatedString(
                     addStyle(spanStyleFor(segment.styles, baseColor).copy(fontFamily = FontFamily.Monospace), start, length)
                 }
                 is MessageSegment.HashtagLink ->
-                    appendLink(segment.display, segment.url, linkColor, FontWeight.SemiBold)
+                    if (onHashtagClick != null) {
+                        appendAction(segment.display, hashtagColor, FontWeight.SemiBold) { onHashtagClick(segment.tag) }
+                    } else {
+                        appendLink(segment.display, segment.url, hashtagColor, FontWeight.SemiBold)
+                    }
                 is MessageSegment.Link -> {
                     val shown = LinkDisplayLaw.resolve(segment.written, trackedLinks)
                     appendLink(shown.text, shown.url, linkColor, FontWeight.Medium)
@@ -116,11 +159,12 @@ internal fun buildMessageAnnotatedString(
         }
     }
 
-    if (highlightTerm.isNullOrEmpty() || highlightColor == Color.Unspecified) return styled
-    val ranges = MessageTextParser.highlightRanges(styled.text, highlightTerm)
-    if (ranges.isEmpty()) return styled
+    val painted = paintRainbow(styled, segments, segmentStarts, rainbowSeed, rainbowPalette)
+    if (highlightTerm.isNullOrEmpty() || highlightColor == Color.Unspecified) return painted
+    val ranges = MessageTextParser.highlightRanges(painted.text, highlightTerm)
+    if (ranges.isEmpty()) return painted
     return buildAnnotatedString {
-        append(styled)
+        append(painted)
         ranges.forEach { range ->
             addStyle(SpanStyle(background = highlightColor), range.first, range.last + 1)
         }
@@ -159,5 +203,44 @@ private fun AnnotatedString.Builder.appendLink(
         ),
     ) {
         append(display)
+    }
+}
+
+private fun AnnotatedString.Builder.appendAction(
+    display: String,
+    color: Color,
+    weight: FontWeight,
+    onClick: () -> Unit,
+) {
+    withLink(
+        LinkAnnotation.Clickable(
+            tag = display,
+            styles = TextLinkStyles(
+                style = SpanStyle(color = color, fontWeight = weight, textDecoration = TextDecoration.Underline),
+            ),
+            linkInteractionListener = { onClick() },
+        ),
+    ) {
+        append(display)
+    }
+}
+
+/** Lettres arc-en-ciel : seules les lettres ordinaires prennent une couleur, jamais un lien. */
+private fun paintRainbow(
+    styled: AnnotatedString,
+    segments: List<MessageSegment>,
+    starts: IntArray,
+    seed: String?,
+    palette: List<Color>,
+): AnnotatedString {
+    if (seed == null || palette.isEmpty()) return styled
+    val letters = RainbowLetters.letters(segments, seed, palette.size)
+    if (letters.isEmpty()) return styled
+    return buildAnnotatedString {
+        append(styled)
+        letters.forEach { letter ->
+            val base = starts[letter.segment]
+            addStyle(SpanStyle(color = palette[letter.colorIndex]), base + letter.start, base + letter.end)
+        }
     }
 }

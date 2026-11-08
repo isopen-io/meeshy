@@ -41,6 +41,9 @@ interface CallSessionHost {
      */
     fun endMedia()
 
+    /** Cancel every job the session itself launched (clock, quality, rejoin…): none survives the call. */
+    fun cancelSessionJobs() {}
+
     /** Force a fresh ICE restart of the media path (a no-op outside a stall). */
     fun restartMediaIce()
 
@@ -52,6 +55,9 @@ interface CallSessionHost {
      * primary's indicators must then ignore it (#13740). A duo never routes one.
      */
     fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean = false
+
+    /** `true` once the call is proven to gather more than two people (a duo never is). */
+    val isGroupCall: Boolean get() = false
 }
 
 /** What an extension point needs to key its work to the call in flight. */

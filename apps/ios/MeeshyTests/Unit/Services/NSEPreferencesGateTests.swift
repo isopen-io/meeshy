@@ -159,4 +159,37 @@ final class NSEPreferencesGateTests: XCTestCase {
 
         XCTAssertEqual(content.interruptionLevel, .passive)
     }
+
+    // MARK: - Le Bring passe (#13936, décision D-3)
+
+    func test_apply_bring_passesDoNotDisturbPushOffAndSoundsOff() throws {
+        var prefs = UserNotificationPreferences.defaults
+        prefs.pushEnabled = false
+        prefs.soundEnabled = false
+        prefs.systemEnabled = false
+        prefs.dndEnabled = true
+        prefs.dndStartTime = "00:00"
+        prefs.dndEndTime = "23:59"
+        prefs.dndDays = []
+        let content = makeContent()
+        content.interruptionLevel = .timeSensitive
+        let noon = try XCTUnwrap(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 1, day: 15, hour: 12, minute: 0)
+        ))
+
+        NSEPreferencesGate.apply(preferences: prefs, to: content, rawType: "bring", now: noon)
+
+        XCTAssertEqual(content.interruptionLevel, .timeSensitive)
+        XCTAssertNotNil(content.sound)
+    }
+
+    func test_apply_bringStopped_staysGatedLikeAnyOtherPush() {
+        var prefs = UserNotificationPreferences.defaults
+        prefs.pushEnabled = false
+        let content = makeContent()
+
+        NSEPreferencesGate.apply(preferences: prefs, to: content, rawType: "bring_stopped")
+
+        XCTAssertEqual(content.interruptionLevel, .passive)
+    }
 }

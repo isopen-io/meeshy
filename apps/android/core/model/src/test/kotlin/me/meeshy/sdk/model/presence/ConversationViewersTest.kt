@@ -112,4 +112,35 @@ class ConversationViewersTest {
         assertThat(ConversationHere.ABSENT.toAvatarHere().isHere).isFalse()
         assertThat(ConversationHere.FOCUSED.toAvatarHere().isFocused).isTrue()
     }
+
+    @Test
+    fun `a peer goes here then active then back to here after the 4 second hold`() {
+        val here = ConversationViewers().applying(ViewingEvent.Arrived(change("u1")), 0L)
+        assertThat(here.here("u1", "c1")).isEqualTo(ConversationHere.HERE)
+        val active = here.applying(ViewingEvent.Active(change("u1")), 1_000L)
+        assertThat(active.here("u1", "c1")).isEqualTo(ConversationHere.ACTIVE)
+        assertThat(active.settled(4_999L).here("u1", "c1")).isEqualTo(ConversationHere.ACTIVE)
+        assertThat(active.settled(5_000L).here("u1", "c1")).isEqualTo(ConversationHere.HERE)
+    }
+
+    @Test
+    fun `each activity pushes the rest back and a departure forgets the stamp`() {
+        val active = ConversationViewers()
+            .applying(ViewingEvent.Arrived(change("u1")), 0L)
+            .applying(ViewingEvent.Active(change("u1")), 0L)
+            .applying(ViewingEvent.Active(change("u1", focus = true)), 3_000L)
+        assertThat(active.settled(5_000L).here("u1", "c1")).isEqualTo(ConversationHere.FOCUSED)
+        assertThat(active.settled(7_000L).here("u1", "c1")).isEqualTo(ConversationHere.HERE)
+        val left = active.applying(ViewingEvent.Left(change("u1")), 3_500L)
+        assertThat(left.activityStamps).isEmpty()
+    }
+
+    @Test
+    fun `a new session empties every viewer and every stamp`() {
+        val state = ConversationViewers()
+            .applying(ViewingEvent.Arrived(change("u1")), 0L)
+            .applying(ViewingEvent.Active(change("u1")), 0L)
+            .applying(ViewingEvent.SessionStarted, 10L)
+        assertThat(state).isEqualTo(ConversationViewers())
+    }
 }

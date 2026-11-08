@@ -184,5 +184,308 @@
         "description": "شفق ومدّ وجمرات: لافتتك تنبض بالحياة."
       }
     }
+  },
+  {
+    "slug": "noel-bannieres",
+    "domain": "banner",
+    "origin": "builtin",
+    "version": 1,
+    "order": 2,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "fd9c7c9b62f4eed1.webp",
+      "bytes": 3668,
+      "sha256": "fd9c7c9b62f4eed1c85253c694f119f3c0bebfc7e56c74e9ad3dc065331844f5"
+    },
+    "preview": null,
+    "contract": {
+      "src": "d42b89d98514e08e.json",
+      "bytes": 6042,
+      "sha256": "d42b89d98514e08e57e8ac15b0a8e7ac339656f6858f9eee48578e7bdad4ab24"
+    },
+    "strings": {
+      "fr": {
+        "src": "3a544492b8d5b0f1.json",
+        "bytes": 271,
+        "sha256": "3a544492b8d5b0f1997a1132930c633040b6beafcb0a034ada0981d1a396ec29"
+      },
+      "en": {
+        "src": "3f6d0f9790856d84.json",
+        "bytes": 246,
+        "sha256": "3f6d0f9790856d842b0281edad4c7839a6b39494936249493119ee19dfd15e66"
+      },
+      "es": {
+        "src": "955bbfea33e30ede.json",
+        "bytes": 257,
+        "sha256": "955bbfea33e30ede2f2e16e72861e34d2652760d15b9c74d31b3a72e637a4436"
+      },
+      "pt": {
+        "src": "903aa1e857942bc5.json",
+        "bytes": 254,
+        "sha256": "903aa1e857942bc59acdb97593775b89db90f6472529626c65bd5c8e2e500b60"
+      },
+      "de": {
+        "src": "ea5d0b1f77f82cbe.json",
+        "bytes": 261,
+        "sha256": "ea5d0b1f77f82cbeb854f3df92799f47aa0d074d9c5c7289e34a024203d54020"
+      },
+      "it": {
+        "src": "fbe5e3c3c706cf0c.json",
+        "bytes": 254,
+        "sha256": "fbe5e3c3c706cf0c7b96d23b86e950b521caf7dabcb56597411b5781fb925590"
+      },
+      "ar": {
+        "src": "63d647c48c7a07ac.json",
+        "bytes": 304,
+        "sha256": "63d647c48c7a07ac7613c88a63024b04061c693608c0b45961a49424f09302a7"
+      }
+    },
+    "downloadBytes": {
+      "story": 6042,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Bannières de Noël",
+        "description": "Six images de bannière assorties aux packs de Noël : givre, guirlande et papier cadeau, puis une tempête de neige, des lumières qui scintillent et les étincelles de l’atelier."
+      },
+      "en": {
+        "name": "Christmas banners",
+        "description": "Six banner images to match the Christmas packs: frost, garland and gift wrap, then a snowstorm, twinkling lights and sparks from the workshop."
+      },
+      "es": {
+        "name": "Banners de Navidad",
+        "description": "Seis imágenes de banner a juego con los packs de Navidad: escarcha, guirnalda y papel de regalo, luego una nevada, luces que titilan y las chispas del taller."
+      },
+      "pt": {
+        "name": "Banners de Natal",
+        "description": "Seis imagens de banner a condizer com os packs de Natal: geada, grinalda e papel de embrulho, depois um nevão, luzes que cintilam e as faíscas da oficina."
+      },
+      "de": {
+        "name": "Weihnachtsbanner",
+        "description": "Sechs Bannerbilder passend zu den Weihnachtspaketen: Raureif, Girlande und Geschenkpapier, dann Schneegestöber, funkelnde Lichter und Funken aus der Werkstatt."
+      },
+      "it": {
+        "name": "Banner di Natale",
+        "description": "Sei immagini di banner abbinate ai pacchetti di Natale: brina, ghirlanda e carta regalo, poi una nevicata, luci che brillano e le scintille del laboratorio."
+      },
+      "ar": {
+        "name": "لافتات الميلاد",
+        "description": "ست صور لافتة تُناسب حزم الميلاد: الصقيع والإكليل وورق الهدايا، ثم عاصفة ثلجية وأضواء متلألئة وشرارات الورشة."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-10-25T00:00:00Z",
+      "endsAt": "2027-01-25T00:00:00Z"
+    },
+    "event": {
+      "id": "christmas",
+      "recurrence": "yearly"
+    }
+  },
+  {
+    "slug": "nouvel-an-images",
+    "domain": "banner",
+    "origin": "builtin",
+    "version": 1,
+    "order": 3,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "414646f712e5f475.webp",
+      "bytes": 4750,
+      "sha256": "414646f712e5f475c0a1656377c0432fdcac8091e7bfaa044af9a32e3796ac08"
+    },
+    "preview": null,
+    "contract": {
+      "src": "4a28eecc6e94edc5.json",
+      "bytes": 5118,
+      "sha256": "4a28eecc6e94edc545351fadcb48eb61d5d696935d75f1e8a5ec9a528e644732"
+    },
+    "strings": {
+      "fr": {
+        "src": "f9685b93b1bccfae.json",
+        "bytes": 169,
+        "sha256": "f9685b93b1bccfaef372996f54d2ff620b9eeefe52c6f6af24b795147cc54555"
+      },
+      "en": {
+        "src": "f74eb5c4cc62ceaa.json",
+        "bytes": 165,
+        "sha256": "f74eb5c4cc62ceaa94d2f8e9b966fdd88ca5b31e3609cb0525a2bcefc7cd9d50"
+      },
+      "es": {
+        "src": "a46bca05db882773.json",
+        "bytes": 169,
+        "sha256": "a46bca05db882773fc541fc845959dd4a23e065736dfc28a839e572bbc427417"
+      },
+      "pt": {
+        "src": "ed47833930f3937d.json",
+        "bytes": 175,
+        "sha256": "ed47833930f3937ddf482e0d6327579ed196accedd62f5e479514d9ebaeda164"
+      },
+      "de": {
+        "src": "5db0242fbc7bd9bb.json",
+        "bytes": 162,
+        "sha256": "5db0242fbc7bd9bbdf31e7815e801e3788b6310960ebea740222f764a42e04af"
+      },
+      "it": {
+        "src": "3584220b4a44d995.json",
+        "bytes": 174,
+        "sha256": "3584220b4a44d995e15379e21852fd2ae84c414cd653b7aff49bfc69242313b3"
+      },
+      "ar": {
+        "src": "767bf412e4e082cd.json",
+        "bytes": 221,
+        "sha256": "767bf412e4e082cd373908f553f018cf07971b5204c00d592a9d3962501a6b99"
+      }
+    },
+    "downloadBytes": {
+      "story": 5118,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Bannières du Nouvel An",
+        "description": "Quatre images de bannière pour la nouvelle année : une nuit d’artifice, une fête de confettis, les douze coups de minuit et un champagne doré."
+      },
+      "en": {
+        "name": "New Year banners",
+        "description": "Four banner images for the new year: a firework night, a confetti party, the twelve strokes of midnight and golden champagne."
+      },
+      "es": {
+        "name": "Banners de Año Nuevo",
+        "description": "Cuatro imágenes de banner para el año nuevo: una noche de fuegos, una fiesta de confeti, las doce campanadas y un champán dorado."
+      },
+      "pt": {
+        "name": "Banners de Ano Novo",
+        "description": "Quatro imagens de banner para o novo ano: uma noite de artifício, uma festa de confetes, as doze badaladas e um champanhe dourado."
+      },
+      "de": {
+        "name": "Neujahrsbanner",
+        "description": "Vier Bannerbilder für das neue Jahr: eine Feuerwerksnacht, ein Konfettifest, die zwölf Schläge um Mitternacht und goldener Sekt."
+      },
+      "it": {
+        "name": "Banner di Capodanno",
+        "description": "Quattro immagini di banner per il nuovo anno: una notte di fuochi, una festa di coriandoli, i dodici rintocchi e uno champagne dorato."
+      },
+      "ar": {
+        "name": "لافتات رأس السنة",
+        "description": "أربع صور لافتة للعام الجديد: ليلة ألعاب نارية، وحفلة قصاصات، ودقات منتصف الليل الاثنتا عشرة، وشمبانيا ذهبية."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-11-01T00:00:00Z",
+      "endsAt": "2027-02-01T00:00:00Z"
+    },
+    "event": {
+      "id": "new-year",
+      "recurrence": "yearly"
+    }
+  },
+  {
+    "slug": "nouvel-an-images-vives",
+    "domain": "banner",
+    "origin": "builtin",
+    "version": 1,
+    "order": 4,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "cc65ddd3b5702218.webp",
+      "bytes": 654,
+      "sha256": "cc65ddd3b5702218d23af7770ed5e7dd479aa7fc712c7161082bf0d30fd99539"
+    },
+    "preview": null,
+    "contract": {
+      "src": "f70493937788a079.json",
+      "bytes": 3316,
+      "sha256": "f70493937788a079c7ebd77088f25f3656f290cce5bdbe3c8de2dcd4371223c6"
+    },
+    "strings": {
+      "fr": {
+        "src": "45e03f881f61cd4a.json",
+        "bytes": 205,
+        "sha256": "45e03f881f61cd4ad5ecf91323ee668a81a731cd93256185c5ba67dba09cfe63"
+      },
+      "en": {
+        "src": "052739b4b424a898.json",
+        "bytes": 181,
+        "sha256": "052739b4b424a898fc0f40e8101cdf6a55d3e277b73bb7b1709b97e24456cda5"
+      },
+      "es": {
+        "src": "db5490a6e17c97a5.json",
+        "bytes": 195,
+        "sha256": "db5490a6e17c97a5f2478c11d9e22cae7f8e7a6ec34b212989a1497e3fdea2ee"
+      },
+      "pt": {
+        "src": "b6caeee83f85ea21.json",
+        "bytes": 210,
+        "sha256": "b6caeee83f85ea212198dbfceedf94d317fd9689b3b547f48fbf863dc17fbccc"
+      },
+      "de": {
+        "src": "4f4b25280300cb6f.json",
+        "bytes": 181,
+        "sha256": "4f4b25280300cb6f3a37fb61b344cb8c5419123e5566fad8f52fbe7097a9f9e4"
+      },
+      "it": {
+        "src": "bcc6b146043fc22a.json",
+        "bytes": 203,
+        "sha256": "bcc6b146043fc22af562f497fa4effa808f8e221e027eb0181942db1c76901b6"
+      },
+      "ar": {
+        "src": "f1b3bbf41006a29b.json",
+        "bytes": 240,
+        "sha256": "f1b3bbf41006a29b35132a23e638788bfcb0d8a0f6a18fa9384b69d8ca0d949f"
+      }
+    },
+    "downloadBytes": {
+      "story": 3316,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Bannières du Nouvel An animées",
+        "description": "Quatre images de bannière animées : des gerbes qui éclatent, une averse de confettis, le compte à rebours de minuit et des bulles de champagne. Animations réduites : une image fixe."
+      },
+      "en": {
+        "name": "Animated New Year banners",
+        "description": "Four animated banner images: bursting fireworks, a confetti shower, the midnight countdown and champagne bubbles. With reduced motion: a still image."
+      },
+      "es": {
+        "name": "Banners animados de Año Nuevo",
+        "description": "Cuatro imágenes de banner animadas: fuegos que estallan, un chaparrón de confeti, la cuenta atrás de medianoche y burbujas de champán. Con movimiento reducido: una imagen fija."
+      },
+      "pt": {
+        "name": "Banners animados de Ano Novo",
+        "description": "Quatro imagens de banner animadas: fogo de artifício a rebentar, um aguaceiro de confetes, a contagem decrescente da meia-noite e bolhas de champanhe. Com movimento reduzido: uma imagem fixa."
+      },
+      "de": {
+        "name": "Animierte Neujahrsbanner",
+        "description": "Vier animierte Bannerbilder: aufblühendes Feuerwerk, ein Konfettischauer, der Countdown bis Mitternacht und Sektperlen. Bei reduzierter Bewegung: ein ruhiges Bild."
+      },
+      "it": {
+        "name": "Banner animati di Capodanno",
+        "description": "Quattro immagini di banner animate: fuochi che esplodono, un acquazzone di coriandoli, il conto alla rovescia di mezzanotte e bollicine di champagne. Con movimento ridotto: un’immagine fissa."
+      },
+      "ar": {
+        "name": "لافتات رأس السنة المتحركة",
+        "description": "أربع صور لافتة متحركة: ألعاب نارية تتفجر، ووابل من القصاصات، والعدّ التنازلي لمنتصف الليل، وفقاعات الشمبانيا. مع تقليل الحركة: صورة ثابتة."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-11-01T00:00:00Z",
+      "endsAt": "2027-02-01T00:00:00Z"
+    },
+    "event": {
+      "id": "new-year",
+      "recurrence": "yearly"
+    }
   }
 ]

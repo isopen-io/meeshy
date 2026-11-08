@@ -21,6 +21,8 @@ const SRC = join(__dirname, '..', '..', '..');
 const SHAPES = /\b(postInclude|storyPostInclude|statusPostSelect|trayStorySelect|postAuthorSelect|repostOfInclude|commentsPreviewInclude)\b/;
 
 const REVIEWED = [
+  // #16541 — la bascule des commentaires relit le post par `postInclude` et le diffuse par `withMentions(…, WIRE_BROADCAST)`.
+  'routes/posts/commentSettings.ts',
   'routes/posts/hashtag.ts',
   'routes/posts/nearby.ts',
   'services/PostCommentService.ts',
@@ -30,6 +32,8 @@ const REVIEWED = [
   'services/attachments/media-processing/ready-listener.ts',
   'services/posts/PostAudioService.ts',
   'services/posts/postIncludes.ts',
+  // #14620 — la recherche de posts lit par `postInclude` et sert chaque ligne par `withMentions(…, reader)`.
+  'services/search/globalPostSearch.ts',
 ];
 
 const sources = (dir: string): string[] =>

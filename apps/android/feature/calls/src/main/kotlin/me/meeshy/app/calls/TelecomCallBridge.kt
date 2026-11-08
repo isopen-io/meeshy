@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.MainDispatcher
+import me.meeshy.sdk.call.CallDtmf
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.TelecomRequestPolicy
 import me.meeshy.sdk.model.call.TelecomSystemRequest
@@ -30,6 +31,8 @@ class TelecomCallBridge @Inject constructor(
     reporter: TelecomCallReporter,
     private val holder: ActiveCallSnapshotHolder,
     @MainDispatcher dispatcher: CoroutineDispatcher,
+    private val hold: CallHolding = CallHolding.Inert,
+    private val dtmf: CallDtmf = CallDtmf { null },
 ) : CallFeatureController {
 
     @Volatile
@@ -55,11 +58,13 @@ class TelecomCallBridge @Inject constructor(
 
     private fun handle(request: TelecomSystemRequest) {
         val muted = holder.snapshot.value?.isMuted == true
+        if (request is TelecomSystemRequest.Hold && state.isActive) hold.onTelecomHold(request.onHold)
         when (val action = TelecomRequestPolicy.actionFor(request, state, muted, mutedByHold)) {
             TelecomRequestPolicy.Action.None -> Unit
             TelecomRequestPolicy.Action.Answer -> holder.answer()
             TelecomRequestPolicy.Action.Decline -> holder.decline()
             TelecomRequestPolicy.Action.HangUp -> holder.hangUp()
+            is TelecomRequestPolicy.Action.SendDtmf -> dtmf.send(action.tones)
             is TelecomRequestPolicy.Action.SetMuted -> {
                 mutedByHold = action.byHold
                 if (action.muted != muted) holder.toggleMute()

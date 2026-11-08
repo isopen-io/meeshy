@@ -14,6 +14,7 @@ const it = {
   'rowMenu.manageMembers': 'Gestisci i membri',
   'rowMenu.adminOpen': 'Apri nell’amministrazione',
   'rowMenu.leave': 'Esci',
+  'rowMenu.obsolete': 'Rendi obsoleta',
   'rowMenu.search': 'Cerca',
   'rowMenu.readingMode': 'Modalità di lettura',
   'rowMenu.peek': 'Anteprima della conversazione',

@@ -49,4 +49,25 @@ class StickerBoxLawTest {
         assertThat(StickerBoxLaw.fitted(StickerBoxLaw.Size(0f, 10f), StickerBoxLaw.templateBox()))
             .isEqualTo(StickerBoxLaw.Size.ZERO)
     }
+
+    @Test
+    fun `un film garde une marge de debordement sur ses quatre bords pour s animer sans etre rogne`() {
+        val side = StickerBoxLaw.SIDE_DP
+        val bleed = StickerBoxLaw.filmBleed(side)
+        assertThat(bleed).isGreaterThan(0f)
+        assertThat(StickerBoxLaw.filmFootprint(side)).isEqualTo(side + 2 * bleed)
+        assertThat(StickerBoxLaw.filmBleed(140f) / 140f).isEqualTo(bleed / side)
+    }
+
+    @Test
+    fun `la ligne d un emoji en grand depasse son corps pour en loger l encre`() {
+        assertThat(StickerBoxLaw.EMOJI_LINE_HEIGHT_RATIO).isAtLeast(1.25f)
+    }
+
+    @Test
+    fun `dans un couloir etroit le film se reduit juste assez pour que sa marge tienne`() {
+        assertThat(StickerBoxLaw.filmSideWithin(width = 400f, preferred = 140f)).isEqualTo(140f)
+        val side = StickerBoxLaw.filmSideWithin(width = 120f, preferred = 140f)
+        assertThat(StickerBoxLaw.filmFootprint(side)).isWithin(0.001f).of(120f)
+    }
 }

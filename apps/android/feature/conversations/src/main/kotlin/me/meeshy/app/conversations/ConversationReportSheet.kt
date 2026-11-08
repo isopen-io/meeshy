@@ -138,5 +138,5 @@ internal fun ReportReason.dialogLabelRes(): Int = when (this) {
     ReportReason.VIOLENCE -> R.string.dialogs_report_reason_violence
     ReportReason.HATE_SPEECH -> R.string.dialogs_report_reason_hate_speech
     ReportReason.IMPERSONATION -> R.string.dialogs_report_reason_impersonation
-    ReportReason.OTHER -> R.string.dialogs_report_reason_other
+    ReportReason.OTHER, ReportReason.FAKE_PROFILE -> R.string.dialogs_report_reason_other
 }

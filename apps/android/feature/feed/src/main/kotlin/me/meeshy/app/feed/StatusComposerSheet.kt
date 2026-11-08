@@ -45,12 +45,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerMoodRules
 import me.meeshy.sdk.model.composer.ComposerRailPlan
 import me.meeshy.sdk.model.composer.PublicationControl
 import me.meeshy.sdk.model.composer.PublicationControlPlace
@@ -174,6 +176,7 @@ private fun MoodPlateau(
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
     val tooLong = stringResource(R.string.status_composer_emoji_too_long)
+    val chooseEmojiHint = stringResource(R.string.status_composer_publish_disabled_hint)
     if (isPicking) MoodEmojiSheet(
         onPick = { picked ->
             if (StatusBarePublish.acceptsPicked(picked)) {
@@ -192,12 +195,15 @@ private fun MoodPlateau(
             Spacer(Modifier.weight(1f))
             MeeshyPrimaryButton(
                 text = stringResource(R.string.status_composer_publish),
-                onClick = { when (draft.publishStep) {
-                    StatusBarePublish.Step.PUBLISH -> onPublish()
-                    StatusBarePublish.Step.ASK_FOR_A_WORD -> isAsking = true
+                onClick = { when (draft.publishDecision) {
+                    ComposerMoodRules.PublishDecision.Publish -> onPublish()
+                    ComposerMoodRules.PublishDecision.AskForWord -> isAsking = true
+                    ComposerMoodRules.PublishDecision.NeedsEmoji -> Unit
                 } },
                 enabled = draft.canPublish,
-                modifier = Modifier.width(MOOD_PUBLISH_WIDTH),
+                modifier = Modifier.width(MOOD_PUBLISH_WIDTH).semantics {
+                    if (!draft.canPublish) stateDescription = chooseEmojiHint
+                },
             )
         },
     ) {
@@ -401,7 +407,10 @@ private fun visibilityLabel(visibility: StatusVisibility): String = stringResour
     when (visibility) {
         StatusVisibility.PUBLIC -> R.string.status_composer_visibility_public
         StatusVisibility.COMMUNITY -> R.string.status_composer_visibility_community
+        StatusVisibility.ACQUAINTANCES -> R.string.status_composer_visibility_acquaintances
         StatusVisibility.FRIENDS -> R.string.status_composer_visibility_friends
+        StatusVisibility.CLOSE -> R.string.status_composer_visibility_close
+        StatusVisibility.BLOOD -> R.string.status_composer_visibility_blood
         StatusVisibility.PRIVATE -> R.string.status_composer_visibility_private
     },
 )

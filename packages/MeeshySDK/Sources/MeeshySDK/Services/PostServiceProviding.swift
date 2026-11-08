@@ -213,6 +213,13 @@ public protocol PostServiceProviding: Sendable {
     /// reste de ce protocole : un double de test qui ne la surcharge pas reste
     /// conforme.
     func publishAttachment(attachmentId: String, target: PublicationTarget?, content: String?, capturedInApp: Bool) async throws -> APIPost
+    /// `PATCH /posts/:postId/comment-settings` (#16541) — ferme ou rouvre les
+    /// commentaires d'une publication. Rend l'état ÉCRIT par la passerelle.
+    /// L'auteur ou la modération de la plateforme qui le surclasse ; tout autre
+    /// appel lève `MeeshyError.forbidden`. Requirement SÉPARÉE avec défaut
+    /// (`PostService+CommentSettings.swift`) : un double qui ne la surcharge
+    /// pas reste conforme, et ÉCHOUE plutôt que de prétendre avoir écrit.
+    func setCommentsDisabled(postId: String, disabled: Bool) async throws -> Bool
 }
 
 /// Accusé de `POST /posts/media/:mediaId/caption/translate` (#6280) :

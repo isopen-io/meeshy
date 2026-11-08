@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.conversationinfo.ConversationInfoHero
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
@@ -70,6 +71,7 @@ internal fun ConversationInfoSheet(
     pinnedPreview: ConversationInfoPinnedPreview? = null,
     onOpenPinned: () -> Unit = {},
     headerActions: @Composable () -> Unit = {},
+    hero: ConversationInfoHero? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -88,6 +90,10 @@ internal fun ConversationInfoSheet(
                     .padding(horizontal = MeeshySpacing.lg),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                if (hero != null && hero.kind.hasHeroBanner) {
+                    ConversationInfoBanner(bannerUrl = hero.bannerUrl, accentColor = accentColor)
+                    Spacer(Modifier.size(MeeshySpacing.md))
+                }
                 ConversationInfoAvatar(
                     title = title,
                     accentColor = accentColor,
@@ -106,7 +112,10 @@ internal fun ConversationInfoSheet(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (subtitle != null) {
+                if (hero != null) {
+                    Spacer(Modifier.size(MeeshySpacing.xsPlus))
+                    ConversationInfoHeroDetails(hero, accentColor)
+                } else if (subtitle != null) {
                     Text(
                         text = subtitle,
                         fontSize = MeeshyFontSize.footnote,

@@ -56,8 +56,20 @@ struct ConversationListTail: View {
         SceneWindowSize.resolve(listColumnSize, fallback: DeviceLayout.windowSize).height / 2
     }
 
-    @ViewBuilder
     var body: some View {
+        VStack(spacing: 0) {
+            // Les MESSAGES trouvés par la recherche de la liste (#14619), sous
+            // les conversations filtrées et au-dessus des accès rapides.
+            ConversationListMessageSearchSection(
+                model: conversationViewModel.searchTextModel.messageSearch,
+                conversations: { [conversationViewModel] in conversationViewModel.conversations }
+            )
+            quickActionsTail
+        }
+    }
+
+    @ViewBuilder
+    private var quickActionsTail: some View {
         // Sous un squelette, la queue attend la liste (#8759) : posée sous
         // lui, elle était repoussée par les rangées réelles.
         if LentilleFeatureFlag.isLentilleListEnabled, ConversationListView.showsQuickActionsTail(emptyBranch: emptyBranch) {

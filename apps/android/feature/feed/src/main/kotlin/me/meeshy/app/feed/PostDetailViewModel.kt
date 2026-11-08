@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,15 +20,22 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.navigation.PostDetailLanding
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostTranslationMerge
+import me.meeshy.sdk.model.PostUpdateMerge
 import me.meeshy.sdk.model.PublicationViewersAccess
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.post.PostCommentSettingsRepository
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.model.PostCommentSettings
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -40,14 +50,22 @@ import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import javax.inject.Inject
 
+/** Effets ponctuels du detail d'un post. */
+sealed interface PostDetailEffect {
+    /** Le post n'existe plus (supprime) : quitter l'ecran. */
+    data object Close : PostDetailEffect
+}
+
 /**
  * A single post opened full-screen from the feed — the Android take on iOS `PostDetailView`.
  * Fetches the post by id, projects it through the shared [FeedPostBuilder] so the Prisme
  * language resolution matches the feed exactly, and lets the reader switch the displayed
  * language via the same per-post flag-tap rule the feed uses (SSOT with the chat bubble).
  *
- * There is no per-post cache yet, so a cold open shows a skeleton until the fetch answers;
- * a blank id (a malformed route) is surfaced as not-found rather than an endless spinner.
+ * Cache-first (#14467): the detail paints at once from what the device already knows of the post
+ * ([PostRepository.knownPost] — the feed card, the last detail read, the feed kept on disk), then
+ * revalidates in silence; only an empty cache shows a skeleton, then the absence screen on failure.
+ * A blank id (a malformed route) is surfaced as not-found rather than an endless spinner.
  *
  * The comment thread itself lives in [PostCommentsViewModel]; this VM only owns the header,
  * whose comment-count badge is kept honest by the same realtime room — a live
@@ -74,10 +92,12 @@ data class PostDetailUiState(
      */
     val quoteComposer: QuoteComposerState? = null,
     /**
-     * Optimistic "this post is reposted" flag — set the instant the reader taps repost/quote so
-     * the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
+     * "This post is reposted": served by the gateway, or set the instant the reader taps repost/quote
+     * so the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
      */
     val isReposted: Boolean = false,
+    /** A one-shot localized feedback of a repost (« Repartage » / « Erreur lors du repost »), cleared by [PostDetailViewModel.consumeNotice]. */
+    val notice: FeedNotice? = null,
     /** The inline secondary translation under the post text (iOS `PostDetailSecondaryTranslationPanel`). */
     val secondaryTranslation: PostSecondaryTranslation? = null,
     /** The detail's flag strip (iOS `buildAvailableFlags`): without the language read, marking the secondary one. */
@@ -95,9 +115,23 @@ class PostDetailViewModel @Inject constructor(
     private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
+    private val reports: ReportRepository? = null,
+    private val commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
 
+    private val _effects = Channel<PostDetailEffect>(Channel.BUFFERED)
+
+    /** Les effets ponctuels du detail (aujourd'hui : quitter l'ecran apres la suppression du post). */
+    val effects: Flow<PostDetailEffect> = _effects.receiveAsFlow()
+
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
+
+    /** Où le détail atterrit (commentaires ouverts, commentaire visé) : lu une fois, depuis la route (#14523). */
+    val landing: PostDetailLanding = PostDetailLanding.from(
+        savedStateHandle[SHOW_COMMENTS_ARG],
+        savedStateHandle[COMMENT_ID_ARG],
+        savedStateHandle[PARENT_COMMENT_ID_ARG],
+    )
 
     /** Les émojis de la palette : les mêmes, dans le même ordre que messages et stories (récents d'abord). */
     val quickEmojis: StateFlow<List<String>> = emojiUsageStore.usage
@@ -270,6 +304,51 @@ class PostDetailViewModel @Inject constructor(
                 liveOverlay.update { it.copy(likeCount = event.likesCount, isLiked = mine ?: it.isLiked) }
             }
         }
+        observeEditsAndReconnection()
+    }
+
+    /**
+     * The rest of the room (iOS `subscribeToSocket`): the author's edit and a finished translation
+     * fold onto the open post in place, and every RECONNECTION joins the room again and reads the post
+     * again — the events emitted during the cut are lost. Each listener swallows its own failure.
+     */
+    private fun observeEditsAndReconnection() {
+        listen(socialSocket.postUpdated) { event ->
+            if (event.post.id == postId) {
+                rawPost.update { current -> current?.let { PostUpdateMerge.merge(it, event.post) ?: it } }
+            }
+        }
+        listen(socialSocket.postTranslationUpdated) { event ->
+            if (event.postId == postId) {
+                rawPost.update { current ->
+                    current?.let { PostTranslationMerge.mergeTranslation(it, event.language, event.translation) ?: it }
+                }
+            }
+        }
+        listen(socialSocket.reconnected) {
+            socialSocket.joinPostRoom(postId)
+            load(silentWhenShown = true)
+        }
+    }
+
+    private fun <T> listen(flow: Flow<T>, onEach: suspend (T) -> Unit) {
+        viewModelScope.launch {
+            try {
+                flow.collect { value ->
+                    try {
+                        onEach(value)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // best-effort — the next event or the next reconnection heals it
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // a flow that cannot be collected is simply not listened to
+            }
+        }
     }
 
     /** Leaves the post-detail realtime room this VM joined in [observeRealtime]. */
@@ -284,6 +363,9 @@ class PostDetailViewModel @Inject constructor(
      * First load. Guarded so a re-entrant call while a fetch is in flight or after the post
      * has already loaded is a no-op — [refresh] forces a reload. A blank [postId] (a malformed
      * route) is surfaced as not-found and never hits the network.
+     *
+     * The post the device already knows is shown before the network answers, and that
+     * revalidation stays silent: offline, the reader keeps the known post with no error.
      */
     fun loadInitial() {
         if (postId.isBlank()) {
@@ -292,7 +374,17 @@ class PostDetailViewModel @Inject constructor(
         }
         if (status.value.isLoading || status.value.hasLoaded) return
         status.update { it.copy(isLoading = true, error = null, failure = null) }
-        fetch()
+        viewModelScope.launch {
+            val known = try {
+                postRepository.knownPost(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (known != null && rawPost.value == null) rawPost.value = known
+            load(silentWhenShown = true)
+        }
     }
 
     /** « Reessayer » de l'ecran d'echec : rejoue le chargement initial sans quitter le detail. */
@@ -310,30 +402,36 @@ class PostDetailViewModel @Inject constructor(
     }
 
     private fun fetch() {
-        viewModelScope.launch {
-            try {
-                when (val result = postRepository.getPost(postId)) {
-                    is NetworkResult.Success -> {
-                        rawPost.value = result.data
-                        liveOverlay.value = LiveOverlay()
-                        status.update {
-                            it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null, failure = null)
-                        }
-                    }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(
-                                isLoading = false,
-                                isRefreshing = false,
-                                error = result.error.message,
-                                failure = result.error.toContentFetchFailure(),
-                            )
-                        }
+        viewModelScope.launch { load(silentWhenShown = false) }
+    }
+
+    /**
+     * Reads the post from the gateway. With [silentWhenShown], a failure while a post is already
+     * on screen keeps it there and reports nothing — the background revalidation of a cache-first
+     * open; the absence screen stays reserved for an empty cache.
+     */
+    private suspend fun load(silentWhenShown: Boolean) {
+        val outcome: Pair<String?, ContentFetchFailure>? = try {
+            when (val result = postRepository.getPost(postId)) {
+                is NetworkResult.Success -> {
+                    rawPost.value = result.data
+                    liveOverlay.value = LiveOverlay()
+                    null
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                status.update { it.copy(isLoading = false, isRefreshing = false, error = e.message, failure = e.toContentFetchFailure()) }
+                is NetworkResult.Failure -> result.error.message to result.error.toContentFetchFailure()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.message to e.toContentFetchFailure()
+        }
+        val silenced = outcome != null && silentWhenShown && rawPost.value != null
+        status.update {
+            when {
+                outcome == null ->
+                    it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null, failure = null)
+                silenced -> it.copy(isLoading = false, isRefreshing = false)
+                else -> it.copy(isLoading = false, isRefreshing = false, error = outcome.first, failure = outcome.second)
             }
         }
     }
@@ -452,10 +550,82 @@ class PostDetailViewModel @Inject constructor(
                 bookmarkCount = (shown.bookmarkCount + if (bookmarked) 1 else -1).coerceAtLeast(0),
             )
         }
-        sendEngagement(revertTo = previous) { postRepository.setBookmarked(shown.id, bookmarked) }
+        status.update { it.copy(notice = if (bookmarked) FeedNotice.BOOKMARKED else FeedNotice.UNBOOKMARKED) }
+        sendEngagement(revertTo = previous, failure = FeedNotice.BOOKMARK_FAILED) {
+            postRepository.setBookmarked(shown.id, bookmarked)
+        }
     }
 
-    private fun sendEngagement(revertTo: LiveOverlay, enqueue: suspend () -> Unit) {
+    /** Epingle un de SES posts (menu « ... »), puis relit le post pour que `isPinned` remonte. */
+    fun pin() {
+        val shown = rawPost.value ?: return
+        viewModelScope.launch {
+            val done = attempt { postRepository.pinPost(shown.id) } is NetworkResult.Success
+            status.update { it.copy(notice = if (done) FeedNotice.PINNED else FeedNotice.PIN_FAILED) }
+            if (done) load(silentWhenShown = true)
+        }
+    }
+
+    /**
+     * #16541 — ferme ou rouvre les commentaires du post : le détail bascule avant le réseau (le menu, le composeur), la
+     * passerelle dit l'état appliqué, un refus le remet — sauf si une diffusion a dit autre chose entre-temps.
+     */
+    fun toggleComments() {
+        val shown = rawPost.value ?: return
+        val settings = commentSettings ?: return
+        val before = shown.commentsDisabled
+        val target = !before
+        rawPost.update { it?.copy(commentsDisabled = target) }
+        viewModelScope.launch {
+            when (val result = attempt { settings.setCommentsDisabled(shown.id, target) }) {
+                is NetworkResult.Success -> rawPost.update { it?.copy(commentsDisabled = result.data) }
+                else -> {
+                    rawPost.update { row -> row?.let { it.copy(commentsDisabled = PostCommentSettings.rolledBack(it.commentsDisabled, target, before)) } }
+                    status.update { it.copy(notice = FeedNotice.COMMENT_SETTINGS_FAILED) }
+                }
+            }
+        }
+    }
+
+    /** Signale le post pour [reason] et dit l'issue. */
+    fun report(reason: ReportReason) {
+        val shown = rawPost.value ?: return
+        val sender = reports ?: return
+        viewModelScope.launch {
+            val sent = attempt { sender.reportPost(shown.id, reason, details = null) } is NetworkResult.Success
+            status.update { it.copy(notice = if (sent) FeedNotice.REPORTED else FeedNotice.REPORT_FAILED) }
+        }
+    }
+
+    /** Supprime SON post ; l'ecran se ferme au succes, un refus le laisse en place et le dit. */
+    fun delete() {
+        val shown = rawPost.value ?: return
+        viewModelScope.launch {
+            if (attempt { postRepository.delete(shown.id) } is NetworkResult.Success) {
+                try {
+                    postRepository.refresh()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // the feed catches up on its next read
+                }
+                _effects.trySend(PostDetailEffect.Close)
+            } else {
+                status.update { it.copy(notice = FeedNotice.DELETE_FAILED) }
+            }
+        }
+    }
+
+    private suspend fun <T> attempt(call: suspend () -> NetworkResult<T>?): NetworkResult<T>? =
+        try {
+            call()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun sendEngagement(revertTo: LiveOverlay, failure: FeedNotice? = null, enqueue: suspend () -> Unit) {
         viewModelScope.launch {
             try {
                 enqueue()
@@ -464,6 +634,7 @@ class PostDetailViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 liveOverlay.value = revertTo
+                if (failure != null) status.update { it.copy(notice = failure) }
             }
         }
     }
@@ -477,7 +648,12 @@ class PostDetailViewModel @Inject constructor(
      */
     fun repost() {
         val post = rawPost.value ?: return
-        sendRepost(RepostCommand.of(post.id, post.repostOf, quote = false, commentary = null))
+        sendRepost(RepostCommand.of(post.id, post.repostOf, quote = false, commentary = null, cardType = post.type))
+    }
+
+    /** The toast for [PostDetailUiState.notice] has been shown. */
+    fun consumeNotice() {
+        status.update { it.copy(notice = null) }
     }
 
     /**
@@ -487,16 +663,7 @@ class PostDetailViewModel @Inject constructor(
      */
     fun beginQuote() {
         val post = rawPost.value ?: return
-        status.update {
-            it.copy(
-                quoteComposer = QuoteComposerState(
-                    postId = post.id,
-                    sourceAuthorName = (post.author?.displayName ?: post.author?.username)
-                        ?.takeIf { name -> name.isNotBlank() },
-                    sourceContentPreview = post.content.orEmpty().trim(),
-                ),
-            )
-        }
+        status.update { it.copy(quoteComposer = QuoteComposerState.quoting(post, sessionRepository.currentUser.value)) }
     }
 
     fun onQuoteTextChange(text: String) {
@@ -516,28 +683,40 @@ class PostDetailViewModel @Inject constructor(
     fun submitQuote() {
         val composer = status.value.quoteComposer ?: return
         val post = rawPost.value ?: return
-        val command = RepostCommand.of(composer.postId, post.repostOf, quote = true, commentary = composer.text)
+        val command = RepostCommand.of(composer.postId, post.repostOf, quote = true, commentary = composer.text, cardType = post.type)
         status.update { it.copy(quoteComposer = null) }
         sendRepost(command)
     }
 
+    /**
+     * The open post counts the repost and marks itself at the gesture; the server confirms (« Repartage ») or refuses,
+     * and the post takes back its state from before the gesture with « Erreur lors du repost » — never the raw
+     * technical message. A second gesture while the first is in flight sends nothing (iOS `toggleDetailRepost`).
+     */
     private fun sendRepost(command: RepostCommand) {
-        if (status.value.isRepostInFlight) return
-        status.update { it.copy(isRepostInFlight = true, isReposted = true, error = null) }
+        val post = rawPost.value ?: return
+        val before = status.value.reposts
+        val begun = before.begun(post.id, post.repostCount ?: 0) ?: return
+        status.update { it.copy(reposts = begun) }
         viewModelScope.launch {
-            try {
-                when (val result = postRepository.repost(command.targetId, content = command.content, isQuote = command.isQuote)) {
-                    is NetworkResult.Success ->
-                        status.update { it.copy(isRepostInFlight = false) }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(isRepostInFlight = false, isReposted = false, error = result.error.message)
-                        }
-                }
+            val confirmed = try {
+                postRepository.repost(
+                    command.targetId,
+                    targetType = command.targetType,
+                    content = command.content,
+                    isQuote = command.isQuote,
+                ) is NetworkResult.Success
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                status.update { it.copy(isRepostInFlight = false, isReposted = false, error = e.message) }
+            } catch (_: Exception) {
+                false
+            }
+            status.update {
+                if (confirmed) {
+                    it.copy(reposts = it.reposts.confirmed(post.id), notice = FeedNotice.REPOSTED)
+                } else {
+                    it.copy(reposts = it.reposts.refused(post.id, before), notice = FeedNotice.REPOST_FAILED)
+                }
             }
         }
     }
@@ -579,8 +758,8 @@ class PostDetailViewModel @Inject constructor(
         overlay: LiveOverlay,
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = post?.let {
-            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id)
+        val projected = post?.let(st.reposts::applyTo)?.let {
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id, viewerRole = user?.role)
         }?.let { presentation ->
             presentation.copy(
                 commentCount = overlay.commentCount?.coerceAtLeast(0) ?: presentation.commentCount,
@@ -604,7 +783,8 @@ class PostDetailViewModel @Inject constructor(
             canListViewers = post != null &&
                 PublicationViewersAccess.mayList(post.type, projected?.isAuthor == true, user?.role),
             quoteComposer = st.quoteComposer,
-            isReposted = st.isReposted,
+            isReposted = projected?.isReposted == true,
+            notice = st.notice,
             secondaryTranslation = post?.let { PostSecondaryTranslation.of(it, st.secondaryCode, displayedCode) },
             detailLanguageStrip = projected?.let {
                 PostDetailLanguageStrip.of(it.languageStrip, displayedCode, post?.originalLanguage, st.secondaryCode)
@@ -613,7 +793,10 @@ class PostDetailViewModel @Inject constructor(
     }
 
     companion object {
-        const val POST_ID_ARG = "postId"
+        const val POST_ID_ARG = PostDetailLanding.POST_ID_ARG
+        const val SHOW_COMMENTS_ARG = PostDetailLanding.SHOW_COMMENTS_ARG
+        const val COMMENT_ID_ARG = PostDetailLanding.COMMENT_ID_ARG
+        const val PARENT_COMMENT_ID_ARG = PostDetailLanding.PARENT_COMMENT_ID_ARG
     }
 }
 
@@ -626,7 +809,7 @@ private data class PostDetailStatus(
     val failure: ContentFetchFailure? = null,
     val translating: Set<String> = emptySet(),
     val quoteComposer: QuoteComposerState? = null,
-    val isReposted: Boolean = false,
-    val isRepostInFlight: Boolean = false,
+    val reposts: RepostMarks = RepostMarks(),
+    val notice: FeedNotice? = null,
     val secondaryCode: String? = null,
 )

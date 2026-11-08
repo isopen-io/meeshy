@@ -190,9 +190,12 @@ describe('un second tête-à-tête chiffré de bout en bout pour la même paire 
     expect(world.conversation.encryptionMode).toBe(mode);
   });
 
-  it('un groupe ne connaît pas la règle de la paire', async () => {
+  it('un groupe ne connaît pas la règle de la paire : il est refusé pour son type, sans un mot sur le tête-à-tête (#16113)', async () => {
     const world = makeWorld({ conversation: { type: 'group' }, members: [{ ...analyst(ALICE), role: 'moderator' }, user(BOB)], others: [sealedDirectOf(ALICE_AND_BOB)] });
-    expect((await enable(world)).statusCode).toBe(200);
+    const res = await enable(world);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, code: 'ENCRYPTION_MODE_UNSUPPORTED' });
+    expect(JSON.stringify(res.json())).not.toContain(SEALED_DM);
   });
 
   it('un étranger reçoit le 404, un membre sans le rôle le 403 — jamais un mot sur l’autre tête-à-tête', async () => {

@@ -80,7 +80,22 @@ const SURFACES: Record<string, Classification> = {
   // est portée par `loadPersonalHistoryHidingByConversation` et gardée par
   // `ROUTE_IN_MEMORY_HIDING_SURFACES` plus bas, même patron que
   // `ConversationBridgeService.ts` côté service.
-  'conversations/messages-list.ts': { kind: 'applies', reads: 6, applications: 6 },
+  'conversations/messages-list.ts': { kind: 'applies', reads: 4, applications: 4 },
+  // #16684 — la résolution de la fenêtre `around` a quitté `messages-list.ts`
+  // pour le module de la loi de curseur ; les deux comptes ci-dessus BAISSENT
+  // d'autant : la surface s'est DÉPLACÉE, elle ne s'est pas ajoutée.
+  //
+  // `reads: 1` alors que le module ouvre DEUX requêtes de page (la moitié
+  // ancienne et la moitié récente) : elles partagent UN helper littéral, donc le
+  // balayage TEXTUEL n'en voit qu'une — et c'est précisément ce que la garde
+  // veut, le masquage personnel étant appliqué dans ce helper unique, donc aux
+  // deux moitiés par construction. Chaque moitié le porte dans son propre
+  // `where` et non à la fin : sans cela, `take: halfLimit` remplirait sa moitié
+  // de messages masqués puis les perdrait, et la fenêtre rendrait moins que
+  // demandé sans le dire. La lecture de la CIBLE (`findFirst`) ne porte que le
+  // plancher d'historique, comme avant ce lot : une cible masquée entre dans la
+  // liste d'ids et la page finale la retire par `personalWhereClause`.
+  'conversations/messages-cursor-window.ts': { kind: 'applies', reads: 1, applications: 1 },
   'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 0 },
   'conversations/messages-pin.ts': { kind: 'applies', reads: 2, applications: 2 },
   'conversations/messages-search.ts': { kind: 'applies', reads: 2, applications: 2 },
@@ -672,6 +687,11 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * marqueurs de `IN_MEMORY_HIDING_SURFACES` ci-dessous en sont la preuve.
    */
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
+  // #14619 — la recherche de la liste des conversations : ses deux lectures
+  // partagent la MÊME disjonction par conversation, où chaque conversation
+  // bornée reçoit `applyPersonalHistoryHiding` — une application pour deux
+  // lectures, comme `conversations/messages-search.ts`.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   /**
    * #10006 — le retrait du seed World Wide (`removeWorldSeed`,

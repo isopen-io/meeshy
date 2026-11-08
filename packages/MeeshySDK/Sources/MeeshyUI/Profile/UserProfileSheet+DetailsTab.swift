@@ -146,12 +146,14 @@ extension UserProfileSheet {
 
             switch connectionStatus {
             case .none:
-                profileActionButton(
-                    icon: "person.badge.plus.fill",
-                    label: String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module),
-                    color: Color(hex: resolvedAccent),
-                    action: { Task { await sendConnectionRequest() } }
-                )
+                ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName) {
+                    profileActionButton(
+                        icon: "person.badge.plus.fill",
+                        label: String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module),
+                        color: Color(hex: resolvedAccent),
+                        action: { Task { await sendConnectionRequest() } }
+                    )
+                }
             case .pendingSent:
                 profileActionButton(
                     icon: "xmark.circle.fill",
@@ -179,18 +181,7 @@ extension UserProfileSheet {
                     action: { Task { await declineRequest() } }
                 )
             case .connected:
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.sm))
-                        .foregroundColor(MeeshyColors.success)
-                    Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.success)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, MeeshySpacing.md)
-                .background(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+                ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName) { ProfileConnectedBadge() }
             }
 
             if isBlocked {

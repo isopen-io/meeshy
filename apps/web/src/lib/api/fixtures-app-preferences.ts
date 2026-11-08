@@ -24,6 +24,7 @@ const INITIAL: AppPreferences = {
   contactActivityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
+  saveMediaToGallery: false,
 };
 
 const state: { preferences: AppPreferences } = { preferences: INITIAL };

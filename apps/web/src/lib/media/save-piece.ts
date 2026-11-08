@@ -15,6 +15,7 @@ import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
 export type NoticeKey = Extract<
   InterfaceCatalogKey,
   | 'media.viewer.saved'
+  | 'media.viewer.already_saved'
   | 'media.viewer.save_failed'
   | 'media.viewer.offline'
   | 'media.viewer.retry'

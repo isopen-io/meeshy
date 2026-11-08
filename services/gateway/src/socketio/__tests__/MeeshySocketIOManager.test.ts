@@ -10,6 +10,8 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+const mockReaderMayTranslate = jest.fn<any>().mockResolvedValue(true);
+jest.mock('../../services/messaging/translationReadGate', () => ({ readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args) }));
 import { EventEmitter } from 'events';
 
 // ---------------------------------------------------------------------------
@@ -138,7 +140,7 @@ jest.mock('../../services/MentionService', () => ({
     };
     return mockMentionServiceInstance;
   }),
-  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a), withoutPendingMessageRequests: async (_p: unknown, _c: unknown, ids: readonly string[]) => [...ids],
 }));
 
 let mockMessagingServiceInstance: any;
@@ -1468,8 +1470,6 @@ describe('MeeshySocketIOManager', () => {
     it('does NOT serve a cached translation to a non-participant (IDOR guard)', async () => {
       const socket = makeSocket('sock-t4b');
       (manager as any).socketToUser.set('sock-t4b', 'user-t4b');
-      // Cache HIT — before the fix this branch emitted the translated content
-      // with no authorization check at all.
       (translationService.getTranslation as jest.Mock).mockResolvedValue({
         translatedText: 'Bonjour',
         confidenceScore: 0.95,
@@ -1482,13 +1482,13 @@ describe('MeeshySocketIOManager', () => {
         senderId: 'sender-1',
         encryptionMode: null,
       });
-      // Requester is not an active participant of conv-not-mine.
-      prisma.participant.findFirst.mockResolvedValue(null);
+      mockReaderMayTranslate.mockResolvedValueOnce(false);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: convId('msg-cached-foreign'), targetLanguage: 'fr' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Access denied' }));
       expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
+      expect(translationService.getTranslation).not.toHaveBeenCalled();
     });
 
     it('increments translations_sent stat when translation found', async () => {
@@ -1552,7 +1552,7 @@ describe('MeeshySocketIOManager', () => {
       });
       // Not a participant of conv-not-mine — the membership guard must block the
       // request before any translation work happens (no unauthorized data access).
-      prisma.participant.findFirst.mockResolvedValue(null);
+      mockReaderMayTranslate.mockResolvedValueOnce(false);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: convId('msg-foreign'), targetLanguage: 'en' });
@@ -2139,6 +2139,20 @@ describe('MeeshySocketIOManager', () => {
         language: 'en',
       }));
     });
+
+    // #16340 — une traduction TEXTE SEULE n'a pas de piste : les clients publiés joueraient `url: ''`.
+    it.each([SERVER_EVENTS.AUDIO_TRANSLATION_READY, SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE, SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED])(
+      'a text-only translation travels by the attachment delta, never as a playable track (%s)',
+      async (eventConstant) => {
+        prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+        const delta = jest.spyOn(manager as any, '_broadcastAttachmentUpdated').mockResolvedValue(undefined);
+        const textOnly = { ...baseAudioData, translatedAudio: { ...baseAudioData.translatedAudio, url: '' } };
+        await (manager as any)._broadcastTranslationEvent(textOnly, eventConstant, '🎯');
+        expect(ioState.toEmit).not.toHaveBeenCalledWith(eventConstant, expect.anything());
+        expect(delta).toHaveBeenCalledWith('att-audio-1', 'msg-audio-1', expect.any(String));
+        delta.mockRestore();
+      }
+    );
   });
 
   // -------------------------------------------------------------------------

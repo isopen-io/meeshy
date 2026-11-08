@@ -191,21 +191,13 @@ struct RootView: View {
             .background(Color.clear)
             .opacity(reelsCoverScreen ? 0 : 1)
 
-            // 3. Feed overlay
-            if showFeed {
+            // 3. Feed overlay — retenu une fois ouvert : le cacher ne le
+            // détruit plus, il revient à sa place exacte (#16676).
+            RetainedFeedHost(isShown: showFeed) {
                 ThemedFeedOverlay()
                     .opacity(reelsCoverScreen ? 0 : 1)
-                    .transition(
-                        .asymmetric(
-                            insertion: .move(edge: .bottom)
-                                .combined(with: .opacity),
-                            removal: .move(edge: .bottom)
-                                .combined(with: .scale(scale: 0.95))
-                                .combined(with: .opacity)
-                        )
-                    )
-                    .zIndex(50)
             }
+            .zIndex(50)
 
             // 3b. Reels overlay — full-screen immersive pager. Born as a liquid
             // disc at the feed button's exact on-screen position, the wavy edge
@@ -231,35 +223,7 @@ struct RootView: View {
                                 onClose: { closeReels() }
                             )
                         } else {
-                            ReelsPlayerView(
-                                seedPosts: launch.seedPosts,
-                                startId: launch.startId,
-                                commentTargetId: launch.commentId,
-                                commentParentTargetId: launch.parentCommentId,
-                                revealCompleted: reelsRevealCompleted,
-                                safeArea: safeArea,
-                                onClose: { closeReels() },
-                                onOpenProfile: { userId, username in
-                                    router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
-                                },
-                                onOpenStory: { userId in
-                                    storyViewerCoordinator.present(StoryViewerRequest(
-                                        id: userId,
-                                        startAtFirstUnviewed: true,
-                                        singleGroup: true
-                                    ))
-                                },
-                                onOpenDetail: { postId in
-                                    // Ferme le lecteur immersif avant de pousser le détail —
-                                    // sinon la page se pousse SOUS l'overlay (zIndex 60) et
-                                    // reste invisible tant que l'utilisateur ne ferme pas.
-                                    closeReels()
-                                    router.push(.postDetail(postId))
-                                },
-                                authorHasStory: { userId in
-                                    storyViewModel.storyRingState(forUserId: userId) != .none
-                                }
-                            )
+                            reelsPlayer(launch, safeArea: safeArea)
                         }
                     }
                 )
@@ -334,11 +298,7 @@ struct RootView: View {
             router: router,
             activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id },
             onSyncPillTap: handleSyncPillTap,
-            onMiniPlayerTap: {
-                guard let target = MiniPlayerTapPolicy.target(
-                    context: ConversationAudioCoordinator.shared.activeContext) else { return }
-                navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
-            },
+            onMiniPlayerTap: returnToPlayingAudio,
             showFeed: showFeed,
             showMenu: showMenu
         ))
@@ -371,9 +331,24 @@ struct RootView: View {
             feedWasVisibleBeforeNav: $feedWasVisibleBeforeNav,
             deepLinkRouter: deepLinkRouter,
             upgradeGate: upgradeGate,
-            onDeepLink: handleDeepLink
+            onDeepLink: handleDeepLink,
+            quoteHost: rootQuoteHost
         ))
         .inAppLinks(router: router)
+    }
+
+    /// La porte de citation de toute surface de publication (#15911).
+    private var rootQuoteHost: QuoteComposerHost {
+        QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                          conversationListViewModel: conversationViewModel,
+                          statusViewModel: statusViewModel)
+    }
+
+    /// Le mini-lecteur ramène à la conversation et au message qui jouent.
+    private func returnToPlayingAudio() {
+        guard let target = MiniPlayerTapPolicy.target(
+            context: ConversationAudioCoordinator.shared.activeContext) else { return }
+        navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
     }
 
     // MARK: - Démarrage de la racine
@@ -513,18 +488,23 @@ struct RootView: View {
     // MARK: - Sync Pill Tap
 
     /// Tap handler wired into the `ConnectionBanner` → `SyncPill` chain.
-    /// Routes each `OutboxUIItem.Source` to the appropriate destination
-    /// using the local `router` + cached `conversations` list. Logs and
-    /// no-ops when the source can't be resolved (e.g. a conversation
-    /// that hasn't been hydrated into the cache yet).
-    private func handleSyncPillTap(_ source: OutboxUIItem.Source) {
-        switch source {
-        case .conversation(let id, let messageId):
+    /// La DÉCISION sort de `SyncPillDestination` (loi unique, partagée avec
+    /// l'iPad) ; ici on ne fait que présenter. Rend `false` quand rien n'a été
+    /// ouvert — la pastille avance alors sa rotation au lieu de rester inerte.
+    @discardableResult
+    private func handleSyncPillTap(_ source: OutboxUIItem.Source) -> Bool {
+        let destination = SyncPillDestination.resolve(
+            source: source,
+            knownConversationIds: Set(conversationViewModel.conversations.map(\.id)),
+            currentUserId: AuthManager.shared.currentUser?.id
+        )
+        switch destination {
+        case .openConversation(let id, let messageId):
             guard let conv = conversationViewModel.conversations.first(where: { $0.id == id }) else {
-                Logger.messages.info("syncPill tap: conversation \(id, privacy: .public) not in cache, skipping")
-                return
+                navigateToConversationById(id, highlightMessageId: messageId)
+                return true
             }
-        // #4027 — l'entrée mène à sa CIBLE EXACTE. Le surlignage est posé
+            // #4027 — l'entrée mène à sa CIBLE EXACTE. Le surlignage est posé
             // AVANT la navigation et SCOPÉ à la conversation visée : sans le
             // scope, une ancre survivrait à une ouverture différente et ferait
             // sauter un autre fil sur un id qui n'est pas le sien.
@@ -536,15 +516,18 @@ struct RootView: View {
                 router.pendingHighlightConversationId = id
             }
             router.push(.conversation(conv))
-        case .post(let id):
+            return true
+        case .openConversationById(let id, let messageId):
+            navigateToConversationById(id, highlightMessageId: messageId)
+            return true
+        case .openPost(let id):
             router.push(.postDetail(id, nil, showComments: false))
-        case .story:
-            // V1 no-op — opening a story requires a StoryIntent +
-            // StoryNotificationContext that the inline pill does not
-            // carry. The status row is enough acknowledgement.
-            Logger.messages.info("syncPill tap: story open not yet supported")
-        case .unknown:
-            break
+            return true
+        case .openOwnStories(let userId):
+            storyViewerCoordinator.present(StoryViewerRequest(id: userId, singleGroup: true))
+            return true
+        case .none:
+            return false
         }
     }
 
@@ -840,6 +823,43 @@ struct RootView: View {
     /// full (so the reel is already running when revealed), and the mask drops at
     /// full screen (so the live `AVPlayer` surface renders instead of staying
     /// frozen under a persistent `.mask()`). Reduce Motion uses a quick cross-fade.
+    /// Le lecteur de réels monté par l'overlay — sorti de `body`, qui portait
+    /// ses vingt-cinq lignes d'arguments (cohésion, #15869).
+    private func reelsPlayer(_ launch: ReelsPresenter.Launch, safeArea: EdgeInsets) -> some View {
+        ReelsPlayerView(
+            seedPosts: launch.seedPosts,
+            startId: launch.startId,
+            commentTargetId: launch.commentId,
+            commentParentTargetId: launch.parentCommentId,
+            revealCompleted: reelsRevealCompleted,
+            safeArea: safeArea,
+            onClose: { closeReels() },
+            onOpenProfile: { userId, username in
+                router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+            },
+            onOpenStory: { userId in
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: userId,
+                    startAtFirstUnviewed: true,
+                    singleGroup: true
+                ))
+            },
+            onOpenDetail: { postId in
+                // Ferme le lecteur immersif avant de pousser le détail —
+                // sinon la page se pousse SOUS l'overlay (zIndex 60) et
+                // reste invisible tant que l'utilisateur ne ferme pas.
+                closeReels()
+                router.push(.postDetail(postId))
+            },
+            authorHasStory: { userId in
+                storyViewModel.storyRingState(forUserId: userId) != .none
+            },
+            quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                                         conversationListViewModel: conversationViewModel,
+                                         statusViewModel: statusViewModel)
+        )
+    }
+
     private func openReels() {
         reelsRevealCompleted = false
         reelsRevealClosing = false

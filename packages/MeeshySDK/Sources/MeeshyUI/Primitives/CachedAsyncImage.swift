@@ -29,6 +29,9 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     /// resolves in Low Data Mode / data-saver conditions. Defaults to `false`
     /// (existing gated behaviour for inline bubble thumbnails).
     public let autoLoad: Bool
+    /// La taille CONNUE du média : sous `MediaDownloadPolicyEngine.smallMediaAutoDownloadBytes`,
+    /// il se charge quel que soit le réseau (#14639). `nil` = inconnue.
+    public let byteSize: Int?
     let imageLoader: any MediaImageLoading
     public let placeholder: () -> Placeholder
 
@@ -47,10 +50,12 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         thumbHash: String? = nil,
         showsStatusOverlays: Bool = true,
         autoLoad: Bool = false,
+        byteSize: Int? = nil,
         imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.urlString = urlString
+        self.byteSize = byteSize
         self.targetSize = targetSize
         self.thumbHash = thumbHash
         self.showsStatusOverlays = showsStatusOverlays
@@ -196,7 +201,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             autoLoad: autoLoad,
             isLocalFileURL: Self.isLocalFileURL(resolved),
             hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
-            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage(byteSize: byteSize)
         ) {
             isDeferred = true
             return
@@ -221,11 +226,12 @@ public struct CachedAsyncImage<Placeholder: View>: View {
 /// on the thumbHash / thumbnail / placeholder and the bytes are saved.
 @MainActor
 enum MediaDownloadPolicy {
-    static func shouldAutoLoadImage() -> Bool {
+    static func shouldAutoLoadImage(byteSize: Int? = nil) -> Bool {
         MediaDownloadPolicyEngine.shouldAutoDownload(
             kind: .image,
             condition: NetworkConditionMonitor.shared.condition,
-            prefs: MediaDownloadPreferencesStore.shared.preferences
+            prefs: MediaDownloadPreferencesStore.shared.preferences,
+            byteSize: byteSize
         )
     }
 }
@@ -473,6 +479,8 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// même si les URL n'ont pas changé — un média que la politique retenait
     /// et qu'un autre chemin vient de poser sur l'appareil.
     public let reloadToken: AnyHashable?
+    /// La taille CONNUE du plein format (#14639) — voir `CachedAsyncImage.byteSize`.
+    public let byteSize: Int?
     let imageLoader: any MediaImageLoading
     public let placeholder: () -> Placeholder
 
@@ -502,10 +510,12 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         onFullImageFailure: (@MainActor () -> Void)? = nil,
         onFullImageLoaded: (@MainActor () -> Void)? = nil,
         reloadToken: AnyHashable? = nil,
+        byteSize: Int? = nil,
         imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.reloadToken = reloadToken
+        self.byteSize = byteSize
         self.imageLoader = imageLoader
         self.thumbHash = thumbHash
         self.thumbnailUrl = thumbnailUrl
@@ -641,7 +651,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             autoLoad: autoLoad,
             isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
             hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
-            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage(byteSize: byteSize)
         ) {
             thumbnailDeferredByPolicy = true
             return
@@ -681,7 +691,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             autoLoad: autoLoad,
             isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
             hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
-            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage(byteSize: byteSize)
         ) {
             fetchDeferredByPolicy = true
             return

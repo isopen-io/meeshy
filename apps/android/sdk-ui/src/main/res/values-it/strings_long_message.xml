@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- État annoncé par TalkBack sur la rangée d'un long message (lot fil-expansion-long-message). -->
+    <string name="focal_long_message_expanded">Espanso</string>
+    <string name="focal_long_message_collapsed">Compresso</string>
+</resources>

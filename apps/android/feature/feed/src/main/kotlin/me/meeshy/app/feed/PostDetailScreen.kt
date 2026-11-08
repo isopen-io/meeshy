@@ -1,7 +1,13 @@
 package me.meeshy.app.feed
 
-import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material.icons.filled.Bookmark
@@ -20,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -37,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -56,6 +64,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.PostReactionPaletteState
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.ui.component.reaction.PostReactionPalette
@@ -86,6 +98,8 @@ import me.meeshy.sdk.model.PostAbsenceReason
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -119,11 +133,29 @@ fun PostDetailScreen(
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // #16541 — le fil du détail (le même magasin que sa section et son composeur) suit la fermeture que le post sert.
+    CommentsClosedEffect(hiltViewModel<PostCommentsViewModel>(), state.post?.commentsClosed)
     var viewersOpen by remember { mutableStateOf(false) }
+    var authorChipShown by remember(viewModel) { mutableStateOf(false) }
     if (viewersOpen) state.post?.id?.let { id -> viewersSheet(id) { viewersOpen = false } }
     val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val linkCopied = stringResource(R.string.feed_link_copied)
+
+    // Le post supprime : l'ecran se ferme.
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect -> if (effect == PostDetailEffect.Close) onBack() }
+    }
+
+    // Collected (not keyed) so consuming the notice never cancels the toast on screen, as in the feed.
+    LaunchedEffect(viewModel) {
+        viewModel.state.map { it.notice }.distinctUntilChanged().filterNotNull().collect { notice ->
+            viewModel.consumeNotice()
+            snackbar.showSnackbar(context.getString(notice.messageRes()))
+        }
+    }
 
     LaunchedEffect(state.errorMessage) {
         // Sans post, l'echec a son propre ecran (PostDetailAbsenceView) : pas de snackbar doublon.
@@ -140,28 +172,38 @@ fun PostDetailScreen(
     MeeshyBackground {
         Scaffold(
             topBar = {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent,
                         titleContentColor = MeeshyTheme.tokens.textPrimary,
                     ),
                     title = {
-                        Text(stringResource(R.string.post_detail_title), fontWeight = FontWeight.Bold)
+                        val shownPost = state.post
+                        if (authorChipShown && shownPost != null) {
+                            PostDetailAuthorChip(post = shownPost, onOpenProfile = onOpenProfile)
+                        } else {
+                            Text(stringResource(R.string.post_detail_title), fontWeight = FontWeight.Bold)
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = MeeshyIcons.Back,
-                                contentDescription = stringResource(R.string.post_detail_back),
+                                imageVector = leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.post_detail_back)),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
                         }
                     },
-                    actions = { state.post?.let { PostDetailImagerMenu(it) } },
+                    actions = {
+                        state.post?.let { shown ->
+                            PostDetailMenu(shown, rememberPostDetailMenuActions(shown, viewModel) {
+                                scope.launch { snackbar.showSnackbar(linkCopied) }
+                            })
+                        }
+                    },
                 )
             },
-            snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent,
             // #14313 — le bas appartient au composeur épinglé : il porte lui-même la barre de navigation et le clavier
             // (`ComposerShellLayout`). Laissé à l'échafaudage, l'encart bas était compté deux fois (~140 px de vide).
@@ -200,6 +242,7 @@ fun PostDetailScreen(
                         onOpenProfile = onOpenProfile,
                         onOpenHashtag = onOpenHashtag,
                         onOpenViewers = if (state.canListViewers) ({ viewersOpen = true }) else null,
+                        onAuthorChipReveal = { authorChipShown = it },
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
                         onLike = viewModel::toggleLike,
@@ -207,6 +250,7 @@ fun PostDetailScreen(
                         onReact = viewModel::react,
                         onBookmark = viewModel::toggleBookmark,
                         onCommentNotice = { notice -> snackbar.showSnackbar(context.getString(notice.messageRes)) },
+                        snackbarHost = { SnackbarHost(snackbar) },
                     )
                 }
             }
@@ -246,7 +290,18 @@ internal fun PostDetailContent(
     onCommentNotice: suspend (CommentNotice) -> Unit,
     commentsSection: @Composable () -> Unit = { PostCommentsSection(onNotice = onCommentNotice, support = post.commentCardSupport) },
     commentComposer: @Composable () -> Unit = { PostCommentsComposerBar() },
+    snackbarHost: @Composable () -> Unit = {},
+    onAuthorChipReveal: (Boolean) -> Unit = {},
 ) {
+    var viewportTop by remember { mutableFloatStateOf(0f) }
+    var viewportBottom by remember { mutableFloatStateOf(0f) }
+    val pageScroll = rememberScrollState()
+    val keyboardInsets = WindowInsets.ime
+    val pageDensity = androidx.compose.ui.platform.LocalDensity.current
+    val sceneViewport: () -> PostDetailViewport = {
+        PostDetailViewport(viewportTop, viewportBottom, pageScroll.value.toFloat(), keyboardInsets.getBottom(pageDensity) > 0)
+    }
+    val revealChip by rememberUpdatedState(onAuthorChipReveal)
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
     var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
@@ -260,129 +315,167 @@ internal fun PostDetailContent(
     }
     gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
     Column(Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(MeeshySpacing.lg),
-        ) {
-            MeeshyGlassSurface(
-                shape = RoundedCornerShape(MeeshyRadius.xl),
-                modifier = Modifier.fillMaxWidth(),
+        Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned {
+            viewportTop = it.positionInRoot().y
+            viewportBottom = viewportTop + it.size.height
+        }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(pageScroll)
+                    .padding(MeeshySpacing.lg),
             ) {
-                Column(Modifier.padding(MeeshySpacing.lg)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
-                        MeeshyAvatar(
-                            name = post.authorName ?: unknownAuthor,
-                            size = 44.dp,
-                            imageUrl = post.authorAvatarUrl,
-                            presence = rememberPresence(post.authorId),
-                            modifier = profileTap,
-                        )
-                        Spacer(Modifier.width(MeeshySpacing.md))
-                        Column(Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = post.authorName ?: unknownAuthor,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MeeshyTheme.tokens.textPrimary,
-                                    modifier = profileTap,
-                                )
-                                if (post.moodEmoji != null) {
+                MeeshyGlassSurface(
+                    shape = RoundedCornerShape(MeeshyRadius.xl),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(MeeshySpacing.lg)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.onGloballyPositioned { block ->
+                                revealChip(PostDetailHeaderReveal.revealed(block.positionInRoot().y + block.size.height, viewportTop))
+                            },
+                        ) {
+                            val profileTap = Modifier.opensAuthorProfile(post.authorProfile())
+                            MeeshyAvatar(
+                                name = post.authorName ?: unknownAuthor,
+                                size = 44.dp,
+                                imageUrl = post.authorAvatarUrl,
+                                presence = rememberPresence(post.authorId),
+                                modifier = profileTap,
+                            )
+                            Spacer(Modifier.width(MeeshySpacing.md))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = post.moodEmoji,
-                                        modifier = Modifier.padding(start = MeeshySpacing.xs),
+                                        text = post.authorName ?: unknownAuthor,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MeeshyTheme.tokens.textPrimary,
+                                        modifier = profileTap,
+                                    )
+                                    if (post.moodEmoji != null) {
+                                        Text(
+                                            text = post.moodEmoji,
+                                            modifier = Modifier.padding(start = MeeshySpacing.xs),
+                                        )
+                                    }
+                                }
+                                post.createdAtIso?.let {
+                                    Text(
+                                        text = detailRelativeTime(it),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MeeshyTheme.tokens.textSecondary,
+                                    )
+                                }
+                                PostReachLine(post = post)
+                                onOpenViewers?.let { open -> ViewersEntry(onClick = open) }
+                            }
+                        }
+
+                        if (post.content.isNotBlank() && !post.showsReelCard) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            HashtagAwareLinks(onOpenHashtag) {
+                                SelectionContainer {
+                                    RichMessageText(
+                                        text = post.content,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MeeshyTheme.tokens.textPrimary,
                                     )
                                 }
                             }
-                            post.createdAtIso?.let {
-                                Text(
-                                    text = detailRelativeTime(it),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MeeshyTheme.tokens.textSecondary,
-                                )
-                            }
-                            PostReachLine(post = post)
-                            onOpenViewers?.let { open -> ViewersEntry(onClick = open) }
                         }
-                    }
 
-                    if (post.content.isNotBlank() && !post.showsReelCard) {
-                        Spacer(Modifier.height(MeeshySpacing.md))
-                        HashtagAwareLinks(onOpenHashtag) {
-                            SelectionContainer {
-                                RichMessageText(
-                                    text = post.content,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MeeshyTheme.tokens.textPrimary,
-                                )
-                            }
+                        PostSecondaryTranslationPanel(secondaryTranslation)
+
+                        if (detailLanguageStrip.isNotEmpty() || post.languageExplorer != null) {
+                            Spacer(Modifier.height(MeeshySpacing.sm))
+                            DetailLanguageStrip(
+                                chips = detailLanguageStrip,
+                                onChipTap = onFlagTap,
+                                onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
+                            )
                         }
-                    }
 
-                    PostSecondaryTranslationPanel(secondaryTranslation)
+                        val scenes = post.scenes
+                        if (scenes != null) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostDetailSceneSection(scenes = scenes, viewport = sceneViewport, imager = rememberPostImager(post))
+                        } else if (post.media.isNotEmpty() && !post.isReel) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostDetailMedia(
+                                media = post.media,
+                                owner = DetailMediaAuthor.of(post),
+                                accentHex = post.accentHex,
+                                onOpenVisual = { index ->
+                                    gallery = FeedMediaGallery.ofVisuals(post, index).takeUnless(FeedGallery::isEmpty)
+                                },
+                            )
+                        } else if (post.images.isNotEmpty()) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostImageLayout(
+                                images = post.images,
+                                layout = post.layout,
+                                onImageTap = { index ->
+                                    gallery = FeedMediaGallery.of(post, index).takeUnless(FeedGallery::isEmpty)
+                                },
+                            )
+                        }
 
-                    if (detailLanguageStrip.isNotEmpty() || post.languageExplorer != null) {
-                        Spacer(Modifier.height(MeeshySpacing.sm))
-                        DetailLanguageStrip(
-                            chips = detailLanguageStrip,
-                            onChipTap = onFlagTap,
-                            onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
-                        )
-                    }
+                        post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            ReelPostCard(
+                                post = post,
+                                cover = cover,
+                                onOpenReel = onOpenReel,
+                                showsActions = false,
+                                captionLines = DETAIL_CAPTION_LINES,
+                                onOpenProfile = onOpenProfile,
+                            )
+                        } ?: FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
 
-                    val scenes = post.scenes
-                    if (scenes != null) {
+                        post.repostEmbed?.takeIf(::showsQuotedDetailMedia)?.let { embed ->
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostDetailMedia(
+                                media = embed.media.filterNot { it.type == FeedMediaType.IMAGE },
+                                owner = DetailMediaAuthor.of(embed),
+                                accentHex = post.accentHex,
+                                onOpenVisual = { index ->
+                                    gallery = FeedMediaGallery.ofQuotedVisuals(embed.copy(media = embed.media.filterNot { it.type == FeedMediaType.IMAGE }), index)
+                                        .takeUnless(FeedGallery::isEmpty)
+                                },
+                            )
+                        }
+
                         Spacer(Modifier.height(MeeshySpacing.md))
-                        PostDetailScenes(scenes = scenes)
-                    } else if (post.images.isNotEmpty()) {
-                        Spacer(Modifier.height(MeeshySpacing.md))
-                        PostImageLayout(
-                            images = post.images,
-                            layout = post.layout,
-                            onImageTap = { index ->
-                                gallery = FeedMediaGallery.of(post, index).takeUnless(FeedGallery::isEmpty)
-                            },
-                        )
-                    }
-
-                    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
-                        Spacer(Modifier.height(MeeshySpacing.md))
-                        ReelPostCard(
+                        DetailStatsRow(
                             post = post,
-                            cover = cover,
-                            onOpenReel = onOpenReel,
-                            showsActions = false,
-                            captionLines = DETAIL_CAPTION_LINES,
-                            onOpenProfile = onOpenProfile,
+                            isReposted = isReposted,
+                            onRepost = onRepost,
+                            onQuote = onQuote,
+                            onLike = onLike,
+                            quickEmojis = quickEmojis,
+                            onReact = onReact,
+                            onBookmark = onBookmark,
+                            onImager = if (post.showsReelCard) null else rememberPostImager(post),
                         )
-                    } ?: FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
-
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    DetailStatsRow(
-                        post = post,
-                        isReposted = isReposted,
-                        onRepost = onRepost,
-                        onQuote = onQuote,
-                        onLike = onLike,
-                        quickEmojis = quickEmojis,
-                        onReact = onReact,
-                        onBookmark = onBookmark,
-                    )
+                    }
                 }
-            }
 
-            Spacer(Modifier.height(MeeshySpacing.lg))
-            commentsSection()
+                Spacer(Modifier.height(MeeshySpacing.lg))
+                commentsSection()
+            }
+            Box(Modifier.align(Alignment.BottomCenter)) { snackbarHost() }
         }
         Box(Modifier.fillMaxWidth().imePadding()) { commentComposer() }
     }
 }
 
 private const val DETAIL_CAPTION_LINES = 6
+
+/** La citation d'un post ordinaire porte, dans le détail, ses vidéos, audios et documents (l'image a déjà son aperçu dans la citation). */
+private fun showsQuotedDetailMedia(embed: RepostEmbedPresentation): Boolean =
+    !embed.isStory && !embed.isReel && !embed.isUnavailable && embed.media.any { it.type != FeedMediaType.IMAGE }
 
 /** « Vues » : l'entrée de la liste de qui a vu (ADMIN/BIGBOSS), même libellé qu'iOS. */
 @Composable
@@ -413,6 +506,7 @@ private fun PostReachLine(post: FeedPostPresentation) {
         isAuthor = post.isAuthor,
         viewCount = post.viewCount,
         impressionCount = post.impressionCount,
+        uniqueViewCount = post.uniqueViewCount,
     )
     if (reach.pseudo == null && reach.views == null) return
     val a11yLabel = stringResource(R.string.feed_post_reach_a11y)
@@ -433,158 +527,11 @@ private fun PostReachLine(post: FeedPostPresentation) {
             Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
             Icon(Icons.Filled.BarChart, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
             Text(text = reach.impressions, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
-        }
-    }
-}
-
-@Composable
-private fun DetailStatsRow(
-    post: FeedPostPresentation,
-    isReposted: Boolean,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
-    onLike: () -> Unit,
-    quickEmojis: List<String>,
-    onReact: (PostReactionPick) -> Unit,
-    onBookmark: () -> Unit,
-) {
-    var palette by remember { mutableStateOf(PostReactionPaletteState()) }
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box {
-        DetailStat(
-            icon = { tint ->
-                Icon(
-                    if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like),
-                    tint = tint,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            count = post.likeCount,
-            active = post.isLiked,
-            activeTint = MeeshyPalette.Error,
-            heart = true,
-            onClick = onLike,
-            triggerModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
-        )
-        PostReactionPalette(
-            isOpen = palette.isOpen,
-            onDismiss = { palette = palette.dismissed() },
-            onPick = { emoji ->
-                val (next, pick) = palette.picked(emoji)
-                palette = next
-                pick?.let(onReact)
-            },
-            emojis = quickEmojis,
-            anchor = PostReactionPaletteAnchor.Start,
-        )
-        }
-        DetailStat(
-            icon = { tint ->
-                Icon(Icons.Filled.ChatBubbleOutline, contentDescription = stringResource(R.string.feed_comments), tint = tint, modifier = Modifier.size(18.dp))
-            },
-            count = post.commentCount,
-            active = false,
-        )
-        DetailRepostStat(
-            count = post.repostCount,
-            active = isReposted,
-            onRepost = onRepost,
-            onQuote = onQuote,
-        )
-        DetailStat(
-            icon = { tint ->
-                Icon(
-                    if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                    contentDescription = stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark),
-                    tint = tint,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            count = post.bookmarkCount,
-            active = post.isBookmarked,
-            onClick = onBookmark,
-        )
-    }
-}
-
-@Composable
-private fun DetailStat(
-    icon: @Composable (Color) -> Unit,
-    count: Int,
-    active: Boolean,
-    activeTint: Color = MeeshyPalette.Indigo500,
-    onClick: (() -> Unit)? = null,
-    triggerModifier: Modifier = Modifier,
-    heart: Boolean = false,
-) {
-    val tint = if (active) activeTint else MeeshyTheme.tokens.textSecondary
-    val haptics = rememberMeeshyHaptics()
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = triggerModifier
-            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
-            .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = { haptics.light(); onClick() }) }
-            .padding(horizontal = MeeshySpacing.xs),
-    ) {
-        EngagementGlyph(active = active, tint = tint, size = 20.dp, burst = heart, tilt = heart) { icon(tint) }
-        if (count > 0) {
-            Spacer(Modifier.width(MeeshySpacing.xs))
-            EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
-        }
-    }
-}
-
-/**
- * The repost stat, made interactive: a tap opens a Repost / Quote choice — the Android take on
- * iOS's post-detail repost button + alert (`PostDetailView.toggleDetailRepost`). The icon fills
- * once the reader has reposted (optimistic [active]); the menu items route to the ViewModel,
- * whose tested [RepostCommand] SSOT decides what to send.
- */
-@Composable
-private fun DetailRepostStat(
-    count: Int,
-    active: Boolean,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val tint = if (active) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary
-    val a11y = stringResource(R.string.feed_reposts)
-    val haptics = rememberMeeshyHaptics()
-    Box {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { haptics.light(); expanded = true }
-                .semantics { contentDescription = a11y },
-        ) {
-            EngagementIcon(icon = Icons.Filled.Repeat, active = active, tint = tint)
-            if (count > 0) {
-                Spacer(Modifier.width(MeeshySpacing.xs))
-                EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
+            reach.uniqueViews?.let { people ->
+                Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+                Icon(Icons.Filled.Person, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+                Text(text = people, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
             }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_repost)) },
-                onClick = {
-                    expanded = false
-                    onRepost()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_quote)) },
-                onClick = {
-                    expanded = false
-                    onQuote()
-                },
-            )
         }
     }
 }

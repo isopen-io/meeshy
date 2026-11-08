@@ -4,6 +4,10 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
@@ -20,6 +24,8 @@ import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.SessionBackup
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
+import me.meeshy.sdk.outbox.OutboxOwnerSource
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.sync.SyncSeqTracker
@@ -84,6 +90,7 @@ class AuthRepositorySessionBackupTest {
         inner: TokenStore = InMemoryTokenStore(),
         accounts: SavedAccountsStore = InMemorySavedAccountsStore(),
         shelf: AccountShelf = NoAccountShelf,
+        fence: AccountFence? = null,
         configure: AuthApi.() -> Unit = {},
     ): Scenario {
         val api = mockk<AuthApi>(relaxed = true).apply(configure)
@@ -91,7 +98,7 @@ class AuthRepositorySessionBackupTest {
         val store = BackedUpTokenStore(inner, backup, consent = consent)
         val session = SessionRepository(api, store)
         val repository = AuthRepository(
-            api, store, session, NoTeardown(), SyncSeqTracker(), sessionBackup = backup, keepSignedIn = consent,
+            api, store, session, NoTeardown(), SyncSeqTracker(), fence = fence, sessionBackup = backup, keepSignedIn = consent,
             accountShelf = shelf,
         )
         return Scenario(repository, api, store, session, backup)
@@ -319,5 +326,36 @@ class AuthRepositorySessionBackupTest {
 
         assertThat(s.store.userId).isEqualTo("u1")
         assertThat(s.backup.held).isNull()
+    }
+
+    @Test
+    fun `une restauration pendant une purge attend la fin de la purge, qui ne la vide donc jamais`() = runTest {
+        val fence = AccountFence(OutboxOwnerSource { null })
+        val s = scenario(fence = fence) {
+            coEvery { refresh(any()) } returns ApiResponse(
+                success = true,
+                data = AuthSession(user = user, token = "new-jwt", sessionToken = "sess-2"),
+            )
+        }
+        val wiping = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var tokenSeenByTheWipe: String? = "unread"
+        val purge = launch {
+            fence.close {
+                wiping.complete(Unit)
+                release.await()
+                tokenSeenByTheWipe = s.store.jwt
+            }
+        }
+        wiping.await()
+
+        val restoring = async { s.repository.restoreBackedUpSession() }
+        runCurrent()
+        release.complete(Unit)
+        purge.join()
+
+        assertThat(tokenSeenByTheWipe).isNull()
+        assertThat(restoring.await()?.id).isEqualTo("u1")
+        assertThat(s.store.jwt).isEqualTo("new-jwt")
     }
 }

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "a11y.post.media.image", "androidName": "post_detail_media_image", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.post.media.video", "androidName": "post_detail_media_video", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.post.media.more", "androidName": "post_detail_media_more", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.post.media.open.hint", "androidName": "post_detail_media_open_hint", "status": "adopted" }
+      ]
+    }
+  }
+}

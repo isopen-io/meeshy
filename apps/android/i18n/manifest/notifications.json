@@ -8,25 +8,25 @@
           "catalog": "app",
           "iosKey": "notification.banner.inConversation",
           "androidName": "notification_banner_in_conversation",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "media.summary.audio",
           "androidName": "notification_banner_media_audio",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "media.summary.photo",
           "androidName": "notification_banner_media_photo",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "media.summary.video",
           "androidName": "notification_banner_media_video",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "notification_banner_preview_hidden",
@@ -36,7 +36,7 @@
           "catalog": "app",
           "iosKey": "comment.action.delete",
           "androidName": "notifications_action_delete",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "notifications_action_mark_read",
@@ -46,73 +46,73 @@
           "catalog": "ui",
           "iosKey": "notifications.category.all",
           "androidName": "notifications_category_all",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.calls",
           "androidName": "notifications_category_calls",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.contacts",
           "androidName": "notifications_category_contacts",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.groups",
           "androidName": "notifications_category_groups",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.mentions",
           "androidName": "notifications_category_mentions",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.messages",
           "androidName": "notifications_category_messages",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.reactions",
           "androidName": "notifications_category_reactions",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.social",
           "androidName": "notifications_category_social",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.system",
           "androidName": "notifications_category_system",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.translations",
           "androidName": "notifications_category_translations",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.category.unread",
           "androidName": "notifications_category_unread",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "ui",
           "iosKey": "notifications.empty.all",
           "androidName": "notifications_empty",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "notifications_empty_category",
@@ -126,13 +126,13 @@
           "catalog": "app",
           "iosKey": "settings.notifications.system",
           "androidName": "notifications_system_sender",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "route.title.notifications",
           "androidName": "notifications_title",
-          "status": "candidate"
+          "status": "adopted"
         }
       ]
     }

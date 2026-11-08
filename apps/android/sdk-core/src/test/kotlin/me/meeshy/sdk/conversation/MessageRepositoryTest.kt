@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.search.GlobalMessageSearchHit
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
@@ -44,7 +45,9 @@ private class FakeMessageApi(
     var response: ApiResponse<List<ApiMessage>>,
     var olderResponse: ApiResponse<List<ApiMessage>> = ApiResponse(success = false, error = "no older page"),
     var aroundResponse: ApiResponse<List<ApiMessage>> = ApiResponse(success = false, error = "no around page"),
+    var searchResult: () -> ApiResponse<List<ApiMessage>> = { ApiResponse(success = false) },
 ) : MessageApi {
+    val searchCalls: MutableList<List<Any?>> = mutableListOf()
     val aroundCalls: MutableList<Triple<String, String, Int>> = mutableListOf()
     var lastBefore: String? = null
     var lastLimit: Int? = null
@@ -91,6 +94,9 @@ private class FakeMessageApi(
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int): ApiResponse<List<ApiMessage>> {
         aroundCalls += Triple(conversationId, messageId, limit)
         return aroundResponse
@@ -105,8 +111,12 @@ private class FakeMessageApi(
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
-    override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
-        ApiResponse<List<ApiMessage>>(success = false)
+    override suspend fun searchAll(query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<GlobalMessageSearchHit>>(success = false)
+    override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?): ApiResponse<List<ApiMessage>> {
+        searchCalls += listOf(conversationId, query, limit, cursor)
+        return searchResult()
+    }
     override suspend fun pin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = true)
     override suspend fun unpin(conversationId: String, messageId: String) =
@@ -168,6 +178,9 @@ private class EtagAwareMessageApi(
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
         ApiResponse<List<ApiMessage>>(success = false)
 
@@ -180,6 +193,8 @@ private class EtagAwareMessageApi(
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
+    override suspend fun searchAll(query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<GlobalMessageSearchHit>>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =
@@ -247,6 +262,9 @@ private class GapAwareMessageApi(
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
         ApiResponse<List<ApiMessage>>(success = false)
 
@@ -275,6 +293,8 @@ private class GapAwareMessageApi(
         ApiResponse<ApiMessage>(success = false)
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun readStatus(messageId: String) = ApiResponse<me.meeshy.sdk.model.ReadStatusData>(success = false)
+    override suspend fun searchAll(query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<GlobalMessageSearchHit>>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
     override suspend fun pin(conversationId: String, messageId: String) =
@@ -298,6 +318,10 @@ private class FakeTranslationApi(
         lastRequest = body
         return response
     }
+
+    override suspend fun job(jobId: String): ApiResponse<me.meeshy.sdk.model.TranslationJob> = ApiResponse(success = false)
+
+    override suspend fun cancelJob(jobId: String): ApiResponse<kotlinx.serialization.json.JsonElement> = ApiResponse(success = false)
 }
 
 private fun apiMessage(
@@ -359,8 +383,7 @@ class MessageRepositoryTest {
     private suspend fun streamedMessages(repo: MessageRepository, conversationId: String = "c1") =
         db.messageDao().observeForConversation(conversationId).first()
 
-    private suspend fun cachedApiMessage(id: String): ApiMessage =
-        MeeshyApi.json.decodeFromString<ApiMessage>(db.messageDao().find(id)!!.payload)
+    private suspend fun cachedApiMessage(id: String): ApiMessage = cachedMessage(id)
 
     private suspend fun sentRequest(lane: String): SendMessageRequest =
         MeeshyApi.json.decodeFromString<SendMessageRequest>(outbox.deliverable(lane).last().payload)
@@ -834,7 +857,7 @@ class MessageRepositoryTest {
             .isEqualTo((MessageEffectFlags.GLOW or MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL).toInt())
         assertThat(request.isViewOnce).isTrue()
         assertThat(request.ephemeralDuration).isEqualTo(300)
-        assertThat(request.expiresAt).isEqualTo("1970-01-01T00:05:00Z")
+        assertThat(request.expiresAt).isNull()
         assertThat(request.maxViewOnceCount).isEqualTo(2)
     }
 
@@ -1125,8 +1148,13 @@ class MessageRepositoryTest {
         assertThat(request.storyReplyToId).isEqualTo("story-1")
     }
 
-    private suspend fun cachedMessage(id: String): ApiMessage =
-        MeeshyApi.json.decodeFromString(db.messageDao().find(id)!!.payload)
+    /** Le message tel que l'écran le lit : la charge superposée aux traductions déjà reçues (lignes dédiées). */
+    private suspend fun cachedMessage(id: String): ApiMessage {
+        val stored = MeeshyApi.json.decodeFromString<ApiMessage>(db.messageDao().find(id)!!.payload)
+        val layer = TranslationLayer.of(db)
+        layer.ensureLoaded(listOf(stored.id))
+        return layer.project(LocalMessage(stored)).message
+    }
 
     @Test
     fun `toggleReactionOptimistic add bumps the summary instantly and queues ADD_REACTION`() = runTest {
@@ -1906,5 +1934,52 @@ class MessageRepositoryTest {
         val recent = repo.recentMessages("c1", limit = 5)
 
         assertThat(recent.map { it.sendState }).containsExactly(LocalSendState.SYNCED, LocalSendState.SENDING)
+    }
+
+    @Test
+    fun `searchMessages upserts the hits into Room and carries the cursor`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(success = false),
+            searchResult = {
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("far1", createdAt = "2020-01-01T00:00:00.000Z")),
+                    cursorPagination = me.meeshy.sdk.model.CursorPagination(nextCursor = "far1", hasMore = true),
+                )
+            },
+        )
+        val repo = repository(api)
+
+        val page = repo.searchMessages("c1", "hi", cursor = "prev", limit = 20)
+
+        assertThat(page.messages.map { it.id }).containsExactly("far1")
+        assertThat(page.nextCursor).isEqualTo("far1")
+        assertThat(page.hasMore).isTrue()
+        assertThat(api.searchCalls.single()).containsExactly("c1", "hi", 20, "prev").inOrder()
+        assertThat(db.messageDao().find("far1")).isNotNull()
+    }
+
+    @Test
+    fun `searchMessages treats a 404 as an empty page`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(success = false),
+            searchResult = { throw retrofit2.HttpException(retrofit2.Response.error<Any>(404, "".toResponseBody())) },
+        )
+
+        val page = repository(api).searchMessages("c1", "hi")
+
+        assertThat(page).isEqualTo(MessageSearchPage.EMPTY)
+    }
+
+    @Test
+    fun `searchMessages reports an unreachable server as such and a refusal as an error`() = runTest {
+        val offline = FakeMessageApi(response = ApiResponse(success = false), searchResult = { throw java.io.IOException("down") })
+        val refused = FakeMessageApi(response = ApiResponse(success = false), searchResult = { ApiResponse(success = false, error = "nope") })
+
+        val unreachable = runCatching { repository(offline).searchMessages("c1", "hi") }.exceptionOrNull()
+        val failure = runCatching { repository(refused).searchMessages("c1", "hi") }.exceptionOrNull()
+
+        assertThat((unreachable as MessageSearchException).unreachable).isTrue()
+        assertThat((failure as MessageSearchException).unreachable).isFalse()
     }
 }

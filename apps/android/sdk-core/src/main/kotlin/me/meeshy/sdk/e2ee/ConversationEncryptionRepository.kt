@@ -80,6 +80,15 @@ class ConversationEncryptionRepository @Inject constructor(
 
         const val DIRECT_ALREADY_END_TO_END: String = "E2EE_DIRECT_ALREADY_END_TO_END"
 
+        /** 409 de la passerelle : un tête-à-tête ne se chiffre de bout en bout qu'entre deux membres inscrits (#12966). */
+        const val DIRECT_NOT_A_PAIR: String = "E2EE_DIRECT_NOT_A_PAIR"
+
+        /** 403 de la passerelle : la politique de plateforme réserve la bascule à un rôle d'équipe (ANALYST et plus). */
+        const val ACTIVATION_RESTRICTED: String = "ENCRYPTION_ACTIVATION_RESTRICTED"
+
+        /** 400 de la passerelle : le mode visé est déjà celui de la conversation. */
+        const val ALREADY_ENABLED: String = "ENCRYPTION_ALREADY_ENABLED"
+
         /** Refus local : ce téléphone n'est pas encore un appareil chiffré (#13015). */
         const val NOT_AVAILABLE_ON_THIS_PHONE: String = "E2EE_NOT_AVAILABLE_ON_THIS_PHONE"
 

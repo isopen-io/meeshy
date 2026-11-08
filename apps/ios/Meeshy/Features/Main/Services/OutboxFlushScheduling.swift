@@ -32,6 +32,7 @@ import MeeshySDK
 @MainActor
 enum OutboxFlushTrigger {
     static func flushNow() async {
+        Task { await NotificationActionHandler.shared.confirmRepliesAwaitingRegime() }
         let flusher = OutboxFlusher(
             pool: DependencyContainer.shared.database.pool,
             dispatcher: EndToEndOutboxGate(),

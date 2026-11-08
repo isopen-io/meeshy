@@ -4,7 +4,10 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.cache.purge.CacheMediaDisks
+import me.meeshy.sdk.cache.purge.MediaDiskStore
 import me.meeshy.sdk.media.MediaCacheDirs
+import me.meeshy.sdk.model.mediacache.CacheMediaKind
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.sdk.model.mediacache.MediaCacheReport
 import me.meeshy.ui.component.media.MeeshyMediaCache
@@ -35,7 +38,7 @@ interface MediaCacheStore {
 @Singleton
 class AndroidMediaCacheStore @Inject constructor(
     @ApplicationContext private val context: Context,
-) : MediaCacheStore {
+) : MediaCacheStore, CacheMediaDisks {
 
     private val cacheRoot: File = context.cacheDir
 
@@ -47,6 +50,18 @@ class AndroidMediaCacheStore @Inject constructor(
     private val media3Categories: Set<MediaCacheCategory> = setOf(MediaCacheCategory.AUDIO, MediaCacheCategory.VIDEO)
 
     private val media3: MeeshyMediaCache get() = MeeshyMediaCache.get(context)
+
+    private val thumbnails = DirectoryMediaDiskStore.typed(directories.getValue(MediaCacheCategory.THUMBNAILS))
+    private val coilImages = DirectoryMediaDiskStore.coil(directories.getValue(MediaCacheCategory.IMAGES))
+    private val audioStore = Media3DiskStore { media3.cacheFor(MediaCacheCategory.AUDIO) }
+    private val videoStore = Media3DiskStore { media3.cacheFor(MediaCacheCategory.VIDEO) }
+
+    /** Les stockages par nature de fichier, mesurés et purgés PAR CLÉ (purge sélective) ; une image vit dans Coil ou en vignette. */
+    override fun stores(kind: CacheMediaKind): List<MediaDiskStore> = when (kind) {
+        CacheMediaKind.IMAGES -> listOf(coilImages, thumbnails)
+        CacheMediaKind.VIDEOS -> listOf(videoStore)
+        CacheMediaKind.AUDIO -> listOf(audioStore)
+    }
 
     override suspend fun report(): MediaCacheReport = withContext(Dispatchers.IO) {
         MediaCacheReport.of(

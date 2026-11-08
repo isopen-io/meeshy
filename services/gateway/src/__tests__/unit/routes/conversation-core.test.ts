@@ -1,7 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // ─── Top-level mock variables (hoisted before jest.mock calls) ────────────────
-
 const mockResolveConversationId = jest.fn<any>();
 const mockCanAccessConversation = jest.fn<any>();
 const mockIsBlockedBetween = jest.fn<any>();
@@ -46,6 +45,7 @@ const mockSendErrorResponse = jest.fn<any>();
 
 // ─── jest.mock calls (hoisted) ────────────────────────────────────────────────
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })), decideOpenings: jest.fn(async () => new Map()) })); // #14107 : direct ici
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
@@ -218,7 +218,7 @@ const makePrisma = (): any => ({
   },
   user: {
     findMany: jest.fn().mockResolvedValue([]),
-    findUnique: jest.fn().mockResolvedValue(null),
+    findUnique: jest.fn().mockResolvedValue(null), findFirst: jest.fn().mockResolvedValue(null),
   },
   community: {
     findFirst: jest.fn().mockResolvedValue(null),
@@ -949,7 +949,7 @@ describe('registerCoreRoutes', () => {
       );
     });
 
-    it('excludes an empty direct DM from a non-creator participant list', async () => {
+    it('excludes an empty direct DM — and, since #14644, an empty group — from a non-creator participant list', async () => {
       prisma.conversation.findMany.mockResolvedValue([]);
       const req = makeRequest({ query: {} });
       const reply = makeReply();
@@ -960,7 +960,7 @@ describe('registerCoreRoutes', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             OR: expect.arrayContaining([
-              { type: { not: 'direct' } },
+              { type: { notIn: ['direct', 'group'] } },
               {
                 OR: [
                   { NOT: { firstMessageSentAt: null } },
@@ -2508,7 +2508,7 @@ describe('registerCoreRoutes', () => {
       const req = makeRequest({ body: {} });
       const reply = makeReply();
 
-      await getCreateHandler(fastify)(req, reply);
+      await getCreateHandler(fastify)(req, reply); await new Promise((resolve) => setImmediate(resolve));
 
       expect(mockSendSuccess).toHaveBeenCalled();
       expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:new', expect.any(Object));
@@ -2539,7 +2539,7 @@ describe('registerCoreRoutes', () => {
       expect(createInviteNotif).not.toHaveBeenCalled();
     });
 
-    it('still sends invitation notifications for group conversations', async () => {
+    it('a fresh group sends no invitation at creation — it waits for the first message (#14644)', async () => {
       mockValidateSchema.mockReturnValue({ type: 'group', title: 'Team', participantIds: [OTHER_USER_ID] });
       const createInviteNotif = jest.fn().mockResolvedValue(undefined);
       fastify.notificationService = { createConversationInviteNotification: createInviteNotif };
@@ -2553,15 +2553,15 @@ describe('registerCoreRoutes', () => {
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
 
-      expect(createInviteNotif).toHaveBeenCalled();
+      expect(createInviteNotif).not.toHaveBeenCalled();
     });
 
-    it('uses username fallback for group invite notification when creator.displayName is null', async () => {
-      // Couvre la branche `creator.displayName || creator.username` (core.ts
-      // ~ligne 1167) : depuis que les directs n'appellent plus jamais
-      // createConversationInviteNotification, seul un `group` peut encore
-      // exercer ce fallback — voir finding de revue post-implémentation.
-      mockValidateSchema.mockReturnValue({ type: 'group', title: 'Team', participantIds: [OTHER_USER_ID] });
+    it('uses username fallback for a public invite notification when creator.displayName is null', async () => {
+      // Couvre la branche `creator.displayName || creator.username` : depuis
+      // #14644, ni un direct ni un groupe neuf n'invitent à la création — seule
+      // une conversation `public` exerce encore ce fallback ici (celui d'un
+      // groupe démarré vit dans `announceStartedGroup`).
+      mockValidateSchema.mockReturnValue({ type: 'public', title: 'Team', participantIds: [OTHER_USER_ID] });
       const createInviteNotif = jest.fn().mockResolvedValue(undefined);
       fastify.notificationService = { createConversationInviteNotification: createInviteNotif };
       prisma.user.findMany.mockResolvedValue([
@@ -2569,7 +2569,7 @@ describe('registerCoreRoutes', () => {
         { id: OTHER_USER_ID, displayName: 'Bob', username: 'bob', avatar: null },
       ]);
       prisma.conversation.create.mockResolvedValue({
-        id: CONV_ID, type: 'group', title: 'Team', createdAt: new Date(), participants: [],
+        id: CONV_ID, type: 'public', title: 'Team', createdAt: new Date(), participants: [],
       });
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
@@ -2589,7 +2589,7 @@ describe('registerCoreRoutes', () => {
         id: CONV_ID, type: 'direct', title: null, createdAt: new Date(), participants: [],
       });
 
-      await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
+      await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply()); await new Promise((resolve) => setImmediate(resolve));
 
       // `createMockFastify()` (ligne 208) route tout `io.to(room).emit(...)` à
       // travers UN SEUL `mockTo`/`mockEmit` partagé (`fastify._mockTo`/
@@ -2642,7 +2642,7 @@ describe('registerCoreRoutes', () => {
         createdAt: new Date(),
         participants: [],
       });
-      prisma.user.findMany.mockResolvedValue([]);
+      prisma.user.findMany.mockResolvedValue([{ id: OTHER_USER_ID, displayName: 'Bob', username: 'bob', avatar: null }]);
       prisma.communityMember.findMany.mockResolvedValue([]);
 
       const req = makeRequest({ body: {} });

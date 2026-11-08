@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lot image-editeur-ecran-et-outils : libellés propres à Android (iOS les écrit en dur). -->
+    <string name="image_editor_mode_simple">Einfacher Modus</string>
+    <string name="image_editor_mode_pro">Pro-Modus</string>
+    <string name="image_editor_mode_group">Bearbeitungsmodus</string>
+    <string name="image_editor_ratio_free">Frei</string>
+    <string name="image_editor_close">Schließen</string>
+    <string name="image_editor_title">Bildeditor</string>
+    <string name="image_editor_adjust_exposure">Belichtung</string>
+    <string name="image_editor_adjust_vibrance">Dynamik</string>
+    <string name="image_editor_adjust_temperature">Temperatur</string>
+    <string name="image_editor_adjust_blur">Unschärfe</string>
+    <string name="image_editor_effect_none">Keiner</string>
+    <string name="image_editor_effect_blur">Unschärfe</string>
+    <string name="image_editor_effect_vignette">Vignette</string>
+    <string name="image_editor_effect_sharpen">Schärfen</string>
+    <string name="image_editor_effect_bloom">Bloom</string>
+    <string name="image_editor_effect_grain">Körnung</string>
+    <string name="image_editor_filter_original">Original</string>
+    <string name="image_editor_filter_vivid">Vivid</string>
+    <string name="image_editor_filter_dramatic">Dramatic</string>
+    <string name="image_editor_filter_mono">Mono</string>
+    <string name="image_editor_filter_noir">Noir</string>
+    <string name="image_editor_filter_sepia">Sepia</string>
+    <string name="image_editor_filter_warm">Warm</string>
+    <string name="image_editor_filter_cool">Kühl</string>
+    <string name="image_editor_filter_fade">Fade</string>
+    <string name="image_editor_filter_chrome">Chrome</string>
+    <string name="image_editor_filter_process">Process</string>
+    <string name="image_editor_filter_instant">Instant</string>
+    <string name="image_editor_adjust_brightness">Helligkeit</string>
+    <string name="image_editor_adjust_contrast">Kontrast</string>
+    <string name="image_editor_adjust_saturation">Sättigung</string>
+    <string name="image_editor_adjust_sharpness">Schärfe</string>
+    <string name="image_editor_adjust_vignette">Vignette</string>
+</resources>

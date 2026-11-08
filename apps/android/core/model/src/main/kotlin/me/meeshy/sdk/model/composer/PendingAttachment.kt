@@ -45,6 +45,8 @@ data class PendingAttachment(
     val height: Int? = null,
     val thumbnailColorHex: String? = null,
     val mediaStoreId: String? = null,
+    /** La pièce sort de la caméra de l'application : déclaré au téléversement et à la publication. */
+    val capturedInApp: Boolean = false,
     val phase: PendingAttachmentPhase = PendingAttachmentPhase.Preparing,
 ) {
     val isReady: Boolean get() = phase is PendingAttachmentPhase.Ready

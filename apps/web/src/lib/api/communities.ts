@@ -1,6 +1,8 @@
 import * as z from 'zod/mini';
 import * as communitiesEndpoints from '@meeshy/shared/api/endpoints/communities';
 
+import { decodeHtmlText } from '@/lib/admin/interpret/html-text';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
@@ -18,6 +20,14 @@ import type { ApiResult, HttpTransport } from './http';
  * - `GET communities.byIdConversations` — celles dont le lecteur est
  *   participant, par page.
  * - `POST communities.root` — le créateur devient administrateur ; 201.
+ * - `POST communities.byIdJoin` / `byIdLeave` (#6378) — rejoindre une
+ *   communauté publique (403 si privée, 409 si déjà membre), la quitter (403
+ *   pour le créateur, 404 si déjà parti).
+ *
+ * **Le détail dit au lecteur ce qu'il y est** (`currentUserRole`, #6378) :
+ * décodé en `viewerRole` — son rôle, `null` s'il n'est pas membre, ABSENT
+ * quand la réponse ne le dit pas (une carte de liste, un serveur ancien). Un
+ * rôle absent n'offre aucun geste : mieux vaut aucun bouton qu'un bouton faux.
  *
  * **Une communauté décodée est une PROJECTION.** La route de liste charge
  * `members[].user.isOnline` et le créateur ; la route de conversations charge
@@ -42,6 +52,8 @@ export const communityConversationsQueryKey = (communityId: string) => ['communi
 
 export type CommunitiesDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
+export type CommunityViewerRole = 'admin' | 'moderator' | 'member';
+
 export type CommunitySummary = {
   readonly id: string;
   readonly identifier: string;
@@ -53,6 +65,7 @@ export type CommunitySummary = {
   readonly createdBy: string | null;
   readonly memberCount: number;
   readonly conversationCount: number;
+  readonly viewerRole?: CommunityViewerRole | null;
 };
 
 export type CommunityConversation = {
@@ -93,6 +106,7 @@ const WireCommunity = z.object({
   memberCount: counter,
   conversationCount: counter,
   _count: z.optional(z.object({ members: counter, Conversation: counter })),
+  currentUserRole: optionalText,
 });
 
 const WireConversation = z.object({
@@ -109,10 +123,21 @@ const WireConversation = z.object({
 const textOrNull = (value: string | null | undefined): string | null =>
   value === undefined || value === null || value.trim() === '' ? null : value;
 
+/** Nom et description sont stockés ÉCHAPPÉS par la passerelle (`SecuritySanitizer.sanitizeText`) : rendus à leur lettre, ils ne s'abîment plus à chaque enregistrement (#6377). */
+const servedText = (value: string | null | undefined): string | null => {
+  const text = textOrNull(value);
+  return text === null ? null : decodeHtmlText(text);
+};
+
 const countOf = (...values: ReadonlyArray<number | null | undefined>): number => {
   const found = values.find((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
   return found === undefined || found === null ? 0 : Math.floor(found);
 };
+
+const VIEWER_ROLES: readonly CommunityViewerRole[] = ['admin', 'moderator', 'member'];
+
+const viewerRoleOf = (served: string | null): CommunityViewerRole | null =>
+  served === null ? null : (VIEWER_ROLES.find((role) => role === served) ?? 'member');
 
 export function decodeCommunity(raw: unknown): CommunitySummary | null {
   const parsed = WireCommunity.safeParse(raw);
@@ -121,14 +146,15 @@ export function decodeCommunity(raw: unknown): CommunitySummary | null {
   return {
     id: wire.id,
     identifier: textOrNull(wire.identifier) ?? wire.id,
-    name: wire.name,
-    description: textOrNull(wire.description),
+    name: decodeHtmlText(wire.name),
+    description: servedText(wire.description),
     avatar: textOrNull(wire.avatar),
     banner: textOrNull(wire.banner),
     isPrivate: wire.isPrivate ?? true,
     createdBy: textOrNull(wire.createdBy),
     memberCount: countOf(wire.memberCount, wire._count?.members),
     conversationCount: countOf(wire.conversationCount, wire._count?.Conversation),
+    ...(wire.currentUserRole === undefined ? {} : { viewerRole: viewerRoleOf(wire.currentUserRole) }),
   };
 }
 
@@ -262,6 +288,18 @@ export async function createCommunity(deps: CommunitiesDeps, draft: CommunityDra
     return fixtureCreateCommunity(validated.body);
   }
   return communityResult(await deps.transport.request<unknown>({ method: 'POST', path: communitiesEndpoints.root, body: validated.body }));
+}
+
+export type MembershipGesture = 'join' | 'leave';
+
+export async function changeMembership(deps: CommunitiesDeps, communityId: string, gesture: MembershipGesture): Promise<ApiResult<null>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { fixtureChangeMembership } = await import('./fixtures-communities');
+    return fixtureChangeMembership(communityId, gesture);
+  }
+  const path = gesture === 'join' ? communitiesEndpoints.byIdJoin(communityId) : communitiesEndpoints.byIdLeave(communityId);
+  const result = await deps.transport.request<unknown>({ method: 'POST', path });
+  return result.ok ? { ok: true, data: null } : result;
 }
 
 type PageContext = { readonly pageParam: number; readonly signal?: AbortSignal };

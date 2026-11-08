@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import me.meeshy.app.game.GamePageScaffold
 import me.meeshy.app.game.notebook.photoMomentTitle
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.app.game.photo.GamePhotoCoordinator
@@ -46,7 +47,7 @@ import me.meeshy.sdk.model.game.guide.GuideCard
 import me.meeshy.sdk.model.game.guide.GuideDestination
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.motion.staggeredAppear
+import me.meeshy.app.game.gameStaggeredEntrance
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -74,6 +75,8 @@ fun ProgressionScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snapshot = state.snapshot
     val hidden = rememberGameHidden()
+    var entered by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(snapshot != null) { if (snapshot != null) entered = true }
     val guide by guideViewModel.state.collectAsStateWithLifecycle()
     val offers by photos.offers.collectAsStateWithLifecycle()
     val taking by photos.active.collectAsStateWithLifecycle()
@@ -130,7 +133,7 @@ fun ProgressionScreen(
                             card = card,
                             game = snapshot.game,
                             onOpen = { onOpenConcept(card.concept) },
-                            modifier = Modifier.staggeredAppear(minOf(index, MAX_STAGGER_RANK)),
+                            modifier = Modifier.gameStaggeredEntrance(index, entered),
                         )
                     }
                 }
@@ -239,6 +242,3 @@ internal fun ProgressionDoors(
         GameSettingsDoor(onOpenSettings)
     }
 }
-
-/** Le décalage entre deux cartes est plafonné : la quinzième n'attend pas une seconde. */
-private const val MAX_STAGGER_RANK = 8

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_header_remove">Remove</string>
+    <string name="stories_header_remove_title">Remove this story?</string>
+    <string name="stories_header_remove_hint">Reason (required, 3 characters minimum)</string>
+    <string name="stories_header_report_details">Details (optional)</string>
+    <string name="stories_header_report_send">Send</string>
+    <string name="stories_header_remove_failed">Couldn\'t remove the story.</string>
+</resources>

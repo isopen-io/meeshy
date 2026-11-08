@@ -39,16 +39,18 @@ struct SettingsView: View {
     @State private var showAffiliate = false
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
+    /// Ouverte par un indicateur (#16418) : sans profil, l'assistant suit.
+    @State private var voiceManageOpensWizard = false
     @State private var showMediaDownload = false
-    @State private var showPacks = false
-    @State private var packsInitialDomain: PackDomain?
-    @State private var packsFocusedPack: String?
+    @State private var packsRequest: PackShopLauncher.Request?
     @ObservedObject private var packShopLauncher: PackShopLauncher
     init(prefs: UserPreferencesManager = .shared, packShopLauncher: PackShopLauncher = .shared) {
         self.prefs = prefs
         self.packShopLauncher = packShopLauncher
     }
     @State private var scrollRelay = ScrollOffsetRelay()
+    /// Le réglage qu'une invite a désigné (#16339) — défilé et allumé.
+    @State private var focusedSetting: SettingsFocus?
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
     /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir
     /// ET `LentilleFeatureFlag.setEnabled` — le drapeau reste la seule source.
@@ -173,12 +175,10 @@ struct SettingsView: View {
             .sheet(isPresented: $showSupport) { SupportView() }
             .sheet(isPresented: $showDataStorage) { DataStorageView() }
             .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
-            .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
+            .sheet(item: $packsRequest) { PacksSettingsView(initialDomain: $0.domain, focusedPack: $0.pack, initialPage: $0.page) }
+            .onReceive(SettingsFocusRequest.shared.$pending.compactMap { $0 }, perform: receiveFocus)
             .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
-                let request = packShopLauncher.consume()
-                packsInitialDomain = request?.domain
-                packsFocusedPack = request?.pack
-                showPacks = true
+                packsRequest = packShopLauncher.consume()
             }
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
     }
@@ -202,7 +202,29 @@ struct SettingsView: View {
 
     // MARK: - Scroll Content
 
+    /// #16339 — le réglage désigné par une invite ; le master PIN vit dans
+    /// Sécurité, qui consomme la demande à son tour.
+    private func receiveFocus(_ focus: SettingsFocus) {
+        if !focus.opensSecurity { _ = SettingsFocusRequest.shared.consume() }
+        focusedSetting = focus
+        if let sheet = focus.opensSheet {
+            Task { await DelayedUI.perform(after: .milliseconds(500)) { present(sheet) } }
+        }
+        guard focus.opensSecurity else { return }
+        Task { await DelayedUI.perform(after: .milliseconds(900)) { showSecurity = true } }
+    }
+
+    /// #16418 — la configuration de la voix s'ouvre d'elle-même, une fois la
+    /// poussée des Réglages achevée.
+    private func present(_ sheet: SettingsFocus.Sheet) {
+        switch sheet {
+        case .voiceProfileManage: voiceManageOpensWizard = true; showVoiceProfileManage = true
+        case .voiceProfileWizard: showVoiceProfileWizard = true
+        }
+    }
+
     private var scrollContent: some View {
+        ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             GeometryReader { geo in
                 Color.clear.preference(
@@ -218,16 +240,22 @@ struct SettingsView: View {
                 VStack(spacing: MeeshySpacing.xl) {
                     profileCard
                     accountSection
+                        .id(SettingsFocus.masterPin.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .masterPin))
                     appearanceSection
                     voiceProfileSection
+                        .id(SettingsFocus.voiceProfile.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting?.settingsAnchor == SettingsFocus.voiceProfile.settingsAnchor))
                     transcriptionSection
+                        .id(SettingsFocus.transcription.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .transcription))
                     notificationsSection
                     dataSection
                     meeshyToolsSection
                     supportSection
                     aboutSection
-                    switchAccountSection
-                    logoutSection
+                    SettingsSwitchAccountButton(isDisabled: isLoggingOut) { showAccountSwitcher = true }
+                    SettingsLogoutButton(isDisabled: isLoggingOut) { showLogoutConfirm = true }
 
                     Spacer().frame(height: 40)
                 }
@@ -238,6 +266,13 @@ struct SettingsView: View {
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .adaptiveOnChange(of: focusedSetting, initial: true) { _, focus in
+            guard let focus else { return }
+            Task { await DelayedUI.perform(after: .milliseconds(350)) {
+                withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(focus.settingsAnchor, anchor: .center) }
+            } }
+        }
+        }
     }
 
     // MARK: - Account Section
@@ -611,9 +646,7 @@ struct SettingsView: View {
 
             Button {
                 HapticFeedback.light()
-                packsInitialDomain = nil
-                packsFocusedPack = nil
-                showPacks = true
+                packsRequest = PackShopLauncher.Request(domain: nil, pack: nil)
             } label: {
                 settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
@@ -623,6 +656,20 @@ struct SettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main))
             .accessibilityHint(String(localized: "settings.packs.hint", defaultValue: "Installe ou retire des packs de stickers et de cadres du jeu", bundle: .main))
+
+            Button {
+                HapticFeedback.light()
+                packsRequest = PackShopLauncher.Request(domain: nil, pack: nil, page: .mine)
+            } label: {
+                settingsRow(icon: "square.stack.3d.up.fill", title: String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main), color: MeeshyColors.warningHex) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main))
+            .accessibilityHint(String(localized: "settings.packs.mine.hint", defaultValue: "Les packs que tu as installés, rangés par catégorie", bundle: .main))
+            .accessibilityIdentifier("settings.packs.mine")
 
             Button {
                 HapticFeedback.light()
@@ -645,6 +692,7 @@ struct SettingsView: View {
         settingsSection(title: String(localized: "settings.section.voice", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.trackingAccentHex) {
             Button {
                 HapticFeedback.light()
+                voiceManageOpensWizard = false
                 showVoiceProfileManage = true
             } label: {
                 settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", bundle: .main), color: MeeshyColors.trackingAccentHex) {
@@ -673,7 +721,7 @@ struct SettingsView: View {
             VoiceProfileWizardView(accentColor: MeeshyColors.trackingAccentHex)
         }
         .sheet(isPresented: $showVoiceProfileManage) {
-            VoiceProfileManageView(accentColor: MeeshyColors.trackingAccentHex)
+            VoiceProfileManageView(accentColor: MeeshyColors.trackingAccentHex, opensWizardWhenEmpty: voiceManageOpensWizard)
         }
     }
 
@@ -681,6 +729,17 @@ struct SettingsView: View {
 
     private var transcriptionSection: some View {
         settingsSection(title: String(localized: "settings.section.transcription", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo300Hex) {
+            settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
+                Toggle("", isOn: Binding(
+                    get: { prefs.audio.transcriptionEnabled },
+                    set: { val in prefs.updateAudio { $0.transcriptionEnabled = val } }
+                ))
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+                    .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main))
+                    .accessibilityValue(prefs.audio.transcriptionEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
+            }
+
             settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", bundle: .main), color: MeeshyColors.indigo300Hex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.audio.autoTranscribeIncoming },
@@ -851,77 +910,6 @@ struct SettingsView: View {
                     .foregroundColor(theme.textMuted)
             }
         }
-    }
-
-    // MARK: - Switch Account Section
-
-    /// **Changer de compte sans rien perdre (#8286).**
-    ///
-    /// Deux gestes distincts : celui-ci GARDE les sessions et ouvre la liste
-    /// des comptes de l'appareil (`AccountSwitcherSheet`) ; « Déconnexion »,
-    /// juste dessous, ferme celle du compte actuel. D'où un habit neutre, et non
-    /// celui de la destruction : rien n'est perdu.
-    private var switchAccountSection: some View {
-        Button {
-            HapticFeedback.light()
-            showAccountSwitcher = true
-        } label: {
-            HStack {
-                Image(systemName: "person.2.arrow.trianglehead.counterclockwise")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                Text(String(localized: "settings.switchAccount.title",
-                            defaultValue: "Changer de compte", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-            }
-            .foregroundColor(theme.textPrimary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.md + 2)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(theme.inputBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(theme.textMuted.opacity(MeeshyOpacity.medium), lineWidth: 1)
-                    )
-            )
-        }
-        .disabled(isLoggingOut)
-        .accessibilityHint(String(localized: "settings.switchAccount.message",
-                                  defaultValue: "Passez d’un compte à l’autre sans vous déconnecter.",
-                                  bundle: .main))
-    }
-
-    // MARK: - Logout Section
-
-    private var logoutSection: some View {
-        Button {
-            HapticFeedback.heavy()
-            showLogoutConfirm = true
-        } label: {
-            // Note: le label reste statique — l'overlay sur SettingsView
-            // gère le visual feedback pendant l'await. Le `.disabled`
-            // ci-dessous empêche le double-tap.
-            HStack {
-                Image(systemName: "rectangle.portrait.and.arrow.forward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                Text(String(localized: "settings.logout.title", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-            }
-            .foregroundColor(MeeshyColors.error)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.md + 2)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(MeeshyColors.error.opacity(MeeshyOpacity.medium), lineWidth: 1)
-                    )
-            )
-        }
-        .disabled(isLoggingOut)
-        .accessibilityLabel(String(localized: "settings.logout.a11y", bundle: .main))
-        .accessibilityHint(String(localized: "settings.logout.hint", bundle: .main))
     }
 
     // MARK: - Theme Sync

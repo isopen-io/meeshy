@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Icon
@@ -39,8 +38,13 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.LOAD_FAILED -> R.string.feed_load_error
     FeedNotice.LIKE_FAILED -> R.string.feed_notice_like_failed
     FeedNotice.BOOKMARK_FAILED -> R.string.feed_notice_bookmark_failed
+    FeedNotice.BOOKMARKED -> R.string.feed_bookmark_success
+    FeedNotice.DAILY_REACTION_LIMIT -> me.meeshy.ui.R.string.post_daily_limit_reaction_untimed
+    FeedNotice.REPOSTED -> R.string.feed_repost_reposted
     FeedNotice.REPOST_FAILED -> R.string.feed_notice_repost_failed
     FeedNotice.PIN_FAILED -> R.string.feed_notice_pin_failed
+    FeedNotice.PINNED -> R.string.feed_post_pinned
+    FeedNotice.DELETED -> R.string.feed_post_deleted
     FeedNotice.DELETE_FAILED -> R.string.feed_notice_delete_failed
     FeedNotice.REPORT_FAILED -> R.string.feed_notice_report_failed
     FeedNotice.REPORTED -> R.string.feed_notice_reported
@@ -48,6 +52,8 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.PUBLISHED -> R.string.feed_notice_published
     FeedNotice.PUBLISH_QUEUED -> R.string.feed_notice_publish_queued
     FeedNotice.TRANSLATION_FAILED -> R.string.feed_notice_translation_failed
+    FeedNotice.UNBOOKMARKED -> R.string.post_bookmark_removed
+    FeedNotice.COMMENT_SETTINGS_FAILED -> R.string.feed_comment_settings_failed
 }
 
 /**
@@ -55,16 +61,6 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
  * context — and, for the error, « Réessayer ». Scrollable so the pull-to-refresh of the
  * parent `PullToRefreshBox` still starts from an empty screen.
  */
-@Composable
-internal fun FeedEmptyState(modifier: Modifier = Modifier) {
-    FeedStatePane(
-        icon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(48.dp)) },
-        title = stringResource(R.string.feed_empty),
-        subtitle = stringResource(R.string.feed_empty_subtitle),
-        modifier = modifier,
-    )
-}
-
 @Composable
 internal fun FeedErrorState(onRetry: () -> Unit, modifier: Modifier = Modifier) {
     FeedStatePane(

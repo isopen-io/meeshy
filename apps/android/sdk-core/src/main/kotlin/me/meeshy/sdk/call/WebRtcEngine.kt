@@ -14,6 +14,7 @@ import me.meeshy.sdk.call.screen.CallScreenFeeds
 import me.meeshy.sdk.call.screen.CallScreenShareRoute
 import me.meeshy.sdk.call.screen.ScreenFeedFactory
 import me.meeshy.sdk.model.call.CallVideoBudget
+import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.IceCandidateLine
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.CandidateRoute
@@ -64,7 +65,8 @@ class WebRtcEngine internal constructor(
         @ApplicationContext appContext: Context,
         activityGate: CallActivityGate,
         microphoneSamples: CallMicrophoneSamples,
-    ) : this(appContext, { buildStack(appContext, microphoneSamples) }, activityGate)
+        remoteSamples: CallRemoteAudioSamples,
+    ) : this(appContext, { buildStack(appContext, microphoneSamples, remoteSamples) }, activityGate)
 
     private val stack = lazy(stackProvider)
     private val media = CallMediaSources(appContext, stack)
@@ -82,6 +84,7 @@ class WebRtcEngine internal constructor(
     private var groupVideoCeiling: CallVideoBudget? = null
     private var cameraBudget: CallVideoBudget = CallVideoBudget.CAMERA
     private var cameraFrozen: Boolean = false
+    private var audioMaxBitrateBps: Int? = null
 
     /** Le contexte EGL partagé ; le lire avant tout appel construit la pile (rendu vidéo). */
     val eglBase: EglBase get() = stack.value.eglBase
@@ -123,9 +126,10 @@ class WebRtcEngine internal constructor(
     /**
      * Ouvre un pair neuf configuré avec les serveurs ICE par utilisateur de la passerelle. Les pistes
      * locales naissent ici mais ne sont attachées qu'à [createOffer] (offreur) ou après
-     * [setRemoteDescription] (répondeur). @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
+     * [setRemoteDescription] (répondeur). Rend `true` quand la vidéo demandée n'a pas pu démarrer ([videoFallback]).
+     * @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
      */
-    fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false) {
+    fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false): Boolean {
         close()
         val config = rtcConfiguration(iceServers, ICE_CANDIDATE_POOL_SIZE)
         val peer = stack.value.factory.createPeerConnection(config, engineEvents.observer)
@@ -134,7 +138,43 @@ class WebRtcEngine internal constructor(
         configuration = config
         activityGate.setActive(true)
         media.prepareAudio()
-        if (enableVideo) media.prepareVideo()
+        videoFallback = if (enableVideo) media.prepareVideo() else null
+        return videoFallback != null
+    }
+
+    /**
+     * Pourquoi la vidéo demandée à l'ouverture n'a pas démarré (`null` : elle tourne, ou n'était pas demandée).
+     * [createConnection] rend `true` dans ce cas : l'appel continue en audio seul, jamais coupé.
+     */
+    var videoFallback: CallVideoFallback? = null
+        private set
+
+    /**
+     * Audio vers vidéo en plein appel : la caméra est acquise, sa piste prend l'émetteur vidéo du pair et une offre
+     * est demandée au négociateur ([renegotiationRequests]). `null` : c'est fait (ou rien à faire pendant un partage
+     * d'écran, qui tient l'émetteur) ; sinon la raison pour laquelle l'appel reste en audio.
+     */
+    fun upgradeToVideo(): CallVideoFallback? {
+        val peer = peerConnection ?: return CallVideoFallback.NoCamera
+        if (screenShare.isSharing) return null
+        return when (val outcome = media.upgradeToVideo(peer)) {
+            VideoUpgrade.Attached -> {
+                applyCameraEncoding()
+                renegotiations.tryEmit(Unit)
+                null
+            }
+            VideoUpgrade.AlreadyAttached -> null
+            is VideoUpgrade.Failed -> outcome.reason
+        }
+    }
+
+    /** Vidéo vers audio : la caméra est libérée et le pair en est informé par une offre. `false` : rien à retirer. */
+    fun downgradeFromVideo(): Boolean {
+        val peer = peerConnection ?: return false
+        if (screenShare.isSharing) return false
+        val detached = media.downgradeFromVideo(peer)
+        if (detached) renegotiations.tryEmit(Unit)
+        return detached
     }
 
     /**
@@ -175,6 +215,9 @@ class WebRtcEngine internal constructor(
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         onMessage = { dataMessages.tryEmit(it) },
     )
+
+    /** Le relais DTMF de l'appel en cours : les touches d'un clavier de voiture ou de montre vers le pair. */
+    val dtmf: CallDtmf = CallDtmf { CallDtmf.lineOf(peerConnection) }
 
     fun setAudioEnabled(enabled: Boolean) = media.setAudioEnabled(enabled)
 
@@ -229,13 +272,31 @@ class WebRtcEngine internal constructor(
         applyCameraEncoding()
     }
 
+    /**
+     * Le plafond de débit de l'émetteur audio (iOS `applyAudioEncoding`) : l'échelle de qualité sous le plafond Opus
+     * voix du profil de données. Retenu et réécrit à chaque négociation, car l'émetteur naît avec l'offre ou la réponse.
+     */
+    fun setAudioMaxBitrate(bitrateBps: Int) {
+        audioMaxBitrateBps = bitrateBps
+        applyAudioEncoding()
+    }
+
+    private fun applyAudioEncoding() {
+        val bitrate = audioMaxBitrateBps ?: return
+        val sender = peerConnection?.let { peer ->
+            runCatching { peer.transceivers }.getOrDefault(emptyList())
+                .firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO && !it.isStopped }
+        }?.sender ?: return
+        runCatching { CallSenderTuner.applyAudio(sender, bitrate) }
+    }
+
     /** La caméra sur l'émetteur vidéo du pair de l'appel, sous le plafond du maillage ; l'écran partagé garde le sien. */
     private fun applyCameraEncoding() {
         if (screenShare.isSharing) return
         val sender = primaryVideoSender() ?: return
         val camera = cameraBudget
         val budget = if (cameraFrozen) camera else groupVideoCeiling?.capping(camera) ?: camera
-        runCatching { VideoSenderEncoding.apply(sender, budget) }
+        runCatching { CallSenderTuner.applyVideo(sender, budget) }
     }
 
     private fun primaryVideoSender(): RtpSender? {
@@ -257,6 +318,7 @@ class WebRtcEngine internal constructor(
         if (isOffer) {
             peerConnection?.let { media.attachForOffer(it) }
             applyCameraEncoding()
+            applyAudioEncoding()
             ensureDataChannel()
         }
         val pc = peerConnection ?: throw WebRtcError.NoPeerConnection()
@@ -266,7 +328,9 @@ class WebRtcEngine internal constructor(
     suspend fun setLocalDescription(desc: SessionDescription) {
         applyDescription(desc, local = true)
         applyCameraEncoding()
+        applyAudioEncoding()
         if (desc.type == SessionDescription.Type.OFFER) remoteDescriptions.onLocalOfferSet()
+        if (desc.type == SessionDescription.Type.ROLLBACK) remoteDescriptions.onLocalOfferRolledBack()
     }
 
     /**
@@ -288,6 +352,7 @@ class WebRtcEngine internal constructor(
         if (type == DescriptionType.Offer) {
             media.attachForAnswer(pc)
             applyCameraEncoding()
+            applyAudioEncoding()
         }
         remoteDescriptions.onApplied(type, desc.description).forEach { pc.addIceCandidate(it.toIceCandidate()) }
     }
@@ -364,6 +429,7 @@ class WebRtcEngine internal constructor(
         groupVideoCeiling = null
         cameraBudget = CallVideoBudget.CAMERA
         cameraFrozen = false
+        audioMaxBitrateBps = null
         remoteDescriptions.reset()
         configuration = null
         media.releaseVideo()
@@ -383,13 +449,14 @@ class WebRtcEngine internal constructor(
         @Volatile
         private var globalInitDone = false
 
-        fun buildStack(context: Context, microphoneSamples: CallMicrophoneSamples): WebRtcStack {
+        fun buildStack(context: Context, microphoneSamples: CallMicrophoneSamples, remoteSamples: CallRemoteAudioSamples): WebRtcStack {
             ensureGlobalInit(context)
             val egl = EglBase.create()
             val audioDevice = JavaAudioDeviceModule.builder(context)
                 .setUseHardwareAcousticEchoCanceler(true)
                 .setUseHardwareNoiseSuppressor(true)
                 .setSamplesReadyCallback(microphoneSamples.callback)
+                .also { remoteSamples.attachTo(it) }
                 .createAudioDeviceModule()
             val factory = PeerConnectionFactory.builder()
                 .setAudioDeviceModule(audioDevice)

@@ -2,15 +2,13 @@ package me.meeshy.app.ongoing
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ongoing.OutboxActivityItem
 import me.meeshy.sdk.model.ongoing.OutboxActivityLaw
 import me.meeshy.sdk.model.ongoing.OutboxActivitySnapshot
+import me.meeshy.sdk.outbox.OutboxProgressObserver
 
 /**
  * Exécute [OutboxActivityLaw] : la file et le réseau entrent, la notification d'envoi sort.
@@ -35,13 +33,7 @@ internal class OutboxOngoingController(
         launch {
             isForeground.distinctUntilChanged().collect(::onForeground)
         }
-        combine(items, isOffline) { queue, offline -> queue to offline }
-            .conflate()
-            .collect { (queue, offline) ->
-                val step = OutboxActivityLaw.step(running, queue, offline, wording())
-                apply(step)
-                if (step.action != OutboxActivityLaw.Action.None) delay(minIntervalMs)
-            }
+        OutboxProgressObserver.steps(items, isOffline, wording, minIntervalMs).collect(::apply)
     }
 
     private fun apply(step: OutboxActivityLaw.Step) {
@@ -69,6 +61,6 @@ internal class OutboxOngoingController(
     }
 
     internal companion object {
-        const val MIN_INTERVAL_MS: Long = 1_000L
+        const val MIN_INTERVAL_MS: Long = OutboxProgressObserver.MIN_INTERVAL_MS
     }
 }

@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.game
 
+import me.meeshy.sdk.model.sticker.MeeInstantCatalog
 import me.meeshy.sdk.model.sticker.MeeStickerCatalog
 
 /**
@@ -16,10 +17,13 @@ public object MeeFilmCatalog {
     /** Les identifiants que le jeu choisit (guide, blason, trophées, Prestige, cartes photo). */
     public val gameFilmIds: List<String> = listOf(MEE_SOURIRE, MEO_SALUT, MEE_BONJOUR, MEE_COUCOU)
 
-    /** Le chemin de l'asset du film, ou `null` si l'identifiant n'est pas au catalogue. */
-    public fun assetPath(filmId: String): String? =
-        MeeStickerCatalog.stickerById(filmId)?.let { MeeStickerCatalog.assetPath(it.id) }
+    /** Le chemin de l'asset du film — un sticker ou un Instant (#14345) —, ou `null` si l'identifiant n'est pas au catalogue. */
+    public fun assetPath(filmId: String): String? = when {
+        MeeStickerCatalog.stickerById(filmId) != null || MeeInstantCatalog.byId(filmId) != null -> MeeStickerCatalog.assetPath(filmId)
+        else -> null
+    }
 
     /** Le film porte-t-il un mouvement ? Faux pour un identifiant inconnu : il ne reste que l'image fixe. */
-    public fun isAnimated(filmId: String): Boolean = MeeStickerCatalog.stickerById(filmId)?.animated == true
+    public fun isAnimated(filmId: String): Boolean =
+        MeeStickerCatalog.stickerById(filmId)?.animated ?: MeeInstantCatalog.byId(filmId)?.animated ?: false
 }

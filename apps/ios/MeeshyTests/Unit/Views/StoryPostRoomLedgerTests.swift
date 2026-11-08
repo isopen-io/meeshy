@@ -41,4 +41,14 @@ final class StoryPostRoomLedgerTests: XCTestCase {
         XCTAssertEqual(joins, 1, "un seul site rejoint : celui du registre")
         XCTAssertEqual(leaves, 1, "un seul site quitte : celui du registre")
     }
+
+    /// #15198 — une story en attente n'a pas de salle : son id est local.
+    func test_holdingAPendingStory_leavesTheHeldRoom_andJoinsNone() {
+        var ledger = StoryPostRoomLedger()
+        _ = ledger.hold("665f1c2e9b1d4a0012345678")
+
+        XCTAssertEqual(ledger.hold("\(PendingStoryMarker.prefix)\(UUID().uuidString)#0"),
+                       .init(leave: "665f1c2e9b1d4a0012345678", join: nil))
+        XCTAssertNil(ledger.held)
+    }
 }

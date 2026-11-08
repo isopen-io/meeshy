@@ -2,9 +2,10 @@ package me.meeshy.sdk.media.scene
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.media3.common.OverlaySettings
 import androidx.media3.common.VideoFrameProcessingException
 import androidx.media3.effect.BitmapOverlay
-import androidx.media3.effect.OverlaySettings
+import androidx.media3.effect.StaticOverlaySettings
 import java.io.File
 
 /**
@@ -24,7 +25,7 @@ internal class BrandCardOverlay(private val file: File, private val alphaAt: (Lo
     }
 
     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings =
-        OverlaySettings.Builder().setAlphaScale(alphaAt(presentationTimeUs / MICROS_PER_MILLI).coerceIn(0f, 1f)).build()
+        StaticOverlaySettings.Builder().setAlphaScale(alphaAt(presentationTimeUs / MICROS_PER_MILLI).coerceIn(0f, 1f)).build()
 
     override fun release() {
         super.release()

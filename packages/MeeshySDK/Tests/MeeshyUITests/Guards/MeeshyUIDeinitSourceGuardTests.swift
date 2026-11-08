@@ -43,9 +43,7 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
         let hasBareDeinit: Bool
     }
 
-    private static let pendingBareDeinits: Set<String> = [
-        "Story/Timeline/Engine/StoryTimelineEngine.swift: StoryTimelineEngine"
-    ]
+    private static let pendingBareDeinits: Set<String> = []
 
     private func meeshyUIRoot() -> URL {
         ComposerSourceGuard.packageRoot.appendingPathComponent("Sources/MeeshyUI")

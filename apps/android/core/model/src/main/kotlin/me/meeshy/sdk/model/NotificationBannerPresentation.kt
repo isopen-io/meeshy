@@ -52,6 +52,13 @@ public data class NotificationBannerPresentation(
     val thumbnailUrl: String?,
     /** Icône typée du contenu visé — ce qui tient la place de la vignette quand il n'y en a pas. */
     val contentIcon: BannerContentIcon,
+    /**
+     * Le DÉTAIL d'un message sans texte lisible (position, carte de visite, invitation, lien) quand
+     * le corps servi doit lui céder : [body] est alors `null` et la couche UI compose
+     * [NotificationMessageDetail.summary] avec ses libellés localisés. `null` pour un message
+     * protégé (`notificationLocKey`) — aucun détail ne fuit.
+     */
+    val detail: NotificationMessageDetail? = null,
 )
 
 /**
@@ -67,7 +74,19 @@ public sealed interface BannerHeadline {
 
     /** « X dans <groupe> » — la seule composition qui appartient au client. */
     public data class InConversation(val actor: String, val groupName: String) : BannerHeadline
+
+    /** Ni acteur ni titre servi : « Quelqu'un » (libellé localisé par la couche UI), puis la phrase d'action. */
+    public data class Someone(val action: String?) : BannerHeadline
+
+    /**
+     * Notification de jeu SANS acteur (la ligue, la saison) : la passerelle ne sert pas de titre, le
+     * client nomme la SURFACE — jamais « Quelqu'un ». La couche UI la localise.
+     */
+    public data class GameSurface(val surface: GameSurfaceTitle, val action: String?) : BannerHeadline
 }
+
+/** Les surfaces de jeu qui se nomment elles-mêmes quand aucun acteur ne signe la notification. */
+public enum class GameSurfaceTitle { LEAGUE_RESULT, SEASON_STEP, MISSION_WINDOW }
 
 /** Nature du média principal — traduite par la couche UI. */
 public enum class MediaSummary { IMAGE, VIDEO, AUDIO }
@@ -102,7 +121,7 @@ public object NotificationBannerFraming {
     )
 
     private val RELATION_TYPES = setOf(
-        "friend_request", "contact_request", "friend_accepted", "contact_accepted",
+        "friend_request", "contact_request", "friend_accepted", "contact_accepted", "contact_joined",
     )
 
     private val REACTION_TYPES = setOf(
@@ -142,7 +161,30 @@ public object NotificationBannerFraming {
             reactionBadge = reactionBadge(notification),
             thumbnailUrl = thumbnailUrl(notification),
             contentIcon = contentIcon(notification),
+            detail = bodyDetail(notification, framing),
         )
+    }
+
+    private fun gameSurface(notification: ApiNotification): GameSurfaceTitle? =
+        when (notification.notificationType) {
+            MeeshyNotificationType.GAME_LEAGUE_RESULT -> GameSurfaceTitle.LEAGUE_RESULT
+            MeeshyNotificationType.GAME_SEASON_STEP -> GameSurfaceTitle.SEASON_STEP
+            MeeshyNotificationType.GAME_MISSION_WINDOW -> GameSurfaceTitle.MISSION_WINDOW
+            else -> null
+        }
+
+    private fun hasActor(notification: ApiNotification): Boolean =
+        notification.actor?.displayName.nonBlank() != null || notification.actor?.username.nonBlank() != null
+
+    /** Le corps servi d'un message : le texte, sinon le résumé d'un média. */
+    private fun servedMessageBody(notification: ApiNotification): String? =
+        notification.metadata?.messagePreview.nonBlank() ?: notification.content.nonBlank()
+
+    /** Le détail qui remplace le corps servi (position, contact, invitation, lien nus) — jamais protégé. */
+    private fun bodyDetail(notification: ApiNotification, framing: BannerFraming): NotificationMessageDetail? {
+        if (framing != BannerFraming.CONVERSATION) return null
+        val detail = notification.messageDetail ?: return null
+        return detail.takeIf { it.shouldReplace(servedMessageBody(notification)) }
     }
 
     private fun headline(
@@ -157,14 +199,27 @@ public object NotificationBannerFraming {
                 val group = groupName.nonBlank()
                     ?: notification.context?.conversationTitle.nonBlank()
                     ?: notification.subtitle.nonBlank()
-                if (isDirect || group == null) BannerHeadline.Plain(actor)
-                else BannerHeadline.InConversation(actor, group)
+                when {
+                    isDirect || group == null ->
+                        if (actor.isEmpty()) BannerHeadline.Someone(null) else BannerHeadline.Plain(actor)
+                    else -> BannerHeadline.InConversation(actor, group)
+                }
             }
             BannerFraming.RELATION, BannerFraming.ACTION -> {
-                val head = notification.title.nonBlank() ?: actor
+                // `title` est le cadrage d'en-tête que la passerelle compose ; `subtitle` la phrase
+                // d'action localisée. Sans acteur ni titre, une notification de jeu se nomme par sa
+                // SURFACE, le reste par « Quelqu'un » — jamais une chaîne vide.
                 val action = notification.subtitle.nonBlank()
-                    ?: return BannerHeadline.Plain(head)
-                BannerHeadline.Plain("$head $action")
+                val head = notification.title.nonBlank()
+                if (head == null && !hasActor(notification)) {
+                    val surface = gameSurface(notification)
+                    return if (surface != null) BannerHeadline.GameSurface(surface, action)
+                    else BannerHeadline.Someone(action)
+                }
+                val resolved = head ?: actor
+                // Un titre serveur qui PORTE déjà l'action ne la reçoit pas une seconde fois.
+                if (action == null || resolved.endsWith(action)) BannerHeadline.Plain(resolved)
+                else BannerHeadline.Plain("$resolved $action")
             }
         }
     }
@@ -174,8 +229,11 @@ public object NotificationBannerFraming {
         // même chose, la seconde moins bien.
         BannerFraming.RELATION -> null
 
-        BannerFraming.CONVERSATION ->
-            notification.metadata?.messagePreview.nonBlank() ?: notification.content.nonBlank()
+        // Un détail qui doit céder (position, carte, invitation, lien nus) porte le corps : `null` ici.
+        BannerFraming.CONVERSATION -> {
+            val served = servedMessageBody(notification)
+            if (bodyDetail(notification, framing) != null) null else served
+        }
 
         // Le serveur garantit que la LIGNE DE LISTE n'est jamais vide : à défaut d'extrait,
         // `content` retombe sur la phrase d'action elle-même (« a publié une nouvelle story »).
@@ -192,13 +250,16 @@ public object NotificationBannerFraming {
         }
     }
 
-    private fun mediaSummary(notification: ApiNotification): MediaSummary? =
-        when (notification.metadata?.mediaType?.lowercase()) {
+    private fun mediaSummary(notification: ApiNotification): MediaSummary? {
+        val kind = notification.metadata?.mediaType?.lowercase()
+            ?: notification.metadata?.attachments?.firstType?.lowercase()?.takeUnless { notification.declaresProtection }
+        return when (kind) {
             "image" -> MediaSummary.IMAGE
             "video" -> MediaSummary.VIDEO
             "audio" -> MediaSummary.AUDIO
             else -> null
         }
+    }
 
     private fun reactionBadge(notification: ApiNotification): String? {
         if (notification.type.lowercase() !in REACTION_TYPES) return null
@@ -215,9 +276,20 @@ public object NotificationBannerFraming {
 
     private fun thumbnailUrl(notification: ApiNotification): String? {
         notification.metadata?.postThumbnailUrl.nonBlank()?.let { return it }
+        // Un message qui DÉCLARE une protection ne montre AUCUNE vignette, d'où qu'elle vienne.
+        if (notification.declaresProtection) return null
+        detailThumbnail(notification)?.let { return it }
         val mime = notification.context?.firstAttachmentMimeType ?: return null
         if (!mime.startsWith("image/")) return null
         return notification.context.firstAttachmentUrl.nonBlank()
+    }
+
+    /** La vignette d'une VIDÉO (`thumbnailUrl`, jamais le fichier) ou l'image d'aperçu d'un LIEN. */
+    private fun detailThumbnail(notification: ApiNotification): String? {
+        val mime = notification.context?.firstAttachmentMimeType?.lowercase().orEmpty()
+        val isVideo = mime.startsWith("video/") || notification.metadata?.attachments?.firstType == "video"
+        if (isVideo) notification.detailField("thumbnailUrl").nonBlank()?.let { return it }
+        return (notification.messageDetail as? NotificationMessageDetail.Link)?.imageUrl.nonBlank()
     }
 
     private fun contentIcon(notification: ApiNotification): BannerContentIcon {

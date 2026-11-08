@@ -6,6 +6,7 @@
  * gardent.
  */
 
+import type { MessageLiveness } from '../messages/message-liveness';
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
@@ -60,8 +61,10 @@ export type MessageBannerSource = MessagePrismSource & {
 };
 
 /**
- * Ce qu'une relecture a APPRIS de la vie du message — trois états, et le
- * troisième n'est pas un détail de forme.
+ * Le verdict de vie d'un message — réexporté, car **la loi vit désormais dans
+ * `services/messages/message-liveness.ts`** (cycle 140, #16685). Les trois
+ * états et leur arbitrage y sont documentés ; ce qui suit est la raison pour
+ * laquelle cet éventail-ci la consomme.
  *
  * `createMessageNotification` porte cette garde depuis toujours, et son
  * commentaire dit pourquoi : entre le commit du message et l'éventail il peut
@@ -70,28 +73,12 @@ export type MessageBannerSource = MessagePrismSource & {
  * règle vaut mot pour mot pour la réponse et la mention, qui relisent la MÊME
  * ligne dans la MÊME fenêtre (cycle 127).
  *
- *  - `live` — la ligne a été lue : ni rappelée, ni expirée. Annoncer.
- *  - `gone` — la ligne a été lue et PROUVE le rappel ou l'expiration. Se taire.
- *  - `unknown` — la lecture n'a rien PROUVÉ : elle a levé, ou n'a rendu aucune
- *    ligne. Annoncer.
- *
- * La distinction `gone` / `unknown` est la leçon du cycle 112 : « la dépendance
- * n'a pas répondu » et « la réponse dit non » sont deux verdicts, et un `catch`
- * qui les confond transforme un hoquet Mongo en silence pour tout un fil. La
- * relecture reste donc fail-OPEN sur l'ERREUR — une bannière appauvrie se
- * rattrape, une annonce perdue non — et fail-CLOSED sur la PREUVE, où c'est un
- * secret qui est en jeu.
- *
- * **Une ligne ABSENTE est `unknown`, jamais `gone`**, et le dépôt le tenait déjà
- * pour dit : le balayage de rétraction de l'éventail refuse d'agir dessus dans
- * les mêmes termes — « `deletedAt` non nul est la SEULE preuve d'un rappel. Une
- * ligne absente ne prouve rien, et aucun chemin de la gateway ne supprime un
- * message physiquement ». Le mécanisme qui la produit est réel : le message vient
- * d'être committé, et une lecture servie par un secondaire en retard sur le jeu
- * de réplicas rend `null` pour un message parfaitement vivant. En faire une
- * preuve ferait perdre des annonces qu'aucun réessai ne rattrape.
+ * Elle valait aussi, mot pour mot, pour le REJEU hors ligne — qui remet le
+ * message ENTIER et non une bannière, et ne la portait pas. C'est ce qui a fait
+ * sortir la règle de cette classe : trois éventails qui s'accordent ne disent
+ * rien du quatrième chemin.
  */
-export type MessageLiveness = 'live' | 'gone' | 'unknown';
+export type { MessageLiveness } from '../messages/message-liveness';
 
 /** Rien à traduire — la réponse de `previewPrismSource` sur un aperçu sans source. */
 export const EMPTY_PRISM_SOURCE: MessagePrismSource = {

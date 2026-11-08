@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -96,6 +97,7 @@ internal fun CallControlsPill(
                                     title = callFamilyTitle(row.family),
                                     items = row.actions.mapNotNull { items[it] },
                                     onAction = onAction,
+                                    dimmed = if (state.isOnHold) HOLD_DIMMED_ACTIONS else emptySet(),
                                 )
                             }
                         }
@@ -134,7 +136,10 @@ private fun BaseRow(
                 modifier = Modifier.semantics { stateDescription = expandedLabel },
             )
         }
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
+        Row(
+            Modifier.weight(1f).alpha(if (state.isOnHold) HOLD_DIMMED_ALPHA else 1f),
+            horizontalArrangement = Arrangement.Center,
+        ) {
             CallPillButton(
                 icon = if (state.isMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
                 kind = if (state.isMuted) CallPillKind.Active else CallPillKind.Normal,

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "photo_crop_editor_avatar",
+          "status": "android-only"
+        },
+        {
+          "androidName": "photo_crop_editor_banner",
+          "status": "android-only"
+        },
+        {
+          "androidName": "photo_crop_move_down",
+          "status": "android-only"
+        },
+        {
+          "androidName": "photo_crop_move_left",
+          "status": "android-only"
+        },
+        {
+          "androidName": "photo_crop_move_right",
+          "status": "android-only"
+        },
+        {
+          "androidName": "photo_crop_move_up",
+          "status": "android-only"
+        },
+        {
+          "androidName": "photo_crop_zoom_in",
+          "status": "android-only"
+        },
+        {
+          "androidName": "photo_crop_zoom_out",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

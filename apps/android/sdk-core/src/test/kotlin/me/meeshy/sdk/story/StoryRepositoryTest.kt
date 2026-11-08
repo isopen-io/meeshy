@@ -842,4 +842,16 @@ class StoryRepositoryTest {
 
         assertThat(merged).isNull()
     }
+
+    @Test
+    fun `repost republishes the story as a STORY, the way the iOS rail does`() = runTest {
+        coEvery { api.repost(any(), any()) } returns ApiResponse(success = true, data = ApiPost(id = "rp1", type = "STORY"))
+
+        val result = repository().repost("s1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        coVerify(exactly = 1) {
+            api.repost("s1", me.meeshy.sdk.net.api.RepostPostRequest(content = null, isQuote = false, targetType = "STORY"))
+        }
+    }
 }

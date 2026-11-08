@@ -68,6 +68,9 @@ class FeedColdStartOfflineTest {
         every { commentDeleted } returns MutableSharedFlow()
         every { postTranslationUpdated } returns MutableSharedFlow()
         every { mediaCaptionTranslationUpdated } returns MutableSharedFlow()
+        every { postReactionAdded } returns MutableSharedFlow()
+        every { postReactionRemoved } returns MutableSharedFlow()
+        every { reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { postUpdated } returns MutableSharedFlow()
         every { postReposted } returns MutableSharedFlow()
     }

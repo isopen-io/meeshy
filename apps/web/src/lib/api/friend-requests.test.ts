@@ -145,3 +145,22 @@ describe('les gestes partent à la route canonique', () => {
     expect(sent.ok && sent.data.id).toBe('64f0c0ffee0000000000f001');
   });
 });
+
+describe('le cran qu’une demande vise (#13938)', () => {
+  test('Connaissance, Proche, Sang se lisent ; Ami, nul, absent ou illisible restent une demande simple', () => {
+    expect(decodeFriendRequest(wireRequest({ targetLevel: 'CLOSE' }))?.targetLevel).toBe('CLOSE');
+    expect(decodeFriendRequest(wireRequest({ targetLevel: 'BLOOD' }))?.targetLevel).toBe('BLOOD');
+    expect(decodeFriendRequest(wireRequest({ targetLevel: 'ACQUAINTANCE' }))?.targetLevel).toBe('ACQUAINTANCE');
+    for (const served of ['FRIEND', null, undefined, 'ATOM', 'close', 3]) {
+      expect(Object.keys(decodeFriendRequest(wireRequest({ targetLevel: served })) ?? {})).not.toContain('targetLevel');
+    }
+  });
+
+  test('demander un cran : `targetLevel` dans le corps ; Ami part exactement comme une demande simple', async () => {
+    const { calls, deps } = gatewayReplying({ status: 201, body: { success: true, data: wireRequest({ targetLevel: 'CLOSE' }) } });
+    const sent = await sendFriendRequest(deps, 'u-ada', 'CLOSE');
+    await sendFriendRequest(deps, 'u-ada', 'FRIEND');
+    expect(calls.map((c) => c.body)).toEqual([{ receiverId: 'u-ada', targetLevel: 'CLOSE' }, { receiverId: 'u-ada' }]);
+    expect(sent.ok && sent.data.targetLevel).toBe('CLOSE');
+  });
+});

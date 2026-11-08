@@ -175,7 +175,7 @@ extension MessageRecord {
         )
         // #7579 — l'état « déjà ouvert » d'une vue unique vit dans la colonne ;
         // le fil, qui ne lit que GRDB, le reçoit d'ici.
-        message.viewOnceOpenedAt = viewOnceOpenedAt
+        (message.viewOnceOpenedAt, message.servedClientMessageId) = (viewOnceOpenedAt, servedClientMessageId)
         message.senderRing = Self.decodeJSONText(ServedProfileDecorItem.self, senderRingJson, field: "senderRingJson", id: localId)
         message.trackedLinkMap = Self.decodeJSONText([TrackedLink].self, trackedLinksJson,
                                                      field: "trackedLinksJson", id: localId)?.trackedLinkMap ?? [:]

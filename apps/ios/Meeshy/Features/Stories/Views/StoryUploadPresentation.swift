@@ -5,6 +5,12 @@ import Foundation
 /// patron que `MyStoriesTabResolver`).
 enum StoryUploadPresentation {
 
+    /// « Annuler l'envoi » est offert tant qu'aucun octet n'est en vol (#14879) :
+    /// en attente comme en échec — un échec n'est qu'une attente qu'on relance.
+    static func offersCancelSend(_ phase: StoryViewModel.StoryUploadState.UploadPhase) -> Bool {
+        phase.isWaiting || phase.isFailed
+    }
+
     struct Surfaced {
         let upload: StoryViewModel.StoryUploadState
         /// Les AUTRES entrées, tous états confondus — jamais l'entrée mise en

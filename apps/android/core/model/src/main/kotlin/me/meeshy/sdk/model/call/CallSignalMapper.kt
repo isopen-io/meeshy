@@ -86,6 +86,12 @@ object CallSignalMapper {
         json.decodeFromString<CallSignalEnvelope>(rawJson)
     }.getOrNull()
 
+    /** Décode un `call:error` : son code, l'appel visé (absent chez une passerelle ancienne) et son texte. */
+    fun callError(rawJson: String): CallErrorSignal? = runCatching {
+        val payload = json.decodeFromString<CallErrorPayload>(rawJson)
+        CallErrorSignal(payload.code, payload.callId, payload.message)
+    }.getOrNull()
+
     /**
      * Decode a `call:ice-servers-refreshed` frame: the call it answers, the fresh STUN/TURN servers and their
      * lifetime (`ttl`, seconds), which re-arms the next refresh (#13773, iOS `CallTurnCredentials`). `null` on a

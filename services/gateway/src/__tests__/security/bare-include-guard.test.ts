@@ -304,18 +304,27 @@ function compterParFichier(sites: ReadonlyArray<BareIncludeSite>): Record<string
 // =============================================================================
 const FROZEN_BARE_INCLUDES: Readonly<Record<string, number>> = {
   'conversation-preferences.ts': 2,
-  // #4284 a découpé conversations/core.ts en fichiers frères ; ce site vit
-  // désormais dans core-lifecycle.ts (compte inchangé : 1).
-  'conversations/core-lifecycle.ts': 1,
+  // #16603 a réparé le dernier site de core-lifecycle.ts (`include: { members: true }`
+  // de la garde de communauté de `POST /conversations`) : sa ligne tombe.
   'conversations/participant-removal.ts': 1,
   // #4713 a extrait le NOYAU de `PATCH …/role` hors de son gestionnaire ; ce
   // site (`include: { user: true }` sur la ligne du demandeur) vit desormais
   // dans `participant-role-core.ts`, inchange. Compte inchange : 1 — meme
   // mecanique que #4284 sur `core-lifecycle.ts`.
   'conversations/participant-role-core.ts': 1,
-  'reactions.ts': 1,
-  'translation-non-blocking.ts': 1,
-  'translation.ts': 1,
+  // #16561 a RETIRÉ le site de `reactions.ts` : son `participants: true` était
+  // la garde d'admission de `GET /reactions/:messageId`, qui décidait donc sur
+  // la liste NON filtrée — un membre banni y gardait l'accès au trombinoscope
+  // des réactions. L'include porte désormais la loi partagée
+  // (`participants: { where: ADMITTED_FILE_READER_WHERE }`), donc le fichier
+  // n'a plus aucun include nu. Une entrée EN MOINS est un site RÉPARÉ, et
+  // retirer sa ligne fait partie du correctif.
+  //
+  // #16557 a RETIRÉ les sites des deux routes de traduction demandée : leur
+  // `participants: true` était, là aussi, la garde d'admission — jugée sur la
+  // liste NON filtrée (`isActive` ignoré, un ex-membre passait). Elles appellent
+  // désormais la loi de lecture partagée (`translationReadGate.ts`) et ne
+  // chargent plus aucun participant.
 };
 
 describe("Aucun include: { relation: true } hors inventaire figé (#4166 critère 5)", () => {

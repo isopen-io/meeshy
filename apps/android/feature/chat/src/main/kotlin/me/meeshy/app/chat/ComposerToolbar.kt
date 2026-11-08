@@ -55,6 +55,7 @@ import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.composer.ComposerCapability
 import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.sdk.model.composer.ComposerCounterState
 import me.meeshy.sdk.model.composer.ComposerIconTint
 import me.meeshy.sdk.model.composer.ComposerProtection
 import me.meeshy.sdk.model.composer.ComposerToolbarDoors
@@ -112,6 +113,7 @@ internal fun ComposerToolbar(
     onFold: (() -> Unit)? = null,
     configuration: ComposerConfiguration = ComposerConfiguration.CONVERSATION,
     onSticker: (() -> Unit)? = null,
+    counter: ComposerCounterState = ComposerCounterState.Hidden,
 ) {
     val iconTint = composerIconTint(effects.flags)
     val flags = effects.flags
@@ -125,102 +127,110 @@ internal fun ComposerToolbar(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
         Row(
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    if (scroll.canScrollForward) {
-                        val fade = fadeWidth.toPx().coerceAtMost(size.width)
-                        drawRect(
-                            brush = Brush.horizontalGradient(
-                                listOf(Color.Black, Color.Transparent),
-                                startX = size.width - fade,
-                                endX = size.width,
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    }
-                }
-                .horizontalScroll(scroll),
+            modifier = Modifier.weight(1f).testTag(COMPOSER_TOOLBAR_LEADING_TAG),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
         ) {
-            if (configuration.offers(ComposerCapability.EPHEMERAL)) {
-                val ephemeralChoice = EphemeralChoice.of(effects)
-                val ephemeralOn = MessageEffectFlags.has(flags, MessageEffectFlags.EPHEMERAL)
-                val ephemeralTint = composerProtectionColor(ComposerProtection.EPHEMERAL, forIcon = true)
-                val ephemeralDescription = if (ephemeralOn) {
-                    stringResource(R.string.chat_ephemeral_active, ephemeralChoiceA11y(ephemeralChoice))
-                } else {
-                    stringResource(R.string.chat_ephemeral_activate)
-                }
-                ComposerToolToggle(
-                    icon = if (ephemeralOn || showEphemeralRail) MeeshyIcons.FlameFilled else MeeshyIcons.Flame,
-                    glyph = if (ephemeralChoice == EphemeralChoice.AfterRead) {
-                        { _ -> FlameEyeGlyph(size = 16.dp, tint = ephemeralTint) }
+            Row(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        if (scroll.canScrollForward) {
+                            val fade = fadeWidth.toPx().coerceAtMost(size.width)
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    listOf(Color.Black, Color.Transparent),
+                                    startX = size.width - fade,
+                                    endX = size.width,
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        }
+                    }
+                    .horizontalScroll(scroll),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+            ) {
+                if (configuration.offers(ComposerCapability.EPHEMERAL)) {
+                    val ephemeralChoice = EphemeralChoice.of(effects)
+                    val ephemeralOn = MessageEffectFlags.has(flags, MessageEffectFlags.EPHEMERAL)
+                    val ephemeralTint = composerProtectionColor(ComposerProtection.EPHEMERAL, forIcon = true)
+                    val ephemeralDescription = if (ephemeralOn) {
+                        stringResource(R.string.chat_ephemeral_active, ephemeralChoiceA11y(ephemeralChoice))
                     } else {
-                        null
-                    },
-                    active = ephemeralOn,
-                    label = (ephemeralChoice as? EphemeralChoice.Duration)
-                        ?.let { stringResource(ephemeralDurationLabel(it.duration)) },
-                    tint = iconTint,
-                    activeTint = ephemeralTint,
-                    description = ephemeralDescription,
-                    onClick = onEphemeral,
-                )
+                        stringResource(R.string.chat_ephemeral_activate)
+                    }
+                    ComposerToolToggle(
+                        icon = if (ephemeralOn || showEphemeralRail) MeeshyIcons.FlameFilled else MeeshyIcons.Flame,
+                        glyph = if (ephemeralChoice == EphemeralChoice.AfterRead) {
+                            { _ -> FlameEyeGlyph(size = 16.dp, tint = ephemeralTint) }
+                        } else {
+                            null
+                        },
+                        active = ephemeralOn,
+                        label = (ephemeralChoice as? EphemeralChoice.Duration)
+                            ?.let { stringResource(ephemeralDurationLabel(it.duration)) },
+                        tint = iconTint,
+                        activeTint = ephemeralTint,
+                        description = ephemeralDescription,
+                        onClick = onEphemeral,
+                    )
+                }
+                if (configuration.offers(ComposerCapability.BLUR)) {
+                    val blurOn = MessageEffectFlags.has(flags, MessageEffectFlags.BLURRED)
+                    ComposerToolToggle(
+                        icon = if (blurOn) MeeshyIcons.EyeOffFilled else MeeshyIcons.EyeOff,
+                        active = blurOn,
+                        label = if (blurOn) stringResource(R.string.chat_effect_blurred) else null,
+                        tint = iconTint,
+                        activeTint = composerProtectionColor(ComposerProtection.BLURRED),
+                        description = stringResource(R.string.chat_effect_blurred),
+                        onClick = { onVeil(ComposerProtection.BLURRED) },
+                    )
+                }
+                if (configuration.offers(ComposerCapability.VIEW_ONCE)) {
+                    val onceOn = MessageEffectFlags.has(flags, MessageEffectFlags.VIEW_ONCE)
+                    ComposerToolToggle(
+                        glyph = { color -> ViewOnceGlyph(filled = onceOn, color = color) },
+                        active = onceOn,
+                        label = if (onceOn) stringResource(R.string.chat_effect_view_once) else null,
+                        tint = iconTint,
+                        activeTint = composerProtectionColor(ComposerProtection.VIEW_ONCE),
+                        description = stringResource(R.string.chat_effect_view_once),
+                        onClick = { onVeil(ComposerProtection.VIEW_ONCE) },
+                    )
+                }
+                if (configuration.offers(ComposerCapability.EFFECTS)) {
+                    val count = MessageEffectsEditor.activeCount(effects.copy(flags = flags and MessageEffectFlags.LIFECYCLE_MASK.inv()))
+                    ComposerToolToggle(
+                        icon = MeeshyIcons.MagicWand,
+                        active = count > 0,
+                        label = if (count > 0) count.toString() else null,
+                        tint = iconTint,
+                        activeTint = iconTint,
+                        description = stringResource(R.string.chat_effects_open),
+                        onClick = onEffects,
+                    )
+                }
+                // Le sticker après les bascules (iOS `UniversalComposerBar+Toolbar`, #9082) : rendu seulement si l'hôte sait
+                // ouvrir la feuille (loi 4).
+                if (configuration.offers(ComposerCapability.STICKER) && onSticker != null) {
+                    ComposerGlassDoor(MeeshyIcons.EmojiFilled, stringResource(R.string.composer_attach_sticker), iconTint, onSticker)
+                }
             }
-            if (configuration.offers(ComposerCapability.BLUR)) {
-                val blurOn = MessageEffectFlags.has(flags, MessageEffectFlags.BLURRED)
-                ComposerToolToggle(
-                    icon = if (blurOn) MeeshyIcons.EyeOffFilled else MeeshyIcons.EyeOff,
-                    active = blurOn,
-                    label = if (blurOn) stringResource(R.string.chat_effect_blurred) else null,
+            if (configuration.offers(ComposerCapability.LANGUAGE)) {
+                ComposerLanguagePill(
+                    languageCode = languageCode,
                     tint = iconTint,
-                    activeTint = composerProtectionColor(ComposerProtection.BLURRED),
-                    description = stringResource(R.string.chat_effect_blurred),
-                    onClick = { onVeil(ComposerProtection.BLURRED) },
+                    accentColor = accentColor,
+                    onPick = onPickLanguage,
+                    collapsed = scroll.maxValue > 0,
                 )
-            }
-            if (configuration.offers(ComposerCapability.VIEW_ONCE)) {
-                val onceOn = MessageEffectFlags.has(flags, MessageEffectFlags.VIEW_ONCE)
-                ComposerToolToggle(
-                    glyph = { color -> ViewOnceGlyph(filled = onceOn, color = color) },
-                    active = onceOn,
-                    label = if (onceOn) stringResource(R.string.chat_effect_view_once) else null,
-                    tint = iconTint,
-                    activeTint = composerProtectionColor(ComposerProtection.VIEW_ONCE),
-                    description = stringResource(R.string.chat_effect_view_once),
-                    onClick = { onVeil(ComposerProtection.VIEW_ONCE) },
-                )
-            }
-            if (configuration.offers(ComposerCapability.EFFECTS)) {
-                val count = MessageEffectsEditor.activeCount(effects.copy(flags = flags and MessageEffectFlags.LIFECYCLE_MASK.inv()))
-                ComposerToolToggle(
-                    icon = MeeshyIcons.MagicWand,
-                    active = count > 0,
-                    label = if (count > 0) count.toString() else null,
-                    tint = iconTint,
-                    activeTint = iconTint,
-                    description = stringResource(R.string.chat_effects_open),
-                    onClick = onEffects,
-                )
-            }
-            // Le sticker après les bascules (iOS `UniversalComposerBar+Toolbar`, #9082) : rendu seulement si l'hôte sait
-            // ouvrir la feuille (loi 4).
-            if (configuration.offers(ComposerCapability.STICKER) && onSticker != null) {
-                ComposerGlassDoor(MeeshyIcons.EmojiFilled, stringResource(R.string.composer_attach_sticker), iconTint, onSticker)
             }
         }
-        if (configuration.offers(ComposerCapability.LANGUAGE)) {
-            ComposerLanguagePill(
-                languageCode = languageCode,
-                tint = iconTint,
-                accentColor = accentColor,
-                onPick = onPickLanguage,
-            )
-        }
+        ComposerCharacterCounter(counter)
         val doors = ComposerToolbarDoors.trailing(
             offersLibrary = onLibrary != null,
             offersCamera = onCamera != null,
@@ -365,6 +375,8 @@ private fun ComposerGlassDoor(icon: ImageVector, label: String, tint: Color, onC
 }
 
 /** Le repère de test du rail de l'éphémère et de chacune de ses pastilles. */
+/** Les bascules et la pastille de langue : elles prennent toute la place libre, les portes de droite gardent l'angle (iOS `Spacer`). */
+internal const val COMPOSER_TOOLBAR_LEADING_TAG: String = "composer-toolbar-leading"
 internal const val EPHEMERAL_RAIL_TAG: String = "composer-ephemeral-rail"
 internal const val EPHEMERAL_OFF_CHIP_TAG: String = "composer-ephemeral-off"
 internal fun ephemeralChoiceChipTag(choice: EphemeralChoice): String = when (choice) {

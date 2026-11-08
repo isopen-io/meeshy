@@ -2,6 +2,7 @@ package me.meeshy.sdk.chat
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageStarredEvent
 import me.meeshy.sdk.model.StarredSnapshotFactory
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
@@ -37,7 +38,7 @@ class StarredMessagesSync(
             return
         }
         if (store.starred.value.isStarred(event.messageId)) return
-        val message = source.message(event.messageId) ?: return
+        val message = source.message(event.messageId)?.takeIf { it.isStarrable() } ?: return
         val conversation = source.conversation(event.conversationId)
         val snapshot = StarredSnapshotFactory.snapshot(
             message = message,
@@ -49,6 +50,10 @@ class StarredMessagesSync(
         )
         fence.commitOrWrite(ticket) { store.placeRemote(snapshot) }
     }
+
+    /** Supprimé ou à vue unique : la passerelle refuse de l'étoiler (`MESSAGE_NOT_STARRABLE`), le cache ne le reconstruit pas. */
+    private fun ApiMessage.isStarrable(): Boolean =
+        deletedAt == null && isViewOnce != true && ((effectFlags?.toLong() ?: 0L) and MessageEffectFlags.VIEW_ONCE) == 0L
 
     fun onGone(messageId: String) = store.unstar(messageId)
 

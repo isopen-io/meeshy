@@ -107,6 +107,16 @@ extension ConversationView {
     /// le front : une porte restée levée (composer non monté) ne changerait
     /// plus de valeur, et une affectation faite pendant la passe qui monte le
     /// composer n'est pas vue.
+    /// « dis-lui salut » (#16338) : les @mentions des arrivants, puis le focus.
+    func greetArrivals(messageId: String) {
+        guard let next = ArrivalGreeting.draft(greeting: messageId, in: viewModel.messages,
+                                               ownHandle: AuthManager.shared.currentUser?.username,
+                                               draft: composerText.text) else { return }
+        HapticFeedback.light()
+        composerText.text = next
+        requestReplyFocus(openingConversation: false)
+    }
+
     func requestReplyFocus(openingConversation: Bool) {
         composerState.focusRequested = false
         let delay = ConversationComposerState.replyFocusDelay(openingConversation: openingConversation)
@@ -115,18 +125,9 @@ extension ConversationView {
         }
     }
 
-    // `scrollToAndHighlight(_:proxy:)` a vécu ici sans qu'aucun commit du dépôt
-    // ne l'appelle. C'était le saut-vers-le-message de l'époque où le fil était
-    // une `ScrollView` SwiftUI (`ScrollViewProxy`) ; la liste est passée à
-    // `MessageListViewController`, et le saut vivant y est
-    // `scrollToMessage(localId:)` / `scrollToMessageFast(localId:)`, dont le
-    // `flashCell(at:)` fait le surlignage. Les six sites vivants passent tous
-    // par `scrollState.scrollToMessageId`.
-    //
-    // Sa dépouille emportait `conversation.message.unavailable` — une chaîne
-    // traduite en sept locales pour un toast qu'aucun geste ne pouvait
-    // déclencher — et `scrollState.highlightedMessageId`, dont elle était le
-    // seul écrivain non nul et que RIEN ne lisait.
+    // Le saut vers un message vit dans `MessageListViewController`
+    // (`scrollToMessage(localId:)`, surlignage par `flashCell(at:)`) : les
+    // sites vivants passent tous par `scrollState.scrollToMessageId`.
 
     // MARK: - Search Overlay
 

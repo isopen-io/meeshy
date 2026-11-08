@@ -211,4 +211,38 @@ class BubbleRenderKindTest {
         assertThat(BubbleRenderKind.Kind.Burned.isSystem).isFalse()
         assertThat(BubbleRenderKind.Kind.EphemeralExpired.isSystem).isFalse()
     }
+
+    // MARK: - ViewOnceSealed (une vue unique pas encore ouverte par CE lecteur)
+
+    @Test
+    fun resolve_sealedViewOnce_isViewOnceSealed() {
+        assertThat(BubbleRenderKind.resolve(isDeleted = false, ephemeral = EphemeralLifecycle.State.None, isViewOnce = true, isViewOnceSealed = true))
+            .isEqualTo(BubbleRenderKind.Kind.ViewOnceSealed)
+    }
+
+    @Test
+    fun resolve_sealedWinsOverEphemeralExpired() {
+        assertThat(BubbleRenderKind.resolve(isDeleted = false, ephemeral = EphemeralLifecycle.State.Expired, isViewOnce = true, isViewOnceSealed = true))
+            .isEqualTo(BubbleRenderKind.Kind.ViewOnceSealed)
+    }
+
+    @Test
+    fun resolve_deletedAndSystemWinOverSealed() {
+        assertThat(BubbleRenderKind.resolve(isDeleted = true, ephemeral = EphemeralLifecycle.State.None, isViewOnceSealed = true))
+            .isEqualTo(BubbleRenderKind.Kind.Deleted)
+        assertThat(BubbleRenderKind.resolve(isDeleted = true, ephemeral = EphemeralLifecycle.State.None, isSystem = true, isViewOnceSealed = true))
+            .isEqualTo(BubbleRenderKind.Kind.System)
+    }
+
+    @Test
+    fun resolve_openedWinsOverSealedFlag() {
+        assertThat(BubbleRenderKind.resolve(isDeleted = false, ephemeral = EphemeralLifecycle.State.None, isViewOnce = true, isViewOnceOpenedByMe = true, isViewOnceSealed = true))
+            .isEqualTo(BubbleRenderKind.Kind.Burned)
+    }
+
+    @Test
+    fun isViewOnceSealed_trueOnlyForSealedKind() {
+        assertThat(BubbleRenderKind.Kind.ViewOnceSealed.isViewOnceSealed).isTrue()
+        assertThat(BubbleRenderKind.Kind.Standard.isViewOnceSealed).isFalse()
+    }
 }

@@ -37,6 +37,7 @@ import arQuote from './catalog-ar-quote';
 import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
+import arAuthFooter from './catalog-ar-auth-footer';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
 import arContentRefused from './catalog-ar-content-refused';
@@ -502,6 +503,7 @@ const ar = {
 
   'media.video.play': 'تشغيل الفيديو',
   'media.video.pause': 'إيقاف مؤقت',
+  'media.video.paused': 'متوقّف مؤقتاً',
   'media.video.position': 'موضع التشغيل',
   'media.audio.position': 'موضع التشغيل',
   'media.audio.speed': 'سرعة التشغيل',
@@ -592,6 +594,7 @@ const ar = {
   'discover.tab.discover': 'اكتشاف',
   'discover.tab.requests': 'الطلبات',
   'discover.tab.blocked': 'المحظورون',
+  'discover.tab.circles': 'الدوائر',
   'discover.tab.requests.count.one': 'الطلبات، {count} طلب وارد',
   'discover.tab.requests.count.other': 'الطلبات، {count} طلبات واردة',
   'discover.invite.title': 'دعوة عبر البريد الإلكتروني',
@@ -857,13 +860,20 @@ const ar = {
   'story.studio.audience.title': 'الجمهور',
   'story.studio.audience.public': 'عام',
   'story.studio.audience.community': 'المجتمعات',
-  'story.studio.audience.friends': 'جهات الاتصال',
+  'story.studio.audience.acquaintances': 'المعارف',
+  'story.studio.audience.friends': 'الأصدقاء',
+  'story.studio.audience.close': 'المقرّبون',
+  'story.studio.audience.blood': 'الدم',
   'story.studio.audience.except': 'باستثناء…',
   'story.studio.audience.only': 'فقط…',
   'story.studio.audience.private': 'خاص',
+  'story.studio.audience.restricted': 'مقيّدة',
   'story.studio.audience.subtitle.public': 'الجميع، بمن فيهم غير المتابعين',
   'story.studio.audience.subtitle.community': 'أعضاء مجتمعاتك',
+  'story.studio.audience.subtitle.acquaintances': 'معارفك وأصدقاؤك والمقرّبون والدم',
   'story.studio.audience.subtitle.friends': 'جهات اتصالك المقبولة',
+  'story.studio.audience.subtitle.close': 'المقرّبون منك والدم',
+  'story.studio.audience.subtitle.blood': 'الدم فقط — لا يُعاد نشره أبدًا',
   'story.studio.audience.subtitle.private': 'أنت فقط — لا يُنشر شيء',
   'story.studio.audience.refusal.people': 'اختيار الأشخاص غير متاح بعد على الويب.',
   'story.studio.audience.scope': 'الجمهور المختار ملك للمنشور، وليس للتنسيق أبدًا: تغيير التنسيق يحافظ عليه.',
@@ -932,6 +942,13 @@ const ar = {
   'comments.send': 'إرسال التعليق',
   'comments.row.pending': 'جارٍ الإرسال',
   'comments.signin': 'سجّل الدخول للتعليق.',
+  'comments.closed': 'التعليقات معطّلة.',
+  'feed.post.menu.comments_off': 'تعطيل التعليقات',
+  'feed.post.menu.comments_on': 'إعادة تفعيل التعليقات',
+  'feed.post.comments_off.done': 'تم تعطيل التعليقات',
+  'feed.post.comments_on.done': 'تمت إعادة تفعيل التعليقات',
+  'feed.post.comments_toggle.failed': 'لم يُحفظ إعداد التعليقات.',
+  'story.studio.comments_off.hint': 'لن يتمكن أحد من التعليق على هذا المنشور.',
   'comment.send.error': 'تعذّر نشر التعليق.',
   'comment.send.pending': 'لم يُؤكَّد التعليق — غير متصل',
   'comment.send.empty': 'اكتب شيئًا قبل الإرسال.',
@@ -949,7 +966,6 @@ const ar = {
   'thread.unread-separator.one': '{count} رسالة غير مقروءة',
   'thread.unread-separator.other': '{count} رسائل غير مقروءة',
   'thread.long-message.read-more': 'اقرأ المزيد',
-  'thread.long-message.collapse': 'عرض أقل',
   'message-detail.info.title': 'معلومات الرسالة',
   'message-detail.received-by': 'استلمها',
   'message-detail.read-by': 'قرأها',
@@ -974,6 +990,7 @@ const ar = {
   'message-detail.retry': 'إعادة المحاولة',
 
   ...arDownload,
+  ...arAuthFooter,
   ...arPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -981,6 +998,8 @@ const ar = {
   'composer.viewOnce.activate': 'تفعيل وضع المشاهدة لمرة واحدة',
   'composer.viewOnce.active': 'وضع المشاهدة لمرة واحدة نشط',
   'composer.viewOnce.label': 'مشاهدة لمرة واحدة',
+  'conversation.composer.fold': 'طيّ شريط الرسائل',
+  'conversation.composer.unfold': 'إظهار شريط الرسائل',
   'composer.protection.ephemeral.state': 'الوضع المؤقت مفعّل',
   'composer.protection.blur.state': 'وضع التمويه مفعّل',
   'message.location.shared': 'موقع مشترك',
@@ -1036,6 +1055,8 @@ const ar = {
   'media.reactions.badge.a11y': 'التفاعلات',
   'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
   'message.join.noAccount': 'بدون حساب',
+  'message.join.greet.one': 'قل مرحبًا',
+  'message.join.greet.many': 'قل لهم مرحبًا',
   'attachment.kind.image': 'صورة',
   'attachment.kind.video': 'فيديو',
   'attachment.kind.audio': 'مقطع صوتي',

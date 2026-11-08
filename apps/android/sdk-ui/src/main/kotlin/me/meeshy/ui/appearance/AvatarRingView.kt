@@ -24,10 +24,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.appearance.ArcSlice
-import me.meeshy.sdk.model.appearance.AvatarRingDecor
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.sdk.model.appearance.AvatarRingGeometry
 import me.meeshy.sdk.model.appearance.AvatarRingOrnamentPath
+import me.meeshy.sdk.model.appearance.RingDecorFit
 import me.meeshy.sdk.model.appearance.RingStrokeLayer
 import me.meeshy.sdk.model.pack.PackAssetRef
 import me.meeshy.ui.component.lottie.PackLottieLayer
@@ -147,6 +147,8 @@ public fun AvatarRingLayer(
     modifier: Modifier = Modifier,
     storyRingSize: Dp? = null,
     animates: Boolean = true,
+    decorRoom: Dp = 0.dp,
+    decor: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (design == null) {
@@ -154,16 +156,17 @@ public fun AvatarRingLayer(
         return
     }
     val plan = remember(design) { AvatarRingPlan(design) }
-    val factor = AvatarRingGeometry.footprintScale(footprint.value.toDouble(), storyRingSize?.value?.toDouble()).toFloat()
+    val layout = AvatarRingLayout.make(design, footprint.value.toDouble(), storyRingSize?.value?.toDouble(), decorRoom.value.toDouble(), decor)
+    val factor = layout.contentScale.toFloat()
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier.drawWithContent {
                 drawContent()
-                drawAvatarRing(plan, footprint.toPx())
+                if (layout.drawsStill) drawAvatarRing(plan, footprint.toPx())
             },
             contentAlignment = Alignment.Center,
         ) {
-            RingDecorFilm(design.decor?.back, design.decor, footprint, animates)
+            RingDecorFilm(design.decor?.back, layout.decor, animates)
             Box(
                 modifier = Modifier.graphicsLayer {
                     scaleX = factor
@@ -172,24 +175,52 @@ public fun AvatarRingLayer(
                 contentAlignment = Alignment.Center,
                 content = content,
             )
-            design.lottie?.let { PackLottieLayer(it, Modifier.size(footprint), animates = animates) }
+            design.lottie?.let { lottie ->
+                val ringScale = layout.ringScale.toFloat()
+                PackLottieLayer(
+                    lottie,
+                    Modifier.size(footprint).graphicsLayer {
+                        scaleX = ringScale
+                        scaleY = ringScale
+                    },
+                    animates = animates,
+                )
+            }
         }
-        RingDecorFilm(design.decor?.front, design.decor, footprint, animates)
+        RingDecorFilm(design.decor?.front, layout.decor, animates)
+    }
+}
+
+/**
+ * La mise en place d'un contour dans l'empreinte [footprint] (#15157, miroir d'`AvatarRingLayout`) : l'échelle du
+ * contenu, le film illustré s'il s'affiche ([AvatarRingDecor.fit] : jamais hors de l'empreinte, sauf la place que
+ * l'hôte déclare libre) et si l'anneau fixe se dessine — jamais SOUS un film affiché. Le film s'affiche à toutes les
+ * tailles (#16114) ; seul l'hôte qui le retire (`decor = false`, l'indicateur de frappe) garde l'anneau seul.
+ */
+public data class AvatarRingLayout(public val contentScale: Double, public val decor: RingDecorFit?) {
+    public val drawsStill: Boolean get() = decor == null
+    public val ringScale: Double get() = decor?.scale ?: 1.0
+    public fun paintedSide(footprint: Double): Double = decor?.side ?: footprint
+
+    public companion object {
+        public fun make(design: AvatarRingDesign, footprint: Double, storyRingSize: Double? = null, room: Double = 0.0, decor: Boolean = true): AvatarRingLayout {
+            val fit = if (decor) design.decor?.fit(footprint, room) else null
+            return AvatarRingLayout(AvatarRingGeometry.footprintScale(footprint, storyRingSize) * (fit?.scale ?: 1.0), fit)
+        }
     }
 }
 
 /**
  * Un film d'un cadre illustré (#13960, miroir d'`AvatarRingDecorFilm`) : posé AVANT le contenu pour `back`, AU-DESSUS
- * du contour pour `front`, carré, centré, de côté `reach ×` l'empreinte — il déborde ([wrapContentSize] sans borne) sans rien
- * grandir ni décaler. Sans film, rien n'est composé.
+ * du contour pour `front`, carré, centré, du côté que [AvatarRingDecor.fit] lui donne (#15157) — il ne sort de
+ * l'empreinte ([wrapContentSize] sans borne) que de la place déclarée libre. Sans film ou sans place, rien n'est composé.
  */
 @Composable
-private fun BoxScope.RingDecorFilm(film: PackAssetRef?, decor: AvatarRingDecor?, footprint: Dp, animates: Boolean) {
-    if (film == null || decor == null) return
-    val side = decor.side(footprint.value).dp
+private fun BoxScope.RingDecorFilm(film: PackAssetRef?, fit: RingDecorFit?, animates: Boolean) {
+    if (film == null || fit == null) return
     PackLottieLayer(
         film,
-        Modifier.matchParentSize().wrapContentSize(Alignment.Center, unbounded = true).requiredSize(side),
+        Modifier.matchParentSize().wrapContentSize(Alignment.Center, unbounded = true).requiredSize(fit.side.dp),
         animates = animates,
     )
 }

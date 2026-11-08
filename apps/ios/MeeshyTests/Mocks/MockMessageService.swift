@@ -146,16 +146,20 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     /// (ex. pagination cache-first : la fenêtre GRDB doit déjà être servie
     /// quand le REST part).
     var onListBefore: (() -> Void)?
+    /// Retient la réponse tant que le test ne l'ouvre pas : un réseau LENT, rendu déterministe.
+    var listBeforeGate: (@Sendable () async -> Void)?
 
     nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
-        await MainActor.run {
+        let gate = await MainActor.run {
             listBeforeCallCount += 1
             lastListBeforeConversationId = conversationId
             lastListBeforeCursor = before
             lastListBeforeLanguages = languages
             onListBefore?()
+            return listBeforeGate
         }
-        return try listBeforeResult.get()
+        await gate?()
+        return try await MainActor.run { try listBeforeResult.get() }
     }
 
     /// Appelé PENDANT `listAfter`, avant la réponse — un témoin y lit l'état

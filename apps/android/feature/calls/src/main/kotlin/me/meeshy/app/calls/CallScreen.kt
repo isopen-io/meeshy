@@ -26,8 +26,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.CompositionLocalProvider
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.call.CallPreflightDecision
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
@@ -73,7 +75,7 @@ fun CallScreen(
     val state = callState.withCaptions(captionsChip)
     val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
-    val permissionGate = rememberCallPermissionGate(config.isVideo)
+    val permissionGate = rememberCallPermissionGate()
     val declineReply: CallDeclineReplyViewModel = hiltViewModel()
     val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
     val autoAnswerGate: IncomingAutoAnswerViewModel = hiltViewModel()
@@ -85,7 +87,10 @@ fun CallScreen(
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) {
-            permissionGate.withMediaPermissions { viewModel.start(config) }
+            permissionGate.preflightOutgoing(config.isVideo) { decision ->
+                viewModel.startAfterPreflight(config, decision)
+                if (decision == CallPreflightDecision.MicrophoneDenied) onClose()
+            }
         } else {
             viewModel.start(config)
             // Bouton « Répondre » de la notification : décrocher directement —
@@ -114,6 +119,7 @@ fun CallScreen(
     }
 
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
+    permissionGate.flow?.let { PermissionFlowHost(it, accent = accent) }
     val extensions = viewModel.extensions
     val chrome = remember { CallChromeController() }
     val chromeVisibility = rememberCallChromeVisibility(chrome, state)
@@ -131,6 +137,7 @@ fun CallScreen(
 
     CallImmersiveEffect()
     CallStatusAnnouncer(state.status)
+    ScreenShareFoldsCall(onMinimize)
     BackHandler {
         when (CallPillPresenter.backAction(state.status)) {
             CallBackAction.Inert -> Unit
@@ -322,6 +329,12 @@ fun CallScreen(
                 )
             }
 
+            if (state.showsConnectedLayout && !inPip) {
+                CallVideoNoticePill(
+                    notice = state.videoNotice,
+                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MeeshySpacing.xxl * 2),
+                )
+            }
             CallOverlaySlotHost(
                 extensions.overlays, CallOverlaySlot.Center, overlayContext,
                 Modifier.align(Alignment.Center),
@@ -346,6 +359,8 @@ fun CallScreen(
 
             // En-tête (miroir de iOS `topChrome`) : Réduire · Conversation à gauche, puce durée · signal à
             // droite en vidéo établie. Il s'efface avec la pilule d'un toucher sur la scène.
+            var qualityDetailOpen by remember { mutableStateOf(false) }
+            if (qualityDetailOpen) CallQualitySheet(onDismiss = { qualityDetailOpen = false })
             if (CallPillPresenter.isMinimizable(state.status)) {
                 CallChromeFade(
                     isVisible = chromeVisibility.isVisible(CallChromeElement.Header) && !inPip,
@@ -359,6 +374,7 @@ fun CallScreen(
                         onMinimize = onMinimize,
                         modifier = Modifier.padding(top = MeeshySpacing.xs),
                         isVideoStage = videoStage,
+                        onOpenQualityDetail = { qualityDetailOpen = true },
                     )
                 }
             }
@@ -403,7 +419,7 @@ fun CallScreen(
 
             // Le journal de la transcription : une feuille, comme iOS ; la fermer rend le menu de la pilule.
             if (chromeState.layer.openPanel == CallScreenPanel.Journal) {
-                CallCaptionsJournalSheet(onDismiss = chrome::backToMenu, viewModel = captionsViewModel)
+                CallCaptionsJournalSheet(onDismiss = chrome::backToMenu, viewModel = captionsViewModel, captures = state.liveCaptures, peerName = state.peerName)
             }
 
             CallToastHost(

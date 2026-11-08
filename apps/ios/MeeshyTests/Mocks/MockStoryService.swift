@@ -14,6 +14,9 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     /// Pages servies dans l'ordre, une par appel à `list`. Prioritaire sur
     /// `listResult` tant qu'elle n'est pas épuisée.
     var listResults: [Result<PaginatedAPIResponse<[APIPost]>, Error>] = []
+    /// Joué pendant `list`, avant la réponse : ce qui arrive alors arrive
+    /// pendant qu'une passe du tray est EN VOL.
+    var whileListInFlight: (@MainActor () async -> Void)?
     var deleteResult: Result<Void, Error> = .success(())
     var reactResult: Result<Void, Error> = .success(())
     var commentResult: Result<APIPostComment, Error> = .success(
@@ -71,6 +74,7 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         lastListLimit = limit
         lastListUpdatedSince = updatedSince
         listCursors.append(cursor)
+        await whileListInFlight?()
         // File de pages : le tray suit `nextCursor` tant que le serveur annonce
         // `hasMore`, donc un témoin de pagination doit pouvoir répondre
         // DIFFÉREMMENT à chaque appel. Vide → `listResult`, inchangé pour les

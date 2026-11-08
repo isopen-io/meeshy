@@ -37,13 +37,13 @@ extension FeedViewModel {
 
             switch cacheResult {
             case .fresh(let cachedPosts, _):
-                posts = cachedPosts
+                posts = PendingPublicationCancel.excludingWithdrawn(PendingPublicationLocalMedia.rebased(cachedPosts))
                 hasLoaded = true
                 prefetchMedia(around: 0)
                 return
 
             case .stale(let cachedPosts, _):
-                posts = cachedPosts
+                posts = PendingPublicationCancel.excludingWithdrawn(PendingPublicationLocalMedia.rebased(cachedPosts))
                 hasLoaded = true
                 prefetchMedia(around: 0)
                 Task {
@@ -99,15 +99,9 @@ extension FeedViewModel {
                 // Des pages déjà chargées restent derrière la tête relue : leur
                 // curseur reste le bon, celui de la page 1 les redemanderait.
                 let keepsLoadedTail = merged.count > head.count
-                posts = merged
-                // grdb-03 (volet mémoire) — réappliquer les likes encore en
-                // attente d'outbox par-dessus le snapshot serveur périmé.
-                if let persistence = feedPersistence {
-                    let pendingLikes = await persistence.pendingLikeFlags()
-                    if !pendingLikes.isEmpty {
-                        posts = Self.reapplyPendingLikes(posts: posts, pendingLikes: pendingLikes)
-                    }
-                }
+                posts = keepingLoadedPages ? headHold.admitting(head: merged, over: posts) : merged
+                let pending = await FeedPendingEngagement.load(from: feedPersistence)
+                posts = pending.reapplied(to: posts)
                 if !keepsLoadedTail {
                     nextCursor = response.pagination?.nextCursor
                     hasMore = response.pagination?.hasMore ?? false
@@ -286,9 +280,10 @@ extension FeedViewModel {
     /// Pre-loads comments for a visible post into the cache so that opening the post
     /// detail does not require a network round-trip. Cache-first: skips the network
     /// call when the cache is already fresh. Coalesced: concurrent calls for the
-    /// same `postId` are no-ops while a prefetch is in flight.
+    /// same `postId` are no-ops while a prefetch is in flight. A card still in
+    /// the outbox (#15123) has only a cmid: nothing to ask the server.
     func prefetchComments(_ postId: String) {
-        guard !prefetchingComments.contains(postId) else { return }
+        guard !PendingPublicationMarker.isPending(postId: postId), !prefetchingComments.contains(postId) else { return }
         prefetchingComments.insert(postId)
 
         Task(priority: .utility) { [weak self] in
@@ -319,5 +314,24 @@ extension FeedViewModel {
     /// and reset the counter.
     func acknowledgeNewPosts() {
         newPostsCount = 0
+    }
+}
+
+/// grdb-03 (volet mémoire) — les likes et les favoris encore en attente
+/// d'outbox, réappliqués par-dessus un snapshot serveur périmé : le cœur et le
+/// favori ne se défont pas sous les yeux de l'auteur pendant la relecture.
+struct FeedPendingEngagement {
+    let likes: [String: Bool]
+    let bookmarks: [String: Bool]
+
+    static func load(from persistence: FeedPersistenceActor?) async -> FeedPendingEngagement {
+        guard let persistence else { return FeedPendingEngagement(likes: [:], bookmarks: [:]) }
+        return FeedPendingEngagement(likes: await persistence.pendingLikeFlags(),
+                                     bookmarks: await persistence.pendingBookmarkFlags())
+    }
+
+    func reapplied(to posts: [FeedPost]) -> [FeedPost] {
+        let liked = likes.isEmpty ? posts : FeedViewModel.reapplyPendingLikes(posts: posts, pendingLikes: likes)
+        return PostBookmarkMutation.reapplying(liked, pending: bookmarks)
     }
 }

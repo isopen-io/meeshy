@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.flow.Flow
@@ -19,9 +20,12 @@ import me.meeshy.ui.component.StoryRingState
  * - [onOpenConversation] : la conversation directe ouverte par « Envoyer un message ».
  * - [onReport] : le signalement de la personne.
  * - [onViewPosts] : le fil de ses postes, quand [postsContent] n'est pas fourni.
+ * - [onOpenPost] : un post touché dans [postsContent] : la feuille se ferme, puis le détail s'empile.
  * - [onCall] : un appel ; `null` = aucun bouton d'appel.
  * - [onViewStory] : sa story ; `null` = l'anneau n'ouvre rien.
  * - [postsContent] : le contenu riche de l'onglet Postes (cartes du fil), reçu avec l'id résolu.
+ * - [postsItems] : les éléments de l'onglet Postes versés DANS le défilement unique de la fiche ; reçoit l'id résolu et
+ *   si la fiche est la mienne ; prime sur [postsContent]. Lu en composition, il rend le lambda qui émet les éléments.
  * - [liveSigns] : les signes en direct de la personne (présence, anneau de story, humeur), par id
  *   résolu ; `null` = le cliché REST seul, sans anneau ni humeur.
  */
@@ -30,10 +34,12 @@ data class ProfileSheetEnvironment(
     val onOpenConversation: (conversationId: String) -> Unit = {},
     val onReport: (userId: String, username: String) -> Unit = { _, _ -> },
     val onViewPosts: (userId: String) -> Unit = {},
+    val onOpenPost: (postId: String) -> Unit = {},
     val onCall: ((ProfileCallRequest) -> Unit)? = null,
     val onViewStory: ((userId: String) -> Unit)? = null,
     val postsContent: (@Composable (userId: String) -> Unit)? = null,
     val liveSigns: ((userId: String) -> Flow<ProfileLiveSigns>)? = null,
+    val postsItems: (@Composable (userId: String, isSelf: Boolean) -> (LazyListScope.() -> Unit))? = null,
 )
 
 /**

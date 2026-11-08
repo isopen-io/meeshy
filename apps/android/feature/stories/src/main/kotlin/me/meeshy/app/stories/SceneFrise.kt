@@ -82,6 +82,7 @@ import kotlin.math.roundToInt
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.sdk.model.composer.ComposerObjectChips
+import me.meeshy.sdk.model.composer.ComposerSceneFriseMetrics
 import me.meeshy.sdk.model.composer.timeline.ClipWindowResolver
 import me.meeshy.sdk.model.composer.timeline.FriseBarDrag
 import me.meeshy.sdk.model.composer.timeline.FrisePlayClock
@@ -93,8 +94,8 @@ import me.meeshy.sdk.model.composer.timeline.TrackBar
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 
-private val LABEL_LANE = 72.dp
-private val HANDLE_HIT = 24.dp
+private val LABEL_LANE = ComposerSceneFriseMetrics.LABEL_LANE_DP.dp
+private val HANDLE_HIT = ComposerSceneFriseMetrics.HANDLE_HIT_DP.dp
 private val ROW_HEIGHT = 34.dp
 
 /** Ce que le doigt tient sur une barre : le corps entier, ou l'une de ses poignées. */
@@ -667,7 +668,7 @@ private fun withinSlide(
 }
 
 /** Le pas d'un réglage au lecteur d'écran, en secondes (iOS `ComposerSceneFriseMetrics.accessibilityStep`). */
-private const val FRISE_ACCESSIBILITY_STEP = 0.5f
+private const val FRISE_ACCESSIBILITY_STEP = ComposerSceneFriseMetrics.ACCESSIBILITY_STEP
 
 @Composable
 private fun Handle(fraction: Float, laneWidthPx: Int, grip: Grip, drag: (Grip) -> Modifier) {

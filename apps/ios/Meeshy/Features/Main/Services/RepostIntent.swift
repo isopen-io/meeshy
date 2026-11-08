@@ -149,30 +149,6 @@ nonisolated struct RepostIntent: Equatable, Sendable {
             visibility: visibility
         )
     }
-
-    /// Le geste « **je repartage en CITANT** » d'une surface qui DÉCLARE la
-    /// citation sans recueillir de commentaire — l'alerte « Citer » de la
-    /// feuille de détail, qui n'a aucun champ de saisie.
-    ///
-    /// Ce geste existe pour rester FIDÈLE, pas par élégance. Le normaliser en
-    /// repartage sec serait un changement de PRODUIT : côté serveur, `isQuote`
-    /// décide où s'enracinent les réactions. La dette — une citation sans champ
-    /// de citation — est donc NOMMÉE ici plutôt que corrigée à l'aveugle par un
-    /// lot qui ne possède pas cette surface.
-    static func declaredQuote(
-        postId: String,
-        targetType: PostType?,
-        visibility: String?
-    ) -> RepostIntent {
-        RepostIntent(
-            clientMutationId: ClientMutationId.generate(),
-            postId: postId,
-            targetType: targetType,
-            content: nil,
-            isQuote: true,
-            visibility: visibility
-        )
-    }
 }
 
 // MARK: - Les deux échecs TERMINAUX, nommés

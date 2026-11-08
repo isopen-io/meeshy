@@ -205,8 +205,17 @@ class StoryViewerLaunchTest {
     }
 
     @Test
-    fun `the author keeps their own expired stories`() = runTest(dispatcher) {
+    fun `the author's own viewer plays only their live stories, archives stay out`() = runTest(dispatcher) {
         coEvery { repo.cachedStories() } returns listOf(story("m0", "me", 30), story("m1", "me", 2))
+
+        val vm = viewer("me")
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("m1")
+    }
+
+    @Test
+    fun `an author with nothing live still opens on their whole group, never an empty viewer`() = runTest(dispatcher) {
+        coEvery { repo.cachedStories() } returns listOf(story("m0", "me", 40), story("m1", "me", 30))
 
         val vm = viewer("me")
 

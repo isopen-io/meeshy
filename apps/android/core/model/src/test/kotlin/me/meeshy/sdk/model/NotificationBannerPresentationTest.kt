@@ -36,6 +36,8 @@ class NotificationBannerPresentationTest {
     private fun headlineText(headline: BannerHeadline): String = when (headline) {
         is BannerHeadline.Plain -> headline.text
         is BannerHeadline.InConversation -> "${headline.actor} ⟨dans⟩ ${headline.groupName}"
+        is BannerHeadline.Someone -> listOfNotNull("⟨quelqu'un⟩", headline.action).joinToString(" ")
+        is BannerHeadline.GameSurface -> listOfNotNull("⟨${headline.surface}⟩", headline.action).joinToString(" ")
     }
 
     // MARK: - 1. Commentaire de contenu
@@ -311,5 +313,152 @@ class NotificationBannerPresentationTest {
             )
         assertThat(decoded.subtitle).isEqualTo("a réagi à votre story")
         assertThat(decoded.title).isEqualTo("Alice")
+    }
+
+    // MARK: - Cadrage complet (banniere-regles-et-contenu)
+
+    private fun present(n: ApiNotification, groupName: String? = null, isDirect: Boolean = false) =
+        NotificationBannerFraming.present(n, groupName, isDirect)
+
+    @Test
+    fun contactJoined_isARelationAndCarriesNoBody() {
+        val banner = present(
+            notification("contact_joined", title = "Alice", subtitle = "a rejoint Meeshy", content = "Nouveau contact"),
+        )
+        assertThat(NotificationBannerFraming.framing("contact_joined")).isEqualTo(BannerFraming.RELATION)
+        assertThat(headlineText(banner.headline)).isEqualTo("Alice a rejoint Meeshy")
+        assertThat(banner.body).isNull()
+    }
+
+    @Test
+    fun gameNotificationWithoutActor_isNamedByItsSurface() {
+        val league = present(notification("game_league_result", actor = null, subtitle = null, content = "Tu es 3e"))
+        assertThat(league.headline).isEqualTo(BannerHeadline.GameSurface(GameSurfaceTitle.LEAGUE_RESULT, null))
+        assertThat(league.body).isEqualTo("Tu es 3e")
+        assertThat(present(notification("game_season_step", actor = null)).headline)
+            .isEqualTo(BannerHeadline.GameSurface(GameSurfaceTitle.SEASON_STEP, null))
+        assertThat(present(notification("game_mission_window", actor = null)).headline)
+            .isEqualTo(BannerHeadline.GameSurface(GameSurfaceTitle.MISSION_WINDOW, null))
+    }
+
+    @Test
+    fun gameNotificationWithAServerTitle_keepsTheServerTitle() {
+        val banner = present(notification("game_league_result", actor = null, title = "Meeshy", subtitle = "a clos la semaine"))
+        assertThat(banner.headline).isEqualTo(BannerHeadline.Plain("Meeshy a clos la semaine"))
+    }
+
+    @Test
+    fun noActorNoTitle_fallsBackToSomeoneNeverBlank() {
+        assertThat(present(notification("post_like", actor = null, subtitle = "a aimé votre post")).headline)
+            .isEqualTo(BannerHeadline.Someone("a aimé votre post"))
+        assertThat(present(notification("new_message", actor = null)).headline).isEqualTo(BannerHeadline.Someone(null))
+    }
+
+    @Test
+    fun aTitleThatAlreadyEndsWithTheActionDoesNotReceiveItTwice() {
+        val banner = present(
+            notification("contact_recently_active", title = "Marie était sur Meeshy récemment", subtitle = "était sur Meeshy récemment"),
+        )
+        assertThat(banner.headline).isEqualTo(BannerHeadline.Plain("Marie était sur Meeshy récemment"))
+    }
+
+    // MARK: - Détail du message x protection x aperçu
+
+    private fun message(
+        vararg fields: Pair<String, String>,
+        content: String? = null,
+        preview: String? = null,
+        mime: String? = null,
+        firstType: String? = null,
+    ): ApiNotification {
+        val f = fields.toMap()
+        return ApiNotification(
+            id = "n1",
+            type = "new_message",
+            content = content,
+            actor = NotificationActor(id = "u1", displayName = "Alice"),
+            context = NotificationContext(
+                conversationId = "c1",
+                firstAttachmentMimeType = mime,
+                firstAttachmentUrl = "https://cdn/x".takeIf { mime != null },
+                locationLat = f["locationLat"], locationLon = f["locationLon"], locationName = f["locationName"],
+                contactName = f["contactName"], inviteUrl = f["inviteUrl"], inviteConversationTitle = f["inviteConversationTitle"],
+                linkUrl = f["linkUrl"], linkTitle = f["linkTitle"], linkImageUrl = f["linkImageUrl"],
+                thumbnailUrl = f["thumbnailUrl"], notificationLocKey = f["notificationLocKey"],
+            ),
+            metadata = NotificationMetadata(
+                messagePreview = preview,
+                attachments = firstType?.let { NotificationAttachments(count = 1, firstType = it) },
+            ),
+        )
+    }
+
+    @Test
+    fun aSharedLocationWithNoText_carriesItsDetailInsteadOfABody() {
+        val banner = present(message("locationLat" to "48.85", "locationLon" to "2.29", "locationName" to "Tour Eiffel"), isDirect = true)
+        assertThat(banner.body).isNull()
+        assertThat(banner.detail).isInstanceOf(NotificationMessageDetail.Location::class.java)
+    }
+
+    @Test
+    fun aBodyTheGatewayAlreadyComposedIsKeptOverTheDetail() {
+        val banner = present(message("contactName" to "Bob", content = "👤 Bob", preview = "👤 Bob"), isDirect = true)
+        assertThat(banner.body).isEqualTo("👤 Bob")
+        assertThat(banner.detail).isNull()
+    }
+
+    @Test
+    fun aBareLinkBodyYieldsToTheLinkDetail() {
+        val banner = present(message("linkUrl" to "https://x.io/a", content = "https://x.io/a"), isDirect = true)
+        assertThat(banner.body).isNull()
+        assertThat(banner.detail).isInstanceOf(NotificationMessageDetail.Link::class.java)
+    }
+
+    @Test
+    fun aProtectedMessageLeaksNoDetailAndNoThumbnail() {
+        val banner = present(
+            message(
+                "contactName" to "Bob", "linkUrl" to "https://x.io", "linkImageUrl" to "https://i/x.png",
+                "thumbnailUrl" to "https://t/v.png", "notificationLocKey" to "message.viewOnce",
+                content = "🔒", mime = "video/mp4", firstType = "video",
+            ),
+            isDirect = true,
+        )
+        assertThat(banner.detail).isNull()
+        assertThat(banner.thumbnailUrl).isNull()
+        assertThat(banner.body).isEqualTo("🔒")
+        assertThat(banner.mediaSummary).isNull()
+    }
+
+    @Test
+    fun aVideoMessageShowsItsServedThumbnailNeverTheFile() {
+        val banner = present(message("thumbnailUrl" to "https://t/v.png", mime = "video/mp4", firstType = "video"), isDirect = true)
+        assertThat(banner.thumbnailUrl).isEqualTo("https://t/v.png")
+    }
+
+    @Test
+    fun aLinkMessageShowsItsPreviewImage() {
+        val banner = present(message("linkUrl" to "https://x.io/a", "linkImageUrl" to "https://i/x.png", content = "regarde"), isDirect = true)
+        assertThat(banner.thumbnailUrl).isEqualTo("https://i/x.png")
+        assertThat(banner.body).isEqualTo("regarde")
+    }
+
+    @Test
+    fun aDetailFieldDecodesFromANumberOrAStringOnTheWire() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val n = json.decodeFromString(
+            ApiNotification.serializer(),
+            """{"id":"n","type":"new_message","context":{"locationLat":48.85,"locationLon":"2.29","inviteMemberCount":12}}""",
+        )
+        assertThat(n.detailField("locationLat")).isEqualTo("48.85")
+        assertThat(n.detailField("locationLon")).isEqualTo("2.29")
+        assertThat(n.detailField("inviteMemberCount")).isEqualTo("12")
+        assertThat(n.messageDetail).isInstanceOf(NotificationMessageDetail.Location::class.java)
+    }
+
+    @Test
+    fun metadataIsTheFallbackWhenContextLacksTheKey() {
+        val n = ApiNotification(id = "n", metadata = NotificationMetadata(contactName = "Zoé"))
+        assertThat(n.messageDetail).isEqualTo(NotificationMessageDetail.Contact("Zoé", null, null))
     }
 }

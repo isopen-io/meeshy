@@ -38,15 +38,28 @@ struct EndToEndOffThreadReply {
     /// Range la réponse pour le fil, ou la refuse sans trace ; rend ce que
     /// l'interface dit à l'utilisateur.
     func keep(_ item: OfflineQueueItem, senderId: String) async -> EndToEndSendRefusal {
+        guard await vault(item, senderId: senderId) else {
+            Logger.e2ee.warning("e2ee off-thread reply refused: the vault did not keep it, nothing written")
+            return .unkeptOutsideConversation
+        }
+        return await bubble(item, senderId: senderId)
+    }
+
+    /// Range le seul clair au coffre, sans aucune ligne : une réponse dont le
+    /// régime attend sa confirmation (#14667) ne scelle aucun fil.
+    func vault(_ item: OfflineQueueItem, senderId: String) async -> Bool {
         let sealer = EndToEndSendSealer(
             conversationId: item.conversationId, encryptionModes: [E2EEWire.mode], isDirect: false,
             peerUserId: nil, senderUserId: senderId, endToEnd: endToEnd
         )
         let (outgoing, context) = Self.outgoing(item)
-        guard await kept(outgoing, context: context, by: sealer) else {
-            Logger.e2ee.warning("e2ee off-thread reply refused: the vault did not keep it, nothing written")
-            return .unkeptOutsideConversation
-        }
+        return await kept(outgoing, context: context, by: sealer)
+    }
+
+    /// La bulle scellée en échec d'un clair déjà au coffre, pour une
+    /// conversation CONNUE chiffrée de bout en bout ; sans bulle, le clair
+    /// quitte le coffre.
+    func bubble(_ item: OfflineQueueItem, senderId: String) async -> EndToEndSendRefusal {
         let refusal = EndToEndSendRefusal.sealedOnlyInConversation
         do {
             try await persistence.insertOptimistic(.sealedFailedText(item: item, senderId: senderId, reason: refusal.userMessage))

@@ -188,6 +188,47 @@ describe('MessagingService.handleMessage — envoi libsignal par appareil (#3706
     expect(mockHandleNewMessage).not.toHaveBeenCalled();
   });
 
+  it('hybride (#14369) : le clair est scellé au repos ET la couche appareil rangée, une enveloppe par appareil', async () => {
+    const savedKey = process.env.ENCRYPTION_MASTER_KEY;
+    process.env.ENCRYPTION_MASTER_KEY = Buffer.alloc(32, 5).toString('base64');
+    const keys = new Map<string, Record<string, unknown>>();
+    mockPrisma.serverEncryptionKey = {
+      create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { keys.set(String(data.id), data); return data; }),
+      findUnique: jest.fn(async ({ where }: { where: { id: string } }) => keys.get(where.id) ?? null),
+      findMany: jest.fn(async () => [...keys.values()]),
+      update: jest.fn(async () => ({})),
+      updateMany: jest.fn(async () => ({ count: 0 })),
+    };
+    mockPrisma.conversation.updateMany = jest.fn(async () => ({ count: 0 }));
+    conversationIn({ encryptionMode: 'hybrid', encryptionEnabledAt: new Date('2026-01-01T00:00:00Z') });
+    const hybridService = new MessagingService(
+      mockPrisma as unknown as PrismaClient,
+      { handleNewMessage: mockHandleNewMessage } as any,
+      { createMentionNotification: jest.fn().mockResolvedValue({ id: 'n' }), createMentionNotificationsBatch: jest.fn().mockResolvedValue(0) } as any,
+    );
+    try {
+      const response = await hybridService.handleMessage({
+        conversationId, content: 'Rendez-vous à 18 h', originalLanguage: 'fr',
+        deviceLayer: {
+          relay: { protocol: LIBSIGNAL_PROTOCOL, senderDeviceId: 1, sessionId: senderSession, unapprovedOwnDevices: [],
+            envelopes: [{ userId: bobUserId, deviceId: 1, registrationId: 201, type: 3 as const, body: SENTINEL }] },
+        },
+      } as unknown as MessageRequest, senderParticipantId);
+
+      expect(response.success).toBe(true);
+      const written = mockPrisma.message.create.mock.calls[0][0].data;
+      expect(written).toMatchObject({ content: '', isEncrypted: true, encryptionMode: 'hybrid' });
+      expect(JSON.stringify(written)).not.toContain('18 h');
+      expect(JSON.stringify(written)).not.toContain(SENTINEL);
+      expect(store.collections.MessageEnvelope.rows).toEqual([
+        expect.objectContaining({ messageId, recipientUserId: bobUserId, recipientDeviceId: 1, senderUserId, body: SENTINEL }),
+      ]);
+    } finally {
+      if (savedKey === undefined) delete process.env.ENCRYPTION_MASTER_KEY;
+      else process.env.ENCRYPTION_MASTER_KEY = savedKey;
+    }
+  });
+
   it('ne confond jamais deux messages chiffrés par leur littéral commun (déduplication par contenu)', async () => {
     conversationIn(E2EE);
     mockPrisma.message.findFirst.mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>

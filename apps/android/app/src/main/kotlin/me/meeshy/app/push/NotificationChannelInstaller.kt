@@ -2,11 +2,18 @@ package me.meeshy.app.push
 
 import android.app.Notification
 import android.app.NotificationChannel
+import android.app.NotificationChannelGroup as AndroidChannelGroup
 import android.app.NotificationManager
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import androidx.core.content.getSystemService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import me.meeshy.app.R
+import me.meeshy.sdk.model.NotificationChannelGroup as PlanGroup
+import me.meeshy.sdk.model.NotificationChannelPlan
+import me.meeshy.sdk.model.NotificationChannelSound
+import me.meeshy.sdk.model.NotificationChannelSpec
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,36 +29,39 @@ import javax.inject.Singleton
  * quiet [NotificationChannelIds.CHANNEL_SILENT] the push pipeline posts to when the preferences
  * refuse an alert. Each v1 predecessor is deleted (one « Messages » entry in the system settings,
  * never two) after its user-set mute is carried over. The calls channel is always reached through a data-only push,
- * so `onMessageReceived` always runs for it — it is left to the call presenter.
+ * so `onMessageReceived` always runs for it ; the installer still registers it (idempotent) so the settings list it.
  */
 @Singleton
 class NotificationChannelInstaller @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
-    fun install() {
+    /**
+     * [strings] porte la langue des libelles : l'application au demarrage, un contexte localise
+     * quand la langue d'interface change (les canaux se renomment sans redemarrage).
+     */
+    fun install(strings: Context = context) {
         val manager = context.getSystemService<NotificationManager>() ?: return
 
-        listOf(
-            Triple(NotificationChannelIds.CHANNEL_MESSAGES_V2, R.string.push_channel_messages_name, R.string.push_channel_messages_description) to
-                (NotificationChannelIds.CHANNEL_MESSAGES to NotificationManager.IMPORTANCE_HIGH),
-            Triple(NotificationChannelIds.CHANNEL_SOCIAL_V2, R.string.push_channel_social_name, R.string.push_channel_social_description) to
-                (NotificationChannelIds.CHANNEL_SOCIAL to NotificationManager.IMPORTANCE_DEFAULT),
-            Triple(NotificationChannelIds.CHANNEL_SYSTEM_V2, R.string.push_channel_system_name, R.string.push_channel_system_description) to
-                (NotificationChannelIds.CHANNEL_SYSTEM to NotificationManager.IMPORTANCE_HIGH),
-        ).forEach { (channel, legacy) ->
-            val (id, name, description) = channel
-            val (legacyId, importance) = legacy
-            manager.createNotificationChannel(alerting(id, name, description, carriedImportance(manager, id, legacyId, importance)))
-            manager.deleteNotificationChannel(legacyId)
+        PlanGroup.entries.forEach { group ->
+            manager.createNotificationChannelGroup(AndroidChannelGroup(group.id, strings.getString(groupName(group))))
         }
+        NotificationChannelPlan.channels.forEach { spec ->
+            val legacyId = LEGACY_PREDECESSORS[spec.id]
+            val importance = legacyId
+                ?.let { carriedImportance(manager, spec.id, it, spec.importance.androidLevel) }
+                ?: spec.importance.androidLevel
+            manager.createNotificationChannel(channel(strings, spec, importance))
+            legacyId?.let(manager::deleteNotificationChannel)
+        }
+        manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_CALLS)
         manager.createNotificationChannel(
             NotificationChannel(
                 NotificationChannelIds.CHANNEL_SILENT,
-                context.getString(R.string.push_channel_silent_name),
+                strings.getString(R.string.push_channel_silent_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = context.getString(R.string.push_channel_silent_description)
+                description = strings.getString(R.string.push_channel_silent_description)
                 setSound(null, null)
                 enableVibration(false)
                 setShowBadge(true)
@@ -61,6 +71,54 @@ class NotificationChannelInstaller @Inject constructor(
         // Renamed away from — delete the orphaned pre-drift channel so a returning
         // install doesn't carry a dead, possibly user-muted duplicate around forever.
         manager.deleteNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_MESSAGES)
+    }
+
+    private fun channel(strings: Context, spec: NotificationChannelSpec, importance: Int): NotificationChannel {
+        val labels = labelsOf(spec.id)
+        return NotificationChannel(spec.id, strings.getString(labels.first), importance).apply {
+            description = strings.getString(labels.second)
+            group = spec.group.id
+            enableVibration(spec.vibrate)
+            when (spec.sound) {
+                NotificationChannelSound.DEFAULT -> Unit
+                NotificationChannelSound.NONE -> setSound(null, null)
+                // Sonnerie APPAREIL en usage ring : le canal sonne comme un appel, volume sonnerie respecté.
+                NotificationChannelSound.RINGTONE -> {
+                    setSound(
+                        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build(),
+                    )
+                    vibrationPattern = RING_VIBRATION
+                    setShowBadge(false)
+                }
+            }
+            if (spec.vibrate && spec.sound != NotificationChannelSound.RINGTONE) {
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            }
+        }
+    }
+
+    private fun labelsOf(id: String): Pair<Int, Int> = when (id) {
+        NotificationChannelPlan.MESSAGES -> R.string.push_channel_messages_name to R.string.push_channel_messages_description
+        NotificationChannelPlan.MENTIONS -> R.string.push_channel_mentions_name to R.string.push_channel_mentions_description
+        NotificationChannelPlan.EPHEMERAL -> R.string.push_channel_ephemeral_name to R.string.push_channel_ephemeral_description
+        NotificationChannelPlan.FRIENDS -> R.string.push_channel_friends_name to R.string.push_channel_friends_description
+        NotificationChannelPlan.SOCIAL -> R.string.push_channel_social_name to R.string.push_channel_social_description
+        NotificationChannelPlan.CALLS -> R.string.call_channel_name to R.string.call_channel_description
+        NotificationChannelPlan.CALLS_MISSED -> R.string.push_channel_calls_missed_name to R.string.push_channel_calls_missed_description
+        NotificationChannelPlan.INVITATIONS -> R.string.push_channel_invitations_name to R.string.push_channel_invitations_description
+        else -> R.string.push_channel_system_name to R.string.push_channel_system_description
+    }
+
+    private fun groupName(group: PlanGroup): Int = when (group) {
+        PlanGroup.MESSAGES -> R.string.push_group_messages
+        PlanGroup.SOCIAL -> R.string.push_group_social
+        PlanGroup.FRIENDS -> R.string.push_group_friends
+        PlanGroup.CALLS -> R.string.push_group_calls
+        PlanGroup.OTHERS -> R.string.push_group_others
     }
 
     /**
@@ -75,11 +133,12 @@ class NotificationChannelInstaller @Inject constructor(
         return minOf(legacy, importance)
     }
 
-    /** Un canal qui sonne : nom et description dans la langue de l'appareil, vibration, contenu masqué sur l'écran verrouillé. */
-    private fun alerting(id: String, name: Int, description: Int, importance: Int): NotificationChannel =
-        NotificationChannel(id, context.getString(name), importance).apply {
-            this.description = context.getString(description)
-            enableVibration(true)
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-        }
+    private companion object {
+        val RING_VIBRATION = longArrayOf(0, 1_000, 800, 1_000, 800)
+        val LEGACY_PREDECESSORS = mapOf(
+            NotificationChannelPlan.MESSAGES to NotificationChannelIds.CHANNEL_MESSAGES,
+            NotificationChannelPlan.SOCIAL to NotificationChannelIds.CHANNEL_SOCIAL,
+            NotificationChannelPlan.SYSTEM to NotificationChannelIds.CHANNEL_SYSTEM,
+        )
+    }
 }

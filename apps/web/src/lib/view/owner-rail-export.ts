@@ -46,7 +46,7 @@ export async function runStoryExport(params: {
 }): Promise<StorySaveNoticeKey> {
   const { job } = params;
   try {
-    const [{ downloadFile }, { fileDeliveryPortal }, { saveToGallery }, { currentGallerySaver }] = await Promise.all([
+    const [{ downloadFile }, { fileDeliveryPortal }, { isInGallery, saveToGallery }, { currentGallerySaver }] = await Promise.all([
       import('@/lib/media/download-file'),
       import('@/lib/media/deliver-file'),
       import('@/lib/gallery/save-to-gallery'),
@@ -69,7 +69,7 @@ export async function runStoryExport(params: {
        ni activation de geste à tenir après un long téléchargement. */
     const saver = params.gallerySaver === undefined ? currentGallerySaver() : params.gallerySaver;
     const gallery = await saveToGallery({ saver, blob: result.blob, fileName: result.fileName, mimeType: result.blob.type });
-    if (gallery !== null) return gallery === 'media.viewer.saved' ? 'story.save.success' : 'story.save.failed';
+    if (gallery !== null) return isInGallery(gallery) ? 'story.save.success' : 'story.save.failed';
     const portal = fileDeliveryPortal(params.host);
     const outcome = portal === null ? 'unavailable' : await portal.deliver(result.blob, result.fileName, result.blob.type);
     if (outcome === 'delivered') return 'story.save.success';
@@ -121,7 +121,6 @@ export const browserStorySceneExporter: StorySceneExporter = async (input) => {
     host: input.host,
     gallerySaver: input.gallerySaver === undefined ? currentGallerySaver() : input.gallerySaver,
     relationLevel: relationLevelProvider(apiDeps),
-    chooseLength: async () => 4,
     signal: input.job.signal,
     onProgress: input.job.report,
     onDelivering: input.job.lockDelivery,

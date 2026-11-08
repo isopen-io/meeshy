@@ -1,30 +1,32 @@
 import XCTest
 @testable import Meeshy
 
-/// #8147 — un message long se déplie EN PLACE dans le fil, un seul à la fois,
-/// sans saut de défilement, et reçoit l'effet Focal tant qu'il est déplié et
-/// visible. La feuille « Lire plus » n'existe plus.
+/// #8147 — un message long se déplie EN PLACE dans le fil, sans saut de
+/// défilement. La feuille « Lire plus » n'existe plus.
+///
+/// #16463 — le déplié est un message ORDINAIRE du mode courant : aucune mise
+/// en avant Focal, aucun « Réduire » ; il reste déplié tant que la
+/// conversation est ouverte, et plusieurs peuvent l'être.
 final class LongMessageExpansionTests: XCTestCase {
 
-    // MARK: - Un seul déplié à la fois
+    // MARK: - Déplier, jamais replier (#16463)
 
-    func test_nextExpanded_nothingExpanded_expandsTheTouchedMessage() {
-        XCTAssertEqual(LongMessageExpansionLaw.nextExpanded(current: nil, toggled: "a"), "a")
+    func test_expanded_tappingACollapsedMessage_expandsIt() {
+        XCTAssertEqual(LongMessageExpansionLaw.expanded(after: [], tapping: "a"), ["a"])
     }
 
-    func test_nextExpanded_touchingTheExpandedMessage_collapsesIt() {
-        XCTAssertNil(LongMessageExpansionLaw.nextExpanded(current: "a", toggled: "a"))
+    func test_expanded_tappingASecondMessage_keepsTheFirstExpanded() {
+        XCTAssertEqual(LongMessageExpansionLaw.expanded(after: ["a"], tapping: "b"), ["a", "b"])
     }
 
-    func test_nextExpanded_touchingAnotherMessage_replacesTheExpandedOne() {
-        XCTAssertEqual(LongMessageExpansionLaw.nextExpanded(current: "a", toggled: "b"), "b")
+    func test_expanded_tappingAnExpandedMessage_neverCollapsesIt() {
+        XCTAssertEqual(LongMessageExpansionLaw.expanded(after: ["a", "b"], tapping: "a"), ["a", "b"])
     }
 
     // MARK: - Aucun saut de défilement
 
-    func test_anchor_expanding_holdsTheTopEdge_collapsing_holdsTheBottomEdge() {
-        XCTAssertEqual(LongMessageExpansionLaw.anchor(isExpanding: true), .top)
-        XCTAssertEqual(LongMessageExpansionLaw.anchor(isExpanding: false), .bottom)
+    func test_anchor_theTopEdgeIsHeld_theRestUnrollsBeneath() {
+        XCTAssertEqual(LongMessageExpansionLaw.anchor, .top)
     }
 
     func test_anchoredOffset_edgeMovedUp_scrollsByTheSameAmount_soTheEdgeStaysStill() {
@@ -50,51 +52,6 @@ final class LongMessageExpansionTests: XCTestCase {
             LongMessageExpansionLaw.anchoredOffset(current: 4_900, edgeBefore: 400, edgeAfter: 100, minOffset: -50, maxOffset: 5_000),
             5_000
         )
-    }
-
-    // MARK: - Le verre épouse la BULLE (#8161)
-
-    func test_glassFrame_bubblesMode_hugsTheBubble_withTheSharedOverhangs() {
-        let bubble = CGRect(x: 120, y: 40, width: 240, height: 600)
-        let row = CGRect(x: 0, y: 0, width: 402, height: 680)
-        let glass = LongMessageExpansionLaw.glassFrame(bubble: bubble, row: row)
-        XCTAssertEqual(glass, CGRect(x: 114, y: 37, width: 252, height: 606), "débords 6/3 de FOCAL_METRICS autour de la bulle, jamais la rangée entière")
-        XCTAssertEqual(bubble.minX - glass.minX, FocalScrollPerspective.focusCardHorizontalInset)
-        XCTAssertEqual(bubble.minY - glass.minY, FocalScrollPerspective.focusCardInnerMargin)
-    }
-
-    func test_glassFrame_withoutABubble_fallsBackToTheRowMinusItsGutter() {
-        let row = CGRect(x: 0, y: 0, width: 402, height: 680)
-        XCTAssertEqual(
-            LongMessageExpansionLaw.glassFrame(bubble: nil, row: row),
-            CGRect(x: 6, y: 0, width: 390, height: 680)
-        )
-        XCTAssertEqual(
-            LongMessageExpansionLaw.glassFrame(bubble: .zero, row: row),
-            CGRect(x: 6, y: 0, width: 390, height: 680),
-            "une bulle pas encore mesurée ne réduit pas le verre à un point"
-        )
-    }
-
-    // MARK: - L'effet Focal du déplié
-
-    func test_alpha_expandedVisible_dimsTheNeighbours_only() {
-        XCTAssertEqual(LongMessageExpansionLaw.alpha(isExpandedCell: true, expansionVisible: true), 1)
-        XCTAssertEqual(
-            LongMessageExpansionLaw.alpha(isExpandedCell: false, expansionVisible: true),
-            FocalScrollPerspective.alphaFloor
-        )
-        XCTAssertLessThan(FocalScrollPerspective.alphaFloor, 1)
-    }
-
-    func test_alpha_expandedOffScreen_leavesTheThreadUniform() {
-        XCTAssertEqual(LongMessageExpansionLaw.alpha(isExpandedCell: false, expansionVisible: false), 1)
-    }
-
-    func test_loupe_underReduceMotion_neverScales() {
-        let size = CGSize(width: 300, height: 400)
-        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: true, size: size), 1)
-        XCTAssertGreaterThan(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: size), 1)
     }
 
     // MARK: - La feuille de lecture est SUPPRIMÉE (garde de non-retour)
@@ -130,15 +87,34 @@ final class LongMessageExpansionTests: XCTestCase {
         }
     }
 
-    func test_bubblesMode_theGlassReadsTheBubbleFrame_notTheRow() throws {
-        let background = try source("Meeshy/Features/Main/Views/Bubble/BubbleBackground.swift")
-        XCTAssertTrue(
-            background.contains("anchorPreference(key: LongMessageBubbleBoundsKey.self"),
-            "le fond de la bulle remonte son cadre au verre du déplié (#8161)"
-        )
+    /// #16463 — le déplié est rendu comme un message ordinaire : ni bloc de
+    /// verre, ni loupe, ni voisins atténués, dans aucun mode.
+    func test_theExpandedMessage_receivesNoFocalHighlight_inAnyMode() throws {
         let focus = try source("Meeshy/Features/Main/Views/Bubble/LongMessageFocus.swift")
-        XCTAssertTrue(focus.contains("backgroundPreferenceValue(LongMessageBubbleBoundsKey.self)"))
-        XCTAssertTrue(focus.contains("LongMessageExpansionLaw.glassFrame("), "le cadre du verre passe par la loi, jamais par une marge recopiée")
+        XCTAssertFalse(focus.contains("FocalGlassBlock"), "Bulles : aucun verre autour du déplié")
+        XCTAssertFalse(focus.contains("Loupe"), "aucune loupe sur le déplié")
+        let background = try source("Meeshy/Features/Main/Views/Bubble/BubbleBackground.swift")
+        XCTAssertFalse(background.contains("LongMessageBubbleBoundsKey"), "la bulle ne remonte plus de cadre à un verre disparu")
+        let host = try source("Meeshy/Features/Main/Views/MessageListViewController+LongMessage.swift")
+        XCTAssertFalse(host.contains("magnify("), "Bulles/Script/Focal : aucune loupe posée sur les layers")
+        XCTAssertFalse(host.contains("alphaFloor"), "aucun voisin atténué")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
+        XCTAssertFalse(row.contains("input.isExpanded && !input.isFocused"), "Script/Focal : aucun verre sous la rangée dépliée")
+        let rows = try source("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift")
+        XCTAssertFalse(rows.contains("|| expandedLongMessageLocalId"), "le déplié ne passe pas au premier plan")
+        let river = try source("Meeshy/Features/River/View/RiverStreamHost.swift")
+        XCTAssertFalse(river.contains("longMessageLoupe"), "Rivière : aucune loupe")
+        XCTAssertFalse(river.contains("LongMessageExpansionLaw.alpha"), "Rivière : aucun voisin atténué")
+    }
+
+    /// #16463 — aucun contrôle de repli : ni bouton « Réduire », ni action
+    /// VoiceOver qui replierait.
+    func test_noCollapseControl_existsInAnyMode() throws {
+        let text = try source("Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift")
+        XCTAssertFalse(text.contains("collapseTitle"), "Bulles/Rivière : aucun « Réduire »")
+        XCTAssertFalse(text.contains("bubble.expand.less"), "aucun bouton de repli identifiable")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
+        XCTAssertFalse(row.contains("collapseTitle"), "Script/Focal : aucune action « Réduire »")
     }
 
     func test_everyReadingMode_mountsTheInPlaceExpansion() throws {
@@ -148,12 +124,12 @@ final class LongMessageExpansionTests: XCTestCase {
         // L'état est lu AVANT la fermeture stockée de la cellule (c97e31e6ca) : la lire dedans capturait le contrôleur
         // en fort — contrôleur → collection → cellule → fermeture → contrôleur.
         XCTAssertTrue(host.contains("let longMessageExpansion = self.longMessageExpansion(for: localId)")
-                      && host.contains("messageBubble.longMessageFocus(longMessageExpansion)"), "Bulles : la bulle reçoit l'état de l'hôte")
-        XCTAssertFalse(host.contains("messageBubble.longMessageFocus(self.longMessageExpansion("),
+                      && host.contains("messageBubble.longMessageExpansion(longMessageExpansion)"), "Bulles : la bulle reçoit l'état de l'hôte")
+        XCTAssertFalse(host.contains("messageBubble.longMessageExpansion(self.longMessageExpansion("),
                        "jamais lu sur `self` dans la fermeture de la cellule")
         XCTAssertTrue(host.contains("focalActions.onToggleExpanded"), "Script/Focal : la rangée remonte le geste à l'hôte")
         let river = try source("Meeshy/Features/River/View/RiverStreamHost.swift")
-        XCTAssertTrue(river.contains(".longMessageFocus(expansion(for: bubble.messageId)"), "Rivière : même dépliage, même effet")
+        XCTAssertTrue(river.contains(".longMessageExpansion(expansion(for: bubble.messageId)"), "Rivière : même dépliage, même effet")
         let riverBubble = try source("Meeshy/Features/River/View/RiverBubbleView.swift")
         XCTAssertTrue(riverBubble.contains("BubbleExpandableText("), "Rivière : le texte long est tronqué comme ailleurs")
     }

@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
+import { mediaDownloadStore } from '@/lib/media/media-download-preferences';
 
 import { VideoFallback, VideoTile } from './video-tile';
 
@@ -78,9 +79,54 @@ function mount(attachment: Attachment, solo: boolean, onExpand: () => void): HTM
   return container;
 }
 
+describe('VideoTile — une vidéo de moins de 100 Ko arrive avec la bulle (#14639)', () => {
+  const setOnline = (online: boolean): void => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => online });
+  };
+
+  afterEach(() => {
+    setOnline(true);
+  });
+
+  test('99 999 octets en ligne : preload="auto"', () => {
+    setOnline(true);
+    const el = mount({ ...video, fileSize: 99_999 }, true, () => {});
+    expect(el.querySelector('video')?.getAttribute('preload')).toBe('auto');
+  });
+
+  test('102 400 octets : preload="none", le fichier attend le premier ▶︎', () => {
+    setOnline(true);
+    const el = mount({ ...video, fileSize: 102_400 }, true, () => {});
+    expect(el.querySelector('video')?.getAttribute('preload')).toBe('none');
+  });
+
+  test('hors ligne, même légère : preload="none"', () => {
+    setOnline(false);
+    const el = mount({ ...video, fileSize: 5_000 }, true, () => {});
+    expect(el.querySelector('video')?.getAttribute('preload')).toBe('none');
+  });
+  test('#6333 — au-delà de 100 Ko, la politique « toujours » de l’appareil précharge ; « jamais » attend le ▶︎', () => {
+    setOnline(true);
+    mediaDownloadStore().setPolicy('video', 'always');
+    expect(mount({ ...video, fileSize: 4_000_000 }, true, () => {}).querySelector('video')?.getAttribute('preload')).toBe('auto');
+    act(() => root.unmount());
+    container.remove();
+    mediaDownloadStore().setPolicy('video', 'never');
+    expect(mount({ ...video, fileSize: 4_000_000 }, true, () => {}).querySelector('video')?.getAttribute('preload')).toBe('none');
+    mediaDownloadStore().setPolicy('video', 'wifiOnly');
+  });
+
+  test('#6333 — hors ligne, « toujours » ne précharge rien', () => {
+    setOnline(false);
+    mediaDownloadStore().setPolicy('video', 'always');
+    expect(mount({ ...video, fileSize: 4_000_000 }, true, () => {}).querySelector('video')?.getAttribute('preload')).toBe('none');
+    mediaDownloadStore().setPolicy('video', 'wifiOnly');
+  });
+});
+
 describe('VideoTile — la vignette et la lecture inline (#6221)', () => {
   test('<video preload="none" playsinline> avec le poster et la source servis', () => {
-    const el = mount(video, true, () => {});
+    const el = mount({ ...video, fileSize: 2_000_000 }, true, () => {});
     const videoEl = el.querySelector('video')!;
     expect(videoEl.getAttribute('preload')).toBe('none');
     expect(videoEl.hasAttribute('playsinline') || (videoEl as unknown as { playsInline: boolean }).playsInline).toBeTruthy();

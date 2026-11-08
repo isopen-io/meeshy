@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.LanguageExplorerOrder
 import me.meeshy.sdk.model.LanguageInfo
 
 /**
@@ -26,7 +27,49 @@ public data class LanguageExplorerRow(
     val isTranslating: Boolean,
     val isSelected: Boolean,
     val canRetranslate: Boolean,
+    /** Pourquoi la dernière demande a échoué, ou `null` : la ligne le dit au lieu de rester muette. */
+    val failure: RowFailure? = null,
+    /** La transcription de la piste vocale traduite de cette langue, ou `null` : la ligne dit qu'une voix existe. */
+    val audioPreview: String? = null,
+    /** Une piste vocale existe déjà dans cette langue (jouable sans nouvelle demande). */
+    val hasAudio: Boolean = false,
 )
+
+/** La traduction affichée en carte sous la bannière (avec sa croix « Fermer la traduction »). */
+@Immutable
+public data class SelectedTranslation(
+    val code: String,
+    val info: LanguageInfo?,
+    val text: String,
+    val isAudio: Boolean,
+)
+
+/** Ce que toucher une ligne fait : la sélectionner, demander la voix par pièce, demander le texte, ou rien (déjà en cours). */
+public sealed interface LanguageExplorerRowAction {
+    public data object Select : LanguageExplorerRowAction
+    public data class RequestAudio(val attachmentId: String) : LanguageExplorerRowAction
+    public data object RequestText : LanguageExplorerRowAction
+    public data object None : LanguageExplorerRowAction
+
+    public companion object {
+        /** Même ordre qu'iOS : contenu texte ou piste vocale prête = sélection ; sinon un vocal se traduit par pièce, un texte par message. */
+        public fun of(row: LanguageExplorerRow, audioAttachmentId: String?): LanguageExplorerRowAction = when {
+            row.isTranslating -> None
+            row.hasContent || row.hasAudio -> Select
+            audioAttachmentId != null -> RequestAudio(audioAttachmentId)
+            else -> RequestText
+        }
+    }
+}
+
+/** Ce que la ligne d'une langue dit d'une demande qui n'a rien rendu. */
+public enum class RowFailure {
+    /** Chiffrée de bout en bout : la traduction passe par l'appareil, jamais par le serveur. */
+    SERVER_REFUSED,
+
+    /** La demande est partie et n'a rien rendu. */
+    FAILED,
+}
 
 /**
  * The projected state of a message's language explorer: the original-language
@@ -43,6 +86,12 @@ public data class MessageLanguageExplorer(
     val originalInfo: LanguageInfo?,
     val originalPreview: String,
     val rows: List<LanguageExplorerRow>,
+    /** La traduction retenue pour la bulle, rendue en carte, ou `null`. */
+    val selected: SelectedTranslation? = null,
+    /** Le bandeau porte la transcription d'un vocal (pas un texte). */
+    val originalIsTranscription: Boolean = false,
+    /** La pièce vocale dont on demande la traduction, ou `null` : un message sans voix se traduit par son texte. */
+    val audioAttachmentId: String? = null,
 )
 
 /**
@@ -52,9 +101,8 @@ public data class MessageLanguageExplorer(
  * distinct from the discrete [MessageLanguageStrip] preview under the bubble.
  *
  * Where iOS ships a hand-curated 18-language list, Android surfaces the viewer's
- * **configured** content languages first (system → regional → custom, the ones the
- * viewer actually cares about) and then the remaining candidate languages — a
- * coherent, preference-led ordering rather than a fixed table. The projection is a
+ * **configured** content languages first, then the remaining candidates — the order is
+ * the pure [LanguageExplorerOrder] law (core:model). The projection is a
  * stateless building block: it takes opaque parameters (translations, in-flight
  * codes, the selected code) and encodes no "when to translate" decision — that
  * orchestration stays in the ViewModel.
@@ -89,27 +137,27 @@ public object MessageDetailExplorer {
         candidates: List<LanguageInfo> = LanguageData.allLanguagesCommonFirst,
         translatingCodes: Set<String> = emptySet(),
         selectedCode: String? = null,
+        failures: Map<String, RowFailure> = emptyMap(),
         previewLength: Int = 60,
+        audioTranslations: Map<String, String> = emptyMap(),
+        audioAttachmentId: String? = null,
     ): MessageLanguageExplorer {
         val original = originalLanguage.normalized()
         val selected = selectedCode.normalized()
         val inFlight = translatingCodes.mapNotNull { it.normalized() }.toSet()
 
-        val ordered = LinkedHashSet<String>()
-        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
-            val code = language.normalized() ?: continue
-            if (code != original) ordered.add(code)
-        }
-        for (candidate in candidates) {
-            val code = candidate.code.normalized() ?: continue
-            if (code != original) ordered.add(code)
-        }
+        val audio = audioTranslations.entries
+            .mapNotNull { (code, text) -> code.normalized()?.let { it to text } }
+            .toMap()
+        val ordered = LanguageExplorerOrder.of(originalLanguage, preferences, candidates)
 
         val rows = ordered.map { code ->
             val translated = translations.firstOrNull {
                 it.targetLanguage.normalized() == code && it.translatedContent.isNotBlank()
             }?.translatedContent
             val isTranslating = code in inFlight
+            val hasAudio = code in audio
+            val audioText = audio[code]?.trim()?.takeIf { it.isNotEmpty() }
             LanguageExplorerRow(
                 code = code,
                 info = LanguageData.info(code),
@@ -118,7 +166,18 @@ public object MessageDetailExplorer {
                 isTranslating = isTranslating,
                 isSelected = code == selected,
                 canRetranslate = translated != null && !isTranslating,
+                failure = failures[code].takeIf { !isTranslating && translated == null && !hasAudio },
+                audioPreview = audioText?.let { truncate(it, previewLength) },
+                hasAudio = hasAudio,
             )
+        }
+
+        val selectedText = selected?.let { code ->
+            val text = translations.firstOrNull {
+                it.targetLanguage.normalized() == code && it.translatedContent.isNotBlank()
+            }?.translatedContent
+            val spoken = audio[code]?.trim()?.takeIf { it.isNotEmpty() }
+            (text ?: spoken)?.let { SelectedTranslation(code, LanguageData.info(code), it, isAudio = text == null) }
         }
 
         return MessageLanguageExplorer(
@@ -126,6 +185,9 @@ public object MessageDetailExplorer {
             originalInfo = LanguageData.info(original),
             originalPreview = bannerPreview(content, transcription),
             rows = rows,
+            selected = selectedText,
+            originalIsTranscription = content.isBlank() && !transcription.isNullOrBlank(),
+            audioAttachmentId = audioAttachmentId,
         )
     }
 

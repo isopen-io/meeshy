@@ -32,7 +32,7 @@ class PostScenesViewComposeTest {
     private val card: ReelSceneRenderer = { item, _, live, _, modifier -> painted += item.id to live; Box(modifier) }
     private val reader: PostSceneReaderRenderer = { item, _, playing, modifier -> read += item.id to playing; Box(modifier) }
     private val exported = mutableListOf<List<String>>()
-    private val exporter: PostSceneExportRenderer = { scenes, _, modifier -> exported += scenes.map { it.id }; Box(modifier) }
+    private val exporter: PostSceneExportRenderer = { scenes, _, modifier, _ -> exported += scenes.map { it.id }; Box(modifier) }
 
     private fun scenePost(layout: MosaicLayoutMode, vararg ids: String) = feedPostPresentation(id = "p1").copy(
         scenes = FeedPostScenes(items = ids.map { StoryItem(id = it) }, layout = layout, accentHex = "6366F1"),

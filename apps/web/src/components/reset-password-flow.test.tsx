@@ -115,7 +115,7 @@ describe('ResetPasswordFlow — « Nouveau mot de passe », dans la colonne de l
     expect(el.querySelector('h1')?.textContent).toBe('Nouveau mot de passe');
     expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Enregistrer le mot de passe');
     expect(perceivableText(el)).not.toMatch(/r[ée]initialis/iu);
-    expect(authColumnIn(el)?.querySelector('a[aria-label="Fermer"]')).not.toBeNull();
+    expect(authColumnIn(el)?.querySelector('a[aria-label="Retour"]')).not.toBeNull();
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
 

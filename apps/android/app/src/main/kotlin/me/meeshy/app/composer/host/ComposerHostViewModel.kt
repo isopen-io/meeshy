@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
 import me.meeshy.sdk.model.composer.ComposerIntent
 import me.meeshy.sdk.model.composer.ComposerOpening
+import me.meeshy.sdk.model.composer.ComposerPortal
+import me.meeshy.sdk.model.composer.ComposerPortalSlot
 import me.meeshy.sdk.model.composer.ComposerProfile
 import me.meeshy.sdk.model.composer.ComposerTextSelection
 import me.meeshy.sdk.model.composer.sceneOpening
@@ -53,12 +55,13 @@ class ComposerHostViewModel @Inject constructor(
     val opening: ComposerOpening get() = ComposerProfile.of(door.origin).opensWith
 
     /**
-     * La porte a promis qu'on écrirait d'emblée (iOS `focusesContentOnAppear`) : dû jusqu'à ce que le champ ait pris le
-     * clavier, UNE fois — ni une bascule de format, ni une rotation, ni la restauration après la mort du processus ne le
-     * rejouent (la dette payée vit dans le [SavedStateHandle]).
+     * La porte a promis qu'on écrirait d'emblée sur une surface sans scène ([ComposerProfile.raisesKeyboardOnOpen]) : dû
+     * jusqu'à ce que le champ ait pris le clavier, UNE fois — ni une bascule de format, ni une rotation, ni la restauration
+     * après la mort du processus ne le rejouent (la dette payée vit dans le [SavedStateHandle]). Une scène s'ouvre au repos,
+     * comme la story (#16203).
      */
     val keyboardOwed: StateFlow<Boolean> =
-        saved.getStateFlow(KEYBOARD_OWED_KEY, ComposerProfile.of(door.origin).opensWith.focusesContentOnAppear)
+        saved.getStateFlow(KEYBOARD_OWED_KEY, ComposerProfile.of(door.origin).raisesKeyboardOnOpen)
 
     fun onKeyboardRaised() {
         saved[KEYBOARD_OWED_KEY] = false
@@ -94,6 +97,15 @@ class ComposerHostViewModel @Inject constructor(
     fun onSeedApplied() {
         _seed.update { if (it is SeedState.Ready) SeedState.None else it }
     }
+
+    private val _portal = MutableStateFlow(ComposerPortalSlot())
+
+    /** La feuille modale ouverte : une seule à la fois, ouvrir la suivante ferme la précédente ([ComposerPortalSlot]). */
+    val portal: StateFlow<ComposerPortalSlot> = _portal.asStateFlow()
+
+    fun present(portal: ComposerPortal) = _portal.update { it.present(portal) }
+
+    fun dismiss(portal: ComposerPortal) = _portal.update { it.dismiss(portal) }
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
 

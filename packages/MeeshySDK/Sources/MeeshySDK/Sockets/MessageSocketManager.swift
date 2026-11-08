@@ -205,7 +205,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     private func handleNetworkBackOnline() {
         guard !isConnected else { return }
-        guard APIClient.shared.authToken != nil else { return }
+        // Un CREDENTIAL, pas un JWT (#16750) : le moniteur réseau est aveugle à
+        // l'authentification et réveille aussi les invités de lien partagé.
+        guard APIClient.shared.requestCredential != nil else { return }
         // The network coming back is fresh positive evidence about the LINK, not
         // about the server: a ladder built up by earlier outages must not defer
         // this attempt. (`SocialSocketManager` reconnects immediately on the same
@@ -215,13 +217,22 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     }
 
     private func scheduleReconnectWithBackoff() {
-        // Only worth retrying while a session still exists. A nil token means the
-        // server invalidated us (`requireReauthentication` clears it) and no amount
-        // of retrying helps — only a fresh login does. An EXPIRED token is a
-        // different story and must keep retrying: that is the post-outage case this
-        // ladder exists for.
-        guard APIClient.shared.authToken != nil else {
-            Logger.socket.info("MessageSocket: no session — not arming a reconnect retry")
+        // Only worth retrying while a session still exists. NO credential means
+        // the server invalidated us (`requireReauthentication` clears the JWT) and
+        // no amount of retrying helps — only a fresh login does. An EXPIRED token
+        // is a different story and must keep retrying: that is the post-outage
+        // case this ladder exists for.
+        //
+        // #16750 — la question est « ai-je une IDENTITÉ ? », jamais « ai-je un
+        // JWT ? ». Les deux jetons sont des champs DISTINCTS d'`APIClient` et un
+        // invité de lien partagé n'a que le second : testé sur `authToken`, ce
+        // garde rendait la main pour TOUTE cette population. La passerelle coupe
+        // pourtant les sockets invité par conception et SANS code d'erreur
+        // (`guestLinkWatch`, fail-closed à la revérification) — une erreur Mongo
+        // transitoire laissait donc l'invité sur « Reconnexion… » définitif, lien
+        // parfaitement valide, sans plus rien recevoir en temps réel.
+        guard APIClient.shared.requestCredential != nil else {
+            Logger.socket.info("MessageSocket: no credential — not arming a reconnect retry")
             return
         }
         reconnectTask?.cancel()
@@ -261,9 +272,18 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             return .armed
         }
 
-        guard let token = APIClient.shared.authToken else {
-            Logger.socket.warning("No auth token, skipping connect")
+        // #16750 — « pas de JWT » n'est pas « pas de session », et c'est la
+        // RECONSTRUCTION qui doit apprendre le credential, pas seulement le garde
+        // de l'échelle : `forceReconnect()` exécute `suspendTransport()` avant
+        // d'arriver ici, donc un `.notArmed` inconditionnel armait une échelle
+        // qui TUE la socket d'un invité sans jamais rien rebâtir.
+        guard let credential = APIClient.shared.requestCredential else {
+            Logger.socket.warning("No credential, skipping connect")
             return .notArmed
+        }
+
+        guard let token = credential.bearerToken else {
+            return establishAnonymousTransport(sessionToken: credential.value)
         }
 
         let tokenExpired = SocketConnectionRules.isJWTExpired(token)
@@ -285,60 +305,22 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         Task { @MainActor in self.connectionState = .connecting }
 
-        manager = makeTransport(url: url, token: token)
+        // #16744 — le transport PÉRIMÉ qu'on remplace part par la porte de la
+        // loi, comme à `suspendTransport()`. Le garde-fou d'entrée ne couvre que
+        // `.connected || .connecting` : un socket coupé par la passerelle
+        // (expiration de JWT) arrive ici non-nil et `.disconnected`, avec ses
+        // `emitWithAck` EN VOL. Socket.IO n'en tient qu'une référence FAIBLE —
+        // le relâcher sans retraite, c'est ni réponse ni expiration, donc un
+        // envoi suspendu pour toujours et jamais replié sur REST.
+        transportRetirement.retire(manager)
+        manager = SocketTransportFactory.make(url: url, headers: Self.handshakeHeaders(
+            token: token, sessionToken: APIClient.shared.registeredSessionToken))
 
         socket = manager?.defaultSocket
         handshakeToken = token
         setupEventHandlers()
         socket?.connect(withPayload: ClientInfoProvider.socketAuthPayload())
         return .armed
-    }
-
-    private func makeTransport(url: URL, token: String) -> SocketManager {
-        return SocketManager(socketURL: url, config: [
-            .log(false),
-            .handleQueue(.main),
-            // CALL-FIX 2026-06-06 — WebSocket transport (polling handshake → auto
-            // upgrade to WebSocket). The previous `.forcePolling(true)` (HTTP
-            // long-poll ONLY) dropped mid-call: every re-poll under WebRTC CPU load
-            // surfaced as "transport close" on the gateway, killing call:initiate /
-            // SDP / ICE signaling (call stuck on "connecting"). The old "~35s the WS
-            // dropped" was a ping timeout (gateway pingTimeout was 10s) — bumped to
-            // 20s server-side, so the persistent WebSocket now holds.
-            //
-            // P4-1 évalué 2026-08-22 puis ÉCARTÉ : `.forceWebsockets(true)`
-            // économiserait 1-2 RTT par connect mais supprime le REPLI polling
-            // — contrairement au web (`transports: ['websocket','polling']`,
-            // WS d'abord AVEC repli), un réseau qui casse l'upgrade WebSocket
-            // (proxy TLS-inspectant, portail captif) perdrait tout temps réel.
-            // À reconsidérer seulement avec un repli après N échecs.
-            // Le jeton de SESSION voyage AVEC le JWT (#4213).
-            //
-            // Un socket inscrit s'authentifiait au JWT seul, et le serveur
-            // n'avait donc aucun moyen de dire quel socket appartient à quelle
-            // session : révoquer une session passait la ligne à
-            // `isValid: false` et cet appareil continuait de tout recevoir —
-            // `message:new`, `conversation:updated` — indéfiniment, un socket
-            // n'étant authentifié qu'une fois, au connect, et jamais revérifié.
-            //
-            // En EN-TÊTE, comme le JWT et comme les appels REST : le serveur le
-            // lit par `extractSessionToken`, qui accepte l'en-tête
-            // `x-session-token` aussi bien que `handshake.auth`.
-            .extraHeaders(Self.handshakeHeaders(token: token, sessionToken: APIClient.shared.registeredSessionToken)),
-            .reconnects(true),
-            .reconnectWait(1),
-            .reconnectWaitMax(16),
-            .reconnectAttempts(-1),
-            .sessionDelegate(CertificatePinningDelegate()),
-            // BW-IOS-01 — negocie l'extension `permessage-deflate`. Le gateway
-            // l'annonce depuis toujours (`perMessageDeflate`, seuil 256 o) mais
-            // Starscream ne pose l'en-tete d'extension que si le manager le
-            // demande : sans ce drapeau, TOUTES les trames iOS voyageaient non
-            // compressees. Un intermediaire qui casserait l'extension fait
-            // retomber le handshake sur des trames nues, jamais sur une
-            // deconnexion.
-            .compress,
-        ])
     }
 
     private func setupEventHandlers() {
@@ -453,36 +435,40 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     }
 
     public func connectAnonymous(sessionToken: String) {
+        establishAnonymousTransport(sessionToken: sessionToken)
+    }
+
+    /// La poignée de main d'un INVITÉ de lien partagé, qui RÉPOND son issue.
+    /// `connectAnonymous` garde sa signature publique (ses appelants ne lisent
+    /// pas d'issue) ; `establishTransport()` en a besoin d'une, car c'est elle
+    /// qui décide si l'échelle se réarme — une reconstruction d'invité muette la
+    /// ferait tourner à vide (#16750).
+    @discardableResult
+    func establishAnonymousTransport(sessionToken: String) -> SocketConnectOutcome {
         if let socket, socket.status == .connected || socket.status == .connecting {
-            return
+            return .armed
         }
         // Transport seul, pas `disconnect()` : au retour d'arrière-plan l'invité garde sa conversation
         // ouverte, et ses salons doivent être rejoints au `.connect` — une remise à froid les oubliait.
         // Un changement de compte passe par `disconnect()` de son côté.
+        // `suspendTransport()` porte aussi la retraite du transport remplacé (#16744).
         suspendTransport()
 
-        guard let url = SocketConfig.baseURL else { return }
+        guard let url = SocketConfig.baseURL else { return .notArmed }
 
         Task { @MainActor in self.connectionState = .connecting }
 
-        manager = SocketManager(socketURL: url, config: [
-            .log(false),
-            .handleQueue(.main),
-            // CALL-FIX 2026-06-06 — WebSocket transport (voir connect()).
-            .extraHeaders(["X-Session-Token": sessionToken]),
-            .reconnects(true),
-            .reconnectWait(1),
-            .reconnectWaitMax(16),
-            .reconnectAttempts(-1),
-            .sessionDelegate(CertificatePinningDelegate()),
-            // BW-IOS-01 — `permessage-deflate` (voir `connect()`).
-            .compress,
+        // L'en-tête vient du credential, jamais d'une supposition locale : un
+        // jeton d'invité présenté en `Bearer` fait répondre « Invalid JWT token ».
+        manager = SocketTransportFactory.make(url: url, headers: [
+            MeeshyRequestCredential.anonymousSession(sessionToken).header: sessionToken,
         ])
 
         socket = manager?.defaultSocket
         handshakeToken = nil
         setupEventHandlers()
         socket?.connect()
+        return .armed
     }
 
     /// Transport-only teardown shared by `disconnect()`, `prepareForBackground()`
@@ -544,7 +530,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Reads the token from `APIClient` (nonisolated mirror of
     /// `AuthManager.authToken`) to keep this hook callable from any context.
     public func resumeFromBackground() {
-        guard APIClient.shared.authToken != nil else { return }
+        // Un credential, pas un JWT (#16750). L'app route aujourd'hui une entrée
+        // au premier plan sans compte vers `resumeWithoutSession()`, donc ce garde
+        // n'excluait aucun invité en FAIT ; il l'excluait en DROIT.
+        guard APIClient.shared.requestCredential != nil else { return }
         forceReconnect()
     }
 
@@ -804,33 +793,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public func emitAppForeground(_ foreground: Bool) {
         lastAppForeground = foreground
         socket?.emit("presence:app-state", ["foreground": foreground])
-    }
-
-    // MARK: - Friend request lifecycle
-
-    /// `friend-request:cancelled` ne porte que `{friendRequestId, cancelledBy}`
-    /// et ne dit PAS de quel cote se trouve le lecteur — l'evenement part a
-    /// l'user-room de l'AUTRE partie, donc `cancelledBy` est l'interlocuteur,
-    /// que la demande ait ete emise ou recue. On retire dans les DEUX sens :
-    /// chacune des deux methodes est un no-op quand la cle est absente.
-    ///
-    /// Muter `FriendshipCache` ne repeint PAS l'ecran Demandes : ses lignes
-    /// viennent de GRDB (`PersistenceKeys.receivedRequests` / `sentRequests`),
-    /// qui resterait `.fresh` avec la ligne retiree. D'ou l'invalidation
-    /// EXPLICITE — `notifyChange()` ne fait qu'incrementer `version`.
-    static func applyFriendRequestWithdrawal(otherUserId: String) async {
-        FriendshipCache.shared.didCancelRequest(to: otherUserId)
-        FriendshipCache.shared.didRejectRequest(from: otherUserId)
-        await FriendshipCache.shared.invalidatePersistedFriendCaches()
-    }
-
-    /// `friend-request:rejected` arrive chez l'EXPEDITEUR d'origine : sa demande
-    /// vit dans `_sentPending`, que `didCancelRequest(to:)` vide.
-    /// `didRejectRequest(from:)` viderait `_receivedPending` — mauvaise
-    /// direction, no-op garanti.
-    static func applyFriendRequestRejection(rejecterId: String) async {
-        FriendshipCache.shared.didCancelRequest(to: rejecterId)
-        await FriendshipCache.shared.invalidatePersistedFriendCaches()
     }
 
     // MARK: - Decode Helper

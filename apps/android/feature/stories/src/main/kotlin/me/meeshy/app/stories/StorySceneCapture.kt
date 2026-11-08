@@ -2,9 +2,6 @@ package me.meeshy.app.stories
 
 import android.content.Context
 import android.net.Uri
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -40,7 +36,6 @@ import me.meeshy.sdk.model.composer.capture.CameraResult
 import me.meeshy.sdk.model.composer.capture.SceneHoldRelay
 import me.meeshy.sdk.model.composer.capture.SceneQuickCapture
 import me.meeshy.ui.component.capture.CaptureViewfinder
-import me.meeshy.ui.theme.MeeshySpacing
 import java.io.File
 
 /** Rien n'est posé sur la diapo : ni média, ni texte, ni sticker, ni trait, ni lieu, ni son. Une couleur de fond ne compte pas. */
@@ -96,9 +91,12 @@ internal class StorySceneCapture(
         if (replacing != null && background != null) background(result, replacing) else onCaptured(result)
     }
 
-    /** Le geste et sa ligne n'existent qu'au repos : scène vide, rien de sélectionné, aucun pinceau, texte ni panneau ouvert. */
+    /**
+     * Le geste et sa ligne n'existent qu'au repos : scène vide (aucun média en train d'y entrer), rien de sélectionné,
+     * aucun pinceau, texte ni panneau ouvert.
+     */
     fun offeredOn(state: StoryComposerUiState, somethingOpen: Boolean): Boolean = SceneQuickCapture.offers(
-        sceneIsBlank = state.deck.selectedSlide.isBlankScene,
+        sceneIsBlank = state.deck.selectedSlide.isBlankScene && !state.isPreparingMedia,
         armed = armed,
         toolIsOpen = somethingOpen || state.isDrawingActive || state.isEditingTextElement ||
             state.band.activeTool != null || state.selectedSceneObject != null,
@@ -157,23 +155,28 @@ private fun Context.capturedUploadItem(result: CameraResult): MediaUploadItem? {
 /** L'ombre qui détache la ligne d'aide de n'importe quel fond de scène, clair comme sombre. */
 private val SCENE_HINT_SHADOW = Shadow(color = Color.Black.copy(alpha = 0.45f), offset = Offset(0f, 1f), blurRadius = 4f)
 
-/** La ligne d'aide de la scène vide : une seule, discrète, au bas de la scène, à l'encre des contrôles posés sur la scène. */
+/**
+ * La ligne d'aide de la scène vide : une seule, discrète, à l'encre des contrôles posés sur la scène. Comme sur iOS
+ * (`ComposerSceneQuickCaptureHint`), elle se lit au MILIEU de la scène, sous l'invite qui la porte (#16204) — deux textes
+ * centrés au même point se superposaient. La marge latérale de l'invite laisse la colonne d'outils libre (#14496).
+ */
 @Composable
 internal fun StorySceneCaptureHint(offer: SceneQuickCapture.Offer, modifier: Modifier = Modifier) {
     val label = when (SceneQuickCapture.hint(offer)) {
         SceneQuickCapture.Hint.TAP_OR_HOLD -> R.string.composer_capture_hint_tap_or_hold
         SceneQuickCapture.Hint.HOLD_TO_FILM -> R.string.composer_capture_hint_hold
     }
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Text(
-            text = stringResource(label),
-            style = MaterialTheme.typography.labelMedium.copy(shadow = SCENE_HINT_SHADOW),
-            color = Color.White.copy(alpha = 0.85f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = 96.dp),
-        )
-    }
+    Text(
+        text = stringResource(label),
+        style = MaterialTheme.typography.labelMedium.copy(shadow = SCENE_HINT_SHADOW),
+        color = Color.White.copy(alpha = 0.85f),
+        textAlign = TextAlign.Center,
+        modifier = modifier,
+    )
 }
+
+/** La place de la colonne d'outils au bord de la scène (retrait de 10 dp, cible de 48 dp), libre des deux côtés : iOS `railClearance`. */
+internal val SCENE_HINT_RAIL_CLEARANCE = 64.dp
 
 /**
  * Suit le doigt qui a armé le viseur en tenant la scène (#13849) : posé sur le PARENT de la scène, ce suivi survit à la

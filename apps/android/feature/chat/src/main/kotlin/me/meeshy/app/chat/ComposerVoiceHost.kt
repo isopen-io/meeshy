@@ -1,9 +1,5 @@
 package me.meeshy.app.chat
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -14,23 +10,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import dagger.hilt.android.EntryPointAccessors
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import me.meeshy.sdk.audio.ComposerVoiceCapture
 import me.meeshy.sdk.audio.MediaRecorderEngine
-import me.meeshy.sdk.audio.VoiceTake
+import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.ongoing.VoiceRecordingBackgroundLaw
+import me.meeshy.sdk.model.waveform.AudioRecordingSettings
+import me.meeshy.sdk.recording.AudioRecorderEntryPoint
+import me.meeshy.sdk.recording.AudioRecordingProviding
+import me.meeshy.sdk.recording.AudioRecordingResult
+import me.meeshy.sdk.recording.DefaultAudioRecorder
+import me.meeshy.ui.component.permission.PermissionFlow
+import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.component.recording.LocalVoiceRecordingHost
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
-
-private const val VOICE_MIME_TYPE = "audio/mp4"
 
 /** L'enregistrement vocal du composeur vu de la barre : l'état de la prise et ses trois portes. */
 internal class ComposerVoiceHandle(
@@ -39,6 +37,8 @@ internal class ComposerVoiceHandle(
     val request: () -> Unit,
     val cancel: () -> Unit,
     val finish: () -> Unit,
+    /** La porte du micro : la feuille d'explication ou la carte « Accès au micro refusé », rendue par `PermissionFlowHost`. */
+    val permissions: PermissionFlow,
 )
 
 /**
@@ -50,86 +50,108 @@ internal class ComposerVoiceHandle(
 internal fun rememberComposerVoice(
     onStageVoiceFile: ((File) -> Unit)?,
     onPickFile: (file: File, fileName: String, mimeType: String?) -> Unit,
+    newRecorder: (() -> AudioRecordingProviding)? = null,
+    conversationTitle: String = "",
 ): ComposerVoiceHandle {
     val context = LocalContext.current
-    val ioScope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
     val haptics = rememberMeeshyHaptics()
     val recordingHost = LocalVoiceRecordingHost.current
+    val permissions = rememberPermissionFlow()
     val publishedTake = remember { AtomicBoolean(false) }
-    val capture = remember { ComposerVoiceCapture(File(context.cacheDir, "voice"), { MediaRecorderEngine(context) }) }
-    var recording by remember { mutableStateOf(capture.session) }
+    val recorder = remember { (newRecorder ?: { sharedRecorder(context) })() }
+    var recording by remember { mutableStateOf(recorder.session) }
 
-    fun deliver(take: VoiceTake?) {
-        val file = take?.file ?: return
+    fun deliver(result: AudioRecordingResult?) {
+        val file = result?.file ?: return
         val stage = onStageVoiceFile
         if (stage != null) return stage(file)
-        if (file.length() > 0L) onPickFile(file, file.name, VOICE_MIME_TYPE) else file.delete()
+        if (file.length() > 0L) onPickFile(file, file.name, result.mimeType) else file.delete()
     }
 
     fun start() {
-        if (capture.start()) {
-            haptics.medium()
-            publishedTake.set(true)
-            recordingHost.publish(System.currentTimeMillis())
+        recorder.start { live ->
+            recording = recorder.session
+            if (live) {
+                haptics.light()
+                publishedTake.set(true)
+                recordingHost.updateTake(conversationTitle, emptyList())
+                recordingHost.publish(System.currentTimeMillis())
+            }
         }
-        recording = capture.session
+        recording = recorder.session
     }
 
     fun finishTake() {
-        val take = capture.finish()
-        recording = capture.session
+        recorder.finish(::deliver)
+        recording = recorder.session
         haptics.light()
-        deliver(take)
     }
 
     fun cancelTake() {
-        capture.cancel()
-        recording = capture.session
+        recorder.cancel()
+        recording = recorder.session
         haptics.light()
     }
 
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) start()
-    }
     val latestDeliver by rememberUpdatedState(::deliver)
-    DisposableEffect(capture) {
+    DisposableEffect(recorder) {
+        recorder.onInterrupted = { kept ->
+            latestDeliver(kept)
+            recording = recorder.session
+        }
         onDispose {
-            latestDeliver(capture.abandon())
+            recorder.onInterrupted = null
+            recorder.abandon { latestDeliver(it) }
             if (publishedTake.getAndSet(false)) recordingHost.retire()
         }
     }
     LaunchedEffect(recordingHost) {
-        recordingHost.stopRequests.collect { if (capture.session.isRecording) finishTake() }
+        recordingHost.stopRequests.collect { if (recorder.session.isRecording) finishTake() }
     }
     LaunchedEffect(recordingHost) {
-        recordingHost.cancelRequests.collect { if (capture.session.isRecording) cancelTake() }
+        recordingHost.cancelRequests.collect { if (recorder.session.isRecording) cancelTake() }
     }
     LaunchedEffect(recording.isRecording) {
         if (!recording.isRecording && publishedTake.getAndSet(false)) recordingHost.retire()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        val leaving = VoiceRecordingBackgroundLaw.Input(capture.session.isRecording, recordingHost.keepsRecordingInBackground)
+        val leaving = VoiceRecordingBackgroundLaw.Input(recorder.session.isRecording, recordingHost.keepsRecordingInBackground)
         if (VoiceRecordingBackgroundLaw.onAppLeft(leaving) == VoiceRecordingBackgroundLaw.Decision.AbandonToTray) {
-            deliver(capture.abandon())
-            recording = capture.session
+            recorder.abandon(::deliver)
+            recording = recorder.session
         }
     }
     LaunchedEffect(recording.isRecording) {
         while (recording.isRecording) {
             delay(100)
-            capture.tick(0.1)
-            recording = capture.session
+            recorder.tick(0.1)
+            recording = recorder.session
+            if (publishedTake.get()) recordingHost.updateTake(conversationTitle, recording.levels.takeLast(LEVEL_WINDOW))
         }
     }
     return ComposerVoiceHandle(
         isRecording = recording.isRecording,
         session = recording,
-        request = {
-            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED
-            if (granted) start() else permission.launch(Manifest.permission.RECORD_AUDIO)
-        },
+        request = { scope.launch { if (permissions.ensure(PermissionNature.MICROPHONE)) start() } },
         cancel = ::cancelTake,
         finish = ::finishTake,
+        permissions = permissions,
     )
 }
+
+/** L'enregistreur partagé du dépôt (session, focus, garde d'appel) ; hors Hilt, un enregistreur isolé du même moteur. */
+private fun sharedRecorder(context: android.content.Context): AudioRecordingProviding {
+    val app = context.applicationContext
+    val factory = runCatching {
+        EntryPointAccessors.fromApplication(app, AudioRecorderEntryPoint::class.java).audioRecorderFactory()
+    }.getOrNull()
+    return factory?.create(AudioRecordingSettings.standard) ?: DefaultAudioRecorder(
+        settings = AudioRecordingSettings.standard,
+        directory = File(app.cacheDir, "voice"),
+        engineFactory = { MediaRecorderEngine(app, it.profile) },
+    )
+}
+
+/** Les mesures récentes dont la notification fait la moyenne (une seconde de micro). */
+private const val LEVEL_WINDOW = 10

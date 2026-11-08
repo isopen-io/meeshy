@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_camera_rail_fold_label">Controles de la cámara</string>
+    <string name="call_camera_rail_folded">Plegados</string>
+    <string name="call_camera_rail_unfolded">Desplegados</string>
+</resources>

@@ -60,6 +60,50 @@ final class StoryExportJingleMixTests: XCTestCase {
                                                       outroJingleStart: nil, outroFade: 0).isEmpty)
     }
 
+    func test_storyRampsOverAuthor_withoutAuthorEnvelope_isTheBareLaw() {
+        let bare = StoryExportJingleMix.storyRamps(storyStart: hold, storyEnd: hold + 8,
+                                                   introJingleEnd: jingle, outroJingleStart: hold + 8 - overlap,
+                                                   outroFade: StoryExportJingleMix.logoOutroDuck)
+        let over = StoryExportJingleMix.storyRamps(over: [], storyStart: hold, storyEnd: hold + 8,
+                                                   introJingleEnd: jingle, outroJingleStart: hold + 8 - overlap,
+                                                   outroFade: StoryExportJingleMix.logoOutroDuck)
+        XCTAssertEqual(over, bare)
+    }
+
+    func test_storyRampsOverAuthor_risesToTheAuthorLevelAndFallsFromIt() {
+        let ramps = StoryExportJingleMix.storyRamps(over: [.init(from: 0.5, to: 0.5, start: 1, end: 1)],
+                                                    storyStart: 1, storyEnd: 9, introJingleEnd: 2,
+                                                    outroJingleStart: 9, outroFade: 1.5)
+        XCTAssertEqual(ramps, [.init(from: 0, to: 0.5, start: 1, end: 2),
+                               .init(from: 0.5, to: 0, start: 7.5, end: 9)],
+                       "la story monte jusqu'au volume de l'auteur et s'éteint depuis lui, jamais depuis 1")
+    }
+
+    func test_storyRampsOverAuthor_keepsTheAuthorRampsOnlyBetweenTheJingles() {
+        let author: [StoryExportJingleMix.Ramp] = [.init(from: 0, to: 1, start: 1, end: 3),
+                                                   .init(from: 1, to: 0, start: 6, end: 9)]
+        let ramps = StoryExportJingleMix.storyRamps(over: author, storyStart: 1, storyEnd: 9,
+                                                    introJingleEnd: 2, outroJingleStart: 9, outroFade: 1.5)
+        XCTAssertEqual(ramps, [.init(from: 0, to: 0.5, start: 1, end: 2),
+                               .init(from: 0.5, to: 1, start: 2, end: 3),
+                               .init(from: 1, to: 0.5, start: 6, end: 7.5),
+                               .init(from: 0.5, to: 0, start: 7.5, end: 9)])
+    }
+
+    func test_storyRampsOverAuthor_neverOverlap_whenTheAuthorRampsDo() {
+        let author: [StoryExportJingleMix.Ramp] = [.init(from: 0.8, to: 0.8, start: 0, end: 0),
+                                                   .init(from: 0.2, to: 1, start: 1.5, end: 6),
+                                                   .init(from: 1, to: 0, start: 4, end: 8.5)]
+        let ramps = StoryExportJingleMix.storyRamps(over: author, storyStart: 1, storyEnd: 9,
+                                                    introJingleEnd: 2, outroJingleStart: 7.5, outroFade: 0.5)
+        XCTAssertEqual(ramps.first?.start, 1)
+        XCTAssertEqual(ramps.last?.end, 7.5, "le son de la story est éteint quand le jingle de fermeture entre")
+        XCTAssertEqual(ramps.last?.to, 0)
+        for (earlier, later) in zip(ramps, ramps.dropFirst()) {
+            XCTAssertLessThanOrEqual(earlier.end, later.start, "\(earlier) chevauche \(later)")
+        }
+    }
+
     func test_introJingle_outlastsTheInterlude_soTheStoryMakesRoomRatherThanCuttingIt() {
         XCTAssertGreaterThan(jingle, hold + StoryExportIntro.crossfadeDuration,
                              "si le jingle tenait dans le fondu, l'enveloppe ne servirait plus — à revoir ensemble")
@@ -73,5 +117,18 @@ final class StoryExportJingleMixTests: XCTestCase {
             "Sources/MeeshyUI/Story/Canvas/StoryExportBranding.swift"), encoding: .utf8)
         XCTAssertFalse(source.contains("jingleParams.setVolumeRamp"))
         XCTAssertTrue(source.contains("applyStoryEnvelope("))
+    }
+
+    func test_everyExportPath_letsTheLawShapeTheStory_neverAForcedFullVolumeFade() throws {
+        let canvas = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/Canvas")
+        for file in ["StoryExportBranding.swift", "StoryExporter.swift",
+                     "StoryExportIntro.swift", "StoryExportOutro.swift"] {
+            let source = try String(contentsOf: canvas.appendingPathComponent(file), encoding: .utf8)
+            XCTAssertFalse(source.contains("setVolumeRamp(fromStartVolume: 1, toEndVolume: 0"),
+                           "\(file) éteint un son depuis 1 au lieu de suivre StoryExportJingleMix")
+        }
     }
 }

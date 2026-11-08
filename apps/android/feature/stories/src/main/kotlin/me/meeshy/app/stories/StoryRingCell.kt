@@ -76,6 +76,8 @@ internal fun StoryRingCell(
     onOpen: () -> Unit,
     onShowProfile: (() -> Unit)?,
     onAppeared: (String?) -> Unit,
+    onTap: () -> Unit = onOpen,
+    tapDescription: String? = null,
     onAdd: (() -> Unit)? = null,
     onManage: (() -> Unit)? = null,
     onEdit: ((String) -> Unit)? = null,
@@ -84,7 +86,7 @@ internal fun StoryRingCell(
 ) {
     val haptics = rememberMeeshyHaptics()
     var menuOpen by remember { mutableStateOf(false) }
-    val openDescription = stringResource(R.string.stories_open, label)
+    val openDescription = tapDescription ?: stringResource(R.string.stories_open, label)
     val reveal = remember { Animatable(if (StoryEntryMetrics.cascadeDelayMillis(cascadeIndex) == null) 1f else 0f) }
 
     LaunchedEffect(Unit) {
@@ -107,7 +109,7 @@ internal fun StoryRingCell(
             .combinedClickable(
                 onClick = {
                     haptics.medium()
-                    onOpen()
+                    onTap()
                 },
                 onLongClick = {
                     haptics.light()

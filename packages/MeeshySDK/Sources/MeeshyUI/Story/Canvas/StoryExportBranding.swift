@@ -61,6 +61,9 @@ public enum StoryExportBranding {
         /// Durée du clip de fin, et décalage de son jingle par rapport à son début.
         public let outroDuration: CMTime
         public let outroJingleOffset: CMTime
+
+        /// La carte de fin peint un auteur : son jingle n'entre qu'à la 2ᵉ phase.
+        var outroCarriesAuthor: Bool { outroJingleOffset > .zero }
     }
 
     /// Résout le plan de marque : encode (ou récupère du cache) les clips et
@@ -134,16 +137,29 @@ public enum StoryExportBranding {
         "meeshy-brand-jingle-\(jingle.rawValue).m4a"
     }
 
+    /// Un jingle chargé. L'asset voyage avec sa piste : une `AVAssetTrack` ne
+    /// retient pas l'asset qui la porte, et l'insérer une fois celui-ci libéré
+    /// échoue (`AVFoundationErrorDomain -11800`, `-12780`).
+    struct LoadedJingle {
+        let asset: AVURLAsset
+        let track: AVAssetTrack
+        let duration: CMTime
+    }
+
+    /// La piste audio du fichier et sa durée, `nil` s'il ne porte aucun son.
+    static func loadJingle(at url: URL) async -> LoadedJingle? {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .audio).first,
+              let duration = try? await asset.load(.duration), duration > .zero else { return nil }
+        return LoadedJingle(asset: asset, track: track, duration: duration)
+    }
+
     /// La piste audio du jingle et sa durée. Un fichier en cache tronqué ou
     /// illisible est purgé puis régénéré une fois ; s'il reste sans son,
     /// l'export échoue au lieu de livrer une marque muette.
-    static func loadJingle(_ jingle: Jingle) async throws -> (track: AVAssetTrack, duration: CMTime) {
+    static func loadJingle(_ jingle: Jingle) async throws -> LoadedJingle {
         for attempt in 0..<2 {
-            let asset = AVURLAsset(url: try await brandJingle(jingle))
-            if let track = try? await asset.loadTracks(withMediaType: .audio).first,
-               let duration = try? await asset.load(.duration), duration > .zero {
-                return (track, duration)
-            }
+            if let loaded = await loadJingle(at: try await brandJingle(jingle)) { return loaded }
             if attempt == 0 { await CacheCoordinator.shared.video.remove(for: jingleCacheKey(jingle)) }
         }
         throw BrandingError.jingleUnavailable
@@ -155,21 +171,12 @@ public enum StoryExportBranding {
     static func applyStoryEnvelope(to parameters: AVMutableAudioMixInputParameters,
                                    story: CMTimeRange, introJingleEnd: CMTime?,
                                    outroJingleStart: CMTime? = nil, outroFade: TimeInterval = 0) {
-        let ramps = StoryExportJingleMix.storyRamps(storyStart: story.start.seconds,
-                                                    storyEnd: story.end.seconds,
-                                                    introJingleEnd: introJingleEnd?.seconds,
-                                                    outroJingleStart: outroJingleStart?.seconds,
-                                                    outroFade: outroFade)
-        for ramp in ramps {
-            let start = CMTime(seconds: ramp.start, preferredTimescale: 600)
-            guard ramp.end > ramp.start else {
-                parameters.setVolume(ramp.to, at: start)
-                continue
-            }
-            parameters.setVolumeRamp(fromStartVolume: ramp.from, toEndVolume: ramp.to,
-                                     timeRange: CMTimeRange(start: start,
-                                                            end: CMTime(seconds: ramp.end, preferredTimescale: 600)))
-        }
+        setVolumeRamps(StoryExportJingleMix.storyRamps(storyStart: story.start.seconds,
+                                                       storyEnd: story.end.seconds,
+                                                       introJingleEnd: introJingleEnd?.seconds,
+                                                       outroJingleStart: outroJingleStart?.seconds,
+                                                       outroFade: outroFade),
+                       on: parameters)
     }
 
     /// Retourne le clip de la carte de fin, encodé une seule fois par gabarit
@@ -482,24 +489,8 @@ public enum StoryExportBranding {
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = audioParameters
 
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")
-        guard let session = AVAssetExportSession(
-            asset: composition, presetName: AVAssetExportPresetHighestQuality)
-        else { throw BrandingError.compositionTrackUnavailable }
-        session.outputURL = outputURL
-        session.outputFileType = .mp4
-        session.shouldOptimizeForNetworkUse = true
-        session.videoComposition = videoComposition
-        session.audioMix = audioMix
-
-        // `export()` sans argument — le `export(to:as:)` d'iOS 18 tombe en
-        // SIGSEGV combiné à outputURL/outputFileType (même piège que
-        // `StoryExportIntro` et `StoryExportOutro`).
-        await session.export()
-        guard session.status == .completed else {
-            throw BrandingError.encodingFailed(session.error)
+        return try await exportRetryingDecodeFailure {
+            try await export(composition, videoComposition: videoComposition, audioMix: audioMix)
         }
-        return outputURL
     }
 }

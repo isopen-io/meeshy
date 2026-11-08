@@ -8,61 +8,61 @@
           "catalog": "app",
           "iosKey": "call.capture.saved",
           "androidName": "call_capture_saved",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.capture.video.saved",
           "androidName": "call_capture_video_saved",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.capture.noVideo",
           "androidName": "call_capture_no_video",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.capture.failed",
           "androidName": "call_capture_failed",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.capture.preview",
           "androidName": "call_capture_preview",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.capture.working",
           "androidName": "call_capture_working",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
-          "iosKey": "call.mode.gesture.hint",
+          "iosKey": "composer.camera.hint.photo",
           "androidName": "call_mode_gesture_hint",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.mode.photo",
           "androidName": "call_mode_photo",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.mode.record",
           "androidName": "call_mode_record",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "call.mode.record.stop",
           "androidName": "call_mode_record_stop",
-          "status": "candidate"
+          "status": "adopted"
         },
         {
           "androidName": "call_capture_denied",

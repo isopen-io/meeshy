@@ -92,8 +92,43 @@ class RouteManifestRatchetTest {
          * 201 : plus les trois routes des cercles que la passerelle sert (`GET /relations`,
          * `POST /relations/:userId/level`, `POST /relations/:userId/ritual`, #13933) et que l'écran des cercles d'Android
          * portera (ui-cercles) : à porter, pas hors périmètre.
+         * 199 : moins `GET /relations` et `POST /relations/:userId/ritual` (#13938 : « Mes cercles » et le rituel du
+         * Sang), que porte `RelationsApi`. `POST /relations/:userId/level` (baisser un lien, #14228) reste à porter.
+         * 204 : plus les cinq routes du Bring et du réglage par personne (`GET|POST /bring/:userId`,
+         * `DELETE /bring/:bringId`, `GET|PUT /relations/:userId/settings`, #13936), servies par la passerelle et
+         * que le sous-lot `proche-bring@android` portera.
+         * 203 : moins `GET /sync` (#14512 : la synchro rapatrie le delta par la route unifiée), que porte `SyncApi`.
+         * 204 : plus `POST /conversations/:id/message-request/accept` (#14107 : « Accepter » une demande de message),
+         * servie par la passerelle avant le tour client ; Android la portera avec sa boîte de demandes.
+         * 205 : plus `GET /messages/search` (8a734141de : la recherche trouve les messages du lecteur), servie par la
+         * passerelle ; l'écran de recherche globale d'Android la portera.
+         * 192 : moins douze routes du jeu et du décor (#14563 : la vitrine d'un autre membre, les archives de saison et de
+         * semaine de ligue, le calendrier, les cadres d'atmosphère, les trois routes des moments photo et les quatre des
+         * autocollants), que portent `GameApi.kt` et `ProfileDecorApi.kt`.
+         * 191 : moins `POST /relations/:userId/level` (#14910 : rétrograder un lien ou l'annuler depuis le profil), que
+         * porte `RelationsApi.lower`.
+         * 151 : moins les dix-neuf routes `/voice/…` et les deux de `/me/consents` (#15085 : le profil vocal, le consentement
+         * au clonage et la traduction vocale suivie par job), que portent `VoiceApi` et `ConsentsApi`.
+         * 150 : moins `PATCH /guest-sessions/me`, la sonde de session d'invité que porte `GuestSessionApi.me` (elle partait en GET,
+         * verbe que la passerelle ne sert pas).
+         * 143 : moins sept routes que des lots fusionnés le 2026-11-03 ont implémentées : les cinq lectures
+         * `GET /me/preferences/{application,document,encryption,message,video}` (`PreferencesApi`),
+         * `GET /user/deleted-conversations` et `POST /user-preferences/communities/reorder`.
+         * 127 : moins les seize routes du chat que `ConversationChatRestApi` et `MessageChatRestApi` déclarent depuis
+         * #15470 (accusés de réception et de lecture, masquer et restaurer pour moi, fil, épinglés, statut, capture,
+         * nouveau lien, invitation, débannissement, vider l'historique) : le lot les a portées sans les retirer d'ici.
+         * 126 : moins `GET /messages/:messageId/translations` (l'explorateur de langues d'un message lit toutes ses traductions),
+         * que porte `MessageChatRestApi.translations`.
+         * 128 : plus `GET /publishers/:slug` et `GET /publishers/me` (#16378 : un éditeur de packs est un compte Meeshy
+         * vérifié), servies par la passerelle ; la boutique d'Android les portera. `GET /publishers/admin` est console.
+         * 129 : plus `GET /publishers/:slug/page` (#16433 : la page éditeur nomme le profil qui édite) ; iOS la porte,
+         * Android la portera avec sa page éditeur.
+         * 128 : moins `DELETE /bring/:bringId` (#13936, `proche-bring@android` : arrêter un Bring d'un geste), que porte
+         * `BringApi.stop`.
+         * 124 : moins `GET|POST /bring/:userId` et `GET|PUT /relations/:userId/settings` (#16617 : faire sonner un ami depuis
+         * sa fiche, et bloquer ses Bring depuis la fiche d'un lien), que portent `BringApi` et `RelationsApi`.
          */
-        const val TO_PORT_CEILING = 201
+        const val TO_PORT_CEILING = 124
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

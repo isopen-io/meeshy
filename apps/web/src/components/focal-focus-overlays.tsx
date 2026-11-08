@@ -233,6 +233,7 @@ export function FocusStamp({
   delivery,
   isMine,
   sendStartedAt,
+  sendProgressKey,
   onOpen,
 }: {
   readonly sentAt: Date;
@@ -245,6 +246,7 @@ export function FocusStamp({
   readonly isMine: boolean;
   /** #5813, étape 9 — même horloge des 200 ms que la colonne méta ordinaire. */
   readonly sendStartedAt?: number;
+  readonly sendProgressKey?: string;
   /**
    * OUVRE LA FICHE DU MESSAGE (#8536, « quand je touche la date : ça n'ouvre
    * pas les détails du message ») — le même panneau que « Plus… » au menu du
@@ -260,7 +262,7 @@ export function FocusStamp({
       {focusStampLabel({ sentAt, now, timeString, locale, ...dayLabelsFor(locale) })}
       {isMine && delivery !== null ? (
         <span className="ms-1 inline-flex align-middle">
-          <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
+          <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} {...(sendProgressKey === undefined ? {} : { progressKey: sendProgressKey })} />
         </span>
       ) : null}
     </>

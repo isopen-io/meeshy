@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onStart
 import me.meeshy.app.conversations.ConversationStoryRing
+import me.meeshy.app.feed.rememberProfilePostsItems
 import me.meeshy.app.profile.ProfileLiveSigns
 import me.meeshy.app.profile.ProfileSheetEnvironment
 import me.meeshy.sdk.cache.CacheClock
@@ -18,6 +19,7 @@ import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.profile.ProfileCallRequest
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
@@ -103,13 +105,27 @@ class ProfileSheetEnvironmentImpl internal constructor(private val sources: Prof
             onOpenConversation = { id -> after { navController.navigate(Routes.chat(id)) } },
             onReport = { id, username -> after { navController.navigate(Routes.reportUser(id, username)) } },
             onViewPosts = { id -> after { navController.navigate(Routes.userPosts(id)) } },
-            onCall = { request ->
-                request.conversationId?.let { conversationId ->
-                    after { navController.navigate(CallRoute.path(conversationId, request.displayName, request.isVideo)) }
-                }
-            },
+            onCall = { request -> request.routePath()?.let { path -> after { navController.navigate(path) } } },
+            onOpenPost = { postId -> after { navController.navigate(Routes.postDetail(postId)) } },
             onViewStory = { id -> after { navController.navigate(Routes.story(id)) } },
             liveSigns = ::signsFor,
+            postsItems = { userId, isSelf ->
+                rememberProfilePostsItems(
+                    userId = userId,
+                    onOpenPost = { postId -> after { navController.navigate(Routes.postDetail(postId)) } },
+                    onOpenMyStories = if (isSelf) ({ after { navController.navigate(Routes.MY_STORIES) } }) else null,
+                    onDismissSheet = host::dismiss,
+                    onOpenReels = { reelId, _ -> navController.navigate(Routes.reels(seed = reelId)) },
+                    hostScope = scope,
+                )
+            },
         )
     }
 }
+
+/**
+ * La route d'appel d'une demande de la fiche : le module d'appel exige l'identifiant de la salle, donc
+ * la conversation directe commune. Sans elle (création refusée ou en file), aucun appel ne part.
+ */
+internal fun ProfileCallRequest.routePath(): String? =
+    conversationId?.takeIf { it.isNotBlank() }?.let { CallRoute.path(it, displayName, isVideo) }

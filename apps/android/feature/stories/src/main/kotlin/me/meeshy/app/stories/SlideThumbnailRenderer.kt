@@ -11,8 +11,11 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import me.meeshy.sdk.model.StoryMediaLook
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.StoryDrawingCanvasSpace
+import me.meeshy.ui.component.retouch.ComposerLookAuthor
+import me.meeshy.ui.component.retouch.StoryMediaLookPainter
 import me.meeshy.ui.theme.hexColor
 
 /**
@@ -187,4 +190,13 @@ internal sealed interface SlideThumbnailPass {
     data object Background : SlideThumbnailPass
     data class Layer(val layer: SlideThumbnailSpec.Layer) : SlideThumbnailPass
     data object Strokes : SlideThumbnailPass
+}
+
+/**
+ * The look of a tile's media (#13841): the filter, effect and frame posed on it, painted on the decoded picture by the
+ * scene's own painter ([StoryMediaLookPainter]) before the slide's filter — the tile shows what the scene shows.
+ */
+internal object SlideThumbnailLook {
+    fun painted(image: Bitmap, look: StoryMediaLook?, author: ComposerLookAuthor): Bitmap =
+        look?.let { StoryMediaLookPainter.paint(image, it, author) } ?: image
 }

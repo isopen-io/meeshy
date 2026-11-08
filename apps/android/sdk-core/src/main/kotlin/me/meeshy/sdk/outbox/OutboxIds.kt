@@ -20,6 +20,9 @@ public object OutboxIds {
 
     public fun cid(): String = ClientIdFormat.newCid()
 
+    /** A STABLE `cid_` for one seed — the same send replayed finds the same bubble and the gateway dedupes it. */
+    public fun derivedCid(seed: String): String = ClientIdFormat.derivedCid(seed)
+
     /**
      * Whether [id] is a client mutation id minted by [cmid] — an offline placeholder
      * keyed to a durable outbox row and blob, as opposed to a server-assigned id. The

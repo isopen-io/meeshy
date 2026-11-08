@@ -15,12 +15,25 @@
  * 3. soi-même ⇒ tout, sauf les actions adressées à un autre ;
  * 4. ADMIN/BIGBOSS ⇒ la PRÉSENCE seulement (loi du 2026-08-25), sans lien ;
  * 5. Connaissance automatique ⇒ refusée entre un mineur DÉCLARÉ et quiconque
- *    ne l'est pas (majeur ou âge inconnu : fail-closed) ;
+ *    ne l'est pas (majeur ou âge inconnu : fail-closed) ; face à un mineur
+ *    déclaré, le bouclier (`RELATION_MINOR_TARGET_MIN_LEVEL`, RG-21) relève le
+ *    minimum des features qu'il nomme, et son refus se dit `level` — jamais
+ *    `minor`, qui apprendrait l'âge de la cible ;
  * 6. sinon, le niveau effectif atteint-il le minimum de la feature — ou, pour
  *    une feature d'entourage, le cran choisi par le propriétaire du contenu
  *    (`ownerAudience`, #13929 ; `NOBODY` ferme) ?
  * 7. une feature à consentement ne s'ouvre que si `consent` vaut `'granted'` :
  *    refusé, inconnu, absent ou illisible ⇒ `allowed: false, reason: 'consent'`.
+ *
+ * ## L'équipe (directive porteur du 2026-11-07, #16623)
+ *
+ * Entre deux comptes de l'équipe (`isPlatformTeam`, les DEUX rôles lus), le niveau
+ * effectif d'un outil vaut Sang, sans lien, dans les deux sens. Seul le NIVEAU
+ * s'ouvre : les verdicts 1 à 3, le consentement et `NOBODY` restent entiers, et
+ * le refus d'un rôle de cible absent ou inconnu est celui d'un inconnu. La raison
+ * reste `level`, jamais `role` : un modérateur lit la présence d'un collègue sous
+ * ses préférences, comme un Sang. Une audience de contenu reste au lien réel
+ * (`RELATION_TEAM_CLOSED_FEATURES`), et le bouclier des mineurs n'est pas franchi.
  *
  * ## Les mineurs (décision porteur, 2026-10-31)
  *
@@ -42,18 +55,20 @@
 
 import {
   compareRelationLevel,
+  maxRelationLevel,
   minRelationLevel,
   parseRelationLevel,
   type RelationLevel,
 } from '../types/relation.js';
-import { isGlobalAdmin } from '../types/role-types.js';
-import type { GlobalUserRoleType } from '../types/role-types.js';
+import { isGlobalAdmin, isPlatformTeam } from '../types/role-types.js';
 import type { DeclaredAgeClass } from './age.js';
 import {
   RELATION_CONSENT_FEATURES,
   RELATION_DIRECTED_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
+  RELATION_MINOR_TARGET_MIN_LEVEL,
   RELATION_PRESENCE_FEATURES,
+  RELATION_TEAM_CLOSED_FEATURES,
   RELATION_TUNABLE_FEATURES,
   isRelationAudienceChoice,
   type RelationAudienceChoice,
@@ -76,7 +91,10 @@ export type RelationAccessInput = {
   readonly blockedEitherWay: boolean;
   readonly viewerMinor: RelationAgeClass;
   readonly targetMinor: RelationAgeClass;
-  readonly viewerRole?: GlobalUserRoleType | null;
+  /** `User.role` tel que lu : la loi replie la casse, et un rôle inconnu ne vaut rien. */
+  readonly viewerRole?: string | null;
+  /** `User.role` de la cible : absent ou inconnu, le privilège d'équipe reste fermé (#16623). */
+  readonly targetRole?: string | null;
   readonly feature: RelationFeature;
   /** Consentement résolu pour une feature qui en exige un ; absent = `'unknown'` (fermé). */
   readonly consent?: RelationConsent;
@@ -126,8 +144,32 @@ const minimumFor = (feature: RelationFeature, ownerAudience: unknown): RelationL
 const declaresMinorApart = (a: RelationAgeClass, b: RelationAgeClass): boolean =>
   (a === 'minor') !== (b === 'minor');
 
+type DeclaredAges = { readonly viewerMinor: RelationAgeClass; readonly targetMinor: RelationAgeClass };
+
+/** Un viewer qui n'est pas mineur déclaré s'adresse à un mineur déclaré. */
+const facesDeclaredMinor = (ages: DeclaredAges): boolean => ages.targetMinor === 'minor' && ages.viewerMinor !== 'minor';
+
+/**
+ * Le bouclier des mineurs (`RELATION_MINOR_TARGET_MIN_LEVEL`) : un viewer qui
+ * n'est pas mineur déclaré, face à un mineur déclaré, doit atteindre le niveau
+ * de la table. Il relève le minimum, ne l'abaisse jamais, et ne rouvre jamais
+ * une feature fermée par son propriétaire (`NOBODY`).
+ */
+const shieldedMinimum = (feature: RelationFeature, minimum: RelationLevel | null, ages: DeclaredAges): RelationLevel | null => {
+  const shield = RELATION_MINOR_TARGET_MIN_LEVEL[feature];
+  if (minimum === null || !shield || !facesDeclaredMinor(ages)) return minimum;
+  return maxRelationLevel(minimum, shield);
+};
+
+/** Le privilège d'équipe s'applique-t-il à cette paire, pour cette feature (#16623) ? */
+const teamOpens = (input: RelationAccessInput): boolean =>
+  isPlatformTeam(input.viewerRole) &&
+  isPlatformTeam(input.targetRole) &&
+  !RELATION_TEAM_CLOSED_FEATURES.has(input.feature) &&
+  !facesDeclaredMinor(input);
+
 export const resolveRelationAccess = (input: RelationAccessInput): RelationAccess => {
-  const level = effectiveRelationLevel(input);
+  const level = teamOpens(input) ? 'BLOOD' : effectiveRelationLevel(input);
   const { feature } = input;
 
   if (input.blockedEitherWay) return verdict(false, 'PUBLIC', 'blocked');
@@ -146,9 +188,31 @@ export const resolveRelationAccess = (input: RelationAccessInput): RelationAcces
     return verdict(false, level, 'minor');
   }
 
-  const minimum = minimumFor(feature, input.ownerAudience);
+  const minimum = shieldedMinimum(feature, minimumFor(feature, input.ownerAudience), input);
   const reached = minimum !== null && compareRelationLevel(level, minimum) >= 0;
   if (!reached || !RELATION_CONSENT_FEATURES.has(feature)) return verdict(reached, level, 'level');
 
   return input.consent === 'granted' ? verdict(true, level, 'level', true) : verdict(false, level, 'consent', true);
+};
+
+/**
+ * Ce que l'orchestrateur doit LIRE pour que la loi juge `feature` juste : l'âge
+ * déclaré quand la Connaissance automatique ou le bouclier des mineurs la vise,
+ * la communauté quand un plancher possible de la feature (matrice, bouclier,
+ * réglage d'entourage) s'atteint par elle, le rôle des deux côtés quand le
+ * privilège d'équipe peut l'ouvrir — et alors l'âge aussi, car un mineur déclaré
+ * éteint ce privilège. Ne rien lire d'autre est permis : une lecture épargnée ne
+ * change aucun verdict.
+ */
+export const relationAccessReads = (
+  feature: RelationFeature,
+): { readonly age: boolean; readonly community: boolean; readonly role: boolean } => {
+  const shield = RELATION_MINOR_TARGET_MIN_LEVEL[feature];
+  const floors = [RELATION_FEATURE_MIN_LEVEL[feature], ...(shield ? [shield] : [])];
+  const team = !RELATION_TEAM_CLOSED_FEATURES.has(feature);
+  return {
+    age: feature === 'acquaintance.auto' || Boolean(shield) || team,
+    community: RELATION_TUNABLE_FEATURES.has(feature) || floors.some((floor) => compareRelationLevel(floor, 'COMMUNITY') <= 0),
+    role: team,
+  };
 };

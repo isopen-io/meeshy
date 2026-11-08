@@ -361,6 +361,44 @@ final class FramePackStoreTests: XCTestCase {
         XCTAssertEqual(loader.contents["exemple-savane"], .needsUpdate)
     }
 
+    // MARK: - La fiche d'un pack de cadres montre ses cadres, installé ou non (#16268)
+
+    private func savaneShelf() -> FramePackShelfLoader {
+        let contract = Data(#"""
+        {"schema":1,"frames":[
+          {"id":"exemple-savane.ambassadeur-4","usage":{"kind":"rank","rank":"ambassadeur","division":4},
+           "thumb":{"src":"\#(Self.sha.prefix(16)).webp","bytes":10,"sha256":"\#(Self.sha)"},"i18n":{"name":"a4"}}
+        ]}
+        """#.utf8)
+        let service = MockFramePackService()
+        service.detailResult = .success(FramePack(slug: "exemple-savane", name: "Savane", contractSchema: 1,
+                                                  contract: ref(Self.contractSha, "json")))
+        let assets = MemoryPackAssets(files: ["\(Self.contractSha.prefix(16)).json": contract])
+        return FramePackShelfLoader(service: service, assets: assets, language: { "fr" }, usageText: { _ in "Rang" })
+    }
+
+    func test_theShowcase_paintsAFramePack_byItsSlug_evenNotInstalled() async {
+        let designs = GameFramePackElementDesigns(base: EmbeddedPackElementDesigns(), shelf: savaneShelf())
+        XCTAssertEqual(designs.elements(domain: .gloryFrame, pack: "exemple-savane", language: "fr"), .downloadRequired)
+
+        await designs.prepare(domain: .gloryFrame, pack: "exemple-savane")
+
+        guard case .ready(let elements) = designs.elements(domain: .gloryFrame, pack: "exemple-savane", language: "fr") else {
+            return XCTFail("les cadres du pack se montrent dans sa fiche")
+        }
+        XCTAssertEqual(elements.map(\.item), ["exemple-savane.ambassadeur-4"])
+        guard case .gloryFrame(let tile)? = elements.first?.art else { return XCTFail("un cadre du jeu") }
+        XCTAssertEqual(tile.usageText, "Rang")
+    }
+
+    func test_theShowcase_leavesTheOtherDomainsToTheSDK() {
+        let designs = GameFramePackElementDesigns(base: EmbeddedPackElementDesigns(), shelf: savaneShelf())
+        let pack = AvatarRingCatalog.shared.packs[0].slug
+
+        XCTAssertEqual(designs.elements(domain: .avatarRing, pack: pack, language: "fr"),
+                       EmbeddedPackElementDesigns().elements(domain: .avatarRing, pack: pack, language: "fr"))
+    }
+
     /// L'usage d'un cadre de rang se lit avec le nom du rang du jeu (#10146).
     func test_theUsageCopy_namesTheRank() {
         let text = FrameUsageCopy.text(.rank(.ambassadeur, division: .iv))

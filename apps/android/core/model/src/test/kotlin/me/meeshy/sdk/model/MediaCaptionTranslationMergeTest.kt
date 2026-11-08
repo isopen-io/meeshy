@@ -49,7 +49,7 @@ class MediaCaptionTranslationMergeTest {
     }
 
     @Test
-    fun `no-op when commentId is set — comment media isn't modeled on Android yet`() {
+    fun `no-op when commentId names a comment the post does not carry`() {
         val post = postWithMedia(media("m1"))
         val merged = MediaCaptionTranslationMerge.merge(
             post, "m1", commentId = "c1", language = "en", entry = ApiMediaCaptionTranslationEntry(text = "Hello"),
@@ -99,5 +99,41 @@ class MediaCaptionTranslationMergeTest {
             post, "m1", commentId = null, language = "en", entry = ApiMediaCaptionTranslationEntry(text = "Hello"),
         )
         assertThat(merged).isNull()
+    }
+
+    private fun postWithComment(vararg media: ApiPostMedia) = ApiPost(
+        id = "p1",
+        content = "post text",
+        media = listOf(media("m1")),
+        comments = listOf(ApiPostComment(id = "c1", media = media.toList()), ApiPostComment(id = "c2", media = listOf(media("m1")))),
+    )
+
+    @Test
+    fun `merges a caption translation into the media of the targeted comment only`() {
+        val entry = ApiMediaCaptionTranslationEntry(text = "Hello")
+        val merged = MediaCaptionTranslationMerge.merge(
+            postWithComment(media("m1")), "m1", commentId = "c1", language = "en", entry = entry,
+        )!!
+        assertThat(merged.comments!!.first { it.id == "c1" }.media!!.single().captionTranslations).containsEntry("en", entry)
+        assertThat(merged.comments!!.first { it.id == "c2" }.media!!.single().captionTranslations).isNull()
+        assertThat(merged.media!!.single().captionTranslations).isNull()
+    }
+
+    @Test
+    fun `no-op when the comment carries no such media`() {
+        val merged = MediaCaptionTranslationMerge.merge(
+            postWithComment(media("m1")), "unknown", commentId = "c1", language = "en",
+            entry = ApiMediaCaptionTranslationEntry(text = "Hello"),
+        )
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun `no-op when the identical entry is already on the comment media`() {
+        val entry = ApiMediaCaptionTranslationEntry(text = "Hello")
+        val once = MediaCaptionTranslationMerge.merge(
+            postWithComment(media("m1")), "m1", commentId = "c1", language = "en", entry = entry,
+        )!!
+        assertThat(MediaCaptionTranslationMerge.merge(once, "m1", commentId = "c1", language = "en", entry = entry)).isNull()
     }
 }

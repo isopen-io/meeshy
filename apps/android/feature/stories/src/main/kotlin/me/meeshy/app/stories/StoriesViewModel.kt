@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ApiPost
@@ -18,17 +19,33 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
+import me.meeshy.sdk.story.InMemoryStoryViewedLedger
 import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.publication.PublicationOutbox
+import me.meeshy.sdk.story.StoryCoverStore
+import me.meeshy.sdk.story.StoryMediaPins
+import me.meeshy.sdk.story.StoryMediaPreloader
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.StoryViewedLedger
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
+
+private data class TrayInputs(
+    val result: me.meeshy.sdk.cache.CacheResult<List<ApiPost>>,
+    val queue: me.meeshy.sdk.story.StoryPublishQueue,
+    val user: me.meeshy.sdk.model.MeeshyUser?,
+    val viewed: Map<String, Long>,
+)
 
 data class StoriesUiState(
     val tray: StoryTrayPresentation = StoryTrayPresentation(self = null, others = emptyList()),
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val failedPublishes: List<StoryPublishFailures.Item> = emptyList(),
+    /** Au moins une story à moi, active ou expirée : l'appui sur « Moi » mène alors à « Mes stories ». */
+    val hasStoryHistory: Boolean = false,
+    /** Le chargement a échoué : distinct de « aucune story » — le plateau propose Réessayer (iOS `loadFailure`). */
+    val loadFailed: Boolean = false,
 )
 
 /**
@@ -46,6 +63,11 @@ class StoriesViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val publications: PublicationOutbox,
     private val coverMemo: StoryCoverMemo = StoryCoverMemo(),
+    private val coverStore: StoryCoverStore = StoryCoverStore.Empty,
+    private val coverSignal: StoryCoverRenderSignal? = null,
+    private val viewedLedger: StoryViewedLedger = InMemoryStoryViewedLedger(),
+    private val mediaPreloader: StoryMediaPreloader? = null,
+    private val mediaPins: StoryMediaPins? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoriesUiState())
@@ -57,12 +79,15 @@ class StoriesViewModel @Inject constructor(
     /** Temp ids of the publishes seen last emission — a vanished one delivered. */
     private var lastPendingIds: Set<String> = emptySet()
 
+    /** Déclaré AVANT `init` : un initialiseur placé après lui remettrait le drapeau à `false`. */
+    private var socialSubscribed = false
+
     init {
         viewModelScope.launch {
             combine(
                 storyRepository.storiesStream(
                     onSyncError = {
-                        _state.update { it.copy(showSkeleton = false, isSyncing = false) }
+                        _state.update { it.copy(showSkeleton = false, isSyncing = false, loadFailed = true) }
                     },
                 ),
                 storyRepository.publishQueue(),
@@ -70,9 +95,13 @@ class StoriesViewModel @Inject constructor(
                 // à froid) : la barre se recompose alors, sinon mes stories restent rangées
                 // comme celles d'un autre auteur jusqu'à la prochaine émission.
                 sessionRepository.currentUser,
-            ) { result, queue, user -> Triple(result, queue, user) }
-                .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
-                .collectEachSafely { (result, queue, user) ->
+                // Une couverture rendue après coup rafraîchit les cellules (iOS `StoryCoverRenderSignal`).
+                coverSignal?.generation ?: flowOf(0),
+                // Le registre durable des vues est une source DISTINCTE du cache : réinjecté à chaque reconstruction.
+                viewedLedger.observe(),
+            ) { result, queue, user, _, viewed -> TrayInputs(result, queue, user, viewed) }
+                .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false, loadFailed = true) } }
+                .collectEachSafely { (result, queue, user, viewed) ->
                     val pending = queue.pending
                     val failed = queue.failed
                     reconcileDeliveredPublishes(pending, failed)
@@ -83,28 +112,145 @@ class StoriesViewModel @Inject constructor(
                         StoryOptimisticTray.SelfIdentity(it.id, it.effectiveDisplayName, it.avatar)
                     }
                     val merged = StoryOptimisticTray.merge(
-                        cached = rawStories,
+                        cached = rawStories.withViewedLedger(viewed, currentUserId),
                         pending = StoryOptimisticTray.pendingStories(pending, self),
                     )
+                    val groups = merged.toStoryGroups(currentUserId = currentUserId)
+                    preloadAndPin(groups)
                     val tray = StoryTrayBuilder.build(
-                        groups = merged.toStoryGroups(currentUserId = currentUserId),
+                        groups = groups,
                         currentUserId = currentUserId,
                         mediaBaseUrl = config.apiBaseUrl,
-                        coverOf = { coverMemo.coverUrl(it, currentUserId) { null } },
+                        coverOf = { coverMemo.coverUrl(it, currentUserId, coverStore::localPath) },
+                        localCoverOf = { coverMemo.localCover(it, currentUserId, coverStore::localPath) },
                     )
                     _state.update {
                         it.copy(
                             tray = tray,
                             isSyncing = flags.isSyncing,
                             showSkeleton = flags.showSkeleton,
+                            loadFailed = it.loadFailed && result !is me.meeshy.sdk.cache.CacheResult.Fresh,
                             failedPublishes = StoryPublishFailures.from(failed),
+                            hasStoryHistory = currentUserId != null &&
+                                groups.any { g -> g.id == currentUserId && g.stories.isNotEmpty() },
                         )
                     }
                 }
         }
+        subscribeToSocialEvents()
+    }
+
+    /**
+     * Abonnement unique aux événements sociaux du plateau (iOS `subscribeToSocketEvents`) : un second appel
+     * (relance du composable racine) n'ajoute aucune souscription — les handlers à ±1 compteraient double.
+     */
+    fun subscribeToSocialEvents() {
+        if (socialSubscribed) return
+        socialSubscribed = true
         observeStoryDeletions()
         observeStoryUpdates()
         observeStoryCreations()
+        observeStoryEngagement()
+        observeReconnection()
+    }
+
+    /**
+     * Reconnexion sociale : des stories ont pu être créées ou supprimées pendant la coupure (aucun rejeu côté
+     * serveur). Le rattrapage est la revalidation par delta — curseur pris au moment de l'événement.
+     */
+    private fun observeReconnection() {
+        viewModelScope.launch {
+            socialSocket.reconnected.collectEachSafely { refreshQuietly() }
+        }
+    }
+
+    /**
+     * Les compteurs de la story tenue bougent en direct (iOS `story:viewed`, `story:reacted/unreacted`,
+     * `comment:added/deleted`, `post:translation-updated`) : l'auteur voit son compteur de vues monter sans rafraîchir.
+     */
+    private fun observeStoryEngagement() {
+        viewModelScope.launch {
+            socialSocket.storyViewed.collectEachArrivedSafely { storyRepository.applyStoryViewed(it.storyId, it.viewCount) }
+        }
+        viewModelScope.launch {
+            socialSocket.storyReacted.collectEachArrivedSafely {
+                storyRepository.applyStoryReaction(it.storyId, it.emoji, it.userId, sessionRepository.currentUserId, 1)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.storyUnreacted.collectEachArrivedSafely {
+                storyRepository.applyStoryReaction(it.storyId, it.emoji, it.userId, sessionRepository.currentUserId, -1)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.commentAdded.collectEachArrivedSafely { storyRepository.applyStoryCommentCount(it.postId, it.commentCount) }
+        }
+        viewModelScope.launch {
+            socialSocket.commentDeleted.collectEachArrivedSafely { storyRepository.applyStoryCommentCount(it.postId, it.commentCount) }
+        }
+        viewModelScope.launch {
+            socialSocket.postTranslationUpdated.collectEachArrivedSafely {
+                storyRepository.applyStoryTranslation(it.postId, it.language, it.translation)
+            }
+        }
+    }
+
+    /** Dernière signature de plan : le plateau se ré-émet à chaque compteur, le préchargement ne repart que si les médias changent. */
+    private var lastPreloadPlan: List<List<List<String>>>? = null
+
+    /** Stories dont les médias sont déjà épinglés, et leurs données pour relâcher à la purge (iOS `releaseOfflineMedia`). */
+    private val pinnedStories = HashMap<String, me.meeshy.sdk.model.StoryItem>()
+
+    private fun preloadAndPin(groups: List<me.meeshy.sdk.model.StoryGroup>) {
+        val plan = me.meeshy.sdk.model.story.StoryTrayPreloadPlan.of(groups)
+        val signature = plan.map { stories -> stories.map { s -> listOf(s.isViewed.toString()) + s.media.map { it.url } } }
+        if (signature != lastPreloadPlan) {
+            lastPreloadPlan = signature
+            mediaPreloader?.preload(plan)
+        }
+        val pins = mediaPins ?: return
+        val toPin = groups.flatMap { it.stories }.filter { it.isViewed && it.id !in pinnedStories }
+        if (toPin.isEmpty()) return
+        toPin.forEach { pinnedStories[it.id] = it }
+        viewModelScope.launch { toPin.forEach { runQuietly { pins.pin(it) } } }
+    }
+
+    private fun releasePins(storyIds: Collection<String>) {
+        val pins = mediaPins ?: return
+        val dead = storyIds.mapNotNull { pinnedStories.remove(it) }
+        if (dead.isEmpty()) return
+        viewModelScope.launch { dead.forEach { runQuietly { pins.release(it) } } }
+    }
+
+    private suspend fun runQuietly(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Balayage d'expiration (appelé chaque minute tant que le plateau est à l'écran) : les stories mortes sortent du cache. */
+    fun sweepExpired() {
+        viewModelScope.launch {
+            try {
+                releasePins(storyRepository.sweepExpired())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private suspend fun refreshQuietly() {
+        try {
+            storyRepository.refresh()
+            _state.update { it.copy(loadFailed = false) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -117,6 +263,7 @@ class StoriesViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.storyDeleted.collectEachArrivedSafely { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
+                releasePins(listOf(payload.storyId))
             }
         }
     }
@@ -125,11 +272,17 @@ class StoriesViewModel @Inject constructor(
      * Folds a realtime `story:created` — a friend just posted — into the authoritative Room
      * cache, so their ring appears (unseen, first) without waiting for a revalidation. A story
      * already held (our own publish echoed back, a re-broadcast) is left as is. Mirrors iOS `StoryViewModel.storyCreated`.
+     * A friend's republication in story arrives by `post:reposted` instead, and joins the same way.
      */
     private fun observeStoryCreations() {
         viewModelScope.launch {
             socialSocket.storyCreated.collectEachArrivedSafely { payload ->
                 storyRepository.adoptAnnounced(payload.story)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postReposted.collectEachArrivedSafely { payload ->
+                storyRepository.adoptAnnouncedRepost(payload.repost)
             }
         }
     }
@@ -198,10 +351,11 @@ class StoriesViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 storyRepository.refresh()
+                _state.update { it.copy(loadFailed = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                _state.update { it.copy(showSkeleton = false, isSyncing = false) }
+                _state.update { it.copy(showSkeleton = false, isSyncing = false, loadFailed = true) }
             }
         }
     }

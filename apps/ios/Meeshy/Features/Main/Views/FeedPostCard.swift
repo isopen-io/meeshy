@@ -142,6 +142,8 @@ struct FeedPostCard: View {
     /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
     static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
 
+    static func repostBodyText(for repost: RepostContent) -> String { repost.displayContent }
+
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
     /// other types) and attributes it to the post author.
@@ -715,7 +717,9 @@ struct FeedPostCard: View {
                     onRepost: onRepost,
                     onQuote: onQuote,
                     onBookmark: onBookmark,
-                    sendSubject: .publication(post)
+                    sendSubject: .publication(post),
+                    onImager: imagerAction,
+                    onImagerQuick: imagerQuickAction
                 )
                 .equatable()
             }
@@ -724,7 +728,7 @@ struct FeedPostCard: View {
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview
-                    .commentMediaGallery(topLevel: post.comments)
+                    .commentMediaGallery(topLevel: post.comments, post: post)
             }
         }
         .background(
@@ -782,7 +786,7 @@ struct FeedPostCard: View {
                 }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
+            .presentationDragIndicator(.visible).closesForConversationOpening(.sheet)
         }
         .fullScreenCover(item: $fullscreenPlace) { item in
             // Même surface plein écran que la bulle de message : carte +
@@ -796,13 +800,6 @@ struct FeedPostCard: View {
                 senderName: post.author
             ).closesForConversationOpening(.place)
         }
-        // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
-        //
-        // Cette vingtaine de lignes était l'un des trois exemplaires que
-        // `socialMediaGallery` a été écrit pour remplacer — et le dernier à
-        // n'avoir pas été raccordé. Le brancher n'est pas qu'un nettoyage :
-        // c'est ce qui apporte à la carte du fil la branche SCÈNE, qui rejoue
-        // le canvas au lieu d'ouvrir son fond.
         .socialMediaGallery(
             post: post,
             isPresented: $showFullscreenGallery,
@@ -820,18 +817,17 @@ struct FeedPostCard: View {
         #endif
     }
 
-    /// « Sauvegarder » (#9681) : la règle UNIQUE `PostSaveRoute` — post composé
-    /// rendu comme une story, média simple enregistré tel quel.
     func requestSaveMedia() {
         PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
     }
 
-    /// Le menu offre « Sauvegarder » ssi la règle a quelque chose à enregistrer ;
-    /// sinon le même item reste le favori.
     var canSaveMedia: Bool {
         PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
     var imagerAction: (() -> Void)? { PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) }
+    var imagerQuickAction: (() -> Void)? {
+        MessageCardExportMenu.hasDefaultFormat ? PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator, quick: true) : nil
+    }
 
 
     // MARK: - Repost View
@@ -841,7 +837,6 @@ struct FeedPostCard: View {
             onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
             VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                // Original author
                 HStack(spacing: MeeshySpacing.sm) {
                     LivePresence { MeeshyAvatar(
                         name: repost.author,
@@ -872,7 +867,7 @@ struct FeedPostCard: View {
                             .font(.body)
                             .accessibilityHidden(true)
                     }
-                    Text(repost.content)
+                    Text(Self.repostBodyText(for: repost))
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
@@ -895,7 +890,6 @@ struct FeedPostCard: View {
                     }
                 }
 
-                // Original stats
                 HStack(spacing: MeeshySpacing.md) {
                     HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
@@ -926,8 +920,7 @@ struct FeedPostCard: View {
         .accessibilityHint(String(localized: "feed.post.original.hint", defaultValue: "Ouvre la publication originale", bundle: .main))
     }
 
-    // MARK: - Media Preview
-    // See FeedPostCard+Media.swift
+    // MARK: - Media Preview (FeedPostCard+Media.swift)
 
 }
 
@@ -955,9 +948,10 @@ extension FeedPostCard: Equatable {
             && lhs.post.content == rhs.post.content
             && lhs.post.mentions == rhs.post.mentions
             && lhs.post.translatedContent == rhs.post.translatedContent
+            && lhs.post.repost?.translatedContent == rhs.post.repost?.translatedContent
             && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing
-            && lhs.post.authorRing == rhs.post.authorRing
+            && lhs.post.authorRing == rhs.post.authorRing && lhs.post.commentsDisabled == rhs.post.commentsDisabled
     }
 }

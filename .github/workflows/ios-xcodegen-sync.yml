@@ -22,6 +22,7 @@ on:
       - 'lot/**'
       - 'fix/**'
       - 'claude/**'
+      - 'feat/**'
     paths:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'

@@ -181,4 +181,75 @@ class NotificationChannelInstallerTest {
         assertThat(manager.getNotificationChannel(NotificationChannelIds.forCategory(me.meeshy.sdk.model.push.PushChannelCategory.SOCIAL)))
             .isNotNull()
     }
+
+    @Test
+    fun `every channel of the plan is created at start in its group`() {
+        installer().install()
+
+        me.meeshy.sdk.model.NotificationChannelPlan.channels.forEach { spec ->
+            val channel = manager.getNotificationChannel(spec.id)
+            assertThat(channel).isNotNull()
+            assertThat(channel.group).isEqualTo(spec.group.id)
+            assertThat(channel.importance).isEqualTo(spec.importance.androidLevel)
+        }
+        assertThat(manager.notificationChannelGroups.map { it.id })
+            .containsExactlyElementsIn(me.meeshy.sdk.model.NotificationChannelGroup.entries.map { it.id })
+    }
+
+    @Test
+    fun `the incoming calls channel rings and vibrates while missed calls have their own channel`() {
+        installer().install()
+
+        val calls = manager.getNotificationChannel(NotificationChannelIds.CHANNEL_CALLS)
+        assertThat(calls.sound).isNotNull()
+        assertThat(calls.shouldVibrate()).isTrue()
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_CALLS_MISSED)).isNotNull()
+        assertThat(NotificationChannelIds.CHANNEL_CALLS_MISSED).isNotEqualTo(NotificationChannelIds.CHANNEL_CALLS)
+    }
+
+    @Test
+    fun `the ephemeral channel is discreet`() {
+        installer().install()
+
+        val channel = manager.getNotificationChannel(NotificationChannelIds.CHANNEL_EPHEMERAL)
+
+        assertThat(channel.importance).isEqualTo(NotificationManager.IMPORTANCE_LOW)
+        assertThat(channel.sound).isNull()
+        assertThat(channel.shouldVibrate()).isFalse()
+    }
+
+    @Test
+    fun `the obsolete calls v1 channel is deleted`() {
+        manager.createNotificationChannel(
+            NotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_CALLS, "Calls", NotificationManager.IMPORTANCE_HIGH),
+        )
+
+        installer().install()
+
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.LEGACY_CHANNEL_CALLS)).isNull()
+    }
+
+    @Test
+    fun `a second start changes nothing`() {
+        installer().install()
+        val first = manager.notificationChannels.map { it.id }.sorted()
+
+        installer().install()
+
+        assertThat(manager.notificationChannels.map { it.id }.sorted()).isEqualTo(first)
+    }
+
+    @Test
+    fun `a push routes to the channel of its category and an unknown type is never lost`() {
+        fun channelOf(type: String?, ephemeral: Int? = null) = NotificationChannelIds.forPayload(
+            me.meeshy.sdk.model.push.PushPayload(type = type, ephemeralDuration = ephemeral),
+        )
+
+        assertThat(channelOf("user_mentioned")).isEqualTo(NotificationChannelIds.CHANNEL_MENTIONS)
+        assertThat(channelOf("friend_request")).isEqualTo(NotificationChannelIds.CHANNEL_FRIENDS)
+        assertThat(channelOf("missed_call")).isEqualTo(NotificationChannelIds.CHANNEL_CALLS_MISSED)
+        assertThat(channelOf("new_message", ephemeral = 30)).isEqualTo(NotificationChannelIds.CHANNEL_EPHEMERAL)
+        assertThat(channelOf("type_from_the_future")).isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES_V2)
+        assertThat(channelOf(null)).isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES_V2)
+    }
 }

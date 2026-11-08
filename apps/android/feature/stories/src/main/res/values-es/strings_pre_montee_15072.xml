@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_preupload_unit_kb">KB</string>
+    <string name="composer_preupload_unit_mb">MB</string>
+    <string name="composer_preupload_unit_gb">GB</string>
+</resources>

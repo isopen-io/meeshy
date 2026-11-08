@@ -21,6 +21,7 @@ import type { PackAssetRef, PackLanguage, PackSummary } from '@meeshy/shared/typ
 import type { PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import { servablePackPreview } from '@meeshy/shared/types/glory-frame-atlas';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
+import { MEESHY_PUBLISHER, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
 import type { PackDomainSpec, RegistryPack } from './PackCatalog';
 import type { PackIndex } from './PackIndex';
 
@@ -46,7 +47,7 @@ export type FramePackDetail = FramePackSummary & {
   readonly collections: readonly { readonly slug: string; readonly usage: FrameUsage | null }[];
 };
 
-export function framePackDetail(entry: PackIndexEntry, installed: boolean, itemCount = 0): FramePackDetail {
+export function framePackDetail(entry: PackIndexEntry, installed: boolean, itemCount = 0, publisher: PackPublisherRef = MEESHY_PUBLISHER): FramePackDetail {
   const fr = entry.names.fr;
   const preview = servablePackPreview(entry.preview);
   return {
@@ -54,6 +55,7 @@ export function framePackDetail(entry: PackIndexEntry, installed: boolean, itemC
     name: fr?.name ?? entry.slug,
     description: fr?.description ?? '',
     author: STICKER_PACK_AUTHOR_MEESHY,
+    publisher,
     builtin: entry.origin === 'builtin',
     status: 'approved',
     itemCount,
@@ -88,7 +90,7 @@ export const framePackRegistry = (index: PackIndex, domain: 'glory-frame' | 'cap
     hidden: entry.hidden,
     availability: entry.availability,
     targeting: entry.targeting,
-    project: (installed: boolean) => framePackDetail(entry, installed, index.itemCount(entry)),
+    project: (installed: boolean) => framePackDetail(entry, installed, index.itemCount(entry), index.publisherOf(entry)),
   }));
 
 export type GloryFramePackSpecOptions = {

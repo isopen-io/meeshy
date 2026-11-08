@@ -36,7 +36,8 @@ export const communitySchema = {
     updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
     creator: { ...userMinimalSchema, description: 'Creator user info' },
     memberCount: { type: 'number', description: 'Number of members' },
-    conversationCount: { type: 'number', description: 'Number of conversations' }
+    conversationCount: { type: 'number', description: 'Number of conversations' },
+    currentUserRole: { type: 'string', nullable: true, description: "Reader's active role (admin, moderator, member); null when not a member. Served by GET /communities/:id" }
   }
 } as const;
 
@@ -119,8 +120,8 @@ export const updateCommunityRequestSchema = {
   properties: {
     name: { type: 'string', minLength: 1, maxLength: 100 },
     description: { type: 'string', maxLength: 500 },
-    avatar: { type: 'string', format: 'uri' },
-    banner: { type: 'string', format: 'uri' },
+    avatar: { type: 'string', minLength: 1, maxLength: 2048, description: 'Identity image reference (isProfileImageReference)' },
+    banner: { type: 'string', minLength: 1, maxLength: 2048, description: 'Identity image reference (isProfileImageReference)' },
     isPrivate: { type: 'boolean' }
   }
 } as const;

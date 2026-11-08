@@ -165,9 +165,9 @@ public actor OfflineQueue {
         onRetrySend = handler
     }
 
-    /// Wires the outbox pool used for SQLite persistence.
-    /// Must be called once at boot before any `enqueue` calls.
-    public func configure(pool: any DatabaseWriter) async {
+    /// Wires the outbox pool used for SQLite persistence — `nil` DETACHES it,
+    /// the state the queue boots in. Wire it once at boot, before any `enqueue`.
+    public func configure(pool: (any DatabaseWriter)?) async {
         outboxPool = pool
         await refreshPendingCount()
     }
@@ -438,6 +438,11 @@ public actor OfflineQueue {
 
     /// Nombre de mutations encore observées — témoin de la purge (tests).
     var observedOutcomeCount: Int { outcomes.observedCount }
+
+    /// L'issue mémorisée d'un cmid — témoin du tombstone (tests), symétrique
+    /// d'`observedOutcomeCount`. L'observer par `outcomeStream` obligerait à
+    /// mesurer une absence par un délai (#16749).
+    func firedOutcome(for cmid: String) -> OutboxOutcome? { outcomes.firedOutcome(for: cmid) }
 
     /// Internal: removes the single continuation identified by `token` after
     /// its consumer cancelled (Task cancellation, scope exit). Idempotent —

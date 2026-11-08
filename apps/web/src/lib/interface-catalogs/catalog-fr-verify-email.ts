@@ -29,8 +29,7 @@ const frVerifyEmail = {
   'signInLink.switchAccount.leave': 'Revenir à l’accueil',
   'emailSent.title': 'E-mail envoyé',
   'emailSent.openLink': 'Ouvrez le lien reçu à {email}',
-  'emailSent.nothingReceived': 'Rien reçu ?',
-  'emailSent.nothingReceived.text': 'Regardez vos indésirables (spam) : le message peut y être tombé.',
+  'emailSent.checkSpam': 'Rien reçu ? Regardez aussi dans vos spams ou courriers indésirables.',
 } as const;
 
 export default frVerifyEmail;

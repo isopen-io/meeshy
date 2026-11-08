@@ -25,6 +25,17 @@ object MeeInstantCatalog {
         }
     }
 
+    fun byId(id: String): MeeInstant? = byId[id]
+
+    /**
+     * Ce que la feuille sait déjà, rangé par emplacement (iOS `meeInstantTypedSlots`) : les mots tapés et l'heure de
+     * l'ouverture ; un emplacement vide n'y figure pas.
+     */
+    fun typedSlots(message: String, time: String?): Map<MeeSlot, String> = listOfNotNull(
+        message.trim().takeIf { it.isNotEmpty() }?.let { MeeSlot.MESSAGE to it },
+        time?.trim()?.takeIf { it.isNotEmpty() }?.let { MeeSlot.TIME to it },
+    ).toMap()
+
     fun instant(forTemplateId: String?): MeeInstant? {
         if (forTemplateId == null || !forTemplateId.startsWith(MeeStickerCatalog.TEMPLATE_PREFIX)) return null
         return byId[forTemplateId.removePrefix(MeeStickerCatalog.TEMPLATE_PREFIX)]

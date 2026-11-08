@@ -10,7 +10,8 @@ nonisolated enum ComposerEditPanel: Hashable, Sendable {
     case trim
     /// La bande des filtres ou des cadres.
     case band
-    /// Les proportions par presets.
+    /// Les proportions par presets, posées SUR le cadre (#15193) : elles ne
+    /// retiennent aucune place.
     case presets
     /// Le spectre vocal en couleur et la ligne de volume (#9754).
     case sound
@@ -60,7 +61,7 @@ nonisolated enum ComposerEditScene {
         case .none: return 0
         case .trim, .sound: return trimHeight
         case .band: return bandHeight
-        case .presets: return presetsHeight
+        case .presets: return 0
         }
     }
 
@@ -87,14 +88,19 @@ nonisolated enum ComposerEditScene {
     /// sont les marges système (nulles pour une couche qui les respecte déjà).
     ///
     /// **Hors recadrage, c'est le conteneur entier** (#10930) : la prise
-    /// « fit » le viewport et le chrome se pose par-dessus. `framed` — le
-    /// recadrage montré — est le seul cas où elle se réduit, pour laisser ses
-    /// bords aux crochets.
-    /// Une vidéo recadrée commence sous la bande de sa lecture (porteur 2026-10-20).
+    /// « fit » le viewport et le chrome se pose par-dessus.
+    ///
+    /// **Le recadrage garde le grand écran** (#15193) : `framed` pose le cadre
+    /// FIXE dans toute la place que le chrome laisse — sous la marge système,
+    /// la rangée haute s'effaçant pendant le recadrage, et au-dessus des outils.
+    /// Les formats flottent sur le cadre et ne retiennent rien ; on place
+    /// l'image sous lui en pinçant et en glissant, sans viser les angles. Une
+    /// vidéo garde sa lecture en haut à droite, sous la rangée haute : son cadre
+    /// commence dessous.
     static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panels: [ComposerEditPanel],
                      framed: Bool = true, playback: Bool = false) -> CGRect {
         guard framed else { return CGRect(origin: .zero, size: container) }
-        let haut = top + topBand + (playback ? ComposerEditPlaybackLayout.band : 0)
+        let haut = top + (playback ? topBand + ComposerEditPlaybackLayout.band : gap)
         let bas = container.height - bottom - bottomReserve(panels)
         return CGRect(x: margin, y: haut, width: max(0, container.width - margin * 2), height: max(0, bas - haut))
     }
@@ -168,20 +174,24 @@ nonisolated enum ComposerCropPreset: CaseIterable, Hashable, Sendable {
     }
 }
 
-/// **Les formats, sur une bande pleine largeur juste SOUS la scène** (porteur
-/// 2026-10-20 : « les rails d'outils doivent être le moins coupés possible et
-/// on doit les laisser aller soit hors viewport soit hors cadre de la
-/// scène »). Ni le cadre ni ses crochets ne la coupent : elle va d'un bord de
-/// l'écran à l'autre, dans la place que le panneau `.presets` retient sous la
-/// scène, et défile au-delà.
+/// **Les formats FLOTTENT sur le cadre** (#15193) : une rangée posée par-dessus
+/// l'image, juste au-dessus des deux crochets du bas, qui ne retient aucune
+/// place sous la scène. Aucun crochet ne la coupe et elle va d'un bord de
+/// l'écran à l'autre, défilant au-delà (« les rails d'outils doivent être le
+/// moins coupés possible »). Un cadre trop bas pour la porter entre ses
+/// crochets la pose juste sous lui.
 nonisolated enum ComposerEditPresetsLayout {
 
     /// La scène est centrée dans son conteneur (`ComposerEditScene.area` est
     /// symétrique, `rect` centre) : la largeur de l'écran est donc le double de
     /// son milieu.
     static func frame(scene: CGRect) -> CGRect {
-        CGRect(x: 0, y: scene.maxY + ComposerEditScene.gap,
-               width: max(0, scene.midX * 2), height: ComposerEditScene.presetsHeight)
+        let crochet = MeeshyControlSize.tapTarget
+        let hauteur = ComposerEditScene.presetsHeight
+        let gap = ComposerEditScene.gap
+        let porte = scene.height >= 2 * crochet + hauteur + 2 * gap
+        let y = porte ? scene.maxY - crochet - gap - hauteur : scene.maxY + gap
+        return CGRect(x: 0, y: y, width: max(0, scene.midX * 2), height: hauteur)
     }
 
     /// Le retrait de tête des bandes défilantes : la première case s'aligne sur

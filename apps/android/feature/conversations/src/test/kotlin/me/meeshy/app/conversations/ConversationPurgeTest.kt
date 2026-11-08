@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
+import me.meeshy.sdk.model.ConversationObsoletedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 import org.junit.Test
@@ -92,5 +93,11 @@ class ConversationPurgeTest {
         )
 
         assertThat(id).isNull()
+    }
+
+    @Test
+    fun `an obsoleted conversation is purged, a blank id is inert`() {
+        assertThat(ConversationPurge.onConversationObsoleted(ConversationObsoletedSocketEvent(conversationId = "c1"))).isEqualTo("c1")
+        assertThat(ConversationPurge.onConversationObsoleted(ConversationObsoletedSocketEvent(conversationId = ""))).isNull()
     }
 }

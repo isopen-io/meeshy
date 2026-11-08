@@ -2,8 +2,9 @@
 # Réinstaller l'app garde la connexion (#14058) : la session d'un compte dans le Block Store.
 playServicesAuthBlockstore = "16.4.0"
 agp = "8.13.0"
-kotlin = "2.0.21"
-ksp = "2.0.21-1.0.25"
+# Kotlin 2.1 : le premier compilateur qui lit les métadonnées 2.2 de libsignal 0.105 (#14591, ADR-030).
+kotlin = "2.1.20"
+ksp = "2.1.20-1.0.32"
 coreKtx = "1.13.1"
 splashscreen = "1.0.1"
 coroutines = "1.9.0"
@@ -17,15 +18,18 @@ retrofit = "2.11.0"
 okhttp = "4.12.0"
 socketio = "2.1.1"
 room = "2.6.1"
+# The SQLite layer Room 2.6.1 is built on; core:database wraps its open helper factory.
+androidx-sqlite = "2.4.0"
 datastore = "1.1.1"
 coil = "2.7.0"
 browser = "1.8.0"
 zxing = "3.5.3"
-media3 = "1.4.1"
+# Media3 1.10.1 (#14567) : compilé en Kotlin 2.0.x, lisible par le compilateur 2.0.21 du dépôt (1.11 passe à Kotlin 2.2).
+media3 = "1.10.1"
 streamWebrtc = "1.3.10"
 glance = "1.1.1"
 securityCrypto = "1.1.0-alpha06"
-hilt = "2.52"
+hilt = "2.56.2"
 hiltNavigationCompose = "1.2.0"
 work = "2.9.1"
 paging = "3.3.2"
@@ -38,6 +42,7 @@ mockk = "1.13.12"
 androidxTestExt = "1.2.1"
 lottie = "6.5.2"
 exifinterface = "1.3.7"
+mediarouter = "1.7.0"
 androidxWindow = "1.3.0"
 material3Adaptive = "1.0.0"
 camerax = "1.4.0"
@@ -45,6 +50,11 @@ mlkitSubjectSegmentation = "16.0.0-beta1"
 
 # lot: primitives-cryptographiques-verifiees
 tink = "1.15.0"
+
+# lot: e2ee-libsignal (#14591, ADR-030) — même version que iOS (packages/LibSignalClient/LIBSIGNAL_VERSION)
+# et que la passerelle ; publiée sur le dépôt Maven de Signal, pas sur Maven Central.
+libsignal = "0.105.4"
+desugarJdkLibs = "2.1.4"
 
 # lot: calls-core-telecom-integration
 coreTelecom = "1.0.0"
@@ -58,6 +68,19 @@ mlkitSelfieSegmentation = "16.0.0-beta6"
 
 # lot: effets-de-visage-appel (#13706)
 mlkitFaceDetection = "17.1.0"
+
+# lot: mesures-performance-et-sorties-app
+jankStats = "1.0.0-beta01"
+tracing = "1.2.0"
+
+# lot: about-and-support-pages-iso (#14771)
+playReview = "2.0.1"
+
+# lot: persist-sqlcipher-base-chiffree (#15880) — SQLCipher (ADR-013) : base Room chiffrée au repos. 4.6.1 au moins : ses
+# bibliothèques natives sont alignées sur 16 Ko (LOAD 0x4000), exigé par Google Play avec targetSdk 36 (4.5.6 : 0x1000).
+sqlcipher = "4.6.1"
+# Le banc instrumenté du vrai SQLCipher (connectedDebugAndroidTest de :core:database, émulateur).
+androidxTestRunner = "1.6.2"
 
 [libraries]
 play-services-auth-blockstore = { module = "com.google.android.gms:play-services-auth-blockstore", version.ref = "playServicesAuthBlockstore" }
@@ -94,6 +117,7 @@ socketio = { module = "io.socket:socket.io-client", version.ref = "socketio" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "androidx-sqlite" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }
@@ -126,6 +150,8 @@ androidx-media3-transformer = { module = "androidx.media3:media3-transformer", v
 androidx-media3-effect = { module = "androidx.media3:media3-effect", version.ref = "media3" }
 androidx-media3-datasource = { module = "androidx.media3:media3-datasource", version.ref = "media3" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
+androidx-media3-test-utils = { module = "androidx.media3:media3-test-utils", version.ref = "media3" }
+androidx-mediarouter = { module = "androidx.mediarouter:mediarouter", version.ref = "mediarouter" }
 androidx-window = { module = "androidx.window:window", version.ref = "androidxWindow" }
 compose-material3-window-size = { module = "androidx.compose.material3:material3-window-size-class" }
 compose-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }
@@ -147,11 +173,17 @@ work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 
 # lot: composer-socle-decoupage-et-dependances
 androidx-media3-muxer = { module = "androidx.media3:media3-muxer", version.ref = "media3" }
+# lot: socle-media3-1-10 (#14567) — médias en HTTP/2 par OkHttp, extraction d'images pour les vignettes.
+androidx-media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
+androidx-media3-inspector-frame = { module = "androidx.media3:media3-inspector-frame", version.ref = "media3" }
 
 # lot: pieces-jointes-compression-image-et-video
 
 # lot: primitives-cryptographiques-verifiees
 tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
+libsignal-android = { module = "org.signal:libsignal-android", version.ref = "libsignal" }
+libsignal-client = { module = "org.signal:libsignal-client", version.ref = "libsignal" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 
 # lot: epinglage-certificat-passerelle
 okhttp-tls = { module = "com.squareup.okhttp3:okhttp-tls", version.ref = "okhttp" }
@@ -167,6 +199,17 @@ mlkit-segmentation-selfie = { module = "com.google.mlkit:segmentation-selfie", v
 # lot: effets-de-visage-appel (#13706) — modèle servi par Play Services (déclaré à l'installation dans le manifeste de
 # sdk-core) : l'embarqué pèse ~13 Mo par appareil (bibliothèque native + modèles), celui-ci moins d'un.
 mlkit-face-detection = { module = "com.google.android.gms:play-services-mlkit-face-detection", version.ref = "mlkitFaceDetection" }
+
+# lot: mesures-performance-et-sorties-app
+androidx-metrics-performance = { module = "androidx.metrics:metrics-performance", version.ref = "jankStats" }
+androidx-tracing-ktx = { module = "androidx.tracing:tracing-ktx", version.ref = "tracing" }
+
+# lot: about-and-support-pages-iso (#14771) — avis intégré Google Play de « Noter l'app » ; absent sans services Play (repli : fiche Play).
+play-review-ktx = { module = "com.google.android.play:review-ktx", version.ref = "playReview" }
+
+# lot: persist-sqlcipher-base-chiffree (#15880)
+sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]

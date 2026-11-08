@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="encryption_e2ee_unavailable_here">Ativar a encriptação ponto a ponto ainda não é possível a partir deste telemóvel: não sabe ler nem escrever mensagens encriptadas ponto a ponto e deixaria de poder escrever aqui.</string>
+    <string name="encryption_e2ee_direct_only_here">Neste telefone, a criptografia de ponta a ponta só está disponível para conversas a dois: ainda não é possível criptografar um grupo de ponta a ponta daqui.</string>
     <string name="encryption_irreversible_refused">A encriptação ponto a ponto não se desativa. Para conversar sem ela, crie uma nova conversa.</string>
     <string name="encryption_action_failed">Não foi possível fazer a alteração. Tente novamente.</string>
     <string name="encryption_offline">Está offline: volte a ligar-se para ler ou alterar a encriptação.</string>
-    <string name="encryption_toggle_forbidden">A sua função não permite ativar nem desativar a encriptação aqui. Quem decide é o servidor.</string>
+    <string name="encryption_toggle_forbidden">Você não tem permissão para alterar o modo de criptografia desta conversa: em um grupo, é preciso ser um de seus moderadores.</string>
+    <string name="encryption_activation_restricted">Durante a fase de testes, apenas um membro com uma função da equipe Meeshy (analista ou superior) pode alterar o modo de criptografia.</string>
+    <string name="encryption_already_enabled">Este modo de criptografia já é o desta conversa: o estado foi atualizado.</string>
     <string name="encryption_read_failed">Não foi possível ler o estado da encriptação. Tente novamente.</string>
     <string name="encryption_retry">Tentar novamente</string>
     <string name="security_verify_description">As mensagens com %1$s estão encriptadas ponto a ponto.</string>

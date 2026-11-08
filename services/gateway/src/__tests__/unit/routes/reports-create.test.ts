@@ -18,7 +18,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logError: jest.fn(), logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 const createReport = jest.fn<any>();
 
@@ -389,7 +389,7 @@ describe('POST /reports — signaler un COMMENTAIRE de post ou de story (#8709)'
   });
 });
 
-describe('POST /reports — le seuil par CIBLE', () => {
+describe('POST /reports — plus de seuil par CIBLE (#14110)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     base.message = { conversationId: CONVERSATION_ID };
@@ -397,7 +397,7 @@ describe('POST /reports — le seuil par CIBLE', () => {
     createReport.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
   });
 
-  it('laisse passer trois signalements de la même cible, refuse le quatrième', async () => {
+  it('écrit chaque signalement de la même cible : aucun seuil par cible ne jette (#14110, contre-audit N2)', async () => {
     // Aucune clé par APPELANT ne peut faire ça : dix comptes complices tiennent
     // chacun leur quota. C'est le seul seuil qui protège la personne signalée.
     const app = await buildApp();
@@ -408,9 +408,8 @@ describe('POST /reports — le seuil par CIBLE', () => {
       statuts.push(res.statusCode);
     }
 
-    expect(statuts.slice(0, 3)).toEqual([201, 201, 201]);
-    expect(statuts[3]).toBe(429);
-    expect(createReport).toHaveBeenCalledTimes(3);
+    expect(statuts).toEqual([201, 201, 201, 201]);
+    expect(createReport).toHaveBeenCalledTimes(4);
 
     await app.close();
   });

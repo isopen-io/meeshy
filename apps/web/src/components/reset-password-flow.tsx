@@ -17,7 +17,8 @@ import {
 import { Link } from '@/routes/route-table';
 
 import { AuthBrandFooter, AuthSubmitButton } from './auth-chrome';
-import { AuthColumn, AuthColumnBar } from './auth-column';
+import { AuthColumn } from './auth-column';
+import { AuthHeader } from './auth-header';
 import { Field } from './field';
 import { Glyph } from './glyph';
 import { PasswordInput } from './password-input';
@@ -145,7 +146,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
 
   return (
     <AuthColumn>
-      <AuthColumnBar to="login" title={translateRecovery(language, 'recovery.reset.newPassword')} />
+      <AuthHeader back="login" title={translateRecovery(language, 'recovery.reset.newPassword')} />
 
       {state === 'checking' ? (
         <div className="grid flex-1 place-items-center gap-4 px-8 text-center">

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,6 +28,7 @@ import me.meeshy.sdk.net.api.TwoFactorSetupInfo
 import me.meeshy.sdk.net.api.TwoFactorStatusInfo
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
+import me.meeshy.ui.component.auth.AUTH_TEXT_FIELD_FRAME_TAG
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -62,22 +64,29 @@ class SecurityScreensFormWidthTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private fun changePasswordViewModel() = ChangePasswordViewModel(
+        mockk(relaxed = true),
+        mockk<me.meeshy.sdk.auth.AuthRepository>().also {
+            io.mockk.coEvery { it.hasPassword() } returns me.meeshy.sdk.net.NetworkResult.Success(true)
+        },
+    )
+
     @Test
     @Config(qualifiers = TABLET)
     fun `change password fields sit in the centered form column on a tablet`() {
-        val viewModel = ChangePasswordViewModel(mockk(relaxed = true))
+        val viewModel = changePasswordViewModel()
         show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertInCenteredFormColumn(hasSetTextAction())
+        compose.assertInCenteredFormColumn(hasTestTag(AUTH_TEXT_FIELD_FRAME_TAG))
     }
 
     @Test
     @Config(qualifiers = PHONE)
     fun `change password fields keep their phone geometry`() {
-        val viewModel = ChangePasswordViewModel(mockk(relaxed = true))
+        val viewModel = changePasswordViewModel()
         show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
-        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)
+        compose.assertSpansPhoneWidth(hasTestTag(AUTH_TEXT_FIELD_FRAME_TAG), horizontalPadding = MeeshySpacing.lg)
     }
 
     @Test

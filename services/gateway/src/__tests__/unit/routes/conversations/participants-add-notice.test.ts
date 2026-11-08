@@ -15,6 +15,13 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const mockResolveConversationId = jest.fn<any>();
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
@@ -78,7 +85,7 @@ async function monterApp() {
       }),
       update: jest.fn<any>(async (a: any) => ({ id: a?.where?.id, ...a?.data })),
     },
-    user: {
+    user: { findMany: jest.fn<any>(async () => []),
       findFirst: jest.fn<any>(async () => ({
         id: BOB, username: 'bob', displayName: 'Bob', firstName: null, lastName: null, avatar: null, systemLanguage: 'fr',
       })),

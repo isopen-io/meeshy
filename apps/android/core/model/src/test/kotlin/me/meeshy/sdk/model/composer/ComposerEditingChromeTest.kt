@@ -15,8 +15,8 @@ class ComposerEditingChromeTest {
         drawing: Boolean = false,
         armed: Boolean = false,
         gestureOpen: Boolean = false,
-        reduced: Boolean = false,
-    ) = ComposerEditingChrome.resolve(ComposerEditingChrome.Input(subject, drawing, armed, gestureOpen, sceneReduced = reduced))
+        panel: Boolean = false,
+    ) = ComposerEditingChrome.resolve(ComposerEditingChrome.Input(subject, drawing, armed, gestureOpen, bottomPanelOpen = panel))
 
     @Test
     fun `at rest the composer shows close, publication and the six tools`() {
@@ -74,8 +74,8 @@ class ComposerEditingChromeTest {
     }
 
     @Test
-    fun `a panel raised at rest leaves the reduced scene bare - no close, no undo, no slide strip, no tools, no publication`() {
-        val panel = chrome(ComposerSelectionSubject.NONE, gestureOpen = true, reduced = true)
+    fun `a panel raised at rest leaves the scene bare - no close, no undo, no slide strip, no tools, no publication`() {
+        val panel = chrome(ComposerSelectionSubject.NONE, gestureOpen = true, panel = true)
 
         assertThat(panel.close).isFalse()
         assertThat(panel.sceneControls).isFalse()
@@ -86,7 +86,7 @@ class ComposerEditingChromeTest {
 
     @Test
     fun `an object's properties at the bottom keep its options rail and silence undo and the slide strip`() {
-        val properties = chrome(ComposerSelectionSubject.OBJECT, reduced = true)
+        val properties = chrome(ComposerSelectionSubject.OBJECT, panel = true)
 
         assertThat(properties.rail).isEqualTo(ComposerRailContent.OBJECT_OPTIONS)
         assertThat(properties.sceneControls).isFalse()
@@ -96,7 +96,7 @@ class ComposerEditingChromeTest {
 
     @Test
     fun `a background setting at the bottom keeps its level Fond and silence undo and the slide strip`() {
-        val setting = chrome(ComposerSelectionSubject.BACKGROUND, reduced = true)
+        val setting = chrome(ComposerSelectionSubject.BACKGROUND, panel = true)
 
         assertThat(setting.rail).isEqualTo(ComposerRailContent.BACKGROUND_OPTIONS)
         assertThat(setting.sceneControls).isFalse()
@@ -109,33 +109,11 @@ class ComposerEditingChromeTest {
     }
 
     @Test
-    fun `a full scene cedes no lane, whatever is selected`() {
-        listOf(ComposerSelectionSubject.NONE, ComposerSelectionSubject.OBJECT, ComposerSelectionSubject.BACKGROUND).forEach { subject ->
-            assertThat(chrome(subject).cedesLane).isFalse()
-        }
-    }
-
-    @Test
-    fun `a scene reduced under the options of what is edited cedes them its lane, so that nothing covers it`() {
-        assertThat(chrome(ComposerSelectionSubject.OBJECT, reduced = true).cedesLane).isTrue()
-        assertThat(chrome(ComposerSelectionSubject.BACKGROUND, reduced = true).cedesLane).isTrue()
-    }
-
-    @Test
-    fun `a reduced scene with no options laid on it cedes no lane`() {
+    fun `a panel at the bottom or a quiet chrome shows undo and redo nowhere`() {
         listOf(
-            chrome(ComposerSelectionSubject.NONE, gestureOpen = true, reduced = true),
-            chrome(ComposerSelectionSubject.OBJECT, gestureOpen = true, reduced = true),
-            chrome(ComposerSelectionSubject.OBJECT, armed = true, reduced = true),
-        ).forEach { assertThat(it.cedesLane).isFalse() }
-    }
-
-    @Test
-    fun `a reduced scene or a quiet chrome shows undo and redo nowhere`() {
-        listOf(
-            chrome(ComposerSelectionSubject.OBJECT, reduced = true),
-            chrome(ComposerSelectionSubject.BACKGROUND, reduced = true),
-            chrome(ComposerSelectionSubject.NONE, gestureOpen = true, reduced = true),
+            chrome(ComposerSelectionSubject.OBJECT, panel = true),
+            chrome(ComposerSelectionSubject.BACKGROUND, panel = true),
+            chrome(ComposerSelectionSubject.NONE, gestureOpen = true, panel = true),
             chrome(ComposerSelectionSubject.OBJECT, armed = true),
         ).forEach { assertThat(it.history).isEqualTo(ComposerHistoryPlace.NONE) }
     }

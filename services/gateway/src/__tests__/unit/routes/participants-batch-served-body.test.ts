@@ -29,6 +29,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const mockResolveConversationId = jest.fn<any>();
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) }));
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

@@ -3,9 +3,9 @@ import MeeshySDK
 import MeeshyUI
 
 /// L'état de dépliage d'un message long, remis par l'hôte de la liste
-/// (#8147) : UN seul message déplié à la fois, et c'est l'hôte qui le sait —
-/// lui seul peut replier le précédent, réserver la hauteur sans saut de
-/// défilement et poser l'effet Focal sur le déplié.
+/// (#8147) : c'est l'hôte qui le sait — lui seul garde le message déplié
+/// tant que la conversation est ouverte (#16463) et pose la hauteur sans
+/// saut de défilement.
 ///
 /// Voyage par l'environnement jusqu'à la bulle, dont la chaîne
 /// `ThemedMessageBubble` → `BubbleStandardLayout` n'a pas à le connaître ;
@@ -17,7 +17,7 @@ import MeeshyUI
 struct LongMessageExpansion: Equatable {
     let messageId: String
     let isExpanded: Bool
-    let toggle: () -> Void
+    let expand: () -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.messageId == rhs.messageId && lhs.isExpanded == rhs.isExpanded
@@ -39,8 +39,9 @@ extension EnvironmentValues {
 ///
 /// La loi de l'extrait est `LongMessageExcerpt` (SDK, miroir de la loi
 /// partagée) : au-delà du seuil, un quart du texte coupé au mot, suivi de
-/// « … Lire la suite ». Le dépliage se fait EN PLACE, dans le fil, et
-/// « Réduire » replie — il n'existe plus de feuille de lecture.
+/// « … Lire la suite ». Le dépliage se fait EN PLACE, dans le fil — il
+/// n'existe plus de feuille de lecture. Déplié, le texte est un texte
+/// ordinaire : aucun « Réduire » (#16463).
 ///
 /// Le texte reçu est le texte SERVI par le Prisme : l'extrait porte sur la
 /// langue affichée, jamais sur l'original quand une traduction est servie.
@@ -62,7 +63,6 @@ struct BubbleExpandableText: View, Equatable {
         }
 
         var showsReadMore: Bool { isLong && !isExpanded }
-        var showsCollapse: Bool { isLong && isExpanded }
     }
 
     let content: String
@@ -136,8 +136,8 @@ struct BubbleExpandableText: View, Equatable {
                 // le menu contextuel custom Meeshy (`MessageActionsMenu`, qui
                 // porte « Copier »), jamais le menu d'édition natif iOS.
 
-            if state.isLong {
-                toggleLabel(isExpanded: state.isExpanded, textColor: textColor)
+            if state.showsReadMore {
+                readMoreLabel(textColor: textColor)
             }
         }
     }
@@ -150,7 +150,8 @@ struct BubbleExpandableText: View, Equatable {
         return Text(RainbowLetters.painting(attributed, baseColor: textColor, seed: rainbowSeed, isDark: isDark))
     }
 
-    /// « Lire la suite » / « Réduire », aligné en bas à droite.
+    /// « Lire la suite », aligné en bas à droite. Il disparaît au dépliage :
+    /// rien ne replie (#16463).
     ///
     /// - `.padding(.trailing, 48)` : exclut le coin où l'overlay des réactions
     ///   (bouton « + », 40 pt débordant de 4) prend ses touches.
@@ -161,11 +162,10 @@ struct BubbleExpandableText: View, Equatable {
     ///   le texte au-dessus.
     /// - Ce n'est pas un vrai `Button` : l'activation VoiceOver passe par
     ///   `.accessibilityAction`, et l'état se dit par `accessibilityValue`.
-    private func toggleLabel(isExpanded: Bool, textColor: Color) -> some View {
-        let title = isExpanded ? Self.collapseTitle : Self.readMoreTitle
+    private func readMoreLabel(textColor: Color) -> some View {
         // À l'ENCRE du texte et souligné (parité web, #8147) : la couleur de
         // marque posée sur le verre mesurait 2,6:1, sous le seuil AA.
-        return Text(title)
+        Text(Self.readMoreTitle)
             .underline()
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             .foregroundColor(textColor)
@@ -173,26 +173,26 @@ struct BubbleExpandableText: View, Equatable {
             .padding(.trailing, 48)
             .contentShape(DownwardExtendedTapShape(extraBottom: 20))
             .textSelection(.disabled)
-            .highPriorityGesture(TapGesture().onEnded { toggle() })
-            .accessibilityIdentifier(isExpanded ? "bubble.expand.less" : "bubble.expand.more")
+            .highPriorityGesture(TapGesture().onEnded { expand() })
+            .accessibilityIdentifier("bubble.expand.more")
             .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(title)
-            .accessibilityValue(isExpanded ? Self.expandedValue : Self.collapsedValue)
-            .accessibilityHint(Text(isExpanded ? Self.collapseHint : Self.readMoreHint))
-            .accessibilityAction { toggle() }
+            .accessibilityLabel(Self.readMoreTitle)
+            .accessibilityValue(Self.collapsedValue)
+            .accessibilityHint(Text(Self.readMoreHint))
+            .accessibilityAction { expand() }
     }
 
     /// Partagé par le tap et l'action VoiceOver. L'hôte anime la hauteur de
     /// la cellule ; seul l'état local (hôte muet) s'anime ici — jamais sous
     /// Réduire le mouvement.
-    private func toggle() {
+    private func expand() {
         HapticFeedback.light()
         if let resolvedExpansion {
-            resolvedExpansion.toggle()
+            resolvedExpansion.expand()
             return
         }
-        guard !reduceMotion else { return localExpanded.toggle() }
-        withAnimation(.easeInOut(duration: 0.25)) { localExpanded.toggle() }
+        guard !reduceMotion else { return localExpanded = true }
+        withAnimation(.easeInOut(duration: 0.25)) { localExpanded = true }
     }
 
     // MARK: - Libellés (un seul vocabulaire pour tous les modes de lecture)
@@ -201,16 +201,8 @@ struct BubbleExpandableText: View, Equatable {
         String(localized: "message.long.readMore", defaultValue: "Lire la suite", bundle: .main)
     }
 
-    static var collapseTitle: String {
-        String(localized: "message.long.collapse", defaultValue: "Réduire", bundle: .main)
-    }
-
     static var readMoreHint: String {
         String(localized: "bubble.expand.more.hint", defaultValue: "Affiche le message complet", bundle: .main)
-    }
-
-    static var collapseHint: String {
-        String(localized: "message.long.collapse.hint", defaultValue: "Replie le message sur son extrait", bundle: .main)
     }
 
     static var expandedValue: String {

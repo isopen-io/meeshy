@@ -20,6 +20,8 @@ public data class LentilleFeatureFlags(
     val lentilleList: Boolean = true,
     val readingModes: Boolean = true,
     val riviereMode: Boolean = true,
+    /** Grammaire d'agent : éteinte par défaut, sans interrupteur dans les Réglages. */
+    val agentGrammar: Boolean = false,
 ) {
     public fun isEnabled(flag: LentilleFeatureFlag): Boolean = when (flag) {
         LentilleFeatureFlag.LENTILLE_LIST -> lentilleList
@@ -38,4 +40,7 @@ public data class LentilleFeatureFlags(
      * grisée dans les Réglages. Le choix mémorisé n'est PAS effacé — rallumer les modes le retrouve.
      */
     public val isRiviereAdjustable: Boolean get() = readingModes
+
+    /** La valeur EFFECTIVE de la Rivière : sans les modes de lecture elle vaut faux, sans toucher au choix stocké. */
+    public val riviereEffective: Boolean get() = riviereMode && readingModes
 }

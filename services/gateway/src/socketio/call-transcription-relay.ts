@@ -39,6 +39,10 @@ import type {
   CallTranslatedSegmentEvent,
 } from '@meeshy/shared/types/video-call';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { translationTargetId } from '../services/zmq-translation/utils/zmq-helpers';
+import { processCallCaptionMetrics, type CallCaptionMetrics } from '../services/metrics/callCaptionMetrics';
+
+export const CALL_CAPTION_TRANSLATION_TIMEOUT_MS = 10_000;
 
 /**
  * Ce que le relais emprunte à l'instance.
@@ -51,6 +55,8 @@ import { guardedTimeout } from '../utils/guarded-timer';
 export type CallTranscriptionRelayDeps = {
   readonly prisma: PrismaClient;
   readonly zmqClient: () => ZmqTranslationClient | null;
+  /** #16548 — absent ⇒ l'instance du processus, celle que le port interne sert. */
+  readonly captionMetrics?: CallCaptionMetrics;
 };
 
 /**
@@ -116,11 +122,68 @@ export function persistTranslation(
     });
 }
 
+/** Ce que le relais lit des participants actifs : leur identité et les quatre colonnes du Prisme. */
+export const CALL_LISTENER_SELECT = {
+  participant: {
+    select: {
+      userId: true,
+      user: {
+        select: {
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          deviceLocale: true
+        }
+      }
+    }
+  }
+} as const;
+
+export type CallListenerRow = {
+  readonly participant?: {
+    readonly userId?: string | null;
+    readonly user?: {
+      readonly systemLanguage?: string | null;
+      readonly regionalLanguage?: string | null;
+      readonly customDestinationLanguage?: string | null;
+      readonly deviceLocale?: string | null;
+    } | null;
+  } | null;
+};
+
+export type CallListenersRead =
+  | { readonly kind: 'read'; readonly rows: readonly CallListenerRow[] }
+  | { readonly kind: 'unreadable' };
+
+/**
+ * Lit les participants ACTIFS d'un appel. Ne rejette JAMAIS (#16575) : le
+ * gestionnaire la lance en parallèle de la résolution du locuteur et de
+ * l'admission e2ee, et peut l'abandonner sur un refus — une promesse qui
+ * rejetterait alors n'aurait aucun écouteur.
+ */
+export async function readCallListeners(prisma: PrismaClient, callId: string): Promise<CallListenersRead> {
+  try {
+    const rows = await prisma.callParticipant.findMany({
+      where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+      select: CALL_LISTENER_SELECT
+    });
+    return { kind: 'read', rows };
+  } catch (err) {
+    logger.warn('Call listeners unreadable, relaying original caption', {
+      callId,
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { kind: 'unreadable' };
+  }
+}
+
 /**
  * Translates a final transcription segment to each active participant's
  * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
  * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
- * Falls back to emitting the original text if translation fails.
+ * The ORIGINAL goes to the whole call room at once (#16613); each translation
+ * follows to its listeners when it arrives, and a failed or late one leaves
+ * them on the original — nothing is emitted twice.
  *
  * Security fix 2026-08-13: every relayed segment is stamped with
  * `speakerUserId` (the server-authenticated caller resolved by
@@ -138,26 +201,25 @@ export async function translateAndEmitSegment(
   socket: Socket,
   data: CallTranscriptionSegmentEvent,
   speaker: { userId: string; displayName: string | null },
-  persistedTranscriptionId: Promise<string | null> | null = null
+  persistedTranscriptionId: Promise<string | null> | null = null,
+  prefetchedListeners?: CallListenersRead
 ): Promise<void> {
-  const activeParticipants = await deps.prisma.callParticipant.findMany({
-    where: { callSessionId: data.callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
-    select: {
-      participant: {
-        select: {
-          userId: true,
-          user: {
-            select: {
-              systemLanguage: true,
-              regionalLanguage: true,
-              customDestinationLanguage: true,
-              deviceLocale: true
-            }
-          }
-        }
-      }
-    }
-  });
+  const listenersRead = prefetchedListeners ?? await readCallListeners(deps.prisma, data.callId);
+  const metrics = deps.captionMetrics ?? processCallCaptionMetrics;
+
+  // #16575 — sans la liste des auditeurs, personne ne sait vers quelle langue
+  // traduire : l'original part à la salle, comme quand le traducteur manque.
+  // Lever ici perdait le segment pour TOUT le monde (le `catch` du
+  // gestionnaire n'émet rien).
+  if (listenersRead.kind === 'unreadable') {
+    metrics.delivered('untranslated');
+    socket.to(ROOMS.call(data.callId)).emit(
+      CALL_EVENTS.TRANSLATED_SEGMENT,
+      buildTranslatedSegment(data, speaker, data.segment.language)
+    );
+    return;
+  }
+  const activeParticipants = listenersRead.rows;
 
   // Prisme-first (systemLanguage > regionalLanguage > customDestinationLanguage
   // > deviceLocale > 'fr') — same resolver as resolveNotificationLangs above.
@@ -204,6 +266,7 @@ export async function translateAndEmitSegment(
   const targetLanguages: string[] = [...listenersByLanguage.keys()];
 
   if (targetLanguages.length === 0) {
+    if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
     socket.to(ROOMS.call(data.callId)).emit(
       CALL_EVENTS.TRANSLATED_SEGMENT,
       buildTranslatedSegment(data, speaker, data.segment.language)
@@ -218,6 +281,8 @@ export async function translateAndEmitSegment(
   const zmqClient = deps.zmqClient();
   if (!zmqClient) {
     logger.warn('[CallEventsHandler] translateAndEmitSegment called without zmqClient — relaying original', { callId: data.callId });
+    targetLanguages.forEach(() => metrics.delivered('untranslated'));
+    if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
     socket.to(ROOMS.call(data.callId)).emit(
       CALL_EVENTS.TRANSLATED_SEGMENT,
       buildTranslatedSegment(data, speaker, data.segment.language)
@@ -225,13 +290,17 @@ export async function translateAndEmitSegment(
     return;
   }
 
-  // Les auditeurs de même langue sont servis TOUT DE SUITE, en original :
-  // leur sous-titre n'attend pas le retour ZMQ des autres langues.
-  emitTranslatedSegmentTo(
-    socket,
-    sameLanguageListeners,
+  // #16612 / #16613 — l'original part TOUT DE SUITE vers toute la salle, sans
+  // attendre aucune traduction : personne ne reste sans sous-titre pendant
+  // que le traducteur travaille. La traduction de chaque langue suit vers ses
+  // seuls auditeurs, sous le même énoncé, et les trois clients l'y fusionnent
+  // (web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android
+  // `CallLiveJournal.merged`) — comme la traduction d'un message.
+  socket.to(ROOMS.call(data.callId)).emit(
+    CALL_EVENTS.TRANSLATED_SEGMENT,
     buildTranslatedSegment(data, speaker, data.segment.language)
   );
+  if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
 
   // Scoped to this call+segment (shared across the segment's target
   // languages, disambiguated below by taskId) — NOT the global
@@ -241,28 +310,30 @@ export async function translateAndEmitSegment(
   // anywhere (chat messages, stories, other calls) re-ran every pending
   // call's taskId filter. Listener count is now bounded by this call's
   // active target languages instead of process-wide traffic.
-  const messageId = `call-${data.callId}-${data.segment.startMs}`;
+  const messageId = translationTargetId('call-caption', `${data.callId}:${data.segment.startMs}`);
   const scopedEvent = `translationCompleted:${messageId}`;
 
   await Promise.allSettled(
     targetLanguages.map(async (targetLanguage) => {
       const listeners = listenersByLanguage.get(targetLanguage) ?? [];
+      const timing = metrics.startTranslation();
       try {
         const taskId = await zmqClient.translateText(
           data.segment.text,
           segmentLanguage,
           targetLanguage,
           messageId,
-          data.callId
+          data.callId,
+          'basic',
+          { timeoutMs: CALL_CAPTION_TRANSLATION_TIMEOUT_MS, retryEnabled: false }
         );
 
         logger.debug('Call transcription segment translation requested', { callId: data.callId, taskId, targetLanguage });
 
         return new Promise<void>((resolve) => {
-          const TIMEOUT_MS = 10_000;
-          const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: TIMEOUT_MS, logger, run: () => {
+          const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: CALL_CAPTION_TRANSLATION_TIMEOUT_MS, logger, run: () => {
             zmqClient.off(scopedEvent, onResult);
-            emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
+            timing.finish('timeout');
             resolve();
           } });
           timer.unref?.();
@@ -276,13 +347,14 @@ export async function translateAndEmitSegment(
               socket, listeners,
               buildTranslatedSegment(data, speaker, targetLanguage, event.result.translatedText)
             );
+            timing.finish('translated');
             resolve();
           };
           zmqClient.on(scopedEvent, onResult);
         });
       } catch (err) {
-        logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
-        emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
+        logger.warn('Call transcription translation failed — the original already went out', { callId: data.callId, targetLanguage, err });
+        timing.finish('error');
       }
     })
   );

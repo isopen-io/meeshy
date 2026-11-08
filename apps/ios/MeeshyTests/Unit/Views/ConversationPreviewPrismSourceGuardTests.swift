@@ -42,12 +42,6 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
         // figerait la langue du lecteur DANS le cache.
         "Features/Main/ViewModels/ConversationListViewModel+SocketEvents.swift":
             "écrit le champ depuis conversation:updated ; la résolution est en aval, à l'affichage",
-        // Homonymie : `GlobalSearchViewModel.SearchResult.lastMessagePreview`
-        // est un champ DE LA VUE, rempli lignes 329/358 par
-        // `conv.resolvedLastMessagePreview(preferredLanguages:)`. La vue lit
-        // donc une valeur déjà passée par le Prisme.
-        "Features/Main/Views/GlobalSearchView.swift":
-            "lit SearchResult.lastMessagePreview, déjà résolu par GlobalSearchViewModel",
     ]
 
     // MARK: - Balayage
@@ -242,7 +236,6 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
             ("Features/Main/Views/ThemedConversationRow.swift", "ConversationPreviewLine("),
             ("Features/Lens/Row/LentilleConversationRow.swift", "ConversationPreviewLine("),
             ("Features/Main/Views/ConversationPreviewLine.swift", "ConversationPreviewComposer.compose("),
-            ("Features/Main/ViewModels/GlobalSearchViewModel.swift", "OutsidePreview.lastMessage("),
             ("Features/Main/Models/Message.swift", "resolvedLastMessagePreview"),
         ]
         for (relative, resolver) in expectations {

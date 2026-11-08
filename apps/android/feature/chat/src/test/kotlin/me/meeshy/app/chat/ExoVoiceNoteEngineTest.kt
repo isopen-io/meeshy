@@ -1,12 +1,23 @@
 package me.meeshy.app.chat
 
+import android.content.Context
 import android.media.MediaFormat
 import android.os.Looper
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.net.URI
+import java.nio.ByteBuffer
 import java.time.Duration
+import java.util.UUID
+import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.ui.component.media.MeeshyMediaCache
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,9 +35,15 @@ import org.robolectric.shadows.ShadowMediaCodecList
  * de la plateforme sont déclarés ici tels que le S8 les porte (`OMX.google.opus.decoder`,
  * `OMX.google.aac.decoder`) ; l'extraction, elle, est celle du moteur.
  */
+@UnstableApi
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class ExoVoiceNoteEngineTest {
+
+    private class LeaseLog {
+        val opened = mutableListOf<String>()
+        var released = 0
+    }
 
     private class Outcome {
         var prepared = false
@@ -66,22 +83,48 @@ class ExoVoiceNoteEngineTest {
         )
         ShadowMediaCodec.addDecoder(
             name,
-            ShadowMediaCodec.CodecConfig(CODEC_BUFFER_BYTES, CODEC_BUFFER_BYTES) { input, output -> output.put(input) },
+            ShadowMediaCodec.CodecConfig(CODEC_BUFFER_BYTES, CODEC_BUFFER_BYTES, ::decodeWholeFrames),
         )
     }
 
-    private fun loading(uri: String): Loaded {
+    /**
+     * Le décodeur factice rend des trames PCM ENTIÈRES, comme un vrai décodeur : depuis Media3 1.10, la rampe de volume
+     * de la reprise lit la sortie échantillon par échantillon, et une trame tronquée y lève un BufferUnderflowException.
+     */
+    private fun decodeWholeFrames(input: ByteBuffer, output: ByteBuffer) {
+        val whole = input.remaining() / PCM_FRAME_BYTES * PCM_FRAME_BYTES
+        val frames = input.duplicate().apply { limit(position() + whole) }
+        output.put(frames)
+        input.position(input.position() + whole)
+    }
+
+    private fun leased(log: LeaseLog) = VoiceNoteSources { url ->
+        log.opened += url
+        VoiceNoteSource(
+            source = DefaultMediaSourceFactory(ApplicationProvider.getApplicationContext<Context>())
+                .createMediaSource(MediaItem.fromUri(url)),
+            release = { log.released += 1 },
+        )
+    }
+
+    private fun engineOver(sources: VoiceNoteSources?): Loaded {
         platformDecoders()
-        val engine = ExoVoiceNoteEngine(ApplicationProvider.getApplicationContext()).also(engines::add)
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val engine = ExoVoiceNoteEngine(context, sources ?: VoiceNoteSources.cached(context)).also(engines::add)
         val outcome = Outcome()
         engine.listen(
             onPrepared = { outcome.prepared = true },
             onCompleted = {},
             onError = { outcome.failed = true },
         )
-        engine.load(uri)
-        idleUntil { outcome.settled }
         return Loaded(engine, outcome)
+    }
+
+    private fun loading(uri: String, sources: VoiceNoteSources? = null): Loaded {
+        val loaded = engineOver(sources)
+        loaded.engine.load(uri)
+        idleUntil { loaded.outcome.settled }
+        return loaded
     }
 
     private fun idleUntil(condition: () -> Boolean) {
@@ -92,15 +135,25 @@ class ExoVoiceNoteEngineTest {
         }
     }
 
+    /** Ce que le lecteur a dit en échouant — son code et la chaîne de ses causes —, pour que le rouge nomme la panne. */
+    private fun ExoVoiceNoteEngine.failure(): String =
+        lastError?.let { error ->
+            generateSequence<Throwable>(error) { it.cause }.take(4)
+                .joinToString(" <- ") { "${it.javaClass.simpleName}: ${it.message}" }
+                .let { "${error.errorCodeName} — $it" }
+        } ?: "aucune erreur du lecteur"
+
+    private fun Loaded.assertPrepared() {
+        assertWithMessage(engine.failure()).that(outcome.failed).isFalse()
+        assertWithMessage(engine.failure()).that(outcome.prepared).isTrue()
+    }
+
     private fun fixture(name: String): String =
         requireNotNull(javaClass.getResource("/voice/$name")) { "fixture $name absente" }.toURI().toString()
 
     @Test
     fun `a translated voice note in Ogg Opus is prepared on Android 9`() {
-        val outcome = loading(fixture("translated-voice-note.opus")).outcome
-
-        assertThat(outcome.failed).isFalse()
-        assertThat(outcome.prepared).isTrue()
+        loading(fixture("translated-voice-note.opus")).assertPrepared()
     }
 
     @Test
@@ -121,10 +174,7 @@ class ExoVoiceNoteEngineTest {
 
     @Test
     fun `an original voice note in M4A is still prepared`() {
-        val outcome = loading(fixture("original-voice-note.m4a")).outcome
-
-        assertThat(outcome.failed).isFalse()
-        assertThat(outcome.prepared).isTrue()
+        loading(fixture("original-voice-note.m4a")).assertPrepared()
     }
 
     @Test
@@ -137,7 +187,96 @@ class ExoVoiceNoteEngineTest {
         assertThat(outcome.failed).isTrue()
     }
 
+    @Test
+    fun `a voice note is read through the source the engine was given`() {
+        val log = LeaseLog()
+        val url = fixture("original-voice-note.m4a")
+
+        val loaded = loading(url, leased(log))
+
+        assertThat(log.opened).containsExactly(url)
+        loaded.assertPrepared()
+    }
+
+    @Test
+    fun `the lease is held while the voice note is loaded and given back when it is reset`() {
+        val log = LeaseLog()
+        val engine = loading(fixture("original-voice-note.m4a"), leased(log)).engine
+        assertThat(log.released).isEqualTo(0)
+
+        engine.reset()
+        engine.reset()
+
+        assertThat(log.released).isEqualTo(1)
+    }
+
+    @Test
+    fun `loading another voice note gives the previous lease back`() {
+        val log = LeaseLog()
+        val engine = loading(fixture("original-voice-note.m4a"), leased(log)).engine
+
+        engine.load(fixture("translated-voice-note.opus"))
+
+        assertThat(log.opened).hasSize(2)
+        assertThat(log.released).isEqualTo(1)
+    }
+
+    @Test
+    fun `releasing the engine gives the lease back`() {
+        val log = LeaseLog()
+        val engine = loading(fixture("original-voice-note.m4a"), leased(log)).engine
+
+        engine.release()
+
+        assertThat(log.released).isEqualTo(1)
+    }
+
+    @Test
+    fun `a protected voice note never goes through the cache source`() {
+        val log = LeaseLog()
+        val loaded = engineOver(leased(log))
+
+        loaded.engine.loadUncached(fixture("original-voice-note.m4a"))
+        idleUntil { loaded.outcome.settled }
+
+        assertThat(log.opened).isEmpty()
+        loaded.assertPrepared()
+    }
+
+    @Test
+    fun `a voice note already in the audio cache plays again with no network`() {
+        val url = "https://gate.meeshy.me/api/v1/attachments/file/2026/10/${UUID.randomUUID()}/heard.m4a"
+        val bytes = File(URI(fixture("original-voice-note.m4a"))).readBytes()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val adopted = MeeshyMediaCache.get(context).adopt(MediaCacheCategory.AUDIO, url, bytes.size.toLong()) {
+            ByteArrayInputStream(bytes)
+        }
+        assertThat(adopted).isTrue()
+
+        loading(url).assertPrepared()
+    }
+
+    /**
+     * (#15428) Le vocal qu'on vient d'envoyer est rangé, à l'accusé, ENTIER dans le cache typé AUDIO
+     * (`MediaAdoption`) sous l'adresse servie. Relu aussitôt hors ligne, il doit jouer depuis ce fichier,
+     * pas attendre un réseau qui n'est pas là.
+     */
+    @Test
+    fun `a voice note adopted whole at the ack plays again with no network`() {
+        val url = "https://gate.meeshy.me/api/v1/static/${UUID.randomUUID()}.m4a"
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val typed = me.meeshy.sdk.media.TypedMediaCache(me.meeshy.sdk.media.MediaCacheDirs(context.cacheDir, context.cacheDir))
+        val staged = File(typed.stagingDir(MediaCacheCategory.AUDIO), "sent.m4a")
+        File(URI(fixture("original-voice-note.m4a"))).copyTo(staged, overwrite = true)
+        kotlinx.coroutines.runBlocking { typed.store(MediaCacheCategory.AUDIO, url, staged) }
+
+        loading(url).assertPrepared()
+    }
+
     private companion object {
         const val CODEC_BUFFER_BYTES = 64 * 1024
+
+        /** Le plus grand échantillon multicanal que le moteur puisse sortir ici : deux canaux en flottant 32 bits. */
+        const val PCM_FRAME_BYTES = 8
     }
 }

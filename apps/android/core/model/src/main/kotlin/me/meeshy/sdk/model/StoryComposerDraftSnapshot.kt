@@ -220,6 +220,8 @@ data class StoryDraftSlideSnapshot(
     val backgroundRotation: Float = 0f,
     val backgroundVolume: Float = 1f,
     val backgroundMutedVolumeMemento: Float? = null,
+    /** Le recadrage du média de FOND (iOS `crop` de l'objet `isBackground`, #13973) ; un blob d'avant se lit « entier ». */
+    val backgroundCrop: StoryMediaCrop? = null,
     /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
     val places: List<StoryLocationObject> = emptyList(),
     /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */
@@ -231,6 +233,8 @@ data class StoryDraftSlideSnapshot(
     val mediaLooks: Map<String, StoryMediaLook> = emptyMap(),
     /** Le dessin à main levée de la diapo (#13863) ; un blob d'avant se lit « aucun trait ». */
     val strokes: List<StoryDrawingStroke> = emptyList(),
+    /** Le format du cadre de la diapo (`"landscape"`) ; absent : un blob d'avant se rouvre en 9:16. */
+    val canvasFormat: String? = null,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
@@ -262,6 +266,8 @@ data class StoryDraftAnnotations(
     val mediaAlt: Map<String, String> = emptyMap(),
     val mediaCaption: Map<String, String> = emptyMap(),
     val allowSoundExtraction: Boolean? = null,
+    /** The author closed the comments of what they are composing (#16541) ; absent from an older blob = open. */
+    val commentsDisabled: Boolean = false,
 ) {
     /** The annotations that still describe [present] media: a description never outlives its media. */
     fun keepingMedia(present: Collection<String>): StoryDraftAnnotations = copy(
@@ -311,6 +317,8 @@ data class StoryComposerDraftSnapshot(
     /** Les pièces téléversées que la scène porte, avec leur type et leur durée : ce qui qualifie un réel au retour. */
     val media: List<UploadedMedia> = emptyList(),
     val formats: List<String> = emptyList(),
+    /** La story publiée que ce brouillon ÉDITE (iOS `draftEditingPostId`) ; `null` : une création, et un blob d'avant. */
+    val editingPostId: String? = null,
 ) {
     /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
     val isAwaitingPublication: Boolean
@@ -347,7 +355,8 @@ data class StoryComposerDraftSnapshot(
             postText == other.postText &&
             format == other.format &&
             formats == other.formats &&
-            media == other.media
+            media == other.media &&
+            editingPostId == other.editingPostId
 
     companion object {
         /** The audience a fresh draft defaults to — parity with the composer's `StoryVisibility.PUBLIC`. */

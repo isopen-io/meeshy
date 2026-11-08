@@ -331,25 +331,36 @@ final class CommentMediaGalleryContext: ObservableObject {
     private var topLevel: [FeedComment] = []
     private var replies: [String: [FeedComment]] = [:]
     private var cached: CommentMediaGallerySnapshot?
+    /// **Le post que ces commentaires commentent** (#16322), quand l'hôte le
+    /// connaît : toucher un média de commentaire ouvre alors la suite du POST
+    /// (`CommentMediaFullscreenRoute`), ses médias en tête. `nil` — une story,
+    /// un hôte qui ne le dit pas — garde la galerie des seuls commentaires.
+    private(set) var post: FeedPost?
 
-    init(topLevel: [FeedComment] = [], replies: [String: [FeedComment]] = [:]) {
+    init(topLevel: [FeedComment] = [], replies: [String: [FeedComment]] = [:], post: FeedPost? = nil) {
         self.topLevel = topLevel
         self.replies = replies
+        self.post = post
     }
 
     /// O(1) — deux stockages COW et une invalidation. L'aplatissement ET la
     /// dérivation, tous deux O(n), sont différés au premier `snapshot()`.
-    func update(topLevel: [FeedComment], replies: [String: [FeedComment]]) {
+    func update(topLevel: [FeedComment], replies: [String: [FeedComment]], post: FeedPost? = nil) {
         self.topLevel = topLevel
         self.replies = replies
+        self.post = post
         cached = nil
+    }
+
+    /// Le fil dans l'ordre où l'écran le montre — racines, chacune suivie de
+    /// ses réponses chargées. Lu au TAP, jamais pendant le rendu.
+    func thread() -> [FeedComment] {
+        CommentMediaGallery.flatten(topLevel: topLevel, replies: replies)
     }
 
     func snapshot() -> CommentMediaGallerySnapshot {
         if let cached { return cached }
-        let resolved = CommentMediaGallery.snapshot(
-            from: CommentMediaGallery.flatten(topLevel: topLevel, replies: replies)
-        )
+        let resolved = CommentMediaGallery.snapshot(from: thread())
         cached = resolved
         return resolved
     }
@@ -372,6 +383,7 @@ extension EnvironmentValues {
 private struct CommentMediaGalleryModifier: ViewModifier {
     let topLevel: [FeedComment]
     let replies: [String: [FeedComment]]
+    let post: FeedPost?
     @StateObject private var context = CommentMediaGalleryContext()
 
     func body(content: Content) -> some View {
@@ -381,7 +393,10 @@ private struct CommentMediaGalleryModifier: ViewModifier {
                 of: CommentMediaGallery.signature(topLevel: topLevel, replies: replies),
                 initial: true
             ) { _, _ in
-                context.update(topLevel: topLevel, replies: replies)
+                context.update(topLevel: topLevel, replies: replies, post: post)
+            }
+            .adaptiveOnChange(of: post?.id) { _, _ in
+                context.update(topLevel: topLevel, replies: replies, post: post)
             }
     }
 }
@@ -392,8 +407,23 @@ extension View {
     /// liste (feuille de commentaires, carte de post, visionneuse de story) —
     /// `CommentMediaView` la lit au moment du TAP, jamais pendant le rendu.
     func commentMediaGallery(
-        topLevel: [FeedComment], replies: [String: [FeedComment]] = [:]
+        topLevel: [FeedComment], replies: [String: [FeedComment]] = [:], post: FeedPost? = nil
     ) -> some View {
-        modifier(CommentMediaGalleryModifier(topLevel: topLevel, replies: replies))
+        modifier(CommentMediaGalleryModifier(topLevel: topLevel, replies: replies, post: post))
+    }
+}
+
+/// **Ce que le toucher d'un média de commentaire ouvre** (#16322).
+///
+/// Sous un post connu : la suite du POST (`SocialMediaGalleryContent`) — ses
+/// médias d'abord, puis ceux des commentaires dans l'ordre du fil, avec la
+/// pellicule, posée sur la pièce touchée. Sans post (commentaires de story) :
+/// la galerie des seuls commentaires, comme avant.
+nonisolated enum CommentMediaFullscreenRoute: Equatable {
+    case postSeries(postId: String)
+    case commentsOnly
+
+    static func resolve(post: FeedPost?) -> CommentMediaFullscreenRoute {
+        post.map { .postSeries(postId: $0.id) } ?? .commentsOnly
     }
 }

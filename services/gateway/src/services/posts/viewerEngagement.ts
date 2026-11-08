@@ -14,6 +14,7 @@ import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { errorIdentity } from '../../utils/error-identity';
 
+import { namedViewsScope, type NamedViewersDb } from './namedViewers';
 const logger = enhancedLogger.child({ module: 'viewerEngagement' });
 
 /**
@@ -50,7 +51,8 @@ export type ViewerEngagementPrisma = Pick<
   PrismaClient,
   'post' | 'postView' | 'postReaction' | 'trackingLink' | 'postComment' | 'user' | 'adminAuditLog'
 > &
-  PostConsumptionPrisma;
+  PostConsumptionPrisma &
+  NamedViewersDb;
 
 /**
  * Ce que l'AUTEUR du contenu a le droit de voir de l'activité d'autrui (#9727,
@@ -120,6 +122,8 @@ export type ViewerInteractionsPage = {
   readonly engagement?: PostViewersPage['engagement'];
   /** Les vues de lecteurs SANS compte (#10483) — un agrégat, jamais une ligne nommée. */
   readonly anonymousViewCount?: number;
+  /** #14108 (POS-07) — les vues du Public, comptées sans être nommées. */
+  readonly publicViewCount?: number;
 } & ViewerListUniques;
 
 /**
@@ -153,10 +157,10 @@ const VIEWER_LIST_POST_SELECT = {
  * absents restent absents (un ancien serveur n'en sert aucun).
  */
 export const viewerListCounts = (
-  result: { readonly anonymousViewCount?: number } & ViewerListUniques,
-): { readonly anonymousViewCount?: number } & ViewerListUniques =>
+  result: { readonly anonymousViewCount?: number; readonly publicViewCount?: number } & ViewerListUniques,
+): { readonly anonymousViewCount?: number; readonly publicViewCount?: number } & ViewerListUniques =>
   Object.fromEntries(
-    (['anonymousViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount', 'viewCount', 'impressionCount'] as const)
+    (['anonymousViewCount', 'publicViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount', 'viewCount', 'impressionCount'] as const)
       .filter((key) => result[key] !== undefined)
       .map((key) => [key, result[key]]),
   );
@@ -456,7 +460,7 @@ export async function readViewerEngagementPage(
   gates: ViewerEngagementGates = viewerEngagementGates(prisma),
   disclosedSince: Date = viewerActivityDisclosedSince(),
 ): Promise<ViewerInteractionsPage> {
-  const where = disclosedViewsWhere(post, disclosedSince);
+  const { where, publicViewCount } = await namedViewsScope(prisma, post, disclosedViewsWhere(post, disclosedSince));
   const [views, total] = await Promise.all([
     prisma.postView.findMany({
       where,
@@ -494,6 +498,7 @@ export async function readViewerEngagementPage(
     viewers,
     total,
     hasMore: offset + limit < total,
+    publicViewCount,
     ...(engagement === null ? { engagement: 'unavailable' as const } : {}),
   };
 }
@@ -530,7 +535,7 @@ export async function readViewerInteractions(
  * historique.
  */
 export async function readPostViews(
-  prisma: Pick<PrismaClient, 'post' | 'postView' | 'adminAuditLog'>,
+  prisma: Pick<PrismaClient, 'post' | 'postView' | 'adminAuditLog'> & NamedViewersDb,
   postId: string,
   reader: InteractionsReader,
   limit: number,
@@ -544,7 +549,7 @@ export async function readPostViews(
   if (!post) return null;
   await openViewerList(prisma, post, reader, 'views', { limit, offset });
 
-  const where = disclosedViewsWhere(post, disclosedSince);
+  const { where, publicViewCount } = await namedViewsScope(prisma, post, disclosedViewsWhere(post, disclosedSince));
   const [items, total] = await Promise.all([
     prisma.postView.findMany({
       where,
@@ -555,5 +560,5 @@ export async function readPostViews(
     }),
     prisma.postView.count({ where }),
   ]);
-  return { items, total, hasMore: offset + limit < total, anonymousViewCount: anonymousViewsOf(post), ...uniquesOf(post) };
+  return { items, total, hasMore: offset + limit < total, anonymousViewCount: anonymousViewsOf(post), publicViewCount, ...uniquesOf(post) };
 }

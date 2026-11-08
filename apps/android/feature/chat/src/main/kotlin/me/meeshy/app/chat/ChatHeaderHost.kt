@@ -24,11 +24,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.avatar.AvatarContext
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.ui.component.reading.ReadingModeChip
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
+import androidx.compose.foundation.background
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.profile.LocalPeerMoodDirectory
 import me.meeshy.ui.profile.LocalPeerMoodOpener
 import me.meeshy.ui.profile.LocalProfileSheetOpener
@@ -40,7 +45,7 @@ import me.meeshy.ui.profile.LocalProfileSheetOpener
  * Reads [ChatHostContext] only; the ViewModel is reached through its plain callbacks.
  */
 @Composable
-internal fun ChatHeaderHost(host: ChatHostContext) {
+internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearch? = null) {
     val state = host.state
     val actions = host.actions
     val navigation = host.navigation
@@ -113,11 +118,19 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
     }
 
     Column(Modifier.statusBarsPadding()) {
-        AnimatedContent(
+        if (isGuest) {
+            ChatGuestHeaderBar(
+                title = title,
+                avatarUrl = header.avatarUrl,
+                shareUrl = header.publicShareUrl,
+                accentColor = accentColor,
+                onClose = navigation.onBack,
+            )
+        } else AnimatedContent(
             targetState = expanded,
             transitionSpec = {
-                fadeIn(spring(dampingRatio = 0.8f, stiffness = 300f)) togetherWith
-                    fadeOut(spring(dampingRatio = 0.8f, stiffness = 300f))
+                fadeIn(spring(dampingRatio = HEADER_SPRING_DAMPING, stiffness = HEADER_SPRING_STIFFNESS)) togetherWith
+                    fadeOut(spring(dampingRatio = HEADER_SPRING_DAMPING, stiffness = HEADER_SPRING_STIFFNESS))
             },
             label = "headerBand",
         ) { isExpanded ->
@@ -138,6 +151,11 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                             TypingAvatarCluster(
                                 stack = TypingAvatarStack.of(state.typingParticipants),
                                 accentColor = accentColor,
+                            )
+                            ChatHeaderEngagementPill(
+                                snapshot = host.engagement.snapshot?.forDay(
+                                    ConversationEngagementSnapshot.dayString(java.time.LocalDate.now()),
+                                ),
                             )
                             ChatHeaderSubtitleRow(
                                 subtitle = ChatHeaderSubtitle.of(
@@ -160,24 +178,19 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                     onSearch = actions.openSearch,
                     onToggle = toggle,
                     callSlot = {
-                        val peerName = state.conversationTitle.orEmpty()
-                        val callEntry = navigation.callEntry.takeIf { !isGuest }
-                        val ongoing = state.activeCall
-                            ?.takeIf { callEntry != null && RejoinPillPolicy.shouldOffer(it, navigation.hasLocalLiveCall) }
-                        if (ongoing != null) {
-                            // A call the local session lost is still live server-side: offer
-                            // « Rejoindre » (joins the existing call) instead of placing a NEW call.
-                            RejoinCallPill(
-                                isVideo = ongoing.isVideo,
-                                onClick = { navigation.onRejoinCall(ongoing, peerName) },
-                            )
-                        } else if (callEntry?.canStart == true) {
-                            ChatHeaderCallButton(
-                                isGroup = state.isGroup,
-                                accentColor = accentColor,
-                                onCall = { isVideo -> navigation.onStartCall(peerName, isVideo) },
-                            )
-                        }
+                        ChatHeaderCallSlot(
+                            conversationId = state.conversationId,
+                            entry = navigation.callEntry.takeIf { !isGuest },
+                            serverActiveCall = state.activeCall,
+                            localCall = navigation.localCall,
+                            hasLocalLiveCall = navigation.hasLocalLiveCall,
+                            isGroup = state.isGroup,
+                            calleeName = state.conversationTitle.orEmpty(),
+                            accentColor = accentColor,
+                            onStartCall = { isVideo -> navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo) },
+                            onRejoinCall = { call -> navigation.onRejoinCall(call, state.conversationTitle.orEmpty()) },
+                        )
+                        header.publicShareUrl?.let { ChatHeaderShareButton(url = it, accentColor = accentColor) }
                     },
                     avatar = {
                         HeaderFlameDecoration(
@@ -194,8 +207,11 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                     readingModeSlot = {
                         val readingMode = host.readingMode
                         if (readingMode != null && readingMode.state.showsChip) {
-                            ChatReadingModeChip(
-                                state = readingMode.state,
+                            ReadingModeChip(
+                                mode = readingMode.state.mode,
+                                isAuto = readingMode.state.isAuto,
+                                entries = readingMode.state.menuEntries,
+                                nextInCycle = readingMode.state.nextInCycle,
                                 accentColor = accentColor,
                                 onSelect = readingMode.select,
                                 onAuto = readingMode.resetToAuto,
@@ -219,5 +235,23 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                 onClose = actions.closeSearch,
             )
         }
+        val serverResults by (serverSearch?.state ?: NO_SERVER_SEARCH).collectAsStateWithLifecycle()
+        if (state.search.isActive && serverResults.panelOpen) {
+            ChatSearchResultsSheet(
+                state = serverResults,
+                accentColor = accentColor,
+                onSelect = actions.selectSearchResult,
+                onLoadMore = { serverSearch?.loadMore() },
+                onRetry = { serverSearch?.retry() },
+                modifier = Modifier.background(MeeshyTheme.tokens.backgroundSecondary),
+            )
+        }
     }
 }
+
+private val NO_SERVER_SEARCH: kotlinx.coroutines.flow.StateFlow<ChatServerSearchState> =
+    kotlinx.coroutines.flow.MutableStateFlow(ChatServerSearchState())
+
+/** Le ressort de bascule de l'en-tête (iOS `spring(response: 0.35, dampingFraction: 0.8)`) : raideur = (2π / 0,35)². */
+private const val HEADER_SPRING_DAMPING = 0.8f
+private const val HEADER_SPRING_STIFFNESS = 322f

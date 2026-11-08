@@ -1,6 +1,7 @@
 package me.meeshy.ui.profile
 
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.State
 import androidx.compose.runtime.staticCompositionLocalOf
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 
@@ -21,3 +22,14 @@ public object InertProfileSheetOpener : ProfileSheetOpener {
 
 public val LocalProfileSheetOpener: ProvidableCompositionLocal<ProfileSheetOpener> =
     staticCompositionLocalOf { InertProfileSheetOpener }
+
+/**
+ * Vrai tant que la fiche profil est présentée par la racine. Un lecteur plein écran (stories, reels) s'y
+ * abonne pour se mettre en pause pendant la fiche et reprendre à sa fermeture. Valeur par défaut : jamais ouverte.
+ */
+public val LocalProfileSheetPresented: ProvidableCompositionLocal<State<Boolean>> =
+    staticCompositionLocalOf { NeverPresented }
+
+private val NeverPresented: State<Boolean> = object : State<Boolean> {
+    override val value: Boolean = false
+}

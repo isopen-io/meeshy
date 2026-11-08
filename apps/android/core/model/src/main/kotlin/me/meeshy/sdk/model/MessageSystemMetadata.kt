@@ -44,6 +44,8 @@ object MessageRichMetadata {
 
     fun arrivalsNotice(metadata: JsonObject?): ArrivalsNoticeMetadata? = ArrivalsNoticeMetadata.parse(metadata)
 
+    fun captureNotice(metadata: JsonObject?): CaptureNoticeMetadata? = CaptureNoticeMetadata.parse(metadata)
+
     fun sticker(metadata: JsonObject?): MessageSticker? =
         MessageSticker.fromJson(metadata?.get("sticker"))?.ifWireWorthy
 

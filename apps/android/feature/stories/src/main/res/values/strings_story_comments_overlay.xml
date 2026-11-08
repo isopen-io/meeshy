@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comments_overlay_expired">Story expired — comments remain visible</string>
+    <string name="stories_comments_overlay_reply">Reply</string>
+    <string name="stories_comments_overlay_more">Comment options</string>
+    <string name="stories_comments_overlay_copy">Copy text</string>
+    <string name="stories_comments_overlay_edit">Edit</string>
+    <string name="stories_comments_overlay_delete">Delete</string>
+    <string name="stories_comments_overlay_report">Report</string>
+    <string name="stories_comments_overlay_remove">Remove</string>
+    <string name="stories_comments_overlay_save">Save</string>
+    <string name="stories_comments_overlay_cancel">Cancel</string>
+    <string name="stories_comments_overlay_editing">Editing comment</string>
+    <string name="stories_comments_overlay_like">Like</string>
+    <string name="stories_comments_overlay_unlike">Unlike</string>
+    <string name="stories_comments_overlay_show_original">Show original</string>
+    <string name="stories_comments_overlay_show_translated">Show translation</string>
+    <string name="stories_comments_overlay_show_replies">View replies</string>
+    <string name="stories_comments_overlay_hide_replies">Hide replies</string>
+    <string name="stories_comments_overlay_more_replies">Load more replies</string>
+    <string name="stories_comments_overlay_retry">Retry</string>
+    <string name="stories_comments_overlay_media">Attached media</string>
+    <string name="stories_comments_overlay_cancel_reply">Cancel reply</string>
+</resources>

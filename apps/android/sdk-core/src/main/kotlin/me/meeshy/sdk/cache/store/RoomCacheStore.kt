@@ -1,5 +1,6 @@
 package me.meeshy.sdk.cache.store
 
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -32,24 +33,53 @@ private val payloadJson = Json { ignoreUnknownKeys = true; encodeDefaults = true
  */
 class RoomCacheStore<V>(
     private val dao: CacheEntryDao,
-    private val namespace: String,
+    override val namespace: String,
     override val policy: CachePolicy,
     private val serializer: KSerializer<V>,
     private val itemId: (V) -> String,
     private val clock: CacheClock = SystemCacheClock,
+    l1Capacity: Int? = null,
+    private val flusher: DirtyFlusher? = null,
+    override val criticality: CacheCriticality = CacheCriticality.NORMAL,
 ) : CacheStore<V> {
 
+    private class L1Entry<V>(val items: List<V>, val lastFetchedAt: Long)
+
+    private val l1: MemoryL1<L1Entry<V>>? = l1Capacity?.let { MemoryL1(it) }
+    private val generation = AtomicLong()
+
+
     override suspend fun load(key: String): CacheResult<List<V>> {
-        val meta = dao.meta(namespace, key) ?: return CacheResult.Empty
-        val items = decode(dao.items(namespace, key)) ?: return CacheResult.Empty
-        val age = (clock.nowMillis() - meta.lastFetchedAt).coerceAtLeast(0L)
-        return classifyCache(items, age, policy)
+        val entry = read(key) ?: return CacheResult.Empty
+        return classifyCache(entry.items, ageOf(entry), policy)
     }
 
-    override suspend fun loadIgnoringExpiry(key: String): CachedSnapshot<V>? {
+    override suspend fun loadIgnoringExpiry(key: String): CachedSnapshot<V>? =
+        read(key)?.let { CachedSnapshot(it.items, ageOf(it)) }
+
+    private fun ageOf(entry: L1Entry<V>): Long = (clock.nowMillis() - entry.lastFetchedAt).coerceAtLeast(0L)
+
+    /**
+     * L1 d'abord : une cle deja vue ne touche pas Room. Une lecture disque ne peuple le L1 que si aucune ecriture n'a
+     * eu lieu entre-temps (generation inchangee), sinon elle y poserait un instantane perime.
+     */
+    private suspend fun read(key: String): L1Entry<V>? {
+        l1?.get(key)?.let { return it }
+        val before = generation.get()
         val meta = dao.meta(namespace, key) ?: return null
         val items = decode(dao.items(namespace, key)) ?: return null
-        return CachedSnapshot(items, (clock.nowMillis() - meta.lastFetchedAt).coerceAtLeast(0L))
+        val entry = L1Entry(items, meta.lastFetchedAt)
+        if (generation.get() == before) l1?.put(key, entry)
+        return entry
+    }
+
+    private fun invalidate(key: String? = null) {
+        generation.incrementAndGet()
+        if (key == null) l1?.clear() else l1?.remove(key)
+    }
+
+    override fun dropMemory() {
+        invalidate()
     }
 
     override suspend fun save(items: List<V>, key: String) = write(items, key, FreshnessWriteMode.Fetched)
@@ -74,11 +104,50 @@ class RoomCacheStore<V>(
     override suspend fun cursor(key: String): PaginationCursor? =
         PaginationCursor.fromJson(dao.meta(namespace, key)?.payload)
 
-    override suspend fun clear(key: String) = dao.deleteKey(namespace, key)
+    override suspend fun clear(key: String) {
+        invalidate(key)
+        try {
+            dao.deleteKey(namespace, key)
+        } finally {
+            invalidate(key)
+        }
+    }
 
-    override suspend fun clearAll() = dao.deleteNamespace(namespace)
+    override suspend fun clearAll() {
+        invalidate()
+        try {
+            dao.deleteNamespace(namespace)
+            flusher?.let { f -> f.pendingIds().filter { it.startsWith("$namespace/") }.forEach { f.markClean(it) } }
+        } finally {
+            invalidate()
+        }
+    }
 
+    /**
+     * Une ecriture qui echoue reste inscrite au dirty-set avec de quoi la rejouer (debounce, ou arriere-plan) ; l'echec
+     * remonte quand meme a l'appelant, qui ne doit jamais prendre une ecriture perdue pour une ecriture rangee.
+     */
     private suspend fun write(items: List<V>, key: String, mode: FreshnessWriteMode) {
+        val dirtyId = "$namespace/$key"
+        invalidate(key)
+        try {
+            persist(items, key, mode)
+            flusher?.markClean(dirtyId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            flusher?.markDirty(dirtyId, criticality) {
+                invalidate(key)
+                persist(items, key, mode)
+                invalidate(key)
+            }
+            throw failure
+        } finally {
+            invalidate(key)
+        }
+    }
+
+    private suspend fun persist(items: List<V>, key: String, mode: FreshnessWriteMode) {
         val stored = CacheDiff.bounded(items, itemId, policy.maxItemCount)
         val payloads = stored.map { payloadJson.encodeToString(serializer, it) }
         val hashes = payloads.map(CacheDiff::contentHash)

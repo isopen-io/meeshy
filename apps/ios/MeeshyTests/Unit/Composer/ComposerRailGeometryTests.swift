@@ -195,14 +195,6 @@ final class ComposerRailGeometryTests: XCTestCase {
                        "La marge du volet ne peut plus se lire des couloirs, qui valent zéro.")
     }
 
-    /// Le MÊME volet est monté sous le canvas de l'ATELIER (#4742), où les rails
-    /// flottent aussi : même marge, lue de la même règle.
-    func test_leVoletDeLAtelier_degageLesRails() throws {
-        let hote = compact(AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource()))
-        XCTAssertTrue(hote.contains("volet.padding(.horizontal,ComposerRailGeometry.lane)"),
-                      "Le volet de l'atelier doit se retirer de la largeur d'un rail de chaque côté.")
-    }
-
     // MARK: - La scène prend le viewport (#8370)
 
     /// **La carte se cadre sur l'écran ENTIER**, et le chrome flotte dessus.
@@ -399,7 +391,7 @@ final class ComposerRailGeometryTests: XCTestCase {
                       "La bande se calcule depuis la scène libre et la carte MESURÉES.")
         XCTAssertTrue(surface.contains(".padding(.top,trailingBand.top).padding(.trailing,edge).padding(.bottom,trailingBand.bottom)"),
                       "Le rail droit porte les marges de la bande.")
-        XCTAssertTrue(surface.contains(".onPreferenceChange(ComposerFreeZoneFrameKey.self){freeZoneFrame=$0}"),
+        XCTAssertTrue(surface.contains(".onPreferenceChange(ComposerFreeZoneFrameKey.self){cadreinfreeZoneFrame=cadre"),
                       "La scène libre se mesure par préférence, jamais par la fenêtre.")
         XCTAssertTrue(surface.contains("inlinePanel.padding(.top,trailingBand.top-ComposerRailGeometry.gutter)"),
                       "Le panneau d'options reste aligné sur le haut de la colonne qu'il voisine.")

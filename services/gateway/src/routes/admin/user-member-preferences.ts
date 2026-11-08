@@ -42,6 +42,8 @@
 import type { FastifyInstance } from 'fastify';
 import { UserAuditAction, type AuditChange } from '@meeshy/shared/types';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
+import { autoAcquaintanceEnabled } from '@meeshy/shared/utils/auto-acquaintance-preference';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UserAuditService } from '../../services/admin/user-audit.service';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
@@ -67,8 +69,31 @@ type Deps = {
   userAuditService: UserAuditService;
 };
 
+/**
+ * Lisibles, jamais écrites par un administrateur au nom d'un membre : la famille chiffrement
+ * (baisser le chiffrement d'autrui), « Recevoir des Bring » (#13936, contre-audit #14441
+ * N2) — rouvrir la réception d'un son qui passe Ne pas déranger est le geste du membre seul —,
+ * et « Créer des Connaissances automatiquement » (#14406, audit #14464 C1) : lever une
+ * opposition (RGPD art. 21) ou le défaut protecteur d'un mineur aussi.
+ */
 export const ADMIN_READ_ONLY_PREFERENCE_KEYS: Readonly<Partial<Record<PreferenceCategory, readonly string[]>>> = {
-  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted']
+  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted', 'autoAcquaintance'],
+  notification: ['bringEnabled'],
+};
+
+/**
+ * La valeur EFFECTIVE de `privacy.autoAcquaintance` (#14406, audit #14464 C7) : la
+ * clé n'a pas de défaut stocké, et celui qui s'applique dépend de l'âge déclaré.
+ * L'administration voit ce que la passerelle obéit, jamais une rangée absente.
+ */
+const withEffectiveAutoAcquaintance = (
+  preferences: Record<string, PreferenceDocument>,
+  birthDate: Date | null | undefined,
+  now: Date
+): Record<string, PreferenceDocument> => {
+  const privacy = preferences.privacy ?? {};
+  const autoAcquaintance = autoAcquaintanceEnabled({ stored: privacy.autoAcquaintance, ageClass: declaredAgeClass(birthDate, now) });
+  return { ...preferences, privacy: { ...privacy, autoAcquaintance } };
 };
 
 const readOnlyKeysIn = (category: PreferenceCategory, submitted: PreferenceDocument): string[] =>
@@ -139,12 +164,16 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const { userId } = request.params;
 
-      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true, birthDate: true } });
       if (!userExists) {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
-      const preferences = await resolveCompleteCategories(fastify.prisma, userId, PREFERENCE_CATEGORIES);
+      const preferences = withEffectiveAutoAcquaintance(
+        await resolveCompleteCategories(fastify.prisma, userId, PREFERENCE_CATEGORIES),
+        userExists.birthDate,
+        new Date()
+      );
 
       await userAuditService.createAuditLog({
         userId,
@@ -251,7 +280,7 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
         });
       }
 
-      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true, birthDate: true } });
       if (!userExists) {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
@@ -296,7 +325,9 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
       const persisted = (updated as Record<string, unknown>)[category] as PreferenceDocument | null | undefined;
       return sendSuccess(reply, {
         category,
-        preferences: resolveComplete(PREFERENCE_REGISTRY[category].defaults, persisted)
+        preferences: category === 'privacy'
+          ? withEffectiveAutoAcquaintance({ privacy: resolveComplete(PREFERENCE_REGISTRY[category].defaults, persisted) }, userExists.birthDate, new Date()).privacy
+          : resolveComplete(PREFERENCE_REGISTRY[category].defaults, persisted)
       });
     } catch (error) {
       const failure = error as { name?: string; message?: string; issues?: unknown[] };

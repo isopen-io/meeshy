@@ -10,9 +10,10 @@ import type { LocalMessage } from './local-message';
  * L'OUTBOX (#5813, étape 4) — le magasin qui porte un envoi tant que le
  * transport n'a pas tranché, HORS du cache TanStack (D-16 amendée par D-28,
  * § 0 de la spécification #5813). Même motif que `conversation-store.ts`
- * (`zustand/vanilla`, mémoire seule — jamais `localStorage`, Q6 de la
+ * (`zustand/vanilla`, en mémoire — jamais `localStorage`, Q6 de la
  * spécification) : ce fichier ne sait rien de la vue, `use-send.ts` s'y
- * abonne via `zustand/react`.
+ * abonne via `zustand/react`. Sa copie sur l'appareil (IndexedDB) et son
+ * rejeu au retour du réseau vivent à côté (`outbox-durability.ts`, #14698).
  *
  * `entries` est indexé PAR CONVERSATION : le magasin ne dépend d'aucun
  * composant monté, une entrée survit à un aller-retour vers `/` (§ 6.2 de la

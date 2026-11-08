@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * VÉRIFIE LE MESSAGE LONG DANS UN VRAI NAVIGATEUR (#8147) — un contrôle
- * existe s'il a un EFFET, et un verre existe s'il FLOUTE.
+ * VÉRIFIE LE MESSAGE LONG DANS UN VRAI NAVIGATEUR (#8147, #16464) — un
+ * contrôle existe s'il a un EFFET.
  *
- * Directive porteur 2026-09-26 : « le message long qui doit avoir “Lire la
+ * Directives porteur 2026-09-26 (« le message long qui doit avoir “Lire la
  * suite” affiche toujours moins de sa moitié », « il faut les déplier juste
- * et non plus ouvrir un sheet », « lorsqu'on déplie un message long, il faut
- * appliquer l'effet focal », « le Focal est un bloc de verre sur lequel le
- * message vient grossir », « par défaut Script ».
+ * et non plus ouvrir un sheet », « par défaut Script ») et 2026-11-06
+ * (#16464, jumelle iOS #16463) : un toucher affiche le message ENTIER comme
+ * un message ordinaire du mode courant, sans mise en avant, et il le reste.
  *
  * CE QU'IL MESURE, sur `/c/c-message-long` (corpus hors liste,
  * `fixtures-long-message.ts`) :
@@ -15,18 +15,15 @@
  * 1. Le fil s'ouvre en SCRIPT ; le message long n'en montre que l'extrait
  *    (moins de la moitié des caractères) suivi de « … » et du bouton
  *    « Lire la suite » (`aria-expanded="false"`, cible ≥ 44 px).
- * 2. Toucher DÉPLIE sur place : le texte intégral est rendu, le bouton dit
- *    « Réduire » (`aria-expanded="true"`), AUCUNE feuille ni dialogue ne
- *    s'ouvre, l'adresse ne bouge pas.
- * 3. L'effet Focal : un bloc de verre SOUS le message (`backdrop-filter`
- *    calculé, rayon 18 px), la loupe (`scale` > 1), les voisins atténués
- *    (opacité calculée 0,62), un seul message déplié à la fois.
+ * 2. Toucher DÉPLIE sur place : le texte intégral est rendu, le bouton s'en
+ *    va et aucun « Réduire » n'apparaît, AUCUNE feuille ni dialogue ne
+ *    s'ouvre, l'adresse ne bouge pas, et le HAUT du message reste en place.
+ * 3. Aucune mise en avant : ni verre, ni loupe, voisins pleinement opaques.
  * 4. Le message traduit se tronque sur le texte SERVI (français), jamais sur
- *    l'original anglais.
- * 5. « Réduire » replie : extrait, verre et atténuation s'en vont.
- * 6. `prefers-reduced-motion: reduce` : aucune loupe.
- * 7. En FOCAL (choisi), l'élue du défilement pose le même verre.
- * 8. Clair et sombre capturés (outil Read, hors de ce script).
+ *    l'original anglais ; le déplier laisse le premier déplié.
+ * 5. Rouvrir le fil rend tout replié.
+ * 6. `prefers-reduced-motion: reduce` et FOCAL : même dépliage, sans verre.
+ * 7. Clair et sombre capturés (outil Read, hors de ce script).
  */
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -86,23 +83,19 @@ const openThread = async (context) => {
 
 const rowState = (page, id) =>
   page.$eval(`[data-row="${id}"]`, (row) => {
-    const stage = row.querySelector('[data-unfold-stage]');
-    const content = row.querySelector('.unfold-content');
-    const glass = row.querySelector('[data-unfold-glass]');
+    const long = row.querySelector('[data-long-message]');
     const toggle = row.querySelector('button[data-long-message-toggle]');
     const text = row.querySelector('[data-rich-text]')?.textContent ?? '';
-    const glassStyle = glass === null ? null : getComputedStyle(glass);
     const toggleBox = toggle?.getBoundingClientRect();
     return {
       text,
       mode: row.querySelector('[data-reading-mode]')?.getAttribute('data-reading-mode') ?? 'bubbles',
-      unfolded: stage?.hasAttribute('data-unfolded') ?? false,
-      opacity: stage === null ? null : Number(getComputedStyle(stage).opacity),
-      transform: content === null ? '' : content.style.transform,
-      glass:
-        glassStyle === null
-          ? null
-          : { backdrop: glassStyle.backdropFilter || glassStyle.webkitBackdropFilter, radius: glassStyle.borderTopLeftRadius },
+      unfolded: long?.getAttribute('data-long-message') === 'unfolded',
+      top: row.getBoundingClientRect().top,
+      opacity: Number(getComputedStyle(row).opacity),
+      highlighted: row.querySelector('[data-unfold-glass], [data-unfold-stage], [data-unfolded]') !== null,
+      transform: long === null ? '' : getComputedStyle(long).transform,
+      collapse: /Réduire/.test(row.textContent ?? ''),
       toggle: toggle === null ? null : { label: toggle.textContent, expanded: toggle.getAttribute('aria-expanded'), height: toggleBox?.height ?? 0 },
     };
   });
@@ -134,25 +127,17 @@ for (const scheme of ['dark', 'light']) {
     `[${scheme}] « Lire la suite », aria-expanded=false (${JSON.stringify(folded.toggle)})`,
   );
   expect((folded.toggle?.height ?? 0) >= 44, `[${scheme}] la cible du bouton fait au moins 44 px (${folded.toggle?.height})`);
-  expect(folded.glass === null && !folded.unfolded, `[${scheme}] replié : aucun verre`);
   await page.screenshot({ path: join(CAPTURES, `long-message-script-folded-${scheme}.png`) });
 
   await press(page, 'lm-2');
   const open = await rowState(page, 'lm-2');
   const neighbour = await rowState(page, 'lm-3');
-  expect(open.text.length > folded.text.length * 3, `[${scheme}] déplié : le texte intégral est rendu (${open.text.length})`);
-  expect(
-    open.toggle?.label === 'Réduire' && open.toggle.expanded === 'true',
-    `[${scheme}] « Réduire », aria-expanded=true (${JSON.stringify(open.toggle)})`,
-  );
+  expect(open.unfolded && open.text.length > folded.text.length * 3, `[${scheme}] déplié : le texte intégral est rendu (${open.text.length})`);
+  expect(open.toggle === null && !open.collapse, `[${scheme}] déplié : le bouton s'en va, aucun « Réduire »`);
   expect((await page.locator('[role="dialog"]').count()) === 0 && page.url() === url, `[${scheme}] aucune feuille, l'adresse ne bouge pas`);
-  expect(
-    open.glass !== null && /blur\(/.test(open.glass.backdrop) && open.glass.radius === '18px',
-    `[${scheme}] le message déplié repose sur un bloc de VERRE flouté, rayon 18 (${JSON.stringify(open.glass)})`,
-  );
-  expect(/scale\(1\.0\d*\)/.test(open.transform), `[${scheme}] la loupe grossit le message déplié (${open.transform})`);
-  expect(Math.abs((neighbour.opacity ?? 1) - 0.62) < 0.01, `[${scheme}] les voisins s'atténuent à 0,62 (${neighbour.opacity})`);
-  expect(open.opacity === 1, `[${scheme}] le message déplié reste pleinement opaque`);
+  expect(Math.abs(open.top - folded.top) < 1, `[${scheme}] le haut du message reste en place (${folded.top} → ${open.top})`);
+  expect(!open.highlighted && open.transform === 'none', `[${scheme}] aucune mise en avant : ni verre, ni loupe (${open.transform})`);
+  expect(neighbour.opacity === 1, `[${scheme}] les voisins restent pleinement opaques (${neighbour.opacity})`);
   await page.screenshot({ path: join(CAPTURES, `long-message-script-unfolded-${scheme}.png`) });
 
   await page.locator('[data-row="lm-4"]').scrollIntoViewIfNeeded();
@@ -164,14 +149,14 @@ for (const scheme of ['dark', 'light']) {
   await press(page, 'lm-4');
   const second = await rowState(page, 'lm-4');
   const first = await rowState(page, 'lm-2');
-  expect(second.unfolded && !first.unfolded, `[${scheme}] un seul message déplié à la fois`);
+  expect(second.unfolded && first.unfolded, `[${scheme}] deux messages dépliés le restent ensemble`);
   expect(second.text.includes('jeu de cotes partagé'), `[${scheme}] le dépliage traduit rend la fin de la traduction`);
 
-  await press(page, 'lm-4');
-  const refolded = await rowState(page, 'lm-4');
-  const calmed = await rowState(page, 'lm-3');
-  expect(!refolded.unfolded && refolded.glass === null && refolded.text.endsWith('…'), `[${scheme}] « Réduire » replie`);
-  expect(calmed.opacity === 1, `[${scheme}] replié, les voisins retrouvent leur opacité (${calmed.opacity})`);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('[data-row="lm-2"]');
+  await page.waitForTimeout(300);
+  const reopened = await rowState(page, 'lm-2');
+  expect(!reopened.unfolded && reopened.toggle !== null, `[${scheme}] rouvrir le fil rend le message replié`);
   await context.close();
 }
 
@@ -181,7 +166,7 @@ for (const scheme of ['dark', 'light']) {
   const page = await openThread(context);
   await press(page, 'lm-2');
   const open = await rowState(page, 'lm-2');
-  expect(open.unfolded && open.transform === '', `mouvement réduit : déplié sans loupe (${open.transform || 'aucune'})`);
+  expect(open.unfolded && open.transform === 'none', `mouvement réduit : déplié, sans mouvement résiduel (${open.transform})`);
   await context.close();
 }
 
@@ -194,7 +179,7 @@ for (const scheme of ['dark', 'light']) {
   expect(state.mode === 'focal', `[${scheme}] Focal choisi, la rangée est Focal`);
   await press(page, 'lm-2');
   const open = await rowState(page, 'lm-2');
-  expect(open.glass !== null && open.unfolded, `[${scheme}] en Focal aussi, le message déplié repose sur le verre`);
+  expect(open.unfolded && !open.highlighted, `[${scheme}] en Focal aussi, le message déplié se rend comme un message ordinaire`);
   await page.screenshot({ path: join(CAPTURES, `long-message-focal-unfolded-${scheme}.png`) });
   await context.close();
 }
@@ -207,4 +192,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(1);
 }
-console.log(`\n  Le message long tient : extrait au quart, dépliage en place, verre Focal. Captures dans ${CAPTURES}.\n`);
+console.log(`\n  Le message long tient : extrait au quart, dépliage en place, sans repli ni mise en avant. Captures dans ${CAPTURES}.\n`);

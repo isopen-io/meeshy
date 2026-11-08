@@ -66,9 +66,15 @@ class WaveformRepository @Inject constructor(
         return WaveformLevels(WaveformScale.peakNormalized(measured), WaveformLevels.Origin.DECODED)
     }
 
-    /** Les niveaux d'une bulle de [barCount] barres : au moins 96 compartiments sont demandés. */
-    suspend fun bubbleLevels(location: String, barCount: Int, recorded: List<Float> = emptyList()): WaveformLevels =
-        levels(location, WaveformResolution.bubbleRequest(barCount), recorded)
+    /**
+     * Les niveaux d'une bulle de [barCount] barres : au moins 96 compartiments sont demandés. Une bulle ne mesure qu'un
+     * fichier DÉJÀ sur l'appareil : une adresse (réseau, `content://`) rend [WaveformLevels.Unavailable] sans être lue —
+     * la décoder téléchargerait le vocal en entier, hors du cache média et hors de la politique réseau.
+     */
+    suspend fun bubbleLevels(location: String, barCount: Int, recorded: List<Float> = emptyList()): WaveformLevels {
+        if (recorded.isEmpty() && WaveformLocation.parse(location) is WaveformLocation.Remote) return WaveformLevels.Unavailable
+        return levels(location, WaveformResolution.bubbleRequest(barCount), recorded)
+    }
 
     /** L'image PNG d'une vignette audio ; vide quand l'audio n'est pas lisible. */
     suspend fun thumbnailPng(location: String, width: Int = THUMBNAIL_WIDTH, height: Int = THUMBNAIL_HEIGHT): ByteArray {

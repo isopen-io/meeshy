@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_repost_menu_feed">Republicar en mi feed</string>
+    <string name="story_repost_menu_reel">Republicar en mis reels</string>
+</resources>

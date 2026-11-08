@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.MessageTranscriptionFiche
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.composer.PendingAttachment
@@ -35,6 +36,8 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** L'appel de cet appareil vu de l'en-tête (pastille « Toucher pour revenir »). */
+    val localCall: ChatLocalCall = ChatLocalCall.NONE,
     /** Ouvre le post (story) cité par un message : la carte de citation du fil (#13296). */
     val onOpenCitedPost: (postId: String) -> Unit = {},
     /** Ouvre une autre conversation (« Écrire » depuis une carte de visite du fil, #13495). */
@@ -59,7 +62,6 @@ internal class ChatSheetVisibility {
     var settings by mutableStateOf(false)
     var members by mutableStateOf(false)
     var stats by mutableStateOf(false)
-    var analysis by mutableStateOf(false)
 
     /** La fiche Conversation, ouverte par l'avatar de l'en-tête (parité iOS `ConversationInfoSheet`). */
     var info by mutableStateOf(false)
@@ -75,6 +77,11 @@ internal class ChatSheetVisibility {
 
     /** La vérification du numéro de sécurité d'un groupe chiffré de bout en bout (#13463). */
     var securityVerification by mutableStateOf(false)
+
+    /** « Imager » demandé hors du menu — la baguette du plein écran audio (#16334) : l'atelier s'ouvre sur ce message. */
+    var exportCardRequest by mutableStateOf<String?>(null)
+
+    val openExportCard: (messageId: String) -> Unit = { exportCardRequest = it }
 }
 
 /**
@@ -82,7 +89,7 @@ internal class ChatSheetVisibility {
  * efface alors sa grappe d'actions (iOS `hiddenWhileScrolling`).
  */
 @Stable
-internal class ChatChromeState {
+internal class ChatChromeState(val listGate: ChatListUpdateGate? = null) {
     var isScrolling by mutableStateOf(false)
     /**
      * Un défilement parti du DOIGT est en cours (glissé puis son élan) — jamais un saut
@@ -92,6 +99,8 @@ internal class ChatChromeState {
     var isUserScrolling by mutableStateOf(false)
     /** L'en-tête est déplié : la pastille de jour flottante se retire (iOS `isHeaderExpanded`). */
     var isHeaderExpanded by mutableStateOf(false)
+    /** Le geste en cours : clavier d'abord, puis repli du chrome (en-tête, barre de saisie). */
+    val threadScroll = ThreadChromeScroll()
 }
 
 /**
@@ -124,6 +133,22 @@ internal class ChatHostContext(
     val engagement: ChatEngagementBinding = ChatEngagementBinding.None,
     /** Les pièces-fichiers reçues pendant la session : la rangée dit « prêt » (#13492). */
     val downloadedFileIds: Set<String> = emptySet(),
+    /** Le message sur lequel la conversation s'ouvre (argument `messageId` de la route), rendu UNE fois puis effacé. */
+    val takeLandingMessageId: () -> String? = { null },
+    /** #14670 — la fenêtre ancrée sur un message ancien et le message allumé à l'arrivée. */
+    val landing: ChatLandingState = ChatLandingState(),
+    /** #15269 — ce qui ferme le composeur (bandeau de lecture seule) et ce que le rang du lecteur permet. */
+    val composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
+    val capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
+    /** [ConversationGovernanceController.viewerRole] : le rôle connu du lecteur, garde du cache de la fiche d'un participant. */
+    val viewerRole: String? = null,
+    /** [ChatViewModel.unreadAtOpening] : le compte serveur que le séparateur des non-lus annonce (#7525). */
+    val unreadAtOpening: Int? = null,
+    /**
+     * #16465 — les longs messages dépliés pendant cette ouverture du fil, comme [bubbleFrames] : écrit par la liste,
+     * lu seulement quand l'aperçu de l'appui long s'ouvre. Recréé à chaque ouverture : tout repart replié.
+     */
+    val expandedLongMessages: MutableSet<String> = mutableSetOf(),
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -170,13 +195,21 @@ internal fun rememberChatHostContext(
     selection: MessageSelection = MessageSelection.Inactive,
     engagement: ChatEngagementBinding = ChatEngagementBinding.None,
     downloadedFileIds: Set<String> = emptySet(),
+    takeLandingMessageId: () -> String? = { null },
+    landing: ChatLandingState = ChatLandingState(),
+    composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
+    capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
+    listGate: ChatListUpdateGate? = null,
+    viewerRole: String? = null,
+    unreadAtOpening: Int? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds)
+    val chrome = remember(listGate) { ChatChromeState(listGate) }
+    val expandedLongMessages = remember { mutableSetOf<String>() }
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening, expandedLongMessages)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -185,12 +218,15 @@ internal class ChatHostActions(
     val onScrollHandled: () -> Unit,
     val scrollToMessage: (String) -> Unit = {},
     val loadOlder: () -> Unit,
+    val loadNewer: () -> Unit = {},
+    val returnToPresent: () -> Unit = {},
     val refresh: () -> Unit,
     val openSearch: () -> Unit,
     val onSearchQueryChange: (String) -> Unit,
     val previousSearchMatch: () -> Unit,
     val nextSearchMatch: () -> Unit,
     val closeSearch: () -> Unit,
+    val selectSearchResult: (String) -> Unit = {},
     val startReply: (String) -> Unit,
     val onMessageLongPress: (String) -> Unit,
     val toggleReaction: (String, String) -> Unit,
@@ -202,6 +238,8 @@ internal class ChatHostActions(
     val pieceOverlayFor: (String, String) -> PieceOverlayModel?,
     /** Les pièces d'un message chargé, telles que le serveur les sert : la fiche Transcription les lit (#13779). */
     val attachmentsOf: (String) -> List<ApiMessageAttachment> = { emptyList() },
+    /** La piste parlée d'une traduction se joue protégée : message protégé, inconnu ou conversation chiffrée. */
+    val transcriptionPlaybackProtected: (String) -> Boolean = { true },
     val onPieceReact: (String, String, String) -> Unit,
     val onPieceDelete: (String, String) -> Unit,
     val openForwardPiece: (String, String) -> Unit,
@@ -216,6 +254,8 @@ internal class ChatHostActions(
     val onPinnedBannerTap: () -> Unit,
     val openPinnedSheet: () -> Unit,
     val onMentionSelected: (MentionCandidate) -> Unit,
+    /** « Dis-lui salut » d'un message d'arrivée (#16338) : les @mentions des arrivants dans le composeur, et le focus. */
+    val greetArrivals: (messageId: String) -> Unit = {},
     val onDraftChange: (String) -> Unit,
     val onComposerLanguagePicked: (String) -> Unit,
     val send: () -> Unit,
@@ -251,6 +291,7 @@ internal class ChatHostActions(
     val addReactionFromDetails: (String, String) -> Unit,
     val dismissReport: () -> Unit,
     val onExplorerRetranslate: (String, String) -> Unit,
+    val onExplorerRowTap: (String, String) -> Unit,
     val dismissLanguageExplorer: () -> Unit,
     val dismissEmojiPicker: () -> Unit,
     val closeReactionDetails: () -> Unit,
@@ -268,6 +309,7 @@ internal class ChatHostActions(
     /** #13995 — la vue unique lue et refermée consomme son compteur serveur. */
     val consumeViewOnce: (String) -> Unit = {},
     val clearEffects: () -> Unit,
+    val clearPanelEffects: () -> Unit = {},
     val closeReplyThread: () -> Unit,
     val onReplyThreadReplyTap: (String) -> Unit,
     val closeForward: () -> Unit,
@@ -289,6 +331,9 @@ internal class ChatHostActions(
     /** L'auteur que les cadres de la retouche écrivent (#12734). */
     val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
+    /** #16341 — la barre de composition repliée ou dépliée, retenue par conversation ; `null` : aucune mémoire (aperçus). */
+    val composerMinimized: StateFlow<Boolean>? = null,
+    val setComposerMinimized: (Boolean) -> Unit = {},
     /** « Sélectionner » du menu d'appui long : entre dans le mode en semant ce message. */
     val beginSelection: (String) -> Unit = {},
     /** Coche ou décoche un message ; le verdict dit si le plafond de 100 est atteint. */
@@ -299,6 +344,10 @@ internal class ChatHostActions(
     val deleteSelectionForEveryone: (List<String>) -> Unit = {},
     val deleteSelectionForMe: (List<String>) -> Unit = {},
     val toggleStars: (List<String>) -> Unit = {},
+    /** Le drapeau d'une langue de piste d'un vocal : voix, texte et karaoké basculent ensemble. */
+    val onAudioLanguage: (String, String) -> Unit = { _, _ -> },
+    /** Réagir, répondre et transférer depuis le plein écran d'un vocal (#16176). */
+    val audioFullscreenReplies: me.meeshy.app.chat.audio.AudioFullscreenReplyController? = null,
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
@@ -306,12 +355,15 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onScrollHandled = this::onScrollHandled,
     scrollToMessage = this::scrollToMessage,
     loadOlder = this::loadOlder,
+    loadNewer = this::loadNewer,
+    returnToPresent = this::returnToPresent,
     refresh = this::refresh,
     openSearch = this::openSearch,
     onSearchQueryChange = this::onSearchQueryChange,
     previousSearchMatch = this::previousSearchMatch,
     nextSearchMatch = this::nextSearchMatch,
     closeSearch = this::closeSearch,
+    selectSearchResult = this::selectSearchResult,
     startReply = this::startReply,
     onMessageLongPress = this::onMessageLongPress,
     toggleReaction = this::toggleReaction,
@@ -321,7 +373,10 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onFileAttachmentTap = this::onFileAttachmentTap,
     onPieceSave = this::onPieceSave,
     pieceOverlayFor = this::pieceOverlayFor,
-    attachmentsOf = this::attachmentsOf,
+    attachmentsOf = { messageId -> messageOf(messageId)?.attachments.orEmpty() },
+    transcriptionPlaybackProtected = { messageId ->
+        MessageTranscriptionFiche.playbackIsProtected(messageOf(messageId), state.value.isEndToEnd)
+    },
     onPieceReact = this::onPieceReact,
     onPieceDelete = this::onPieceDelete,
     openForwardPiece = this::openForwardPiece,
@@ -336,6 +391,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onPinnedBannerTap = this::onPinnedBannerTap,
     openPinnedSheet = this::openPinnedSheet,
     onMentionSelected = this::onMentionSelected,
+    greetArrivals = this::greetArrivals,
     onDraftChange = this::onDraftChange,
     onComposerLanguagePicked = this::onComposerLanguagePicked,
     send = this::send,
@@ -357,6 +413,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     replacePendingAudio = { id, file -> controllers.find<ComposerTrayController>()?.replaceFile(id, file, EDITED_AUDIO_MIME) ?: file.delete() },
     selfAuthor = this::selfAuthor,
     trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
+    composerMinimized = controllers.find<ComposerFoldController>()?.minimized,
+    setComposerMinimized = { minimized -> controllers.find<ComposerFoldController>()?.setMinimized(minimized) },
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
     startEdit = this::startEdit,
@@ -379,6 +437,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     addReactionFromDetails = this::addReactionFromDetails,
     dismissReport = this::dismissReport,
     onExplorerRetranslate = this::onExplorerRetranslate,
+    onExplorerRowTap = this::onExplorerRowTap,
     dismissLanguageExplorer = this::dismissLanguageExplorer,
     dismissEmojiPicker = this::dismissEmojiPicker,
     closeReactionDetails = this::closeReactionDetails,
@@ -393,6 +452,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     consumeAfterReadOnExit = { controllers.find<AfterReadController>()?.consumeOnExit() },
     consumeViewOnce = { id -> controllers.find<AfterReadController>()?.consumeViewOnce(id) },
     clearEffects = this::clearEffects,
+    clearPanelEffects = this::clearPanelEffects,
     closeReplyThread = this::closeReplyThread,
     onReplyThreadReplyTap = this::onReplyThreadReplyTap,
     closeForward = this::closeForward,
@@ -408,6 +468,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     deleteSelectionForEveryone = this::deleteSelectionForEveryone,
     deleteSelectionForMe = this::deleteSelectionForMe,
     toggleStars = this::toggleStars,
+    onAudioLanguage = this::selectAudioLanguage,
+    audioFullscreenReplies = controllers.find<me.meeshy.app.chat.audio.AudioFullscreenReplyController>(),
 )
 
 /** Le rendu de l'éditeur audio est un m4a (AAC), comme la prise du micro. */

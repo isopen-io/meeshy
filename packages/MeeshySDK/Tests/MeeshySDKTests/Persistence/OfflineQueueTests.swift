@@ -558,7 +558,7 @@ final class OfflineQueueTests: XCTestCase {
             // voisins : un appelant qui n'a pas de légende l'écrit. Ces témoins
             // portent sur les CHEMINS et les MIMES, jamais sur le texte.
             mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
+            allowSoundExtraction: nil, commentsDisabled: nil
         )
 
         XCTAssertEqual(result.localMediaPaths.count, 2)
@@ -624,7 +624,7 @@ final class OfflineQueueTests: XCTestCase {
             // voisins : un appelant qui n'a pas de légende l'écrit. Ces témoins
             // portent sur les CHEMINS et les MIMES, jamais sur le texte.
             mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
+            allowSoundExtraction: nil, commentsDisabled: nil
         )
 
         let maybePool = await queue.outboxPoolForTesting
@@ -666,7 +666,7 @@ final class OfflineQueueTests: XCTestCase {
             // voisins : un appelant qui n'a pas de légende l'écrit. Ces témoins
             // portent sur les CHEMINS et les MIMES, jamais sur le texte.
             mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
+            allowSoundExtraction: nil, commentsDisabled: nil
         )
 
         // The durable row must carry the REEL type so the dispatcher creates the

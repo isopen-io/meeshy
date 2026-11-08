@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "context.search",
+          "androidName": "context_search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.call",
+          "androidName": "context_call",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.details",
+          "androidName": "context_details",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.invite_friends",
+          "androidName": "context_invite_friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.report",
+          "androidName": "context_report",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.admin_open",
+          "androidName": "context_admin_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.more_options",
+          "androidName": "context_more_options",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.rename",
+          "androidName": "context_rename",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.favorite",
+          "androidName": "context_favorite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "lentille.mode.menu.title",
+          "androidName": "lentille_mode_menu_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -54,6 +54,8 @@
     <string name="change_password_hint_match">Passwörter stimmen überein</string>
     <string name="change_password_hint_different">Anders als dein aktuelles Passwort</string>
     <string name="change_password_error_current">Das aktuelle Passwort ist falsch</string>
+    <string name="change_password_error_weak">Das neue Passwort ist zu schwach. Wähle ein längeres, weniger vorhersehbares.</string>
+    <string name="change_password_error_rejected">Passwort abgelehnt. Prüfe es und versuche es erneut.</string>
     <!-- Email / phone change (§K) -->
     <string name="account_contact_title">E-Mail &amp; Telefon</string>
     <string name="account_contact_email_resend">E-Mail erneut senden</string>
@@ -109,7 +111,6 @@
     <string name="about_version_label">Version %1$s</string>
     <string name="about_info_application_id">App-ID</string>
     <string name="settings_help_support">Hilfe &amp; Support</string>
-    <string name="licenses_intro">Meeshy wurde mit den folgenden Open-Source-Bibliotheken entwickelt.</string>
     <string name="licenses_type_mit">MIT</string>
     <string name="licenses_type_apache">Apache 2.0</string>
     <string name="licenses_type_bsd">BSD</string>

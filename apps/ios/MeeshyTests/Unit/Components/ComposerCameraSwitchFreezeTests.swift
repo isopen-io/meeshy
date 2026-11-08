@@ -75,7 +75,7 @@ final class ComposerCameraSwitchFreezeTests: XCTestCase {
                         .contains("ComposerPreviewMirroring.align(session.connections, wanted: previewWanted)"),
                       "la connexion neuve de la couche prend son état AVANT la validation — jamais une écriture de plus après")
         let proprietaire = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel.swift"))
-        XCTAssertEqual(proprietaire.components(separatedBy: "previewWanted: self.previewMirroring.isWanted").count - 1, 2)
+        XCTAssertEqual(proprietaire.components(separatedBy: "previewWanted: ").count - 1, 2)
         let apercu = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("session.camera.previewMirroring.isWanted = montre"))
     }

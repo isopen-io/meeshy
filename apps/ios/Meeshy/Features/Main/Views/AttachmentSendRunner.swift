@@ -42,7 +42,8 @@ struct AttachmentUploadSession {
 
 struct AttachmentSendCallbacks {
     let restorePlace: @MainActor (SharedPlace?, Bool) -> Void
-    let setProgress: @MainActor (UploadQueueProgress) -> Void
+    /// Les octets téléversés d'UNE bulle, par son tempId (#14702, #16275).
+    let setProgress: @MainActor (_ tempId: String, _ sent: Int64, _ total: Int64) -> Void
     let abortUpload: @MainActor () -> Void
 }
 
@@ -97,18 +98,19 @@ final class AttachmentSendRunner: AttachmentSendRunning {
             cleanUp(batch)
             return
         }
-        guard let session = uploadSession(batch) else {
+        guard let firstSession = uploadSession(batch) else {
             abortWithoutCredential(batch)
             return
         }
-        let progress = observeProgress(of: session)
         let outbox = outboxFor(batch, host.conversationId)
         var anySuccess = false
-        for send in batch.mediaGroupSends {
-            if await sendGroup(send, in: batch, session: session, outbox: outbox) { anySuccess = true }
+        for (index, send) in batch.mediaGroupSends.enumerated() {
+            let ownSession = index == 0 ? firstSession : uploadSession(batch)
+            let progress = ownSession.map { observeProgress(of: $0, for: send.tempId) }
+            if await sendGroup(send, in: batch, session: ownSession ?? firstSession, outbox: outbox) { anySuccess = true }
+            progress?.cancel()
         }
         if await sendTrailing(batch) { anySuccess = true }
-        progress.cancel()
         finish(batch, anySuccess: anySuccess)
     }
 
@@ -118,11 +120,13 @@ final class AttachmentSendRunner: AttachmentSendRunning {
         callbacks.restorePlace(batch.place, false)
     }
 
-    private func observeProgress(of session: AttachmentUploadSession) -> AnyCancellable {
+    /// Une session par bulle : son flux ne compte que les octets de CE groupe, et la bulle
+    /// ne lit jamais la progression d'une autre (#14702).
+    private func observeProgress(of session: AttachmentUploadSession, for tempId: String) -> AnyCancellable {
         let setProgress = callbacks.setProgress
         return session.progress
             .receive(on: DispatchQueue.main)
-            .sink { progress in setProgress(progress) }
+            .sink { progress in setProgress(tempId, progress.uploadedBytes, progress.totalBytes) }
     }
 
     private func sendGroup(

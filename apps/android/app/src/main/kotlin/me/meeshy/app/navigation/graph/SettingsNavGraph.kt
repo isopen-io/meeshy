@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import me.meeshy.app.navigation.sheetComposable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import me.meeshy.app.BuildConfig
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
@@ -28,7 +29,7 @@ import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.EncryptedDevicesScreen
 import me.meeshy.app.settings.LegalDocumentScreen
 import me.meeshy.app.settings.LicensesScreen
-import me.meeshy.app.settings.MediaCacheScreen
+import me.meeshy.app.settings.DataStorageScreen
 import me.meeshy.app.settings.MediaDownloadScreen
 import me.meeshy.app.settings.NotificationSettingsScreen
 import me.meeshy.app.settings.PackShopScreen
@@ -38,44 +39,21 @@ import me.meeshy.app.settings.SettingsScreen
 import me.meeshy.app.settings.SupportScreen
 import me.meeshy.app.settings.TwoFactorScreen
 import me.meeshy.sdk.model.legal.LegalDocumentKind
+import me.meeshy.sdk.model.settings.SettingsHubSectionId
+import me.meeshy.sdk.model.settings.SettingsInvite
 
 /** Hub Reglages et tous ses sous-ecrans. */
 internal fun NavGraphBuilder.settingsNavGraph(
     navController: NavHostController,
     authViewModel: AuthViewModel,
 ) {
-    settingsComposable(Routes.SETTINGS) {
-        SettingsScreen(
-            onBack = { navController.popBackStack() },
-            // La racine bascule sur LOGIN quand la session est fermée (startDestination) :
-            // naviguer ici, avant la fin de l'appel serveur, renvoyait vers la liste.
-            onLogout = { authViewModel.logout() },
-            onOpenProfile = { userId -> ProfileRoutes.own(userId)?.let { navController.navigate(it) } },
-            onOpenStarred = { navController.navigate(Routes.STARRED) },
-            onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
-            onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
-            onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
-            onOpenStats = { navController.navigate(ProfileRoutes.STATS) },
-            onOpenSecurity = { navController.navigate(Routes.SECURITY) },
-            onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
-            onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
-            onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
-            onOpenPacks = { navController.navigate(Routes.packShop()) },
-            onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
-            onOpenBlockedUsers = { navController.navigate(Routes.BLOCKED_USERS) },
-            onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
-            onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
-            onOpenAbout = { navController.navigate(Routes.ABOUT) },
-            onOpenSupport = { navController.navigate(Routes.SUPPORT) },
-            onOpenLicenses = { navController.navigate(Routes.LICENSES) },
-            onOpenTerms = {
-                navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
-            },
-            onOpenPrivacyPolicy = {
-                navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
-            },
-            onOpenDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
-        )
+    settingsComposable(Routes.SETTINGS) { SettingsHub(navController, authViewModel, focus = null) }
+    settingsComposable(
+        Routes.SETTINGS_FOCUS,
+        arguments = listOf(navArgument(Routes.SETTINGS_FOCUS_ARG) { type = NavType.StringType }),
+    ) { entry ->
+        val invite = SettingsInvite.fromWire(entry.arguments?.getString(Routes.SETTINGS_FOCUS_ARG))
+        SettingsHub(navController, authViewModel, focus = invite?.section)
     }
     sheetComposable(Routes.NOTIFICATION_SETTINGS, navController) { _, dismiss ->
         NotificationSettingsScreen(onBack = dismiss)
@@ -108,7 +86,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
         MediaDownloadScreen(onBack = dismiss)
     }
     sheetComposable(Routes.MEDIA_CACHE, navController) { _, dismiss ->
-        MediaCacheScreen(onBack = dismiss)
+        DataStorageScreen(onBack = dismiss)
     }
     sheetComposable(
         route = "${Routes.PACK_SHOP}?domain={domain}&pack={pack}",
@@ -134,7 +112,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
         SupportScreen(onBack = dismiss)
     }
     sheetComposable(Routes.LICENSES, navController) { _, dismiss ->
-        LicensesScreen(onBack = dismiss)
+        LicensesScreen(onBack = dismiss, sourceCommit = BuildConfig.SOURCE_COMMIT)
     }
     sheetComposable(
         route = Routes.LEGAL,
@@ -186,3 +164,41 @@ private fun NavGraphBuilder.settingsComposable(
     popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(POP_FADE_MILLIS)) },
     content = content,
 )
+
+/** Le hub Réglages, ouvert seul ou par une invite de réglage qui désigne la section [focus] (#16339). */
+@Composable
+private fun SettingsHub(navController: NavHostController, authViewModel: AuthViewModel, focus: SettingsHubSectionId?) {
+    SettingsScreen(
+        onBack = { navController.popBackStack() },
+        // La racine bascule sur LOGIN quand la session est fermée (startDestination) :
+        // SignOutViewModel n'émet qu'après le retour de logout().
+        onSignedOut = { authViewModel.onSignedOutExternally() },
+        onOpenProfile = { userId -> ProfileRoutes.own(userId)?.let { navController.navigate(it) } },
+        onOpenStarred = { navController.navigate(Routes.STARRED) },
+        onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
+        onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
+        onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
+        onOpenStats = { navController.navigate(ProfileRoutes.STATS) },
+        onOpenSecurity = { navController.navigate(Routes.SECURITY) },
+        onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
+        onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
+        onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
+        onOpenPacks = { navController.navigate(Routes.packShop()) },
+        onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+        onOpenBlockedUsers = { navController.navigate(Routes.BLOCKED_USERS) },
+        onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
+        onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+        onOpenAbout = { navController.navigate(Routes.ABOUT) },
+        onOpenSupport = { navController.navigate(Routes.SUPPORT) },
+        onOpenLicenses = { navController.navigate(Routes.LICENSES) },
+        onOpenTerms = {
+            navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
+        },
+        onOpenPrivacyPolicy = {
+            navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
+        },
+        onOpenDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
+        onOpenVoiceProfile = { navController.navigate(VoiceProfileWizardDestinations.ROUTE) },
+        focus = focus,
+    )
+}

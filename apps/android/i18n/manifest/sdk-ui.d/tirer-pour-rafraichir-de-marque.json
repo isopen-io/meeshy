@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "ui", "iosKey": "pull_refresh.armed", "androidName": "pull_refresh_armed", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "pull_refresh.refreshing", "androidName": "pull_refresh_refreshing", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "pull_refresh.done", "androidName": "pull_refresh_done", "status": "adopted" }
+      ]
+    }
+  }
+}

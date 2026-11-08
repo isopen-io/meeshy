@@ -1,0 +1,316 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.header.title",
+          "androidName": "invite_landing_header_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.close.accessibilityLabel",
+          "androidName": "join_flow_close_accessibility_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.inviter.invites",
+          "androidName": "invite_landing_inviter_invites",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.group.createdOn",
+          "androidName": "invite_landing_group_created_on",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.group.copy",
+          "androidName": "invite_landing_group_copy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.group.copied",
+          "androidName": "invite_landing_group_copied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.group.reshare",
+          "androidName": "invite_landing_group_reshare",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.group.copiedAnnouncement",
+          "androidName": "invite_landing_group_copied_announcement",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.group.linkLabel",
+          "androidName": "invite_landing_group_link_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.typeDirect",
+          "androidName": "join_flow_preview_type_direct",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.typeGroup",
+          "androidName": "join_flow_preview_type_group",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.typePublic",
+          "androidName": "join_flow_preview_type_public",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.typeGlobal",
+          "androidName": "join_flow_preview_type_global",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.typeCommunity",
+          "androidName": "join_flow_preview_type_community",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.typeChannel",
+          "androidName": "join_flow_preview_type_channel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.defaultTitle",
+          "androidName": "join_flow_preview_default_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.facts.person",
+          "androidName": "invite_landing_facts_person",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.facts.people",
+          "androidName": "invite_landing_facts_people",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.facts.language",
+          "androidName": "invite_landing_facts_language",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.facts.languages",
+          "androidName": "invite_landing_facts_languages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.languages.title",
+          "androidName": "invite_landing_languages_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.title",
+          "androidName": "invite_landing_terms_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.messages",
+          "androidName": "invite_landing_terms_messages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.images",
+          "androidName": "invite_landing_terms_images",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.history",
+          "androidName": "invite_landing_terms_history",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.files",
+          "androidName": "invite_landing_terms_files",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.allowed",
+          "androidName": "invite_landing_terms_allowed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.denied",
+          "androidName": "invite_landing_terms_denied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.askedLabel",
+          "androidName": "invite_landing_terms_asked_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.fieldName",
+          "androidName": "invite_landing_terms_field_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.fieldNickname",
+          "androidName": "invite_landing_terms_field_nickname",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.fieldEmail",
+          "androidName": "invite_landing_terms_field_email",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.fieldBirthday",
+          "androidName": "invite_landing_terms_field_birthday",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.languagesLabel",
+          "androidName": "invite_landing_terms_languages_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.allLanguages",
+          "androidName": "invite_landing_terms_all_languages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.validityLabel",
+          "androidName": "invite_landing_terms_validity_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.noExpiry",
+          "androidName": "invite_landing_terms_no_expiry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.expired",
+          "androidName": "invite_landing_terms_expired",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.oneDayLeft",
+          "androidName": "invite_landing_terms_one_day_left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.daysLeft",
+          "androidName": "invite_landing_terms_days_left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.unlimitedPlaces",
+          "androidName": "invite_landing_terms_unlimited_places",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.terms.places",
+          "androidName": "invite_landing_terms_places",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.joinWithAccount",
+          "androidName": "invite_landing_choice_join_with_account",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.joinAnonymously",
+          "androidName": "invite_landing_choice_join_anonymously",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.continueAnonymously",
+          "androidName": "invite_landing_choice_continue_anonymously",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.signIn",
+          "androidName": "invite_landing_choice_sign_in",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.signUp",
+          "androidName": "invite_landing_choice_sign_up",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.captionSignedOut",
+          "androidName": "invite_landing_choice_caption_signed_out",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.captionSignedIn",
+          "androidName": "invite_landing_choice_caption_signed_in",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "joinFlow.preview.accountRequiredMessage",
+          "androidName": "join_flow_preview_account_required_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "inviteLanding.choice.closed",
+          "androidName": "invite_landing_choice_closed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

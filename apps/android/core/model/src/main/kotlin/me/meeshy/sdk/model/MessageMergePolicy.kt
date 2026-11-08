@@ -53,6 +53,10 @@ data class MessageMergeOutcome(
  *     absent de la charge reçue garde la valeur en cache au lieu de la vider.
  *  3. **L'outbox a le dernier mot** tant qu'elle n'a pas livré : édition, suppression, réaction et
  *     épinglage en file gardent leur valeur locale ([MessageMergeGuards]).
+ *  4. **Une vue unique ouverte par ce lecteur reste scellée** : dès que le fusionné est une vue unique et
+ *     porte `consumedByMe` (gardé du cache ou servi), il sort par [ConversationEventDeltas.sealedIfOpened] — une page partie
+ *     avant l'ouverture ne remet rien du contenu, et un cache rempli avant une ouverture faite ailleurs
+ *     ne survit pas à la page qui la sert (iso iOS `APIMessageUpsert+Merge`, #15897).
  *
  * Restent faisant autorité dans la charge servie, parce qu'ils se vident légitimement : le
  * résumé des réactions et l'épinglage (hors garde).
@@ -73,6 +77,7 @@ object MessageMergePolicy {
         next = mergedPin(next, existing, guards)
         next = mergedLightFields(next, existing, incoming)
         next = next.copy(attachments = mergedAttachments(existing.attachments, incoming.attachments))
+        next = ConversationEventDeltas.sealedIfOpened(next, openedHere = false)
         return MessageMergeOutcome(message = next, changed = next != existing)
     }
 
@@ -140,22 +145,20 @@ object MessageMergePolicy {
     }
 
     /** Remise et lecture : jamais en arrière, quel que soit le canal le plus lent. */
-    private fun mergedReceipts(next: ApiMessage, existing: ApiMessage, incoming: ApiMessage): ApiMessage =
-        next.copy(
-            deliveredCount = maxOf(existing.deliveredCount, incoming.deliveredCount),
-            readCount = maxOf(existing.readCount, incoming.readCount),
-            deliveredToAllAt = incoming.deliveredToAllAt ?: existing.deliveredToAllAt,
-            readByAllAt = incoming.readByAllAt ?: existing.readByAllAt,
-            recipientCount = incoming.recipientCount ?: existing.recipientCount,
+    private fun mergedReceipts(next: ApiMessage, existing: ApiMessage, incoming: ApiMessage): ApiMessage {
+        val counters = ReceiptMergePolicy.merged(ReceiptMergePolicy.countersOf(existing), ReceiptMergePolicy.countersOf(incoming))
+        return ReceiptMergePolicy.withCounters(next, counters).copy(
             viewOnceCount = maxOf(existing.viewOnceCount, incoming.viewOnceCount),
             consumedByMe = if (existing.consumedByMe == true) true else incoming.consumedByMe ?: existing.consumedByMe,
         )
+    }
 
     private fun mergedReactions(next: ApiMessage, existing: ApiMessage, guards: MessageMergeGuards): ApiMessage =
         if (!guards.pendingReaction) {
-            next
+            next.copy(reactionRows = ReactionLedger.reconciled(next.reactionRows ?: existing.reactionRows, next.reactionSummary, null))
         } else {
             next.copy(
+                reactionRows = existing.reactionRows,
                 reactionSummary = existing.reactionSummary,
                 currentUserReactions = existing.currentUserReactions,
                 reactionCount = existing.reactionCount,
@@ -204,7 +207,9 @@ object MessageMergePolicy {
     /**
      * Les pièces servies l'emportent ; une charge sans pièce garde celles du cache. Une pièce servie
      * sans adresse (fichier ou vignette) reprend l'adresse locale de sa jumelle en cache — le chemin
-     * du fichier que l'envoi optimiste a posé — par identifiant, sinon par rang à nombre égal.
+     * du fichier que l'envoi optimiste a posé — par identifiant, sinon par rang à nombre égal. Une page servie AVANT
+     * Whisper ne retire jamais la transcription ni les pistes parlées que la jumelle porte déjà
+     * ([AttachmentAudioMetadata.mergedAttachment], le serveur l'emportant quand il re-sert un texte).
      */
     private fun mergedAttachments(
         cached: List<ApiMessageAttachment>,
@@ -218,7 +223,7 @@ object MessageMergePolicy {
             if (twin == null) {
                 attachment
             } else {
-                attachment.copy(
+                AttachmentAudioMetadata.mergedAttachment(twin, attachment, forceOverwrite = true).copy(
                     fileUrl = attachment.fileUrl.takeUnless { it.isNullOrBlank() } ?: twin.fileUrl,
                     thumbnailUrl = attachment.thumbnailUrl.takeUnless { it.isNullOrBlank() } ?: twin.thumbnailUrl,
                 )

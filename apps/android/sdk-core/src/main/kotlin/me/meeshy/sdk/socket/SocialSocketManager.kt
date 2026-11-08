@@ -1,10 +1,15 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.PostEngagementSnapshot
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.SocketPostCreatedData
+import me.meeshy.sdk.model.SocketPostReactionUpdateData
+import me.meeshy.sdk.model.SocketCommentMediaUpdatedData
 import me.meeshy.sdk.model.SocketPostRepostedData
 import me.meeshy.sdk.model.SocketPostUpdatedData
 import me.meeshy.sdk.model.SocketPostLikedData
@@ -31,8 +36,19 @@ import me.meeshy.sdk.model.SocketStatusUpdatedData
 import me.meeshy.sdk.model.SocketStatusDeletedData
 import me.meeshy.sdk.model.SocketStatusReactedData
 import me.meeshy.sdk.model.SocketStatusUnreactedData
+import me.meeshy.sdk.model.ConversationDeletedSocketEvent
+import me.meeshy.sdk.model.social.PostRoomRefCount
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.json.JSONObject
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -62,6 +78,10 @@ class SocialSocketManager @Inject constructor(
     private val _postBookmarked = SocketInboundRoute.subject<SocketPostBookmarkedData>()
     private val _postDeleted = SocketInboundRoute.subject<SocketPostDeletedData>()
     private val _postTranslationUpdated = SocketInboundRoute.subject<SocketPostTranslationUpdatedData>()
+    private val _postReactionAdded = SocketInboundRoute.subject<SocketPostReactionUpdateData>()
+    private val _postReactionRemoved = SocketInboundRoute.subject<SocketPostReactionUpdateData>()
+    private val _postEngagementUpdated = SocketInboundRoute.subject<PostEngagementSnapshot>()
+    private val _commentMediaUpdated = SocketInboundRoute.subject<SocketCommentMediaUpdatedData>()
     private val _commentAdded = SocketInboundRoute.subject<SocketCommentAddedData>()
     private val _commentUpdated = SocketInboundRoute.subject<SocketCommentUpdatedData>()
     private val _commentLiked = SocketInboundRoute.subject<SocketCommentLikedData>()
@@ -83,6 +103,18 @@ class SocialSocketManager @Inject constructor(
     private val _statusDeleted = SocketInboundRoute.subject<SocketStatusDeletedData>()
     private val _statusReacted = SocketInboundRoute.subject<SocketStatusReactedData>()
     private val _statusUnreacted = SocketInboundRoute.subject<SocketStatusUnreactedData>()
+    private val _conversationDeleted = SocketInboundRoute.subject<ConversationDeletedSocketEvent>()
+
+    private val lock = Any()
+    private var postRooms = PostRoomRefCount()
+    private var feedSubscribed = false
+    private var replayScope: CoroutineScope? = null
+
+    /**
+     * `conversation:deleted` / `:closed` / `:obsoleted` : la passerelle émet `closed` pour une suppression douce et
+     * `deleted` pour une dure ; le cache social les lit sans savoir lequel est parti (miroir d'iOS `conversationDeleted`).
+     */
+    val conversationDeleted: SharedFlow<ConversationDeletedSocketEvent> = _conversationDeleted.exposed()
 
     val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.exposed()
 
@@ -114,6 +146,30 @@ class SocialSocketManager @Inject constructor(
     val postTranslationUpdated: SharedFlow<SocketPostTranslationUpdatedData> =
         _postTranslationUpdated.exposed()
     val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.exposed()
+
+    /** `post:reaction-added` : le compte ABSOLU de l'emoji (`aggregation`), jamais un delta. */
+    val postReactionAdded: SharedFlow<SocketPostReactionUpdateData> = _postReactionAdded.exposed()
+
+    /** `post:reaction-removed` : meme forme que [postReactionAdded], le sens vit dans le flux. */
+    val postReactionRemoved: SharedFlow<SocketPostReactionUpdateData> = _postReactionRemoved.exposed()
+
+    /** `engagement:post-updated` : ce qu'un post a rapporté au lecteur, poussé à sa seule room (#9569). */
+    val postEngagementUpdated: SharedFlow<PostEngagementSnapshot> = _postEngagementUpdated.exposed()
+
+    /** `comment:media-updated` : le commentaire enrichi (transcription audio prete) a substituer. */
+    val commentMediaUpdated: SharedFlow<SocketCommentMediaUpdatedData> = _commentMediaUpdated.exposed()
+
+    /**
+     * Chaque RECONNEXION de la socket (une connexion qui en suit une autre vue par le collecteur) : le fil relit sa
+     * tete et se reabonne, car les evenements emis pendant la coupure sont perdus. Miroir d'iOS `didReconnect`.
+     */
+    val reconnected: Flow<Unit> = flow {
+        var seen = socketManager.isConnected
+        socketManager.connected.collect {
+            if (seen) emit(Unit)
+            seen = true
+        }
+    }
 
     /**
      * `comment:updated` — a comment was edited server-side; carries the COMPLETE new comment.
@@ -182,6 +238,42 @@ class SocialSocketManager @Inject constructor(
 
     fun attach() {
         router.install(routes())
+        startReplay()
+    }
+
+    /** À chaque connexion (première ou reconnexion) : le serveur a oublié nos salles, la mémoire du client les rejoue. */
+    private fun startReplay() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        synchronized(lock) {
+            replayScope?.cancel()
+            replayScope = scope
+        }
+        scope.launch {
+            try {
+                socketManager.connected.collect { replaySubscriptions() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
+                Timber.w(failure, "SocialSocket: rejeu des abonnements en échec")
+            }
+        }
+    }
+
+    private fun replaySubscriptions() {
+        val (feed, rooms) = synchronized(lock) { feedSubscribed to postRooms.toRejoin() }
+        if (feed) socketManager.emit(SocketEventNames.FEED_SUBSCRIBE, JSONObject())
+        rooms.forEach { socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", it)) }
+    }
+
+    /** S'abonne au fil (`feed:subscribe`), rejoué à chaque reconnexion sur la socket unique. */
+    fun subscribeFeed() {
+        synchronized(lock) { feedSubscribed = true }
+        socketManager.emit(SocketEventNames.FEED_SUBSCRIBE, JSONObject())
+    }
+
+    fun unsubscribeFeed() {
+        synchronized(lock) { feedSubscribed = false }
+        socketManager.emit(SocketEventNames.FEED_UNSUBSCRIBE, JSONObject())
     }
 
     private fun routes(): List<SocketInboundRoute> = buildList {
@@ -193,6 +285,10 @@ class SocialSocketManager @Inject constructor(
         route(SocketEventNames.POST_BOOKMARKED, _postBookmarked)
         route(SocketEventNames.POST_DELETED, _postDeleted)
         route(SocketEventNames.POST_TRANSLATION_UPDATED, _postTranslationUpdated)
+        route(SocketEventNames.POST_REACTION_ADDED, _postReactionAdded)
+        route(SocketEventNames.POST_REACTION_REMOVED, _postReactionRemoved)
+        route(SocketEventNames.ENGAGEMENT_POST_UPDATED, _postEngagementUpdated)
+        route(SocketEventNames.COMMENT_MEDIA_UPDATED, _commentMediaUpdated)
         route(SocketEventNames.COMMENT_ADDED, _commentAdded)
         route(SocketEventNames.COMMENT_UPDATED, _commentUpdated)
         route(SocketEventNames.COMMENT_LIKED, _commentLiked)
@@ -214,6 +310,9 @@ class SocialSocketManager @Inject constructor(
         route(SocketEventNames.STATUS_DELETED, _statusDeleted)
         route(SocketEventNames.STATUS_REACTED, _statusReacted)
         route(SocketEventNames.STATUS_UNREACTED, _statusUnreacted)
+        route(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)
+        route(SocketEventNames.CONVERSATION_CLOSED, _conversationDeleted)
+        route(SocketEventNames.CONVERSATION_OBSOLETED, _conversationDeleted)
     }
 
     /**
@@ -222,12 +321,32 @@ class SocialSocketManager @Inject constructor(
      * post the viewer isn't otherwise implicitly subscribed to via a friend's feed room.
      */
     fun joinPostRoom(postId: String) {
-        socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", postId))
+        val step = synchronized(lock) { postRooms.join(postId).also { postRooms = it.next } }
+        if (step.emit) socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", postId))
+    }
+
+    /**
+     * Le coeur (ou toute réaction) d'un commentaire par le socket, avec accusé — iso `addCommentReaction` /
+     * `removeCommentReaction` iOS. Rend quand la passerelle accuse `success`, lève sinon (refus, socket absente,
+     * session finie) : l'appelant décide du repli. Aucun délai ici, il appartient à l'appelant.
+     */
+    suspend fun reactToComment(add: Boolean, commentId: String, postId: String, emoji: String) {
+        val event = if (add) SocketEventNames.COMMENT_REACTION_ADD else SocketEventNames.COMMENT_REACTION_REMOVE
+        val payload = JSONObject().put("commentId", commentId).put("postId", postId).put("emoji", emoji)
+        suspendCancellableCoroutine<Unit> { continuation ->
+            socketManager.emit(event, payload) { args ->
+                val accepted = (args.firstOrNull() as? JSONObject)?.optBoolean("success", false) == true
+                if (!continuation.isActive) return@emit
+                if (accepted) continuation.resume(Unit)
+                else continuation.resumeWithException(IllegalStateException("comment reaction refused"))
+            }
+        }
     }
 
     /** Leaves the post-detail realtime room — pairs with [joinPostRoom]. */
     fun leavePostRoom(postId: String) {
-        socketManager.emit(SocketEventNames.POST_LEAVE, JSONObject().put("postId", postId))
+        val step = synchronized(lock) { postRooms.leave(postId).also { postRooms = it.next } }
+        if (step.emit) socketManager.emit(SocketEventNames.POST_LEAVE, JSONObject().put("postId", postId))
     }
 
     private inline fun <reified T> MutableList<SocketInboundRoute>.route(event: String, subject: RouteSubject<T>) {

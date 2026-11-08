@@ -187,6 +187,7 @@ class ChatRealtimeController @Inject constructor(
             audio.quality,
             audio.voiceModelId,
             audio.ttsModel,
+            audio.segments,
         )
     }
 

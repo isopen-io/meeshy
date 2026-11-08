@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_text_format_bar">Formatting</string>
+    <string name="composer_text_format_bold">Bold</string>
+    <string name="composer_text_format_italic">Italic</string>
+    <string name="composer_text_format_underline">Underline</string>
+    <string name="composer_text_format_strikethrough">Strikethrough</string>
+</resources>

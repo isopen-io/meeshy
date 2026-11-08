@@ -1699,6 +1699,7 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     func getById(_ conversationId: String) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult { throw MeeshyError.network(.timeout) }
     func markRead(conversationId: String) async throws {}
     func markAsReceived(conversationId: String) async throws {
         markAsReceivedLock.withLock {
@@ -1819,6 +1820,7 @@ private final class GapMockConversationService: ConversationServiceProviding, @u
     func getById(_ conversationId: String) async throws -> APIConversation { fatalError("Not used in tests") }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult { throw MeeshyError.network(.timeout) }
     func markRead(conversationId: String) async throws {}
     func markAsReceived(conversationId: String) async throws {}
     func markUnread(conversationId: String) async throws {}

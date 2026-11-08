@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -132,7 +133,7 @@ private fun StoryReplyLines(story: BubbleStoryReply, accentColor: Color) {
                 StoryMetric(
                     icon = MeeshyIcons.HeartFilled,
                     value = story.reactionCount,
-                    label = stringResource(R.string.bubble_story_reactions, story.reactionCount),
+                    label = pluralStringResource(R.plurals.bubble_story_reactions, story.reactionCount, story.reactionCount),
                     accentColor = accentColor,
                 )
             }
@@ -140,7 +141,7 @@ private fun StoryReplyLines(story: BubbleStoryReply, accentColor: Color) {
                 StoryMetric(
                     icon = Icons.Filled.ChatBubble,
                     value = story.commentCount,
-                    label = stringResource(R.string.bubble_story_comments, story.commentCount),
+                    label = pluralStringResource(R.plurals.bubble_story_comments, story.commentCount, story.commentCount),
                     accentColor = accentColor,
                 )
             }
@@ -148,7 +149,7 @@ private fun StoryReplyLines(story: BubbleStoryReply, accentColor: Color) {
                 StoryMetric(
                     icon = Icons.Filled.Share,
                     value = story.shareCount,
-                    label = stringResource(R.string.bubble_story_shares, story.shareCount),
+                    label = pluralStringResource(R.plurals.bubble_story_shares, story.shareCount, story.shareCount),
                     accentColor = accentColor,
                 )
             }

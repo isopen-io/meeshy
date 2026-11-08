@@ -13,6 +13,7 @@ class StoryLanguageExplorerTest {
         override val systemLanguage: String? = null,
         override val regionalLanguage: String? = null,
         override val customDestinationLanguage: String? = null,
+        override val deviceLocale: String? = null,
     ) : LanguageResolver.ContentLanguagePreferences
 
     private val item = StoryItem(
@@ -54,7 +55,8 @@ class StoryLanguageExplorerTest {
 
     @Test
     fun `when nothing matches the reader the original is served and no language row is selected`() {
-        val result = explorer(Prefs(systemLanguage = "ja"))
+        // Rang 4 épinglé : sans lui, la locale du JVM hôte (souvent « en ») entre au prisme et sert « Hello ».
+        val result = explorer(Prefs(systemLanguage = "ja", deviceLocale = "ja"))
 
         assertThat(result.current?.text).isEqualTo("Bonjour")
         assertThat(result.current?.code).isNull()

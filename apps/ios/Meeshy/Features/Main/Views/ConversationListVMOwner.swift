@@ -30,6 +30,7 @@ final class ConversationListVMOwner: ObservableObject {
     /// #10927 — la réparation au retour du serveur, UNE par liste vivante : deux propriétaires (iPad) ne
     /// relancent pas deux rafraîchissements sur le même front montant du socket.
     private static var liveRepair: AnyCancellable?
+    private static var liveCatchUp: AnyCancellable?
     /// #10927 — le chargement lancé dès la session restaurée, et le compte pour lequel il l'a été. Il tient
     /// la liste en vie jusqu'à ce qu'une racine l'adopte : `live` étant faible, elle mourrait avant.
     private static var launch: Launch?
@@ -55,6 +56,7 @@ final class ConversationListVMOwner: ObservableObject {
         let made = make()
         live = made
         liveRepair = made.repairsFailedLoadOnReconnect(MessageSocketManager.shared.$isConnected.eraseToAnyPublisher())
+        liveCatchUp = made.listCatchUp.retriesOnRisingEdge(MessageSocketManager.shared.$isConnected.eraseToAnyPublisher())
         return made
     }
 
@@ -64,6 +66,7 @@ final class ConversationListVMOwner: ObservableObject {
         if live === stale.viewModel {
             live = nil
             liveRepair = nil
+            liveCatchUp = nil
         }
         launch = nil
     }
@@ -106,6 +109,7 @@ extension ConversationListVMOwner {
         launch = nil
         live = nil
         liveRepair = nil
+        liveCatchUp = nil
     }
     #endif
 }

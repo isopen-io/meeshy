@@ -304,6 +304,8 @@ export interface TranslationReadyEvent {
     voiceQuality: number;
     audioMimeType: string;
     segments?: TranscriptionSegment[];
+    /** #16340 — la TTS a échoué : le texte traduit voyage seul, sans piste. */
+    textOnly?: boolean;
   };
   timestamp: number;
 }
@@ -326,6 +328,8 @@ interface BaseTranslationEvent {
     voiceQuality: number;
     audioMimeType: string;
     segments?: TranscriptionSegment[];
+    /** #16340 — la TTS a échoué : le texte traduit voyage seul, sans piste. */
+    textOnly?: boolean;
   };
   timestamp: number;
 }

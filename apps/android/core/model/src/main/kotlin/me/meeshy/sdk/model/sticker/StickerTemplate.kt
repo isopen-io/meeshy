@@ -2,13 +2,6 @@ package me.meeshy.sdk.model.sticker
 
 import me.meeshy.sdk.model.StickerAnimation
 
-/**
- * Le rangement de la palette — miroir de `StickerTemplateFamily` (iOS, #4716). Android sert les deux familles de
- * l'onglet Personnalisés qui se remplissent de la donnée de l'AUTEUR : ses mots, son heure. Ce n'est pas une famille
- * d'objet de scène : une décoration reste un sticker qui porte un gabarit.
- */
-enum class StickerTemplateFamily { TEXT, TIME }
-
 /** Un emplacement de donnée d'un gabarit. Sa nature tranche le Prisme : une VALEUR ne se traduit jamais, une PROSE suit. */
 data class StickerTemplateSlot(val name: String, val nature: Nature) {
     enum class Nature { VALUE, PROSE }

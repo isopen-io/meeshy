@@ -63,6 +63,21 @@ final class MessageListHeightEstimationTests: XCTestCase {
         )
     }
 
+    // #16459 — mesuré sur iPhone (2026-11-06) : dix adoptions en 70 s de
+    // lecture (149 → 173 → 197 → 123 → 240 → 123 → 171 → 197 → 128 → 145),
+    // chacune déplaçant l'offset de 700 à 1 100 pt avant que le verrou de scène
+    // ne le rattrape, puis une re-mesure qui faisait sauter le fil sans doigt.
+    // La médiane de la FENÊTRE suit ce qu'on regarde (photos, puis texte) :
+    // une fois le fil appris, l'estimation ne bouge plus.
+    func test_proposal_onceTheThreadHasTaughtAnEstimate_neverAdoptsAnother() {
+        let photos = Array(repeating: CGFloat(240), count: 8)
+
+        XCTAssertNil(
+            MessageListHeightEstimationLaw.proposal(visibleHeights: photos, current: 123, alreadyLearned: true),
+            "le fil a déjà appris son estimation : en adopter une autre au repos repositionnerait tout le contenu mesuré sous les yeux du lecteur."
+        )
+    }
+
     func test_proposal_headsOfGroupMixedWithFollowRows_staysOnTheDominantPopulation() {
         // Deux têtes de groupe (69) pour six rangées de suite (51) : la
         // médiane suit la population dominante, la moyenne se laisserait

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
 
-import { compensatesResize, keepReadingInPlace } from './thread-resize-compensation';
+import { createUnfoldStore } from './unfold-store';
+import { compensatesResize, keepReadingInPlace, keepReadingInPlaceExceptUnfolding } from './thread-resize-compensation';
 
 /**
  * #9216, #9219 — la rangée qui change de taille AU-DESSUS de ce qu'on lit est
@@ -39,5 +40,29 @@ describe('keepReadingInPlace — le haut de l’écran est celui du virtualiseur
 
   test('un virtualiseur sans offset connu ne compense rien au-dessus de zéro', () => {
     expect(keepReadingInPlace(item(0), 10, instance(null, 0))).toBe(false);
+  });
+});
+
+/**
+ * #16464 — DÉPLIER UN MESSAGE LONG NE FAIT PAS SAUTER SON HAUT. La rangée
+ * touchée peut être à cheval sur le haut de l'écran : la compenser ferait
+ * remonter son extrait sous le doigt. La mesure qui suit le dépliage n'est
+ * donc pas compensée — une fois ; les suivantes retrouvent la loi #9216.
+ */
+describe('keepReadingInPlaceExceptUnfolding — le haut du message déplié reste en place', () => {
+  const straddling: VirtualItem = { key: 'm-long', index: 0, start: 4400, end: 4488, size: 88, lane: 0 };
+  const instance = { scrollOffset: 4500, scrollAdjustments: 0 } as unknown as Virtualizer<HTMLElement, Element>;
+
+  test('la mesure qui suit le dépliage n’est pas compensée, la suivante l’est de nouveau', () => {
+    const unfolds = createUnfoldStore();
+    const predicate = keepReadingInPlaceExceptUnfolding(unfolds);
+    unfolds.unfold('m-long');
+    expect(predicate(straddling, 600, instance)).toBe(false);
+    expect(predicate(straddling, 20, instance)).toBe(true);
+  });
+
+  test('sans dépliage, la loi #9216 s’applique telle quelle', () => {
+    const predicate = keepReadingInPlaceExceptUnfolding(createUnfoldStore());
+    expect(predicate(straddling, -40, instance)).toBe(true);
   });
 });

@@ -28,6 +28,8 @@ export type Session = {
   loop: QualityLoop | null;
   telemetry: Telemetry;
   alertTimers: Map<string, unknown>;
+  /** Les pairs qui enregistrent leur écran : la puce d'une capture ponctuelle ne les éteint pas (#16665). */
+  recordingPeers: Set<string>;
   unwatchNetwork: (() => void) | null;
   /** L'appel a souffert (qualité mauvaise ou reprise) : sa note est toujours demandée (#8072). */
   troubled: boolean;
@@ -51,6 +53,7 @@ export const emptySession = (): Session => ({
   loop: null,
   telemetry: createTelemetry(0),
   alertTimers: new Map(),
+  recordingPeers: new Set(),
   unwatchNetwork: null,
   troubled: false,
   captions: null,
@@ -82,6 +85,7 @@ export function baseCall(request: StartCallRequest, direction: ActiveCall['direc
     localStream: null,
     remoteStreams: {},
     captions: [],
+    journalNotes: [],
     captionsMode: 'off',
     captionPeers: [],
     transcription: 'idle',

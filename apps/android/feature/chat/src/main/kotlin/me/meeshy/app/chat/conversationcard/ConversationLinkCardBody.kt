@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -24,6 +25,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -58,7 +65,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val BannerHeight = 76.dp
 private val AvatarSide = 52.dp
-private const val MaxLanguagePills = 3
+/** Les pastilles de langue cèdent la place avant les nombres : 4, puis 2, puis aucune (iOS `ViewThatFits`). */
+internal val LanguagePillSteps = listOf(4, 2, 0)
 
 /**
  * Le contenu de la carte, sans ses boutons (iOS `ConversationLinkCardBody`) : la CITATION de
@@ -88,7 +96,7 @@ private fun GroupCard(card: ConversationCard, accent: Color) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(MeeshyRadius.smPlus))
             .background(tokens.backgroundSecondary)
-            .alpha(if (card.isLinkExpired) 0.6f else 1f)
+            .then(if (card.isLinkExpired) Modifier.grayscale().alpha(0.6f) else Modifier)
             .padding(bottom = MeeshySpacing.sm)
             .clearAndSetSemantics { contentDescription = spoken },
     ) {
@@ -159,26 +167,55 @@ private fun initials(title: String): String =
     title.split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }
 
 @Composable
-private fun StatsRow(stats: ConversationCardStats, accent: Color) {
+internal fun StatsRow(stats: ConversationCardStats, accent: Color, modifier: Modifier = Modifier) {
+    FitsHorizontally(
+        LanguagePillSteps.map { visible -> FitCandidate({ StatsLine(stats, accent, visible) }) },
+        modifier = modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun StatsLine(stats: ConversationCardStats, accent: Color, visibleLanguages: Int) {
     val tokens = MeeshyTheme.tokens
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         Metric(MeeshyIcons.GroupFilled, stats.memberCount)
         stats.messageCount?.let { Metric(MeeshyIcons.ForumFilled, it) }
-        stats.languages.take(MaxLanguagePills).forEach { code ->
+        stats.languages.take(visibleLanguages).forEach { code ->
             Text(
                 code.uppercase(),
                 color = accent,
                 fontSize = MeeshyFontSize.footnote,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(accent.copy(alpha = 0.14f))
                     .padding(horizontal = MeeshySpacing.xs, vertical = 2.dp),
             )
         }
-        if (stats.languages.size > MaxLanguagePills) {
-            Text("+${stats.languages.size - MaxLanguagePills}", color = tokens.textSecondary, fontSize = MeeshyFontSize.footnote, fontWeight = FontWeight.Bold)
+        if (stats.languages.size > visibleLanguages) {
+            Text(
+                "+${stats.languages.size - visibleLanguages}",
+                color = tokens.textSecondary,
+                fontSize = MeeshyFontSize.footnote,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
+    }
+}
+
+/** Niveaux de gris (iOS `.saturation(0)`) : un lien expiré se lit comme éteint, sans que la couleur porte l'état seule. */
+private fun Modifier.grayscale(): Modifier = drawWithContent {
+    val paint = Paint().apply {
+        colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+    }
+    drawIntoCanvas { canvas ->
+        canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
+        drawContent()
+        canvas.restore()
     }
 }
 
@@ -256,6 +293,7 @@ internal fun CardButton(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs, Alignment.CenterHorizontally),
         modifier = modifier
             .heightIn(min = 48.dp)
+            .widthIn(min = CardButtonMinWidth)
             .clip(shape)
             .then(surface)
             .alpha(if (enabled || busy) 1f else 0.5f)

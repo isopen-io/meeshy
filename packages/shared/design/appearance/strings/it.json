@@ -131,6 +131,146 @@
     "cadres-australs": {
       "name": "Cornici australi",
       "description": "Tre cornici ispirate alla pittura a punti e al cielo australe: cerchi di punti che scintillano, una tartaruga marina che nuota intorno all’avatar e la Croce del Sud che brilla."
+    },
+    "meeshy-signature": {
+      "name": "Firma Meeshy",
+      "description": "Sei contorni di Meeshy, sobri e leggibili a ogni dimensione: filo d’oro, perle di madreperla, eclissi, rosone, notte stellata e sfaccettature."
+    },
+    "meeshy-vivants": {
+      "name": "Vivi di Meeshy",
+      "description": "Sei contorni animati di Meeshy che escono appena dal tuo avatar: un’orbita, un alone d’aurora, una pulsazione, scintille, una cometa e un’onda lunga."
+    },
+    "meeshy-fonds": {
+      "name": "Sfondi firma",
+      "description": "Sei sfondi di Meeshy, discreti sotto le bolle, in chiaro e in scuro: seta, puntinato, onde sottili, paglia di Vienna, terrazzo e crepuscolo."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Sfondi vivi",
+      "description": "Quattro sfondi animati di Meeshy, che si muovono piano dietro i tuoi messaggi: lucciole, velo d’aurora, neve leggera e onde."
+    },
+    "meeshy-bordures": {
+      "name": "Cornici firma",
+      "description": "Sei cornici per il banner di Meeshy, al bordo perché livello e contatori restino visibili: filetto d’oro, volute, filo di perle, onice, intarsio e mezzanotte."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Cornici vive",
+      "description": "Quattro cornici animate per il banner di Meeshy: un riflesso che scorre sull’oro, perle che brillano, una notte che scintilla e un neon."
+    },
+    "noel-enneige": {
+      "name": "Natale innevato",
+      "description": "Due contorni animati per l’inverno: fiocchi che cadono piano intorno all’avatar e una corona di agrifoglio con bacche che brillano."
+    },
+    "lumieres-de-noel": {
+      "name": "Luci di Natale",
+      "description": "Due contorni animati che si accendono per le feste: una ghirlanda di lampadine che lampeggiano a turno e la stella dell’albero che risplende."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Laboratorio di Babbo Natale",
+      "description": "Due contorni animati appena usciti dal laboratorio: un berretto rosso con il pompon che dondola e un bastoncino di zucchero che gira, legato da un nastro verde."
+    },
+    "fonds-noel": {
+      "name": "Sfondi di Natale",
+      "description": "Tre sfondi di conversazione abbinati ai pacchetti di Natale: fiocchi di cristallo, ghirlanda stellata e strisce di bastoncino di zucchero, discreti perché ogni fumetto resti leggibile."
+    },
+    "fonds-noel-vivants": {
+      "name": "Natale vivo",
+      "description": "Tre sfondi animati abbinati ai pacchetti di Natale: neve di cristalli, una ghirlanda le cui lampadine si accendono a turno e le scintille del laboratorio. Con movimento ridotto: una sfumatura fissa."
+    },
+    "bannieres-illustrees": {
+      "name": "Cornici illustrate",
+      "description": "Le cornici per il banner abbinate a «Cornici illustrate»: Maschera felina, Ragnatela, Ali d’angelo, Cerchio runico, Artigli d’osso e Ali di demone, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-asiatiques": {
+      "name": "Cornici d’Asia",
+      "description": "Le cornici per il banner abbinate a «Cornici d’Asia»: Drago di giada, Nuvole di seta e Lanterne di carta, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-africaines": {
+      "name": "Cornici d’Africa",
+      "description": "Le cornici per il banner abbinate a «Cornici d’Africa»: Maschera d’ebano, Bande tessute e Collana di perle, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-celtes": {
+      "name": "Cornici celtiche",
+      "description": "Le cornici per il banner abbinate a «Cornici celtiche»: Nodo intrecciato, Spirale tripla e Edera smeraldo, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-nordiques": {
+      "name": "Cornici nordiche",
+      "description": "Le cornici per il banner abbinate a «Cornici nordiche»: Corvi in volo, Aurora boreale, Anello di pietra incisa e Prua scolpita, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Cornici egizie",
+      "description": "Le cornici per il banner abbinate a «Cornici egizie»: Cobra d’oro, Scarabeo alato, Sole del deserto e Loto del Nilo, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-mayas": {
+      "name": "Cornici maya",
+      "description": "Le cornici per il banner abbinate a «Cornici maya»: Serpente di giada, Cartigli di glifi, Fregio a gradoni e Giaguaro della giungla, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-indiennes": {
+      "name": "Cornici indiane",
+      "description": "Le cornici per il banner abbinate a «Cornici indiane»: Mandala floreale, Pavone che fa la ruota e Ghirlanda di calendule, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Cornici amerindie",
+      "description": "Le cornici per il banner abbinate a «Cornici amerindie»: Cerchio intrecciato con piume, Rombi di perline e Sole sulle montagne, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-australes": {
+      "name": "Cornici australi",
+      "description": "Le cornici per il banner abbinate a «Cornici australi»: Cerchi di punti, Tartaruga marina e Croce del Sud, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Natale innevato",
+      "description": "Le cornici per il banner abbinate a «Natale innevato»: Fiocchi che cadono e Corona di agrifoglio, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Luci di Natale",
+      "description": "Le cornici per il banner abbinate a «Luci di Natale»: Ghirlanda luminosa e Stella dell’albero, al bordo perché la tua foto resti visibile."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Laboratorio di Babbo Natale",
+      "description": "Le cornici per il banner abbinate a «Laboratorio di Babbo Natale»: Berretto di Babbo Natale e Bastoncino di zucchero, al bordo perché la tua foto resti visibile."
+    },
+    "noel-bannieres": {
+      "name": "Banner di Natale",
+      "description": "Sei immagini di banner abbinate ai pacchetti di Natale: brina, ghirlanda e carta regalo, poi una nevicata, luci che brillano e le scintille del laboratorio."
+    },
+    "noel-contours-fixes": {
+      "name": "Natale · contorni fissi",
+      "description": "I sei contorni di Natale senza animazione: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero, per un avatar tranquillo."
+    },
+    "noel-cadres-fixes": {
+      "name": "Natale · cornici fisse",
+      "description": "Le sei cornici di banner di Natale senza animazione, abbinate ai contorni fissi: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero."
+    },
+    "nouvel-an-contours": {
+      "name": "Capodanno",
+      "description": "Quattro contorni per festeggiare il nuovo anno: fuochi d’artificio, pioggia di coriandoli, quadrante di mezzanotte e coppa di champagne dorato."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Capodanno vivo",
+      "description": "Quattro contorni animati per il passaggio al nuovo anno: un gran finale, un volo di coriandoli, l’orologio che batte la mezzanotte e bollicine di champagne."
+    },
+    "nouvel-an-images": {
+      "name": "Banner di Capodanno",
+      "description": "Quattro immagini di banner per il nuovo anno: una notte di fuochi, una festa di coriandoli, i dodici rintocchi e uno champagne dorato."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Banner animati di Capodanno",
+      "description": "Quattro immagini di banner animate: fuochi che esplodono, un acquazzone di coriandoli, il conto alla rovescia di mezzanotte e bollicine di champagne. Con movimento ridotto: un’immagine fissa."
+    },
+    "nouvel-an-cadres": {
+      "name": "Cornici di Capodanno",
+      "description": "Quattro cornici di banner abbinate ai contorni di Capodanno: fuochi d’artificio, coriandoli, quadrante di mezzanotte e coppe di champagne."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Cornici animate di Capodanno",
+      "description": "Quattro cornici di banner animate, abbinate ai contorni vivi: un bouquet che esplode, coriandoli che volano, la lancetta di mezzanotte che gira e coppe che brindano."
+    },
+    "nouvel-an-fonds": {
+      "name": "Sfondi di Capodanno",
+      "description": "Quattro sfondi di conversazione per il nuovo anno: cielo di fuochi, coriandoli, ora di mezzanotte e bollicine dorate, discreti perché ogni fumetto resti leggibile."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Capodanno vivo · sfondi",
+      "description": "Quattro sfondi animati per il nuovo anno: scoppi lontani, coriandoli che cadono, una notte stellata e bollicine che salgono. Con movimento ridotto: una sfumatura fissa."
     }
   },
   "designs": {
@@ -153,7 +293,45 @@
     "bulles-legeres": "Bolle leggere",
     "pluie-de-petales": "Pioggia di petali",
     "maree": "Marea",
-    "braises": "Braci"
+    "braises": "Braci",
+    "soie": "Seta",
+    "pointille": "Puntinato",
+    "vagues-fines": "Onde sottili",
+    "cannage": "Paglia di Vienna",
+    "terrazzo": "Terrazzo",
+    "crepuscule": "Crepuscolo",
+    "lucioles": "Lucciole",
+    "voile-aurore": "Velo d’aurora",
+    "neige-douce": "Neve leggera",
+    "ondes": "Onde",
+    "flocons-cristal": "Fiocchi di cristallo",
+    "guirlande-etoilee": "Ghirlanda stellata",
+    "sucre-d-orge-raye": "Strisce di zucchero",
+    "neige-de-noel": "Neve di Natale",
+    "ampoules-de-noel": "Lampadine di Natale",
+    "etincelles-atelier": "Scintille del laboratorio",
+    "banniere-noel-givre": "Brina",
+    "banniere-noel-guirlande": "Ghirlanda",
+    "banniere-noel-cadeau": "Carta regalo",
+    "banniere-noel-neige": "Nevicata",
+    "banniere-noel-lumieres": "Luci scintillanti",
+    "banniere-noel-etincelles": "Scintille di Natale",
+    "banniere-artifice": "Notte di fuochi",
+    "banniere-confettis": "Festa dei coriandoli",
+    "banniere-minuit": "Dodici rintocchi",
+    "banniere-champagne": "Champagne dorato",
+    "banniere-artifice-vive": "Fuochi vivi",
+    "banniere-confettis-vive": "Acquazzone di coriandoli",
+    "banniere-minuit-vive": "Conto alla rovescia",
+    "banniere-champagne-vive": "Bollicine di champagne",
+    "fond-artifice": "Cielo di fuochi",
+    "fond-confettis": "Coriandoli",
+    "fond-minuit": "Ora di mezzanotte",
+    "fond-champagne": "Bollicine dorate",
+    "fond-artifice-vif": "Scoppi lontani",
+    "fond-confettis-vif": "Coriandoli che cadono",
+    "fond-minuit-vif": "Mezzanotte stellata",
+    "fond-champagne-vif": "Bollicine che salgono"
   },
   "rings": {
     "filet": "Filetto",
@@ -214,7 +392,39 @@
     "soleil-montagnes": "Sole sulle montagne",
     "cercles-points": "Cerchi di punti",
     "tortue-marine": "Tartaruga marina",
-    "croix-du-sud": "Croce del Sud"
+    "croix-du-sud": "Croce del Sud",
+    "fil-d-or": "Filo d’oro",
+    "perles-de-nacre": "Perle di madreperla",
+    "eclipse": "Eclissi",
+    "rosace": "Rosone",
+    "nuit-etoilee": "Notte stellata",
+    "facettes": "Sfaccettature",
+    "orbite": "Orbita",
+    "halo-aurore": "Alone d’aurora",
+    "pulsation": "Pulsazione",
+    "scintillement": "Scintillio",
+    "comete": "Cometa",
+    "houle": "Onda lunga",
+    "flocons-tombants": "Fiocchi che cadono",
+    "couronne-de-houx": "Corona di agrifoglio",
+    "guirlande-lumineuse": "Ghirlanda luminosa",
+    "etoile-du-sapin": "Stella dell’albero",
+    "bonnet-du-pere-noel": "Berretto di Babbo Natale",
+    "sucre-d-orge": "Bastoncino di zucchero",
+    "flocons-tombants-fixe": "Fiocchi che cadono · fisso",
+    "couronne-de-houx-fixe": "Corona di agrifoglio · fisso",
+    "guirlande-lumineuse-fixe": "Ghirlanda luminosa · fisso",
+    "etoile-du-sapin-fixe": "Stella dell’albero · fisso",
+    "bonnet-du-pere-noel-fixe": "Berretto di Babbo Natale · fisso",
+    "sucre-d-orge-fixe": "Bastoncino di zucchero · fisso",
+    "feux-d-artifice": "Fuochi d’artificio",
+    "pluie-de-confettis": "Pioggia di coriandoli",
+    "cadran-de-minuit": "Quadrante di mezzanotte",
+    "coupe-de-champagne": "Coppa di champagne",
+    "bouquet-final": "Gran finale",
+    "envol-de-confettis": "Volo di coriandoli",
+    "minuit-sonne": "Scocca la mezzanotte",
+    "champagne-petillant": "Champagne frizzante"
   },
   "gamut": {
     "indigo": "Indaco Meeshy",
@@ -254,6 +464,72 @@
     "rituel": "Africano rituale",
     "rituel-anime": "Africano rituale animato",
     "celte": "Celtico",
-    "celte-anime": "Celtico animato"
+    "celte-anime": "Celtico animato",
+    "liseret-or": "Filetto d’oro",
+    "volutes": "Volute",
+    "rang-de-perles": "Filo di perle",
+    "onyx": "Onice",
+    "marqueterie": "Intarsio",
+    "minuit": "Mezzanotte",
+    "liseret-lumiere": "Filetto di luce",
+    "perles-vives": "Perle vive",
+    "nuit-vive": "Notte scintillante",
+    "neon": "Neon",
+    "masque-felin": "Maschera felina",
+    "toile-araignee": "Ragnatela",
+    "ailes-ange": "Ali d’angelo",
+    "cercle-runique": "Cerchio runico",
+    "griffes-os": "Artigli d’osso",
+    "ailes-demon": "Ali di demone",
+    "dragon-jade": "Drago di giada",
+    "nuages-soie": "Nuvole di seta",
+    "lanternes-papier": "Lanterne di carta",
+    "masque-ebene": "Maschera d’ebano",
+    "bandes-tissees": "Bande tessute",
+    "collier-perles": "Collana di perle",
+    "noeud-entrelace": "Nodo intrecciato",
+    "spirale-triple": "Spirale tripla",
+    "lierre-emeraude": "Edera smeraldo",
+    "corbeaux-tournoyants": "Corvi in volo",
+    "aurore-boreale": "Aurora boreale",
+    "anneau-pierre-gravee": "Anello di pietra incisa",
+    "proue-sculptee": "Prua scolpita",
+    "cobra-dore": "Cobra d’oro",
+    "scarabee-aile": "Scarabeo alato",
+    "soleil-du-desert": "Sole del deserto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpente di giada",
+    "cartouches-de-glyphes": "Cartigli di glifi",
+    "frise-a-gradins": "Fregio a gradoni",
+    "jaguar-de-jungle": "Giaguaro della giungla",
+    "mandala-floral": "Mandala floreale",
+    "paon-roue": "Pavone che fa la ruota",
+    "guirlande-soucis": "Ghirlanda di calendule",
+    "cercle-tisse": "Cerchio intrecciato con piume",
+    "perlage-losanges": "Rombi di perline",
+    "soleil-montagnes": "Sole sulle montagne",
+    "cercles-points": "Cerchi di punti",
+    "tortue-marine": "Tartaruga marina",
+    "croix-du-sud": "Croce del Sud",
+    "flocons-tombants": "Fiocchi che cadono",
+    "couronne-de-houx": "Corona di agrifoglio",
+    "guirlande-lumineuse": "Ghirlanda luminosa",
+    "etoile-du-sapin": "Stella dell’albero",
+    "bonnet-du-pere-noel": "Berretto di Babbo Natale",
+    "sucre-d-orge": "Bastoncino di zucchero",
+    "flocons-tombants-fixe": "Fiocchi che cadono · fisso",
+    "couronne-de-houx-fixe": "Corona di agrifoglio · fisso",
+    "guirlande-lumineuse-fixe": "Ghirlanda luminosa · fisso",
+    "etoile-du-sapin-fixe": "Stella dell’albero · fisso",
+    "bonnet-du-pere-noel-fixe": "Berretto di Babbo Natale · fisso",
+    "sucre-d-orge-fixe": "Bastoncino di zucchero · fisso",
+    "feux-d-artifice": "Fuochi d’artificio",
+    "pluie-de-confettis": "Pioggia di coriandoli",
+    "cadran-de-minuit": "Quadrante di mezzanotte",
+    "coupe-de-champagne": "Coppa di champagne",
+    "bouquet-final": "Gran finale",
+    "envol-de-confettis": "Volo di coriandoli",
+    "minuit-sonne": "Scocca la mezzanotte",
+    "champagne-petillant": "Champagne frizzante"
   }
 }

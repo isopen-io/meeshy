@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "preview.messages_unavailable",
+          "androidName": "preview_messages_unavailable",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

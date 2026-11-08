@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "androidName": "push_new_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "push_placeholder_encrypted",
+          "status": "android-only"
+        },
+        {
+          "androidName": "push_placeholder_ephemeral",
+          "status": "android-only"
+        },
+        {
+          "androidName": "push_placeholder_hidden",
+          "status": "android-only"
+        },
+        {
+          "androidName": "push_placeholder_view_once",
+          "status": "android-only"
+        },
+        {
+          "androidName": "push_sender_in_group",
+          "status": "android-only"
+        },
+        {
+          "androidName": "push_someone",
+          "status": "android-only"
+        },
+        {
+          "androidName": "push_voice_message",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

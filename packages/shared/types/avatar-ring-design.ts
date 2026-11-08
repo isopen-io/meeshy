@@ -35,10 +35,10 @@ export const RING_DECOR_MAX_REACH = 1.5;
  * AU-DESSUS (masque, toile, griffes, braises), et l'un comme l'autre peuvent couvrir
  * l'avatar en partie et DÉBORDER du contour. Chaque film est carré, centré sur l'avatar,
  * de côté `reach ×` la boîte du contour : le viewBox 0 0 100 100 du contour en occupe le
- * centre, sur `100 / reach` de son côté. Le débordement se DESSINE hors de la boîte sans
- * la grandir : une liste ne se décale pas. Un client antérieur ignore le champ et garde
- * l'anneau fixe (`stroke` + `ornament`), qui reste l'image de repli et celle de « réduire
- * les animations ».
+ * centre, sur `100 / reach` de son côté. Le film tient dans la place que l'hôte lui donne
+ * (`ringDecorFit`, #15157) : rien ne grandit, rien ne se décale, rien ne couvre un voisin.
+ * Un client antérieur ignore le champ et garde l'anneau fixe (`stroke` + `ornament`), qui
+ * reste l'image de repli : il ne se dessine plus SOUS un film qui s'affiche.
  */
 const AvatarRingDecorSchema = z
   .object({
@@ -49,10 +49,21 @@ const AvatarRingDecorSchema = z
   .check(z.refine((decor) => decor.back !== undefined || decor.front !== undefined));
 export type AvatarRingDecor = z.infer<typeof AvatarRingDecorSchema>;
 
-/** Où poser un film illustré dans une boîte de contour de côté `box` : son côté, et son décalage depuis le coin de la boîte. */
-export const ringDecorCanvas = ({ box, reach }: { readonly box: number; readonly reach: number }): { readonly side: number; readonly offset: number } => {
-  const side = box * reach;
-  return { side, offset: (box - side) / 2 };
+export type RingDecorFit = { readonly scale: number; readonly side: number; readonly offset: number };
+
+/**
+ * Comment poser un cadre illustré dans une boîte de contour de côté `box` (#15157). Le film ne
+ * peint jamais hors de la boîte que l'anneau seul occupe déjà, sauf la place `room` que l'hôte
+ * déclare libre de chaque côté (aucun nom, aucun avatar voisin n'y vit). Quand le film demande
+ * plus (`box × reach`), l'avatar, son contour et ses films se réduisent ENSEMBLE de `scale` —
+ * l'illustration reste calée sur l'avatar. `side` est le côté du film, `offset` son décalage
+ * depuis le coin de la boîte. Le cadre se pose ENTIER à toutes les tailles (#16114) : aucune
+ * boîte n'est trop petite pour lui — liste, bulle, mini-avatar comme profil.
+ */
+export const ringDecorFit = ({ box, reach, room = 0 }: { readonly box: number; readonly reach: number; readonly room?: number }): RingDecorFit => {
+  const need = box * reach;
+  const side = Math.min(need, box + 2 * Math.max(0, room));
+  return { scale: side / need, side, offset: (box - side) / 2 };
 };
 
 const RingOrnamentStrokeSchema = z.object({

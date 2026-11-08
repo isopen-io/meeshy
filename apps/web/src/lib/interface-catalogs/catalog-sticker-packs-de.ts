@@ -91,6 +91,8 @@ const deStickerPacks = {
   'packs.frames.yourAtmosphere': "Deine Atmosphäre",
   'packs.frames.atmosphereKept': "Dieses Paket trägt deine Atmosphäre und bleibt installiert. Wechsle die Atmosphäre, um es zu entfernen.",
   'packs.frames.atmosphereQueued': "Offline: Deine Wahl wird gesendet, sobald die Verbindung zurück ist.",
+  'packs.sheet.open': "Paket {name} öffnen",
+  'packs.preview.open': "{name} im Vollbild ansehen",
 } satisfies StickerPacksCatalog;
 
 export default deStickerPacks;

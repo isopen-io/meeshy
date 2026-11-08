@@ -39180,7 +39180,6 @@ Lme/meeshy/app/push/pipeline/AndroidPushEnvironment;
 Lme/meeshy/app/push/pipeline/BigTextEnricher;
 Lme/meeshy/app/push/pipeline/EphemeralExpirationEnricher;
 Lme/meeshy/app/push/pipeline/GroupAndBadgeEnricher;
-Lme/meeshy/app/push/pipeline/ImageMediaEnricher;
 Lme/meeshy/app/push/pipeline/MessageActionsEnricher;
 Lme/meeshy/app/push/pipeline/MessagingStyleEnricher;
 Lme/meeshy/app/push/pipeline/NotificationEnricher;

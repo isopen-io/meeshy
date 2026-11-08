@@ -8,7 +8,8 @@ import type { RowFlagActionId } from '@/lib/view/row-actions';
 import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
 import { toDate } from './decode';
 import { outcomeOf } from './outcome';
-import { pushConversationFlags, pushRead, pushUnread, type ConversationPreferencePatch } from './preferences';
+import type { ConversationPreferencePatch } from './preferences';
+import { pushConversationFlags, pushRead, pushUnread } from './preference-ports';
 import { caughtUpConversation } from './receipts';
 import type { Conversation } from './types';
 

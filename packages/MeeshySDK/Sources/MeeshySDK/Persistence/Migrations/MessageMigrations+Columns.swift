@@ -142,3 +142,17 @@ struct MessagesEditedByIdMigration: DatabaseMigration {
         }
     }
 }
+
+/// #14369 — l'identifiant client que la passerelle SERT pour un message. Le fil
+/// ne lit que GRDB : sans cette colonne, la couche appareil d'un hybride ne
+/// pouvait jamais être rattachée à son message (identifiant client absent d'un
+/// côté), et le verdict restait invérifiable.
+struct MessagesServedClientMessageIdMigration: DatabaseMigration {
+    let identifier = "messages_served_client_message_id"
+
+    func migrate(_ db: Database) throws {
+        try db.alter(table: "messages") { t in
+            t.add(column: "servedClientMessageId", .text)
+        }
+    }
+}

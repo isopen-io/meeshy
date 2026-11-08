@@ -58,7 +58,7 @@ extension CallView {
 
             Spacer()
 
-            // #8795 — micro et caméra de l'aperçu, puis filtres et raccroché
+            // #8795 — micro et caméra de l'aperçu, puis effets et raccroché
             HStack(spacing: MeeshySpacing.xl) {
                 CallPreviewOutgoingControls(
                     preview: .shared,
@@ -66,11 +66,11 @@ extension CallView {
                     isVideoCall: callManager.isVideoEnabled
                 )
                 if callManager.isVideoEnabled {
-                    effectsToggleButton
+                    effectsModeButton
                 }
                 endCallButton
             }
-            .padding(.bottom, 80)
+            .padding(.bottom, Self.chromeBottomInset)
         }
         .task {
             sdpOfferSlow = false
@@ -121,11 +121,11 @@ extension CallView {
 
             HStack(spacing: 40) {
                 if callManager.isVideoEnabled {
-                    effectsToggleButton
+                    effectsModeButton
                 }
                 endCallButton
             }
-            .padding(.bottom, 80)
+            .padding(.bottom, Self.chromeBottomInset)
         }
         // L'écran entier : l'aperçu de l'appelant posé derrière (`CallView`,
         // état `.connecting`) ne se limite pas à la colonne des boutons.

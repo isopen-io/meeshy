@@ -72,6 +72,8 @@ sealed interface CaptureEvent {
     data object FlipFinished : CaptureEvent
     /** La caméra a lié l'objectif : si une bascule attendait ce signal, elle se termine. */
     data object FlipFinishedIfSwitching : CaptureEvent
+    /** L'objectif demandé a été refusé : l'ancien reste en place, la position affichée ne change pas. */
+    data object FlipRefused : CaptureEvent
     data class ZoomChanged(val displayed: Float) : CaptureEvent
 }
 
@@ -104,6 +106,7 @@ object CaptureSessionReducer {
         is CaptureEvent.FlashSliderExpired -> CaptureStep(s.copy(flashSlider = s.flashSlider.expire(e.generation, e.voiceOver)))
         CaptureEvent.FlipTapped -> flipTapped(s)
         CaptureEvent.FlipFinishedIfSwitching -> if (s.switching) reduce(s, CaptureEvent.FlipFinished) else CaptureStep(s)
+        CaptureEvent.FlipRefused -> if (s.switching) CaptureStep(s.copy(switching = false)) else CaptureStep(s)
         CaptureEvent.FlipFinished -> CaptureStep(s.copy(facing = flipped(s.facing), switching = false, zoom = 1f), listOf(CaptureEffect.Haptic(CaptureHaptic.LIGHT)))
         is CaptureEvent.ZoomChanged -> CaptureStep(s.copy(zoom = e.displayed), listOf(CaptureEffect.ApplyZoom(e.displayed)))
     }

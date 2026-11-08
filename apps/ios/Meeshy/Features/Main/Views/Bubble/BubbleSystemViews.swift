@@ -57,9 +57,16 @@ struct BubbleDeletedView: View, Equatable {
 /// Stateless: depends only on `text` + `isDark` + `timeString`; the content
 /// string itself carries the localized label from the gateway.
 struct BubbleSystemNoticeView: View, Equatable {
+    static func == (lhs: BubbleSystemNoticeView, rhs: BubbleSystemNoticeView) -> Bool {
+        lhs.text == rhs.text && lhs.isDark == rhs.isDark && lhs.timeString == rhs.timeString
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentColor == rhs.greeting?.accentColor
+    }
+
     let text: String
     let isDark: Bool
     var timeString: String? = nil
+    /// L'invite « dis-leur salut » d'une ligne d'arrivées (#16338).
+    var greeting: ArrivalGreetingInvite? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -72,10 +79,13 @@ struct BubbleSystemNoticeView: View, Equatable {
                         .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
                         .accessibilityIdentifier("bubble-system-notice-time")
                 }
-                Text(text)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: MeeshySpacing.xxs) {
+                    Text(text)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .multilineTextAlignment(.center)
+                    greeting
+                }
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
@@ -87,8 +97,7 @@ struct BubbleSystemNoticeView: View, Equatable {
                             )
                     )
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(text)
+            .accessibilityElement(children: greeting == nil ? .combine : .contain)
 
             Spacer(minLength: 24)
         }
@@ -155,6 +164,7 @@ struct BubbleJoinNoticeView: View, Equatable {
         lhs.notice == rhs.notice
             && lhs.isDark == rhs.isDark
             && lhs.timeString == rhs.timeString
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentColor == rhs.greeting?.accentColor
     }
 
     let notice: BubbleContent.JoinNotice
@@ -163,6 +173,8 @@ struct BubbleJoinNoticeView: View, Equatable {
     /// Heure du fil (« 08:26 ») — gravée EN PREMIER, centrée, même sémantique
     /// que les stickers de date : l'avis est un jalon du fil, pas une parole.
     var timeString: String? = nil
+    /// « dis-lui salut » (#16338), sous l'avis — `nil` pour l'arrivant lui-même.
+    var greeting: ArrivalGreetingInvite? = nil
 
     var body: some View {
         let presentation = JoinNoticePresentation(notice: notice)
@@ -189,11 +201,7 @@ struct BubbleJoinNoticeView: View, Equatable {
                         .multilineTextAlignment(.center)
 
                     if presentation.showsNoAccountBadge {
-                        Text(String(
-                            localized: "bubble.joinNotice.noAccount",
-                            defaultValue: "sans compte",
-                            bundle: .main
-                        ))
+                        Text(String(localized: "bubble.joinNotice.noAccount", defaultValue: "sans compte", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.purple700)
                         .padding(.horizontal, MeeshySpacing.xsPlus)
@@ -221,6 +229,7 @@ struct BubbleJoinNoticeView: View, Equatable {
                         }
                     }
                 }
+                greeting
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, hasDetailRow ? 8 : 7)
@@ -252,6 +261,7 @@ struct BubbleJoinNoticeView: View, Equatable {
                 guard let onOpenProfile, !notice.participantId.isEmpty else { return }
                 onOpenProfile(notice.participantId)
             }
+            .modifier(ArrivalGreetingAccessibility(greeting: greeting))
 
             Spacer(minLength: 24)
         }

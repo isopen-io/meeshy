@@ -28,7 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.io.File
+import me.meeshy.app.chat.audio.UnreadAudioButton
 import me.meeshy.feature.chat.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -64,7 +66,7 @@ internal fun UnreadPreviewPill(
                     modifier = Modifier.size(16.dp),
                 )
             }
-            Column {
+            Column(modifier = Modifier.weight(1f, fill = false)) {
                 preview.senderName?.let { name ->
                     Text(
                         text = name,
@@ -83,6 +85,7 @@ internal fun UnreadPreviewPill(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            preview.audioAttachmentId?.let { UnreadAudioButton(attachmentId = it, accentColor = accentColor) }
         }
     }
 }
@@ -168,6 +171,7 @@ internal fun OfflinePill(onClick: () -> Unit) {
 private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {
     UnreadPreviewKind.Image -> Icons.Filled.Image
     UnreadPreviewKind.File -> Icons.Filled.AttachFile
+    UnreadPreviewKind.Audio -> MeeshyIcons.Waveform
     UnreadPreviewKind.Text -> null
 }
 
@@ -176,6 +180,7 @@ private fun unreadPreviewLabel(preview: UnreadPreview): String = when {
     preview.text.isNotBlank() -> preview.text
     preview.kind == UnreadPreviewKind.Image -> stringResource(R.string.chat_unread_photo)
     preview.kind == UnreadPreviewKind.File -> stringResource(R.string.chat_unread_attachment)
+    preview.kind == UnreadPreviewKind.Audio -> stringResource(me.meeshy.ui.R.string.media_label_audio)
     else -> stringResource(R.string.chat_unread_new_message)
 }
 

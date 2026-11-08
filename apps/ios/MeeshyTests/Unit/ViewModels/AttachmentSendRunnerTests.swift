@@ -1,7 +1,7 @@
 import XCTest
 import Combine
 @testable import Meeshy
-import MeeshySDK
+@testable import MeeshySDK
 
 @MainActor
 private final class Journal {
@@ -140,7 +140,7 @@ final class AttachmentSendRunnerTests: XCTestCase {
             host: host,
             callbacks: AttachmentSendCallbacks(
                 restorePlace: { _, sent in journal.add("restorePlace:\(sent)") },
-                setProgress: { _ in },
+                setProgress: { _, _, _ in },
                 abortUpload: { journal.add("abort") }
             ),
             network: network,
@@ -412,5 +412,170 @@ final class AttachmentSendRunnerTests: XCTestCase {
 
         XCTAssertEqual(fx.host.sent.map { $0.reusedClientMessageId?.rawValue }, ["t_text"])
         XCTAssertEqual(fx.host.sent.first?.attachments.ids, nil)
+    }
+}
+
+// MARK: - Chaque bulle en cours d'envoi montre SA progression (#14702)
+
+/// Une session TUS par bulle : son téléverseur publie, pendant la montée, la
+/// fraction propre à CE groupe sur le flux de SA session.
+@MainActor
+private final class ProgressEmittingUploader: MediaGroupUploading {
+    let subject: PassthroughSubject<UploadQueueProgress, Never>
+    let percents: [Double]
+
+    init(subject: PassthroughSubject<UploadQueueProgress, Never>, percents: [Double]) {
+        self.subject = subject
+        self.percents = percents
+    }
+
+    func upload(
+        _ send: OutgoingMediaGroup,
+        items: [MediaGroupUploadItem],
+        currentUserId: String,
+        didPromote: @MainActor (String, String) -> Void
+    ) async throws -> UploadedMediaGroup {
+        for percent in percents {
+            subject.send(UploadQueueProgress(
+                files: [], totalFiles: 1, completedFiles: 0,
+                totalBytes: 100, uploadedBytes: Int64(percent), globalPercentage: percent
+            ))
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return UploadedMediaGroup(
+            ids: items.map { "srv_\($0.attachmentId)" },
+            attachments: items.map { MeeshyMessageAttachment(id: "srv_\($0.attachmentId)", uploadedBy: currentUserId) }
+        )
+    }
+}
+
+extension AttachmentSendRunnerTests {
+
+    private func progressRunner(
+        store: MessageUploadProgressStore,
+        percentsBySession: [[Double]]
+    ) -> (runner: AttachmentSendRunner, sessionsOpened: () -> Int) {
+        let journal = Journal()
+        var opened = 0
+        let runner = AttachmentSendRunner(
+            host: MockAttachmentSendHost(journal: journal),
+            callbacks: AttachmentSendCallbacks(
+                restorePlace: { _, _ in },
+                setProgress: { tempId, sent, total in store.report(sent: sent, total: total, for: tempId) },
+                abortUpload: {}
+            ),
+            network: FakeNetworkMonitor(isOnline: true),
+            uploadSession: { _ in
+                let percents = percentsBySession[min(opened, percentsBySession.count - 1)]
+                opened += 1
+                let subject = PassthroughSubject<UploadQueueProgress, Never>()
+                return AttachmentUploadSession(
+                    uploader: ProgressEmittingUploader(subject: subject, percents: percents),
+                    progress: subject.eraseToAnyPublisher()
+                )
+            },
+            outbox: { _, _ in MockAttachmentGroupQueue(journal: journal) },
+            transcriber: FakeVoiceTranscriber(),
+            feedback: SpyFeedback(journal: journal)
+        )
+        return (runner, { opened })
+    }
+
+    /// LE témoin de la correspondance tempId → progression : deux bulles d'un
+    /// même lot, deux sessions, deux progressions qui ne se mélangent pas.
+    func test_run_twoGroupsInOneBatch_eachBubbleReceivesItsOwnSessionProgress() async {
+        let store = MessageUploadProgressStore()
+        store.begin(["t_video", "t_photo"])
+        let sut = progressRunner(store: store, percentsBySession: [[10, 35], [80]])
+        let batch = makeBatch(sends: [send("t_video", attachmentIds: ["v"]), send("t_photo", attachmentIds: ["p"])])
+
+        await sut.runner.run(batch)
+
+        XCTAssertEqual(sut.sessionsOpened(), 2)
+        XCTAssertEqual(store.progress(for: "t_video")?.percent, 35)
+        XCTAssertEqual(store.progress(for: "t_photo")?.percent, 80)
+    }
+
+    /// Deux lots EN VOL ensemble (#14696) : chaque bulle avance à son rythme.
+    func test_run_twoBatchesInFlight_eachBubbleShowsItsOwnProgress() async {
+        let store = MessageUploadProgressStore()
+        store.begin(["t_long_video", "t_photo"])
+        let first = progressRunner(store: store, percentsBySession: [[5, 12, 20]])
+        let second = progressRunner(store: store, percentsBySession: [[60, 100]])
+
+        let videoBatch = makeBatch(sends: [send("t_long_video", attachmentIds: ["v"])])
+        let photoBatch = makeBatch(sends: [send("t_photo", attachmentIds: ["p"])])
+        let video = Task { await first.runner.run(videoBatch) }
+        let photo = Task { await second.runner.run(photoBatch) }
+        await video.value
+        await photo.value
+
+        XCTAssertEqual(store.progress(for: "t_long_video")?.percent, 20)
+        XCTAssertEqual(store.progress(for: "t_photo")?.percent, 100)
+    }
+
+    /// Une session qui ne se crée pas (plus d'identifiant de requête) ne prête PAS la
+    /// progression de la précédente : la 2e bulle garde son horloge, pas le 100 % de la 1re.
+    func test_run_secondSessionMissing_secondBubbleKeepsItsClock() async {
+        let store = MessageUploadProgressStore()
+        store.begin(["t_video", "t_photo"])
+        let journal = Journal()
+        var opened = 0
+        let runner = AttachmentSendRunner(
+            host: MockAttachmentSendHost(journal: journal),
+            callbacks: AttachmentSendCallbacks(
+                restorePlace: { _, _ in },
+                setProgress: { tempId, sent, total in store.report(sent: sent, total: total, for: tempId) },
+                abortUpload: {}
+            ),
+            network: FakeNetworkMonitor(isOnline: true),
+            uploadSession: { _ in
+                opened += 1
+                guard opened == 1 else { return nil }
+                let subject = PassthroughSubject<UploadQueueProgress, Never>()
+                return AttachmentUploadSession(
+                    uploader: ProgressEmittingUploader(subject: subject, percents: [60, 100]),
+                    progress: subject.eraseToAnyPublisher()
+                )
+            },
+            outbox: { _, _ in MockAttachmentGroupQueue(journal: journal) },
+            transcriber: FakeVoiceTranscriber(),
+            feedback: SpyFeedback(journal: journal)
+        )
+
+        await runner.run(makeBatch(sends: [send("t_video", attachmentIds: ["v"]), send("t_photo", attachmentIds: ["p"])]))
+
+        XCTAssertEqual(store.progress(for: "t_video")?.percent, 100)
+        XCTAssertNil(store.progress(for: "t_photo")?.percent)
+    }
+
+    /// Hors ligne, rien ne monte : aucune bulle ne prétend avancer.
+    func test_run_offline_reportsNoProgress() async {
+        let store = MessageUploadProgressStore()
+        store.begin(["t1"])
+        let journal = Journal()
+        let runner = AttachmentSendRunner(
+            host: MockAttachmentSendHost(journal: journal),
+            callbacks: AttachmentSendCallbacks(
+                restorePlace: { _, _ in },
+                setProgress: { tempId, sent, total in store.report(sent: sent, total: total, for: tempId) },
+                abortUpload: {}
+            ),
+            network: FakeNetworkMonitor(isOnline: false),
+            uploadSession: { _ in
+                let subject = PassthroughSubject<UploadQueueProgress, Never>()
+                return AttachmentUploadSession(
+                    uploader: ProgressEmittingUploader(subject: subject, percents: [50]),
+                    progress: subject.eraseToAnyPublisher()
+                )
+            },
+            outbox: { _, _ in MockAttachmentGroupQueue(journal: journal) },
+            transcriber: FakeVoiceTranscriber(),
+            feedback: SpyFeedback(journal: journal)
+        )
+
+        await runner.run(makeBatch(sends: [send("t1", attachmentIds: ["a"])]))
+
+        XCTAssertNil(store.progress(for: "t1")?.percent)
     }
 }

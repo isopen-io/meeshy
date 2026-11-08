@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.auth
 
 import me.meeshy.sdk.model.ApiViolation
+import me.meeshy.sdk.model.net.MaskedEmailOwner
 
 /**
  * Pourquoi la passerelle a refusé une inscription — un cas par refus que
@@ -50,6 +51,8 @@ public sealed interface SignupSubmitError {
         val serverMessage: String?,
         /** Les pseudos LIBRES proposés par la passerelle avec `USERNAME_TAKEN` ; vide sinon. */
         val suggestions: List<String> = emptyList(),
+        /** Le titulaire MASQUÉ de l'adresse avec `EMAIL_TAKEN` (#8214) ; `null` si la passerelle ne le sert pas. */
+        val owner: MaskedEmailOwner? = null,
     ) : SignupSubmitError
 
     /** Le réseau n'a pas répondu — rien n'a été tenté côté serveur. */
@@ -103,6 +106,7 @@ public object SignupErrorRouter {
         message: String? = null,
         violations: List<ApiViolation> = emptyList(),
         suggestions: List<String> = emptyList(),
+        emailOwner: MaskedEmailOwner? = null,
     ): SignupSubmitError {
         val normalizedCode = code?.trim()?.uppercase()
         if (normalizedCode == CODE_NETWORK) return SignupSubmitError.Network
@@ -115,7 +119,8 @@ public object SignupErrorRouter {
         }
         if (typed != null) {
             val offered = if (typed.second == SignupRefusal.NAME_TAKEN) suggestions else emptyList()
-            return SignupSubmitError.Field(typed.first, typed.second, message, offered)
+            val owner = if (typed.second == SignupRefusal.EMAIL_TAKEN) emailOwner else null
+            return SignupSubmitError.Field(typed.first, typed.second, message, offered, owner)
         }
 
         fieldFor(fieldName)?.let { return SignupSubmitError.Field(it, SignupRefusal.INVALID, message) }

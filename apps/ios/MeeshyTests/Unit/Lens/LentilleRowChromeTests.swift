@@ -69,7 +69,13 @@ final class LentilleRowChromeTests: XCTestCase {
         let text = try block("private func styledText(_ preview: ConversationPreview, at now: Date) -> Text {", in: line)
         XCTAssertTrue(text.contains("(author + unencrypted + glyph + direction + styledBody)"),
                       "« Auteur : texte » en UN seul texte, marqueur « non chiffré » compris")
-        XCTAssertTrue(text.contains("strings(.lineAuthor"), "le séparateur d'auteur vient du catalogue")
+        // #15760 — le préfixe d'auteur est PARTAGÉ avec `seenText` (le texte
+        // vu, comparé au texte dit) : la ligne le lit chez `authorPrefix`,
+        // qui le tient du catalogue.
+        XCTAssertTrue(text.contains("Self.authorPrefix(of: preview, strings: strings)"),
+                      "la ligne rend le préfixe d'auteur partagé")
+        let prefix = try block("private static func authorPrefix(", in: line).components(separatedBy: "\n\n")[0]
+        XCTAssertTrue(prefix.contains("strings(.lineAuthor"), "le séparateur d'auteur vient du catalogue")
         for outline in ["strokeBorder", ".border(", "RoundedRectangle", "background("] {
             XCTAssertFalse(text.contains(outline), "aucun contour ni fond sur le dernier message au repos (« \(outline) »)")
         }

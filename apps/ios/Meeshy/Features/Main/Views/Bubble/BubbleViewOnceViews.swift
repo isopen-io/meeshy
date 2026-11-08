@@ -17,7 +17,12 @@ struct BubbleViewOnceSealedView: View, Equatable {
     let isMe: Bool
     let isDark: Bool
     let protection: MessageProtectionDescriptor
-    let timeString: String
+    /// Le pied de la puce (#16130) : l'heure et l'accusé, par le MÊME `BubbleFooter` que
+    /// les feuilles sans bulle (sticker, emoji libre). Il n'est fait que de ce que
+    /// `footerModel` y met — rien de ce que le sceau cache.
+    let footer: BubbleFooterModel
+    /// Renvoyer et « détails de lecture » : hors de l'égalité, comme tout rappel.
+    var footerActions = BubbleFooterActions()
     /// Ce que fait le toucher, dit à VoiceOver (#8009).
     var hint: String? = nil
     let onOpen: () -> Void
@@ -27,7 +32,22 @@ struct BubbleViewOnceSealedView: View, Equatable {
             && lhs.isMe == rhs.isMe
             && lhs.isDark == rhs.isDark
             && lhs.protection == rhs.protection
-            && lhs.timeString == rhs.timeString
+            && lhs.footer == rhs.footer
+    }
+
+    /// Le pied d'une vue unique : l'heure et le statut, et RIEN d'autre — ni identité, ni
+    /// drapeau, ni traduction, qui diraient d'un contenu scellé plus que la puce.
+    static func footerModel(for content: BubbleContent, isOnline: Bool) -> BubbleFooterModel {
+        BubbleFooterModel.make(
+            timeString: content.meta.timeString,
+            deliveryStatus: content.meta.deliveryStatus ?? .sent,
+            isMe: content.isMe,
+            isOnline: isOnline,
+            sender: nil,
+            flags: [],
+            showsTranslate: false,
+            sendStartedAt: content.meta.sendStartedAt
+        )
     }
 
     var body: some View {
@@ -40,10 +60,8 @@ struct BubbleViewOnceSealedView: View, Equatable {
                 HStack(alignment: .center, spacing: MeeshySpacing.xsPlus) {
                     ViewOnceChip(state: state, isDark: isDark, hint: hint, onOpen: onOpen)
                         .equatable()
-                    Text(timeString)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                        .foregroundColor(ThemeManager.shared.textMuted)
-                        .accessibilityHidden(true)
+                    BubbleFooter(model: footer, actions: footerActions, style: .compact, isDark: isDark)
+                        .equatable()
                 }
             }
 

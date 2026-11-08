@@ -3,6 +3,7 @@ package me.meeshy.sdk.media
 import me.meeshy.core.crypto.primitives.StreamingSeal
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.channels.Channels
@@ -35,6 +36,8 @@ internal class MediaBlobFiles(
                 source.open().use { input -> input.copyTo(sealed, COPY_BUFFER_BYTES) }
             }
             check(part.renameTo(target)) { "The sealed blob could not take its name" }
+        } catch (failure: IOException) {
+            throw if (failure.isDiskFull()) MediaStorageFullException(failure) else failure
         } finally {
             part.delete()
         }
@@ -99,6 +102,9 @@ internal class MediaBlobFiles(
             out.close()
         }
     }
+
+    private fun IOException.isDiskFull(): Boolean =
+        generateSequence<Throwable>(this) { it.cause }.any { it.message.orEmpty().contains("ENOSPC") || it.message.orEmpty().contains("No space left", ignoreCase = true) }
 
     private companion object {
         const val BLOB_SUFFIX = ".blob"

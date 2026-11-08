@@ -68,7 +68,7 @@ class FileViewerSheetsTest {
         compose.setContent { MeeshyTheme { ContactCardSheet(request, Color.Blue, onDismiss = {}) } }
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Zoé Dupont")).fetchSemanticsNodes().isNotEmpty() }
 
-        compose.onNode(hasContentDescription("+33612345678", substring = true)).assertIsDisplayed()
+        compose.onNode(hasContentDescription("+33612345678. ", substring = true)).assertIsDisplayed()
         compose.onNode(hasContentDescription("zoe@example.com", substring = true)).assertIsDisplayed()
         compose.onNode(hasContentDescription("Une note", substring = true)).assertIsDisplayed()
         compose.onNodeWithText("Add to Contacts").assertIsDisplayed()

@@ -25,6 +25,11 @@ describe('profilePresenceLine', () => {
     expect(profilePresenceLine(null, NOW, 'fr')).toBeNull();
   });
 
+  test('un AMI reçoit « en ligne » ou rien (#13928, #13940) : hors ligne sans `lastActiveAt`, ni pastille ni « vu il y a »', () => {
+    expect(profilePresenceLine({ isOnline: false, lastActiveAt: null }, NOW, 'fr')).toBeNull();
+    expect(profilePresenceLine({ isOnline: true, lastActiveAt: null }, NOW, 'fr')?.label).toBe('En ligne');
+  });
+
   test('connecté : pastille verte et « En ligne »', () => {
     expect(profilePresenceLine({ isOnline: true, lastActiveAt: null }, NOW, 'fr')).toEqual({
       status: 'online',

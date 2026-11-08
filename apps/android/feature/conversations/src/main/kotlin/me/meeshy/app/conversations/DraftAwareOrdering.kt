@@ -4,6 +4,7 @@ import java.time.Instant
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.isMeaningful
+import me.meeshy.sdk.model.listRankAt
 
 /**
  * Draft-aware re-ordering of an (already filtered) conversation list — parity §B
@@ -24,6 +25,10 @@ import me.meeshy.sdk.model.isMeaningful
  * non-épinglées, les conversations avec un brouillon actif flottent en tête »). The section
  * split keeps this order, so a pinned row left in a category or in the catch-all heads it.
  *
+ * The incoming list is first ordered by [listRankAt] (iOS `listActivityAt`: last message, served
+ * rank, a reaction to the reader's message), stable on ties, so the order follows the same rank as
+ * iOS rather than the last message alone.
+ *
  * A pure product rule (`:feature`), not an SDK atom: it encodes the "when to float"
  * decision. Kept off the Composable/ViewModel so every branch is JVM-testable.
  */
@@ -32,8 +37,10 @@ public object DraftAwareOrdering {
     public fun apply(
         conversations: List<ApiConversation>,
         draftsById: Map<String, ConversationDraft>,
+        readerId: String? = null,
     ): List<ApiConversation> {
-        val (pinned, unpinned) = conversations.partition { it.resolvedPreferences?.isPinned == true }
+        val ranked = conversations.sortedByDescending { it.listRankAt(readerId) }
+        val (pinned, unpinned) = ranked.partition { it.resolvedPreferences?.isPinned == true }
         return pinned + floatDrafts(unpinned, draftsById)
     }
 

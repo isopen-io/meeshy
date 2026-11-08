@@ -238,6 +238,8 @@ class LayoutKeysTest {
 
 class FocalCellsTest {
 
+    private val zone = ZoneOffset.UTC
+
     private class Row(
         override val index: Int,
         override val key: Any,
@@ -253,5 +255,148 @@ class FocalCellsTest {
         val cells = focalCells(visible, rendered, viewportHeight = 1000.0, beforePadding = 0.0, density = 1.0)
 
         assertThat(cells.map { it.id }).containsExactly(rendered.single().key)
+    }
+
+    @Test
+    fun `la rangee de debut de conversation ouvre le fil au jour du premier message`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-10T23:50:00Z"), bubble("m2", "2026-06-11T08:00:00Z")),
+            zone,
+            conversationStartName = "Mégane",
+        )
+
+        val start = items.first() as ChatListItem.ConversationStart
+        assertThat(start.conversationName).isEqualTo("Mégane")
+        assertThat(start.firstMessageDayMillis).isEqualTo(java.time.Instant.parse("2026-06-10T23:50:00Z").toEpochMilli())
+        assertThat(items[1]).isInstanceOf(ChatListItem.DayHeader::class.java)
+    }
+
+    @Test
+    fun `la rangee de debut se pose sous l'avis de chiffrement`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-10T10:00:00Z")),
+            zone,
+            showEncryptionNotice = true,
+            conversationStartName = "Équipe",
+        )
+
+        assertThat(items[0]).isEqualTo(ChatListItem.EncryptionNotice)
+        assertThat(items[1]).isInstanceOf(ChatListItem.ConversationStart::class.java)
+    }
+
+    @Test
+    fun `sans nom ou sans message aucune rangee de debut`() {
+        assertThat(buildChatListItems(listOf(bubble("m1", null)), zone).filterIsInstance<ChatListItem.ConversationStart>()).isEmpty()
+        assertThat(buildChatListItems(emptyList(), zone, conversationStartName = "X")).isEmpty()
+    }
+
+    @Test
+    fun `un horodatage illisible laisse le nom seul`() {
+        val start = buildChatListItems(listOf(bubble("m1", null)), zone, conversationStartName = "X")
+            .first() as ChatListItem.ConversationStart
+        assertThat(start.firstMessageDayMillis).isNull()
+    }
+
+    @Test
+    fun `le nom de debut n'existe que historique entierement charge`() {
+        assertThat(ConversationStartName.of(" Mégane ", hasMoreOlder = false, isLoadingInitial = false)).isEqualTo("Mégane")
+        assertThat(ConversationStartName.of("Mégane", hasMoreOlder = true, isLoadingInitial = false)).isNull()
+        assertThat(ConversationStartName.of("Mégane", hasMoreOlder = false, isLoadingInitial = true)).isNull()
+        assertThat(ConversationStartName.of("  ", hasMoreOlder = false, isLoadingInitial = false)).isNull()
+        assertThat(ConversationStartName.of(null, hasMoreOlder = false, isLoadingInitial = false)).isNull()
+    }
+}
+
+class ChatListItemContentTypeTest {
+
+    private val zone = ZoneOffset.UTC
+
+    @Test
+    fun `chaque genre de rangee a son propre type de composition`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+            firstUnreadId = "m2",
+            showEncryptionNotice = true,
+            conversationStartName = "Mégane",
+        )
+
+        val byKind = items.groupBy { it::class }.mapValues { (_, rows) -> rows.map { it.contentType }.toSet() }
+        assertThat(byKind.values.flatten()).containsNoDuplicates()
+        assertThat(byKind.keys).containsExactly(
+            ChatListItem.EncryptionNotice::class,
+            ChatListItem.ConversationStart::class,
+            ChatListItem.DayHeader::class,
+            ChatListItem.UnreadSeparator::class,
+            ChatListItem.Message::class,
+        )
+    }
+
+    @Test
+    fun `toutes les bulles partagent un type, donc un pool de composition`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+        ).filterIsInstance<ChatListItem.Message>()
+
+        assertThat(items.map { it.contentType }.toSet()).containsExactly("bubble")
+    }
+
+    @Test
+    fun `le spinner d'historique n'emprunte le type d'aucune rangee du fil`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z")),
+            zone,
+            showEncryptionNotice = true,
+            conversationStartName = "x",
+        )
+
+        assertThat(items.map { it.contentType }).doesNotContain(LOADING_OLDER_CONTENT_TYPE)
+    }
+
+    @Test
+    fun `la cle de mise en page d'une bulle optimiste survit a sa reconciliation serveur`() {
+        val optimistic = bubble("cid_7", "2026-06-11T08:00:00Z").copy(clientMessageId = "cid_7", isPending = true)
+        val reconciled = bubble("srv_42", "2026-06-11T08:00:00Z").copy(clientMessageId = "cid_7")
+
+        val before = layoutKeys(buildChatListItems(listOf(optimistic), zone))
+        val after = layoutKeys(buildChatListItems(listOf(reconciled), zone))
+
+        assertThat(after).isEqualTo(before)
+    }
+
+    @Test
+    fun `les cles des separateurs ne dependent pas des bulles voisines`() {
+        val keys = layoutKeys(
+            buildChatListItems(
+                listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-12T08:00:00Z")),
+                zone,
+                firstUnreadId = "m2",
+            ),
+        )
+
+        assertThat(keys).containsNoDuplicates()
+        assertThat(keys).contains("unread-separator")
+    }
+
+    @Test
+    fun `the separator announces the server count rather than the window count`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+            firstUnreadId = "m2",
+            serverUnreadCount = 12,
+        )
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>().single().count).isEqualTo(12)
+    }
+
+    @Test
+    fun `an unknown server count falls back to the window count`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+            firstUnreadId = "m1",
+        )
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>().single().count).isEqualTo(2)
     }
 }

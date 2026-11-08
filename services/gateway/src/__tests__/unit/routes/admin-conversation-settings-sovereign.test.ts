@@ -45,6 +45,7 @@ type Etat = {
   readonly encryptionMode?: string | null;
   readonly existe?: boolean;
   readonly closedAt?: Date | null;
+  readonly deletedAt?: Date | null;
 };
 
 const PARTICIPANTS = [
@@ -67,6 +68,7 @@ function ligneConversation(etat: Etat, surcharge: AnyRecord = {}): AnyRecord {
     banner: null,
     isActive: true,
     closedAt: etat.closedAt ?? null,
+    ...(etat.deletedAt ? { isActive: false, deletedAt: etat.deletedAt } : {}),
     communityId: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-02'),
@@ -218,6 +220,29 @@ describe('PATCH /admin/conversations/:conversationId', () => {
     const res = await patchConv(app, { autoTranslateEnabled: true, reason: MOTIF });
     expect(res.statusCode).toBe(400);
     expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ['restaurer', { isActive: true }],
+    ['rouvrir', { closed: false }],
+  ])('#14643 — refuse de %s une conversation OBSOLÈTE (409) : ses marques de purge resteraient posées', async (_geste, corps) => {
+    const obsolete = new Date('2026-11-02T10:00:00.000Z');
+    const { app, prisma } = await monter('BIGBOSS', fauxPrisma({ closedAt: obsolete, deletedAt: obsolete }));
+    const res = await patchConv(app, { ...corps, reason: MOTIF });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('CONVERSATION_OBSOLETE');
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('#14643 — une conversation obsolète garde ses autres réglages d\'administration (titre)', async () => {
+    const obsolete = new Date('2026-11-02T10:00:00.000Z');
+    const { app, prisma } = await monter('ADMIN', fauxPrisma({ closedAt: obsolete, deletedAt: obsolete }));
+    const res = await patchConv(app, { title: 'Archive', reason: MOTIF });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(res.json().data).not.toHaveProperty('deletedAt');
     await app.close();
   });
 

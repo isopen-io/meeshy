@@ -1120,4 +1120,54 @@ class StoryComposerAutosaveTest {
         assertThat(restored.frame).isEqualTo(StoryTextFrame())
         assertThat(restored.sourceLanguage).isNull()
     }
+
+    // ---- démontage sans sortie (rotation, pliage) ----
+
+    @Test
+    fun `a draft written at teardown reopens into the next pristine composer`() {
+        val written = (StoryComposerAutosave.resolve(
+            deck = textDeck("a demain"),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        ) as StoryDraftPersist.Save).snapshot
+
+        val reopened = StoryComposerAutosave.restore(stored = written, deckIsPristine = StoryComposerAutosave.deckIsPristine(blankDeck()))
+
+        assertThat(reopened).isEqualTo(written)
+        assertThat(reopened!!.toDeck()!!.slides.single().text).isEqualTo("a demain")
+    }
+
+    @Test
+    fun `a composer already touched is not overwritten by the reopened draft`() {
+        val written = (StoryComposerAutosave.resolve(textDeck("x"), StoryVisibility.PUBLIC, null, now, null) as StoryDraftPersist.Save).snapshot
+
+        assertThat(StoryComposerAutosave.restore(written, deckIsPristine = StoryComposerAutosave.deckIsPristine(textDeck("deja")))).isNull()
+    }
+}
+
+class StoryComposerAutosaveCoverTest {
+
+    @Test
+    fun `la couverture est ecrite apres la sauvegarde du brouillon`() = kotlinx.coroutines.test.runTest {
+        val order = mutableListOf<String>()
+        StoryComposerAutosave.saveThenCover({ order += "save" }, { order += "cover" })
+        assertThat(order).containsExactly("save", "cover").inOrder()
+    }
+
+    @Test
+    fun `un echec de couverture ne bloque jamais la sauvegarde`() = kotlinx.coroutines.test.runTest {
+        var saved = false
+        StoryComposerAutosave.saveThenCover({ saved = true }, { error("rendu impossible") })
+        assertThat(saved).isTrue()
+    }
+
+    @Test
+    fun `un echec de sauvegarde se propage et n'ecrit pas de couverture`() = kotlinx.coroutines.test.runTest {
+        var covered = false
+        val failure = runCatching { StoryComposerAutosave.saveThenCover({ error("disque plein") }, { covered = true }) }
+        assertThat(failure.isFailure).isTrue()
+        assertThat(covered).isFalse()
+    }
 }

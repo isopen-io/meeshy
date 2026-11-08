@@ -35,6 +35,13 @@ final class ComposerLabeledRailTests: XCTestCase {
         XCTAssertEqual(Array(rail.rows.suffix(4)), [.more(.addSlide), .more(.slideDuration), .more(.legend), .plus])
     }
 
+    /// La reprise du son est une COCHE (#4756) : posée en rangée, elle perdrait son état.
+    func test_resolve_neverPromotesTheSoundReuseCheckmark() {
+        let rail = layout(height: 10_000, entries: [.addSlide, .hashtags, .soundReuse])
+        XCTAssertFalse(rail.rows.contains(.more(.soundReuse)))
+        XCTAssertEqual(rail.plus, [.soundReuse])
+    }
+
     func test_resolve_neverPromotesTheAnimationSubmenuNorTheDestructiveClearAll() {
         let rail = layout(height: 10_000)
         XCTAssertFalse(rail.rows.contains(.more(.animation)), "Animation est un sous-menu : il reste derrière Plus")
@@ -147,7 +154,7 @@ final class ComposerLabeledRailTests: XCTestCase {
     /// **Chaque rangée que le rail peut poser a son mot court, dans les sept langues** : un libellé de ⋯ repris tel
     /// quel (« Retirer le fond de la scène », « Vista previa ») ne tient pas dans 112 pt et se tronque.
     func test_title_everyRowTheRailMayServe_hasAShortWordInEveryLanguage() throws {
-        let promouvables = ComposerMoreMenuEntry.allCases.filter { $0 != .animation && $0 != .clearAll }
+        let promouvables = ComposerMoreMenuEntry.allCases.filter { ![.animation, .soundReuse, .commentsOff, .clearAll].contains($0) }
         let cles = promouvables.map { "composer.rail.title.\($0.rawValue)" }
             + ["text", "media", "sticker", "sound", "drawing", "background", "mention", "place"]
                 .map { "composer.rail.title.\($0)" }

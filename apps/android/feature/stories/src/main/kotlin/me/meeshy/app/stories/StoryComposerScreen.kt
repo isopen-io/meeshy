@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.navigation.PresentedSurfaceKind
+import me.meeshy.ui.component.surface.DeclarePresentedSurface
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundSource
 import me.meeshy.sdk.media.readMediaUploadItem
 import android.net.Uri
@@ -18,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -29,7 +30,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.ComposerOpening
 import me.meeshy.ui.theme.MeeshyTheme
@@ -97,6 +97,12 @@ fun StoryComposerScreen(
     }
     // Tuer l'app passe par l'arrière-plan (#13869, iOS didEnterBackground) : la dernière fenêtre où l'écriture n'attend pas l'accalmie.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.persistDraft() }
+    // Une conversation qui s'ouvre referme le composeur dont le brouillon s'écrit à la sortie ; une porte qui sème la matière RETIENT (iOS `ComposerConversationYield`).
+    DeclarePresentedSurface(
+        kind = PresentedSurfaceKind.COMPOSER,
+        retains = { seededByDoor || repostOfId != null || editStoryId != null || recomposeStoryId != null },
+        onClose = onClose,
+    )
 
     StoryEditGate(editStoryId = editStoryId, viewModel = viewModel, onClose = onClose)
     StoryRecomposeGate(recomposeStoryId = recomposeStoryId, viewModel = viewModel, onClose = onClose)
@@ -135,7 +141,13 @@ fun StoryComposerScreen(
         }.takeIf { !capture.armed },
         onCloseSheet = if (sheet?.let(state::serves) == true && !capture.armed) ({ sheet = null }) else null,
     )
-    CompositionLocalProvider(LocalComposerLive provides live, LocalFriseTransport provides transport) {
+    val timelineBridge = rememberComposerTimelineBridge(transport, state.playheadSeconds)
+    val timelinePreview = remember(timelineBridge, state.sceneTracks) { ComposerTimelinePreview(timelineBridge, state.sceneWindows()) }
+    CompositionLocalProvider(
+        LocalComposerLive provides live,
+        LocalFriseTransport provides transport,
+        LocalComposerTimelinePreview provides timelinePreview,
+    ) {
     Box(Modifier.closesGestureOnLift(viewModel::onGestureLifted)) {
     StoryComposerSceneFirst(
         state = state,
@@ -187,13 +199,13 @@ private fun StoryComposerSheetBody(
     onDone: () -> Unit,
 ) {
     when (open) {
-        StoryComposerSheet.STICKERS -> ComposerAnchoredSheet(fill = true) {
+        StoryComposerSheet.STICKERS -> ComposerAnchoredSheet(fill = open.fillsHeight) {
             StoryStickerSheetPanel(viewModel = viewModel, onDismiss = onDone)
         }
-        StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = true) {
+        StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = open.fillsHeight) {
             StorySoundSheet(state = state, composer = viewModel, onDone = onDone)
         }
-        StoryComposerSheet.AUDIENCE -> ComposerAnchoredSheet(fill = false) {
+        StoryComposerSheet.AUDIENCE -> ComposerAnchoredSheet(fill = open.fillsHeight) {
             StoryAudiencePanel(
                 visibility = state.draft.visibility,
                 userIds = state.draft.visibilityUserIds,
@@ -205,6 +217,8 @@ private fun StoryComposerSheetBody(
                 onRemoveMention = viewModel::onRemoveMention,
                 onRemoveHashtag = viewModel::onRemoveHashtag,
                 onDismiss = onDone,
+                commentsDisabled = state.draft.commentsDisabled,
+                onCommentsDisabledChange = viewModel::onCommentsDisabledChange,
             )
         }
         StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE ->
@@ -239,17 +253,15 @@ private class StoryMediaPickers(
 @Composable
 private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: StoryComposerViewModel): StoryMediaPickers {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var replacing by remember { mutableStateOf<String?>(null) }
     fun dispatchPicked(uris: List<Uri>, asBackground: Boolean = false) {
         val replaced = replacing.takeIf { asBackground }
         replacing = null
         if (uris.isEmpty()) return
-        scope.launch {
-            val items = withContext(Dispatchers.IO) {
-                uris.mapNotNull { context.readMediaUploadItem(it) }
-            }
-            if (items.isNotEmpty()) viewModel.onMediaPicked(items, asBackground = asBackground, replacing = replaced)
+        val app = context.applicationContext
+        val hints = uris.map { uri -> IncomingMediaHint.of(uri, app.contentResolver.getType(uri)) }
+        viewModel.onMediaChosen(uris.size, asBackground = asBackground, replacing = replaced, hints = hints) {
+            withContext(Dispatchers.IO) { uris.mapNotNull { app.readMediaUploadItem(it) } }
         }
     }
     val pickSingle = rememberLauncherForActivityResult(

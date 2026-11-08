@@ -6,6 +6,7 @@ import { callerRateKey } from '../../utils/client-rate-key';
 import { presenceFor, viewerFromAuthContext } from '../users/presence-gate';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { logError } from '../../utils/logger.js';
+import { servedDoNotDisturb } from '../../services/relations/doNotDisturbVisibility';
 
 /** La borne anti-moisson, conservée telle quelle. */
 export const MAX_IDS_PAR_REQUETE = 200;
@@ -14,6 +15,8 @@ export type PresenceServie = {
   readonly userId: string;
   readonly isOnline: boolean;
   readonly lastActiveAt: Date | null;
+  /** « Ne pas déranger » en cours, servi dès Connaissance (#14107, PRE-07) ; `false` sinon. */
+  readonly doNotDisturb: boolean;
 };
 
 /**
@@ -35,6 +38,7 @@ export const presenceResponseSchema = {
               userId: { type: 'string' },
               isOnline: { type: 'boolean' },
               lastActiveAt: { type: ['string', 'null'], format: 'date-time' },
+              doNotDisturb: { type: 'boolean', description: 'En Ne pas déranger maintenant, servi dès Connaissance (#14107) ; false sinon' },
             },
           },
         },
@@ -93,7 +97,7 @@ export async function servirPresence(
   if (!presenceChecker) {
     // Service non encore monté (phase de démarrage). Tout hors ligne plutôt
     // qu'un 500 — et c'est la réponse FERMÉE, donc la bonne des deux.
-    return ids.map((id) => ({ userId: id, isOnline: false, lastActiveAt: null }));
+    return ids.map((id) => ({ userId: id, isOnline: false, lastActiveAt: null, doNotDisturb: false }));
   }
 
   const presenceRuntime = presenceChecker.bulk(ids);
@@ -119,10 +123,10 @@ export async function servirPresence(
     }).authContext
   );
 
-  const carte = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
-    viewer,
-    users.map((u) => u.id)
-  );
+  const [carte, ndd] = await Promise.all([
+    getPresenceVisibilityService(fastify.prisma).resolveForTargets(viewer, users.map((u) => u.id)),
+    servedDoNotDisturb(fastify.prisma, { viewerId: viewer?.userId ?? null, targetIds: users.map((u) => u.id) }),
+  ]);
 
   return ids.map((id) => {
     // UNE seule lecture de la carte, pour tous les ids : présent, absent,
@@ -132,6 +136,7 @@ export async function servirPresence(
       userId: id,
       isOnline: vis.showOnline ? (presenceRuntime.get(id) ?? false) : false,
       lastActiveAt: vis.showLastSeenTimestamp ? (derniereActivite.get(id) ?? null) : null,
+      doNotDisturb: ndd.get(id) ?? false,
     };
   });
 }

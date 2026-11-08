@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -46,10 +47,23 @@ private val LIVE_AUDIO_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
     .build()
 
+/**
+ * Les effets d'image qu'un lecteur vivant pose sur sa vidéo (le look d'une vidéo réglée, #13841) ; [PENDING] ouvre le
+ * pipeline sans rien peindre, le temps que le look se peigne.
+ */
+class ComposerLiveEffects internal constructor(internal val effects: List<Effect>) {
+    companion object {
+        val PENDING: ComposerLiveEffects = ComposerLiveEffects(emptyList())
+    }
+}
+
 /** Le lecteur vivant du compositeur, et s'il attend encore sa première image (la scène le dit). */
 @Stable
 class ComposerLivePlayerState internal constructor(val player: ExoPlayer, waiting: State<Boolean>) {
     val waiting: Boolean by waiting
+
+    /** La position du lecteur, en millisecondes : le chrono d'une puce son la lit sans dépendre de Media3 (#16293). */
+    val positionMs: Long get() = player.currentPosition
 }
 
 /**
@@ -71,7 +85,9 @@ internal class ComposerLiveFirstFrame : Player.Listener {
  * les autres — la scène se tait, elle, hors premier plan. La fenêtre est tenue sur la source entière — un message posé à sa fin ramène la tête au début, une boucle de la
  * source aussi ([ComposerLivePlayback.rewindTo]) — et chaque fenêtre nouvelle déplace la tête là où l'auteur regarde
  * ([ComposerLivePlayback.seekOnChange]). Le volume suit à chaud ; [playing] faux le fige sans rembobiner. Chacun ne charge
- * d'avance que quelques secondes, 8 Mo au plus ([ComposerLiveBuffer]).
+ * d'avance que quelques secondes, 8 Mo au plus ([ComposerLiveBuffer]). [effects] : le look d'une vidéo réglée, posé par
+ * le GPU ([me.meeshy.ui.component.retouch.rememberStoryVideoLookEffects]) sur CE lecteur ([ComposerLiveLook]) — poser,
+ * changer ou retirer un look ne le recrée jamais et garde la position de lecture ; `null` n'ouvre aucun pipeline d'effets.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -82,6 +98,7 @@ fun rememberComposerLivePlayer(
     playing: Boolean,
     category: MediaCacheCategory = MediaCacheCategory.VIDEO,
     follow: ComposerLiveFollow? = null,
+    effects: ComposerLiveEffects? = null,
 ): ComposerLivePlayerState {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
@@ -92,6 +109,7 @@ fun rememberComposerLivePlayer(
             .setLoadControl(ComposerLiveBuffer.loadControl())
             .build().apply {
                 setAudioAttributes(LIVE_AUDIO_ATTRIBUTES, false)
+                if (effects != null) setVideoEffects(emptyList())
                 setMediaItem(MediaItem.fromUri(mediaUrl))
                 repeatMode = Player.REPEAT_MODE_ALL
                 prepare()
@@ -101,6 +119,8 @@ fun rememberComposerLivePlayer(
     val live = remember(player) { ComposerLiveHead(player) }
     LaunchedEffect(live, window) { live.follow(window) }
     LaunchedEffect(player, volume) { player.volume = volume }
+    val look = remember(player) { ComposerLiveLook(player, opened = effects != null, onReopened = live::rearm) }
+    LaunchedEffect(look, effects) { look.paint(effects) }
     // La frise ouverte (#13481) : le lecteur suit sa tête — il joue avec elle, se fige sur l'image de l'instant à l'arrêt,
     // se tait hors de sa fenêtre. Fermée, la scène joue en continu.
     LaunchedEffect(player, playing, follow) { player.obey(playing, follow) }
@@ -135,6 +155,28 @@ private fun ExoPlayer.obey(playing: Boolean, follow: ComposerLiveFollow?) {
     playWhenReady = runs
 }
 
+/**
+ * Le look posé sur un lecteur vivant, sans jamais le recréer (#14858) : un pipeline d'effets ouvert prend chaque look à
+ * chaud, et le retirer y pose une liste vide. Le premier look d'un lecteur né sans pipeline le rouvre SUR PLACE — arrêté
+ * puis repréparé, sa position, sa lecture et sa fenêtre gardées ([onReopened]) — car le rendu vidéo ne prend son pipeline
+ * qu'en s'activant.
+ */
+@OptIn(UnstableApi::class)
+internal class ComposerLiveLook(private val player: ExoPlayer, private var opened: Boolean, private val onReopened: () -> Unit) {
+    fun paint(effects: ComposerLiveEffects?) {
+        if (effects == null) {
+            if (opened) player.setVideoEffects(emptyList())
+            return
+        }
+        player.setVideoEffects(effects.effects)
+        if (opened) return
+        opened = true
+        player.stop()
+        player.prepare()
+        onReopened()
+    }
+}
+
 /** La tête du lecteur vivant : elle suit la fenêtre courante et reboucle sur son début. */
 private class ComposerLiveHead(private val player: ExoPlayer) {
     private var window: ComposerLiveWindow? = null
@@ -143,6 +185,15 @@ private class ComposerLiveHead(private val player: ExoPlayer) {
     fun follow(next: ComposerLiveWindow) {
         ComposerLivePlayback.seekOnChange(window, next)?.let(player::seekTo)
         window = next
+        arm(next)
+    }
+
+    /** Le lecteur s'est rouvert sur place : le rendez-vous de fin de fenêtre se repose. */
+    fun rearm() {
+        window?.let(::arm)
+    }
+
+    private fun arm(next: ComposerLiveWindow) {
         endMessage?.cancel()
         endMessage = next.endMs?.let { end ->
             player.createMessage { _, _ -> player.seekTo(next.startMs) }

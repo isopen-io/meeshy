@@ -3,7 +3,10 @@ package me.meeshy.ui.component.imageedit
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.imageedit.CropGeometry
@@ -41,6 +45,9 @@ private const val CORNER_ARM = 0.6f
  * [onInteraction] se déclenche dès qu'une poignée (ou le cadre) est saisie — au premier appui, avant
  * le seuil de glissement, comme iOS `DragGesture(minimumDistance: 0)` : l'hôte ne cuit le
  * recadrage que s'il a été saisi, ouvrir puis fermer l'outil reste un no-op.
+ *
+ * Avec [imageGestures] (le recadrage plein écran, #15194), le cadre ne se déplace plus par son centre : hors des angles et
+ * des bords, glisser et pincer vont à l'image posée dessous, et le cadre tiré se rend à l'hôte quand le doigt se lève.
  */
 @Composable
 public fun CropOverlayView(
@@ -50,12 +57,14 @@ public fun CropOverlayView(
     aspectRatio: Double?,
     modifier: Modifier = Modifier,
     onInteraction: () -> Unit = {},
+    imageGestures: CropImageGestures? = null,
 ) {
     val rect by rememberUpdatedState(cropRect)
     val onChange by rememberUpdatedState(onCropRectChange)
     val onTouch by rememberUpdatedState(onInteraction)
     val ratio by rememberUpdatedState(aspectRatio)
     val display by rememberUpdatedState(imageDisplayRect)
+    val image by rememberUpdatedState(imageGestures)
     var active by remember { mutableStateOf(CropOverlayHandle.NONE) }
     val minCrop = with(androidx.compose.ui.platform.LocalDensity.current) { CropGeometry.MIN_CROP_SIZE_DP.dp.toPx() }
     val hitArea = with(androidx.compose.ui.platform.LocalDensity.current) { CropGeometry.HANDLE_HIT_AREA_DP.dp.toPx() }
@@ -73,22 +82,58 @@ public fun CropOverlayView(
                         if (grabbed != CropOverlayHandle.NONE) onTouch()
                     }
                 }
-                .pointerInput(minCrop, hitArea) {
-                    detectDragGestures(
-                        onDragStart = { start ->
-                            active = CropGeometry.detectHandle(rect, start.x, start.y, ratio, hitArea)
-                        },
-                        onDrag = { change, delta ->
-                            change.consume()
-                            val next = CropGeometry.resized(
-                                rect, active, CropSize(delta.x, delta.y), ratio, minCrop,
+                .then(
+                    if (imageGestures == null) {
+                        Modifier.pointerInput(minCrop, hitArea) {
+                            detectDragGestures(
+                                onDragStart = { start ->
+                                    active = CropGeometry.detectHandle(rect, start.x, start.y, ratio, hitArea)
+                                },
+                                onDrag = { change, delta ->
+                                    change.consume()
+                                    val next = CropGeometry.resized(
+                                        rect, active, CropSize(delta.x, delta.y), ratio, minCrop,
+                                    )
+                                    if (next != rect) onChange(next)
+                                },
+                                onDragEnd = { settle(active, rect, display, minCrop, onChange); active = CropOverlayHandle.NONE },
+                                onDragCancel = { active = CropOverlayHandle.NONE },
                             )
-                            if (next != rect) onChange(next)
-                        },
-                        onDragEnd = { settle(active, rect, display, minCrop, onChange); active = CropOverlayHandle.NONE },
-                        onDragCancel = { active = CropOverlayHandle.NONE },
-                    )
-                },
+                        }
+                    } else {
+                        Modifier.pointerInput(minCrop, hitArea) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val handle = CropGeometry.detectHandle(rect, down.position.x, down.position.y, ratio, hitArea)
+                                if (handle != CropOverlayHandle.NONE && handle != CropOverlayHandle.CENTER) {
+                                    active = handle
+                                    image?.onFrameGrab?.invoke()
+                                    drag(down.id) { change ->
+                                        val delta = change.positionChange()
+                                        change.consume()
+                                        val next = CropGeometry.resized(rect, active, CropSize(delta.x, delta.y), ratio, minCrop)
+                                        if (next != rect) onChange(next)
+                                    }
+                                    settle(active, rect, display, minCrop, onChange)
+                                    active = CropOverlayHandle.NONE
+                                    image?.onFrameRelease?.invoke()
+                                } else {
+                                    image?.onImageStart?.invoke()
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val zoom = event.calculateZoom()
+                                        val pan = event.calculatePan()
+                                        if (zoom != 1f || pan != Offset.Zero) {
+                                            image?.onImage?.invoke(pan.x, pan.y, zoom)
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                    image?.onImageEnd?.invoke()
+                                }
+                            }
+                        }
+                    },
+                ),
         ) {
             drawScrim(cropRect)
             drawFrame(cropRect)
@@ -104,6 +149,19 @@ public fun CropOverlayView(
         )
     }
 }
+
+/**
+ * Ce que le recadrage plein écran reçoit du cadre (#15194) : [onImage] le glisser et le pincement sur l'image (en pixels
+ * d'écran, facteur de zoom), encadrés par [onImageStart] et [onImageEnd] ; [onFrameGrab] et [onFrameRelease] un angle ou
+ * un bord saisi puis lâché.
+ */
+public class CropImageGestures(
+    public val onImage: (panX: Float, panY: Float, zoom: Float) -> Unit,
+    public val onImageStart: () -> Unit = {},
+    public val onImageEnd: () -> Unit = {},
+    public val onFrameGrab: () -> Unit = {},
+    public val onFrameRelease: () -> Unit = {},
+)
 
 private fun settle(
     handle: CropOverlayHandle,

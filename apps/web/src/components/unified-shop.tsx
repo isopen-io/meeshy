@@ -11,6 +11,7 @@ import { loadShop, purchasePack, setShopPackInstalled, shopPackText, type ShopPa
 import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 
 import { loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
+import { usePackPreviewCatalog } from '@/lib/i18n-pack-preview-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import { packIsLocked, packUnlockLine } from '@/lib/packs/unlock-line';
 import { stickerPackCoverSrc } from '@/lib/sticker-packs/src';
@@ -21,7 +22,10 @@ import { meeStickersOfPack } from '@/lib/mee/catalog';
 import { renderMeeSticker } from '@/lib/mee/render';
 import { isMeeBuiltinPack, type MeeBuiltinPack } from '@/lib/mee/types';
 
-import type { PackShopAdapter } from './pack-shop';
+import { isDecorDomain, packItemsQueryKey } from '@/lib/packs/decor-domains';
+import type { PackItems } from '@/lib/packs/pack-items-load';
+
+import type { PackInspection, PackShopAdapter } from './pack-shop';
 
 /** La vignette d'un pack Mee intégré : son premier Mee, dessiné par le client (le serveur ne sert aucune image). */
 function MeePackCover({ slug }: { readonly slug: MeeBuiltinPack }) {
@@ -36,6 +40,9 @@ function MeePackCover({ slug }: { readonly slug: MeeBuiltinPack }) {
 
 /** Chargée à la demande, comme dans `frame-pack-shop.tsx` : `pack_shop` est `dynamic_only` (budgets.json). */
 const PackShop = lazy(() => import('./pack-shop').then((m) => ({ default: m.PackShop })));
+/* #16267 — la fiche d'un pack et le plein écran d'un élément, chargés au premier toucher. */
+const PackSheet = lazy(() => import('./pack-sheet').then((m) => ({ default: m.PackSheet })));
+const DecorPreview = lazy(() => import('./decor-preview').then((m) => ({ default: m.DecorPreview })));
 /* W16 — proposer une lens, chargé seulement quand le domaine « Lens » est choisi. */
 const LensSubmit = lazy(() => import('./lens-submit'));
 
@@ -71,6 +78,84 @@ const DOMAIN_KEYS: Readonly<Record<PackDomain, PlainStickerPacksKey>> = {
   lens: 'packs.domain.lens',
 };
 
+
+function PackCover({ pack }: { readonly pack: UnifiedPack }) {
+  if (pack.domain === 'sticker' && pack.builtin === true && isMeeBuiltinPack(pack.rawSlug)) return <MeePackCover slug={pack.rawSlug} />;
+  const cover = stickerPackCoverSrc(pack);
+  return cover === null ? (
+    <span aria-hidden className="block h-14 w-14 shrink-0 rounded-xl" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
+  ) : (
+    <img src={cover} alt="" loading="lazy" decoding="async" className="block h-14 w-14 shrink-0 rounded-xl object-cover" />
+  );
+}
+
+/**
+ * La fiche et le plein écran d'un pack de décor (#16267), chacun par un
+ * `import()`. Une « autre proposition » ouvre le plein écran de SON pack, à
+ * son élément — lu dans le cache des éléments que la rangée a remplis.
+ */
+function UnifiedPackInspector({
+  inspection,
+  language,
+  deps,
+  queryClient,
+}: {
+  readonly inspection: PackInspection<UnifiedPack>;
+  readonly language: InterfaceLanguage;
+  readonly deps: ConversationsDeps;
+  readonly queryClient: QueryClient;
+}) {
+  const catalogReady = usePackPreviewCatalog(language);
+  const refOf = (pack: UnifiedPack) => (isDecorDomain(pack.domain) ? { domain: pack.domain, slug: pack.rawSlug } : null);
+  const decorPacks = inspection.packs.flatMap((pack) => {
+    const ref = refOf(pack);
+    return ref === null ? [] : [ref];
+  });
+  const sheet = inspection.sheet;
+  const sheetRef = sheet === null ? null : refOf(sheet);
+  const preview = inspection.preview;
+  const previewRef = preview === null ? null : refOf(preview.pack);
+  if (!catalogReady) return null;
+  return (
+    <Suspense fallback={null}>
+      {sheet === null || sheetRef === null ? null : (
+        <PackSheet
+          language={language}
+          deps={deps}
+          pack={{ ...sheetRef, title: shopPackText(sheet, language).name, description: shopPackText(sheet, language).description, author: sheet.author, installed: sheet.installed, price: sheet.price, owned: sheet.owned }}
+          cover={<PackCover pack={sheet} />}
+          action={inspection.actionOf(sheet)}
+          busy={inspection.busy(sheet)}
+          notice={inspection.notice}
+          onAction={() => void inspection.toggle(sheet)}
+          onOpenItem={(index) => inspection.openPreview(sheet, index)}
+          onClose={inspection.closeSheet}
+        />
+      )}
+      {preview === null || previewRef === null ? null : (
+        <DecorPreview
+          language={language}
+          deps={deps}
+          pack={{ ...previewRef, title: shopPackText(preview.pack, language).name, installed: preview.pack.installed }}
+          index={preview.index}
+          packs={decorPacks}
+          action={inspection.actionOf(preview.pack)}
+          busy={inspection.busy(preview.pack)}
+          notice={inspection.notice}
+          onIndex={(index) => inspection.openPreview(preview.pack, index)}
+          onProposal={(item) => {
+            const target = inspection.packs.find((pack) => pack.domain === item.domain && pack.rawSlug === item.pack);
+            if (target === undefined) return;
+            const items = queryClient.getQueryData<PackItems>(packItemsQueryKey(item.domain, item.pack))?.items ?? [];
+            inspection.openPreview(target, Math.max(0, items.findIndex((candidate) => candidate.key === item.key)));
+          }}
+          onAction={() => inspection.toggle(preview.pack)}
+          onClose={inspection.closePreview}
+        />
+      )}
+    </Suspense>
+  );
+}
 
 export const keyedPack = (pack: ShopPack): UnifiedPack => ({ ...pack, rawSlug: pack.slug, slug: `${pack.domain}:${pack.slug}` });
 
@@ -123,15 +208,9 @@ export const unifiedShopAdapter = (
     ...(pack.author === '' ? [] : [translateStickerPacks(language, 'stickerPacks.by', { author: pack.author })]),
     translateStickerPacks(language, DOMAIN_KEYS[pack.domain]),
   ],
-  cover: (pack) => {
-    if (pack.domain === 'sticker' && pack.builtin === true && isMeeBuiltinPack(pack.rawSlug)) return <MeePackCover slug={pack.rawSlug} />;
-    const cover = stickerPackCoverSrc(pack);
-    return cover === null ? (
-      <span aria-hidden className="block h-14 w-14 shrink-0 rounded-xl" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
-    ) : (
-      <img src={cover} alt="" loading="lazy" decoding="async" className="block h-14 w-14 shrink-0 rounded-xl object-cover" />
-    );
-  },
+  cover: (pack) => <PackCover pack={pack} />,
+  inspectable: (pack) => isDecorDomain(pack.domain),
+  inspector: (inspection) => <UnifiedPackInspector inspection={inspection} language={language} deps={deps} queryClient={queryClient} />,
   unlock: (pack) =>
     pack.requirementPreview === undefined ? null : packUnlockLine({ preview: pack.requirementPreview, language, ...(rankName !== undefined ? { rankName } : {}) }),
   locked: (pack) => packIsLocked(pack.requirementPreview),

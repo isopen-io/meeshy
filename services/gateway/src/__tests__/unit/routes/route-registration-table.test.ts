@@ -271,7 +271,13 @@ describe('ROUTE_TABLE (#4278)', () => {
     // l'usage k-anonyme sous `/api/v1/lens` (distinct de `/packs/lens`, dont les
     // chemins statiques masqueraient des slugs). Aucun alias, aucune route
     // retirée ni renommée ; le manifeste gagne exactement ses neuf routes.
-    expect(ROUTE_TABLE.length).toBe(97);
+    // 98 : #13936 ajoute `bring` — le Bring (`/api/v1/bring` : disponibilité, envoi,
+    // arrêt). Aucun alias, aucune route retirée ni renommée ; le manifeste gagne ses trois
+    // routes, et le montage `relations` les deux du réglage par personne (`/:userId/settings`).
+    // 99 : #16274 ajoute `pack-publishers` — les éditeurs de packs (`/api/v1/publishers` : le sien,
+    // la fiche en boutique, la liste avec propriétaire pour BIGBOSS/ADMIN). Aucun alias, aucune
+    // route retirée ni renommée ; le manifeste gagne exactement ses trois routes.
+    expect(ROUTE_TABLE.length).toBe(99);
   });
 });
 

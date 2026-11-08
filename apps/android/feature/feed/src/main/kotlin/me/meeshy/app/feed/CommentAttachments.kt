@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -30,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -42,6 +42,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.CommentPieceKind
+import me.meeshy.ui.component.bubble.BubbleFile
+import me.meeshy.ui.component.comments.CommentAttachmentsTray
+import me.meeshy.ui.component.comments.CommentTrayLabels
+import me.meeshy.ui.component.comments.CommentTrayTile
+import me.meeshy.ui.component.bubble.BubbleFileRow
+import me.meeshy.ui.component.composer.PieceRemoveBadge
+import me.meeshy.ui.component.composer.PieceRemoveBadgeGeometry
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.icons.MeeshyIcons
@@ -52,8 +60,6 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val PieceShape = RoundedCornerShape(MeeshyRadius.md)
 private val PieceSize = 56.dp
-private val PieceRemoveDisc = 20.dp
-private val PieceRemoveTouch = 32.dp
 private val MediaSize = 120.dp
 
 /** Assez pour une vignette de 56 dp nette, l'orientation EXIF cuite : une prise de l'objectif n'y arrive pas couchée. */
@@ -67,9 +73,26 @@ private const val PIECE_THUMBNAIL_LONG_SIDE = 256
 internal fun CommentMediaStrip(media: List<CommentMediaPreview>) {
     if (media.isEmpty()) return
     media.filter { it.isAudio }.forEach { CommentAudioChip(it) }
-    val visual = media.filterNot { it.isAudio }
+    media.filter { it.isFile }.forEach { CommentFileRow(it) }
+    val visual = media.filter { it.kind.isVisual }
     if (visual.isEmpty()) return
     CommentVisualStrip(visual)
+}
+
+/**
+ * #14386 — un fichier joint se lit comme dans une conversation ([BubbleFileRow] : trombone, nom, taille) ; le toucher
+ * l'ouvre hors de Meeshy (le navigateur ou l'application qui sait le lire le télécharge).
+ */
+@Composable
+private fun CommentFileRow(item: CommentMediaPreview) {
+    val uriHandler = LocalUriHandler.current
+    val url = item.url
+    BubbleFileRow(
+        file = BubbleFile(attachmentId = item.id, name = item.fileName, sizeBytes = item.fileSize, url = url),
+        onColor = MeeshyTheme.tokens.textPrimary,
+        onClick = url?.let { { runCatching { uriHandler.openUri(it) } } },
+        modifier = Modifier.padding(top = MeeshySpacing.xs),
+    )
 }
 
 @Composable
@@ -103,58 +126,28 @@ private fun CommentVisualStrip(media: List<CommentMediaPreview>) {
 }
 
 /**
- * Le bandeau des pièces du composeur (#12972) : une vignette par pièce ; la toucher l'ouvre dans la retouche
- * unique (#12735), (x) la retire ; une pièce qui se téléverse porte son indicateur.
+ * Le bandeau des pièces du composeur (#12972) : la zone commune [CommentAttachmentsTray] (sdk-ui, mêmes tuiles que le
+ * message) ; la vignette, elle, vient d'ici — la zone ne lit aucun fichier.
  */
 @Composable
 internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentPendingPiece) -> Unit, onRemove: (String) -> Unit) {
-    if (!tray.hasMedia) return
-    val removeLabel = stringResource(R.string.feed_composer_remove_media)
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        tray.pieces.forEach { piece ->
-            val editLabel = stringResource(R.string.post_comments_edit_media)
-            Box(Modifier.size(PieceSize)) {
-                Box(
-                    Modifier.size(PieceSize).clip(PieceShape).background(MeeshyTheme.tokens.inputBackground)
-                        .clickable(onClickLabel = editLabel, role = Role.Button) { onEdit(piece) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PieceThumbnail(piece)
-                    if (piece.uploaded == null) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                }
-                PieceRemoveButton(label = removeLabel, onClick = { onRemove(piece.id) }, modifier = Modifier.align(Alignment.TopEnd))
-            }
-        }
-    }
-}
-
-/**
- * Le ✕ d'une pièce (#14287) : un rond net de 20 dp dans le coin de la vignette. La zone touchée, plus large, reste
- * transparente ; un `IconButton` l'aurait portée à 48 dp et peinte en gris, débordant en demi-disque derrière le ✕.
- */
-@Composable
-private fun PieceRemoveButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(PieceRemoveTouch)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.TopEnd,
-    ) {
-        Box(
-            Modifier.size(PieceRemoveDisc).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
-        }
+    val labels = CommentTrayLabels(
+        edit = stringResource(R.string.post_comments_edit_media),
+        remove = stringResource(R.string.feed_composer_remove_media),
+        preparing = stringResource(R.string.comment_tray_preparing),
+    )
+    val tiles = tray.pieces.map { CommentTrayTile(it.id, CommentPieceKind.of(it.item.mimeType), it.item.fileName, isLoading = it.uploaded == null) }
+    CommentAttachmentsTray(tiles, labels, onEdit = { tile -> tray.piece(tile.id)?.let(onEdit) }, onRemove = onRemove) { tile ->
+        tray.piece(tile.id)?.let { PieceThumbnail(it) }
     }
 }
 
 @Composable
 private fun PieceThumbnail(piece: CommentPendingPiece) {
+    if (piece.isFile) {
+        PieceFileThumbnail(piece)
+        return
+    }
     if (piece.isVideo || piece.isAudio) {
         Icon(if (piece.isAudio) MeeshyIcons.Mic else MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
         return
@@ -165,33 +158,51 @@ private fun PieceThumbnail(piece: CommentPendingPiece) {
     bitmap?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
 }
 
+/** Un fichier du bandeau (#14386) : le trombone et le nom, qui se lit sous le pouce. */
+@Composable
+private fun PieceFileThumbnail(piece: CommentPendingPiece) {
+    androidx.compose.foundation.layout.Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(MeeshySpacing.xxs).semantics(mergeDescendants = true) { contentDescription = piece.item.fileName },
+    ) {
+        Icon(MeeshyIcons.AttachFile, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(20.dp))
+        androidx.compose.material3.Text(
+            text = piece.item.fileName,
+            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+    }
+}
+
 /**
  * **UNE PIÈCE DU COMMENTAIRE S'OUVRE DANS LA RETOUCHE UNIQUE** (#12735) — miroir de `CommentSceneRetouch` (iOS) :
  * une photo dans la retouche photo, une vidéo dans la retouche vidéo ; « Terminé » la remplace à sa place, une
  * pièce intouchée ne bouge pas. Rend le geste « Éditer » du bandeau.
  */
 @Composable
-internal fun rememberCommentPieceRetouch(onReplace: (String, MediaUploadItem) -> Unit): (CommentPendingPiece) -> Unit {
+internal fun rememberCommentPieceRetouch(onReplace: (String, MediaUploadItem, CommentPieceRetouch?) -> Unit): (CommentPendingPiece) -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var photo by remember { mutableStateOf<Pair<String, FeedRetouchPending>?>(null) }
     var video by remember { mutableStateOf<Pair<String, FeedVideoRetouchPending>?>(null) }
     photo?.let { (id, pending) ->
-        FeedCaptureRetouchHost(pending, onDeliver = { item -> photo = null; if (item !== pending.item) onReplace(id, item) }, onDismiss = { photo = null })
+        FeedCaptureRetouchHost(pending, onDeliver = { piece -> photo = null; piece?.let { onReplace(id, it.item, it.retouch) } }, onDismiss = { photo = null })
     }
     video?.let { (id, pending) ->
         FeedVideoRetouchHost(
             pending,
-            onDeliver = { item -> video = null; item?.takeIf { it.fileName != pending.fileName }?.let { onReplace(id, it) } },
+            onDeliver = { item -> video = null; item?.takeIf { it.fileName != pending.fileName }?.let { onReplace(id, it, null) } },
             onDismiss = { pending.discard(); video = null },
         )
     }
     return { piece ->
-        scope.launch {
+        if (!piece.isFile) scope.launch {
             if (piece.isVideo) {
                 commentVideoPending(context, piece.item)?.let { video = piece.id to it }
             } else {
-                withContext(Dispatchers.Default) { FeedRetouchPending.of(piece.item) }?.let { photo = piece.id to it }
+                withContext(Dispatchers.Default) { FeedRetouchPending.of(piece.source, piece.retouch) }?.let { photo = piece.id to it }
             }
         }
     }

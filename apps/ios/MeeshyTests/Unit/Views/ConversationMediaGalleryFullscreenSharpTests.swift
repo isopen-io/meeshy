@@ -449,6 +449,106 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
         XCTAssertTrue(code.contains("poster: VideoPosterResolver.poster(for: attachment)"))
     }
 
+    // MARK: - #16470 : la voisine a son visuel PRÊT avant d'entrer à l'écran
+
+    private func video(width: Int = 1920, height: Int = 1080) -> MessageAttachment {
+        MessageAttachment(mimeType: "video/mp4",
+                          fileUrl: "https://cdn.meeshy.me/neighbour-\(UUID().uuidString).mp4",
+                          width: width, height: height)
+    }
+
+    private func poster(side: CGFloat) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side * 9 / 16), format: format)
+            .image { context in
+                UIColor.red.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+            }
+    }
+
+    /// La page VOISINE se construit pendant le glissement : elle ne lit que la
+    /// MÉMOIRE. Un poster resté sur le disque n'est pas résident — sa lecture
+    /// synchrone (disque + décodage) tomberait sur le fil principal au moment
+    /// précis où le doigt fait glisser la page.
+    func test_residentPoster_readsMemoryOnly_neverTheDisk() async throws {
+        let attachment = video()
+        let key = try XCTUnwrap(VideoPosterResolver.posterKey(for: attachment))
+        let data = try XCTUnwrap(poster(side: 1920).jpegData(compressionQuality: 0.8))
+        await CacheCoordinator.shared.thumbnails.store(data, for: key)
+
+        XCTAssertNil(VideoPosterResolver.residentPoster(for: attachment),
+                     "un poster sur disque seulement n'est pas résident")
+        XCTAssertNotNil(VideoPosterResolver.persistedPoster(for: attachment),
+                        "témoin : le disque porte bien le poster")
+    }
+
+    func test_residentPoster_servesAFullscreenGradePosterInMemory_andRefusesTheBubbleGrade() throws {
+        let sharp = video()
+        DiskCacheStore.cacheImageForPreview(poster(side: 1920),
+                                            key: try XCTUnwrap(VideoPosterResolver.posterKey(for: sharp)))
+        XCTAssertNotNil(VideoPosterResolver.residentPoster(for: sharp))
+
+        let bubble = video()
+        DiskCacheStore.cacheImageForPreview(poster(side: 300),
+                                            key: try XCTUnwrap(VideoPosterResolver.posterKey(for: bubble)))
+        XCTAssertNil(VideoPosterResolver.residentPoster(for: bubble),
+                     "le grade bulle reste refusé en plein écran")
+    }
+
+    /// Le préchauffage de la fenêtre remonte le poster persisté du disque vers
+    /// la mémoire, HORS du fil principal : la voisine le trouve résident au
+    /// premier `body`.
+    func test_warmPersistedPoster_bringsTheDiskPosterIntoMemory() async throws {
+        let attachment = video()
+        let key = try XCTUnwrap(VideoPosterResolver.posterKey(for: attachment))
+        let data = try XCTUnwrap(poster(side: 1920).jpegData(compressionQuality: 0.8))
+        await CacheCoordinator.shared.thumbnails.store(data, for: key)
+
+        await VideoPosterResolver.warmPersistedPoster(for: attachment)
+
+        XCTAssertNotNil(VideoPosterResolver.residentPoster(for: attachment))
+    }
+
+    /// La voisine lit la mémoire seule à sa construction ; seule la page
+    /// OUVERTE peut payer la lecture disque (elle s'ouvre sur son poster).
+    func test_videoPage_neighbourMountsTheResidentPosterOnly() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
+        let page = try block(from: "struct GalleryVideoPage: View, Equatable", upTo: "var body: some View", in: code)
+        XCTAssertTrue(page.contains("VideoPosterResolver.residentPoster(for: attachment)"),
+                      "la voisine se construit pendant le geste : mémoire seule")
+    }
+
+    /// Tant que le poster net n'est pas là, la voisine montre la VIGNETTE
+    /// serveur (la même première image), jamais le seul thumbHash flou qui
+    /// était remplacé à l'arrivée.
+    func test_videoPage_withoutPoster_showsTheServerThumbnail_notABlurredHashAlone() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
+        let layer = try block(from: "private var thumbnailLayer: some View {", upTo: "private var playOrDownloadButton", in: code)
+        XCTAssertFalse(layer.contains("posterUnavailable"),
+                       "la vignette serveur n'attend plus l'échec du poster")
+        XCTAssertFalse(layer.contains("thumbHashBackdrop"),
+                       "plus de thumbHash seul : il était substitué sous les yeux à l'arrivée")
+    }
+
+    /// Le préchauffage d'une vidéo voisine met AUSSI sa vignette serveur en
+    /// mémoire, pour que la page la serve au premier `body`.
+    func test_prewarm_video_warmsTheServerThumbnail() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
+        let warm = try block(from: "enum GalleryPrewarm {", upTo: "enum GalleryRenderWindow {", in: code)
+        let videoCase = try block(from: "case .video:", upTo: "case .image:", in: warm)
+        XCTAssertTrue(videoCase.contains("attachment.thumbnailUrl"))
+    }
+
+    /// Le préchauffage ne lit plus le disque sur le fil principal : la sonde
+    /// du poster persisté vit dans la tâche.
+    func test_warmIfLocal_neverProbesTheDiskSynchronously() throws {
+        let code = AppSourceGuard.stripComments(try source(Self.resolver))
+        let warm = try block(from: "static func warmIfLocal(", upTo: "static func poster(", in: code)
+        let beforeTask = try block(from: "static func warmIfLocal(", upTo: "Task {", in: warm)
+        XCTAssertFalse(beforeTask.contains("persistedPoster("))
+    }
+
     func test_fullscreenLayerView_reportsItsFirstFrame_viaIsReadyForDisplayKVO() throws {
         let code = AppSourceGuard.stripComments(try source(Self.legacyPlayer))
         XCTAssertTrue(code.contains("observe(\\.isReadyForDisplay"))

@@ -309,7 +309,7 @@ class ComposerPlacedMediaEditComposeTest {
         tapRail("Set as background")
 
         assertThat(railShown()).containsExactly(
-            "Framing", "Trim", "Filters", "Adjust", "Sound", "Loop", "Rotate", "Describe", "Replace", "Place on the scene", "Remove",
+            "Framing", "Trim", "Filters", "Frames", "Adjust", "Sound", "Loop", "Rotate", "Describe", "Replace", "Place on the scene", "Remove",
         ).inOrder()
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
         tapRail("Adjust")

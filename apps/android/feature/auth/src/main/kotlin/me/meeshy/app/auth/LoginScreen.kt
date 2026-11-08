@@ -1,64 +1,49 @@
-@file:OptIn(ExperimentalLayoutApi::class)
-
 package me.meeshy.app.auth
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.meeshy.feature.auth.R
+import kotlinx.coroutines.delay
+import me.meeshy.app.onboarding.rememberOnboardingReduceMotion
 import me.meeshy.sdk.model.auth.SavedAccount
-import me.meeshy.sdk.model.auth.ServerEnvironment
-import me.meeshy.ui.component.BrandLogo
-import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.auth.AuthActionButton
-import me.meeshy.ui.component.auth.AuthContentType
-import me.meeshy.ui.component.auth.AuthTextField
-import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.component.auth.AmbientHalos
+import me.meeshy.ui.component.auth.BrandSignature
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.ThemePalette
 import me.meeshy.ui.theme.formColumnWidth
+
+/** iOS `LoginView` : les champs entrent 0,2 s après l'écran, en ressort (réponse 0,7 s, amortissement 0,8). */
+private const val FIELDS_DELAY_MS = 200L
+private const val FIELDS_SPRING_STIFFNESS = 80f
+private const val FIELDS_SPRING_DAMPING = 0.8f
+private val FIELDS_RISE = 32.dp
 
 @Composable
 fun LoginScreen(
@@ -70,28 +55,49 @@ fun LoginScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val reduceMotion = rememberOnboardingReduceMotion()
+    val isDark = MeeshyTheme.isDark
 
     LaunchedEffect(state.isAuthenticated) {
         if (state.isAuthenticated) onAuthenticated()
     }
 
-    if (state.sessionClosedNotice) {
-        SessionClosedNotice(onContinue = viewModel::dismissSessionClosedNotice)
-    }
+    // Ce que l'inscription ou « Changer de compte » a remis à cet écran avant qu'il n'existe (iOS onAppear).
+    LaunchedEffect(Unit) { viewModel.adoptPendingHandoffs() }
 
     LaunchedEffect(state.restartToApplyEnvironment) {
         if (state.restartToApplyEnvironment) restartToApplyServer(context)
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MeeshyTheme.tokens.backgroundPrimary) {
+    var showFields by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(FIELDS_DELAY_MS)
+        showFields = true
+    }
+    val appearance by animateFloatAsState(
+        targetValue = if (showFields) 1f else 0f,
+        animationSpec = if (reduceMotion) {
+            tween(durationMillis = 150)
+        } else {
+            spring(dampingRatio = FIELDS_SPRING_DAMPING, stiffness = FIELDS_SPRING_STIFFNESS)
+        },
+        label = "loginFieldsAppearance",
+    )
+
+    // Le fond est PLEIN ECRAN (degrade du theme + halos) ; seul le CONTENU respecte les barres systeme.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ThemePalette(isDark).backgroundGradient)
+            .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } },
+    ) {
+        AmbientHalos(reduceMotion = reduceMotion)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Cet ecran n'a pas de Scaffold : depuis que le Scaffold racine ne
-                // reserve plus les barres systeme (MeeshyApp.kt, contentWindowInsets
-                // a zero), il pose lui-meme son inset. Le fond reste PLEIN ECRAN,
-                // seul le CONTENU est retreci — c'est exactement la geometrie
-                // d'avant, le degrade en plus.
+                // Cet ecran n'a pas de Scaffold : le Scaffold racine ne reserve plus les barres systeme
+                // (MeeshyApp.kt, contentWindowInsets a zero), il pose lui-meme son inset.
                 .systemBarsPadding()
                 .imePadding()
                 .formColumnWidth()
@@ -99,398 +105,111 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            BrandLogo()
+            LoginBrandHeader(reduceMotion = reduceMotion)
 
-            Text(
-                text = stringResource(R.string.login_welcome_back),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textPrimary,
-                modifier = Modifier.padding(top = MeeshySpacing.xl),
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        alpha = appearance.coerceIn(0f, 1f)
+                        translationY = if (reduceMotion) 0f else (1f - appearance) * FIELDS_RISE.toPx()
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                LoginBody(
+                    state = state,
+                    viewModel = viewModel,
+                    onForgotPassword = {
+                        viewModel.holdRecoveryEmail()
+                        onForgotPassword()
+                    },
+                    onMagicLink = {
+                        viewModel.holdRecoveryEmail()
+                        onMagicLink()
+                    },
+                )
 
-            // Parity iOS LoginView: showPicker gates the remembered-account picker
-            // (list, or the selected account's password prompt) vs. the plain
-            // username/password form — see AuthUiState.showPicker.
-            val twoFactorPending = state.twoFactorToken != null
-            val verificationPending = state.pendingVerification
-            if (twoFactorPending) {
-                TwoFactorSection(
-                    state = state,
-                    onCodeChange = viewModel::onTwoFactorCodeChange,
-                    onSubmit = viewModel::submitTwoFactor,
-                    onCancel = viewModel::cancelTwoFactor,
-                    modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
+                LoginSignupLink(
+                    enabled = !state.isSubmitting,
+                    onSignUp = onSignUp,
+                    modifier = Modifier.padding(top = MeeshySpacing.md),
                 )
-            } else if (verificationPending != null) {
-                EmailVerificationSection(
-                    state = state,
-                    pending = verificationPending,
-                    onCodeChange = viewModel::onVerificationCodeChange,
-                    onSubmit = viewModel::submitVerification,
-                    onResend = viewModel::resendVerification,
-                    onClose = viewModel::cancelVerification,
-                    modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
-                )
-            } else if (state.showPicker) {
-                val selected = state.selectedAccount
-                if (selected != null) {
-                    SelectedAccountForm(
-                        account = selected,
+
+                // Parity iOS LoginView.environmentSelector — developer/QA-only backend picker.
+                if (state.showEnvironmentSelector) {
+                    EnvironmentSelector(
                         state = state,
-                        viewModel = viewModel,
-                        modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
-                    )
-                } else {
-                    SavedAccountsPicker(
-                        accounts = state.savedAccounts,
-                        errorText = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
-                        onAccountTap = viewModel::selectAccount,
-                        onAccountRemove = viewModel::removeAccount,
-                        onOtherAccount = viewModel::useAnotherAccount,
-                        modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
+                        onSelect = viewModel::selectEnvironment,
+                        onCustomHostChange = viewModel::onCustomHostChange,
+                        onApplyCustomHost = viewModel::applyCustomHost,
+                        modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
                     )
                 }
-            } else {
-                NormalLoginForm(
-                    state = state,
-                    viewModel = viewModel,
-                    showBackToPicker = state.showNormalLogin && state.savedAccounts.isNotEmpty(),
-                )
+
+                BrandSignature(modifier = Modifier.padding(top = MeeshySpacing.md))
             }
-
-            // Recuperation de compte : les deux chemins sans mot de passe,
-            // juste sous le formulaire (parite iOS LoginView). La connexion par
-            // e-mail garde sa baguette ; la rangee passe a la ligne plutot que de
-            // rogner un libelle sur un ecran etroit ou dans une langue longue.
-            FlowRow(
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.sm),
-            ) {
-                TextButton(onClick = onForgotPassword, enabled = !state.isSubmitting) {
-                    Text(
-                        text = stringResource(R.string.login_forgot_password),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                TextButton(onClick = onMagicLink, enabled = !state.isSubmitting) {
-                    Icon(
-                        imageVector = Icons.Filled.AutoFixHigh,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.login_magic_link),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(start = MeeshySpacing.xs),
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = MeeshySpacing.md),
-            ) {
-                Text(
-                    text = stringResource(R.string.login_signup_prompt),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textSecondary,
-                )
-                TextButton(onClick = onSignUp, enabled = !state.isSubmitting) {
-                    Text(
-                        text = stringResource(R.string.login_signup_link),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-
-            // Parity iOS LoginView.environmentSelector — developer/QA-only backend
-            // picker. iOS gates on `Self.isSimulator`; Android gates on
-            // `showEnvironmentSelector` (== BuildConfig.DEBUG via MeeshyConfig), the
-            // idiomatic Android equivalent (no reliable simulator-vs-device signal).
-            if (state.showEnvironmentSelector) {
-                EnvironmentSelector(
-                    state = state,
-                    viewModel = viewModel,
-                    modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
-                )
-            }
-        }
-    }
-}
-
-/** Developer/QA backend picker — iOS `LoginView.environmentSelector`. */
-@Composable
-private fun EnvironmentSelector(
-    state: AuthUiState,
-    viewModel: AuthViewModel,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            ServerEnvironment.entries.forEach { env ->
-                FilterChip(
-                    selected = state.selectedEnvironment == env,
-                    onClick = { viewModel.selectEnvironment(env) },
-                    label = { Text(env.label) },
-                )
-            }
-        }
-
-        if (state.showCustomHostInput) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.sm),
-            ) {
-                OutlinedTextField(
-                    value = state.customHostInput,
-                    onValueChange = viewModel::onCustomHostChange,
-                    label = { Text(stringResource(R.string.login_custom_host_label)) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = viewModel::applyCustomHost, enabled = state.canApplyCustomHost) {
-                    Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = stringResource(R.string.login_apply_custom_host),
-                    )
-                }
-            }
-        }
-
-        Text(
-            text = stringResource(R.string.login_server_origin, state.serverOriginLabel),
-            style = MaterialTheme.typography.labelSmall,
-            color = MeeshyTheme.tokens.textMuted,
-            modifier = Modifier.padding(top = MeeshySpacing.xs),
-        )
-    }
-}
-
-/** The remembered-account list — iOS `LoginView.savedAccountsList`. */
-@Composable
-private fun SavedAccountsPicker(
-    accounts: List<SavedAccount>,
-    errorText: String?,
-    onAccountTap: (SavedAccount) -> Unit,
-    onAccountRemove: (String) -> Unit,
-    onOtherAccount: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        accounts.forEach { account ->
-            SavedAccountRow(
-                account = account,
-                onTap = { onAccountTap(account) },
-                onRemove = { onAccountRemove(account.id) },
-                modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
-            )
-        }
-
-        errorText?.let { message ->
-            Text(
-                text = message,
-                color = MeeshyTheme.tokens.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
-            )
-        }
-
-        TextButton(onClick = onOtherAccount, modifier = Modifier.padding(top = MeeshySpacing.xs)) {
-            Text(
-                text = stringResource(R.string.login_other_account),
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
         }
     }
 }
 
 /**
- * One row of [SavedAccountsPicker] — tap selects the account. Removal hides behind a long
- * press (iOS `LoginView` `.contextMenu`), so a stray touch can no longer erase an account.
+ * Parity iOS LoginView: showPicker gates the remembered-account picker (list, or the selected
+ * account's password prompt) vs. the plain username/password form — see AuthUiState.showPicker.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SavedAccountRow(
-    account: SavedAccount,
-    onTap: () -> Unit,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var menuOpen by remember { mutableStateOf(false) }
-    val removeLabel = stringResource(R.string.login_remove_account)
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
-        color = MeeshyTheme.tokens.backgroundSecondary,
-    ) {
-        Box {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .combinedClickable(
-                        onClick = onTap,
-                        onLongClick = { menuOpen = true },
-                        onLongClickLabel = removeLabel,
-                    )
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-            ) {
-                MeeshyAvatar(name = account.shortName, size = 44.dp, imageUrl = account.avatarUrl)
-
-                Column(modifier = Modifier.padding(start = MeeshySpacing.md).weight(1f)) {
-                    Text(
-                        text = account.shortName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MeeshyTheme.tokens.textPrimary,
-                    )
-                    Text(
-                        text = "@${account.username}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.textMuted,
-                    )
-                }
-
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MeeshyTheme.tokens.textMuted,
-                )
-            }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(removeLabel, color = MeeshyTheme.tokens.error) },
-                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null, tint = MeeshyTheme.tokens.error) },
-                    onClick = {
-                        menuOpen = false
-                        onRemove()
-                    },
-                )
-            }
-        }
-    }
-}
-
-/** The selected account's password prompt — iOS `LoginView.selectedAccountView`. */
-@Composable
-private fun SelectedAccountForm(
-    account: SavedAccount,
+private fun LoginBody(
     state: AuthUiState,
     viewModel: AuthViewModel,
-    modifier: Modifier = Modifier,
+    onForgotPassword: () -> Unit,
+    onMagicLink: () -> Unit,
 ) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            IconButton(onClick = viewModel::deselectAccount) {
-                Icon(MeeshyIcons.Back, contentDescription = stringResource(R.string.registration_back))
-            }
-            Spacer(modifier = Modifier.width(MeeshySpacing.sm))
-            MeeshyAvatar(name = account.shortName, size = 40.dp, imageUrl = account.avatarUrl)
-            Column(modifier = Modifier.padding(start = MeeshySpacing.md)) {
-                Text(
-                    text = account.shortName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textPrimary,
+    val verificationPending = state.pendingVerification
+    val selected: SavedAccount? = state.selectedAccount
+    when {
+        state.twoFactorToken != null -> LoginTwoFactorStep(
+            state = state,
+            onCodeChange = viewModel::onTwoFactorCodeChange,
+            onSubmit = viewModel::submitTwoFactor,
+            onCancel = viewModel::cancelTwoFactor,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        verificationPending != null -> {
+            val verification: EmailVerificationViewModel = hiltViewModel(key = verificationPending.email)
+            LaunchedEffect(verificationPending) {
+                verification.begin(
+                    email = verificationPending.email,
+                    password = state.password,
+                    accountCreated = verificationPending.accountCreated,
+                    pendingSessionToken = verificationPending.pendingSessionToken,
                 )
-                Text(
-                    text = "@${account.username}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                )
             }
+            EmailVerificationSheet(
+                viewModel = verification,
+                onVerified = viewModel::completeEmailProof,
+                onClose = viewModel::cancelVerification,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
-
-        LoginPasswordField(
-            value = state.password,
-            onValueChange = viewModel::onPasswordChange,
-            enabled = !state.isSubmitting,
-            onGo = viewModel::login,
-            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.lg),
+        state.showPicker && selected != null -> SelectedAccountForm(
+            account = selected,
+            state = state,
+            viewModel = viewModel,
+            modifier = Modifier.fillMaxWidth(),
         )
-
-        KeepSignedInToggle(state = state, onChange = viewModel::onKeepSignedInChange)
-
-        AuthErrorMessage(
-            text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
-            modifier = Modifier.padding(top = MeeshySpacing.md),
+        state.showPicker -> SavedAccountsPicker(
+            accounts = state.savedAccounts,
+            errorText = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
+            onAccountTap = viewModel::selectAccount,
+            onAccountRemove = viewModel::removeAccount,
+            onOtherAccount = viewModel::useAnotherAccount,
+            modifier = Modifier.fillMaxWidth(),
         )
-
-        AuthActionButton(
-            title = stringResource(R.string.login_button),
-            onClick = viewModel::login,
-            enabled = state.canSubmit,
-            isLoading = state.isSubmitting,
-            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
+        else -> NormalLoginForm(
+            state = state,
+            viewModel = viewModel,
+            showBackToPicker = state.showNormalLogin && state.savedAccounts.isNotEmpty(),
+            onForgotPassword = onForgotPassword,
+            onMagicLink = onMagicLink,
         )
     }
-}
-
-/** The plain credential form — iOS `LoginView.normalLoginSection`. */
-@Composable
-private fun NormalLoginForm(
-    state: AuthUiState,
-    viewModel: AuthViewModel,
-    showBackToPicker: Boolean,
-) {
-    if (showBackToPicker) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
-        ) {
-            TextButton(onClick = viewModel::backToSavedAccounts) {
-                Icon(MeeshyIcons.Back, contentDescription = null, tint = MeeshyTheme.tokens.textMuted)
-                Text(
-                    text = stringResource(R.string.login_saved_accounts),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MeeshyTheme.tokens.textMuted,
-                    modifier = Modifier.padding(start = MeeshySpacing.xs),
-                )
-            }
-        }
-    }
-
-    AuthTextField(
-        value = state.username,
-        onValueChange = viewModel::onUsernameChange,
-        title = stringResource(R.string.login_username_label),
-        icon = MeeshyIcons.Person,
-        contentType = AuthContentType.Username,
-        imeAction = ImeAction.Next,
-        enabled = !state.isSubmitting,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = if (showBackToPicker) MeeshySpacing.md else MeeshySpacing.xl),
-    )
-
-    LoginPasswordField(
-        value = state.password,
-        onValueChange = viewModel::onPasswordChange,
-        enabled = !state.isSubmitting,
-        onGo = viewModel::login,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = MeeshySpacing.md),
-    )
-
-    KeepSignedInToggle(state = state, onChange = viewModel::onKeepSignedInChange)
-
-    AuthErrorMessage(
-        text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
-        modifier = Modifier.padding(top = MeeshySpacing.md),
-    )
-
-    AuthActionButton(
-        title = stringResource(R.string.login_button),
-        onClick = viewModel::login,
-        enabled = state.canSubmit,
-        isLoading = state.isSubmitting,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = MeeshySpacing.xl),
-    )
 }

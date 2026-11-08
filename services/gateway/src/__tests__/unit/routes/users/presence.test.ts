@@ -178,7 +178,7 @@ describe('GET /users/presence — anonymous participant presence', () => {
     const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.users).toEqual([
-      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null },
+      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null, doNotDisturb: false },
     ]);
     await app.close();
   });
@@ -190,7 +190,7 @@ describe('GET /users/presence — anonymous participant presence', () => {
     const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.users).toEqual([
-      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null },
+      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null, doNotDisturb: false },
     ]);
     await app.close();
   });
@@ -202,7 +202,7 @@ describe('GET /users/presence — anonymous participant presence', () => {
     const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.users).toEqual([
-      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null },
+      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null, doNotDisturb: false },
     ]);
     await app.close();
   });
@@ -216,7 +216,7 @@ describe('GET /users/presence — anonymous participant presence', () => {
       const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
       expect(res.statusCode).toBe(200);
       expect(res.json().data.users).toEqual([
-        { userId: ANON_PARTICIPANT_ID, isOnline: true, lastActiveAt: lastActiveAt.toISOString() },
+        { userId: ANON_PARTICIPANT_ID, isOnline: true, lastActiveAt: lastActiveAt.toISOString(), doNotDisturb: false },
       ]);
       await app.close();
     }

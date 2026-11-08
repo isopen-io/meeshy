@@ -97,3 +97,20 @@ class FrameLuminanceTest {
         assertThat(FrameLuminance.averageOfYPlane(ByteArray(0), width = 4, height = 4)).isNull()
     }
 }
+
+class FrameLuminanceBufferTest {
+    @org.junit.Test
+    fun `a direct buffer is sampled every 8 pixels without moving its position`() {
+        val buffer = java.nio.ByteBuffer.allocateDirect(16 * 16)
+        for (i in 0 until 16 * 16) buffer.put(i, 200.toByte())
+        val average = FrameLuminance.averageOfYPlane(buffer, width = 16, height = 16)
+        com.google.common.truth.Truth.assertThat(average).isEqualTo(200f)
+        com.google.common.truth.Truth.assertThat(buffer.position()).isEqualTo(0)
+    }
+
+    @org.junit.Test
+    fun `a buffer shorter than its geometry yields no reading`() {
+        val buffer = java.nio.ByteBuffer.allocateDirect(10)
+        com.google.common.truth.Truth.assertThat(FrameLuminance.averageOfYPlane(buffer, width = 16, height = 16)).isNull()
+    }
+}

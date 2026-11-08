@@ -24,6 +24,15 @@ internal class VoiceRecordingActivityBridge @Inject constructor() : VoiceRecordi
     /** Le début de la prise en cours (epoch ms), ou `null` quand le micro est fermé. */
     val startedAt: StateFlow<Long?> = current.asStateFlow()
 
+    private val takeTitle = MutableStateFlow("")
+    private val takeLevels = MutableStateFlow<List<Float>>(emptyList())
+
+    /** Le titre de la conversation de la prise en cours. */
+    val title: StateFlow<String> = takeTitle.asStateFlow()
+
+    /** Les dernières mesures du micro de la prise en cours. */
+    val levels: StateFlow<List<Float>> = takeLevels.asStateFlow()
+
     private val cancels = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     @Volatile
     private var keptAlive = false
@@ -43,8 +52,15 @@ internal class VoiceRecordingActivityBridge @Inject constructor() : VoiceRecordi
         current.value = startedAtEpochMs
     }
 
+    override fun updateTake(title: String, levels: List<Float>) {
+        takeTitle.value = title
+        takeLevels.value = levels
+    }
+
     override fun retire() {
         current.value = null
+        takeTitle.value = ""
+        takeLevels.value = emptyList()
     }
 
     /** Le bouton « Arrêter » de la notification. */

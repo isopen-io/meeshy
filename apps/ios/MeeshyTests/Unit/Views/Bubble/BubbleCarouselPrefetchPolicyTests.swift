@@ -2,32 +2,35 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// `BubbleCarouselView.shouldPrefetchAttachment` (2026-07-21) : le prefetch
-/// ±1 du carousel de bulle téléchargeait des images pleine taille sans
-/// consulter `MediaDownloadPolicyEngine` — données cellulaires consommées
-/// malgré la préférence 'Jamais'/'Wi-Fi uniquement'. Décision pure gatant
-/// chaque type d'attachment sur le résultat déjà résolu du policy engine.
+/// `BubbleCarouselView.shouldPrefetch` (2026-07-21) : le prefetch ±1 du
+/// carousel de bulle téléchargeait des images pleine taille sans consulter
+/// `MediaDownloadPolicyEngine` — données cellulaires consommées malgré la
+/// préférence 'Jamais'/'Wi-Fi uniquement'. Décision pure par pièce, taille
+/// comprise (#14639).
 final class BubbleCarouselPrefetchPolicyTests: XCTestCase {
 
-    func test_shouldPrefetchAttachment_image_gatedOnAllowImage() {
-        XCTAssertTrue(BubbleCarouselView.shouldPrefetchAttachment(
-            kind: .image, allowImage: true, allowVideo: false))
-        XCTAssertFalse(BubbleCarouselView.shouldPrefetchAttachment(
-            kind: .image, allowImage: false, allowVideo: true))
+    private let never = MediaDownloadPreferences(image: .never, audio: .never, audioTranslation: .never, video: .never)
+    private let wifiOnly = MediaDownloadPreferences(image: .wifiOnly, audio: .wifiOnly, audioTranslation: .wifiOnly, video: .wifiOnly)
+
+    private func piece(_ type: String, size: Int) -> MessageAttachment {
+        MessageAttachment(id: "x", mimeType: type, fileSize: size, fileUrl: "https://x/x")
     }
 
-    func test_shouldPrefetchAttachment_video_gatedOnAllowVideo() {
-        XCTAssertTrue(BubbleCarouselView.shouldPrefetchAttachment(
-            kind: .video, allowImage: false, allowVideo: true))
-        XCTAssertFalse(BubbleCarouselView.shouldPrefetchAttachment(
-            kind: .video, allowImage: true, allowVideo: false))
+    func test_shouldPrefetch_largeMedia_followsThePolicyOfItsKind() {
+        let image = piece("image/jpeg", size: 2_000_000)
+        let video = piece("video/mp4", size: 2_000_000)
+        XCTAssertTrue(BubbleCarouselView.shouldPrefetch(image, condition: .wifi, prefs: wifiOnly))
+        XCTAssertFalse(BubbleCarouselView.shouldPrefetch(image, condition: .badCellular, prefs: wifiOnly))
+        XCTAssertFalse(BubbleCarouselView.shouldPrefetch(video, condition: .wifi, prefs: never))
     }
 
-    func test_shouldPrefetchAttachment_bothDisallowed_neverPrefetches() {
-        XCTAssertFalse(BubbleCarouselView.shouldPrefetchAttachment(
-            kind: .image, allowImage: false, allowVideo: false))
-        XCTAssertFalse(BubbleCarouselView.shouldPrefetchAttachment(
-            kind: .video, allowImage: false, allowVideo: false))
+    /// #14639 — sous 100 Ko, la pièce part quel que soit le réseau ; seul le hors-ligne la retient.
+    func test_shouldPrefetch_under100KB_ignoresTheNetworkPolicy_butNotOffline() {
+        for type in ["image/jpeg", "video/mp4"] {
+            XCTAssertTrue(BubbleCarouselView.shouldPrefetch(piece(type, size: 99_999), condition: .badCellular, prefs: never), type)
+            XCTAssertFalse(BubbleCarouselView.shouldPrefetch(piece(type, size: 102_400), condition: .badCellular, prefs: never), type)
+            XCTAssertFalse(BubbleCarouselView.shouldPrefetch(piece(type, size: 99_999), condition: .offline, prefs: never), type)
+        }
     }
 
     // MARK: - Page courante, bornée

@@ -6,9 +6,18 @@ import MeeshySDK
 /// sous-titres et pour le liseré de sa vignette de groupe. Palette et hachage
 /// sont ceux du SDK (`DynamicColorGenerator`), éclaircis pour l'écran d'appel,
 /// épinglé en sombre.
+///
+/// Hors de l'écran d'appel (journal d'après l'appel, dans un fil clair ou
+/// sombre), la MÊME couleur s'adapte au schéma du fil (#16634,
+/// `docs/product/appels-vue-finale.md` loi 4) : une personne garde sa couleur
+/// avant et après la fin de l'appel.
 enum CallSpeakerColor {
     static func hex(for userId: String) -> String {
-        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: .dark)
+        hex(for: userId, mode: .dark)
+    }
+
+    static func hex(for userId: String, mode: ThemeMode) -> String {
+        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: mode)
     }
 }
 
@@ -28,14 +37,45 @@ struct CallCaptionLine: Equatable, Identifiable {
     let capturedAt: Date
     let isShowingOriginal: Bool
     let canRevealOriginal: Bool
+    /// #16665 — une ligne d'ÉVÉNEMENT (capture, borne d'enregistrement) :
+    /// « Karim · a capturé l'écran · 12:40 », pseudo à sa couleur, la phrase
+    /// en encre secondaire, jamais colorée.
+    var isEvent: Bool = false
+    var timeLabel: String?
 
     var speakerColorHex: String { CallSpeakerColor.hex(for: speakerId) }
+
+    /// La couleur du TEXTE : celle de l'auteur quand la ligne sert sa
+    /// TRADUCTION, `nil` (encre de l'écran d'appel) pour un original, ma
+    /// parole comprise — le nom, lui, porte toujours la couleur
+    /// (`docs/product/appels-vue-finale.md` loi 4).
+    var textColorHex: String? { isShowingOriginal || isEvent ? nil : speakerColorHex }
 
     /// Ce que VoiceOver lit : la phrase FINALE seulement — une révision
     /// partielle, remplacée quelques centaines de millisecondes plus tard,
     /// n'a rien à annoncer.
     var announcement: String? {
-        isFinal ? "\(speakerName) : \(text)" : nil
+        guard isFinal else { return nil }
+        guard isEvent else { return "\(speakerName) : \(text)" }
+        return [speakerName, text, timeLabel ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    /// #16665 — la ligne datée d'une capture. Une borne de l'enregistrement
+    /// de l'appel ne nomme personne : sa phrase est entière.
+    static func capture(_ capture: CallTranscriptCapture, displayName: String, phrase: String, timeLabel: String) -> CallCaptionLine {
+        CallCaptionLine(
+            id: UUID(uuidString: capture.id) ?? UUID(),
+            speakerId: capture.userId,
+            speakerName: capture.kind.namesCapturer ? displayName : "",
+            text: phrase,
+            languageTag: nil,
+            isFinal: true,
+            capturedAt: capture.capturedAt,
+            isShowingOriginal: true,
+            canRevealOriginal: false,
+            isEvent: true,
+            timeLabel: timeLabel
+        )
     }
 
     static func make(

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comments_overlay_expired">Story expirada: os comentários continuam visíveis</string>
+    <string name="stories_comments_overlay_reply">Responder</string>
+    <string name="stories_comments_overlay_more">Opções do comentário</string>
+    <string name="stories_comments_overlay_copy">Copiar texto</string>
+    <string name="stories_comments_overlay_edit">Editar</string>
+    <string name="stories_comments_overlay_delete">Excluir</string>
+    <string name="stories_comments_overlay_report">Denunciar</string>
+    <string name="stories_comments_overlay_remove">Remover</string>
+    <string name="stories_comments_overlay_save">Salvar</string>
+    <string name="stories_comments_overlay_cancel">Cancelar</string>
+    <string name="stories_comments_overlay_editing">Editando o comentário</string>
+    <string name="stories_comments_overlay_like">Curtir</string>
+    <string name="stories_comments_overlay_unlike">Descurtir</string>
+    <string name="stories_comments_overlay_show_original">Ver original</string>
+    <string name="stories_comments_overlay_show_translated">Ver tradução</string>
+    <string name="stories_comments_overlay_show_replies">Ver respostas</string>
+    <string name="stories_comments_overlay_hide_replies">Ocultar respostas</string>
+    <string name="stories_comments_overlay_more_replies">Ver mais respostas</string>
+    <string name="stories_comments_overlay_retry">Tentar novamente</string>
+    <string name="stories_comments_overlay_media">Mídia anexada</string>
+    <string name="stories_comments_overlay_cancel_reply">Cancelar resposta</string>
+</resources>

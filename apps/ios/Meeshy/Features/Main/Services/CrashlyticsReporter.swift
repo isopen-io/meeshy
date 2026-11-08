@@ -50,6 +50,10 @@ nonisolated struct CrashlyticsReporter: CrashReporting {
     func log(_ message: String) {
         Crashlytics.crashlytics().log(message)
     }
+
+    func recordNonFatal(_ error: NSError) {
+        Crashlytics.crashlytics().record(error: error)
+    }
 }
 
 extension CrashDiagnostic.Kind {

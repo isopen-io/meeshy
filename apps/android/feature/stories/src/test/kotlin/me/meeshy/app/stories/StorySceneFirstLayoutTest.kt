@@ -36,8 +36,8 @@ import org.robolectric.annotation.Config
 /**
  * La scène d'abord (#13834, maquette du 2026-10-30, état 1) : la scène 9:16 prend la plus grande taille qui tient dans la
  * fenêtre, bord à bord, sans carte autour ; la croix, l'historique, les six outils et Publier sont posés DESSUS. Remplace
- * l'ancienne loi de #12298 (« le panneau laisse la scène à sa taille ») par son inverse : une feuille qui monte réduit la
- * scène, qui reste entière au-dessus d'elle.
+ * l'ancienne loi de #12298 : une feuille qui monte réduit la scène, qui reste entière au-dessus d'elle ; un panneau d'options
+ * se pose par-dessus elle, qui garde sa taille (#15192).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w1300dp-h1000dp")
@@ -60,7 +60,6 @@ class StorySceneFirstLayoutTest {
                 Box(Modifier.size(width = setup.width, height = setup.height)) {
                     StorySceneFirstLayout(
                         onDismiss = {},
-                        reduced = panelOpen(),
                         scene = { modifier -> Box(modifier.testTag(SCENE)) },
                         top = { SceneTopBar(onClose = {}, history = setup.history, onUndo = {}, onRedo = {}) },
                         trailing = {
@@ -131,7 +130,7 @@ class StorySceneFirstLayoutTest {
         show()
 
         val scene = bounds(SCENE)
-        listOf(CLOSE, "Text", "Media", "Sticker", "Sound", "Drawing", "Background", "Mention", "Place", MORE).forEach { name ->
+        listOf(CLOSE, "Add text", "Add media", "Add a sticker", "Add sound", "Draw", "Choose a background", "Mention someone", "Add a place", MORE).forEach { name ->
             assertThat(boundsOf(name).isInside(scene)).isTrue()
         }
         assertThat(compose.onNodeWithText(PUBLISH).getUnclippedBoundsInRoot().isInside(scene)).isTrue()
@@ -142,7 +141,7 @@ class StorySceneFirstLayoutTest {
     fun `each round tool is a 48 dp target`() {
         show()
 
-        listOf(CLOSE, "Text", "Media", "Sticker", "Sound", "Drawing", "Background", "Mention", "Place", MORE).forEach { name ->
+        listOf(CLOSE, "Add text", "Add media", "Add a sticker", "Add sound", "Draw", "Choose a background", "Mention someone", "Add a place", MORE).forEach { name ->
             compose.onNodeWithContentDescription(name).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
     }
@@ -223,7 +222,7 @@ class StorySceneFirstLayoutTest {
     }
 
     @Test
-    fun `opening a panel shrinks the scene, whole and 9 by 16, above the panel instead of covering it`() {
+    fun `opening a panel lays it over the scene, which keeps its full size`() {
         var open by mutableStateOf(false)
         show { open }
         val rest = drawnBounds(SCENE)
@@ -233,16 +232,16 @@ class StorySceneFirstLayoutTest {
 
         val scene = drawnBounds(SCENE)
         val panel = bounds(PANEL)
-        assertThat(scene.w).isLessThan(rest.w)
-        assertThat(scene.bottom.value).isAtMost(panel.top.value + 0.5f)
-        assertThat(scene.w / scene.h).isWithin(0.01f).of(9f / 16f)
+        assertThat(scene.w).isWithin(0.5f).of(rest.w)
+        assertThat(scene.h).isWithin(0.5f).of(rest.h)
+        assertThat(panel.isInside(scene)).isTrue()
     }
 
     @Test
     fun `with a panel up the round tools stay whole 48 dp targets instead of being squashed`() {
         show { true }
 
-        listOf("Text", "Media", "Sticker", "Sound", "Drawing", "Background", "Mention", "Place", MORE).forEach { name ->
+        listOf("Add text", "Add media", "Add a sticker", "Add sound", "Draw", "Choose a background", "Mention someone", "Add a place", MORE).forEach { name ->
             compose.onNodeWithContentDescription(name).assertExists().assertHeightIsAtLeast(48.dp)
         }
     }

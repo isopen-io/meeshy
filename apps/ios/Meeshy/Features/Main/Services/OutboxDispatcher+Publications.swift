@@ -61,7 +61,7 @@ extension OutboxDispatcher {
                     fileURL: fileURL,
                     mimeType: mimeType,
                     credential: .bearer(token),
-                    uploadContext: "post"
+                    uploadContext: "post", fileName: payload.originalMediaName(forSentFile: fileURL)
                 )
             }
             resolvedMediaIds = montes.ids + payload.attachmentIds
@@ -158,7 +158,7 @@ extension OutboxDispatcher {
             // `PublishIntent`), et mourait ici : ni `CreatePostPayload` ni ce
             // corps ne le portaient, si bien que l'auteur croyait décider et
             // le serveur ne l'apprenait jamais.
-            allowSoundExtraction: payload.allowSoundExtraction
+            allowSoundExtraction: payload.allowSoundExtraction, commentsDisabled: payload.commentsDisabled
         )
         // #10321 — dernier point de contrôle : une publication retirée ne part pas.
         try await OfflineQueue.shared.throwIfPublicationCancelled(outboxId: record.id)

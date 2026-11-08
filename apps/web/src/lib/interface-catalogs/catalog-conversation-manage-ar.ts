@@ -67,6 +67,11 @@ const ar = {
   'conversationManage.options.pin': 'تثبيت',
   'conversationManage.options.mute': 'كتم',
   'conversationManage.options.archive': 'أرشفة',
+  'conversationManage.obsolete': 'جعلها قديمة',
+  'conversationManage.obsolete.title': 'جعل المحادثة قديمة؟',
+  'conversationManage.obsolete.message': 'ستختفي لدى جميع المشاركين. سيصبح محتواها غير مقروء وسيُحذف خلال 48 ساعة.',
+  'conversationManage.obsolete.error': 'تعذّر جعل المحادثة قديمة.',
+  'conversationManage.obsolete.requestSender': 'وحده متلقي الطلب يمكنه حذف هذه المحادثة.',
   'conversationManage.header.created_on': 'أُنشئت في {date}',
   'conversationManage.header.muted': 'الإشعارات متوقفة',
 } satisfies ConversationManageCatalog;

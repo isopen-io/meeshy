@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 
 import { AuthBrandFooter, AuthSubmitButton } from '@/components/auth-chrome';
 import { AuthColumn } from '@/components/auth-column';
+import { AuthHeader } from '@/components/auth-header';
 import { EmailSentNotice } from '@/components/email-sent-notice';
 import { Field } from '@/components/field';
 import { GlyphSvg } from '@/components/glyph';
@@ -115,96 +116,99 @@ export default function ForgotPasswordScreen({
         : null;
 
   return (
-    <AuthColumn className="items-center justify-center gap-6 px-6 py-10">
-      {sent ? (
-        <EmailSentNotice email={email}>
-          <Link
-            to="login"
-            replace
-            className="grid w-full place-items-center rounded-field px-6 font-semibold"
-            style={{
-              minHeight: 52,
-              border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
-              color: 'var(--color-ios-ink)',
-            }}
-          >
-            {backToLogin}
-          </Link>
-        </EmailSentNotice>
-      ) : (
-        <form onSubmit={handleSubmit} className="grid w-full gap-6" noValidate>
-          {/* L'ENVELOPPE POUR TOUTE EN-TÊTE — le pendant de la baguette de
-              `/login` (#6583) : elle dit de quoi il s'agit sans qu'aucun
-              titre n'ait à le répéter. */}
-          <span aria-hidden="true" className="mx-auto" style={{ color: FORGOT_PASSWORD_TINT }}>
-            <GlyphSvg glyph={AUTH_GLYPHS.envelope} size={56} />
-          </span>
+    <AuthColumn>
+      <AuthHeader back="login" />
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-10">
+        {sent ? (
+          <EmailSentNotice email={email}>
+            <Link
+              to="login"
+              replace
+              className="grid w-full place-items-center rounded-field px-6 font-semibold"
+              style={{
+                minHeight: 52,
+                border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
+                color: 'var(--color-ios-ink)',
+              }}
+            >
+              {backToLogin}
+            </Link>
+          </EmailSentNotice>
+        ) : (
+          <form onSubmit={handleSubmit} className="grid w-full gap-6" noValidate>
+            {/* L'ENVELOPPE POUR TOUTE EN-TÊTE — le pendant de la baguette de
+                `/login` (#6583) : elle dit de quoi il s'agit sans qu'aucun
+                titre n'ait à le répéter. */}
+            <span aria-hidden="true" className="mx-auto" style={{ color: FORGOT_PASSWORD_TINT }}>
+              <GlyphSvg glyph={AUTH_GLYPHS.envelope} size={56} />
+            </span>
 
-          <div className="grid justify-items-center gap-1 text-center">
-            <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translateRecovery(language, 'recovery.forgot.lead')}
-            </p>
-            <InfoHintButton hint={neverHadAPasswordHint} state={neverHadOne} showsLabel />
-            <InfoHintText hint={neverHadAPasswordHint} state={neverHadOne} />
-          </div>
+            <div className="grid justify-items-center gap-1 text-center">
+              <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {translateRecovery(language, 'recovery.forgot.lead')}
+              </p>
+              <InfoHintButton hint={neverHadAPasswordHint} state={neverHadOne} showsLabel />
+              <InfoHintText hint={neverHadAPasswordHint} state={neverHadOne} />
+            </div>
 
-          <Field
-            id="forgot-email"
-            glyph={AUTH_GLYPHS.envelope}
-            tint={FORGOT_PASSWORD_TINT}
-            focused={focused}
-            error={fieldError}
-          >
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                aria-describedby={describedBy}
-                aria-label={translate(language, 'signup.email.label')}
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoCapitalize="none"
-                spellCheck={false}
-                autoFocus
-                value={email}
-                onInput={(e) => setEmail(e.currentTarget.value)}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                placeholder={translate(language, 'magicLink.email.placeholder')}
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
-              />
-            )}
-          </Field>
+            <Field
+              id="forgot-email"
+              glyph={AUTH_GLYPHS.envelope}
+              tint={FORGOT_PASSWORD_TINT}
+              focused={focused}
+              error={fieldError}
+            >
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-label={translate(language, 'signup.email.label')}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  autoFocus
+                  value={email}
+                  onInput={(e) => setEmail(e.currentTarget.value)}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  placeholder={translate(language, 'magicLink.email.placeholder')}
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                />
+              )}
+            </Field>
 
-          {banner !== null ? (
-            <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
-              {banner}
-            </p>
-          ) : null}
+            {banner !== null ? (
+              <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
+                {banner}
+              </p>
+            ) : null}
 
-          <AuthSubmitButton
-            disabled={!isEmailValid(email) || !online}
-            isSubmitting={submitting}
-            label={translate(language, 'magicLink.submit')}
-            busyLabel={translate(language, 'magicLink.submit.busy')}
-            background={FORGOT_PASSWORD_TINT}
-          />
+            <AuthSubmitButton
+              disabled={!isEmailValid(email) || !online}
+              isSubmitting={submitting}
+              label={translate(language, 'magicLink.submit')}
+              busyLabel={translate(language, 'magicLink.submit.busy')}
+              background={FORGOT_PASSWORD_TINT}
+            />
 
-          {/* LE RETOUR, EN PIED — la place qu'occupent les deux liens de
-              `/login`, jamais une croix en haut d'écran (§ doc-comment). */}
-          <Link
-            to="login"
-            replace
-            className="inline-flex items-center justify-self-center font-medium text-title"
-            style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
-          >
-            {backToLogin}
-          </Link>
-        </form>
-      )}
+            {/* LE RETOUR, EN PIED — la place qu'occupent les deux liens de
+                `/login`, jamais une croix en haut d'écran (§ doc-comment). */}
+            <Link
+              to="login"
+              replace
+              className="inline-flex items-center justify-self-center font-medium text-title"
+              style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
+            >
+              {backToLogin}
+            </Link>
+          </form>
+        )}
 
-      <AuthBrandFooter />
+        <AuthBrandFooter />
+      </div>
     </AuthColumn>
   );
 }

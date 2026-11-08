@@ -57,6 +57,21 @@ public object OutboxLocalTargets {
         OutboxKind.CREATE_COMMENT,
         OutboxKind.CONSUME_AFTER_READ,
         OutboxKind.CONSUME_VIEW_ONCE,
+        OutboxKind.REPOST_POST,
+        OutboxKind.REACT_STORY,
+        OutboxKind.UPDATE_CONVERSATION,
+        OutboxKind.HIDE_FOR_ME,
+        OutboxKind.RESTORE_FOR_ME,
+        OutboxKind.REMOVE_ATTACHMENT,
+        OutboxKind.MODERATION_DELETE,
+        OutboxKind.MARK_RECEIVED,
+        OutboxKind.REPOST_STORY,
+        OutboxKind.MARK_STORY_VIEWED,
+        OutboxKind.DELETE_COMMENT,
+        OutboxKind.TOGGLE_LIKE_COMMENT,
+        OutboxKind.LEAVE_CONVERSATION,
+        OutboxKind.DELETE_CONVERSATION_FOR_ME,
+        OutboxKind.DELETE_CONVERSATION_FOR_ALL,
     ).map { it.name }.toSet()
 
     /** Whether [kind] sends its row's `targetId` to the server as a resource key. */

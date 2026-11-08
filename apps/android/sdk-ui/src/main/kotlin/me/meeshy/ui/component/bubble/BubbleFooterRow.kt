@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -57,6 +58,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.bubbleClockLabel
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -80,7 +82,9 @@ internal fun BubbleFooterRow(
     content: BubbleContent,
     onColor: Color,
     onFlagTap: ((String) -> Unit)? = null,
+    onTranslate: (() -> Unit)? = null,
     onSenderTap: (() -> Unit)? = null,
+    onShowReadStatus: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val metaColor = if (content.isOutgoing) onColor.copy(alpha = 0.7f) else MeeshyTheme.tokens.textMuted
@@ -92,14 +96,16 @@ internal fun BubbleFooterRow(
             onColor = onColor,
             metaColor = metaColor,
             onFlagTap = onFlagTap,
+            onTranslate = onTranslate,
             onSenderTap = onSenderTap,
+            onShowReadStatus = onShowReadStatus,
             modifier = modifier,
         )
     } else {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
-            BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
+            BubbleMetaLeading(content, onColor, metaColor, onFlagTap, onTranslate)
             Spacer(Modifier.weight(1f).widthIn(min = MeeshySpacing.xs))
-            BubbleMetaTrailing(content, metaColor)
+            BubbleMetaTrailing(content, metaColor, onShowReadStatus = onShowReadStatus)
         }
     }
 }
@@ -112,7 +118,9 @@ private fun BubbleIdentityFooter(
     onColor: Color,
     metaColor: Color,
     onFlagTap: ((String) -> Unit)?,
+    onTranslate: (() -> Unit)?,
     onSenderTap: (() -> Unit)?,
+    onShowReadStatus: (() -> Unit)?,
     modifier: Modifier,
 ) {
     val senderColor = content.senderColorHex?.let { hexColor(it, MeeshyPalette.Indigo500) } ?: MeeshyPalette.Indigo500
@@ -124,24 +132,30 @@ private fun BubbleIdentityFooter(
         modifier = modifier,
     ) {
         Box {
-            MeeshyAvatar(
-                name = name,
-                context = AvatarContext.MessageBubble,
-                containerColor = senderColor,
-                imageUrl = content.senderAvatarUrl,
-                presence = rememberPresence(content.senderProfile?.userId),
-                here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .let { base ->
-                        if (onSenderTap == null) base
-                        else base.combinedClickable(
-                            onClickLabel = profileLabel,
-                            onClick = onSenderTap,
-                            onLongClick = { menuOpen = true },
-                        )
-                    },
-            )
+            val avatarModifier = Modifier
+                .clip(CircleShape)
+                .let { base ->
+                    if (onSenderTap == null) base
+                    else base.combinedClickable(
+                        onClickLabel = profileLabel,
+                        onClick = onSenderTap,
+                        onLongClick = { menuOpen = true },
+                    )
+                }
+            if (content.senderIsAnonymous) {
+                BubbleSenderGhost(size = AvatarContext.MessageBubble.size.dp, color = senderColor, modifier = avatarModifier)
+            } else {
+                MeeshyAvatar(
+                    name = name,
+                    context = AvatarContext.MessageBubble,
+                    containerColor = senderColor,
+                    imageUrl = content.senderAvatarUrl,
+                    presence = rememberPresence(content.senderProfile?.userId),
+                    here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
+                    decorRing = content.senderRing,
+                    modifier = avatarModifier,
+                )
+            }
             if (onSenderTap != null) {
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
@@ -173,10 +187,10 @@ private fun BubbleIdentityFooter(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false).padding(end = MeeshySpacing.xs),
                     )
-                    BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
+                    BubbleMetaLeading(content, onColor, metaColor, onFlagTap, onTranslate)
                 }
                 Spacer(Modifier.width(MeeshySpacing.xs))
-                BubbleMetaTrailing(content, metaColor)
+                BubbleMetaTrailing(content, metaColor, onShowReadStatus = onShowReadStatus)
             }
             content.senderUsername?.let { username ->
                 Text(
@@ -197,6 +211,7 @@ private fun BubbleMetaLeading(
     onColor: Color,
     metaColor: Color,
     onFlagTap: ((String) -> Unit)?,
+    onTranslate: (() -> Unit)?,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -221,10 +236,15 @@ private fun BubbleMetaLeading(
                 modifier = Modifier.size(12.dp),
             )
         }
-        val chips = if (content.isDeleted) emptyList() else content.languageStrip
+        val chips = if (content.isDeleted) emptyList() else BubbleVoiceStackFooter.chips(content)
+        // iOS `metaLeading` : le bouton traduire vient TOUJOURS en premier (position stable) et ne vit que là où
+        // AUCUN drapeau ne dit déjà la traduction ; les drapeaux suivent à sa droite.
+        if (chips.isEmpty() && !content.isDeleted && onTranslate != null && offersTranslation(content)) {
+            TranslateButton(onTranslate)
+        }
         if (chips.isNotEmpty()) {
-            chips.forEach { chip -> CompactFlagChip(chip, onColor, onFlagTap) }
-        } else if (content.isTranslated) {
+            chips.forEach { chip -> CompactFlagChip(chip, onColor, onFlagTap, isWaiting = chip.code in content.translatingCodes) }
+        } else if (content.isTranslated && onTranslate == null) {
             Icon(
                 imageVector = Icons.Filled.Translate,
                 contentDescription = stringResource(R.string.bubble_translated),
@@ -232,6 +252,33 @@ private fun BubbleMetaLeading(
                 modifier = Modifier.size(12.dp),
             )
         }
+    }
+}
+
+private fun offersTranslation(content: BubbleContent): Boolean = BubbleFooterBuilder.build(content).showsTranslate
+
+/** Le bouton traduire du pied : ouvre l'explorateur des langues, haptique léger, cible de 22 dp. */
+@Composable
+private fun TranslateButton(onTranslate: () -> Unit) {
+    val haptics = rememberMeeshyHaptics()
+    val label = stringResource(R.string.bubble_footer_translation_request)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .sizeIn(minWidth = 22.dp, minHeight = 22.dp)
+            .clip(RoundedCornerShape(MeeshySpacing.xs))
+            .clickable(onClickLabel = label) {
+                haptics.light()
+                onTranslate()
+            }
+            .semantics { role = Role.Button; contentDescription = label },
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Translate,
+            contentDescription = null,
+            tint = MeeshyPalette.Indigo400,
+            modifier = Modifier.size(12.dp),
+        )
     }
 }
 
@@ -245,6 +292,7 @@ internal fun CompactFlagChip(
     chip: LanguageChip,
     onColor: Color,
     onFlagTap: ((String) -> Unit)?,
+    isWaiting: Boolean = false,
 ) {
     val accent = chip.info?.colorHex?.let { hexColor(it, onColor) } ?: onColor
     val label = chip.info?.name ?: chip.code
@@ -260,117 +308,25 @@ internal fun CompactFlagChip(
             }
             .semantics(mergeDescendants = true) { contentDescription = label },
     ) {
-        Text(
-            text = chip.info?.flag ?: chip.code.uppercase(),
-            fontSize = MeeshyFontSize.small,
-            modifier = Modifier.alpha(if (chip.isTranslatable) 0.45f else 1f),
-        )
+        if (isWaiting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+                color = accent,
+            )
+        } else {
+            Text(
+                text = chip.info?.flag ?: chip.code.uppercase(),
+                fontSize = MeeshyFontSize.small,
+                modifier = Modifier.alpha(if (chip.isTranslatable) 0.45f else 1f),
+            )
+        }
         Box(
             modifier = Modifier
                 .width(12.dp)
                 .height(2.dp)
                 .clip(RoundedCornerShape(1.dp))
                 .background(if (chip.isActive) accent else Color.Transparent),
-        )
-    }
-}
-
-@Composable
-internal fun BubbleMetaTrailing(
-    content: BubbleContent,
-    metaColor: Color,
-    modifier: Modifier = Modifier,
-    readTint: Color? = null,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        if (content.isEdited && !content.isDeleted) {
-            Icon(
-                imageVector = Icons.Filled.Edit,
-                contentDescription = stringResource(R.string.bubble_edited),
-                tint = metaColor,
-                modifier = Modifier.size(10.dp),
-            )
-        }
-        val clock = remember(content.createdAtIso) { bubbleClockLabel(content.createdAtIso) }
-        if (clock != null) {
-            Text(
-                text = clock,
-                fontSize = MeeshyFontSize.small,
-                fontWeight = FontWeight.Medium,
-                color = metaColor,
-                maxLines = 1,
-            )
-        }
-        // Échec : la coche se tait, la bande orange de la bulle porte le renvoi (iOS).
-        if (content.isOutgoing && content.deliveryStatus != DeliveryStatus.Failed) {
-            // The online in-flight clock is debounced: a send that
-            // round-trips under 200ms never flashes it (parity iOS
-            // `SendingClockGlyph`). The offline hourglass and every
-            // settled tier render immediately.
-            if (content.deliveryStatus == DeliveryStatus.Pending) {
-                if (rememberSendingGlyphRevealed(content.createdAtIso)) {
-                    DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend, readTintOverride = readTint)
-                }
-            } else {
-                DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend, readTintOverride = readTint)
-            }
-        }
-    }
-}
-
-/**
- * La coche d'un message envoyé (iOS `BubbleDeliveryCheck`) : horloge en cours d'envoi (orange si
- * lent), sablier hors ligne, ✓ envoyé et ✓✓ délivré dans la couleur méta, ✓✓ lu en indigo 600
- * (clair) / 400 (sombre), échec en rouge.
- */
-@Composable
-internal fun DeliveryStatusIcon(
-    status: DeliveryStatus,
-    metaColor: Color,
-    isSlow: Boolean,
-    readTintOverride: Color? = null,
-) {
-    val readTint = readTintOverride ?: if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo600
-    when (status) {
-        DeliveryStatus.Pending -> Icon(
-            imageVector = Icons.Filled.Schedule,
-            contentDescription = stringResource(R.string.bubble_status_pending),
-            tint = if (isSlow) MeeshyPalette.Warning else metaColor,
-            modifier = Modifier.size(12.dp),
-        )
-        DeliveryStatus.QueuedOffline -> Icon(
-            imageVector = Icons.Filled.HourglassEmpty,
-            contentDescription = stringResource(R.string.bubble_status_queued),
-            tint = metaColor,
-            modifier = Modifier.size(12.dp),
-        )
-        DeliveryStatus.Sent -> Icon(
-            imageVector = Icons.Filled.Done,
-            contentDescription = stringResource(R.string.bubble_status_sent),
-            tint = metaColor,
-            modifier = Modifier.size(13.dp),
-        )
-        DeliveryStatus.Delivered -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_delivered),
-            tint = metaColor,
-            modifier = Modifier.size(14.dp),
-        )
-        DeliveryStatus.Read -> Icon(
-            imageVector = Icons.Filled.DoneAll,
-            contentDescription = stringResource(R.string.bubble_status_read),
-            tint = readTint,
-            modifier = Modifier.size(15.dp),
-        )
-        DeliveryStatus.Failed -> Icon(
-            imageVector = Icons.Filled.Error,
-            contentDescription = stringResource(R.string.bubble_status_failed),
-            tint = MeeshyPalette.Error,
-            modifier = Modifier.size(12.dp),
         )
     }
 }

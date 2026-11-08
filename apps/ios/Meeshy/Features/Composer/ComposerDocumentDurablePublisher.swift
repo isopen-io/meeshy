@@ -80,7 +80,8 @@ enum ComposerDocumentDurablePublisher {
             mediaObjectIds: draft.mediaObjectIds,
             // **L'autorisation d'extraction du son** (#3996) — même valeur,
             // même rang que la porte jumelle (`DocumentComposerDoor`).
-            allowSoundExtraction: draft.allowSoundExtraction
+            allowSoundExtraction: draft.allowSoundExtraction,
+            commentsDisabled: draft.commentsDisabled
         )
 
         do {
@@ -109,7 +110,8 @@ enum ComposerDocumentDurablePublisher {
                 // Même raison que le canvas juste au-dessus : cette porte
                 // enfile DIRECTEMENT, sans passer par `FeedViewModel.publish`
                 // (#3996).
-                allowSoundExtraction: intent.allowSoundExtraction
+                allowSoundExtraction: intent.allowSoundExtraction,
+                commentsDisabled: intent.commentsDisabled
             )
         } catch {
             return refuse()

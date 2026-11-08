@@ -24,7 +24,7 @@ extension CallView {
         let halfW = size.width / 2
         let halfH = size.height / 2
         let margin = Self.pipMargin
-        let topInset = safeArea.top + QualityThresholds.pipTopClearance
+        let topInset = safeArea.top + QualityThresholds.pipTopClearance + CallCaptureAlertClearance.top(isAlertShown: transcriptionService.captureJournal.alert != nil)
         let bottomInset = safeArea.bottom + QualityThresholds.pipBottomClearance
         let leadingX = safeArea.leading + margin + halfW
         let trailingX = container.width - safeArea.trailing - margin - halfW
@@ -50,7 +50,7 @@ extension CallView {
             height: container.height - safeArea.top - safeArea.bottom
                 - QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance
         )
-        return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: selfTileScale), in: available)
+        return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: CallSelfTileScale.resting(selfTileScale, isChromeVisible: isChromeVisible)), in: available)
     }
 
     /// Nearest corner to a point — used to snap on drag end.

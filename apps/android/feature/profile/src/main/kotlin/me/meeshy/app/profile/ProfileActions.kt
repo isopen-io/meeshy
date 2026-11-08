@@ -55,6 +55,7 @@ import me.meeshy.sdk.model.profile.ProfileActionPlan
 import me.meeshy.sdk.model.profile.ProfileConnectionAction
 import me.meeshy.sdk.model.profile.ProfileContextBanner
 import me.meeshy.sdk.model.profile.ProfileLayout
+import me.meeshy.sdk.model.relation.ProfileCircle
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -76,6 +77,10 @@ internal data class ProfileActionCallbacks(
     val onUnblock: () -> Unit,
     val onReport: () -> Unit,
     val onCall: ((isVideo: Boolean) -> Unit)? = null,
+    /** Demander le cran suivant du cercle (#13940). */
+    val onRaise: () -> Unit = {},
+    /** Rétrograder d'un cran ou annuler le lien, après confirmation (#14910). */
+    val onLower: () -> Unit = {},
 )
 
 /**
@@ -89,6 +94,7 @@ internal fun ProfileActionsSection(
     displayName: String,
     isOpeningConversation: Boolean,
     callbacks: ProfileActionCallbacks,
+    circle: ProfileCircle? = null,
 ) {
     if (plan.layout == ProfileLayout.BLOCKED_BY_ME) {
         BlockedByMeCard(onUnblock = callbacks.onUnblock)
@@ -116,7 +122,18 @@ internal fun ProfileActionsSection(
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
                 group.banner?.let { ConnectionContextRow(banner = it, name = displayName) }
                 group.actions.forEach { ConnectionActionButton(action = it, callbacks = callbacks) }
-                if (group.showsConnected) ConnectedPill()
+                if (circle != null) {
+                    ProfileCircleRow(
+                        circle = circle,
+                        displayName = displayName,
+                        onRaise = callbacks.onRaise,
+                        onLower = callbacks.onLower,
+                        allowPromote = group.actions.isEmpty(),
+                    )
+                    ProfileBringRow(userId = circle.link.userId, displayName = displayName)
+                } else if (group.showsConnected) {
+                    ConnectedPill()
+                }
             }
         }
         if (plan.canBlock) {
@@ -197,7 +214,7 @@ private fun ConnectionActionButton(action: ProfileConnectionAction, callbacks: P
 }
 
 @Composable
-private fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
+internal fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     val haptics = rememberMeeshyHaptics()
     Row(

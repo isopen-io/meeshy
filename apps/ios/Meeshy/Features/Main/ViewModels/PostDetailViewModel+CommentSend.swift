@@ -176,7 +176,9 @@ extension PostDetailViewModel {
             return true
         case .refused(let cause):
             decrementCommentCount()
-            if !DailyGestureLimitNotice.surface(cause) { showSendError() }
+            if CommentsClosure.isRefusal(cause) {
+                commentsRefusedLocally = true
+            } else if !DailyGestureLimitNotice.surface(cause) { showSendError() }
             return false
         case .unqueued:
             decrementCommentCount()

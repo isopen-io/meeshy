@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_poster_play">Play video</string>
+    <string name="video_embed_play">Play %1$s video</string>
+</resources>

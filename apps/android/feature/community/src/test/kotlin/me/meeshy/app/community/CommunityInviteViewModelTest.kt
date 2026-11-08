@@ -99,4 +99,31 @@ class CommunityInviteViewModelTest {
         assertThat(vm.state.value.invitedIds).isEmpty()
         assertThat(vm.state.value.invitingId).isNull()
     }
+
+    @Test
+    fun `after a refusal the same person can be invited again`() = runTest {
+        coEvery { repository.invite("c1", "u1") } returnsMany listOf(
+            NetworkResult.Failure(ApiError("503")),
+            NetworkResult.Success(ApiCommunityMember(id = "m", userId = "u1")),
+        )
+        val vm = viewModel()
+
+        vm.invite(user("u1"))
+        vm.invite(user("u1"))
+
+        assertThat(vm.state.value.invitedIds).containsExactly("u1")
+        coVerify(exactly = 2) { repository.invite("c1", "u1") }
+    }
+
+    @Test
+    fun `clearing the query empties the results`() = runTest {
+        coEvery { users.searchUsers("al", 20, 0) } returns NetworkResult.Success(listOf(user("al1")))
+        val vm = viewModel()
+        vm.onQuery("al")
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.onQuery("")
+
+        assertThat(vm.state.value.results).isEmpty()
+        assertThat(vm.state.value.showsNoResults).isFalse()
+    }
 }

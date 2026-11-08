@@ -50,7 +50,7 @@ extension BubbleStandardLayout {
         if content.isPinned {
             parts.append(String(localized: "a11y.message.pinned", bundle: .main))
         }
-        parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: content.protection))
+        parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: content.protection) + [BubbleDeviceLayerMark.spokenLabel(for: content.deviceLayerIntegrity)].compactMap { $0 })
         let summaries = content.reactions
         if !summaries.isEmpty {
             let reactionText = summaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")

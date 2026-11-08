@@ -18,6 +18,7 @@ import UIKit
 final class LongMessageAnchorTests: XCTestCase {
 
     private nonisolated static let longId = "m30"
+    private nonisolated static let secondLongId = "m31"
 
     func test_expanding_farFromTheBottom_withTheTopUnderTheChrome_keepsTheExcerptInPlace() async throws {
         let (vc, cv, window) = try await makeScrolledThread()
@@ -25,7 +26,7 @@ final class LongMessageAnchorTests: XCTestCase {
         let before = try visualTop(of: Self.longId, in: vc, cv: cv)
         let collapsedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
 
-        vc.toggleLongMessageExpansion(Self.longId)
+        vc.expandLongMessage(Self.longId)
         try await settle(vc, cv) { try self.frame(of: Self.longId, in: vc, cv: cv).height > collapsedHeight + 100 }
 
         let after = try visualTop(of: Self.longId, in: vc, cv: cv)
@@ -34,34 +35,52 @@ final class LongMessageAnchorTests: XCTestCase {
         XCTAssertFalse(vc.isIntentionalProgrammaticScroll, "le recalage ne laisse pas le verrou de scène désarmé")
     }
 
-    func test_collapsing_farFromTheBottom_keepsTheShowLessEdgeInPlace() async throws {
+    /// #16463 — un déplié le RESTE : toucher à nouveau ne le replie pas, et
+    /// en déplier un second ne replie pas le premier.
+    func test_expandingTwoMessages_bothStayExpanded_andNothingCollapsesThem() async throws {
         let (vc, cv, window) = try await makeScrolledThread()
         defer { window.isHidden = true }
         let collapsedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
-        vc.toggleLongMessageExpansion(Self.longId)
+
+        vc.expandLongMessage(Self.longId)
         try await settle(vc, cv) { try self.frame(of: Self.longId, in: vc, cv: cv).height > collapsedHeight + 100 }
         let expandedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
-        XCTAssertGreaterThan(expandedHeight, collapsedHeight + 100, "précondition : le message s'est déplié avant d'être replié")
-        let before = try visualBottom(of: Self.longId, in: vc, cv: cv)
+        XCTAssertGreaterThan(expandedHeight, collapsedHeight + 100, "précondition : le message s'est déplié")
 
-        vc.toggleLongMessageExpansion(Self.longId)
-        try await settle(vc, cv) { try self.frame(of: Self.longId, in: vc, cv: cv).height < expandedHeight - 100 }
+        vc.expandLongMessage(Self.secondLongId)
+        vc.expandLongMessage(Self.longId)
+        try await settle(vc, cv) { false }
 
-        let after = try visualBottom(of: Self.longId, in: vc, cv: cv)
-        XCTAssertLessThan(try frame(of: Self.longId, in: vc, cv: cv).height, expandedHeight - 100, "précondition : le message s'est replié")
-        XCTAssertEqual(after, before, accuracy: 1, "« Réduire » replie vers le haut : le bas du message reste sous le doigt")
+        XCTAssertEqual(vc.expandedLongMessageLocalIds, [Self.longId, Self.secondLongId], "les deux restent dépliés")
+        XCTAssertTrue(vc.longMessageExpansion(for: Self.longId).isExpanded)
+        XCTAssertTrue(vc.longMessageExpansion(for: Self.secondLongId).isExpanded)
+        XCTAssertEqual(try frame(of: Self.longId, in: vc, cv: cv).height, expandedHeight, accuracy: 1, "toucher à nouveau ne replie jamais")
+    }
+
+    /// #16463 — l'état vit dans le contrôleur du fil, recréé à chaque
+    /// ouverture de la conversation : rouvrir la rend repliée.
+    func test_aNewThreadInstance_startsWithEveryMessageCollapsed() async throws {
+        let store = try await makeSeededStore()
+        let first = makeSUT(store: store)
+        first.loadViewIfNeeded()
+        first.expandLongMessage(Self.longId)
+        XCTAssertTrue(first.longMessageExpansion(for: Self.longId).isExpanded, "précondition : déplié dans la première ouverture")
+
+        let reopened = makeSUT(store: store)
+        reopened.loadViewIfNeeded()
+        XCTAssertTrue(reopened.expandedLongMessageLocalIds.isEmpty)
+        XCTAssertFalse(reopened.longMessageExpansion(for: Self.longId).isExpanded, "rouvrir la conversation rend le message replié")
     }
 
     /// #8232 — la hauteur s'ANIME comme sur le web : le déplié se déroule sous
-    /// un masque, au tempo et sur la courbe partagés ; au repli, ses voisins
-    /// glissent au même tempo au lieu de sauter.
-    func test_expandingThenCollapsing_playsTheHeightAtTheWebTempoAndCurve() async throws {
+    /// un masque, au tempo et sur la courbe partagés.
+    func test_expanding_playsTheHeightAtTheWebTempoAndCurve() async throws {
         guard !UIAccessibility.isReduceMotionEnabled else { throw XCTSkip("Réduire le mouvement est actif sur ce simulateur") }
         let (vc, cv, window) = try await makeScrolledThread()
         defer { window.isHidden = true }
         let collapsedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
 
-        vc.toggleLongMessageExpansion(Self.longId)
+        vc.expandLongMessage(Self.longId)
         XCTAssertGreaterThan(try frame(of: Self.longId, in: vc, cv: cv).height, collapsedHeight + 100, "la hauteur se pose dans la passe du geste")
         let cell = try XCTUnwrap(cv.cellForItem(at: XCTUnwrap(vc.dataSource.indexPath(for: .message(localId: Self.longId)))))
         let reveal = try XCTUnwrap(
@@ -69,18 +88,6 @@ final class LongMessageAnchorTests: XCTestCase {
             "le déplié se déroule sous un masque, il ne passe pas d'un coup à sa hauteur"
         )
         assertSharedTempo(reveal)
-
-        try await settle(vc, cv) { cell.layer.mask == nil }
-        let expandedHeight = try frame(of: Self.longId, in: vc, cv: cv).height
-        vc.toggleLongMessageExpansion(Self.longId)
-        XCTAssertLessThan(try frame(of: Self.longId, in: vc, cv: cv).height, expandedHeight - 100)
-        let slides = cv.visibleCells.flatMap { neighbour in
-            (neighbour.layer.animationKeys() ?? [])
-                .filter { $0.hasPrefix(MessageListViewController.heightSlideKeyPrefix) }
-                .compactMap { neighbour.layer.animation(forKey: $0) }
-        }
-        let slide = try XCTUnwrap(slides.first, "au repli, les voisins glissent au lieu de sauter")
-        assertSharedTempo(slide)
     }
 
     private func assertSharedTempo(_ animation: CAAnimation, file: StaticString = #filePath, line: UInt = #line) {
@@ -186,7 +193,7 @@ final class LongMessageAnchorTests: XCTestCase {
         let t0 = Date(timeIntervalSince1970: 1_726_000_000)
         try await pool.write { db in
             for i in 1...60 {
-                try Self.record(index: i, at: t0, content: "m\(i)" == Self.longId ? Self.longText : "Bonjour \(i)").insert(db)
+                try Self.record(index: i, at: t0, content: [Self.longId, Self.secondLongId].contains("m\(i)") ? Self.longText : "Bonjour \(i)").insert(db)
             }
         }
         let store = MessageStore(conversationId: "c1", persistence: MessagePersistenceActor(dbWriter: pool))

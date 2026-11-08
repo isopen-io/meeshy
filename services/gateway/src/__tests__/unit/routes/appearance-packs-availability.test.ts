@@ -149,3 +149,29 @@ describe('le ciblage gouverne l’offre (#11274)', () => {
     expect(reads).toEqual([]);
   });
 });
+
+describe('un pack d’événement ANNUEL (#16450) : la boutique recalcule l’occurrence à la date du jour', () => {
+  const SNAPSHOT = { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-25T00:00:00Z' };
+
+  function yearlyShop(now: string) {
+    const db = appearancePrisma();
+    const index = buildPackIndex({
+      registries: [[wallpaper('toujours'), wallpaper('noel', { order: 1, availability: SNAPSHOT, event: { id: 'christmas', recurrence: 'yearly' } })]],
+      retained: [],
+      contractItemKeys: () => ['fond'],
+    });
+    const clock = () => new Date(now);
+    return new PackCatalog({ prisma: db.prisma, spec: appearancePackSpec({ index, domain: 'wallpaper', now: clock }), now: clock, audience: async () => audienceOf() });
+  }
+
+  it('en rayon pendant l’occurrence, retiré après sa fin, de retour l’année suivante sans réécrire de date', async () => {
+    expect(await slugs(yearlyShop('2026-11-06T00:00:00Z') as never)).toContain('noel');
+    expect(await slugs(yearlyShop('2027-03-01T00:00:00Z') as never)).not.toContain('noel');
+    expect(await slugs(yearlyShop('2027-10-25T00:00:00Z') as never)).toContain('noel');
+  });
+
+  it('sert aux clients la fenêtre de l’occurrence courante, pas l’instantané du générateur', async () => {
+    const served = (await yearlyShop('2027-11-01T00:00:00Z').catalogue(ALICE)).find((pack) => (pack as { slug: string }).slug === 'noel') as { availability?: unknown };
+    expect(served.availability).toEqual({ startsAt: '2027-10-25T00:00:00Z', endsAt: '2028-01-25T00:00:00Z' });
+  });
+});

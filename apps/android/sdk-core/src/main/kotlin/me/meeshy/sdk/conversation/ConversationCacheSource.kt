@@ -40,6 +40,12 @@ import me.meeshy.sdk.model.sync.PageFetchPlan
 import me.meeshy.sdk.model.sync.SyncOwnership
 import me.meeshy.sdk.sync.SyncAccountProvider
 import me.meeshy.sdk.sync.SyncCheckpointStore
+import me.meeshy.sdk.sync.SyncDeltaFetching
+import me.meeshy.sdk.sync.SyncDeltaOutcome
+import me.meeshy.sdk.sync.SyncDeltaRequest
+import me.meeshy.sdk.model.sync.ConversationDeltaRules
+import me.meeshy.sdk.model.sync.DeltaApplyRules
+import me.meeshy.sdk.model.sync.ReconcilePlan
 import me.meeshy.sdk.sync.fetchPageWithRetry
 import me.meeshy.sdk.sync.fetchPagesInParallel
 import kotlinx.coroutines.CancellationException
@@ -77,6 +83,8 @@ internal class ConversationCacheSource(
     private val decodeOn: CoroutineDispatcher = Dispatchers.Default,
     /** #13746 — the presence the gateway serves on the page seeds the session's presence map at cold start. */
     private val presenceSink: ServedPresenceSink = ServedPresenceSink.None,
+    /** #14512 — `GET /sync` first on a warm cache; [SyncDeltaFetching.None] (an old server) keeps `GET /conversations` alone. */
+    private val syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
@@ -347,10 +355,15 @@ internal class ConversationCacheSource(
         val currentEtag = syncMetaDao.etag(RESOURCE_KEY)
         val currentEtagScope = syncMetaDao.etagRequestKey(RESOURCE_KEY)
         val now = clock.nowMillis()
-        val useDelta = watermark != null && (now - watermark) <= CachePolicy.Conversations.keepForMillis
+        val reconcileDue = account != null && checkpoints.read(account).lastFullReconcile
+            ?.let { ReconcilePlan.isDue(it, now) } == true
+        val useDelta = watermark != null && !reconcileDue &&
+            (now - watermark) <= CachePolicy.Conversations.keepForMillis
         val updatedSince = if (useDelta) Instant.ofEpochMilli(watermark!!).toString() else null
         val requestScope = updatedSince ?: FULL_SWEEP_ETAG_SCOPE
         val ifNoneMatch = currentEtag?.takeIf { currentEtagScope == requestScope }
+
+        if (useDelta && revalidateViaSync(account, ticket, watermark!!, now, currentEtag, currentEtagScope)) return
 
         val outcome = sweepPages(updatedSince, ifNoneMatch)
 
@@ -383,6 +396,76 @@ internal class ConversationCacheSource(
             recordCheckpoint(account, now, pruned = prunedNow, fullReconcile = prunedNow)
         }
     }
+
+    /**
+     * #14512 — the delta by `GET /sync` (iOS `deltaViaSync`), tried first on a warm cache. Returns `true` when it settled the
+     * revalidation; `false` falls back to `GET /conversations?updatedSince=` with the watermark UNTOUCHED, so no resume point
+     * is lost: `/sync` unavailable (404/501, contract error, network), a gap the server cannot replay, a truncated window, or a
+     * row the thin `/sync` line cannot explain (unknown conversation, activity newer than the cached preview — only the rich
+     * route serves the preview and the unread count). What `/sync` did serve is merged FIELD BY FIELD before falling back.
+     */
+    private suspend fun revalidateViaSync(
+        account: String?,
+        ticket: AccountTicket?,
+        watermark: Long,
+        now: Long,
+        currentEtag: String?,
+        currentEtagScope: String?,
+    ): Boolean {
+        if (conversationDao.allIds().isEmpty()) return false
+        val since = Instant.ofEpochMilli(watermark).toString()
+        val scope = SYNC_ETAG_SCOPE_PREFIX + since
+        val outcome = syncDelta.conversationsDelta(
+            SyncDeltaRequest(since = since, validator = currentEtag?.takeIf { currentEtagScope == scope }),
+        )
+        if (!ownership.owns(account)) return true
+        return when (outcome) {
+            is SyncDeltaOutcome.Unavailable -> false
+            is SyncDeltaOutcome.NotModified -> {
+                fence.commitOrWrite(ticket) {
+                    syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermark, currentEtag, currentEtagScope))
+                    recordCheckpoint(account, now, pruned = false, fullReconcile = false)
+                }
+                true
+            }
+            is SyncDeltaOutcome.Delta -> {
+                if (outcome.hasGap) return false
+                val merge = fence.commitOrWrite(ticket) { applySyncDelta(outcome) } ?: return true
+                val settled = outcome.complete && !merge.needsRichRefresh
+                if (!settled) return false
+                val checkpoint = outcome.checkpoint?.let(::isoToEpochMillisOrNull)
+                fence.commitOrWrite(ticket) {
+                    syncMetaDao.upsert(
+                        SyncMetaEntity(
+                            RESOURCE_KEY, now, maxOf(watermark, checkpoint ?: watermark),
+                            outcome.validator, scope.takeIf { outcome.validator != null },
+                        ),
+                    )
+                    recordCheckpoint(account, now, pruned = false, fullReconcile = false)
+                }
+                true
+            }
+        }
+    }
+
+    private suspend fun applySyncDelta(outcome: SyncDeltaOutcome.Delta): ConversationDeltaRules.Merge =
+        database.withTransaction {
+            seedEndToEndFromCache()
+            val known = outcome.rows.mapNotNull { row ->
+                conversationDao.find(row.id)
+                    ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
+            }.associateBy { it.id }
+            val applied = DeltaApplyRules.apply(known, outcome.rows, outcome.deletedIds)
+            val merge = applied.merge
+            val carried = merge.upserts.map { keepingEndToEnd(it) }
+            confirmServedClear(carried)
+            val now = clock.nowMillis()
+            conversationDao.upsertAll(carried.map { entityOf(it, now) })
+            carried.forEach(searchIndex::indexConversation)
+            merge.removedIds.chunked(DELETE_CHUNK_SIZE).forEach { conversationDao.deleteByIds(it) }
+            applied.invalidatedMessageIds.forEach { database.messageDao().clearConversation(it) }
+            merge
+        }
 
     private suspend fun recordCheckpoint(account: String?, now: Long, pruned: Boolean, fullReconcile: Boolean) {
         if (account == null || !ownership.owns(account)) return
@@ -551,5 +634,8 @@ internal class ConversationCacheSource(
          * value, which is always a well-formed ISO-8601 instant.
          */
         private const val FULL_SWEEP_ETAG_SCOPE = "full-sweep"
+
+        /** [SyncMetaEntity.etagRequestKey] prefix of a `GET /sync` validator (#14512): it hashes THAT window's body only. */
+        private const val SYNC_ETAG_SCOPE_PREFIX = "sync:"
     }
 }

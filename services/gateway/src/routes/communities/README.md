@@ -32,12 +32,17 @@ src/routes/communities/
 - **Types TypeScript**: Types inférés des schémas Zod
 
 ### core.ts
-Routes CRUD principales pour les communautés:
+Routes CRUD principales pour les communautés.
+
+**Un membre est une ligne `CommunityMember` ACTIVE (#16603).** Un départ ou un retrait laisse la ligne en `isActive: false` : toute route qui demande « est-il membre ? » passe `activeMembershipOf(userId)` (`serialization.ts`), et tout `memberCount` passe `COMMUNITY_ACTIVE_COUNTS`. La liste et le détail se servent par le même `communityForViewer`.
+
 - `GET /communities/check-identifier/:identifier` - Vérifier disponibilité d'un identifiant
-- `GET /communities` - Liste des communautés de l'utilisateur (avec pagination et recherche)
-- `GET /communities/:id` - Détails d'une communauté (par ID ou identifier)
+- `GET /communities` - Liste des communautés de l'utilisateur (avec pagination et recherche) ; une communauté quittée n'y figure plus, chaque carte sert `currentUserRole`, et la route ne charge plus la liste des membres de chaque communauté
+- `GET /communities/:id` - Détails d'une communauté (par ID ou identifier) ; sert `currentUserRole` (rôle ACTIF du lecteur, `admin` pour le créateur, `null` sinon — #6378). Ne charge que la ligne d'adhésion active du lecteur, jamais la liste des membres ; un ancien membre (`isActive: false`) est refusé d'une communauté privée ; `memberCount` ne compte que les membres actifs.
 - `POST /communities` - Créer une nouvelle communauté
-- `GET /communities/:id/conversations` - Conversations d'une communauté
+- `GET /communities/:id/conversations` - Conversations d'une communauté (privée : membres ACTIFS et créateur seulement)
+- `POST /communities/:id/conversations/:conversationId` - Rattacher une conversation : administrateur ACTIF (ou créateur) de la cible, et de la source si elle en a une
+- `POST /conversations` avec `communityId` (route des conversations) - Créer un salon de la communauté : communauté active (sinon 404), appelant membre ACTIF ou créateur. Ses participants qui ne sont pas membres actifs y ENTRENT sous la loi de `…/invite` (#16639, `services/conversations/communityMembershipSync.ts`) : communauté privée ⇒ créateur, administrateur ou modérateur seulement (403 `COMMUNITY_INVITE_FORBIDDEN`), compte vivant et sans blocage (404), ligne d'un retiré réactivée en `member`. Le refus tombe AVANT la création : rien n'est écrit. Différence assumée avec `…/invite` : le créateur de la communauté sans ligne active (il ne peut ni partir ni être retiré) y revient `admin`.
 
 ### search.ts
 Routes de recherche publique:
@@ -50,12 +55,17 @@ Routes de recherche publique:
 Gestion complète des membres:
 - `GET /communities/:id/members` - Liste des membres (avec pagination)
 - `POST /communities/:id/members` - Ajouter un membre (admin uniquement)
+
+**Qui peut être ajouté (#6376).** `POST …/members` et `POST …/invite` (`membership.ts`) ajoutent quelqu'un sans son accord : toutes deux passent `isAddableUser` (`addable-user.ts`) — compte vivant (ni `deactivatedAt`, ni `deletedAt`, `isActive`), aucun blocage dans un sens ou dans l'autre — et rendent le même 404 qu'un inconnu.
 - `PATCH /communities/:id/members/:memberId/role` - Modifier le rôle d'un membre (admin uniquement)
 - `DELETE /communities/:id/members/:memberId` - Retirer un membre (admin uniquement)
+
+**Ne plus être membre d'une communauté qui garde ses salons, c'est en sortir (#16704).** `DELETE …/members/:memberId` et `POST /communities/:id/leave` (`membership.ts`), sur une communauté privée ou désactivée (`communityGuardsItsSalons`), font sortir la personne de chaque salon vivant de la communauté par `exitCommunitySalons` (`services/conversations/communitySalonExit.ts`) : le même départ que `POST /conversations/:id/leave` (`leftAt`, succession du créateur, avis « X a quitté la conversation », `conversation:participant-left` avec l'effectif absolu, fin d'appartenance), sans jamais clore un salon. Une communauté publique vivante ne fait sortir de rien : ses salons sont ouverts à quiconque.
 
 ### settings.ts
 Paramètres et modifications:
 - `PUT /communities/:id` - Mettre à jour une communauté (créateur uniquement)
+  - **Passer en privée fait entrer les occupants de ses salons (#16723).** Une communauté publique qui devient privée (ici, ou par `PATCH /admin/communities/:id`) fait d'abord entrer dans la communauté chaque occupant inscrit, actif et non banni de ses salons (clos compris) qui n'en a JAMAIS été membre, sous l'autorité du créateur (`admitSalonOccupants`, `services/conversations/communitySalonAdoption.ts` : compte vivant, aucun blocage avec le créateur) ; un ANCIEN membre (parti, ou retiré d'une communauté encore publique) n'est pas réinscrit. Puis, la bascule écrite, une seconde passe rattrape les retardataires et ceux qui n'ont pas pu entrer — anciens membres compris — sortent des salons (`closeSalonsAfterSwitch`, loi de #16704). Une admission en panne n'écrit pas la bascule (500, rejouable). Les invités sans compte et les bots ne sont pas touchés.
 - `DELETE /communities/:id` - Supprimer une communauté (créateur uniquement)
 
 ## Caractéristiques préservées

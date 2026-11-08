@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "sessions_current_badge",
+          "androidName": "sessions_current_badge",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_empty",
+          "androidName": "sessions_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_empty_subtitle",
+          "androidName": "sessions_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_error_ok",
+          "androidName": "sessions_error_ok",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_error_title",
+          "androidName": "sessions_error_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_load_error",
+          "androidName": "sessions_load_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_revoke_error",
+          "androidName": "sessions_revoke_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_revoke_all_error",
+          "androidName": "sessions_revoke_all_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_unknown_device",
+          "androidName": "sessions_unknown_device",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.section.others",
+          "androidName": "sessions_section_others",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.revoke.a11y",
+          "androidName": "sessions_revoke_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loading",
+          "androidName": "sessions_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.offline.title",
+          "androidName": "sessions_offline_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.offline.subtitle",
+          "androidName": "sessions_offline_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.error.subtitle",
+          "androidName": "sessions_error_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.offline.banner",
+          "androidName": "sessions_offline_banner",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.error.banner",
+          "androidName": "sessions_error_banner",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.place.footnote",
+          "androidName": "sessions_place_footnote",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.place.approximate",
+          "androidName": "sessions_place_approximate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.timezone",
+          "androidName": "sessions_timezone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.opened",
+          "androidName": "sessions_opened",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.activity.now",
+          "androidName": "sessions_activity_now",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.activity.last",
+          "androidName": "sessions_activity_last",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.device.browserOnSystem",
+          "androidName": "sessions_device_browser_on_system",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.platform.web",
+          "androidName": "sessions_platform_web",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.platform.pwa",
+          "androidName": "sessions_platform_pwa",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.platform.android",
+          "androidName": "sessions_platform_android",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loginMethod.password",
+          "androidName": "sessions_login_password",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loginMethod.twoFactor",
+          "androidName": "sessions_login_two_factor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loginMethod.magicLink",
+          "androidName": "sessions_login_magic_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loginMethod.registration",
+          "androidName": "sessions_login_registration",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loginMethod.emailVerification",
+          "androidName": "sessions_login_email_verification",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loginMethod.oauth",
+          "androidName": "sessions_login_oauth",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.loginMethod.anonymous",
+          "androidName": "sessions_login_anonymous",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

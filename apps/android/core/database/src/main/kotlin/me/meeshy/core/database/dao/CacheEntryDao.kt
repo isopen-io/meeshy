@@ -54,6 +54,10 @@ public abstract class CacheEntryDao {
     @Query("DELETE FROM cache_entries WHERE namespace = :namespace")
     public abstract suspend fun deleteNamespace(namespace: String)
 
+    /** Every namespace holding a row — the completeness check compares it with the registry's inventory. */
+    @Query("SELECT DISTINCT namespace FROM cache_entries")
+    public abstract suspend fun namespaces(): List<String>
+
     @Query("SELECT COUNT(*) FROM cache_entries WHERE namespace = :namespace AND itemId != ''")
     public abstract suspend fun itemCount(namespace: String): Int
 

@@ -25,6 +25,9 @@ public abstract class EphemeralReceiptDao {
     @Query("DELETE FROM ephemeral_receipts WHERE messageId = :messageId")
     public abstract suspend fun delete(messageId: String)
 
+    @Query("DELETE FROM ephemeral_receipts WHERE messageId IN (:messageIds)")
+    public abstract suspend fun deleteAll(messageIds: List<String>)
+
     /** Idempotent and monotone: a replay is a no-op, a later reception never moves the clock back. */
     @Transaction
     public open suspend fun record(row: EphemeralReceiptEntity) {

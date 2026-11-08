@@ -133,7 +133,6 @@ public object PrivacyCatalog {
      */
     public val comingSoon: Set<PrivacyToggle> = setOf(
         PrivacyToggle.BLOCK_SCREENSHOTS,
-        PrivacyToggle.SAVE_MEDIA_TO_GALLERY,
         PrivacyToggle.SHARE_USAGE_DATA,
         PrivacyToggle.ALLOW_CONTACT_REQUESTS,
         PrivacyToggle.ALLOW_GROUP_INVITES,

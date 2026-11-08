@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
@@ -96,10 +98,12 @@ public fun MeeshyImageViewer(
         var chrome by remember { mutableStateOf(FullscreenChromeState.Initial) }
         var dragProgress by remember { mutableFloatStateOf(0f) }
         var busy by remember { mutableStateOf(false) }
+        var menuOpen by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         val haptics = rememberMeeshyHaptics()
         val shareTitle = stringResource(R.string.viewer_share_outside)
+        val positionLabel = stringResource(R.string.viewer_position, pagerState.currentPage + 1, imageUrls.size)
 
         SystemBarsForViewer(immersive = !chrome.showsChrome)
 
@@ -153,7 +157,9 @@ public fun MeeshyImageViewer(
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = !currentPageZoomed,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .semantics { stateDescription = positionLabel },
             ) { index ->
                 ZoomableImagePage(
                     url = imageUrls[index],
@@ -165,6 +171,12 @@ public fun MeeshyImageViewer(
                     onDragProgress = { dragProgress = it },
                     onDismiss = onDismiss,
                     secure = secure,
+                    onLongPress = {
+                        if (exits.isNotEmpty()) {
+                            chrome = chrome.revealing()
+                            menuOpen = true
+                        }
+                    },
                 )
             }
 
@@ -183,6 +195,8 @@ public fun MeeshyImageViewer(
                     exits = exits,
                     isBusy = busy,
                     onExit = ::runExit,
+                    menuOpen = menuOpen,
+                    onMenuOpenChange = { menuOpen = it },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .statusBarsPadding(),
@@ -219,7 +233,7 @@ private const val STAGE_FADE_ON_DRAG = 0.6f
  * them in immersion — iOS hands the whole height to the media.
  */
 @Composable
-private fun SystemBarsForViewer(immersive: Boolean) {
+internal fun SystemBarsForViewer(immersive: Boolean) {
     FullScreenDialogWindow()
     val view = LocalView.current
     val window = (view.parent as? DialogWindowProvider)?.window ?: return

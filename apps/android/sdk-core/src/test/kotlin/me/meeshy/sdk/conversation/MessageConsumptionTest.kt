@@ -42,12 +42,14 @@ class MessageConsumptionTest {
 
     private class Recorder {
         val expired = mutableListOf<List<String>>()
+        val erased = mutableListOf<List<String>>()
         var flushes = 0
     }
 
     private fun TestScope.sut(recorder: Recorder) = MessageConsumption(
         outbox = outbox,
         expireLocally = { recorder.expired += it },
+        erasePlaintexts = { recorder.erased += it },
         flush = { recorder.flushes++ },
         scope = backgroundScope,
     )
@@ -100,5 +102,13 @@ class MessageConsumptionTest {
             .isEqualTo("c1")
         assertThat(recorder.expired).isEmpty()
         assertThat(recorder.flushes).isEqualTo(1)
+    }
+
+    @Test
+    fun `a view once closed by me leaves the end-to-end vault at once`() = runTest {
+        val recorder = Recorder()
+        sut(recorder).consumeViewOnceNow("c1", "m1")
+
+        assertThat(recorder.erased).containsExactly(listOf("m1"))
     }
 }

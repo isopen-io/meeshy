@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.chrome
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -38,8 +39,8 @@ public fun TopChromeBand(tint: TopChromeTint?, modifier: Modifier = Modifier) {
     AnimatedVisibility(
         visible = tint != null,
         modifier = modifier,
-        enter = if (reduceMotion) fadeIn(tween(150)) else slideInVertically(spring(dampingRatio = 1f)) { -it },
-        exit = if (reduceMotion) fadeOut(tween(150)) else slideOutVertically(spring(dampingRatio = 1f)) { -it },
+        enter = if (reduceMotion) fadeIn(tween(150)) else slideInVertically(topChromeBarSpring()) { -it },
+        exit = if (reduceMotion) fadeOut(tween(150)) else slideOutVertically(topChromeBarSpring()) { -it },
     ) {
         Box(
             Modifier
@@ -49,3 +50,9 @@ public fun TopChromeBand(tint: TopChromeTint?, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * LE ressort des barres du haut (iOS `TopChromeBarMotion.animation`) : amorti critique, sans rebond. La bande ET
+ * chaque barre (appel, lecteur audio) le tirent d'ICI, pour qu'elles entrent et sortent d'un seul mouvement.
+ */
+public fun <T> topChromeBarSpring(): FiniteAnimationSpec<T> = spring(dampingRatio = 1f)

@@ -231,6 +231,8 @@ struct ThemedMessageBubble: View {
     /// l'avis mène toujours à la fiche de participation, quelle que soit la
     /// porte empruntée.
     var onOpenParticipantProfile: ((String) -> Void)? = nil
+    /// « dis-lui salut » (#16338) — l'id de l'avis d'arrivée touché.
+    var onGreetArrivals: ((String) -> Void)? = nil
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
     /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
@@ -305,15 +307,7 @@ struct ThemedMessageBubble: View {
         //   - otherwise (`.standard`) → `BubbleStandardLayout`
         switch content.kind {
         case .system:
-            if let callNotice = content.callNotice {
-                BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPressCallDetail)
-            } else if let joinNotice = content.joinNotice {
-                // Une arrivée a sa propre notice : la notice générique a pour
-                // icône un TÉLÉPHONE, héritée des résumés d'appel.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile, timeString: content.meta.timeString)
-            } else {
-                BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark, timeString: content.meta.timeString)
-            }
+            systemNotice(content)
         case .deleted where content.protection.isExpired:
             EmptyView()
         case .deleted:
@@ -322,19 +316,7 @@ struct ThemedMessageBubble: View {
             if content.protection.isExpired {
                 EmptyView()
             } else {
-                BubbleViewOnceSealedView(
-                    state: content.viewOnceChipState ?? .sealed,
-                    isMe: message.isMe,
-                    isDark: isDark,
-                    protection: content.protection,
-                    timeString: content.meta.timeString,
-                    hint: content.protectedTap().accessibilityHint,
-                    onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
-                        HapticFeedback.medium()
-                        onConsumeViewOnce?(messageId) { _ in }
-                    }
-                )
-                .ephemeralBurn(isBurning: content.isBurning)
+                viewOnceLayout(content: content)
             }
         default:
             if content.protection.isExpired {
@@ -623,6 +605,29 @@ extension ThemedMessageBubble: @MainActor Equatable {
             .filter { ownedIds.contains($0.id) }
             .sorted { $0.id < $1.id }
             .map { AudioEnrichmentKey(id: $0.id, transcription: $0.transcription, translatedAudios: $0.translatedAudios) }
+    }
+
+    /// La puce d'une vue unique et son pied (#16130) : le statut de MON envoi, le renvoi
+    /// d'un échec, et les détails de lecture, dont le menu ne dit rien du contenu
+    /// (`MessageActionResolver.viewOnceSections`).
+    private func viewOnceLayout(content: BubbleContent) -> some View {
+        BubbleViewOnceSealedView(
+            state: content.viewOnceChipState ?? .sealed,
+            isMe: message.isMe,
+            isDark: isDark,
+            protection: content.protection,
+            footer: BubbleViewOnceSealedView.footerModel(for: content, isOnline: NetworkMonitor.shared.isOnline),
+            footerActions: BubbleFooterActions(
+                onRetry: onRetry == nil ? nil : { onRetry?(message.id) },
+                onShowReadStatus: content.isMe && onShowReadStatus != nil ? { onShowReadStatus?(message.id) } : nil
+            ),
+            hint: content.protectedTap().accessibilityHint,
+            onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
+                HapticFeedback.medium()
+                onConsumeViewOnce?(messageId) { _ in }
+            }
+        )
+        .ephemeralBurn(isBurning: content.isBurning)
     }
 
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {

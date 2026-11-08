@@ -36,11 +36,18 @@ class ComposerLivePlayerTest {
     private var window by mutableStateOf(ComposerLiveWindow(2_000, 6_000))
     private var volume by mutableFloatStateOf(1f)
     private var playing by mutableStateOf(true)
+    private var effects by mutableStateOf<ComposerLiveEffects?>(null)
     private var player: Player? = null
 
     private fun show() {
         compose.setContent {
-            val live = rememberComposerLivePlayer(mediaUrl = "file:///sdcard/clip.mp4", window = window, volume = volume, playing = playing)
+            val live = rememberComposerLivePlayer(
+                mediaUrl = "file:///sdcard/clip.mp4",
+                window = window,
+                volume = volume,
+                playing = playing,
+                effects = effects,
+            )
             player = live.player
         }
         compose.waitForIdle()
@@ -75,6 +82,44 @@ class ComposerLivePlayerTest {
         compose.waitForIdle()
 
         assertThat(player!!.currentPosition).isEqualTo(3_500)
+    }
+
+    @Test
+    fun `the first look is painted on the same player, which keeps its position`() {
+        show()
+        player!!.seekTo(3_300)
+        compose.waitForIdle()
+
+        effects = ComposerLiveEffects.PENDING
+        compose.waitForIdle()
+
+        assertThat(PlayerCensus.created).isEqualTo(1)
+        assertThat(player!!.currentPosition).isEqualTo(3_300)
+    }
+
+    @Test
+    fun `removing the look keeps the same player and its position`() {
+        effects = ComposerLiveEffects.PENDING
+        show()
+        player!!.seekTo(4_100)
+        compose.waitForIdle()
+
+        effects = null
+        compose.waitForIdle()
+
+        assertThat(PlayerCensus.created).isEqualTo(1)
+        assertThat(player!!.currentPosition).isEqualTo(4_100)
+    }
+
+    @Test
+    fun `a look laid, removed and laid again never rebuilds the player`() {
+        show()
+        listOf(ComposerLiveEffects.PENDING, null, ComposerLiveEffects.PENDING, null).forEach { next ->
+            effects = next
+            compose.waitForIdle()
+        }
+
+        assertThat(PlayerCensus.created).isEqualTo(1)
     }
 
     @Test

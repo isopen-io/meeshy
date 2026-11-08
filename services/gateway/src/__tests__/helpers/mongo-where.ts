@@ -15,6 +15,9 @@
  * sont des objets nus : une clé absente de l'objet est absente du document, et
  * c'est le RÉSULTAT de la lecture qui parle.
  *
+ * Un champ `undefined` est IGNORÉ, comme chez Prisma : il n'apparie pas
+ * « rien », il apparie TOUT.
+ *
  * Le sous-ensemble supporté est celui des filtres de soft-state de ce dépôt.
  * Toute autre forme jette : un filtre dont ce double ne sait rien doit faire
  * échouer le test, jamais passer en l'ignorant.
@@ -28,6 +31,10 @@ export function matchesMongoWhere(row: MongoDocument, where: MongoDocument | und
   if (!where) return true;
 
   return Object.entries(where).every(([key, condition]) => {
+    // Prisma IGNORE un champ `undefined` : `{ userId: undefined }` vise toutes
+    // les lignes, ce qui fait d'un identifiant indéfini une suppression de toute
+    // une collection (audit #14448). Le double ne doit pas le masquer.
+    if (condition === undefined) return true;
     if (key === 'OR') {
       return (condition as MongoDocument[]).some((branch) => matchesMongoWhere(row, branch));
     }

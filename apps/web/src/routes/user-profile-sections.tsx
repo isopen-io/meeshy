@@ -55,6 +55,7 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
   busy,
   onAction,
   onSignIn,
+  circle = null,
 }: {
   readonly language: InterfaceLanguage;
   readonly relation: ProfileRelation;
@@ -65,6 +66,9 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
   readonly busy: boolean;
   readonly onAction: (kind: ProfileActionKind) => void;
   readonly onSignIn: () => void;
+  /** La ligne du CERCLE (#13940) — un emplacement opaque, iso `profileRelationSection` d'iOS : le niveau commun
+   * et sa montée, posés au-dessus des gestes. `null` : rien à dire, la section est celle d'avant. */
+  readonly circle?: ReactNode;
 }) {
   return (
     <GroupedSection
@@ -77,6 +81,7 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
         {signedIn ? (
           <>
             <ContextBanner language={language} relation={relation} name={name} />
+            {circle}
             {actions.map((kind) => (
               <ActionButton
                 key={kind}

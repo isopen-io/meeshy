@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.Role
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.launch
+import me.meeshy.app.game.GamePageScaffold
 import me.meeshy.app.game.photo.GamePhotoFlowDialog
 import me.meeshy.app.game.photo.GamePhotoSharer
 import me.meeshy.sdk.model.game.photo.GamePhotoMoment
@@ -54,7 +55,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.meeshy.app.game.progression.GamePageScaffold
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.PhotoLawEntry
 import me.meeshy.ui.component.MeeshySkeletonBox

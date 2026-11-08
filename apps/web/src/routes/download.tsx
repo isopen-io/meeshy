@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react';
 
 import '@/styles/site-chrome.css';
+import '@/styles/store-badge.css';
 
 import { AuthAmbient } from '@/components/auth-chrome';
 import { LANDING_COPY } from '@/landing/landing-copy';
+import { StoreBadge } from '@/landing/store-logos';
 import { LanguageSelect, SiteFooter, SiteHeader, type SitePage } from '@/landing/site-chrome';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { appInstitutionalHref, appSiteHref } from '@/lib/institutional-href';
 import { currentInterfaceLanguage, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { Link } from '@/routes/route-table';
 
 import { ActionLink } from './link-page-parts';
 
@@ -29,14 +30,17 @@ import { ActionLink } from './link-page-parts';
  *
  * ## Ce que chaque badge promet
  *
- * - **App Store** : la fiche RÉELLE, `id6760208591` (lookup iTunes
- *   `bundleId=me.meeshy.app`). L'adresse d'avant, `apps.apple.com/app/meeshy`,
- *   rendait 404 — le seul geste de la page menait à une erreur.
- * - **Google Play** : la coque Android n'est pas encore publiée. Le badge
- *   reste visible (le visiteur Android doit se reconnaître), dit « bientôt »,
- *   et mène à la version web — jamais à `play.google.com`, dont la fiche
- *   n'existe pas. Le jour de la publication, c'est `GOOGLE_PLAY_HREF` et une
- *   clé de catalogue.
+ * Les deux mènent à leur fiche RÉELLE, dont les adresses vivent dans
+ * `lib/store-links.ts`, que la landing lit aussi (#15120). Le badge lui-même
+ * est `StoreBadge` (`landing/store-logos.tsx`), le même que celui de la
+ * landing, et sa feuille `styles/store-badge.css` (#16407).
+ *
+ * - **App Store** : `id6760208591` (lookup iTunes `bundleId=me.meeshy.app`).
+ *   L'adresse d'avant, `apps.apple.com/app/meeshy`, rendait 404 — le seul
+ *   geste de la page menait à une erreur.
+ * - **Google Play** : la fiche de l'app Android NATIVE, `me.meeshy.app`,
+ *   publique depuis qu'elle l'a reprise à la coque (#13619). Le badge disait
+ *   « bientôt » et menait à la version web tant qu'aucune fiche n'existait.
  *
  * ## Les captures
  *
@@ -58,8 +62,6 @@ import { ActionLink } from './link-page-parts';
  * le morceau de cet écran — jamais dans `app.css`, que paie la première
  * peinture de toutes les autres adresses.
  */
-
-export const APP_STORE_URL = 'https://apps.apple.com/app/id6760208591';
 
 const ASSET_ORIGIN = __SHELL__ ? 'https://meeshy.me' : '';
 
@@ -126,53 +128,13 @@ function ShotImage({ src, alt, eager }: { readonly src: string; readonly alt: st
   );
 }
 
-function AppleLogo() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
-      <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
-    </svg>
-  );
-}
-
-function GooglePlayLogo() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24">
-      {/* harmony-exempt: logo Google Play, couleurs de la marque tierce */}
-      <path fill="#4285F4" d="M3.61 1.81 13.4 12 3.61 22.19C3.24 22 3 21.6 3 21.1V2.9c0-.5.24-.9.61-1.09Z" />
-      {/* harmony-exempt: logo Google Play */}
-      <path fill="#34A853" d="M3.61 1.81c.36-.19.82-.18 1.27.08l11.72 6.73L13.4 12Z" />
-      {/* harmony-exempt: logo Google Play */}
-      <path fill="#EA4335" d="M3.61 22.19 13.4 12l3.2 3.38-11.72 6.73c-.45.26-.91.27-1.27.08Z" />
-      {/* harmony-exempt: logo Google Play */}
-      <path fill="#FBBC04" d="m16.6 8.62 3.8 2.18c.9.52.9 1.88 0 2.4l-3.8 2.18L13.4 12Z" />
-    </svg>
-  );
-}
-
-const BADGE_CLASS =
-  // harmony-exempt: badge de magasin, noir et blanc imposés par Apple et Google
-  'inline-flex h-[52px] items-center gap-2.5 rounded-xl px-4 text-start text-white outline-offset-2 focus-visible:outline-2';
-// harmony-exempt: badge de magasin, noir et gris imposés par Apple et Google
-const BADGE_STYLE = { background: '#000', border: '1px solid #a6a6a6', outlineColor: 'var(--color-ios-brand)' };
-
-function BadgeText({ caption, name }: { readonly caption: string; readonly name: string }) {
-  return (
-    <span className="grid leading-none">
-      <span className="text-[0.6875rem] tracking-wide">{caption}</span>
-      <span className="text-[1.3125rem] font-semibold tracking-tight">{name}</span>
-    </span>
-  );
-}
-
 function PlatformCard({
   heading,
-  soon,
   badge,
   note,
   children,
 }: {
   readonly heading: string;
-  readonly soon?: string;
   readonly badge: ReactNode;
   readonly note: string;
   readonly children: ReactNode;
@@ -185,22 +147,9 @@ function PlatformCard({
         border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
       }}
     >
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-          {heading}
-        </h2>
-        {soon === undefined ? null : (
-          <span
-            className="rounded-full px-2.5 py-0.5 text-caption font-semibold"
-            style={{
-              color: 'var(--color-ios-brand)',
-              background: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)',
-            }}
-          >
-            {soon}
-          </span>
-        )}
-      </div>
+      <h2 className="text-lg font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+        {heading}
+      </h2>
       <div>{badge}</div>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
         {note}
@@ -246,18 +195,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
             heading={t('download.ios.heading')}
             note={t('download.ios.note')}
             badge={
-              <a
-                href={APP_STORE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-store="app-store"
-                aria-label={t('download.appStore')}
-                className={BADGE_CLASS}
-                style={BADGE_STYLE}
-              >
-                <AppleLogo />
-                <BadgeText caption={t('download.badge.appStore.caption')} name="App Store" />
-              </a>
+              <StoreBadge store="app-store" label={t('download.appStore')} caption={t('download.badge.appStore.caption')} />
             }
           >
             <ShotStrip label={t('download.shots.ios')}>
@@ -271,19 +209,9 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
 
           <PlatformCard
             heading={t('download.android.heading')}
-            soon={t('download.android.soon')}
             note={t('download.android.note')}
             badge={
-              <Link
-                to="home"
-                data-store="google-play"
-                aria-label={t('download.android.badge')}
-                className={BADGE_CLASS}
-                style={BADGE_STYLE}
-              >
-                <GooglePlayLogo />
-                <BadgeText caption={t('download.badge.googlePlay.caption')} name="Google Play" />
-              </Link>
+              <StoreBadge store="google-play" label={t('download.googlePlay')} caption={t('download.badge.googlePlay.caption')} />
             }
           >
             <ShotStrip label={t('download.shots.android')}>

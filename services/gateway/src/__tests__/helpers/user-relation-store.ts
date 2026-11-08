@@ -102,6 +102,11 @@ export function relationStore(seed: { friendRequests?: readonly Row[]; relations
       state.relations.push(row);
       return Promise.resolve({ ...row });
     },
+    deleteMany: (args: { where: Row }): Promise<{ count: number }> => {
+      const before = state.relations.length;
+      state.relations = state.relations.filter((row) => !matchesMongoWhere(row, args.where));
+      return Promise.resolve({ count: before - state.relations.length });
+    },
     updateMany: (args: { where: Row; data: Row }): Promise<{ count: number }> => {
       const matched = state.relations.filter((row) => matchesMongoWhere(row, args.where));
       matched.forEach((row) => {

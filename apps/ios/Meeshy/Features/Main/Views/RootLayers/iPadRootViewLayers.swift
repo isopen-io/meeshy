@@ -250,7 +250,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     /// La route ouverte dans le panneau de droite : un écran profond y cache la bannière du joueur (#9494).
     var rightPanelRoute: Route? = nil
     let onStoryReply: (ReplyContext) -> Void
-    let onSyncPillTap: (OutboxUIItem.Source) -> Void
+    let onSyncPillTap: (OutboxUIItem.Source) -> Bool
     let activeConversationIdForBanner: () -> String?
     let onMiniPlayerTap: () -> Void
     /// Rouvre un réel qui n'a pas pu se charger (« Réessayer » de `ReelOpenFailureView`).
@@ -282,53 +282,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 storyViewModel: storyViewModel
             )
             .fullScreenCover(item: $reelsPresenter.launch) { launch in
-                GeometryReader { proxy in
-                    // Parité RootView (#6508) : un réel qui n'a pas pu se charger montre SON échec. Monté sur une
-                    // graine vide, le lecteur partait en démarrage à froid et jouait d'autres réels sans rapport.
-                    if let failure = launch.failure, let postId = launch.startId {
-                        ReelOpenFailureView(
-                            failure: failure,
-                            onRetry: {
-                                await onRetryReel(postId, launch.commentId, launch.parentCommentId)
-                            },
-                            onClose: { reelsPresenter.dismiss() }
-                        )
-                    } else {
-                    ReelsPlayerView(
-                        seedPosts: launch.seedPosts,
-                        startId: launch.startId,
-                        commentTargetId: launch.commentId,
-                        commentParentTargetId: launch.parentCommentId,
-                        revealCompleted: true,
-                        safeArea: proxy.safeAreaInsets,
-                        onClose: { reelsPresenter.dismiss() },
-                        onOpenProfile: { userId, username in
-                            reelsPresenter.dismiss()
-                            router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
-                        },
-                        onOpenStory: { userId in
-                            reelsPresenter.dismiss()
-                            storyViewerCoordinator.present(StoryViewerRequest(
-                                id: userId,
-                                startAtFirstUnviewed: true,
-                                singleGroup: true
-                            ))
-                        },
-                        onOpenDetail: { postId in
-                            reelsPresenter.dismiss()
-                            router.push(.postDetail(postId))
-                        },
-                        authorHasStory: { userId in
-                            storyViewModel.storyRingState(forUserId: userId) != .none
-                        }
-                    )
-                    .ignoresSafeArea()
-                    }
-                }
-                .modifier(MeeshyRouterInjection(router: router))
-                .environmentObject(statusViewModel)
-                .meeshyConversationList(conversationViewModel)
-                .environmentObject(storyViewModel)
+                reelsPage(launch)
             }
             .overlay(alignment: .bottom) {
                 ConnectionBanner(
@@ -372,6 +326,68 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // referme que ceux de cette fenêtre (#10543).
             // La demande d'un lien d'appel : confirmée ici, dans la fenêtre principale.
             .callLinkConfirmationSheet()
+            .environment(\.meeshyQuoteComposerHost, quoteHost)
             .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    /// La porte de citation de toute surface de publication (#15911).
+    private var quoteHost: QuoteComposerHost {
+        QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                          conversationListViewModel: conversationViewModel,
+                          statusViewModel: statusViewModel)
+    }
+
+    /// Le lecteur de réels plein cadre — sorti de `body` (cohésion, #15869).
+    private func reelsPage(_ launch: ReelsPresenter.Launch) -> some View {
+        GeometryReader { proxy in
+            // Parité RootView (#6508) : un réel qui n'a pas pu se charger montre SON échec. Monté sur une
+            // graine vide, le lecteur partait en démarrage à froid et jouait d'autres réels sans rapport.
+            if let failure = launch.failure, let postId = launch.startId {
+                ReelOpenFailureView(
+                    failure: failure,
+                    onRetry: {
+                        await onRetryReel(postId, launch.commentId, launch.parentCommentId)
+                    },
+                    onClose: { reelsPresenter.dismiss() }
+                )
+            } else {
+                ReelsPlayerView(
+                    seedPosts: launch.seedPosts,
+                    startId: launch.startId,
+                    commentTargetId: launch.commentId,
+                    commentParentTargetId: launch.parentCommentId,
+                    revealCompleted: true,
+                    safeArea: proxy.safeAreaInsets,
+                    onClose: { reelsPresenter.dismiss() },
+                    onOpenProfile: { userId, username in
+                        reelsPresenter.dismiss()
+                        router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+                    },
+                    onOpenStory: { userId in
+                        reelsPresenter.dismiss()
+                        storyViewerCoordinator.present(StoryViewerRequest(
+                            id: userId,
+                            startAtFirstUnviewed: true,
+                            singleGroup: true
+                        ))
+                    },
+                    onOpenDetail: { postId in
+                        reelsPresenter.dismiss()
+                        router.push(.postDetail(postId))
+                    },
+                    authorHasStory: { userId in
+                        storyViewModel.storyRingState(forUserId: userId) != .none
+                    },
+                    quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                                                 conversationListViewModel: conversationViewModel,
+                                                 statusViewModel: statusViewModel)
+                )
+                .ignoresSafeArea()
+            }
+        }
+        .modifier(MeeshyRouterInjection(router: router))
+        .environmentObject(statusViewModel)
+        .meeshyConversationList(conversationViewModel)
+        .environmentObject(storyViewModel)
     }
 }

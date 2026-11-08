@@ -49,7 +49,10 @@ export const conversationListParticipantSelect = {
       isOnline: true,
       lastActiveAt: true,
       // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
-      equippedAvatarRing: true
+      equippedAvatarRing: true,
+      // #15717 — l'état du COMPTE (pas celui du participant) : chargé, jamais
+      // servi tel quel, composé en `accountClosed` par `participantAccountClosure`.
+      isActive: true
     }
   }
 } as const;
@@ -235,7 +238,9 @@ export const conversationDetailInclude = {
           firstName: true,
           lastName: true,
           // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
-          equippedAvatarRing: true
+          equippedAvatarRing: true,
+          // #15717 — l'état du COMPTE : composé en `accountClosed`, jamais servi tel quel.
+          isActive: true
         }
       }
     }
@@ -317,7 +322,10 @@ export const conversationListQuerySelect = (viewerId: string) => ({
     where: {
       isActive: true
     },
-    select: conversationListParticipantSelect
+    // #14107 — la demande en attente se lit sur la ligne du LECTEUR (un tête-à-tête :
+    // toujours dans les cinq), jamais une lecture de plus ; le schéma de membre ne
+    // déclare pas ces colonnes, et la liste les retire avant l'ETag (audit 3, F-a).
+    select: { ...conversationListParticipantSelect, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
   },
   // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
   userPreferences: {
@@ -325,14 +333,27 @@ export const conversationListQuerySelect = (viewerId: string) => ({
     take: 1,
     select: conversationUserPreferencesSelect
   },
-  // #9630 — un avis de capture est une ligne silencieuse : jamais l'aperçu.
-  messages: {
-    where: withoutCaptureNotices({ deletedAt: null }),
-    orderBy: { createdAt: 'desc' as const },
-    take: 1,
-    select: conversationLastMessagePreviewSelect
-  }
+  messages: CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY
 }) as const;
+
+/**
+ * La sélection imbriquée qui LIT cet aperçu — le `where`, l'ordre, le `take: 1`
+ * et la projection ENSEMBLE.
+ *
+ * Extraite avec #16590, et pour la raison que la projection seule ne suffisait
+ * pas à tenir : `GET /users/me/dashboard-stats` l'avait récrite à la main en
+ * quatre champs, sans le bloc de protection ni l'exclusion des avis de capture.
+ * Une projection partagée n'empêche pas une TROISIÈME copie du `where` ; le
+ * bloc entier, si.
+ *
+ * #9630 — un avis de capture est une ligne silencieuse : jamais l'aperçu.
+ */
+export const CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY = {
+  where: withoutCaptureNotices({ deletedAt: null }),
+  orderBy: { createdAt: 'desc' as const },
+  take: 1,
+  select: conversationLastMessagePreviewSelect,
+} as const;
 
 /** La forme d'une ligne rendue par `prisma.conversation.findMany({ select: conversationListQuerySelect(...) })`. */
 export type ConversationListRow = Prisma.ConversationGetPayload<{

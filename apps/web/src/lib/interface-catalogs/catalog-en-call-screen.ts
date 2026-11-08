@@ -7,6 +7,7 @@
 const enCallScreen = {
   'call.screen.share': 'Share screen',
   'call.screen.stop': 'Stop sharing screen',
+  'call.screen.stopShort': 'Stop',
   'call.screen.sharing': 'You are sharing your screen',
   'call.screen.peerSharing': '{name} is sharing their screen',
   'call.more': 'More actions',

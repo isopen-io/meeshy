@@ -203,6 +203,9 @@ nonisolated struct BubbleContent: Equatable {
     struct Meta: Equatable {
         let timeString: String
         let deliveryStatus: MeeshyMessage.DeliveryStatus?  // nil si reçu
+        /// Le `createdAt` de MON message : ce qui retient l'horloge d'un envoi de moins de
+        /// 200 ms (`SendingClockGlyph`). `nil` sur un message reçu.
+        var sendStartedAt: Date? = nil
     }
 
     /// Resolved facts for a call-summary system message — everything the leaf
@@ -344,6 +347,11 @@ nonisolated struct BubbleContent: Equatable {
         }
     }
 
+    /// Un envoi en cours se voit au repos sur cette rangée plate (#16130) : la puce n'a
+    /// aucun contenu qui dise que le message existe encore. Les autres rangées attendent
+    /// #16542.
+    var pinsPendingDelivery: Bool { isMe && viewOnceChipState != nil }
+
     /// Le chrome à peindre au-dessus du message : celui d'une vue unique
     /// scellée ne répète pas la vue unique, que sa puce dit déjà (#7619).
     var chromeProtection: MessageProtectionDescriptor {
@@ -356,6 +364,10 @@ nonisolated struct BubbleContent: Equatable {
     /// compatibilite source avec les fixtures existantes, meme patron que
     /// `location` et `sticker` sur `APIMessage`. Le builder l'assigne.
     var isBurning: Bool = false
+
+    /// #14369 — le verdict de la couche appareil d'un message hybride, projeté
+    /// de `MeeshyMessage.deviceLayerIntegrity` : le pied le dit discrètement.
+    var deviceLayerIntegrity: HybridDeviceLayerIntegrity? = nil
     /// Vue unique TEXTE ouverte et lue sur place (#7579) : la retoucher la
     /// fait passer à « déjà ouvert ». Projection de
     /// `MeeshyMessage.isViewOnceRevealed`, posée par le builder.
@@ -423,6 +435,9 @@ nonisolated struct BubbleContent: Equatable {
     /// de témoins (`Unit/Focal/…`) qui énumèrent chaque champ ; une valeur par
     /// défaut garde leur appel intact, un `let` sans défaut les casserait tous.
     var sticker: Sticker? = nil
+    /// « dis-lui salut » (#16338) — l'invite qu'un avis d'arrivée offre à ce lecteur, lue
+    /// par TOUS les modes de lecture (Bulles, Focal, Script) ; `nil` sinon.
+    var arrivalsInvite: String? = nil
 
     /// #13622 — ce que la conversation porteuse permet aux cartes de visite de
     /// faire du réseau ; `.unknown` (défaut) ne résout rien.
@@ -508,6 +523,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.location == rhs.location
             && lhs.protection == rhs.protection
             && lhs.isBurning == rhs.isBurning
+            && lhs.deviceLayerIntegrity == rhs.deviceLayerIntegrity
             && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
             && lhs.exitGate == rhs.exitGate
             && lhs.captureVerdict == rhs.captureVerdict
@@ -529,6 +545,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.callNotice == rhs.callNotice
             && lhs.joinNotice == rhs.joinNotice
             && lhs.sticker == rhs.sticker
+            && lhs.arrivalsInvite == rhs.arrivalsInvite
             && lhs.contactCardScope == rhs.contactCardScope
     }
 }

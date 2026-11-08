@@ -131,6 +131,146 @@
     "cadres-australs": {
       "name": "Molduras austrais",
       "description": "Três molduras inspiradas na pintura de pontos e no céu austral: círculos de pontos que cintilam, uma tartaruga marinha que nada à volta do avatar e o Cruzeiro do Sul a brilhar."
+    },
+    "meeshy-signature": {
+      "name": "Assinatura Meeshy",
+      "description": "Seis contornos da Meeshy, sóbrios e legíveis em qualquer tamanho: fio de ouro, pérolas de nácar, eclipse, rosácea, noite estrelada e facetas."
+    },
+    "meeshy-vivants": {
+      "name": "Vivos da Meeshy",
+      "description": "Seis contornos animados da Meeshy que mal transbordam do teu avatar: uma órbita, um halo de aurora, uma pulsação, faíscas, um cometa e uma ondulação."
+    },
+    "meeshy-fonds": {
+      "name": "Fundos assinatura",
+      "description": "Seis fundos da Meeshy, discretos sob os balões, no claro e no escuro: seda, pontilhado, ondas finas, palhinha, terrazzo e crepúsculo."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Fundos vivos",
+      "description": "Quatro fundos animados da Meeshy, que se movem com suavidade atrás das tuas mensagens: pirilampos, véu de aurora, neve suave e ondas."
+    },
+    "meeshy-bordures": {
+      "name": "Molduras assinatura",
+      "description": "Seis molduras de capa da Meeshy, na borda para que o teu nível e os teus contadores fiquem à vista: debrum de ouro, volutas, fio de pérolas, ónix, marchetaria e meia-noite."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Molduras vivas",
+      "description": "Quatro molduras de capa animadas da Meeshy: um reflexo que desliza sobre o ouro, pérolas que brilham, uma noite que cintila e um néon."
+    },
+    "noel-enneige": {
+      "name": "Natal com neve",
+      "description": "Dois contornos animados para o inverno: flocos que caem suavemente à volta do avatar e uma coroa de azevinho com bagas que brilham."
+    },
+    "lumieres-de-noel": {
+      "name": "Luzes de Natal",
+      "description": "Dois contornos animados que se acendem nas festas: uma grinalda de lâmpadas que piscam à vez e a estrela da árvore que brilha."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Oficina do Pai Natal",
+      "description": "Dois contornos animados acabados de sair da oficina: um gorro vermelho cujo pompom balança e um bastão de doce que gira, atado com uma fita verde."
+    },
+    "fonds-noel": {
+      "name": "Fundos de Natal",
+      "description": "Três fundos de conversa a condizer com os packs de Natal: flocos de cristal, grinalda estrelada e riscas de bastão de doce, discretos para que cada balão se leia bem."
+    },
+    "fonds-noel-vivants": {
+      "name": "Natal vivo",
+      "description": "Três fundos animados a condizer com os packs de Natal: neve de cristais, uma grinalda cujas lâmpadas se acendem à vez e as faíscas da oficina. Com movimento reduzido: um degradê fixo."
+    },
+    "bannieres-illustrees": {
+      "name": "Molduras ilustradas",
+      "description": "As molduras de capa a condizer com «Molduras ilustradas»: Máscara felina, Teia de aranha, Asas de anjo, Círculo rúnico, Garras de osso e Asas de demônio, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-asiatiques": {
+      "name": "Molduras da Ásia",
+      "description": "As molduras de capa a condizer com «Molduras da Ásia»: Dragão de jade, Nuvens de seda e Lanternas de papel, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-africaines": {
+      "name": "Molduras de África",
+      "description": "As molduras de capa a condizer com «Molduras de África»: Máscara de ébano, Faixas tecidas e Colar de contas, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-celtes": {
+      "name": "Molduras celtas",
+      "description": "As molduras de capa a condizer com «Molduras celtas»: Nó entrelaçado, Espiral tripla e Hera esmeralda, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-nordiques": {
+      "name": "Molduras nórdicas",
+      "description": "As molduras de capa a condizer com «Molduras nórdicas»: Corvos em círculo, Aurora boreal, Anel de pedra gravada e Proa esculpida, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Molduras egípcias",
+      "description": "As molduras de capa a condizer com «Molduras egípcias»: Naja dourada, Escaravelho alado, Sol do deserto e Lótus do Nilo, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-mayas": {
+      "name": "Molduras maias",
+      "description": "As molduras de capa a condizer com «Molduras maias»: Serpente de jade, Cartuchos de glifos, Friso em degraus e Jaguar da selva, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-indiennes": {
+      "name": "Molduras indianas",
+      "description": "As molduras de capa a condizer com «Molduras indianas»: Mandala floral, Pavão em leque e Grinalda de cravos, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Molduras ameríndias",
+      "description": "As molduras de capa a condizer com «Molduras ameríndias»: Aro tecido com penas, Losangos de miçangas e Sol sobre as montanhas, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-australes": {
+      "name": "Molduras austrais",
+      "description": "As molduras de capa a condizer com «Molduras austrais»: Círculos de pontos, Tartaruga marinha e Cruzeiro do Sul, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Natal com neve",
+      "description": "As molduras de capa a condizer com «Natal com neve»: Flocos a cair e Coroa de azevinho, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Luzes de Natal",
+      "description": "As molduras de capa a condizer com «Luzes de Natal»: Grinalda de luzes e Estrela da árvore, na borda para que a tua foto fique à vista."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Oficina do Pai Natal",
+      "description": "As molduras de capa a condizer com «Oficina do Pai Natal»: Gorro do Pai Natal e Bastão de doce, na borda para que a tua foto fique à vista."
+    },
+    "noel-bannieres": {
+      "name": "Banners de Natal",
+      "description": "Seis imagens de banner a condizer com os packs de Natal: geada, grinalda e papel de embrulho, depois um nevão, luzes que cintilam e as faíscas da oficina."
+    },
+    "noel-contours-fixes": {
+      "name": "Natal · contornos fixos",
+      "description": "Os seis contornos de Natal sem animação: flocos, azevinho, grinalda, estrela, gorro e bastão de doce, para um avatar tranquilo."
+    },
+    "noel-cadres-fixes": {
+      "name": "Natal · molduras fixas",
+      "description": "As seis molduras de banner de Natal sem animação, a condizer com os contornos fixos: flocos, azevinho, grinalda, estrela, gorro e bastão de doce."
+    },
+    "nouvel-an-contours": {
+      "name": "Ano Novo",
+      "description": "Quatro contornos para celebrar o novo ano: fogo de artifício, chuva de confetes, mostrador da meia-noite e taça de champanhe dourado."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Ano Novo vivo",
+      "description": "Quatro contornos animados para a passagem de ano: um grande final, um voo de confetes, o relógio a dar a meia-noite e bolhas de champanhe."
+    },
+    "nouvel-an-images": {
+      "name": "Banners de Ano Novo",
+      "description": "Quatro imagens de banner para o novo ano: uma noite de artifício, uma festa de confetes, as doze badaladas e um champanhe dourado."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Banners animados de Ano Novo",
+      "description": "Quatro imagens de banner animadas: fogo de artifício a rebentar, um aguaceiro de confetes, a contagem decrescente da meia-noite e bolhas de champanhe. Com movimento reduzido: uma imagem fixa."
+    },
+    "nouvel-an-cadres": {
+      "name": "Molduras de Ano Novo",
+      "description": "Quatro molduras de banner a condizer com os contornos de Ano Novo: fogo de artifício, confetes, mostrador da meia-noite e taças de champanhe."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Molduras animadas de Ano Novo",
+      "description": "Quatro molduras de banner animadas, a condizer com os contornos vivos: um ramo que rebenta, confetes a voar, o ponteiro da meia-noite a girar e taças a brindar."
+    },
+    "nouvel-an-fonds": {
+      "name": "Fundos de Ano Novo",
+      "description": "Quatro fundos de conversa para o novo ano: céu de artifício, confetes, hora da meia-noite e bolhas douradas, discretos para que cada balão se leia bem."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Ano Novo vivo · fundos",
+      "description": "Quatro fundos animados para o novo ano: explosões ao longe, confetes a cair, uma noite estrelada e bolhas a subir. Com movimento reduzido: um degradê fixo."
     }
   },
   "designs": {
@@ -153,7 +293,45 @@
     "bulles-legeres": "Bolhas leves",
     "pluie-de-petales": "Chuva de pétalas",
     "maree": "Maré",
-    "braises": "Brasas"
+    "braises": "Brasas",
+    "soie": "Seda",
+    "pointille": "Pontilhado",
+    "vagues-fines": "Ondas finas",
+    "cannage": "Palhinha",
+    "terrazzo": "Terrazzo",
+    "crepuscule": "Crepúsculo",
+    "lucioles": "Pirilampos",
+    "voile-aurore": "Véu de aurora",
+    "neige-douce": "Neve suave",
+    "ondes": "Ondas",
+    "flocons-cristal": "Flocos de cristal",
+    "guirlande-etoilee": "Grinalda estrelada",
+    "sucre-d-orge-raye": "Riscas de bastão de doce",
+    "neige-de-noel": "Neve de Natal",
+    "ampoules-de-noel": "Lâmpadas de Natal",
+    "etincelles-atelier": "Faíscas da oficina",
+    "banniere-noel-givre": "Geada",
+    "banniere-noel-guirlande": "Grinalda",
+    "banniere-noel-cadeau": "Papel de embrulho",
+    "banniere-noel-neige": "Nevão",
+    "banniere-noel-lumieres": "Luzes cintilantes",
+    "banniere-noel-etincelles": "Faíscas de Natal",
+    "banniere-artifice": "Noite de artifício",
+    "banniere-confettis": "Festa dos confetes",
+    "banniere-minuit": "Doze badaladas",
+    "banniere-champagne": "Champanhe dourado",
+    "banniere-artifice-vive": "Fogo de artifício vivo",
+    "banniere-confettis-vive": "Aguaceiro de confetes",
+    "banniere-minuit-vive": "Contagem decrescente",
+    "banniere-champagne-vive": "Bolhas de champanhe",
+    "fond-artifice": "Céu de artifício",
+    "fond-confettis": "Confetes",
+    "fond-minuit": "Hora da meia-noite",
+    "fond-champagne": "Bolhas douradas",
+    "fond-artifice-vif": "Explosões ao longe",
+    "fond-confettis-vif": "Confetes a cair",
+    "fond-minuit-vif": "Meia-noite estrelada",
+    "fond-champagne-vif": "Bolhas a subir"
   },
   "rings": {
     "filet": "Filete",
@@ -214,7 +392,39 @@
     "soleil-montagnes": "Sol sobre as montanhas",
     "cercles-points": "Círculos de pontos",
     "tortue-marine": "Tartaruga marinha",
-    "croix-du-sud": "Cruzeiro do Sul"
+    "croix-du-sud": "Cruzeiro do Sul",
+    "fil-d-or": "Fio de ouro",
+    "perles-de-nacre": "Pérolas de nácar",
+    "eclipse": "Eclipse",
+    "rosace": "Rosácea",
+    "nuit-etoilee": "Noite estrelada",
+    "facettes": "Facetas",
+    "orbite": "Órbita",
+    "halo-aurore": "Halo de aurora",
+    "pulsation": "Pulsação",
+    "scintillement": "Cintilação",
+    "comete": "Cometa",
+    "houle": "Ondulação",
+    "flocons-tombants": "Flocos a cair",
+    "couronne-de-houx": "Coroa de azevinho",
+    "guirlande-lumineuse": "Grinalda de luzes",
+    "etoile-du-sapin": "Estrela da árvore",
+    "bonnet-du-pere-noel": "Gorro do Pai Natal",
+    "sucre-d-orge": "Bastão de doce",
+    "flocons-tombants-fixe": "Flocos a cair · fixo",
+    "couronne-de-houx-fixe": "Coroa de azevinho · fixo",
+    "guirlande-lumineuse-fixe": "Grinalda de luzes · fixo",
+    "etoile-du-sapin-fixe": "Estrela da árvore · fixo",
+    "bonnet-du-pere-noel-fixe": "Gorro do Pai Natal · fixo",
+    "sucre-d-orge-fixe": "Bastão de doce · fixo",
+    "feux-d-artifice": "Fogo de artifício",
+    "pluie-de-confettis": "Chuva de confetes",
+    "cadran-de-minuit": "Mostrador da meia-noite",
+    "coupe-de-champagne": "Taça de champanhe",
+    "bouquet-final": "Grande final",
+    "envol-de-confettis": "Voo de confetes",
+    "minuit-sonne": "Soa a meia-noite",
+    "champagne-petillant": "Champanhe espumante"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -254,6 +464,72 @@
     "rituel": "Africano ritual",
     "rituel-anime": "Africano ritual animado",
     "celte": "Celta",
-    "celte-anime": "Celta animado"
+    "celte-anime": "Celta animado",
+    "liseret-or": "Debrum de ouro",
+    "volutes": "Volutas",
+    "rang-de-perles": "Fio de pérolas",
+    "onyx": "Ónix",
+    "marqueterie": "Marchetaria",
+    "minuit": "Meia-noite",
+    "liseret-lumiere": "Debrum de luz",
+    "perles-vives": "Pérolas vivas",
+    "nuit-vive": "Noite cintilante",
+    "neon": "Néon",
+    "masque-felin": "Máscara felina",
+    "toile-araignee": "Teia de aranha",
+    "ailes-ange": "Asas de anjo",
+    "cercle-runique": "Círculo rúnico",
+    "griffes-os": "Garras de osso",
+    "ailes-demon": "Asas de demônio",
+    "dragon-jade": "Dragão de jade",
+    "nuages-soie": "Nuvens de seda",
+    "lanternes-papier": "Lanternas de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Faixas tecidas",
+    "collier-perles": "Colar de contas",
+    "noeud-entrelace": "Nó entrelaçado",
+    "spirale-triple": "Espiral tripla",
+    "lierre-emeraude": "Hera esmeralda",
+    "corbeaux-tournoyants": "Corvos em círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anel de pedra gravada",
+    "proue-sculptee": "Proa esculpida",
+    "cobra-dore": "Naja dourada",
+    "scarabee-aile": "Escaravelho alado",
+    "soleil-du-desert": "Sol do deserto",
+    "lotus-du-nil": "Lótus do Nilo",
+    "serpent-de-jade": "Serpente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso em degraus",
+    "jaguar-de-jungle": "Jaguar da selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavão em leque",
+    "guirlande-soucis": "Grinalda de cravos",
+    "cercle-tisse": "Aro tecido com penas",
+    "perlage-losanges": "Losangos de miçangas",
+    "soleil-montagnes": "Sol sobre as montanhas",
+    "cercles-points": "Círculos de pontos",
+    "tortue-marine": "Tartaruga marinha",
+    "croix-du-sud": "Cruzeiro do Sul",
+    "flocons-tombants": "Flocos a cair",
+    "couronne-de-houx": "Coroa de azevinho",
+    "guirlande-lumineuse": "Grinalda de luzes",
+    "etoile-du-sapin": "Estrela da árvore",
+    "bonnet-du-pere-noel": "Gorro do Pai Natal",
+    "sucre-d-orge": "Bastão de doce",
+    "flocons-tombants-fixe": "Flocos a cair · fixo",
+    "couronne-de-houx-fixe": "Coroa de azevinho · fixo",
+    "guirlande-lumineuse-fixe": "Grinalda de luzes · fixo",
+    "etoile-du-sapin-fixe": "Estrela da árvore · fixo",
+    "bonnet-du-pere-noel-fixe": "Gorro do Pai Natal · fixo",
+    "sucre-d-orge-fixe": "Bastão de doce · fixo",
+    "feux-d-artifice": "Fogo de artifício",
+    "pluie-de-confettis": "Chuva de confetes",
+    "cadran-de-minuit": "Mostrador da meia-noite",
+    "coupe-de-champagne": "Taça de champanhe",
+    "bouquet-final": "Grande final",
+    "envol-de-confettis": "Voo de confetes",
+    "minuit-sonne": "Soa a meia-noite",
+    "champagne-petillant": "Champanhe espumante"
   }
 }

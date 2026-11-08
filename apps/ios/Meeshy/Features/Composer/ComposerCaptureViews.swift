@@ -176,6 +176,13 @@ struct ComposerCaptureChrome: View {
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
+    /// Le ticket du dernier effacement prévu de l'anneau : seul le plus récent
+    /// l'efface, un glissé du soleil en repousse l'échéance (OPUS-5).
+    @State private var markFadeTicket = 0
+    @State private var exposureDragging = false
+    /// Le biais posé au soleil — un état de VUE, comme l'anneau qu'il suit.
+    @State private var exposure = ComposerCaptureExposureDial()
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
     @GestureState private var pinchActive = false
@@ -187,6 +194,7 @@ struct ComposerCaptureChrome: View {
     /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
     @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(ComposerCaptureGrid.storageKey) private var gridEnabled = false
 
     /// Le pas d'un balayage VoiceOver sur le média : un quart de plus, ou de moins.
     private static let accessibleZoomStep: CGFloat = 1.25
@@ -235,14 +243,7 @@ struct ComposerCaptureChrome: View {
                         rezoomStep = nil
                         session.endPinchZoom()
                     }
-                    .overlay(alignment: .topLeading) {
-                        if let focusMark {
-                            ComposerCaptureFocusRing(reduceMotion: reduceMotion)
-                                .id(focusMark.id)
-                                .position(focusMark.location)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                    .overlay(alignment: .topLeading) { viewfinderMarks }
                     .accessibilityElement()
                     .accessibilityLabel(session.phase.isEditing
                         ? ComposerCaptureCopy.reframe
@@ -259,6 +260,7 @@ struct ComposerCaptureChrome: View {
                         @unknown default: break
                         }
                     }
+                    .overlay(alignment: .topLeading) { exposureLayer(width: proxy.size.width) }
                     .allowsHitTesting(!finishing)
             }
             cropBrackets
@@ -331,7 +333,8 @@ struct ComposerCaptureChrome: View {
         }
     }
 
-    /// **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
+    /// **Les formats, PAR-DESSUS le cadre** (#15193), au-dessus de ses crochets
+    /// du bas, et « Annuler » en tête (#15355).
     @ViewBuilder
     private var cropPresets: some View {
         if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
@@ -339,8 +342,14 @@ struct ComposerCaptureChrome: View {
                 let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
                                                   framed: session.editFramesScene, playback: session.offersEditPlayback)
                 let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                HStack(spacing: 0) {
+                    ComposerCropCancelButton { ComposerCropFlow.cancel(session) }
+                        .padding(.leading, ComposerEditPresetsLayout.leadingInset)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session)) {
+                            ComposerCropFlow.apply($0, to: session)
+                        }
+                    }
                 }
                 .frame(width: rangee.width, height: rangee.height)
                 .position(x: rangee.midX, y: rangee.midY)
@@ -453,6 +462,7 @@ struct ComposerCaptureChrome: View {
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { valeur in
                 guard case .second(true, _) = valeur, session.holdStartedAt == nil else { return }
+                session.selfTimer.cancel()
                 scene(.longPress)
             }
             .onEnded { _ in
@@ -562,10 +572,111 @@ struct ComposerCaptureChrome: View {
         let marque = ComposerCaptureFocusMark(
             id: UUID(), location: CGPoint(x: location.x - origin.x, y: location.y - origin.y))
         focusMark = marque
-        Task { @MainActor in
-            _ = await cancellableSleep(for: .seconds(ComposerCaptureFocus.markLifetime))
-            if focusMark == marque { focusMark = nil }
+        exposureDragging = false
+        exposure = ComposerCaptureExposureDial()
+        scheduleMarkFade(marque)
+    }
+
+    /// La grille des tiers (CAM-2), sous l'anneau de mise au point, et le
+    /// compte du retardateur (CAM-4), qui s'arrête quand le viseur s'en va.
+    private var viewfinderMarks: some View {
+        ZStack(alignment: .topLeading) {
+            if ComposerCaptureGrid.shows(enabled: gridEnabled, editing: session.phase.isEditing) {
+                ComposerCaptureGridOverlay()
+            }
+            focusRing
+            ComposerCaptureCountdown(timer: session.selfTimer)
         }
+        .onDisappear { session.selfTimer.cancel() }
+    }
+
+    @ViewBuilder private var focusRing: some View {
+        if let focusMark {
+            ComposerCaptureFocusRing(reduceMotion: reduceMotion)
+                .id(focusMark.id)
+                .position(focusMark.location)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var offersExposure: Bool {
+        ComposerCaptureExposure.offered(stage: session.stage, editing: session.phase.isEditing,
+                                        range: session.controls.exposureBiasRange)
+    }
+
+    /// Posé APRÈS l'élément d'accessibilité de la scène : le soleil reste son
+    /// propre élément VoiceOver, et les gestes de la scène ne le voient pas.
+    @ViewBuilder private func exposureLayer(width: CGFloat) -> some View {
+        if let focusMark, offersExposure {
+            exposureSun(beside: focusMark, width: width)
+        }
+    }
+
+    /// Le biais rendu par le cadran part à l'objectif ; le neutre se sent.
+    private func sendExposure(_ valeur: Float?) {
+        if ComposerCaptureExposure.send(valeur, to: session.controls) { HapticFeedback.light() }
+    }
+
+    /// L'anneau s'efface à son échéance — sauf si un effacement plus récent a
+    /// été prévu, ou si le doigt tient le soleil.
+    private func scheduleMarkFade(_ marque: ComposerCaptureFocusMark) {
+        markFadeTicket += 1
+        let ticket = markFadeTicket
+        let duree = ComposerCaptureExposure.markLifetime(adjustable: offersExposure,
+                                                         voiceOver: voiceOverEnabled)
+        Task { @MainActor in
+            _ = await cancellableSleep(for: .seconds(duree))
+            guard ticket == markFadeTicket, !exposureDragging, focusMark == marque else { return }
+            focusMark = nil
+        }
+    }
+
+    /// **Le soleil d'exposition** (OPUS-5) : à côté de l'anneau, il monte quand
+    /// l'image s'éclaircit. Son glissé lui est propre — il ne zoome pas et ne
+    /// range pas le viseur, ceux de la scène ne le voient pas.
+    private func exposureSun(beside marque: ComposerCaptureFocusMark, width: CGFloat) -> some View {
+        let diametre = ComposerCaptureFocusRing.diameter
+        let objectif = session.controls
+        let biais = exposure.bias(on: objectif.currentPosition)
+        return ComposerCaptureExposureSun(bias: biais)
+            .position(x: ComposerCaptureExposure.sunX(ringX: marque.location.x, ringDiameter: diametre, width: width),
+                      y: marque.location.y + ComposerCaptureExposure.sunOffsetY(biais))
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { valeur in
+                        exposureDragging = true
+                        sendExposure(exposure.drag(translationY: valeur.translation.height,
+                                                   range: objectif.exposureBiasRange, lens: objectif.currentPosition))
+                    }
+                    .onEnded { _ in
+                        exposureDragging = false
+                        exposure.endDrag()
+                        scheduleMarkFade(marque)
+                    })
+            .accessibilityAdjustableAction { sens in
+                guard sens == .increment || sens == .decrement else { return }
+                sendExposure(exposure.step(up: sens == .increment, range: objectif.exposureBiasRange,
+                                           lens: objectif.currentPosition))
+                scheduleMarkFade(marque)
+            }
+    }
+}
+
+/// **Le soleil d'exposition** (OPUS-5) : glisser vers le haut éclaircit, vers
+/// le bas assombrit. La zone de toucher fait 44 pt, le dessin moins.
+private struct ComposerCaptureExposureSun: View {
+    let bias: Float
+
+    var body: some View {
+        Image(systemName: "sun.max.fill")
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(Color.white)
+            .shadow(color: .black.opacity(0.45), radius: 3)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel(ComposerCaptureCopy.exposure)
+            .accessibilityValue(ComposerCaptureExposure.valueText(bias))
     }
 }
 

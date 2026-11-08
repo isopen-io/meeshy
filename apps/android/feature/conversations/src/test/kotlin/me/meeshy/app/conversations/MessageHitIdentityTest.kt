@@ -40,4 +40,19 @@ class MessageHitIdentityTest {
         assertThat(hit(conversation = null, storedTitle = "Archive").identity("u-me"))
             .isEqualTo(MessageHitIdentity(title = "Archive", avatarUrl = null))
     }
+
+    @Test
+    fun `sans conversation connue la ligne montre la photo servie avec le titre servi, comme iOS`() {
+        val served = MessageSearchHit(ApiMessage(id = "m1", conversationId = "c9"), "Ada", conversation = null, conversationAvatar = "2026/11/ada.png")
+
+        assertThat(served.identity("u-me")).isEqualTo(MessageHitIdentity(title = "Ada", avatarUrl = "2026/11/ada.png"))
+    }
+
+    @Test
+    fun `une conversation connue garde sa photo elue contre le lecteur, jamais la photo servie`() {
+        val direct = ApiConversation(id = "c1", type = "direct", participants = listOf(reader, bob))
+        val served = MessageSearchHit(ApiMessage(id = "m1", conversationId = "c1"), "Bob", direct, conversationAvatar = "stale.png")
+
+        assertThat(served.identity("u-me").avatarUrl).isEqualTo("2026/09/bob/photo.png")
+    }
 }

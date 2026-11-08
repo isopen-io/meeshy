@@ -1,5 +1,6 @@
 package me.meeshy.app.profile
 
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.readMediaUploadItem
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -46,6 +47,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import me.meeshy.sdk.model.appearance.AvatarRingDesign
+import me.meeshy.sdk.model.profile.ProfileDecorLayersPolicy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -101,21 +104,26 @@ fun OwnProfileScreen(
     onMoodTap: (() -> Unit)? = null,
     viewModel: OwnProfileViewModel = hiltViewModel(),
     uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
+    decorViewModel: ProfileBannerViewModel = hiltViewModel(),
 ) {
+    val decorCatalog by decorViewModel.catalog.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val ownDecor = state.user?.servedDecor
+    LaunchedEffect(ownDecor, decorCatalog) { ownDecor?.let(decorViewModel::request) }
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
     val onEvent = viewModel::onEvent
     var isSharing by rememberSaveable { mutableStateOf(false) }
     var pickingSlot by rememberSaveable { mutableStateOf<OwnProfileLanguageSlot?>(null) }
     var fullscreen by remember { mutableStateOf<ProfileFullscreenImage?>(null) }
     val mediaBaseUrl = LocalMediaBaseUrl.current
-    val pickImage = rememberOwnProfileImagePicker(uploadViewModel)
+    val imageEditor = rememberProfileImageEditor(uploadViewModel::onImagePicked)
+    val pickImage = rememberOwnProfileImagePicker(imageEditor::offer)
     val capsule = rememberOwnProfileErrorCapsule(
         errorMessage = state.errorMessage,
-        uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) },
-        onUploadErrorShown = uploadViewModel::dismissError,
     )
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 1) }
+    OwnProfileUploadEffects(uploadViewModel.effects, toasts, onShown = uploadViewModel::dismissError)
+    val openHaptics = rememberMeeshyHaptics()
     OwnProfileSaveEffects(
         effects = viewModel.effects,
         onSaveFailedMessage = { capsule.value = it },
@@ -153,11 +161,13 @@ fun OwnProfileScreen(
                 onPickBanner = { pickImage(ImageUploadTarget.BANNER) },
                 onPickAvatar = { pickImage(ImageUploadTarget.AVATAR) },
                 onOpenImage = { image ->
+                    openHaptics.light()
                     fullscreen = resolveServedImageUrl(image.url, mediaBaseUrl)?.let { image.copy(url = it) }
                 },
                 onMoodTap = onMoodTap,
                 onPickLanguage = { pickingSlot = it },
                 onEvent = onEvent,
+                ring = { user -> decorCatalog?.let { ProfileDecorLayersPolicy.resolve(user.banner, user.servedDecor, it, blockedByTarget = false).ring } },
                 banner = { ProfileBanner(user = it, modifier = Modifier.fillMaxSize()) },
             )
         }
@@ -165,6 +175,7 @@ fun OwnProfileScreen(
         FeedbackToastHost(toasts = toasts)
     }
 
+    ProfileImageEditorHost(imageEditor)
     pickingSlot?.let { slot -> OwnProfileLanguagePicker(slot, state, onEvent, onDone = { pickingSlot = null }) }
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val share = state.user?.let(ProfileShareBuilder::build)
@@ -173,13 +184,13 @@ fun OwnProfileScreen(
 
 /** Le sélecteur de photo système, branché sur le téléversement de l'avatar ou de la bannière. */
 @Composable
-private fun rememberOwnProfileImagePicker(uploadViewModel: AvatarBannerUploadViewModel): (ImageUploadTarget) -> Unit {
+private fun rememberOwnProfileImagePicker(onPicked: (ImageUploadTarget, MediaUploadItem) -> Unit): (ImageUploadTarget) -> Unit {
     val context = LocalContext.current
     var target by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { uploadViewModel.onImagePicked(target, it) } }
+        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { onPicked(target, it) } }
     }
     return { picked ->
         target = picked
@@ -216,22 +227,40 @@ private fun OwnProfileSaveEffects(
     }
 }
 
+/** Le résultat d'un téléversement d'avatar / de bannière : toast + haptique, succès ou erreur (iOS `FeedbackToastManager`). */
+@Composable
+private fun OwnProfileUploadEffects(
+    effects: Flow<AvatarBannerUploadEffect>,
+    toasts: MutableSharedFlow<FeedbackToastRequest>,
+    onShown: () -> Unit,
+) {
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            when (effect) {
+                is AvatarBannerUploadEffect.Succeeded -> {
+                    haptics.success()
+                    val message = if (effect.target == ImageUploadTarget.AVATAR) R.string.profile_avatar_updated else R.string.profile_banner_updated
+                    toasts.tryEmit(FeedbackToastRequest(message, FeedbackKind.Success))
+                }
+                is AvatarBannerUploadEffect.Failed -> {
+                    haptics.error()
+                    toasts.tryEmit(FeedbackToastRequest(effect.error.messageRes(), FeedbackKind.Error))
+                    onShown()
+                }
+            }
+        }
+    }
+}
+
 /** La capsule d'erreur : le dernier message (enregistrement ou téléversement), effacé après 3 s. */
 @Composable
 private fun rememberOwnProfileErrorCapsule(
     errorMessage: String?,
-    uploadErrorMessage: String?,
-    onUploadErrorShown: () -> Unit,
 ): MutableState<String?> {
     val capsuleState = remember { mutableStateOf<String?>(null) }
     var capsule by capsuleState
     LaunchedEffect(errorMessage) { errorMessage?.let { capsule = it } }
-    LaunchedEffect(uploadErrorMessage) {
-        uploadErrorMessage?.let {
-            capsule = it
-            onUploadErrorShown()
-        }
-    }
     LaunchedEffect(capsule) {
         if (capsule != null) {
             delay(ERROR_CAPSULE_MILLIS)
@@ -258,6 +287,7 @@ internal fun OwnProfileBody(
     onPickLanguage: (OwnProfileLanguageSlot) -> Unit,
     onEvent: (OwnProfileUiEvent) -> Unit,
     banner: @Composable BoxScope.(MeeshyUser) -> Unit,
+    ring: (MeeshyUser) -> AvatarRingDesign? = { null },
 ) {
     Column(
         modifier = Modifier
@@ -300,6 +330,7 @@ internal fun OwnProfileBody(
                 onPickAvatar = onPickAvatar,
                 onOpenImage = onOpenImage,
                 onMoodTap = onMoodTap,
+                ring = ring(user),
                 banner = { banner(this, user) },
             )
             OwnProfileSectionsColumn(

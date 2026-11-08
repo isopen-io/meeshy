@@ -14,6 +14,7 @@ const es = {
   'rowMenu.manageMembers': 'Gestionar los miembros',
   'rowMenu.adminOpen': 'Abrir en la administración',
   'rowMenu.leave': 'Salir',
+  'rowMenu.obsolete': 'Hacer obsoleta',
   'rowMenu.search': 'Buscar',
   'rowMenu.readingMode': 'Modo de lectura',
   'rowMenu.peek': 'Vista previa de la conversación',

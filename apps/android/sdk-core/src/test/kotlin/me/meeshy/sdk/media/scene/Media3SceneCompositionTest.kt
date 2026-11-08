@@ -14,6 +14,7 @@ import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ImageAssetLoader
 import androidx.media3.transformer.SampleConsumer
+import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -32,9 +33,10 @@ import org.robolectric.annotation.Config
 
 /**
  * #13986 — sur le S8, « ⋯ › Enregistrer » d'un brouillon de quatre scènes, la quatrième à fond vidéo, finissait en
- * `IllegalStateException` dans `ImageAssetLoader.<init>` : Media3 1.4.1 exige d'un [EditedMediaItem] d'IMAGE une durée
- * (`durationUs`) et une cadence (`frameRate`), et ne lit pas `MediaItem.imageDurationMs`. La composition RÉELLE d'un
- * brouillon mixte passe ici chaque image au chargeur d'images de Media3, celui qui refusait sur l'appareil.
+ * `IllegalStateException` dans `ImageAssetLoader.<init>` : Media3 exige d'un [EditedMediaItem] d'IMAGE une durée
+ * (`durationUs`, que Media3 1.10.1 lit de `MediaItem.imageDurationMs` — 1.4.1 ne la lisait pas) et une cadence
+ * (`frameRate`). La composition RÉELLE d'un brouillon mixte passe ici chaque image au chargeur d'images de Media3, celui
+ * qui refusait sur l'appareil.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -105,7 +107,7 @@ class Media3SceneCompositionTest {
         val images = imagesOf(job)
         assertThat(images).hasSize(expectedImages)
         images.forEach { (planned, item) ->
-            ImageAssetLoader.Factory(Undecoded)
+            ImageAssetLoader.Factory(ApplicationProvider.getApplicationContext(), Undecoded)
                 .createAssetLoader(item, Looper.getMainLooper(), Silent, AssetLoader.CompositionSettings(Composition.HDR_MODE_KEEP_HDR, false))
                 .release()
             assertThat(item.durationUs).isEqualTo(planned.imageMillis!! * 1_000)

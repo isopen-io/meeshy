@@ -13,6 +13,11 @@ import type { MentionedUser } from '@meeshy/shared/types';
 import { MAX_MENTIONS_PER_MESSAGE } from '../validation/mention-list.js';
 import { MentionSuggestionFinder, type MentionSuggestion } from './mentions/mentionSuggestions';
 import { mentionableScope } from './mentions/mentionableScope';
+// Importé de son module DÉFINISSANT, pas du barrel `messages-list-query` qui le
+// ré-exporte : ce dernier tire `attachmentIncludes`, donc `Prisma.validator`, ce
+// qui casse au CHARGEMENT toute suite dont le double de `@meeshy/shared/prisma/client`
+// est partiel. Le site unique de la règle est ici ; le barrel n'en est qu'un relais.
+import { MESSAGE_PROTECTION_SELECT } from '../routes/conversations/messageProtectionProjection';
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 
 // Logger dédié pour MentionService
@@ -484,6 +489,17 @@ export class MentionService {
             conversationId: true,
             senderId: true,
             createdAt: true,
+            // #16583 — la coupure de CITATION (#8630) remonte la chaîne par
+            // `replyToId` : sans lui, une mention qui RÉPOND à un éphémère mort
+            // pour ce lecteur survit à ce qu'elle cite.
+            replyToId: true,
+            // #16558 — cette lecture alimente `GET /mentions/me`, qui SERT
+            // `Message.content` : elle doit donc le bloc de protection, source
+            // UNIQUE du `select` et de la projection servie (#4885 critère 4,
+            // énoncé par `messageProtectionProjection.ts`). Sans lui, un message
+            // à vue unique ou flouté arrivait en clair au mentionné, sans un seul
+            // drapeau — et la garde cliente lit `isViewOnce`.
+            ...MESSAGE_PROTECTION_SELECT,
             sender: {
               select: {
                 id: true,
@@ -701,4 +717,29 @@ export async function resolveUsernamesToIds(
     select: { id: true }
   });
   return users.map((u) => u.id);
+}
+
+/**
+ * #14107 (audit M4) — les mentionnés qui reçoivent `mention:created` (avec le
+ * contenu en clair) : sans le destinataire d'une DEMANDE de message en attente
+ * dans CETTE conversation — il la découvre dans sa boîte, comme le veut
+ * l'éventail des notifications (`messageNotificationFanOut`, même prédicat :
+ * `messageRequestAt` posé). Une lecture qui échoue n'émet rien (fail-closed).
+ */
+export async function withoutPendingMessageRequests(
+  prisma: PrismaClient,
+  conversationId: string,
+  userIds: readonly string[]
+): Promise<string[]> {
+  if (!userIds || userIds.length === 0) return [];
+  try {
+    const pending = await prisma.participant.findMany({
+      where: { conversationId, userId: { in: [...userIds] }, messageRequestAt: { not: null } },
+      select: { userId: true }
+    });
+    const silenced = new Set(pending.map((row) => row.userId));
+    return userIds.filter((id) => !silenced.has(id));
+  } catch {
+    return [];
+  }
 }

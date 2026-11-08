@@ -1,3 +1,4 @@
+import { RELATION_LEVEL_PRESENTATION, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import { memo, useId } from 'react';
 
 import { GlyphSvg, type GlyphShape } from '@/components/glyph';
@@ -5,7 +6,7 @@ import { GLYPHS } from '@/components/glyphs';
 import { STORY_AUDIENCE_GLYPHS } from '@/components/glyphs-story-audience';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { audienceLabelKey, type ChoosableAudience } from '@/lib/stories/publication-audience';
+import { audienceLabelKey, type AudienceSource, type ShownAudience, type StudioAudience } from '@/lib/stories/publication-audience';
 
 /**
  * **LA PASTILLE D'AUDIENCE DU STUDIO** (#7683, première tranche du registre
@@ -30,16 +31,39 @@ import { audienceLabelKey, type ChoosableAudience } from '@/lib/stories/publicat
  * feuille l'ÉTEND des deux modes nominatifs, qu'elle seule peint
  * (`story-compose-audience-sheet.tsx`) — jamais une seconde table.
  */
-export const CHOOSABLE_AUDIENCE_GLYPH: Readonly<Record<ChoosableAudience, GlyphShape>> = {
+export const CHOOSABLE_AUDIENCE_GLYPH = {
   PUBLIC: STORY_AUDIENCE_GLYPHS.globe,
   COMMUNITY: STORY_AUDIENCE_GLYPHS.usersThree,
   FRIENDS: GLYPHS.users,
   PRIVATE: GLYPHS.lock,
-};
+} as const satisfies Readonly<Record<string, GlyphShape>>;
 
-/** D'où vient la valeur que la pastille affiche : l'auteur l'a CHOISIE, ou
- * c'est le défaut que la passerelle posera pour le format en cours. */
-export type AudienceSource = 'chosen' | 'default';
+export type { AudienceSource };
+
+/**
+ * **L'ICÔNE D'UNE AUDIENCE** — un glyphe pour les audiences historiques, l'icône
+ * PARTAGÉE du cercle pour Connaissances, Proches et Sang (`RELATION_LEVEL_PRESENTATION`,
+ * 👋 🔥 🩸 : la même que « Mes cercles » et `GET /relations/config`), le cadenas
+ * pour une audience servie qu'on ne sait pas lire. Les deux modes nominatifs ont
+ * leur glyphe dans la feuille, seule à les peindre ; la pastille d'une
+ * publication rouverte nominative montre la personne seule.
+ */
+export function AudienceIcon({ visibility, size, nominal }: { readonly visibility: StudioAudience | 'RESTRICTED'; readonly size: number; readonly nominal?: GlyphShape }) {
+  const circle = postCircleAudienceFloor(visibility);
+  if (circle !== null) {
+    return (
+      <span aria-hidden="true" data-audience-icon={visibility} className="inline-grid shrink-0 place-items-center leading-none" style={{ width: size, height: size, fontSize: size * 0.85 }}>
+        {RELATION_LEVEL_PRESENTATION[circle].icon}
+      </span>
+    );
+  }
+  const glyph =
+    visibility === 'EXCEPT' || visibility === 'ONLY' ? (nominal ?? GLYPHS.user) : visibility === 'RESTRICTED' ? GLYPHS.lock : CHOOSABLE_AUDIENCE_GLYPH[visibility as keyof typeof CHOOSABLE_AUDIENCE_GLYPH];
+  return <GlyphSvg glyph={glyph} size={size} className="shrink-0" />;
+}
+
+const shownLabel = (lang: InterfaceLanguage, value: ShownAudience['value']): string =>
+  translate(lang, value === 'RESTRICTED' ? 'story.studio.audience.restricted' : audienceLabelKey(value));
 
 const TARGET = 44;
 
@@ -66,9 +90,10 @@ export const AudienceChip = memo(function AudienceChip({
   disabled = false,
 }: {
   readonly lang: InterfaceLanguage;
-  /** Ce qui PARTIRA — l'audience CHOISIE, ou le défaut de la passerelle pour
-   * le format en cours (`defaultAudienceOf`) quand `source === 'default'`. */
-  readonly value: ChoosableAudience;
+  /** Ce qui PARTIRA — l'audience CHOISIE, le défaut de la passerelle pour le
+   * format en cours (`source === 'default'`), ou l'audience SERVIE d'une
+   * publication rouverte que le studio ne sait pas choisir (`'served'`). */
+  readonly value: ShownAudience['value'];
   readonly source: AudienceSource;
   readonly open: boolean;
   readonly onOpen: () => void;
@@ -78,7 +103,7 @@ export const AudienceChip = memo(function AudienceChip({
   readonly disabled?: boolean;
 }) {
   const valueId = useId();
-  const label = translate(lang, audienceLabelKey(value));
+  const label = shownLabel(lang, value);
   return (
     <button
       type="button"
@@ -101,7 +126,7 @@ export const AudienceChip = memo(function AudienceChip({
         opacity: disabled ? 0.4 : 1,
       }}
     >
-      <GlyphSvg glyph={CHOOSABLE_AUDIENCE_GLYPH[value]} size={16} className="shrink-0" />
+      <AudienceIcon visibility={value} size={16} />
       <span id={valueId} className="hidden min-w-0 truncate text-caption font-semibold min-[360px]:block">
         {label}
         {source === 'default' ? <span className="sr-only">{` · ${translate(lang, 'story.studio.audience.defaultMark')}`}</span> : null}

@@ -1,5 +1,17 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.lang.ReaderPrism
+import me.meeshy.sdk.model.SocialAudioSurface
+import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.SocialAudioChoice
+import me.meeshy.sdk.model.socialAudioChoice
+import me.meeshy.sdk.model.CommentLikeState
+import me.meeshy.sdk.model.CommentEffects
+import me.meeshy.sdk.model.CommentPieceKind
+import me.meeshy.sdk.model.CommentQuotedMedia
+import me.meeshy.sdk.model.CommentVeilRules
+import me.meeshy.sdk.model.quotedCitation
+import me.meeshy.sdk.model.MessageEffects
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPostComment
@@ -29,7 +41,15 @@ data class CommentMediaPreview(
     val durationMillis: Int? = null,
     /** Un commentaire vocal (#14265) : il s'écoute dans le fil, il ne s'ouvre pas en plein écran. */
     val isAudio: Boolean = false,
-)
+    /** Ce qu'est la pièce (#14386) : un FICHIER se lit par son nom et sa taille, il ne se peint pas en vignette. */
+    val kind: CommentPieceKind = if (isVideo) CommentPieceKind.VIDEO else if (isAudio) CommentPieceKind.AUDIO else CommentPieceKind.IMAGE,
+    val fileName: String? = null,
+    val fileSize: Int? = null,
+    /** Les drapeaux d'un vocal (#16541) : l'origine et les langues du lecteur qu'une piste parle, l'active étant celle jouée. */
+    val audioChips: List<LanguageChip> = emptyList(),
+) {
+    val isFile: Boolean get() = kind == CommentPieceKind.FILE
+}
 
 @Immutable
 data class CommentPresentation(
@@ -52,7 +72,18 @@ data class CommentPresentation(
     val media: List<CommentMediaPreview> = emptyList(),
     /** Le compte de l'auteur : sa présence servie se lit sur la carte unique. */
     val authorId: String? = null,
+    /** Le flou et les effets permanents du commentaire (#14385), restreints à ce qu'un commentaire porte. */
+    val effects: MessageEffects = MessageEffects(),
+    /** Le lieu joint au commentaire (#14387), rendu en carte touchable sous son corps. */
+    val place: FeedLocationPresentation? = null,
+    /** Le média du post que le commentaire cite (#6578) : le bandeau de sa ligne ; sa cible a pu disparaître. */
+    val quotedMedia: CommentQuotedMedia? = null,
+    /** Les drapeaux BRUTS servis : la protection (éphémère, vue unique) n'est pas dans [effects], restreint aux bits d'un commentaire. */
+    val effectFlags: Int? = null,
 ) {
+    /** Un commentaire flouté se lit sous un voile, en le touchant (iOS `CommentVeilRules`). */
+    val isBlurred: Boolean get() = CommentVeilRules.isVeiled(effects, isRevealed = false)
+
     /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
     val hasBody: Boolean get() = content.isNotBlank()
 
@@ -123,26 +154,57 @@ object CommentProjection {
             isPending = isPending,
             isOwn = currentUserId != null && comment.author?.id == currentUserId,
             depth = depth,
-            media = mediaPreviews(comment, mediaBaseUrl),
+            media = mediaPreviews(comment, mediaBaseUrl, ReaderPrism.resolve(preferences), audioOverride = activeLanguageCode),
+            effects = CommentEffects.served(comment.effectFlags),
+            place = FeedPostLocationBuilder.build(comment.location),
+            quotedMedia = comment.quotedCitation,
+            effectFlags = comment.effectFlags,
         )
     }
 
-    private fun mediaPreviews(comment: ApiPostComment, mediaBaseUrl: String?): List<CommentMediaPreview> =
+    private fun mediaPreviews(
+        comment: ApiPostComment,
+        mediaBaseUrl: String?,
+        readerLanguages: List<String> = emptyList(),
+        audioOverride: String? = null,
+    ): List<CommentMediaPreview> =
         comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
-            val isVideo = media.mimeType?.startsWith("video") == true
-            val isAudio = media.mimeType?.startsWith("audio") == true
-            val still = if (isAudio) null else media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
+            // Un média servi sans type reste une image, comme avant #14386 : seul un type DÉCLARÉ fait un fichier.
+            val kind = media.mimeType?.takeIf { it.isNotBlank() }?.let(CommentPieceKind::of) ?: CommentPieceKind.IMAGE
+            val isVideo = kind == CommentPieceKind.VIDEO
+            val isAudio = kind == CommentPieceKind.AUDIO
+            val audio = if (!isAudio) null else media.socialAudioChoice(
+                surface = SocialAudioSurface.COMMENT,
+                carrierLanguage = comment.originalLanguage,
+                preferredLanguages = readerLanguages,
+                manualOverride = audioOverride,
+                resolveUrl = { resolveFeedMediaUrl(it, mediaBaseUrl) },
+            )
+            val still = if (!kind.isVisual) null else media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
             CommentMediaPreview(
                 id = media.id,
                 thumbnailUrl = still?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
                 isVideo = isVideo,
                 isAudio = isAudio,
-                url = media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
+                kind = kind,
+                fileName = (media.originalName ?: media.fileName)?.takeIf { it.isNotBlank() },
+                fileSize = media.fileSize,
+                url = if (isAudio) {
+                    audio?.url
+                } else {
+                    media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) }
+                },
                 width = media.width,
                 height = media.height,
                 durationMillis = media.duration,
+                audioChips = audio?.chips().orEmpty(),
             )
         }
+
+    /** Les drapeaux d'un vocal, dans la forme de la bande des bulles : la langue jouée est l'active. */
+    private fun SocialAudioChoice.chips(): List<LanguageChip> = offered.map { code ->
+        LanguageChip(code = code, info = LanguageData.info(code), isOriginal = code == originalLanguage, isActive = code == servedLanguage)
+    }
 
     /**
      * The effective displayed language for [comment]: the viewer's [override] when it

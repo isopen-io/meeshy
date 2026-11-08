@@ -57,5 +57,5 @@ interface CallExtensionPointsModule {
     fun bindCallHaptics(impl: AndroidCallHaptics): CallHaptics
 
     @Binds
-    fun bindCallVideoHealth(impl: NoopCallVideoHealth): CallVideoHealth
+    fun bindCallVideoHealth(impl: CallVideoHealthImpl): CallVideoHealth
 }

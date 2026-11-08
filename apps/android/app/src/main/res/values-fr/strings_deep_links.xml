@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="deep_link_error_not_found">Lien introuvable</string>
+    <string name="deep_link_error_inactive">Ce lien n\'est plus actif</string>
+    <string name="deep_link_error_forbidden">Accès refusé à cette conversation</string>
+    <string name="deep_link_error_unresolved">Ce lien n\'a pas pu être ouvert</string>
+    <string name="shortcut_recent_conversations">Conversations récentes</string>
+    <string name="shortcut_unread_conversations">Non lues</string>
+</resources>

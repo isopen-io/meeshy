@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "invite.title",
+          "androidName": "invite_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.members",
+          "androidName": "invite_members",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.messageLabel",
+          "androidName": "invite_messageLabel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.creatingLink",
+          "androidName": "invite_creatingLink",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.copied",
+          "androidName": "invite_copied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.copy",
+          "androidName": "invite_copy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.a11y.copyLink",
+          "androidName": "invite_a11y_copyLink",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.a11y.customizeOptions",
+          "androidName": "invite_a11y_customizeOptions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.a11y.shareLink",
+          "androidName": "invite_a11y_shareLink",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.a11y.summary.expiration",
+          "androidName": "invite_a11y_summary_expiration",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.a11y.summary.noPermissions",
+          "androidName": "invite_a11y_summary_noPermissions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.a11y.summary.permissions",
+          "androidName": "invite_a11y_summary_permissions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.perm.messages",
+          "androidName": "invite_perm_messages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.perm.images",
+          "androidName": "invite_perm_images",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.perm.files",
+          "androidName": "invite_perm_files",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.perm.history",
+          "androidName": "invite_perm_history",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.access.account",
+          "androidName": "invite_access_account",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.access.nickname",
+          "androidName": "invite_access_nickname",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.access.email",
+          "androidName": "invite_access_email",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.section.identity",
+          "androidName": "invite_section_identity",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.section.limits",
+          "androidName": "invite_section_limits",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.section.permissions",
+          "androidName": "invite_section_permissions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.section.access",
+          "androidName": "invite_section_access",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.share",
+          "androidName": "invite_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.linkName",
+          "androidName": "invite_linkName",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.defaultLinkName",
+          "androidName": "invite_defaultLinkName",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.expiration.title",
+          "androidName": "invite_expiration_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.limitUses",
+          "androidName": "invite_limitUses",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.unlimited",
+          "androidName": "invite_unlimited",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.hideOptions",
+          "androidName": "invite_hideOptions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.retry",
+          "androidName": "invite_retry",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

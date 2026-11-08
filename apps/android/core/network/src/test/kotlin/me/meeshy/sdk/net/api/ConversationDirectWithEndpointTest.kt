@@ -91,4 +91,18 @@ class ConversationDirectWithEndpointTest {
         assertThat(response.success).isTrue()
         assertThat(response.data).isEmpty()
     }
+
+    @Test
+    fun `les conversations en commun partent sans filtre de type, avec withUserId et la limite`() = runTest {
+        val capture = Capture()
+
+        apiServing("""{"success":true,"data":[]}""", capture).sharedWith(withUserId = "u-peer", limit = 50)
+
+        val url = checkNotNull(capture.request).url
+        assertThat(capture.request?.method).isEqualTo("GET")
+        assertThat(url.encodedPath).isEqualTo("/api/v1/conversations")
+        assertThat(url.queryParameter("withUserId")).isEqualTo("u-peer")
+        assertThat(url.queryParameter("limit")).isEqualTo("50")
+        assertThat(url.queryParameter("type")).isNull()
+    }
 }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comments_overlay_expired">انتهت صلاحية القصة — تبقى التعليقات مرئية</string>
+    <string name="stories_comments_overlay_reply">رد</string>
+    <string name="stories_comments_overlay_more">خيارات التعليق</string>
+    <string name="stories_comments_overlay_copy">نسخ النص</string>
+    <string name="stories_comments_overlay_edit">تعديل</string>
+    <string name="stories_comments_overlay_delete">حذف</string>
+    <string name="stories_comments_overlay_report">إبلاغ</string>
+    <string name="stories_comments_overlay_remove">إزالة</string>
+    <string name="stories_comments_overlay_save">حفظ</string>
+    <string name="stories_comments_overlay_cancel">إلغاء</string>
+    <string name="stories_comments_overlay_editing">تعديل التعليق</string>
+    <string name="stories_comments_overlay_like">إعجاب</string>
+    <string name="stories_comments_overlay_unlike">إلغاء الإعجاب</string>
+    <string name="stories_comments_overlay_show_original">عرض الأصل</string>
+    <string name="stories_comments_overlay_show_translated">عرض الترجمة</string>
+    <string name="stories_comments_overlay_show_replies">عرض الردود</string>
+    <string name="stories_comments_overlay_hide_replies">إخفاء الردود</string>
+    <string name="stories_comments_overlay_more_replies">تحميل المزيد من الردود</string>
+    <string name="stories_comments_overlay_retry">إعادة المحاولة</string>
+    <string name="stories_comments_overlay_media">وسائط مرفقة</string>
+    <string name="stories_comments_overlay_cancel_reply">إلغاء الرد</string>
+</resources>

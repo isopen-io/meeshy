@@ -66,6 +66,10 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// lui-même) ou la marque sans identité `"moderator"` ; `nil` quand c'est
     /// l'auteur (ou ligne antérieure).
     public var editedById: String?
+    /// #14369 — l'identifiant client tel que la passerelle le sert (`nil` pour
+    /// une ligne antérieure, remplie à la revalidation). Lu par la couche
+    /// appareil d'un hybride pour rattacher son enveloppe à CE message.
+    public var servedClientMessageId: String?
     public var deletedAt: Date?
 
     // Pin

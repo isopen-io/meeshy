@@ -46,10 +46,10 @@ nonisolated enum ComposerAudienceReach: Equatable {
         case .except:
             guard let id = mentionUserId else { return .unknown }
             return audienceUserIds.contains(id) ? .excluded : .reaches
-        case .public, .community, .friends:
-            // Le client ne connaît ni le graphe d'amitié ni l'appartenance aux
-            // communautés de la personne mentionnée. Se taire est la seule
-            // réponse honnête.
+        case .public, .community, .acquaintances, .friends, .close, .blood:
+            // Le client ne connaît ni le graphe d'amitié, ni le niveau effectif
+            // du cercle, ni l'appartenance aux communautés de la personne
+            // mentionnée. Se taire est la seule réponse honnête.
             return .unknown
         }
     }
@@ -76,9 +76,18 @@ nonisolated enum ComposerAudienceSubtitle {
         case .community:
             return String(localized: "composer.audience.sub.community",
                           defaultValue: "Les membres de vos communautés", bundle: .main)
+        case .acquaintances:
+            return String(localized: "composer.audience.sub.acquaintances",
+                          defaultValue: "Vos Connaissances, Amis, Proches et Sangs", bundle: .main)
         case .friends:
             return String(localized: "composer.audience.sub.friends",
                           defaultValue: "Vos contacts acceptés", bundle: .main)
+        case .close:
+            return String(localized: "composer.audience.sub.close",
+                          defaultValue: "Vos Proches et vos Sangs", bundle: .main)
+        case .blood:
+            return String(localized: "composer.audience.sub.blood",
+                          defaultValue: "Vos Sangs seulement — jamais repartagé", bundle: .main)
         case .private:
             return String(localized: "composer.audience.sub.private",
                           defaultValue: "Vous seul — rien n'est publié", bundle: .main)

@@ -20,26 +20,31 @@ import MeeshyUI
 /// (`prefetchNeighbors`). Il chauffe ce que le plein écran AFFICHE, jamais
 /// autre chose : image → la variante élue, décodée dans la NSCache (fast-path
 /// synchrone de `ProgressiveCachedImage` → affichage instantané, sans
-/// placeholder) ; vidéo → le poster NET, extrait SEULEMENT si le fichier est
-/// déjà sur l'appareil. Un préchauffage ne touche jamais le réseau pour une
-/// vidéo : le fichier lui-même est mis en cache par la page (auto-DL) ou par
-/// `SharedAVPlayerManager` au tap lecture.
+/// placeholder) ; vidéo → le poster NET remonté en mémoire (extrait SEULEMENT
+/// si le fichier est déjà sur l'appareil) et la VIGNETTE serveur décodée, que
+/// la page voisine montre pendant le glissement tant que le poster manque
+/// (#16470). Un préchauffage ne télécharge jamais le fichier vidéo : il est mis
+/// en cache par la page (auto-DL) ou par `SharedAVPlayerManager` au tap lecture.
 enum GalleryPrewarm {
     static func warm(_ attachment: MessageAttachment) {
         switch attachment.type {
         case .video:
             VideoPosterResolver.warmIfLocal(attachment)
+            warmImage(attachment.thumbnailUrl)
         case .image:
             // 5.2 — préchauffer la MÊME variante que celle affichée, pas
             // l'original, sinon on téléchargerait les deux.
-            let urlStr = GalleryImageSource.fullscreenURL(for: attachment)
-            guard !urlStr.isEmpty,
-                  let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString
-            else { return }
-            Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
+            warmImage(GalleryImageSource.fullscreenURL(for: attachment))
         case .audio, .file, .location:
             return
         }
+    }
+
+    private static func warmImage(_ url: String?) {
+        guard let url, !url.isEmpty,
+              let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString
+        else { return }
+        Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
     }
 }
 

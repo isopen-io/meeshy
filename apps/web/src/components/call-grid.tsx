@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { lazy, Suspense, useId, type ReactNode } from 'react';
 
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
@@ -17,9 +17,12 @@ import { gridColumns, hasVideo } from '@/lib/calls/call-view';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { LocalZoom } from '@/lib/calls/self-zoom';
 import { initialsOf } from '@/lib/view/conversation';
 
 import { useScreenZoom } from './use-screen-zoom';
+
+const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
 
 /**
  * **LA GRILLE D'UN APPEL DE GROUPE** (#3721, #8392, #8393) — une tuile par
@@ -32,10 +35,12 @@ import { useScreenZoom } from './use-screen-zoom';
  * médaillon, sous « Écran de X ». Un choix manuel l'emporte ; la règle vit dans
  * `lib/calls/call-spotlight.ts`, le choix reste local. Le plein écran s'offre
  * sur toute tuile à la une (#9098). MA tuile passe à la une comme les autres,
- * les commandes de ma caméra en haut au centre (comme iOS), et porte mon
- * micro coupé ; un écran partagé à la une se ZOOME — pincer, Ctrl + molette,
- * double toucher pour le revoir entier (`use-screen-zoom.ts`). Pendant un
- * partage, les caméras des autres restent en rail sous l'écran (#9112).
+ * les commandes de ma caméra en haut au centre (comme iOS), porte mon
+ * micro coupé ET le zoom de ma caméra (#9182, `call-self-camera.tsx` —
+ * pincer, Ctrl + molette, capsule sur le bord) ; un écran partagé à la une se
+ * ZOOME — pincer, Ctrl + molette, double toucher pour le revoir entier
+ * (`use-screen-zoom.ts`). Pendant un partage, les caméras des autres restent
+ * en rail sous l'écran (#9112).
  * Qui MODÈRE l'appel trouve sur chaque tuile d'un pair
  * (et sur la une) le menu « Couper le micro » · « Retirer de l'appel » (#8438) ;
  * une personne invitée sonne dans sa tuile, portrait pulsé (#8433).
@@ -61,6 +66,8 @@ export type CallGridProps = {
   readonly members: readonly CallMember[];
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
   readonly self: {
+    /** Mon identifiant : ma vignette porte MA couleur, celle de mes sous-titres (#16635). Absent : le liseré neutre. */
+    readonly id?: string | null;
     readonly stream: MediaStream | null;
     readonly cameraOn: boolean;
     readonly mirrored: boolean;
@@ -71,6 +78,8 @@ export type CallGridProps = {
   };
   /** Les commandes de ma caméra, posées en haut au centre quand MA tuile est à la une. */
   readonly selfControls?: ReactNode;
+  /** Le zoom de ma caméra quand MA tuile est à la une (#9182, comme `GroupCallStageView.featuredTile` sur iOS) — pincer, Ctrl + molette, capsule sur le bord. `null` : pas de zoom à offrir (un témoin qui n'en parle pas garde l'ancien comportement). */
+  readonly selfZoom?: { readonly local: LocalZoom; readonly column: (capsule: ReactNode) => ReactNode } | null;
   readonly choice: SpotlightChoice;
   readonly onChoose: (choice: SpotlightChoice) => void;
   /** Le plein écran de la tuile à la une : le bandeau et tout le reste s'effacent. */
@@ -78,6 +87,9 @@ export type CallGridProps = {
   readonly onToggleImmersive: () => void;
   readonly moderation: CallModeration | null;
   readonly language: InterfaceLanguage;
+  /** Le chrome est-il affiché (#9183, `GroupStageTapRule.outcome(isChromeVisible:)` sur iOS). Par défaut visible : une scène sans chrome à gérer (témoins qui n'en parlent pas) garde l'ancien comportement. */
+  readonly chromeVisible?: boolean;
+  readonly onRevealChrome?: () => void;
 };
 
 function NameLabel({ name, muted, suffix }: { readonly name: string; readonly muted: boolean; readonly suffix: string | null }) {
@@ -151,7 +163,7 @@ function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: Cal
 function SelfTile({ self, language, portrait, onPress }: { readonly self: CallGridProps['self']; readonly language: InterfaceLanguage; readonly portrait: number; readonly onPress: (() => void) | null }) {
   const you = translate(language, 'call.you');
   const className = 'relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2';
-  const frame = { background: TILE, borderColor: SELF_SPEAKER_COLOR };
+  const frame = { background: TILE, borderColor: self.id ? speakerColor(self.id) : SELF_SPEAKER_COLOR };
   const body = (
     <>
       {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <Portrait name={self.name || you} avatar={self.avatar ?? null} size={portrait} pulse={false} presenceKey={undefined} />}
@@ -191,9 +203,10 @@ function SharedScreen({ member, stream, language }: { readonly member: CallMembe
   );
 }
 
-export function CallGrid({ members, remoteStreams, self, selfControls = null, choice, onChoose, immersive, onToggleImmersive, moderation, language }: CallGridProps) {
-  const featureSelf = () => onChoose(chooseSelf());
-  const feature = (member: CallMember) => () => onChoose(chooseMember(member.userId));
+export function CallGrid({ members, remoteStreams, self, selfControls = null, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined }: CallGridProps) {
+  /** #9183 — chrome masqué, toucher une tuile le RANGE/rend au lieu de changer la une (`GroupStageTapRule` sur iOS). */
+  const featureSelf = () => (chromeVisible ? onChoose(chooseSelf()) : onRevealChrome());
+  const feature = (member: CallMember) => () => (chromeVisible ? onChoose(chooseMember(member.userId)) : onRevealChrome());
   const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
   const view = resolveSpotlight({ members, choice, remoteStreams });
 
@@ -231,6 +244,17 @@ export function CallGrid({ members, remoteStreams, self, selfControls = null, ch
           <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2" data-call-self-featured-controls="">
             {selfControls}
           </div>
+        ) : null}
+        {featured === null && selfZoom !== null ? (
+          <Suspense fallback={null}>
+            <CallSelfCamera
+              stream={self.cameraOn ? self.stream : null}
+              local={selfZoom.local}
+              language={language}
+              glyphs={{ plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> }}
+              column={selfZoom.column}
+            />
+          </Suspense>
         ) : null}
         <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
           <div className="flex gap-2">

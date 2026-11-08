@@ -1,5 +1,6 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) }));
 jest.mock('../../../routes/conversations/utils/access-control', () =>
   (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
     jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>, jest.fn<any>()));

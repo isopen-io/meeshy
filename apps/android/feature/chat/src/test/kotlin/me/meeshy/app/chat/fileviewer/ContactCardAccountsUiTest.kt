@@ -53,7 +53,7 @@ class ContactCardAccountsUiTest {
             onWrite = { onWrite() },
         )
         compose.setContent { MeeshyTheme { ContactCardSheet(request(), Color.Blue, onDismiss = {}, accounts = ui) } }
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Add to Contacts")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(CARD_LOAD_TIMEOUT_MS) { compose.onAllNodes(hasText("Add to Contacts")).fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test
@@ -99,5 +99,10 @@ class ContactCardAccountsUiTest {
     fun `sans compte reconnu la fiche reste celle d avant`() {
         show(null)
         compose.onAllNodes(hasText("On Meeshy", ignoreCase = true)).fetchSemanticsNodes().let { assert(it.isEmpty()) }
+    }
+
+    private companion object {
+        /** La carte se lit hors du fil principal ; le premier témoin de la JVM paie aussi le démarrage à froid. */
+        const val CARD_LOAD_TIMEOUT_MS: Long = 20_000
     }
 }

@@ -52,7 +52,7 @@ final class CallManagerHandleHoldSurvivalResetSourceTests: XCTestCase {
         let block = String(source[logRange.lowerBound..<endRange.lowerBound])
 
         XCTAssertTrue(
-            block.contains("self.isVideoEnabled = false"),
+            block.contains("call.isVideoEnabled = false"),
             "Sanity check: this must be handleHold's generic catch branch, which disables video."
         )
         XCTAssertTrue(

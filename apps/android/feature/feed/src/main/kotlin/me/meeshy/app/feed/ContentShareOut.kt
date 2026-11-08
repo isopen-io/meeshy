@@ -19,7 +19,7 @@ import me.meeshy.sdk.post.PostShareLinkService
  * **« Partager » : sortir un contenu de Meeshy** (#14315) — l'entrée du menu « ⋯ » d'une story, d'un réel et d'un
  * post. Le lien suivi de l'utilisateur est frappé (ou retrouvé) d'abord, puis la feuille du SYSTÈME s'ouvre sur la
  * phrase de la carte. Hors ligne ou en échec, l'adresse directe part : seule l'attribution se perd, jamais le partage.
- * « Envoyer » — la feuille Meeshy — frappe le même lien de son côté (`AppShareSheetViewModel`).
+ * « Envoyer » — la feuille Meeshy — frappe le même lien de son côté (`ShareSheetViewModel`).
  */
 @HiltViewModel
 class ContentShareOutViewModel @Inject constructor(
@@ -34,6 +34,21 @@ class ContentShareOutViewModel @Inject constructor(
             open(TrackedShareCard.outgoingText(ready))
         }
     }
+
+    fun copyLink(postId: String, ready: (String) -> Unit) {
+        viewModelScope.launch { ready(links.resolve(postId, COPY_PLATFORM).url) }
+    }
+
+    private companion object {
+        const val COPY_PLATFORM = "copy"
+    }
+}
+
+/** « Copier le lien » (#14827) : le lien suivi de l'utilisateur ([PostShareLinkService], plateforme `copy`), sinon l'URL brute. */
+@Composable
+fun rememberPostLinkCopy(): (String, (String) -> Unit) -> Unit {
+    val viewModel: ContentShareOutViewModel = hiltViewModel()
+    return remember(viewModel) { { postId, ready -> viewModel.copyLink(postId, ready) } }
 }
 
 /** Le geste « Partager » prêt à poser sur une entrée de menu : il prend la carte du contenu touché. */

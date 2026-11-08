@@ -109,12 +109,28 @@ data class ApiConversation(
     /** Pourquoi le lecteur ne peut pas écrire ici (#9927) ; une valeur illisible vaut « aucune ». */
     @Serializable(with = ConversationWriteRestrictionSerializer::class)
     val viewerWriteRestriction: ConversationWriteRestriction? = null,
+    /**
+     * Ce que la passerelle accorde au LECTEUR sur cette conversation (#14690), calculé par la décision
+     * même qui garde la route. `null` = serveur antérieur, lecture ratée ou charge illisible : la règle
+     * locale décide, jamais un « non » implicite.
+     */
+    @Serializable(with = TolerantViewerCapabilitiesSerializer::class)
+    val viewerCapabilities: ConversationViewerCapabilities? = null,
     /** Pont ✦ précalculé serveur ; absent quand il n'y a rien de non lu. */
     @Serializable(with = TolerantConversationBridgeSerializer::class)
     val bridge: ConversationBridge? = null,
+    /**
+     * Le curseur de lecture SERVEUR du lecteur (#7198/#7222), à la racine de la ligne. Absent
+     * sans curseur connu, jamais fabriqué : c'est l'entrée de la loi du premier non lu
+     * (`first-unread.ts`), qui exclut [lastReadMessageId] des candidats.
+     */
+    val lastReadMessageId: String? = null,
+    val lastReadAt: String? = null,
+    val lastReadMessageCreatedAt: String? = null,
+    val lastDeliveredAt: String? = null,
 ) {
     /** La conversation « World » : le salon global, reconnu à son identifiant. */
-    val isWorldWide: Boolean get() = identifier == "world"
+    val isWorldWide: Boolean get() = identifier == WORLD_WIDE_IDENTIFIER
 
     /** Prefers the server-computed count over [participants], which is truncated to 5. */
     val memberCount: Int get() = serverMemberCount ?: participants.size
@@ -160,6 +176,17 @@ fun ApiConversation.currentUserRole(currentUserId: String?): MemberRole =
     MemberRole.from(participants.firstOrNull { it.userId == currentUserId }?.role)
 
 /**
+ * Le rôle du lecteur quand il est CONNU — celui que la passerelle a calculé, sinon celui du roster servi — et `null`
+ * quand rien ne le dit. À la différence de [currentUserRole], l'inconnu ne se replie pas sur [MemberRole.MEMBER] : la
+ * garde de rôle du cache de la fiche d'un participant (ADR-032) ne lit aucune copie sous un rôle qu'elle ignore.
+ */
+fun ApiConversation.knownUserRole(currentUserId: String?): MemberRole? {
+    if (currentUserId == null) return null
+    val raw = currentUserRole ?: participants.firstOrNull { it.userId == currentUserId }?.role ?: return null
+    return MemberRole.from(raw)
+}
+
+/**
  * Le lecteur est-il un membre ACTIF de cette conversation ? La passerelle ne sert
  * [ApiConversation.currentUserRole] qu'à un participant actif (`resolveCallerParticipant`) ;
  * à défaut, sa présence dans le roster servi le prouve aussi. Rien de cela ⇒ `false` :
@@ -185,6 +212,13 @@ data class ApiParticipant(
      */
     val isOnline: Boolean? = null,
     val lastActiveAt: String? = null,
+    /** Servi `true` seulement quand le compte est supprimé ou désactivé (#15717). */
+    val accountClosed: Boolean? = null,
+    /** `user` ou `anonymous` (`ParticipantType`) ; absent d'une vieille passerelle. */
+    val type: String? = null,
+    /** Le décor équipé du participant (#10713, ne sert que son contour ici) ; absent d'une vieille passerelle ou ligne Room. */
+    @Serializable(with = TolerantServedProfileDecorSerializer::class)
+    val profileDecor: ServedProfileDecor? = null,
 )
 
 /**
@@ -255,6 +289,15 @@ internal object LossyTagListSerializer : KSerializer<List<String>> by LossyListS
 internal object LossyRecentMessagesSerializer :
     KSerializer<List<ApiConversationLastMessage>> by LossyListSerializer(ApiConversationLastMessage.serializer())
 
+/** `viewerCapabilities` (#14690) : `canMakeObsolete` — `DELETE /conversations/:id/obsolete` accepterait ce lecteur. */
+@Serializable
+data class ConversationViewerCapabilities(
+    val canMakeObsolete: Boolean,
+)
+
+internal object TolerantViewerCapabilitiesSerializer :
+    KSerializer<ConversationViewerCapabilities?> by TolerantSerializer(ConversationViewerCapabilities.serializer())
+
 internal object TolerantEngagementSerializer :
     KSerializer<ConversationEngagementSnapshot?> by TolerantSerializer(ConversationEngagementSnapshot.serializer())
 
@@ -289,6 +332,8 @@ data class ApiConversationPreferences(
      * upsert at version 1 rather than the schema default 0.
      */
     val version: Int = 0,
+    /** Masque les messages antérieurs à cet instant (effacement d'historique) ; `null` = rien de masqué. */
+    val clearHistoryBefore: String? = null,
 )
 
 @Serializable

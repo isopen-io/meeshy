@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_banner_someone">Alguém</string>
+    <string name="notification_game_league_result_title">Sua liga da semana</string>
+    <string name="notification_game_season_step_title">Sua temporada</string>
+    <string name="notification_game_mission_window_title">Sua missão do momento</string>
+    <string name="notification_detail_shared_location">Localização compartilhada</string>
+    <string name="notification_detail_invitation">Convite</string>
+</resources>

@@ -1,6 +1,9 @@
 package me.meeshy.app.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -13,7 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.settings.SettingsHubRow
+import me.meeshy.ui.component.settings.SettingsCard
 import me.meeshy.ui.component.settings.SettingsRow
+import me.meeshy.ui.component.settings.SettingsSectionHeader
+import me.meeshy.ui.component.settings.SettingsSeparator
 import me.meeshy.ui.component.settings.SettingsSwitchRow
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -85,4 +92,32 @@ internal fun NotificationToggleRow(
             onCheckedChange(it)
         },
     )
+}
+
+/** Section teintée du hub : titre en capitales (en-tête d'accessibilité) au-dessus d'une carte. */
+@Composable
+internal fun SettingsGroup(
+    title: String,
+    icon: ImageVector,
+    tint: Color,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+        SettingsSectionHeader(title = title, icon = icon, color = tint)
+        SettingsCard(tint = tint, content = content)
+    }
+}
+
+/** Projette les rangées du catalogue dans une carte, un séparateur entre deux rangées voisines. */
+@Composable
+internal fun SettingsRows(
+    rows: List<SettingsHubRow>,
+    tint: Color,
+    separatedBefore: (SettingsHubRow) -> Boolean = { true },
+    rowContent: @Composable (SettingsHubRow) -> Unit,
+) {
+    rows.forEachIndexed { index, row ->
+        if (index > 0 && separatedBefore(row)) SettingsSeparator(tint)
+        rowContent(row)
+    }
 }

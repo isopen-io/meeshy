@@ -80,6 +80,8 @@ final class ProfileUserPostsViewModel: ObservableObject {
     /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
     /// relance) portés par `ImpressionBatcher`.
     private lazy var impressions = ImpressionBatcher(source: "profile", surface: .profile, postService: postService)
+    /// « Enregistrer » (#15994) : l'écrivain du fil — cache des favoris et toasts compris.
+    private lazy var bookmarker = PostBookmarkWriter()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -371,16 +373,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
         guard let post = posts.first(where: { $0.id == postId }) else { return }
         let current = isBookmarked(post)
         bookmarkedOverrides[postId] = !current
-        do {
-            if current {
-                try await postService.removeBookmark(postId: postId)
-            } else {
-                try await postService.bookmark(postId: postId)
-            }
-        } catch {
-            bookmarkedOverrides[postId] = current
-            FeedbackToastManager.shared.showError(String(localized: "profile.posts.bookmarkError", defaultValue: "Erreur", bundle: .main))
-        }
+        await bookmarker.write(bookmarked: !current, postId: postId, post: post, onRejected: { [weak self] in
+            self?.bookmarkedOverrides[postId] = current
+        })
     }
 
     /// Reposts are append-only on the backend — the optimistic flip only
@@ -444,6 +439,15 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
+    /// Ferme / rouvre les commentaires d'une publication du profil (#16541).
+    func toggleComments(_ postId: String) async {
+        guard let current = posts.first(where: { $0.id == postId })?.commentsDisabled else { return }
+        await CommentSettingsToggle.run(postId: postId, current: current, service: postService) { closed in
+            guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+            posts[index].commentsDisabled = closed
+        }
+    }
+
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)
@@ -462,7 +466,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil, additions: PostEditAdditions = PostEditAdditions()
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -484,11 +488,11 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // Le corps ne se construit plus ici : `known` dit ce que la
             // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
             // champ non déclaré est OMIS, et le serveur préserve le sien.
-            let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
+            let updated = try await postService.update(postId: postId, known: known, draft: additions.completing(PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
                 originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
-            ))
+            )))
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
                 let edited = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
                 posts[newIdx] = edited

@@ -52,7 +52,7 @@ class ReactionSendersTest {
         assertThat(handler.send(row(OutboxKind.ADD_REACTION))).isEqualTo(SendResult.TransientFailure)
 
         coEvery { reactionApi.add(any()) } throws IOException("offline")
-        assertThat(handler.send(row(OutboxKind.ADD_REACTION))).isEqualTo(SendResult.TransientFailure)
+        assertThat(handler.send(row(OutboxKind.ADD_REACTION))).isEqualTo(SendResult.TransportFailure)
     }
 
     @Test
@@ -132,4 +132,17 @@ class ReactionSendersTest {
 
     private fun <T> signalChannelRequired(): ApiResponse<T> =
         ApiResponse(success = false, error = "canal de signaux requis", code = "E2EE_SIGNAL_CHANNEL_REQUIRED")
+
+    @Test
+    fun `a definitively refused reaction takes its persisted row back too, under the row owner`() = runTest {
+        val rows = mockk<me.meeshy.sdk.reaction.ReactionRowStore>(relaxed = true)
+
+        AddReactionHandler(reactionApi, messageRepository, senderJson, ledger, withdrawals, rows)
+            .onExhausted(row(OutboxKind.ADD_REACTION).copy(ownerId = "me"))
+        RemoveReactionHandler(reactionApi, messageRepository, senderJson, ledger, withdrawals, rows)
+            .onExhausted(row(OutboxKind.REMOVE_REACTION).copy(ownerId = "me"))
+
+        coVerify(exactly = 1) { rows.setOwn("m1", "🔥", present = false, ownerId = "me") }
+        coVerify(exactly = 1) { rows.setOwn("m1", "🔥", present = true, ownerId = "me") }
+    }
 }

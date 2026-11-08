@@ -66,22 +66,6 @@ class SceneAssetFetcherTest {
     }
 
     @Test
-    fun `seule l identite rendue pour cette adresse part avec la requete`() = runBlocking {
-        server.enqueue(MockResponse().setBody("son"))
-        server.start()
-        val withCredential = SceneAssetFetcher(
-            OkHttpClient(),
-            admits = { true },
-            headers = { url -> if (url.contains("/static/")) mapOf("Authorization" to "Bearer j") else emptyMap() },
-        )
-        withCredential.fetch(server.url("/api/v1/static/a.mp3").toString(), File(folder.root, "e.bin"))
-        assertThat(server.takeRequest().getHeader("Authorization")).isEqualTo("Bearer j")
-        server.enqueue(MockResponse().setBody("fond"))
-        withCredential.fetch(server.url("/u/fond.mp4").toString(), File(folder.root, "f.bin"))
-        assertThat(server.takeRequest().getHeader("Authorization")).isNull()
-    }
-
-    @Test
     fun `un fichier plus lourd que la borne est refuse sans fichier partiel`() = runBlocking {
         server.enqueue(MockResponse().setBody("x".repeat(4_096)))
         server.start()

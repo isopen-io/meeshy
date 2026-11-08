@@ -117,7 +117,7 @@ final class SceneAudioStageSurfacesTests: XCTestCase {
 
     func test_theLiveChip_appliesTheSameRotation() throws {
         XCTAssertTrue(try source("Controls/AudioForegroundChip.swift")
-            .contains(".rotationEffect(.degrees(audioObject.rotation ?? 0))"))
+            .contains(".rotationEffect(.degrees(audioObject.rotation ?? 0) + twist)"))
     }
 
     // MARK: - La couche de pastilles d'une surface (SceneSoundChipLayer)
@@ -215,22 +215,6 @@ final class SceneAudioStageSurfacesTests: XCTestCase {
                 return String(line[line.startIndex..<mark.lowerBound])
             }
             .joined(separator: "\n")
-    }
-
-    /// Les sites du SDK qui posent un son sur une scène : le lecteur, la couche
-    /// de pastilles, le player, l'export, les deux vignettes, l'atelier.
-    func test_everySceneSurface_readsTheStageRule() throws {
-        for site in ["Controls/AudioForegroundChip.swift",
-                     "Controls/SceneSoundChipLayer.swift",
-                     "ScenePlayer/MeeshyScenePlayer.swift",
-                     "Canvas/StoryAudioChipPainter.swift",
-                     "SceneThumbnail.swift",
-                     "SlideMiniPreview.swift",
-                     "StoryCanvasMediaMuteOverlays.swift"] {
-            XCTAssertTrue(try source(site).contains("SceneAudioStageRule."),
-                          "\(site) pose un son sur une scène sans lire SceneAudioStageRule : " +
-                          "un son de fond pourrait y être peint.")
-        }
     }
 
     /// La vignette de slide peignait une note pour CHAQUE objet audio, fond

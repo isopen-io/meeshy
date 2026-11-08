@@ -1,17 +1,10 @@
 import Foundation
 import MeeshySDK
 
-// Sorti de `FeedView+Attachments.swift` avec la feuille (#6040), mais dans son
-// PROPRE fichier et non avec elle : c'est le seul des trois types qui serve les
-// DEUX surfaces — `FeedView.publishBorrowedSoundPost` (l'extension) et
-// `FeedComposerSheet.publishBorrowedSoundFromSheet` (la feuille). Le ranger
-// chez l'une en ferait la propriété de celle-là.
-
 // MARK: - Borrowed sound post building
 
-/// Construction PURE d'un post/réel « son emprunté seul », partagée par les
-/// deux surfaces de publication (`FeedView.publishBorrowedSoundPost` et
-/// `FeedComposerSheet.publishBorrowedSoundFromSheet`).
+/// Construction PURE d'un post/réel « son emprunté seul »
+/// (`FeedView.publishBorrowedSoundPost`).
 enum BorrowedSoundPost {
     /// Blob `storyEffects` portant l'unique piste empruntée — exactement la
     /// forme produite par `StoryComposerViewModel.addBorrowedSound` (`soundId`

@@ -87,6 +87,55 @@ class BubbleImagePreviewTest {
     }
 
     @Test
+    fun `a pending image whose octets are sealed paints its local preview until the server answers`() {
+        val preview = "file:///data/user/0/me.meeshy.app/cache/pending-previews/cmid-1.jpg"
+        val image = BubbleContentBuilder.build(
+            message = ApiMessage(
+                id = "cid-1",
+                conversationId = "c1",
+                senderId = "me",
+                attachments = listOf(ApiMessageAttachment(id = "cmid-1", mimeType = "image/jpeg", thumbnailUrl = preview, width = 4000, height = 3000)),
+            ),
+            currentUserId = "me",
+            preferences = French,
+            mediaBaseUrl = "https://gate.staging.meeshy.me/api/v1",
+            displayDensity = BubbleContentBuilder.DEFAULT_DISPLAY_DENSITY,
+        ).images.single()
+
+        assertThat(image.url).isEqualTo(preview)
+        assertThat(image.thumbnailUrl).isEqualTo(preview)
+        assertThat(image.width).isEqualTo(4000)
+    }
+
+    @Test
+    fun `a pending video shows its local first frame and its duration, ready to play rather than to download`() {
+        val poster = "file:///data/user/0/me.meeshy.app/cache/pending-previews/cmid-2.preview.jpg"
+        val video = BubbleContentBuilder.build(
+            message = ApiMessage(
+                id = "cid-2",
+                conversationId = "c1",
+                senderId = "me",
+                attachments = listOf(ApiMessageAttachment(id = "cmid-2", mimeType = "video/mp4", thumbnailUrl = poster, duration = 12_000, width = 1920, height = 1080)),
+            ),
+            currentUserId = "me",
+            preferences = French,
+            mediaBaseUrl = "https://gate.staging.meeshy.me/api/v1",
+            displayDensity = BubbleContentBuilder.DEFAULT_DISPLAY_DENSITY,
+        ).videos.single()
+
+        assertThat(video.thumbnailUrl).isEqualTo(poster)
+        assertThat(video.durationSeconds).isEqualTo(12)
+        assertThat(video.isOnDevice).isTrue()
+    }
+
+    @Test
+    fun `an image with neither its file nor a local preview paints nothing`() {
+        val images = build(ApiMessageAttachment(id = "a1", mimeType = "image/jpeg", thumbnailUrl = "/thumbs/a1.jpg")).images
+
+        assertThat(images).isEmpty()
+    }
+
+    @Test
     fun `a single image previews the smallest variant that covers its 252 dp cell`() {
         val image = build(photo()).images.single()
 
@@ -224,5 +273,22 @@ class BubbleImagePreviewTest {
         assertThat(build(photo().copy(reactionSummary = reactions, isBlurred = true)).images.single().reactionLabel).isNull()
         assertThat(build(photo().copy(reactionSummary = reactions, isViewOnce = true)).images.single().reactionLabel).isNull()
         assertThat(build(photo().copy(reactionSummary = reactions), effectFlags = MessageEffectFlags.BLURRED.toInt()).images.single().reactionLabel).isNull()
+    }
+
+    @Test
+    fun `a pending voice note plays its local copy before the server answers`() {
+        val audio = build(
+            ApiMessageAttachment(
+                id = "upload-0",
+                mimeType = "audio/mp4",
+                fileUrl = "file:///data/cache/pending-previews/upload-0.voice.m4a",
+                duration = 4_000,
+                effectFlags = 0L,
+            ),
+        ).audios.single()
+
+        assertThat(audio.url).isEqualTo("file:///data/cache/pending-previews/upload-0.voice.m4a")
+        assertThat(audio.isPlayable).isTrue()
+        assertThat(audio.durationSeconds).isEqualTo(4)
     }
 }

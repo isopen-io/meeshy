@@ -60,7 +60,7 @@ class StoryComposerUploadProgressViewModelTest {
     private fun uploaded(id: String) = UploadedMedia(id, "https://cdn/$id", "image/jpeg", 1, 1, 1, null, null)
 
     @Test
-    fun `each picked media gets its own line that follows its own bytes until all are attached`() = runTest {
+    fun `each picked media says its own share sent until all are attached`() = runTest {
         val vm = viewModel()
         val gate = CompletableDeferred<Unit>()
         coEvery { media.upload(any(), any()) } coAnswers {
@@ -72,12 +72,12 @@ class StoryComposerUploadProgressViewModelTest {
 
         vm.onMediaPicked(listOf(photo("a.jpg"), photo("b.jpg")))
 
-        assertThat(vm.state.value.isUploadingMedia).isTrue()
-        assertThat(vm.state.value.uploadingMedia).containsExactly(
-            MediaUploadProgress.Uploading(50L, 100L), MediaUploadProgress.Idle,
-        ).inOrder()
+        val (first, second) = vm.state.value.deck.slides.flatMap { it.mediaIds }
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
+        assertThat(vm.state.value.uploadProgress[first]).isEqualTo(MediaUploadProgress.Uploading(50L, 100L))
+        assertThat(vm.state.value.uploadProgress[second]).isEqualTo(MediaUploadProgress.Idle)
         gate.complete(Unit)
-        assertThat(vm.state.value.uploadingMedia).isEmpty()
+        assertThat(vm.state.value.uploadProgress).isEmpty()
         assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1", "m2")
     }
 
@@ -89,7 +89,8 @@ class StoryComposerUploadProgressViewModelTest {
         vm.onMediaPicked(listOf(photo("a.jpg")))
 
         assertThat(vm.state.value.uploadingMedia).isEmpty()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.uploadProgress).isEmpty()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
     }
 

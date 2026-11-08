@@ -1,8 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
 
-import type { ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
-
 import type { Conversation } from '@/lib/api/types';
 import { navigate } from '@/lib/router';
 import { impact } from '@/lib/view/haptics';
@@ -15,6 +13,7 @@ import {
   rowSubmenuItems,
   type RowActionGlyph as RowActionGlyphName,
   type RowActionId,
+  type RowConversationActions,
   type RowMenuDoors,
   type RowMenuMore,
   type RowReadingModeMenu,
@@ -266,7 +265,7 @@ export function RowActions({
   /** Présent, l'appui long, le clic droit et la touche menu ouvrent l'aperçu au-dessus des actions (#11211). */
   readonly peek?: RowPeek;
   /** Les verdicts du rôle, lus À L'OUVERTURE — le rôle servi peut arriver après le rendu de la ligne. */
-  readonly actionsOf?: () => ConversationActions;
+  readonly actionsOf?: () => RowConversationActions;
   /** Le relais que `LensRow` remet à son `useLongPress`. */
   readonly peekOpener?: RowPeekOpener;
   /** « Rechercher » et « Mode de lecture › » (#11226) — absentes, le menu ne les porte pas. */
@@ -286,8 +285,8 @@ export function RowActions({
   /** Un choix de sous-menu (favori, catégorie) part vers l'écran. */
   readonly onChoice?: (choice: RowSubmenuChoice) => void;
 }) {
-  const [verdict, setVerdict] = useState<ConversationActions | undefined>(undefined);
-  const itemsFor = (actions: ConversationActions | undefined) =>
+  const [verdict, setVerdict] = useState<RowConversationActions | undefined>(undefined);
+  const itemsFor = (actions: RowConversationActions | undefined) =>
     rowMenuItems({
       flags,
       unread,

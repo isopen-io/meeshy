@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -32,6 +35,12 @@ enum class ImageUploadError {
     TOO_LARGE,
     UPLOAD_FAILED,
     UPDATE_FAILED,
+}
+
+/** Un résultat ponctuel : l'écran en tire un toast et une haptique (iOS `FeedbackToastManager` + `HapticFeedback`). */
+sealed interface AvatarBannerUploadEffect {
+    data class Succeeded(val target: ImageUploadTarget) : AvatarBannerUploadEffect
+    data class Failed(val error: ImageUploadError) : AvatarBannerUploadEffect
 }
 
 data class AvatarBannerUploadUiState(
@@ -69,15 +78,18 @@ class AvatarBannerUploadViewModel @Inject constructor(
     private val _state = MutableStateFlow(AvatarBannerUploadUiState())
     val state: StateFlow<AvatarBannerUploadUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<AvatarBannerUploadEffect>(Channel.BUFFERED)
+    val effects: Flow<AvatarBannerUploadEffect> = _effects.receiveAsFlow()
+
     fun dismissError() = _state.update { it.copy(error = null) }
 
     fun onImagePicked(target: ImageUploadTarget, item: MediaUploadItem) {
         if (_state.value.uploading != null) return
 
-        when (val validation = ImageUploadValidator.validate(target, item.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), item.mimeType)) {
+        when (val validation = ImageUploadValidator.validateCompressed(target, item.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), item.mimeType)) {
             is ImageUploadValidation.Rejected -> {
                 MediaIntake.release(item)
-                _state.update { it.copy(error = validation.reason.toError()) }
+                fail(validation.reason.toError())
                 return
             }
             ImageUploadValidation.Accepted -> Unit
@@ -101,6 +113,7 @@ class AvatarBannerUploadViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         adoptUnderTicket(ProfileSnapshot.mergingServerUser(confirm.data, sessionRepository.currentUser.value))
                         _state.update { it.copy(uploading = null) }
+                        _effects.trySend(AvatarBannerUploadEffect.Succeeded(target))
                     }
                     is NetworkResult.Failure -> {
                         snapshot?.let { adoptUnderTicket(it) }
@@ -123,8 +136,10 @@ class AvatarBannerUploadViewModel @Inject constructor(
         ImageUploadTarget.BANNER -> userRepository.updateBanner(url)
     }
 
-    private fun fail(error: ImageUploadError) =
+    private fun fail(error: ImageUploadError) {
         _state.update { it.copy(uploading = null, error = error) }
+        _effects.trySend(AvatarBannerUploadEffect.Failed(error))
+    }
 
     private fun ImageUploadValidation.Reason.toError(): ImageUploadError = when (this) {
         ImageUploadValidation.Reason.EMPTY -> ImageUploadError.EMPTY

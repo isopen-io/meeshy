@@ -15,7 +15,7 @@ import Foundation
 /// > sur sa slide » — et il était CITÉ par les sites qui en dérivaient leur
 /// > propre absence. Une phrase fausse au bon endroit se propage mieux qu'un
 /// > correctif.
-public struct StoryLocationObject: Codable, Identifiable, Sendable {
+public struct StoryLocationObject: Codable, Identifiable, Sendable, Equatable {
     public var id: String
     public var place: SharedPlace
     public var x: Double

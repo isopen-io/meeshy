@@ -12,101 +12,9 @@ import MeeshyUI
 // L'EN-TÊTE vit chez lui depuis #4084 : `StoryViewerView+Header.swift`. Ce
 // fichier portait les deux vues pour 1 368 lignes, hors du budget 800–1100 ;
 // une garde qui cherchait l'en-tête ici doit désormais nommer l'autre fichier.
-
-// MARK: - Story Action Rail Plan
-
-/// Plan du rail d'actions — CALCULÉ D'UN BLOC À L'ENTRÉE DU SLIDE puis FIGÉ
-/// pendant toute sa lecture (directive user 2026-07-10 : « le calcul des
-/// boutons à afficher doit se faire avant affichage, même contenant toutes
-/// les informations de compteur — pas des apparitions en second temps »).
-///
-/// Toutes les entrées proviennent du payload feed déjà en main (compteurs
-/// inclus) : aucune résolution réseau n'est nécessaire pour décider du set.
-/// Les VALEURS de compteurs affichées sur les boutons restent vivantes
-/// (realtime), mais l'APPARTENANCE d'un bouton au rail ne change jamais en
-/// cours de slide — un compteur réconcilié après coup ne fait plus surgir
-/// un bouton au milieu de la lecture.
-///
-/// `nonisolated` : rule engine pur sans état partagé (parité
-/// StoryCanvasFraming / BandStateMachine) — le target app compile en
-/// defaultIsolation MainActor, sans ce modificateur le bundle de tests
-/// (nonisolated) ne peut ni appeler `resolve` ni lire les propriétés
-/// (échec CI ios-tests 2026-07-10, exit 65 = échec de COMPILE).
-nonisolated struct StoryActionRailPlan: Equatable {
-    let showsReact: Bool
-    let showsReply: Bool
-    let showsForward: Bool
-    let showsRepost: Bool
-    let showsViews: Bool
-    let showsExport: Bool
-    let showsSound: Bool
-    let showsComments: Bool
-    let showsTranslations: Bool
-    /// « Composer » au rail sur la story d'une AUTRE personne (#9953) — le même
-    /// geste que l'entrée « Composer » du menu « … », qui reste. Sur sa propre
-    /// story, le rail ne change pas.
-    let showsCompose: Bool
-
-    static func resolve(
-        isOwnStory: Bool,
-        canReply: Bool,
-        isPublicStory: Bool,
-        hasAudibleSound: Bool,
-        commentCount: Int,
-        hasTranslatableContent: Bool,
-        canCompose: Bool = false
-    ) -> StoryActionRailPlan {
-        StoryActionRailPlan(
-            showsReact: !isOwnStory,
-            showsReply: !isOwnStory && canReply,
-            showsForward: true,
-            // D1 (arbitrage user 2026-08-19) : la republication n'est plus
-            // réservée aux stories PUBLIQUES. Une story FRIENDS se republie en
-            // FRIENDS ou PRIVATE, une PRIVATE en PRIVATE — c'est la LOI
-            // D'AUDIENCE (`StoryRepostAudience`, miroir du serveur) qui borne
-            // le choix, plus l'appartenance au rail. Gater ici sur
-            // `isPublicStory` rendait la règle inatteignable : le bouton
-            // n'existait pas pour les seules stories qu'elle concerne.
-            showsRepost: !isOwnStory,
-            showsViews: isOwnStory,
-            showsExport: isOwnStory,
-            showsSound: hasAudibleSound,
-            showsComments: commentCount > 0,
-            // Les traductions ne sont PAS réservées aux lecteurs (changement
-            // 2026-07-25) : l'auteur explore les langues de sa propre story
-            // comme il choisit déjà sa langue d'export. Le Prisme est un outil
-            // de lecture, pas une permission.
-            showsTranslations: hasTranslatableContent,
-            showsCompose: !isOwnStory && canCompose
-        )
-    }
-}
-
-// MARK: - Export Rail Button (Enregistrer)
-
-/// Résolution PURE du bouton Enregistrer du rail auteur — testée sans
-/// instancier de vue. Membership = `showsExport` (== `isOwnStory`, voir
-/// `StoryActionRailPlan.resolve`) ; pendant un job de sauvegarde, le bouton
-/// cède la place à l'anneau de progression.
-///
-/// **L'anneau, lui, se montre sur TOUTE story en cours d'export** (#13871) :
-/// le menu « … » enregistre ou image la story d'un autre, et sans anneau le
-/// lecteur ne voyait ni la progression ni le moyen d'annuler. Il apparaît
-/// parce que le lecteur vient d'agir, jamais de lui-même en cours de lecture.
-///
-/// Le bouton « Partager » (export vidéo) n'en fait plus partie (#9953) : le
-/// menu « … » l'offre à tout lecteur sous « Partager ▸ Exporter en vidéo ».
-nonisolated struct StoryExportRailButtons: Equatable {
-    let showsSaveButton: Bool
-    let showsSaveProgressRing: Bool
-
-    static func resolve(showsExport: Bool, saveProgress: Double?) -> StoryExportRailButtons {
-        StoryExportRailButtons(
-            showsSaveButton: showsExport && saveProgress == nil,
-            showsSaveProgressRing: saveProgress != nil
-        )
-    }
-}
+// Le PLAN du rail (`StoryActionRailPlan`) vit dans `StoryActionRailPlan.swift`,
+// et `StoryExportRailButtons` dans `StoryExportRailButtons.swift` — des règles
+// pures, sans vue.
 
 // MARK: - Republier une story d'un tap (#9953)
 
@@ -309,14 +217,20 @@ struct StoryActionSidebarView: View {
     /// `storyCommentCount` (compteur vivant, mis à jour en temps réel par
     /// les réconciliations post-gel) — voir `sidebarContent` plus bas.
     private var liveRailPlan: StoryActionRailPlan {
+        resolvedRailPlan(commentCount: currentStory?.commentCount ?? 0, canCompose: composeTarget != nil)
+    }
+
+    private func resolvedRailPlan(commentCount: Int, canCompose: Bool) -> StoryActionRailPlan {
         StoryActionRailPlan.resolve(
             isOwnStory: isOwnStory,
             canReply: onReplyToStory != nil,
             isPublicStory: currentStory?.isPublic == true,
             hasAudibleSound: storyHasAudibleSound,
-            commentCount: currentStory?.commentCount ?? 0,
+            commentCount: commentCount,
             hasTranslatableContent: storyHasTranslatableContent,
-            canCompose: composeTarget != nil
+            canCompose: canCompose,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility),
+            isPending: currentStory.map { PendingStoryMarker.isPending(storyId: $0.id) } ?? false
         )
     }
 
@@ -577,16 +491,23 @@ struct StoryActionSidebarView: View {
         // qu'apparaître, jamais disparaître.
         .adaptiveOnChange(of: storyCommentCountReconciledPulse) { _, _ in
             guard !railPlan.showsComments else { return }
-            frozenRailPlan = StoryActionRailPlan.resolve(
-                isOwnStory: isOwnStory,
-                canReply: onReplyToStory != nil,
-                isPublicStory: currentStory?.isPublic == true,
-                hasAudibleSound: storyHasAudibleSound,
-                commentCount: storyCommentCount,
-                hasTranslatableContent: storyHasTranslatableContent,
-                canCompose: railPlan.showsCompose
-            )
+            frozenRailPlan = railPlanAfterCommentsReconciled
         }
+    }
+
+    /// « Imager » (#16332) : la baguette fait de la story affichée une carte image.
+    @ViewBuilder
+    private var imagerButton: some View {
+        if railPlan.showsImager, let story = currentStory {
+            StoryActionButton(icon: FullscreenChromeSymbol.imager, label: MessageCardExportMenu.imageLabel) {
+                HapticFeedback.light()
+                MessageCardExportPresenter.present(ImagerCardRequest.story(story, author: currentGroup.map { StoryExportAuthor.served(from: $0) }, accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
+            }
+        }
+    }
+
+    private var railPlanAfterCommentsReconciled: StoryActionRailPlan {
+        resolvedRailPlan(commentCount: storyCommentCount, canCompose: railPlan.showsCompose)
     }
 
     @ViewBuilder
@@ -753,18 +674,18 @@ struct StoryActionSidebarView: View {
                 .mediaChromeGlyph()
             }
 
-            // Forward (send to someone) — label = count when > 0
-            // (user spec 2026-05-28: « Compteur des react et des commentaires,
-            // envoyer uniquement » pour le non-auteur).
-            StoryActionButton(
-                icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
-                outlineTint: outlineTint(.forward)
-            ) {
-                HapticFeedback.light()
-                if let story = currentStory, let group = currentGroup {
-                    EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id, isPublic: story.isPublic))
+            // « Envoyer » : le compteur de partages quand il y en a, sinon le libellé.
+            if railPlan.showsForward {
+                StoryActionButton(
+                    icon: "paperplane.fill",
+                    label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
+                    outlineTint: outlineTint(.forward)
+                ) {
+                    HapticFeedback.light()
+                    if let story = currentStory, let group = currentGroup {
+                        EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
+                        sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id, isPublic: story.isPublic))
+                    }
                 }
             }
 
@@ -794,16 +715,15 @@ struct StoryActionSidebarView: View {
             // « Composer » au rail sur la story d'une AUTRE personne (#9953) :
             // le même geste que l'entrée du menu « … » — la porte du conteneur.
             if railPlan.showsCompose {
-                StoryActionButton(
-                    icon: "wand.and.stars",
-                    label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
-                ) {
+                StoryActionButton(icon: FullscreenChromeSymbol.compose,
+                                  label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)) {
                     guard let cible = composeTarget, let demanderComposer else { return }
                     HapticFeedback.light()
                     pauseTimer()
                     demanderComposer(cible)
                 }
             }
+            imagerButton
 
             // Author-only Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
             // EXACTEMENT comme sur la ligne « Mes stories » : un export lancé ici

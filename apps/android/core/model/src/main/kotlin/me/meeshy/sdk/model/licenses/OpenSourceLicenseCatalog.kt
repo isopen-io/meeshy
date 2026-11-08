@@ -109,4 +109,8 @@ public object OpenSourceLicenseCatalog {
 
     public fun groups(): List<OpenSourceLicenseGroup> =
         OpenSourceLicensePresentationBuilder.build(LICENSES)
+
+    /** One card per bundled library (iOS `LicensesView`), the Android dependency catalog untouched. */
+    public fun cards(): List<OpenSourceLicenseCard> =
+        OpenSourceLicensePresentationBuilder.cards(LICENSES)
 }

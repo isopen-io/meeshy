@@ -102,18 +102,58 @@ class AppearanceLottieLayersComposeTest {
         return rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes()
     }
 
-    @Test fun `an illustrated frame (#13960) plays its back film and its front film, both overflowing the footprint`() {
-        host { Box(Modifier.offset(40.dp, 40.dp)) { AvatarRingLayer(masque, footprint = 50.dp, modifier = Modifier.size(50.dp)) { Box(Modifier.size(50.dp)) } } }
+    @Test fun `an illustrated frame (#13960) plays its back film and its front film inside the footprint (#15157)`() {
+        host { Box(Modifier.offset(40.dp, 40.dp)) { AvatarRingLayer(masque, footprint = 88.dp, modifier = Modifier.size(88.dp)) { Box(Modifier.size(88.dp)) } } }
         val nodes = modes(2)
         assertThat(nodes).hasSize(2)
         nodes.forEach { node ->
             assertThat(node.config[LottiePlaybackModeKey]).isEqualTo(LottiePlaybackMode.Playing(loops = true))
-            with(rule.density) { assertThat(node.boundsInRoot.width.toDp().value).isWithin(0.6f).of(70f) }
+            with(rule.density) {
+                assertThat(node.boundsInRoot.width.toDp().value).isWithin(0.6f).of(88f)
+                assertThat(node.boundsInRoot.left.toDp().value).isWithin(0.6f).of(40f)
+            }
         }
     }
 
+    @Test fun `the room the host declares free is the only spill of an illustrated frame (#15157)`() {
+        host { Box(Modifier.offset(40.dp, 40.dp)) { AvatarRingLayer(masque, footprint = 88.dp, decorRoom = 6.dp, modifier = Modifier.size(88.dp)) { Box(Modifier.size(88.dp)) } } }
+        modes(2).forEach { node -> with(rule.density) { assertThat(node.boundsInRoot.width.toDp().value).isWithin(0.6f).of(100f) } }
+    }
+
+    @Test fun `a list avatar shows its whole illustrated frame, both films inside the footprint (#16114)`() {
+        host { AvatarRingLayer(masque, footprint = 52.dp, modifier = Modifier.size(52.dp)) { Box(Modifier.size(52.dp)) } }
+        modes(2).forEach { node -> with(rule.density) { assertThat(node.boundsInRoot.width.toDp().value).isWithin(0.6f).of(52f) } }
+    }
+
+    @Test fun `the typing indicator host drops the films and keeps the ring alone (#16114)`() {
+        host { AvatarRingLayer(masque, footprint = 22.dp, decor = false, modifier = Modifier.size(22.dp)) { Box(Modifier.size(22.dp)) } }
+        rule.waitForIdle()
+        assertThat(rule.onAllNodes(layer, useUnmergedTree = true).fetchSemanticsNodes()).isEmpty()
+    }
+
+    @Test fun `the layout of an illustrated frame bounds its spill at every size and never draws the fallback ring under it (#15157)`() {
+        val profile = AvatarRingLayout.make(masque, footprint = 107.0)
+        assertThat(profile.paintedSide(107.0)).isAtMost(107.0)
+        assertThat(profile.drawsStill).isFalse()
+        assertThat(profile.contentScale).isWithin(1e-6).of(0.84 / 1.4)
+        val tray = AvatarRingLayout.make(masque, footprint = 88.0, storyRingSize = 94.0)
+        assertThat(tray.paintedSide(88.0)).isAtMost(88.0)
+        assertThat(tray.drawsStill).isFalse()
+        listOf(52.0, 32.0, 20.0).forEach { size ->
+            val small = AvatarRingLayout.make(masque, footprint = size)
+            assertThat(small.decor).isNotNull()
+            assertThat(small.paintedSide(size)).isAtMost(size + 1e-9)
+            assertThat(small.drawsStill).isFalse()
+            assertThat(small.contentScale).isWithin(1e-6).of(0.84 / 1.4)
+        }
+        val typing = AvatarRingLayout.make(masque, footprint = 22.0, decor = false)
+        assertThat(typing.decor).isNull()
+        assertThat(typing.drawsStill).isTrue()
+        assertThat(typing.contentScale).isWithin(1e-6).of(0.84)
+    }
+
     @Test fun `an illustrated frame holds both films at their first frame under reduce motion`() {
-        host(reduceMotion = true) { AvatarRingLayer(masque, footprint = 50.dp) { Box(Modifier.size(50.dp)) } }
+        host(reduceMotion = true) { AvatarRingLayer(masque, footprint = 88.dp) { Box(Modifier.size(88.dp)) } }
         assertThat(modes(2).map { it.config[LottiePlaybackModeKey] }).containsExactly(LottiePlaybackMode.FirstFrame, LottiePlaybackMode.FirstFrame)
     }
 
@@ -126,7 +166,7 @@ class AppearanceLottieLayersComposeTest {
         val main = Thread.currentThread()
         val loads = ConcurrentLinkedQueue<Thread>()
         host(reduceMotion = true, source = hostSource { loads += Thread.currentThread() }) {
-            AvatarRingLayer(masque, footprint = 50.dp) { Box(Modifier.size(50.dp)) }
+            AvatarRingLayer(masque, footprint = 88.dp) { Box(Modifier.size(88.dp)) }
         }
 
         assertThat(modes(2)).hasSize(2)

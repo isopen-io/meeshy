@@ -69,7 +69,7 @@ extension ConversationViewModel {
     func subscribeToMessageStore() {
         // #3707 — une enveloppe de CETTE conversation ouverte : le fil relit le magasin, qui pose le clair.
         endToEndOpenings = EndToEndThreadPlaintexts.openings(of: conversationId, from: endToEnd)
-            .sink { [weak messageStore] in messageStore?.messagesDidChange.send() }
+            .sink { [weak messageStore, hybrid = startupDependencies.endToEndClear.hybrid] in hybrid.reopen(); messageStore?.messagesDidChange.send() }
         storeObservation = messageStore.messagesDidChange
             .sink { [weak self] in
                 // Defer to a fresh runloop tick via DispatchQueue.main.async — a
@@ -89,7 +89,7 @@ extension ConversationViewModel {
                     // le clair vient de la base scellée de libsignal, posé en
                     // mémoire à chaque relecture (lecture locale, pas de
                     // déchiffrement : l'enveloppe a été ouverte une fois).
-                    let needsDecryption = mapped.contains(where: EndToEndThreadPlaintexts.awaitsPlaintext)
+                    let needsDecryption = mapped.contains { self.startupDependencies.endToEndClear.needsVaultRead($0) }
                     guard needsDecryption else {
                         // Même slice, aucun `await` entre les deux : les
                         // métadonnées suivent l'id que la bulle vient de prendre.

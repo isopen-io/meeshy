@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. Partagées par « Mes cercles » et le profil. -->
+<resources>
+    <string name="circles_action_request">Pedir %1$s</string>
+    <string name="circles_action_request_a11y">Pedir a %2$s o nível %1$s</string>
+    <string name="circles_action_unlink">Desfazer o vínculo</string>
+    <string name="circles_promote_friend">Vamos ser amigos</string>
+    <string name="circles_promote_close">Vamos ser próximos</string>
+    <string name="circles_promote_blood">Vamos virar sangue</string>
+    <string name="circles_promote_friend_a11y">Vamos ser amigos: pedir a %1$s o nível Amigo</string>
+    <string name="circles_promote_close_a11y">Vamos ser próximos: pedir a %1$s o nível Próximo</string>
+    <string name="circles_promote_blood_a11y">Vamos virar sangue: pedir a %1$s o nível Sangue</string>
+    <string name="circles_demote_close">Vamos continuar próximos</string>
+    <string name="circles_demote_friend">Vamos continuar amigos</string>
+    <string name="circles_demote_acquaintance">Vamos manter contato</string>
+    <string name="circles_demote_close_confirm_title">Continuar apenas próximos de %1$s?</string>
+    <string name="circles_demote_friend_confirm_title">Continuar apenas amigos de %1$s?</string>
+    <string name="circles_demote_acquaintance_confirm_title">Manter apenas contato com %1$s?</string>
+    <string name="circles_confirm_cancel">Cancelar</string>
+    <string name="circles_demote_confirm_body">%1$s passará de %2$s para %3$s. Você perderá o que %2$s compartilha. %1$s não será avisado(a) e não poderá pedir para subir de novo durante 30 dias.</string>
+    <string name="circles_level_acquaintance">Conhecido</string>
+    <string name="circles_level_blood">Sangue</string>
+    <string name="circles_level_close">Próximo</string>
+    <string name="circles_level_community">Comunidade</string>
+    <string name="circles_level_friend">Amigo</string>
+    <string name="circles_level_public">Público</string>
+    <string name="circles_missing_audio">uma mensagem de áudio</string>
+    <string name="circles_missing_message">uma mensagem</string>
+    <string name="circles_missing_other">uma interação</string>
+    <string name="circles_missing_post_view">uma visualização de post</string>
+    <string name="circles_missing_reaction">uma reação</string>
+    <string name="circles_notice_lower_failed">Não foi possível salvar a alteração.</string>
+    <string name="circles_pending">Pedido enviado · %1$s</string>
+    <string name="circles_progress_eligible">Pronto para %1$s</string>
+    <string name="circles_progress_missing">Falta: %1$s</string>
+    <string name="circles_progress_weeks">Semanas seguidas: %1$d de %2$d</string>
+    <string name="circles_unlink_confirm_body">Vocês não estarão mais ligados: nenhum círculo em comum. %1$s não será avisado(a) e não poderá pedir um vínculo durante 30 dias.</string>
+    <string name="circles_unlink_confirm_title">Desfazer o vínculo com %1$s?</string>
+</resources>

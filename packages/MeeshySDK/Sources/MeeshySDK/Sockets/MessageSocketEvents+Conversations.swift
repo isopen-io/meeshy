@@ -349,6 +349,10 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     /// Ce qui compte pour appliquer le changement (`userId`, `newRole`) est au
     /// premier niveau : l'événement reste utile sans ce bloc.
     public let participant: ParticipantRoleUpdatedParticipantInfo?
+    /// #15987 — la capacité de la CIBLE recalculée pour son nouveau rang, dans le seul
+    /// exemplaire remis à sa room personnelle. `nil` : serveur antérieur, autre
+    /// destinataire ou charge illisible (le décodage de la capacité ne jette jamais).
+    public var viewerCapabilities: ConversationViewerCapabilities? = nil
 }
 
 public struct SocketEventUser: Decodable, Sendable {
@@ -506,6 +510,24 @@ public struct ConversationClosedEvent: Decodable, Sendable {
     public let conversationId: String
     public let closedBy: String
     public let closedAt: String
+}
+
+/// `conversation:obsoleted` (#14643) — suit `conversation:closed` sur la room de
+/// la conversation et la room personnelle de chaque membre actif. La
+/// conversation quitte toutes les listes ; ses données sont effacées après
+/// `purgeAfter`.
+public struct ConversationObsoletedEvent: Decodable, Sendable, Equatable {
+    public let conversationId: String
+    public let obsoletedBy: String
+    public let obsoletedAt: String
+    public let purgeAfter: String
+
+    public init(conversationId: String, obsoletedBy: String, obsoletedAt: String, purgeAfter: String) {
+        self.conversationId = conversationId
+        self.obsoletedBy = obsoletedBy
+        self.obsoletedAt = obsoletedAt
+        self.purgeAfter = purgeAfter
+    }
 }
 
 public struct ConversationNewEvent: Decodable, Sendable {

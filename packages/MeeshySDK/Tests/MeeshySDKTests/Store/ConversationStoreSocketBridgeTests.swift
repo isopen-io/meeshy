@@ -48,6 +48,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         let bridge: ConversationStoreSocketBridge
         let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
         let deleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+        let obsoleted = PassthroughSubject<ConversationObsoletedEvent, Never>()
         let participantLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
         let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
         let prefsUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
@@ -72,6 +73,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),
                 conversationDeleted: deleted.eraseToAnyPublisher(),
+                conversationObsoleted: obsoleted.eraseToAnyPublisher(),
                 participantLeft: participantLeft.eraseToAnyPublisher(),
                 participantBanned: participantBanned.eraseToAnyPublisher(),
                 userPreferencesUpdated: prefsUpdated.eraseToAnyPublisher(),
@@ -380,6 +382,20 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
         let removed = await waitUntil { await store.conversation(id: "c1") == nil }
         XCTAssertTrue(removed, "bridge must route conversation:deleted → applyConversationDeleted")
+    }
+
+    func test_conversationObsoleted_routesToApplyConversationDeleted() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.obsoleted.send(ConversationObsoletedEvent(
+            conversationId: "c1", obsoletedBy: "admin-1",
+            obsoletedAt: "2026-11-02T10:00:00.000Z", purgeAfter: "2026-11-04T10:00:00.000Z"
+        ))
+
+        let removed = await waitUntil { await store.conversation(id: "c1") == nil }
+        XCTAssertTrue(removed, "une conversation rendue obsolète quitte le store de chaque membre")
     }
 
     // MARK: - Les trois AUTRES fins d'appartenance

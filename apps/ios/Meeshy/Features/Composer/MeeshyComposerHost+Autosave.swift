@@ -21,13 +21,16 @@ nonisolated struct ComposerAutosaveSignature: Equatable {
     let format: ComposerFormat
     /// Le choix armé au chevron (#9419) : le choisir est une mutation.
     let publishChoice: ComposerPublishChoice?
+    /// « Désactiver les commentaires » (#16541) : le basculer est une mutation.
+    let commentsDisabled: Bool
+    /// « Autoriser la reprise du son » (#16595) : le basculer est une mutation.
+    let soundExtractionChoice: Bool?
 }
 
 extension MeeshyComposerHost {
 
     var autosaveOpening: ComposerAutosaveOpening {
         ComposerAutosaveOpening.decide(
-            opensOnAtelier: mountedSurface == .scene,
             isHydrated: hydration != nil,
             resumesDraft: draftId != nil,
             isSeeded: mediaSeed != nil || moodSeed != nil,
@@ -44,7 +47,8 @@ extension MeeshyComposerHost {
                                   location: documentLocation,
                                   references: composerReferences,
                                   format: selectedFormat,
-                                  publishChoice: authorPublishChoice)
+                                  publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice,
+                                  soundExtractionChoice: soundExtractionChoice)
     }
 
     /// L'état à écrire — `nil` hors du meuble : l'atelier tient son propre
@@ -76,7 +80,8 @@ extension MeeshyComposerHost {
             audios: viewModel.loadedAudioURLs,
             stickerAnimations: viewModel.loadedStickerAnimations,
             adoptedLocalMedia: viewModel.adoptedLocalMedia,
-            publishChoice: authorPublishChoice
+            publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice,
+            soundExtractionChoice: soundExtractionChoice
         )
     }
 
@@ -94,6 +99,7 @@ extension MeeshyComposerHost {
     }
 
     func bindAutosave() {
+        bindStoredDraft()
         guard let restored = autosave.bind(account: autosaveAccount, opening: autosaveOpening) else { return }
         guard let state = ComposerAutosaveCodec.state(from: restored) else {
             autosave.abandonRestoredDraft()
@@ -116,29 +122,56 @@ extension MeeshyComposerHost {
                                               stickerAnimations: state.stickerAnimations)
         documentText = state.text
         documentBackground = state.background
-        composerVisibility = PostVisibility(rawValue: state.visibility) ?? composerVisibility
+        composerVisibility = PostVisibility(served: state.visibility)
         composerVisibilityUserIds = state.visibilityUserIds
         documentLanguage = state.language
         documentLocation = state.location
         composerReferences = state.references
-        // Le format d'OUVERTURE n'est pas rendu : il n'a aucun écrivain, et la
-        // surface ne bouge pas sous les doigts de l'auteur. Ce qu'il avait ARMÉ
-        // à l'envoi (#6502) — format et disposition — revient, lui (#9419), et
-        // reste son choix : aucune bascule automatique ne l'écrase.
+        // Le format d'OUVERTURE n'est pas rendu : aucun écrivain, et la surface
+        // ne bouge pas sous les doigts de l'auteur. Ce qu'il avait ARMÉ (#6502) —
+        // format, disposition — revient (#9419) : aucune bascule ne l'écrase.
         if let choix = state.publishChoice { chooseArmedPublish(choix) }
+        commentsDisabledChoice = state.commentsDisabled
+        soundExtractionChoice = state.soundExtractionChoice
     }
 
     func scheduleAutosave() {
         autosave.schedule { autosaveState() }
+        storedDraft.schedule { storedDraftFrame }
     }
 
     func flushAutosave() {
         autosave.flushNow { autosaveState() }
+        storedDraft.flush { storedDraftFrame }
     }
 
     /// Appelé par les deux sites où la publication est ACCEPTÉE (socle).
-    func discardAutosavedDraft() { autosave.discard() }
-    func handOverAutosavedDraft() { autosave.handOver(to: ComposerPublicationHandoff.take()) { autosaveState() } }
+    func discardAutosavedDraft() {
+        autosave.discard()
+        storedDraft.stopWriting()
+    }
+    func handOverAutosavedDraft() {
+        autosave.handOver(to: ComposerPublicationHandoff.take()) { autosaveState() }
+        storedDraft.stopWriting()
+    }
+
+    /// Le brouillon de « Mes stories » repris ou l'édition d'une story
+    /// (#15629) : la scène du meuble le relit et l'écrit, sans atelier.
+    func bindStoredDraft() {
+        let garde = ComposerStoredDraftScope.keepsStoredDraft(adoptsDraft: viewModel.isAdoptedDraftSession,
+                                                               hydration: hydration)
+        guard let repris = storedDraft.bind(viewModel, keeps: garde) else { return }
+        let audience = ComposerStoredDraftScope.restoredAudience(repris)
+        composerVisibility = audience.visibility
+        composerVisibilityUserIds = audience.userIds
+        if let langue = repris.originalLanguage { documentLanguage = langue }
+    }
+
+    var storedDraftFrame: StoryStoredDraftFrame {
+        StoryStoredDraftFrame(visibility: composerVisibility.rawValue,
+                              visibilityUserIds: composerVisibilityUserIds,
+                              originalLanguage: documentLanguage)
+    }
 
     func withComposerAutosave<Content: View>(_ content: Content) -> some View {
         content
@@ -154,50 +187,26 @@ extension MeeshyComposerHost {
             }
             .onDisappear { flushAutosave() }
             .closesForConversationOpening(.composer, answer: { conversationOpeningYield }, close: {
-                ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft,
-                                                trigger: publishTrigger) {
-                    flushAutosave()
-                    onDismiss()
-                }
+                flushAutosave()
+                onDismiss()
             })
     }
 
     /// Une conversation qui s'ouvre ne referme le meuble que s'il sait rendre
     /// ce qu'il tient (#10539) : la porte vierge, dont le brouillon s'écrit à la
-    /// fermeture et se relit à la réouverture — et l'ATELIER, qui écrit le sien
-    /// par sa propre sortie (#10543). Toute autre porte — une graine du meuble
-    /// — RETIENT : rien ne se perd, et la conversation s'ouvre quand l'auteur
-    /// a fini.
+    /// fermeture et se relit à la réouverture — et le brouillon REPRIS ou
+    /// l'édition d'une story, que `ComposerStoredDraftKeeper` écrit au même
+    /// `flushAutosave()` (#10543, #15629). Toute autre porte — une graine du
+    /// meuble — RETIENT : rien ne se perd, et la conversation s'ouvre quand
+    /// l'auteur a fini.
     var conversationOpeningYield: PresentedSurfaceYield {
-        ComposerConversationYield.decide(autosaveOpening, atelierWritesItsDraft: atelierWritesItsDraft)
-    }
-
-    var atelierWritesItsDraft: Bool {
-        ComposerConversationYield.atelierWritesItsDraft(mounted: mountedComposerView,
-                                                        exitIsArmed: publishTrigger.offersExit)
+        ComposerConversationYield.decide(autosaveOpening, keepsStoredDraft: storedDraft.keepsDraft)
     }
 }
 
 nonisolated enum ComposerConversationYield {
     static func decide(_ opening: ComposerAutosaveOpening,
-                       atelierWritesItsDraft: Bool = false) -> PresentedSurfaceYield {
-        opening == .restores || atelierWritesItsDraft ? .closes : .retains
-    }
-
-    /// L'atelier monté ET armé sait écrire son brouillon (`StoryDraftStore`),
-    /// proposé à la réouverture.
-    static func atelierWritesItsDraft(mounted: ComposerMountedView,
-                                      exitIsArmed: Bool) -> Bool {
-        mounted == .atelier && exitIsArmed
-    }
-
-    /// La sortie de l'atelier écrit son brouillon PUIS referme ; sans elle, le
-    /// meuble referme par son propre chemin.
-    @MainActor
-    static func close(atelierWritesItsDraft: Bool,
-                      trigger: ComposerPublishTrigger,
-                      hostClose: () -> Void) {
-        if atelierWritesItsDraft, trigger.requestExit() { return }
-        hostClose()
+                       keepsStoredDraft: Bool = false) -> PresentedSurfaceYield {
+        opening == .restores || keepsStoredDraft ? .closes : .retains
     }
 }

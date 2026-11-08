@@ -1,4 +1,6 @@
 import XCTest
+import MeeshySDK
+@testable import Meeshy
 
 /// Gardes par analyse de source sur la ligne de méta du header du reader de
 /// story — `StoryHeaderView` est couplée à des `@Binding` du viewer et à son
@@ -108,7 +110,7 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
             "Le nom passé à l'atome est celui de la ligne du nom."
         )
         XCTAssertTrue(
-            header.contains("subtitle: currentStory?.timeAgo"),
+            header.contains("subtitle: StoryHeaderTime.subtitle(of: currentStory)"),
             "Vue `2f` : l'heure de publication est le `subtitle` de l'atome, donc sur la " +
             "ligne du NOM qu'elle qualifie — pas sur une rangée de méta partagée avec le " +
             "crédit du son, où la donnée la plus consultée se noie dans la moins consultée."
@@ -135,7 +137,7 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     func test_header_soundCreditSitsOnItsOwnLineBelowTheName() throws {
         let header = try headerBlock()
 
-        guard let time = header.range(of: "subtitle: currentStory?.timeAgo"),
+        guard let time = header.range(of: "subtitle: StoryHeaderTime.subtitle(of: currentStory)"),
               let accessory = header.range(of: "accessory: {"),
               let badge = header.range(of: "BackgroundSoundBadge(") else {
             XCTFail("Le header doit porter l'heure, l'accessoire ET le crédit du son")
@@ -332,5 +334,19 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
             "`selectedProfileUser` que l'en-tête), sinon la rangée nomme des " +
             "gens qu'on ne peut pas atteindre."
         )
+    }
+
+    /// #15198 — une story en attente dit son attente par l'horloge d'un
+    /// message en envoi, à la place de l'heure (#14879) ; jamais par un libellé.
+    func test_headerTime_pendingStory_showsTheClockInPlaceOfTheTime() {
+        let pending = StoryItem(id: "\(PendingStoryMarker.prefix)\(UUID().uuidString)#0", content: nil, media: [],
+                                storyEffects: nil, createdAt: Date(), expiresAt: nil, isViewed: false)
+        let sent = StoryItem(id: "665f1c2e9b1d4a0012345678", content: nil, media: [],
+                             storyEffects: nil, createdAt: Date(), expiresAt: nil, isViewed: false)
+
+        XCTAssertNil(StoryHeaderTime.subtitle(of: pending))
+        XCTAssertTrue(StoryHeaderTime.showsPendingClock(for: pending))
+        XCTAssertEqual(StoryHeaderTime.subtitle(of: sent), sent.timeAgo)
+        XCTAssertFalse(StoryHeaderTime.showsPendingClock(for: sent))
     }
 }

@@ -57,3 +57,28 @@ fun ApiConversation.mayCurrentUserWrite(currentUserId: String? = null): Boolean 
     val userRank = WRITE_ROLE_RANK[userRoleWire] ?: WRITE_ROLE_RANK.getValue("member")
     return userRank >= requiredRank
 }
+
+/**
+ * Pourquoi le composeur cède la place à un bandeau de lecture seule (#15269) — miroir de
+ * `composerOrReadOnlyZone` (`ConversationView+ComposerBanners.swift`) : la conversation terminée
+ * prime, puis Global avant 18 ans. Une restriction que la passerelle sait nommer sans fermer le
+ * composeur ([ConversationWriteRestriction.Unknown]) ne ferme rien : la passerelle refuse, et dit pourquoi.
+ */
+enum class ComposerClosure {
+    /** La conversation est terminée (`isActive == false`) : elle se lit, elle ne s'écrit plus. */
+    ENDED,
+
+    /** Global n'admet l'écriture qu'à partir de 18 ans. */
+    MINOR_GLOBAL,
+}
+
+/**
+ * Ce qui ferme le composeur de cette conversation pour son lecteur, ou `null` quand il s'ouvre.
+ * [learned] est la restriction qu'un REFUS d'envoi a apprise (403 `GLOBAL_ADULTS_ONLY`) : elle vaut
+ * celle que la conversation sert, même quand un cache antérieur ne la portait pas.
+ */
+fun ApiConversation.composerClosure(learned: ConversationWriteRestriction? = null): ComposerClosure? = when {
+    isActive == false -> ComposerClosure.ENDED
+    learned?.closesComposer == true || viewerWriteRestriction?.closesComposer == true -> ComposerClosure.MINOR_GLOBAL
+    else -> null
+}

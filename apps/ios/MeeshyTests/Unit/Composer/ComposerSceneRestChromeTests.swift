@@ -15,6 +15,73 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     private let portesDeLaStory = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                            format: .story, allowsCapture: true)
 
+    // MARK: - La scène plus étroite que l'écran
+
+    /// Relevé au simulateur iPhone SE : la couche de scène fait 375 × 667 pt, le
+    /// 9:16 s'y pose sous 12 pt d'air (368,4 × 655), et le socle le réduit, dès
+    /// le repos, à la zone libre au-dessus de lui (604 pt de haut). La scène
+    /// DESSINÉE commence donc à 17,6 pt du bord : c'est cet écart que le chrome
+    /// du repos reprend.
+    func test_sceneSideInset_seLitSurLaSceneDessinee_reduiteParLeSocle() {
+        let couche = CGRect(x: 0, y: 0, width: 375, height: 667)
+        let auRepos: CGFloat = 604.0 / 655.0
+        let se = ComposerRestChrome.sceneSideInset(layer: couche, aspectRatio: 9.0 / 16.0, scale: auRepos)
+        XCTAssertEqual(se, (375 - 604 * 9.0 / 16.0) / 2, accuracy: 0.01)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: couche.offsetBy(dx: 20, dy: 0),
+                                                         aspectRatio: 9.0 / 16.0, scale: auRepos),
+                       se + 20, accuracy: 0.01, "une couche décalée dans la fenêtre décale la scène d'autant")
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: couche, aspectRatio: 9.0 / 16.0, scale: 1),
+                       (375 - 655 * 9.0 / 16.0) / 2, accuracy: 0.01)
+    }
+
+    func test_sceneSideInset_uneSceneQuiPrendLaLargeur_nePousseRien() {
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: CGRect(x: 0, y: 0, width: 402, height: 800),
+                                                         aspectRatio: 9.0 / 16.0, scale: 1), 0)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: .null, aspectRatio: 9.0 / 16.0, scale: 1), 0)
+        XCTAssertEqual(ComposerRestChrome.sceneSideInset(layer: .zero, aspectRatio: 9.0 / 16.0, scale: 1), 0)
+    }
+
+    /// Le haut de la scène dessinée : la levée s'ancre au haut du 9:16, qui ne
+    /// bouge que du décalage qu'elle applique. Sur le SE, 12 pt d'air au-dessus.
+    func test_sceneTop_estLeHautDu916_plusLeDecalageDeLaLevee() {
+        let couche = CGRect(x: 0, y: 0, width: 375, height: 667)
+        XCTAssertEqual(ComposerRestChrome.sceneTop(layer: couche, aspectRatio: 9.0 / 16.0, offsetY: 0), 12,
+                       accuracy: 0.01)
+        XCTAssertEqual(ComposerRestChrome.sceneTop(layer: couche.offsetBy(dx: 0, dy: 20), aspectRatio: 9.0 / 16.0,
+                                                   offsetY: -5), 27, accuracy: 0.01)
+        XCTAssertEqual(ComposerRestChrome.sceneTop(layer: .null, aspectRatio: 9.0 / 16.0, offsetY: 0), 0)
+    }
+
+    /// ✕ et ↶ ↷ descendent sous le haut de la scène quand elle commence plus bas
+    /// que le chrome ; une scène qui monte au-dessus de lui ne les déplace pas.
+    func test_sceneTopInset_poussseLeChromeSousLeHautDeLaScene_jamaisAuDessus() {
+        XCTAssertEqual(ComposerRestChrome.sceneTopInset(sceneTop: 12, chromeTop: 0), 12)
+        XCTAssertEqual(ComposerRestChrome.sceneTopInset(sceneTop: 50, chromeTop: 62), 0)
+    }
+
+    /// Un panneau, une feuille ou le clavier réduisent la scène davantage : ses
+    /// options ne la suivent pas, elles gardent l'écart du repos.
+    func test_restInset_seFigePendantUneReduction_seRelitAuRepos() {
+        XCTAssertEqual(ComposerRestChrome.restInset(measured: 17.6, sceneIsReduced: false, current: 0), 17.6)
+        XCTAssertEqual(ComposerRestChrome.restInset(measured: 80, sceneIsReduced: true, current: 17.6), 17.6)
+    }
+
+    /// Le relevé au SE l'a montré deux fois : un écart suspendu pendant une
+    /// « levée » restait à 0, la scène passant pour levée au repos ; lu sans
+    /// l'échelle du repos, il ne valait que 3,3 pt. La réduction qui fige
+    /// l'écart est celle d'une feuille ou du clavier (#15226).
+    func test_lEcartDuRepos_suitLEchelleDuRepos_etNeSeFigeQueSurUnPanneau() throws {
+        let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("ComposerRestChrome.sceneSideInset(layer:"))
+        XCTAssertTrue(surface.contains("scale: lift.scale"))
+        XCTAssertTrue(surface.contains("ComposerRestChrome.restInset(measured:"))
+        XCTAssertTrue(surface.contains("ComposerRestChrome.sceneTop(layer:"))
+        XCTAssertTrue(surface.contains("sceneTopInset: restSceneTopInset"))
+        XCTAssertFalse(surface.contains("sceneLiftInset > 0 ||"))
+    }
+
+
+
     // MARK: - La colonne
 
     func test_tools_enStory_lesCinqOutils_puisFondMentionLieu_puisPlus() {
@@ -46,14 +113,15 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(ComposerRestChrome.tools(offered: sansSon).contains(.sound))
     }
 
-    /// Fond, Mention, Lieu : sur le rail, en entrées directes (#14050) ; le
-    /// hashtag, la description et le texte du post restent ailleurs.
+    /// Fond, Mention, Lieu : sur le rail, en entrées directes (#14050), et le
+    /// texte du post quand le format en écrit un (#14457) ; le hashtag et la
+    /// description restent ailleurs.
     func test_tools_fondMentionLieuSontSurLeRail_leRestePasse() {
         let portes = ComposerRestChrome.tools(offered: ComposerRailDoor.allCases).compactMap(\.door)
-        for porte in [ComposerRailDoor.background, .mention, .place] {
+        for porte in [ComposerRailDoor.background, .mention, .place, .content] {
             XCTAssertTrue(portes.contains(porte), "\(porte.rawValue) doit être une entrée directe du rail")
         }
-        for porte in [ComposerRailDoor.hashtag, .description, .content] {
+        for porte in [ComposerRailDoor.hashtag, .description] {
             XCTAssertFalse(portes.contains(porte), "\(porte.rawValue) doit vivre ailleurs que sur la scène")
         }
     }
@@ -63,8 +131,10 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     func test_column_scrollsWhenItOverflows() throws {
         let chrome = try ComposerSceneArrangementTests.source("ComposerSceneOverlayChrome.swift")
         XCTAssertTrue(chrome.contains("ViewThatFits(in: .vertical)"), "la colonne se mesure à la hauteur libre")
-        XCTAssertTrue(chrome.contains("ScrollView(.vertical, showsIndicators: false) { toolButtons }"),
-                      "au-delà, elle défile")
+        XCTAssertTrue(chrome.contains("bodyButtons.modifier(ComposerScrollEdgeCue())"),
+                      "au-delà, ses outils défilent, le pied restant posé (#14622)")
+        let defilement = try ComposerSceneArrangementTests.source("ComposerScrollEdgeCue.swift")
+        XCTAssertTrue(defilement.contains("ScrollView(.vertical, showsIndicators: false)"), "le défilement est vertical")
     }
 
     func test_tools_chaqueBoutonAUnLibelleNonVide() {
@@ -118,12 +188,11 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(ComposerRestChrome.toolColumnIsShown(etat(camera: true)))
     }
 
-    /// **La scène réduite est nue** (#14191, jumelle d'Android #14186) : un
-    /// panneau du bas (fond, cadrage, effets, frise) réduit la scène au-dessus
-    /// de lui, et rien de ce qu'elle portait en plein écran ne s'y pose plus —
-    /// ni ✕, ni ↶ ↷, ni la rangée des diapos, ni la colonne. Seuls la scène
-    /// réduite et le panneau restent.
-    func test_unPanneauEnBas_laisseLaSceneReduiteNue() {
+    /// **Ce qui occupe le bas laisse la scène nue** (#14191, jumelle d'Android
+    /// #14186) : sous un panneau du bas (fond, cadrage, effets, frise), rien de
+    /// ce que la scène portait au repos ne s'y pose plus — ni ✕, ni ↶ ↷, ni la
+    /// rangée des diapos, ni la colonne. Seuls la scène et le panneau restent.
+    func test_unPanneauEnBas_laisseLaSceneNue() {
         for fond in [etat(panneau: true), etat(panneau: true, frise: true)] {
             XCTAssertFalse(ComposerRestChrome.closeIsShown(fond), "✕ ne se pose plus sur la scène réduite")
             XCTAssertFalse(ComposerRestChrome.historyIsShown(fond), "↶ ↷ non plus")
@@ -141,7 +210,66 @@ final class ComposerSceneRestChromeTests: XCTestCase {
                        "un outil ouvert garde ↶ ↷ dans SON rail")
     }
 
-    /// Les propriétés d'un objet sélectionné réduisent aussi la scène : ses
+    // MARK: - La scène ne se réduit que pour le clavier ou une vraie feuille (#15226)
+
+    /// Décision porteur (Android #15192) : une bande, la frise ou les effets se
+    /// posent PAR-DESSUS une scène qui garde sa taille.
+    func test_sceneIsReduced_uneBandeOuLaFrise_laisseLaScenePleine() {
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat(panneau: true)),
+                       "le fond, le cadrage ou les effets se posent sur la scène")
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat(panneau: true, frise: true)), "la frise aussi")
+    }
+
+    /// Un outil ouvert — ses réglages à plat à la place du rail, le dessin —
+    /// ne réduit pas la scène.
+    func test_sceneIsReduced_unOutilAPlat_laisseLaScenePleine() {
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat(outil: true)))
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(etat()), "au repos non plus")
+    }
+
+    /// Un objet sélectionné remplace la colonne par ses options, sans réduire.
+    func test_sceneIsReduced_uneSelection_laisseLaScenePleine() {
+        let selection = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
+                                                 bottomPanelIsOpen: false, timelineIsOpen: false,
+                                                 objectIsSelected: true)
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(selection))
+    }
+
+    func test_sceneIsReduced_leClavier_reduitLaScene() {
+        let frappe = ComposerRestChrome.State(toolIsOpen: true, writesText: false, cameraIsArmed: false,
+                                              bottomPanelIsOpen: false, timelineIsOpen: false,
+                                              keyboardIsUp: true)
+        XCTAssertTrue(ComposerRestChrome.sceneIsReduced(frappe))
+    }
+
+    func test_sceneIsReduced_uneVraieFeuille_reduitLaScene() {
+        let feuille = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
+                                               bottomPanelIsOpen: false, timelineIsOpen: false,
+                                               sheetIsRaised: true)
+        XCTAssertTrue(ComposerRestChrome.sceneIsReduced(feuille), "une feuille ancrée monte du bas")
+    }
+
+    func test_sceneIsReduced_lesProprietesDUnObjet_laissentLaScenePleine() {
+        let proprietes = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
+                                                  bottomPanelIsOpen: false, timelineIsOpen: false,
+                                                  objectIsSelected: true, propertiesAreOpen: true)
+        XCTAssertFalse(ComposerRestChrome.sceneIsReduced(proprietes),
+                       "le cadrage d'une image sélectionnée se pose par-dessus la scène")
+    }
+
+    /// La surface lit la loi : plus de réduction calculée à côté d'elle, et la
+    /// scène lit le haut du repos sous ce qui se pose par-dessus.
+    func test_laSurface_litLaLoiDeReduction_etLeHautDuRepos() throws {
+        let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("ComposerRestChrome.sceneIsReduced(restState)"))
+        XCTAssertTrue(surface.contains("keyboardIsUp: editingTextId != nil"))
+        XCTAssertTrue(surface.contains("sheetIsRaised: anchoredSheetTop != nil"))
+        XCTAssertTrue(surface.contains("ComposerSceneLift.floorTop("))
+        XCTAssertTrue(surface.contains("ComposerSceneLift.restFloorTop("))
+        XCTAssertFalse(surface.contains("panelIsOpen("), "aucune réduction par panneau ne survit")
+    }
+
+    /// Les propriétés d'un objet sélectionné se posent par-dessus la scène : ses
     /// options restent dans leur colonne, ↶ ↷ et la rangée des diapos partent.
     func test_lesProprietesDUnObjet_gardentSesOptions_retirentLaRangeeDuHaut() {
         let proprietes = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,

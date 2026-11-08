@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MessagesApiResponse
 import me.meeshy.sdk.model.ReadStatusData
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.search.GlobalMessageSearchHit
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.conditionalApiCall
 import retrofit2.Response
@@ -100,6 +101,18 @@ interface MessageApi {
     ): ApiResponse<List<ApiMessage>>
 
     /**
+     * La fenêtre CENTRÉE sur un message (#14670) : `around=<id>` rend la moitié de [limit] de chaque côté.
+     * Comme [listAfter], rend [MessagesApiResponse] : `cursorPagination.hasMore` dit s'il reste du plus
+     * ancien, `hasNewer` (racine, mode `around` seul) s'il reste du plus récent.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listWindowAround(
+        @Path("cid") conversationId: String,
+        @Query("around") messageId: String,
+        @Query("limit") limit: Int,
+    ): MessagesApiResponse
+
+    /**
      * L'index d'un genre pour l'écran « Médias, liens et documents » : `view=media` (la passerelle ne sert que les
      * messages porteurs du genre demandé), paginé par `before`. [kinds] est absent pour le visuel (défaut serveur,
      * compris aussi d'une passerelle antérieure à #8098) ; [query] n'est envoyé qu'à partir de deux caractères.
@@ -132,6 +145,17 @@ interface MessageApi {
 
     @DELETE("messages/{id}")
     suspend fun delete(@Path("id") messageId: String): ApiResponse<Unit>
+
+    /**
+     * La recherche des messages de TOUTES mes conversations (#14619) : le serveur sert le texte
+     * élu par le Prisme du lecteur et n'interroge jamais une conversation chiffrée de bout en bout.
+     */
+    @GET("messages/search")
+    suspend fun searchAll(
+        @Query("q") query: String,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null,
+    ): ApiResponse<List<GlobalMessageSearchHit>>
 
     @GET("conversations/{cid}/messages/search")
     suspend fun search(

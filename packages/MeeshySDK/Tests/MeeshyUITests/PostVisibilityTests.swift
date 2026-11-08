@@ -9,6 +9,9 @@ final class PostVisibilityTests: XCTestCase {
         XCTAssertEqual(PostVisibility.except.rawValue, "EXCEPT")
         XCTAssertEqual(PostVisibility.only.rawValue, "ONLY")
         XCTAssertEqual(PostVisibility.private.rawValue, "PRIVATE")
+        XCTAssertEqual(PostVisibility.acquaintances.rawValue, "ACQUAINTANCES")
+        XCTAssertEqual(PostVisibility.close.rawValue, "CLOSE")
+        XCTAssertEqual(PostVisibility.blood.rawValue, "BLOOD")
     }
 
     func test_requiresUserSelection_onlyExceptAndOnly() {
@@ -18,11 +21,24 @@ final class PostVisibilityTests: XCTestCase {
         XCTAssertFalse(PostVisibility.community.requiresUserSelection)
         XCTAssertFalse(PostVisibility.friends.requiresUserSelection)
         XCTAssertFalse(PostVisibility.private.requiresUserSelection)
+        for circle in [PostVisibility.acquaintances, .close, .blood] {
+            XCTAssertFalse(circle.requiresUserSelection)
+        }
     }
 
-    func test_composerSelectableCases_includesExceptAndOnly() {
+    /// #13939 : une audience SERVIE que ce client ne connaît pas se lit RESTREINTE, jamais publique. Le risque
+    /// inverse (un ancien client qui affichait « Public » une audience de cercle) est celui que ce lot referme.
+    func test_aServedAudience_isReadFailClosed() {
+        XCTAssertEqual(PostVisibility(served: "CLOSE"), .close)
+        XCTAssertEqual(PostVisibility(served: "blood"), .blood, "la casse ne décide pas de l'audience")
+        XCTAssertEqual(PostVisibility(served: "ACQUAINTANCES"), .acquaintances)
+        XCTAssertEqual(PostVisibility(served: "ATOM"), .private)
+        XCTAssertEqual(PostVisibility(served: ""), .private)
+    }
+
+    func test_composerSelectableCases_climbTheCirclesFromPublicToBlood_thenTheNamedModes() {
         let cases = PostVisibility.composerSelectableCases
-        XCTAssertEqual(cases, [.public, .community, .friends, .except, .only, .private])
+        XCTAssertEqual(cases, [.public, .community, .acquaintances, .friends, .close, .blood, .except, .only, .private])
         XCTAssertTrue(cases.contains(.except))
         XCTAssertTrue(cases.contains(.only))
     }
@@ -54,6 +70,11 @@ extension PostVisibilityTests {
         let en = try XCTUnwrap(Bundle(path: try XCTUnwrap(Bundle.module.path(forResource: "en", ofType: "lproj"))))
         let de = try XCTUnwrap(Bundle(path: try XCTUnwrap(Bundle.module.path(forResource: "de", ofType: "lproj"))))
         XCTAssertEqual(PostVisibility.private.label(in: en), "Private")
-        XCTAssertEqual(PostVisibility.friends.label(in: de), "Kontakte")
+        let fr = try XCTUnwrap(Bundle(path: try XCTUnwrap(Bundle.module.path(forResource: "fr", ofType: "lproj"))))
+        XCTAssertEqual(PostVisibility.friends.label(in: de), "Freunde")
+        XCTAssertEqual(
+            [PostVisibility.acquaintances, .friends, .close, .blood].map { $0.label(in: fr) },
+            ["Connaissances", "Amis", "Proches", "Sang"]
+        )
     }
 }

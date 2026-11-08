@@ -42,6 +42,9 @@ import kotlin.math.sin
 import me.meeshy.sdk.model.sticker.StickerSlotFiller
 import me.meeshy.sdk.model.sticker.StickerTemplateCatalog
 import me.meeshy.ui.R
+import me.meeshy.ui.component.sticker.StickerTemplateRenderer
+import me.meeshy.ui.sticker.template.StickerTemplateMetrics
+import me.meeshy.ui.sticker.template.StickerTemplateRegistry
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -58,7 +61,9 @@ public fun StickerTemplateArtwork(templateId: String, slots: Map<String, String>
         "time.analog" -> AnalogClock(slots, body, modifier)
         "time.ribbon" -> TextFrame(slots[StickerSlotFiller.TIME].orEmpty(), TextFrameStyle.RIBBON, font, body, modifier)
         "time.calendarDay" -> CalendarPage(slots[StickerSlotFiller.DATE].orEmpty(), font, body, modifier)
-        else -> {
+        else -> if (templateId !in StickerTemplateCatalog.composeDrawnIds) {
+            StickerTemplateRenderer(templateId, slots, StickerTemplateMetrics.sticker(body.value), modifier)
+        } else {
             val words = slots[StickerSlotFiller.TEXT]?.takeIf { it.isNotBlank() } ?: stringResource(R.string.sticker_text_example)
             TextFrame(words, TextFrameStyle.of(templateId), font, body, modifier)
         }
@@ -66,10 +71,9 @@ public fun StickerTemplateArtwork(templateId: String, slots: Map<String, String>
 }
 
 public object StickerTemplateArtwork {
-    private val drawn: Set<String> = StickerTemplateCatalog.all.map { it.id }.toSet()
-
-    /** Seuls les gabarits du catalogue se dessinent ; un autre (météo, recherche iOS) retombe sur son emoji. */
-    public fun knows(templateId: String): Boolean = templateId in drawn
+    /** Seuls les gabarits que le Compose historique ou le registre dessinent se rendent ; un autre retombe sur son emoji. */
+    public fun knows(templateId: String): Boolean =
+        templateId in StickerTemplateCatalog.composeDrawnIds || StickerTemplateRegistry.knows(templateId)
 }
 
 private enum class TextFrameStyle(val shape: Shape, val fill: Color, val ink: Color, val border: Color?, val tilt: Float) {

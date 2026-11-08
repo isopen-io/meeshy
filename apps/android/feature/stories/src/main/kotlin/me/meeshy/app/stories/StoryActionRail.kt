@@ -2,18 +2,18 @@ package me.meeshy.app.stories
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,20 +28,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
+import me.meeshy.sdk.model.story.StoryRailContour
+import me.meeshy.sdk.model.story.StoryRailEmphasisAction
+import me.meeshy.sdk.model.story.StoryViewerParticipation
 import me.meeshy.ui.component.fullscreen.icon
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
@@ -65,6 +64,8 @@ data class StoryRailCounts(
     val shares: Int = 0,
     val reposts: Int = 0,
     val views: Int = 0,
+    /** Ce lecteur a republié la story : « Republier » prend la teinte d'une participation, comme le cœur (#14443). */
+    val reposted: Boolean = false,
 )
 
 /** Les gestes des boutons du rail qui n'ouvrent ni barre ni geste de balayage (#14313). */
@@ -73,14 +74,38 @@ class StoryRailTaps(
     val onRepost: () -> Unit = {},
     val onViews: () -> Unit = {},
     val onCompose: () -> Unit = {},
+    /** « Imager » : la baguette du rail ouvre la vue Imager de la story (#16334). */
+    val onImager: () -> Unit = {},
     val onComments: () -> Unit = {},
+    val onToggleSound: () -> Unit = {},
+    val onSave: () -> Unit = {},
 )
 
 /**
- * Right-side action rail of the story viewer — Android mirror of the iOS `StoryActionSidebarView` (#14313) : Réagir,
- * Répondre, Envoyer, Republier ou Vues, Composer, Commentaires, Traductions, dans l'ordre d'iOS. Réagir et Traductions
- * carry two gesture layers: a plain tap (instant ❤️ / language-bar toggle) and a longpress-then-drag that streams
- * [StoryScrubEvent]s to the screen, which owns the bars, the hit-testing and the flight animation.
+ * Ce que le rail dessine autour de ses boutons (iOS `outlineTint`) : le son coupé ou non, ce qui est ouvert, ce que le
+ * lecteur a déjà fait, la couleur d'accent de l'auteur et l'enregistrement en cours.
+ */
+data class StoryRailEmphasis(
+    val isMuted: Boolean = false,
+    val live: StoryRailContour.Live = StoryRailContour.Live(),
+    val participation: StoryViewerParticipation = StoryViewerParticipation.NONE,
+    val authorAccent: Color = MeeshyPalette.Error,
+    val saving: Boolean = false,
+) {
+    fun outline(action: StoryRailEmphasisAction): Color? =
+        storyRailContourColor(StoryRailContour.resolve(action, live, participation), authorAccent)
+}
+
+private val RailSpacingNormal = MeeshySpacing.md
+private val RailSpacingTight = MeeshySpacing.xsPlus
+
+/**
+ * Right-side action rail of the story viewer — Android mirror of the iOS `StoryActionSidebarView` : Son, Réagir,
+ * Répondre, Envoyer, Republier ou Vues, Composer, Imager, Enregistrer, Commentaires, Traductions, dans l'ordre d'iOS.
+ * Composer porte l'icône du post ; la baguette est Imager (#16334). Réagir et
+ * Traductions carry two gesture layers: a plain tap and a longpress-then-drag that streams [StoryScrubEvent]s to the
+ * screen, which owns the bars, the hit-testing and the flight animation. Le rail prend la densité qui tient : espacement
+ * normal, puis resserré, puis défilement vertical ; le plan qu'on lui remet est figé par l'hôte à l'entrée de la slide.
  */
 @Composable
 fun StoryActionRail(
@@ -98,74 +123,66 @@ fun StoryActionRail(
     modifier: Modifier = Modifier,
     counts: StoryRailCounts = StoryRailCounts(),
     taps: StoryRailTaps = StoryRailTaps(),
+    emphasis: StoryRailEmphasis = StoryRailEmphasis(),
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
+    AdaptiveRailLayout(modifier = modifier) {
+        if (plan.showsSound) StoryRailSoundButton(emphasis, taps.onToggleSound)
         if (plan.showsReact) {
-            var bounceTarget by remember { mutableStateOf(1f) }
-            LaunchedEffect(heartBouncePulse) {
-                if (heartBouncePulse == 0) return@LaunchedEffect
-                bounceTarget = 1.35f
-                delay(160)
-                bounceTarget = 1f
-            }
-            val heartScale by animateFloatAsState(
-                targetValue = bounceTarget,
-                animationSpec = MeeshyMotion.bouncySpring(),
-                label = "heartScale",
-            )
-            RailButton(
-                icon = Icons.Filled.Favorite,
-                label = if (reactionCount > 0) reactionCount.toString()
-                else stringResource(R.string.stories_action_react),
-                tint = if (hasReacted) MeeshyPalette.Indigo400 else MeeshyPalette.White,
-                scale = heartScale,
-                onTap = onTapHeart,
-                scrubKind = StoryScrubKind.Reactions,
-                onScrubEvent = onScrubEvent,
-                onBounds = onHeartBounds,
-            )
+            StoryRailHeartButton(reactionCount, heartBouncePulse, emphasis, onTapHeart, onScrubEvent, onHeartBounds)
         }
         if (plan.showsReply) {
-            RailButton(
+            StoryRailButton(
                 icon = MeeshyIcons.Reply,
-                label = stringResource(R.string.stories_action_reply),
-                tint = MeeshyPalette.White,
-                scale = 1f,
+                caption = stringResource(R.string.stories_action_reply),
+                accessibilityLabel = stringResource(R.string.stories_action_reply),
                 onTap = onTapReply,
-                scrubKind = null,
-                onScrubEvent = onScrubEvent,
-                onBounds = {},
             )
         }
-        StoryRailTapButtons(plan, counts, taps)
+        StoryRailTapButtons(plan, counts, emphasis, taps)
+        if (plan.showsComments) {
+            StoryRailButton(
+                icon = FullscreenChromeSymbol.Comments.icon,
+                caption = counts.comments.toString(),
+                accessibilityLabel = stringResource(R.string.stories_comments_open),
+                value = counts.comments.toString(),
+                isActive = emphasis.live.commentsOpen,
+                outline = emphasis.outline(StoryRailEmphasisAction.COMMENTS),
+                onTap = taps.onComments,
+            )
+        }
         if (plan.showsLanguage) {
-            Box {
-                RailButton(
-                    icon = Icons.Filled.Translate,
-                    label = stringResource(R.string.stories_action_translations),
-                    tint = MeeshyPalette.White,
-                    scale = 1f,
-                    onTap = onTapLanguage,
-                    scrubKind = StoryScrubKind.Languages,
-                    onScrubEvent = onScrubEvent,
-                    onBounds = onLanguageBounds,
-                )
-                if (!languageBadgeCode.isNullOrBlank()) {
-                    Text(
-                        text = languageBadgeCode.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MeeshyPalette.White,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .clip(CircleShape)
-                            .background(MeeshyPalette.Indigo500)
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                    )
+            StoryRailLanguageButton(languageBadgeCode, emphasis, onTapLanguage, onScrubEvent, onLanguageBounds)
+        }
+    }
+}
+
+/**
+ * La densité d'iOS (`ViewThatFits(in: .vertical)`) : l'espacement normal s'il tient dans la hauteur, sinon resserré, sinon
+ * le rail défile. Une seule composition : les boutons sont mesurés une fois, et l'espacement ne se choisit qu'à la pose.
+ */
+@Composable
+private fun AdaptiveRailLayout(modifier: Modifier, content: @Composable () -> Unit) {
+    BoxWithConstraints(modifier) {
+        val availablePx = constraints.maxHeight
+        Box(Modifier.verticalScroll(rememberScrollState())) {
+            Layout(content = content) { measurables, incoming ->
+                val loose = Constraints(maxWidth = incoming.maxWidth)
+                val items = measurables.map { it.measure(loose) }
+                val gaps = (items.size - 1).coerceAtLeast(0)
+                val stacked = items.sumOf { it.height }
+                val normalGap = RailSpacingNormal.roundToPx()
+                val tightGap = RailSpacingTight.roundToPx()
+                val gap = when (StoryRailDensity.choose(availablePx, stacked + gaps * normalGap, stacked + gaps * tightGap)) {
+                    StoryRailDensity.NORMAL -> normalGap
+                    StoryRailDensity.TIGHT, StoryRailDensity.SCROLL -> tightGap
+                }
+                val width = items.maxOfOrNull { it.width } ?: 0
+                layout(width, stacked + gaps * gap) {
+                    var y = 0
+                    items.forEach { item ->
+                        item.place((width - item.width) / 2, y)
+                        y += item.height + gap
+                    }
                 }
             }
         }
@@ -173,97 +190,156 @@ fun StoryActionRail(
 }
 
 @Composable
-private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, taps: StoryRailTaps) {
-    if (plan.showsSend) {
-        TapRailButton(MeeshyIcons.Send, countOr(counts.shares, stringResource(R.string.stories_action_send)), stringResource(R.string.stories_action_send), taps.onSend)
-    }
-    if (plan.showsRepost) {
-        TapRailButton(FullscreenChromeSymbol.Repost.icon, countOr(counts.reposts, stringResource(R.string.stories_action_repost)), stringResource(R.string.stories_action_repost), taps.onRepost)
-    } else if (plan.showsViews) {
-        TapRailButton(MeeshyIcons.EyeFilled, countOr(counts.views, stringResource(R.string.stories_action_views)), stringResource(R.string.stories_action_views), taps.onViews)
-    }
-    if (plan.showsCompose) {
-        TapRailButton(MeeshyIcons.MagicWand, stringResource(R.string.story_viewer_compose), stringResource(R.string.story_viewer_compose), taps.onCompose)
-    }
-    if (plan.showsComments) {
-        TapRailButton(FullscreenChromeSymbol.Comments.icon, counts.comments.toString(), stringResource(R.string.stories_comments_open), taps.onComments)
-    }
-}
-
-private fun countOr(count: Int, label: String): String = if (count > 0) count.toString() else label
-
-@Composable
-private fun TapRailButton(icon: ImageVector, caption: String, accessibilityLabel: String, onTap: () -> Unit) {
-    RailButton(
-        icon = icon,
-        label = caption,
-        tint = MeeshyPalette.White,
-        scale = 1f,
-        onTap = onTap,
-        scrubKind = null,
-        onScrubEvent = {},
-        onBounds = {},
-        accessibilityLabel = accessibilityLabel,
+private fun StoryRailSoundButton(emphasis: StoryRailEmphasis, onToggle: () -> Unit) {
+    val label = stringResource(if (emphasis.isMuted) R.string.stories_action_mute else R.string.stories_action_sound)
+    StoryRailButton(
+        icon = if (emphasis.isMuted) MeeshyIcons.VolumeOff else MeeshyIcons.VolumeUp,
+        caption = label,
+        accessibilityLabel = label,
+        isActive = !emphasis.isMuted,
+        outline = emphasis.outline(StoryRailEmphasisAction.SOUND),
+        onTap = onToggle,
     )
 }
 
 @Composable
-private fun RailButton(
-    icon: ImageVector,
-    label: String,
-    tint: Color,
-    scale: Float,
+private fun StoryRailHeartButton(
+    reactionCount: Int,
+    heartBouncePulse: Int,
+    emphasis: StoryRailEmphasis,
     onTap: () -> Unit,
-    scrubKind: StoryScrubKind?,
     onScrubEvent: (StoryScrubEvent) -> Unit,
     onBounds: (Rect) -> Unit,
-    accessibilityLabel: String = label,
 ) {
-    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    var scrubStartedThisGesture by remember { mutableStateOf(false) }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .onGloballyPositioned {
-                    coords = it
-                    onBounds(it.boundsInRoot())
-                }
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.35f))
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = { scrubStartedThisGesture = false },
-                        onTap = { if (!scrubStartedThisGesture) onTap() },
-                    )
-                }
-                .pointerInput(scrubKind) {
-                    if (scrubKind == null) return@pointerInput
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { offset ->
-                            scrubStartedThisGesture = true
-                            val root = coords?.localToRoot(offset) ?: offset
-                            onScrubEvent(StoryScrubEvent.Started(scrubKind, root))
-                        },
-                        onDrag = { change, _ ->
-                            change.consume()
-                            val root = coords?.localToRoot(change.position) ?: change.position
-                            onScrubEvent(StoryScrubEvent.Moved(root))
-                        },
-                        onDragEnd = { onScrubEvent(StoryScrubEvent.Ended) },
-                        onDragCancel = { onScrubEvent(StoryScrubEvent.Cancelled) },
-                    )
-                }
-                .semantics { contentDescription = accessibilityLabel },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MeeshyPalette.White,
+    var bounceTarget by remember { mutableStateOf(1f) }
+    LaunchedEffect(heartBouncePulse) {
+        if (heartBouncePulse == 0) return@LaunchedEffect
+        bounceTarget = 1.35f
+        delay(160)
+        bounceTarget = 1f
+    }
+    val heartScale by animateFloatAsState(
+        targetValue = bounceTarget,
+        animationSpec = MeeshyMotion.bouncySpring(),
+        label = "heartScale",
+    )
+    val react = stringResource(R.string.stories_action_react)
+    StoryRailButton(
+        icon = Icons.Filled.Favorite,
+        caption = if (reactionCount > 0) reactionCount.toString() else react,
+        accessibilityLabel = react,
+        value = reactionCount.takeIf { it > 0 }?.toString(),
+        isActive = emphasis.participation.hasReacted,
+        outline = emphasis.outline(StoryRailEmphasisAction.REACT),
+        scale = heartScale,
+        scrubKind = StoryScrubKind.Reactions,
+        onScrubEvent = onScrubEvent,
+        onBounds = onBounds,
+        onTap = onTap,
+    )
+}
+
+@Composable
+private fun StoryRailLanguageButton(
+    badgeCode: String?,
+    emphasis: StoryRailEmphasis,
+    onTap: () -> Unit,
+    onScrubEvent: (StoryScrubEvent) -> Unit,
+    onBounds: (Rect) -> Unit,
+) {
+    Box {
+        val label = stringResource(R.string.stories_action_translations)
+        StoryRailButton(
+            icon = Icons.Filled.Translate,
+            caption = label,
+            accessibilityLabel = label,
+            value = badgeCode?.takeIf { it.isNotBlank() }?.uppercase(),
+            isActive = emphasis.live.languagesOpen,
+            outline = emphasis.outline(StoryRailEmphasisAction.TRANSLATIONS),
+            scrubKind = StoryScrubKind.Languages,
+            onScrubEvent = onScrubEvent,
+            onBounds = onBounds,
+            onTap = onTap,
         )
+        if (!badgeCode.isNullOrBlank()) {
+            Text(
+                text = badgeCode.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.White,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .clip(CircleShape)
+                    .background(MeeshyPalette.Indigo500)
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            )
+        }
     }
 }
+
+@Composable
+private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, emphasis: StoryRailEmphasis, taps: StoryRailTaps) {
+    if (plan.showsSend) {
+        val send = stringResource(R.string.stories_action_send)
+        StoryRailButton(
+            icon = MeeshyIcons.Send,
+            caption = countOr(counts.shares, send),
+            accessibilityLabel = send,
+            value = counts.shares.takeIf { it > 0 }?.toString(),
+            outline = emphasis.outline(StoryRailEmphasisAction.FORWARD),
+            onTap = taps.onSend,
+        )
+    }
+    if (plan.showsRepost) {
+        val repost = stringResource(R.string.stories_action_repost)
+        StoryRailButton(
+            icon = FullscreenChromeSymbol.Repost.icon,
+            caption = countOr(counts.reposts, repost),
+            accessibilityLabel = repost,
+            value = counts.reposts.takeIf { it > 0 }?.toString(),
+            isActive = counts.reposted || emphasis.participation.hasReposted,
+            outline = emphasis.outline(StoryRailEmphasisAction.REPOST),
+            onTap = taps.onRepost,
+        )
+    } else if (plan.showsViews) {
+        val views = stringResource(R.string.stories_action_views)
+        StoryRailButton(
+            icon = MeeshyIcons.EyeFilled,
+            caption = countOr(counts.views, views),
+            accessibilityLabel = views,
+            value = counts.views.takeIf { it > 0 }?.toString(),
+            onTap = taps.onViews,
+        )
+    }
+    if (plan.showsCompose) {
+        val compose = stringResource(R.string.story_viewer_compose)
+        StoryRailButton(icon = FullscreenChromeSymbol.Compose.icon, caption = compose, accessibilityLabel = compose, onTap = taps.onCompose)
+    }
+    if (plan.showsImager) {
+        val imager = stringResource(R.string.stories_viewer_export_imager)
+        StoryRailButton(icon = FullscreenChromeSymbol.Imager.icon, caption = imager, accessibilityLabel = imager, onTap = taps.onImager)
+    }
+    if (plan.showsExport) StoryRailSaveButton(emphasis.saving, taps.onSave)
+}
+
+/** « Enregistrer » (auteur) ; pendant l'export, l'anneau de progression prend sa place et reste muet au toucher. */
+@Composable
+private fun StoryRailSaveButton(saving: Boolean, onSave: () -> Unit) {
+    val save = stringResource(R.string.stories_action_save)
+    if (!saving) {
+        StoryRailButton(icon = MeeshyIcons.Download, caption = save, accessibilityLabel = save, onTap = onSave)
+        return
+    }
+    val busy = stringResource(R.string.stories_rail_saving)
+    Column(
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = busy },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(modifier = Modifier.size(RailButtonSize), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp), color = MeeshyPalette.Indigo400, strokeWidth = 3.dp)
+        }
+        Text(text = busy, style = MaterialTheme.typography.labelSmall, color = MeeshyPalette.White, maxLines = 1)
+    }
+}
+
+private fun countOr(count: Int, label: String): String = if (count > 0) count.toString() else label

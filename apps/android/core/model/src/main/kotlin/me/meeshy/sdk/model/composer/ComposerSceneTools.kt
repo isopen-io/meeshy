@@ -5,9 +5,10 @@ import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 
 /**
  * Les boutons ronds posés sur la scène de la story au repos (#13834), le « ⋯ » en dernier : Fond, Mention et Lieu sont des
- * entrées directes du rail, jamais rangées dans le « ⋯ » (directive porteur du 2026-10-31, #14049).
+ * entrées directes du rail, jamais rangées dans le « ⋯ » (directive porteur du 2026-10-31, #14049). [POST_TEXT], « Texte du
+ * post », n'existe qu'en post et en réel ([ComposerSceneTools.column]), juste avant le « ⋯ » (#14457).
  */
-enum class ComposerSceneTool { TEXT, MEDIA, STICKER, SOUND, DRAWING, BACKGROUND, MENTION, PLACE, MORE }
+enum class ComposerSceneTool { TEXT, MEDIA, STICKER, SOUND, DRAWING, BACKGROUND, MENTION, PLACE, POST_TEXT, MORE }
 
 /**
  * Ce que l'appui long sur Média propose (#13845, iOS `ComposerRailDoorLongPress`) : le viseur de la scène (#13849, la
@@ -45,7 +46,14 @@ enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDe
 object ComposerSceneTools {
 
     /** Ce qui s'en retire — un objet en édition, le pinceau en main — est la loi de [ComposerEditingChrome] (#13956). */
-    val column: List<ComposerSceneTool> = ComposerSceneTool.entries
+    val column: List<ComposerSceneTool> = ComposerSceneTool.entries - ComposerSceneTool.POST_TEXT
+
+    /**
+     * La colonne d'un format (#14457) : la story, le post et le réel posent les MÊMES outils au même endroit ; seul celui qui
+     * écrit un texte de publication ([writesPostText]) ajoute « Texte du post », une option ronde de plus au pied de la
+     * colonne. Le socle, lui, ne change pas : la scène garde son cadre quand on coche Post.
+     */
+    fun column(writesPostText: Boolean): List<ComposerSceneTool> = if (writesPostText) ComposerSceneTool.entries else column
 
     /**
      * [editsSlides] : faux pendant la modification d'une story publiée, qui ne gagne pas de diapo. [sceneEffects] et

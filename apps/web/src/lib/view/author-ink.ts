@@ -126,11 +126,20 @@ const STEP = 0.04;
 const legibleOn = (backgrounds: readonly string[]) => (hex: string): boolean =>
   backgrounds.every((background) => contrast(hex, background) >= AA);
 
-const inkFor = (tint: string, scheme: 'dark' | 'light'): string => {
-  const legible = legibleOn(AUTHOR_INK_BACKGROUNDS[scheme]);
+/**
+ * La teinte rapprochée de `toward` du plus PETIT pas qui tient l'AA (4,5:1)
+ * sur TOUS les `backgrounds` — une teinte déjà lisible reste exactement la
+ * sienne. Partagé par la ligne d'identité du fil et les sous-titres d'appel
+ * (#16614) : une couleur d'auteur, une seule façon de la rendre lisible.
+ */
+export const legibleTint = ({ tint, toward, backgrounds }: { readonly tint: string; readonly toward: string; readonly backgrounds: readonly string[] }): string => {
+  const legible = legibleOn(backgrounds);
   const steps = Array.from({ length: Math.ceil(1 / STEP) + 1 }, (_, i) => Math.min(1, i * STEP));
-  return steps.map((t) => mix(tint, INK[scheme], t)).find(legible) ?? INK[scheme];
+  return steps.map((t) => mix(tint, toward, t)).find(legible) ?? toward;
 };
+
+const inkFor = (tint: string, scheme: 'dark' | 'light'): string =>
+  legibleTint({ tint, toward: INK[scheme], backgrounds: AUTHOR_INK_BACKGROUNDS[scheme] });
 
 export const authorInk = ({ authorId, name }: { readonly authorId: string | undefined | null; readonly name: string }): AuthorInk => {
   const tint = authorAccentColor(authorId, name).toLowerCase();

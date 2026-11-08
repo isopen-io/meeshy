@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
@@ -15,12 +17,20 @@ import me.meeshy.app.feed.HashtagResultsViewModel
 import me.meeshy.app.feed.MoodSpotlightScreen
 import me.meeshy.app.feed.MoodSpotlightViewModel
 import me.meeshy.app.feed.NearbyScreen
+import me.meeshy.app.feed.PendingPostDetailScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.navigation.FeedArrivalViewModel
+import me.meeshy.app.navigation.FeedOverlayTransition
+import me.meeshy.app.navigation.MeeshyPinnedStoryBand
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.navigation.MeeshyStoryRail
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.LegacyStoryComposerRedirect
 import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
+import me.meeshy.app.navigation.setFeedAside
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
@@ -30,14 +40,24 @@ import me.meeshy.app.composer.host.ComposerHostScreen
 import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryComposerSeedAudience
 import me.meeshy.app.stories.StoryViewersSheet
-import me.meeshy.app.stories.StoryViewerScreen
-import me.meeshy.app.stories.StoryViewerViewModel
 
 /** Flux, enregistres, a proximite, detail de post, Reels et stories. */
 internal fun NavGraphBuilder.feedNavGraph(
     navController: NavHostController,
 ) {
-    composable(Routes.FEED) {
+    composable(
+        route = Routes.FEED,
+        enterTransition = { FeedOverlayTransition.enter(this) },
+        exitTransition = { FeedOverlayTransition.exit(this) },
+        popExitTransition = { FeedOverlayTransition.popExit(this) },
+    ) {
+        // Le retour système quitte le Flux comme le bouton Flux : mis de côté avec son état, il revient à la même
+        // place au prochain toucher (#16676). Inscrit avant l'écran : ses propres retours (feuilles, visionneuse) passent d'abord.
+        BackHandler(enabled = remember { navController.previousBackStackEntry != null }) { navController.setFeedAside() }
+        val arrival: FeedArrivalViewModel = hiltViewModel()
+        LaunchedEffect(arrival) {
+            if (arrival.consumeComposerRequest()) Routes.composer(ComposerOrigin.FeedComposer)?.let(navController::navigate)
+        }
         // Une instance pour le rail et le geste « tirer » : tirer le fil recharge aussi les stories (iOS `FeedView`).
         val storiesViewModel: StoriesViewModel = hiltViewModel()
         FeedScreen(
@@ -51,6 +71,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenComposer = { origin -> Routes.composer(origin)?.let(navController::navigate) },
             onRefreshRail = storiesViewModel::refresh,
             storyRail = { MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel) },
+            pinnedBand = { reveal -> MeeshyPinnedStoryBand(navController, storiesViewModel, reveal) },
         )
     }
     composable(
@@ -77,6 +98,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
             onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
             onEditStory = { storyId -> navController.navigateKeepingSheet(Routes.storyComposerEdit(storyId)) },
+            onResumeDraft = { navController.navigateKeepingSheet(storyDoor) },
         )
     }
     composable(Routes.SAVED_POSTS) {
@@ -85,6 +107,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
     composable(Routes.NEARBY_DISCOVERY) {
@@ -93,17 +116,29 @@ internal fun NavGraphBuilder.feedNavGraph(
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
-    composable(
+    // #16676 — le détail d'un post est une FEUILLE, comme sur iOS : le fil, le réel ou le profil restent dessous,
+    // la croix ou le glissé vers le bas la referment.
+    sheetComposable(
         route = Routes.POST_DETAIL,
+        navController = navController,
         arguments = listOf(
             navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
+            navArgument(PostDetailViewModel.SHOW_COMMENTS_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument(PostDetailViewModel.COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument(PostDetailViewModel.PARENT_COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
-        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS).map { pattern -> navDeepLink { uriPattern = pattern } },
-    ) {
+        deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS.filter { "/story/" !in it }).map { pattern -> navDeepLink { uriPattern = pattern } },
+    ) { entry, dismiss ->
+        val postId = entry.arguments?.getString(PostDetailViewModel.POST_ID_ARG)
+        if (postId != null && OutboxIds.isCmid(postId)) {
+            PendingPostDetailScreen(cmid = postId, onBack = dismiss)
+            return@sheetComposable
+        }
         PostDetailScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenReel = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
@@ -125,32 +160,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onClose = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
-        )
-    }
-    composable(
-        route = Routes.STORY_VIEWER,
-        arguments = listOf(
-            navArgument(StoryViewerViewModel.USER_ID_ARG) { type = NavType.StringType },
-            navArgument(StoryViewerViewModel.STORY_ID_ARG) {
-                type = NavType.StringType
-                nullable = true
-                defaultValue = null
-            },
-        ),
-        deepLinks = listOf(
-            navDeepLink { uriPattern = Routes.STORY_DEEP_LINK },
-        ),
-    ) {
-        StoryViewerScreen(
-            onClose = { navController.popBackStack() },
-            onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
-            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
-            onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
-            onComposeStory = { storyId -> navController.navigate(Routes.storyComposerRecompose(storyId)) },
-            // Une story republiée qui n'est plus jouable (expirée, supprimée) ouvre la fiche du post, comme avant le lecteur.
-            onStoryMissing = { postId ->
-                navController.navigate(Routes.postDetail(postId)) { popUpTo(Routes.STORY_VIEWER) { inclusive = true } }
-            },
+            onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
         )
     }
     composable(
@@ -207,12 +217,21 @@ internal fun NavGraphBuilder.feedNavGraph(
             },
         ),
     ) { entry ->
-        StoryComposerScreen(
-            onClose = { navController.popBackStack() },
-            repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG),
-            initialVisibility = StoryComposerSeedAudience.fromRouteArg(entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)),
-            editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG),
-            recomposeStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_RECOMPOSE_ARG),
-        )
+        val repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG)
+        val audienceArg = entry.arguments?.getString(Routes.STORY_COMPOSER_AUDIENCE_ARG)
+        val editStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_EDIT_ARG)
+        val recomposeStoryId = entry.arguments?.getString(Routes.STORY_COMPOSER_RECOMPOSE_ARG)
+        val host = remember(entry) { LegacyStoryComposerRedirect.target(repostOfId, audienceArg, editStoryId, recomposeStoryId) }
+        if (host != null) {
+            LaunchedEffect(host) { navController.navigate(host) { popUpTo(Routes.STORY_COMPOSER_ROUTE) { inclusive = true } } }
+        } else {
+            StoryComposerScreen(
+                onClose = { navController.popBackStack() },
+                repostOfId = repostOfId,
+                initialVisibility = StoryComposerSeedAudience.fromRouteArg(audienceArg),
+                editStoryId = editStoryId,
+                recomposeStoryId = recomposeStoryId,
+            )
+        }
     }
 }

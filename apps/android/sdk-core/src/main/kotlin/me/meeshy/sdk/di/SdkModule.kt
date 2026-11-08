@@ -179,6 +179,8 @@ object SdkModule {
         outboxRepository: me.meeshy.sdk.outbox.OutboxRepository,
         notificationStore: NotificationPreferencesStore,
         privacyStore: PrivacyPreferencesStore,
+        audioStore: me.meeshy.sdk.audio.AudioPreferencesStore,
+        categorySync: me.meeshy.sdk.preferences.CategorySyncRepository,
     ): me.meeshy.sdk.preferences.PreferencesSyncCoordinator =
         me.meeshy.sdk.preferences.PreferencesSyncCoordinator(
             socketManager = socketManager,
@@ -187,7 +189,9 @@ object SdkModule {
             outboxRepository = outboxRepository,
             notificationStore = notificationStore,
             privacyStore = privacyStore,
+            audioStore = audioStore,
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            categorySync = categorySync,
         )
 
     @Provides
@@ -330,6 +334,8 @@ object SdkModule {
         perAccountCaches: Set<@JvmSuppressWildcards PerAccountCache>,
         guestSessions: me.meeshy.sdk.session.AnonymousSessionStore,
         fence: me.meeshy.sdk.session.AccountFence,
+        feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter,
+        lostSends: me.meeshy.sdk.session.LostSendsNotifier,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -344,6 +350,8 @@ object SdkModule {
             perAccountCaches,
             guestSessions,
             fence,
+            feedbackToasts,
+            lostSends,
         )
 
     @Provides

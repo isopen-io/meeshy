@@ -220,6 +220,9 @@ const f = {
   'admin.enum.postVisibility.EXCEPT.explain': 'Visible par les amis, sauf une liste de personnes exclues.',
   'admin.enum.postVisibility.ONLY': 'Certains amis',
   'admin.enum.postVisibility.ONLY.explain': 'Visible seulement par une liste choisie d’amis.',
+  'admin.enum.postVisibility.ACQUAINTANCES': 'Connaissances',
+  'admin.enum.postVisibility.CLOSE': 'Proches',
+  'admin.enum.postVisibility.BLOOD': 'Sang',
 
   'admin.enum.postState.published': 'Publiée',
   'admin.enum.postState.offline': 'Hors ligne',

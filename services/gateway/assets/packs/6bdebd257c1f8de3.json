@@ -1,0 +1,265 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "soie",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#FAF7F2",
+     "ink": "#E8D9C2",
+     "soft": "#F2EBE0"
+    },
+    "dark": {
+     "base": "#121014",
+     "ink": "#2B2330",
+     "soft": "#1A171D"
+    }
+   },
+   "gradient": {
+    "angle": 165,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.15,
+      "y": 0.08,
+      "r": 0.85,
+      "role": "ink",
+      "opacity": 0.45
+     },
+     {
+      "x": 0.92,
+      "y": 0.95,
+      "r": 0.7,
+      "role": "accent",
+      "opacity": 0.06
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "pointille",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#F7F8FA",
+     "ink": "#334155",
+     "soft": "#E9ECF1"
+    },
+    "dark": {
+     "base": "#0E1116",
+     "ink": "#CBD5E1",
+     "soft": "#171B22"
+    }
+   },
+   "tile": {
+    "width": 22,
+    "height": 22,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M4.6 5.5A0.9 0.9 0 1 0 6.4 5.5A0.9 0.9 0 1 0 4.6 5.5ZM15.6 16.5A0.9 0.9 0 1 0 17.4 16.5A0.9 0.9 0 1 0 15.6 16.5Z",
+      "role": "ink",
+      "opacity": 0.08
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "vagues-fines",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#F4F8FA",
+     "ink": "#155E75",
+     "soft": "#E3EEF2"
+    },
+    "dark": {
+     "base": "#0B1418",
+     "ink": "#A5F3FC",
+     "soft": "#12202A"
+    }
+   },
+   "tile": {
+    "width": 60,
+    "height": 22,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M0 11C10 5 20 5 30 11S50 17 60 11",
+      "role": "ink",
+      "opacity": 0.07,
+      "width": 0.8
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "cannage",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#FAF7F1",
+     "ink": "#6B4E2E",
+     "soft": "#EFE6D6"
+    },
+    "dark": {
+     "base": "#14110D",
+     "ink": "#D8C3A0",
+     "soft": "#1F1A14"
+    }
+   },
+   "tile": {
+    "width": 36,
+    "height": 36,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M0 0L36 36M36 0L0 36M18 0V36M0 18H36",
+      "role": "ink",
+      "opacity": 0.06,
+      "width": 0.55
+     },
+     {
+      "d": "M11.5 18A6.5 6.5 0 1 0 24.5 18A6.5 6.5 0 1 0 11.5 18Z",
+      "role": "ink",
+      "opacity": 0.06,
+      "width": 0.55
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "terrazzo",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#F8F6F3",
+     "ink": "#57534E",
+     "soft": "#ECE8E2"
+    },
+    "dark": {
+     "base": "#111010",
+     "ink": "#D6D3D1",
+     "soft": "#1C1A19"
+    }
+   },
+   "tile": {
+    "width": 96,
+    "height": 96,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M8 10L15 7L17 13L10 15Z",
+      "role": "ink",
+      "opacity": 0.06
+     },
+     {
+      "d": "M46 6L52 9L49 14L43 12Z",
+      "role": "accent",
+      "opacity": 0.08
+     },
+     {
+      "d": "M78 18L86 16L88 22L80 25Z",
+      "role": "ink",
+      "opacity": 0.06
+     },
+     {
+      "d": "M22 40L30 37L33 44L26 47L21 45Z",
+      "role": "accent",
+      "opacity": 0.07
+     },
+     {
+      "d": "M60 44L66 40L70 47L64 50Z",
+      "role": "ink",
+      "opacity": 0.06
+     },
+     {
+      "d": "M86 58L92 60L89 66Z",
+      "role": "accent",
+      "opacity": 0.08
+     },
+     {
+      "d": "M10 72L17 70L19 77L12 80Z",
+      "role": "ink",
+      "opacity": 0.06
+     },
+     {
+      "d": "M44 76L52 72L56 80L48 84Z",
+      "role": "ink",
+      "opacity": 0.06
+     },
+     {
+      "d": "M74 84L80 82L82 88L76 90Z",
+      "role": "accent",
+      "opacity": 0.07
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "crepuscule",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#FBF7F4",
+     "ink": "#F3D3C8",
+     "soft": "#ECE4F4"
+    },
+    "dark": {
+     "base": "#120E18",
+     "ink": "#3A1F36",
+     "soft": "#1E1A33"
+    }
+   },
+   "gradient": {
+    "angle": 200,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.85,
+      "y": 0.05,
+      "r": 0.8,
+      "role": "ink",
+      "opacity": 0.5
+     },
+     {
+      "x": 0.1,
+      "y": 0.9,
+      "r": 0.7,
+      "role": "soft",
+      "opacity": 0.6
+     }
+    ]
+   },
+   "fit": "fill"
+  }
+ ]
+}

@@ -60,21 +60,29 @@ internal class RenderedContentProof(private val luma: SceneContentLuma = Android
         PlacedVideoContent.verdict(placed)?.let { throw IllegalStateException(it) }
     }
 
-    /** L'instant [at] dans le cadre de [video] ; `null` quand elle n'est pas à juger (absente, en fondu, illisible). */
+    /**
+     * L'instant [at] dans le cadre de [video] ; `null` quand elle n'est pas à juger (absente, en fondu, illisible, ou un cadre
+     * réglé qui peut couvrir son cœur ou celui de la vidéo de fond, #14875). Un réglage sans cadre se relit : sa région dans le
+     * cadrage, sous son filtre ; le fond qu'elle recouvre, sous son look puis celui de sa diapo (#15224).
+     */
     private fun placedSample(job: SceneExportJob, planned: SceneComposition, video: SceneExportPlacedVideo, at: Long): PlacedVideoSample? {
         val source = video.clock.sourceAt(at) ?: return null
         val placement = video.placementAt(at)?.takeIf { it.opacity >= PlacedVideoContent.JUDGED_OPACITY } ?: return null
         val region = PlacedVideoContent.outputRegion(placement, job.format)
+        val look = video.look
+        if (look?.look?.frame != null) return null
+        val fillLook = SceneExportContent.itemAt(planned.video, at)?.look
+        if (fillLook?.look?.frame != null) return null
         val fill = when (val probe = SceneExportContent.fillAt(planned.video, at)) {
             is SceneContentProbe.Picture -> luma.imageRegion(probe.file, region)
             is SceneContentProbe.VideoFrame -> luma.videoRegion(probe.file, probe.atMillis, region)
             else -> SceneColor.BLACK
-        } ?: return null
+        }?.under(fillLook?.colorMatrix)?.under(fillLook?.sceneColorMatrix) ?: return null
         val below = job.overlays.filter { it.depth <= video.depth && shows(job, it, at) }
         val under = below.fold(fill) { base, layer -> (regionOf(layer, region) ?: return null).over(base) }
         val above = job.overlays.filter { it.depth > video.depth && shows(job, it, at) }.mapNotNull { regionOf(it, region) }
         val branded = planned.brandLayers.any { it.alphaAt(at) > 0f }
-        val frame = luma.videoRegion(video.file, source, PlacedVideoContent.sourceRegion(placement)) ?: return null
+        val frame = luma.videoRegion(video.file, source, PlacedVideoContent.sourceRegion(placement).within(look?.crop))?.under(look?.colorMatrix) ?: return null
         return PlacedVideoSample(
             atMillis = at,
             label = "${video.file.name} (${video.clock.startMillis}–${video.clock.endMillis} ms)",

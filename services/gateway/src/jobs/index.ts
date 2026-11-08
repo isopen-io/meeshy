@@ -12,6 +12,8 @@ import { MutationLogCleanupJob } from './mutation-log-cleanup';
 import { BanExpirySweepJob } from './ban-expiry-sweep';
 import { sweepExpiredSessions } from './session-expiry-sweep';
 import { retentionPurgeArmed, sweepRetention } from './retention-sweep';
+import { OBSOLETE_PURGE_EVERY_MS, obsoletePurgeArmed, purgeObsoleteConversations } from './obsolete-conversation-purge';
+import { AttachmentService } from '../services/attachments/AttachmentService';
 import { GameLeagueJob } from './game-league';
 import { GameNightlyJob } from './game-nightly';
 import { GameMissionWindowJob } from './game-mission-window';
@@ -66,6 +68,8 @@ export class BackgroundJobsManager {
   private geoCacheInterval: NodeJS.Timeout | null = null;
   /** La conservation (#9614, #9642) : une passe par jour, sans état propre. */
   private retentionInterval: NodeJS.Timeout | null = null;
+  /** #14643 — la purge des conversations obsolètes, toutes les heures ; désarmée sans OBSOLETE_CONVERSATION_PURGE_ENABLED=true. */
+  private obsoletePurgeInterval: NodeJS.Timeout | null = null;
   /** Les enveloppes E2EE jamais accusées s'effacent à 30 jours (#3706) : une requête, sans état. */
   private envelopeSweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
@@ -205,6 +209,18 @@ export class BackgroundJobsManager {
     this.retentionInterval = guardedInterval({ name: 'retention-sweep', everyMs: 24 * 60 * 60 * 1000, logger, run: passerLaConservation });
     this.retentionInterval.unref();
 
+    /* #14643 — LA PURGE DES CONVERSATIONS OBSOLÈTES, 48 h après leur
+       obsolescence. ARMÉE seulement par `OBSOLETE_CONVERSATION_PURGE_ENABLED=true` ;
+       désarmée, elle compte et journalise ce qu'elle effacerait. */
+    const purgerLesConversationsObsoletes = () => {
+      const apply = obsoletePurgeArmed();
+      purgeObsoleteConversations(this.prismaClient, { apply, attachmentRemover: new AttachmentService(this.prismaClient) })
+        .then((report) => logger.info(apply ? 'Obsolete conversation purge applied' : 'Obsolete conversation purge (dry run — OBSOLETE_CONVERSATION_PURGE_ENABLED is not true): would purge', report))
+        .catch((err) => logger.error('Obsolete conversation purge failed', err));
+    };
+    this.obsoletePurgeInterval = guardedInterval({ name: 'obsolete-conversation-purge', everyMs: OBSOLETE_PURGE_EVERY_MS, logger, run: purgerLesConversationsObsoletes });
+    this.obsoletePurgeInterval.unref();
+
     this.isRunning = true;
     logger.info('All background jobs started successfully');
   }
@@ -252,6 +268,11 @@ export class BackgroundJobsManager {
     if (this.retentionInterval) {
       clearInterval(this.retentionInterval);
       this.retentionInterval = null;
+    }
+
+    if (this.obsoletePurgeInterval) {
+      clearInterval(this.obsoletePurgeInterval);
+      this.obsoletePurgeInterval = null;
     }
 
     this.isRunning = false;

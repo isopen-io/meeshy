@@ -129,7 +129,6 @@ final class MessageAuthorRingTests: XCTestCase {
         "Main/Components/ConversationCard/ConversationLinkCardBody.swift": (1, "carte de lien — l'invitant servi ne porte pas le contour (#10957)"),
         "Main/Components/MessageDetail/MessageReactionsDetailView.swift": (1, "réactions — la liste des réacteurs ne porte pas le contour (#10957)"),
         "Main/Views/AudioFullscreenPage.swift": (1, "plein écran audio — l'auteur transmis (`ProfileSheetUser`) ne porte pas le contour (#10957)"),
-        "Main/Views/GlobalSearchView.swift": (1, "résultat de MESSAGE — l'avatar de la conversation, dont la recherche ne sert ni le type ni le pair (#10957)"),
         "Links/Views/ShareLinkArrivalsSection.swift": (1, "arrivées par lien — l'entrée servie ne porte pas le contour (#10957)"),
         "Main/Views/VisitorContentView.swift": (1, "visiteur — le partageur du lien servi ne porte pas le contour (#10957)"),
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": (1, "invitation — le créateur du lien servi ne porte pas le contour (#10957)"),
@@ -141,7 +140,8 @@ final class MessageAuthorRingTests: XCTestCase {
         "Profile/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
         "MeeshyUI/Profile/UserProfileSheet+Header.swift": (2, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`)"),
         "Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
-        "Main/Views/PublicationViewersSheet.swift": (2, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),
+        "Main/Views/PublicationViewersSheet.swift": (1, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),
+        "Main/Views/ViewerEngagementDetailScreen.swift": (1, "détail d'une personne de la liste des vues — `StoryViewerItem` servi ne porte pas le contour (#10957)"),
         "Stories/Notifications/StoryExpiredContent.swift": (1, "notification de story expirée — l'acteur est un instantané sans contour (#10957)"),
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": (1, "entité — les conversations d'un profil"),
         "Auth/LinkSignInConfirmationSheet.swift": (1, "soi, avant toute session — aucun profil servi"),
@@ -153,6 +153,8 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Profile/FullscreenImageView.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Story/Controls/SoundDetailView.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Story/Controls/SoundLibraryPicker.swift": (1, "décor, illustration ou son — aucune personne"),
+        "MeeshyUI/Packs/PackElementStage.swift": (2, "soi, essai d'un décor — le contour essayé se pose AUTOUR de l'avatar (`.avatarRing`), la bannière essayée n'en montre aucun"),
+        "MeeshyUI/Packs/PublisherPageView.swift": (1, "page d'un éditeur — `PackPublisherOwner` servi ne porte pas le contour (#10957)"),
     ]
 
     func test_everyPersonAvatar_passesTheServedRing_orIsCountedWithItsReason() throws {

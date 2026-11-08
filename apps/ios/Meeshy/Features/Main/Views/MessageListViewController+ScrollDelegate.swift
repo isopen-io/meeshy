@@ -15,7 +15,6 @@ extension MessageListViewController: UICollectionViewDelegate {
     ) {
         arrivalMotion.play(on: cell, item: dataSource.itemIdentifier(for: indexPath))
         applyFocalPerspectiveOnCellDisplay()
-        applyLongMessageExpansionPresentation(animated: false)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
@@ -27,7 +26,6 @@ extension MessageListViewController: UICollectionViewDelegate {
         didEndDisplaying cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        applyLongMessageExpansionPresentation(animated: true, excluding: cell)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
@@ -62,13 +60,13 @@ extension MessageListViewController: UICollectionViewDelegate {
         noteFocalScrollTick(scrollView)
         noteScrollTimePillActivity()
         updateStickyDayLabel(visibleIndexPaths: visibleIndexPaths)
-        noteNearBottomTransition(offset: offset)
+        noteNearBottomTransition(distanceFromVisualBottom: MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: offset, bottomInset: scrollView.contentInset.top))
         loadOlderIfNeeded(scrollView)
     }
 
-    /// Dans le layout inversé, `contentOffset.y` proche de 0 est le bas visuel (messages récents) ; le seuil laisse une zone de confort avant l'apparition du bouton « dernier message ».
-    func noteNearBottomTransition(offset: CGFloat) {
-        let nearBottom = offset < Self.nearBottomFollowThreshold
+    /// Dans le layout inversé, le bas visuel (messages récents) est `contentOffset.y == -contentInset.top` : la distance se mesure depuis lui (#16458) ; le seuil laisse une zone de confort avant l'apparition du bouton « dernier message ».
+    func noteNearBottomTransition(distanceFromVisualBottom: CGFloat) {
+        let nearBottom = MessageListOffsetCompensationLaw.isNearVisualBottom(distanceFromVisualBottom: distanceFromVisualBottom, threshold: Self.nearBottomFollowThreshold)
         guard nearBottom != isCurrentlyNearBottom else { return }
         isCurrentlyNearBottom = nearBottom
         onNearBottomChanged?(nearBottom)
@@ -179,7 +177,8 @@ extension MessageListViewController: UICollectionViewDelegate {
         }
         guard let adopted = MessageListHeightEstimationLaw.proposal(
             visibleHeights: visibleHeights,
-            current: currentRowHeightEstimate
+            current: currentRowHeightEstimate,
+            alreadyLearned: (readingMode.usesFlatRow ? learnedFlatRowHeight : learnedBubbleRowHeight) != nil
         ) else { return }
         if readingMode.usesFlatRow {
             learnedFlatRowHeight = adopted

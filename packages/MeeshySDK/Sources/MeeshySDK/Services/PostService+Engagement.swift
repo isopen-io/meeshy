@@ -2,7 +2,7 @@ import Foundation
 
 extension PostService {
     public func like(postId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdLike(postId: postId), method: "POST")
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(PostsEndpoint.byPostIdLike(postId: postId), method: "POST")
         emitInteraction(.react, postId: postId)
     }
 
@@ -12,7 +12,7 @@ extension PostService {
     }
 
     public func bookmark(postId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdBookmark(postId: postId), method: "POST")
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(PostsEndpoint.byPostIdBookmark(postId: postId), method: "POST")
         emitInteraction(.save, postId: postId)
     }
 
@@ -72,7 +72,7 @@ extension PostService {
     }
 
     public func share(postId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdShare(postId: postId), method: "POST")
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(PostsEndpoint.byPostIdShare(postId: postId), method: "POST")
     }
 
     /// Records a share and (optionally) mints a TrackingLink. When
@@ -105,7 +105,7 @@ extension PostService {
     }
 
     public func pinPost(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(PostsEndpoint.byPostIdPin(postId: postId), method: "POST")
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(PostsEndpoint.byPostIdPin(postId: postId), method: "POST")
     }
 
     public func unpinPost(postId: String) async throws {

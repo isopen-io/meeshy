@@ -36,3 +36,22 @@ describe('repostOfInclude', () => {
     expect(modes).not.toContain('SILENT');
   });
 });
+
+describe('repostOf.commentsDisabled (#16541)', () => {
+  it('charge la fermeture des commentaires de l’original', () => {
+    expect(repostOfInclude.select.commentsDisabled).toBe(true);
+  });
+
+  it('la SERT sur le fil : la projection de l’imbriqué ne la retire pas', async () => {
+    const { withMentions } = await import('../../../../services/posts/postReferences');
+    const { WIRE_BROADCAST } = await import('../../../../services/posts/storyEffectsV3');
+    const repost = {
+      id: 'repost-1',
+      postMentions: [],
+      repostOf: { id: 'root-1', visibility: 'PUBLIC', moderationHiddenAt: null, deletedAt: null, commentsDisabled: true, author: null },
+    };
+    const served = withMentions(repost, WIRE_BROADCAST);
+
+    expect(served.repostOf).toMatchObject({ commentsDisabled: true });
+  });
+});

@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.audio.BackgroundAudioAnnouncement
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryClipTransition
@@ -13,6 +14,7 @@ import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+import me.meeshy.sdk.model.StoryTransitionEffect
 import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
@@ -184,10 +186,16 @@ data class StorySlideView(
     val textObjects: List<StoryTextObjectView> = emptyList(),
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
+    /** L'id de la piste de premier plan jouée : le tap de sa pastille la coupe. */
+    val foregroundAudioId: String? = null,
+    /** Les pistes audio posées dont aucune adresse ne se résout (journalisées par le lecteur, jamais tues en silence). */
+    val unresolvedAudioIds: List<String> = emptyList(),
     /** Fenêtres de LECTURE des trois pistes de la slide (#5129) — `null` = entière. */
     val backgroundVideoWindow: StorySourceWindowMs? = null,
     val backgroundAudioWindow: StorySourceWindowMs? = null,
     val foregroundAudioWindow: StorySourceWindowMs? = null,
+    /** TOUTES les pistes sonores de la scène (fond puis clips), lues par le mixeur multipistes ; vide : le repli des deux URL ci-dessus. */
+    val audioTracks: List<me.meeshy.sdk.model.scene.SceneAudioTrack> = emptyList(),
     val languageCode: String? = null,
     /**
      * How long this slide stays on screen before auto-advancing, in milliseconds.
@@ -197,6 +205,9 @@ data class StorySlideView(
      * flat constant. Defaults to the 6s static baseline.
      */
     val autoAdvanceMillis: Int = StorySlideDuration.DEFAULT_STATIC_MS,
+    /** L'ouverture et la fermeture choisies par l'auteur (`effects.opening` / `effects.closing`), jouées 1,2 s par la scène. */
+    val opening: StoryTransitionEffect? = null,
+    val closing: StoryTransitionEffect? = null,
     /**
      * The author's colour backdrop (`StoryEffects.background`), parsed once at
      * projection time via the shared [StoryBackgroundValue] rule: a solid colour or
@@ -257,12 +268,16 @@ data class StorySlideView(
     val places: List<StoryLocationObject> = emptyList(),
     /** Les puces des sons de premier plan (iOS `AudioForegroundChip`). */
     val audioChips: List<StoryAudioChipView> = emptyList(),
+    /** Le son d'arrière-plan que l'en-tête annonce (iOS `BackgroundSoundBadge`) : rien, l'original, ou un crédit. */
+    val backgroundAudio: BackgroundAudioAnnouncement = BackgroundAudioAnnouncement.None,
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */
     val isViewed: Boolean = false,
     /** Instant de publication, pour le « il y a 2 h » de l'en-tête ; `null` si illisible. */
     val createdAtMillis: Long? = null,
     /** Le look du fond (filtre de slide puis réglages) — neutre : aucun coût de rendu. */
     val lookRecipe: SceneLookRecipe = SceneLookRecipe.NEUTRAL,
+    /** Les filtres, effets et cadres d'une scène PAS ENCORE publiée (aperçu, export du compositeur, #13841) ; `null` partout ailleurs. */
+    val composerLooks: StorySceneMediaLooks? = null,
 ) {
     /** La slide fait du son : vidéo de fond ou de premier plan, ou piste audio. */
     val hasSound: Boolean
@@ -292,6 +307,11 @@ data class StoryLanguageOption(
  * reads the CURRENT group's slides plus the index so its segmented progress and
  * auto-advance stay simple; group roll-over and dismissal are decided by the
  * pure engine.
+ *
+ * RÈGLE D'EXTENSION (lot story-viewer-decomposition-and-nav-graph) : ce type ne reçoit plus de champ. Un lot
+ * qui ajoute une fonction au lecteur expose SON contrôleur ou son `StateFlow` et le lit dans son fichier
+ * emplacement (`StoryViewerShell`, `StoryRailOverlays`, `StoryViewerSheetsHost`…) ; l'hôte
+ * `StoryViewerScreen` ne grossit pas.
  */
 data class StoryViewerUiState(
     val authorName: String = "",
@@ -302,6 +322,10 @@ data class StoryViewerUiState(
     val isDismissed: Boolean = false,
     val reactionCount: Int = 0,
     val myReactions: Set<String> = emptySet(),
+    /** Les republications de la story à l'écran : le compte servi, plus celles de ce lecteur dès son geste (#14443). */
+    val repostCount: Int = 0,
+    /** Ce lecteur l'a republiée — la marque tient dès le geste et tombe si le serveur refuse. */
+    val hasReposted: Boolean = false,
     val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
     val isOwnStory: Boolean = false,
     val currentStoryId: String? = null,
@@ -341,6 +365,10 @@ data class StoryViewerUiState(
     val authorUserId: String? = null,
     /** Présence servie de l'auteur courant (jamais la sienne) : repli de la carte unique pour le point de l'en-tête. */
     val authorPresence: UserPresence? = null,
+    /** Les commentaires de la story courante sont fermés par elle (#16541) : le menu offre « Réactiver ». */
+    val commentsDisabled: Boolean = false,
+    /** Fermés par elle ou par sa source : le composeur épinglé cède la place au bandeau, le fil reste lisible. */
+    val commentsClosed: Boolean = false,
 ) {
     val hasNextGroup: Boolean get() = groupIndex < groupCount - 1
     val hasPreviousGroup: Boolean get() = groupIndex > 0

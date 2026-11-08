@@ -54,11 +54,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import me.meeshy.app.chat.share.ShareRecipientRow
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ForwardDurationChoice
 import me.meeshy.sdk.model.share.ShareDelivery
 
 import me.meeshy.sdk.model.share.ShareRecipient
+import me.meeshy.sdk.model.share.ShareRecipientRowModel
 import me.meeshy.sdk.model.share.ShareTitle
 import me.meeshy.sdk.model.share.ShareWithdrawReason
 import me.meeshy.ui.component.MeeshyAvatar
@@ -308,13 +310,13 @@ private fun ShareRecipients(model: ShareSheetModel, accentColor: Color, actions:
                 if (sections.conversations.isNotEmpty()) {
                     item(key = "header:conversations") { SectionLabel(stringResource(R.string.share_section_conversations)) }
                     items(sections.conversations, key = { it.id }) { recipient ->
-                        RecipientRow(recipient, model, accentColor, toggle, Modifier.animateItem())
+                        RecipientRow(recipient, model, accentColor, toggle, actions.onSend, Modifier.animateItem())
                     }
                 }
                 if (sections.people.isNotEmpty()) {
                     item(key = "header:people") { SectionLabel(stringResource(R.string.share_section_people)) }
                     items(sections.people, key = { it.id }) { recipient ->
-                        RecipientRow(recipient, model, accentColor, toggle, Modifier.animateItem())
+                        RecipientRow(recipient, model, accentColor, toggle, actions.onSend, Modifier.animateItem())
                     }
                 }
             }
@@ -338,14 +340,19 @@ private fun RecipientRow(
     model: ShareSheetModel,
     accentColor: Color,
     onToggle: (ShareRecipient) -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier,
 ) {
     ShareRecipientRow(
-        recipient = recipient,
-        selected = recipient.id in model.selectedIds,
-        delivery = model.deliveries[recipient.id],
+        model = ShareRecipientRowModel(
+            recipient = recipient,
+            presence = rememberPresence(recipient.userId.takeUnless { recipient.isGroup }),
+            selected = recipient.id in model.selectedIds,
+            delivery = model.deliveries[recipient.id],
+        ),
         accentColor = accentColor,
         onToggle = { onToggle(recipient) },
+        onRetry = onRetry,
         modifier = modifier,
     )
 }

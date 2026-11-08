@@ -29,6 +29,13 @@ public enum StoryExportJingleMix {
         public let to: Float
         public let start: TimeInterval
         public let end: TimeInterval
+
+        public init(from: Float, to: Float, start: TimeInterval, end: TimeInterval) {
+            self.from = from
+            self.to = to
+            self.start = start
+            self.end = end
+        }
     }
 
     /// L'enveloppe du son de la story.
@@ -43,6 +50,38 @@ public enum StoryExportJingleMix {
                                   introJingleEnd: TimeInterval?,
                                   outroJingleStart: TimeInterval?,
                                   outroFade: TimeInterval) -> [Ramp] {
+        let brand = brandRamps(storyStart: storyStart, storyEnd: storyEnd, introJingleEnd: introJingleEnd,
+                               outroJingleStart: outroJingleStart, outroFade: outroFade)
+        return [brand.fadeIn, brand.fadeOut].compactMap { $0 }
+    }
+
+    /// La même loi sur une piste qui porte déjà l'enveloppe de son auteur
+    /// (volume, automation, fondus) : la story monte jusqu'au niveau de
+    /// l'auteur et s'éteint depuis le niveau en vigueur ; entre les deux
+    /// jingles, les rampes de l'auteur jouent telles quelles. Le résultat est
+    /// ordonné, et aucune de ses rampes n'en chevauche une autre.
+    public static func storyRamps(over author: [Ramp],
+                                  storyStart: TimeInterval,
+                                  storyEnd: TimeInterval,
+                                  introJingleEnd: TimeInterval?,
+                                  outroJingleStart: TimeInterval?,
+                                  outroFade: TimeInterval) -> [Ramp] {
+        let brand = brandRamps(storyStart: storyStart, storyEnd: storyEnd, introJingleEnd: introJingleEnd,
+                               outroJingleStart: outroJingleStart, outroFade: outroFade)
+        let envelope = disjoint(author)
+        let fadeIn = brand.fadeIn.map { Ramp(from: 0, to: level(of: envelope, at: $0.end), start: $0.start, end: $0.end) }
+        let fadeOut = brand.fadeOut.map { Ramp(from: level(of: envelope, at: $0.start), to: 0, start: $0.start, end: $0.end) }
+        let between = envelope.compactMap {
+            $0.clipped(from: brand.fadeIn?.end ?? -.infinity, to: brand.fadeOut?.start ?? .infinity)
+        }
+        return [fadeIn].compactMap { $0 } + between + [fadeOut].compactMap { $0 }
+    }
+
+    private static func brandRamps(storyStart: TimeInterval,
+                                   storyEnd: TimeInterval,
+                                   introJingleEnd: TimeInterval?,
+                                   outroJingleStart: TimeInterval?,
+                                   outroFade: TimeInterval) -> (fadeIn: Ramp?, fadeOut: Ramp?) {
         let fadeIn = introJingleEnd.flatMap { jingleEnd in
             jingleEnd > storyStart ? Ramp(from: 0, to: 1, start: storyStart, end: min(jingleEnd, storyEnd)) : nil
         }
@@ -51,7 +90,24 @@ public enum StoryExportJingleMix {
             let end = min(max(entry, floor), storyEnd)
             return Ramp(from: 1, to: 0, start: max(end - outroFade, floor), end: end)
         }
-        return [fadeIn, fadeOut].compactMap { $0 }
+        return (fadeIn, fadeOut)
+    }
+
+    /// Le niveau qu'une enveloppe tient à l'instant `time` : celui de la
+    /// dernière rampe entamée, le niveau nominal avant la première.
+    private static func level(of envelope: [Ramp], at time: TimeInterval) -> Float {
+        envelope.last { $0.start <= time }?.value(at: time) ?? 1
+    }
+
+    /// Une rampe qui chevauche la suivante s'arrête là où celle-ci commence.
+    private static func disjoint(_ ramps: [Ramp]) -> [Ramp] {
+        let sorted = ramps.enumerated()
+            .sorted { ($0.element.start, $0.offset) < ($1.element.start, $1.offset) }
+            .map(\.element)
+        return zip(sorted, sorted.dropFirst().map(Optional.some) + [nil]).map { ramp, next in
+            guard let next, next.start < ramp.end else { return ramp }
+            return Ramp(from: ramp.from, to: ramp.value(at: next.start), start: ramp.start, end: next.start)
+        }
     }
 
     /// La durée sur laquelle la story s'éteint : le fondu visuel de la carte
@@ -59,5 +115,20 @@ public enum StoryExportJingleMix {
     /// retrait court quand le jingle entre avec le logo.
     public static func outroFade(authorCard: Bool, overlap: TimeInterval) -> TimeInterval {
         authorCard ? overlap : logoOutroDuck
+    }
+}
+
+private extension StoryExportJingleMix.Ramp {
+    func value(at time: TimeInterval) -> Float {
+        guard end > start else { return to }
+        let progress = min(max((time - start) / (end - start), 0), 1)
+        return from + (to - from) * Float(progress)
+    }
+
+    func clipped(from lower: TimeInterval, to upper: TimeInterval) -> Self? {
+        guard start < upper, end > lower || start >= lower else { return nil }
+        let clippedStart = max(start, lower)
+        let clippedEnd = min(end, upper)
+        return Self(from: value(at: clippedStart), to: value(at: clippedEnd), start: clippedStart, end: clippedEnd)
     }
 }

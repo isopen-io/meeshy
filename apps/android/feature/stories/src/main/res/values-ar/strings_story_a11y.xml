@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_a11y_pause">إيقاف مؤقت</string>
+    <string name="story_a11y_resume">استئناف التشغيل</string>
+    <string name="story_a11y_hint">قائمة الإجراءات: القصة التالية، القصة السابقة، إيقاف مؤقت، ملء الشاشة، إغلاق</string>
+</resources>

@@ -159,4 +159,64 @@ class GameApiRoutesTest {
         assertThat(http.requests[0].body).isEqualTo("""{"requestId":"req-12345678","pseudonym":"Aube_7"}""")
         assertThat(http.requests[1].body).isEqualTo("""{"requestId":"req-12345678","friendId":"u1"}""")
     }
+
+    @Test
+    fun `les nouvelles lectures et ecritures partent vers leur route avec leur corps`() = runTest {
+        val http = RecordingHttp()
+        val api = game(http)
+
+        api.userShowcase("u1")
+        api.seasonArchive(3)
+        api.leagueWeekArchive("2026-10-26")
+        api.setFrameAtmosphere(me.meeshy.sdk.model.game.FrameAtmosphereRequest("req-12345678", "aurora"))
+        api.setPhotoInvitations(me.meeshy.sdk.model.game.PhotoInvitationsRequest("req-12345678", "major"))
+        api.markPhotoMomentsPresented(me.meeshy.sdk.model.game.PhotoMomentsRequest("req-12345678", listOf("s1")))
+        api.markPhotoMomentsKept(me.meeshy.sdk.model.game.PhotoMomentsRequest("req-12345678", listOf("s1", "s2")))
+
+        assertThat(http.requests.map { it.method to it.path }).containsExactly(
+            "GET" to "/api/v1/users/u1/game/showcase",
+            "GET" to "/api/v1/me/game/seasons/3",
+            "GET" to "/api/v1/me/game/league/weeks/2026-10-26",
+            "PUT" to "/api/v1/me/game/frames/atmosphere",
+            "PUT" to "/api/v1/me/game/photo-moments/invitations",
+            "POST" to "/api/v1/me/game/photo-moments/presented",
+            "POST" to "/api/v1/me/game/photo-moments/kept",
+        ).inOrder()
+        assertThat(http.requests[3].body).isEqualTo("""{"requestId":"req-12345678","atmosphere":"aurora"}""")
+        assertThat(http.requests[4].body).isEqualTo("""{"requestId":"req-12345678","invitations":"major"}""")
+        assertThat(http.requests[5].body).isEqualTo("""{"requestId":"req-12345678","stepIds":["s1"]}""")
+        assertThat(http.requests[6].body).isEqualTo("""{"requestId":"req-12345678","stepIds":["s1","s2"]}""")
+    }
+
+    @Test
+    fun `le calendrier rejoue l ETag et le 304 se rend sans corps`() = runTest {
+        val http = RecordingHttp(status = 304, responseBody = "")
+        val api = game(http)
+
+        val response = api.seasonCalendar(ifNoneMatch = "W/\"abc\"")
+
+        assertThat(http.only.path).isEqualTo("/api/v1/me/game/seasons/calendar")
+        assertThat(http.only.header("If-None-Match")).isEqualTo("W/\"abc\"")
+        assertThat(response.code()).isEqualTo(304)
+        assertThat(response.body()).isNull()
+    }
+
+    @Test
+    fun `le calendrier sans ETag n envoie pas l en-tete`() = runTest {
+        val http = RecordingHttp()
+
+        game(http).seasonCalendar()
+
+        assertThat(http.only.header("If-None-Match")).isNull()
+    }
+
+    @Test
+    fun `le corps brut d un refus 409 se lit sur la reponse d une ecriture`() = runTest {
+        val http = RecordingHttp(status = 409, responseBody = """{"success":false,"code":"LEAGUE_LOCKED"}""")
+
+        val response = game(http).setFrameAtmosphere(me.meeshy.sdk.model.game.FrameAtmosphereRequest("req-12345678", "aurora"))
+
+        assertThat(response.code()).isEqualTo(409)
+        assertThat(response.errorBody()?.string()).contains("LEAGUE_LOCKED")
+    }
 }

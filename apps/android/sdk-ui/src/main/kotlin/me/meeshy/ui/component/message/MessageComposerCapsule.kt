@@ -9,6 +9,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
@@ -38,8 +40,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.composer.ComposerFocusBorderPolicy
+import me.meeshy.sdk.model.composer.ComposerPlaceholderFit
 import me.meeshy.sdk.model.composer.ComposerLineBounds
-import me.meeshy.sdk.model.composer.ComposerToolbarLaw
+import me.meeshy.sdk.model.composer.ComposerReturnKey
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyMotion
@@ -70,6 +73,7 @@ public fun MessageComposerCapsule(
     trailing: (@Composable () -> Unit)? = null,
     focusRequester: FocusRequester = remember { FocusRequester() },
     onFocusChange: (Boolean) -> Unit = {},
+    fieldModifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val reduceMotion = LocalReduceMotion.current
@@ -83,7 +87,7 @@ public fun MessageComposerCapsule(
         label = "composer-field-scale",
     )
     val leadingVisible = leading != null && !(hidesLeadingOnFocus && focused)
-    val returnSends = ComposerToolbarLaw.returnSends(value.text)
+    val returnSends = ComposerReturnKey.imeSends(value.text)
     Row(
         modifier = modifier
             .graphicsLayer {
@@ -113,6 +117,7 @@ public fun MessageComposerCapsule(
             onValueChange = onValueChange,
             modifier = Modifier
                 .weight(1f)
+                .then(fieldModifier)
                 .focusRequester(focusRequester)
                 .onFocusChanged {
                     focused = it.isFocused
@@ -139,19 +144,32 @@ public fun MessageComposerCapsule(
                         ),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (value.text.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = placeholderStyle,
-                            color = MeeshyTheme.tokens.textMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    if (value.text.isEmpty()) ComposerPlaceholder(placeholder, placeholderStyle)
                     inner()
                 }
             },
         )
         trailing?.invoke()
+    }
+}
+
+/** L'invite, rétrécie juste assez pour tenir dans la capsule (#14394, [ComposerPlaceholderFit]). */
+@Composable
+private fun ComposerPlaceholder(text: String, style: TextStyle) {
+    val measurer = rememberTextMeasurer()
+    BoxWithConstraints {
+        val available = constraints.maxWidth
+        val scale = remember(text, style, available) {
+            ComposerPlaceholderFit.fit(available) { factor ->
+                measurer.measure(text, style.copy(fontSize = style.fontSize * factor), maxLines = 1, softWrap = false).size.width
+            }
+        }
+        Text(
+            text = text,
+            style = style.copy(fontSize = style.fontSize * scale),
+            color = MeeshyTheme.tokens.textMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

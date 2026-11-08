@@ -66,6 +66,29 @@ final class LockedSweepLedgersConcurrencyTests: XCTestCase {
         XCTAssertTrue(tasks.allSatisfy(\.isCancelled))
     }
 
+    /// #10331 — une annulation qui tombe À L'INSTANT où l'envoi démarre coupe
+    /// quand même la requête. Créée puis enregistrée en deux temps, la `Task`
+    /// pouvait atteindre son téléversement avant d'être dans la table :
+    /// `cancel` n'y trouvait rien, et la requête en vol allait à son terme
+    /// (CI iOS SDK de dev, run 41581682299).
+    func test_start_cancelledTheInstantItStarts_isInterrupted() async {
+        let dispatches = OutboxInflightDispatches()
+        let interrupted = Locked(false)
+
+        let task = dispatches.start("row") {
+            dispatches.cancel("row")
+            do {
+                try await Task.sleep(nanoseconds: 10_000_000_000)
+            } catch {
+                interrupted.mutate { $0 = true }
+                throw error
+            }
+        }
+        _ = try? await task.value
+
+        XCTAssertTrue(interrupted.read { $0 }, "la requête démarrée est coupée par l'annulation")
+    }
+
     func test_unregister_foreignTask_leavesTheRegisteredOneCancellable() {
         let dispatches = OutboxInflightDispatches()
         let registered = Task<Void, Error> { try await Task.sleep(nanoseconds: 60_000_000_000) }

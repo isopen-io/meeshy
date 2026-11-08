@@ -39,6 +39,7 @@ data class CommunitySettingsUiState(
     val uploading: ImageUploadTarget? = null,
     val isSaving: Boolean = false,
     val isDeleting: Boolean = false,
+    val isLeaving: Boolean = false,
     val errorMessage: String? = null,
 ) {
     val isLoading: Boolean get() = draft == null && !failedToLoad
@@ -48,6 +49,7 @@ data class CommunitySettingsUiState(
 sealed interface CommunitySettingsEffect {
     data object Saved : CommunitySettingsEffect
     data object Deleted : CommunitySettingsEffect
+    data object Left : CommunitySettingsEffect
     data class UploadResult(val target: ImageUploadTarget, val succeeded: Boolean) : CommunitySettingsEffect
 }
 
@@ -155,6 +157,22 @@ class CommunitySettingsViewModel @Inject constructor(
                     _effects.send(CommunitySettingsEffect.Deleted)
                 }
                 is NetworkResult.Failure -> _state.update { it.copy(isDeleting = false, errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    fun leave() {
+        if (_state.value.isLeaving) return
+        _state.update { it.copy(isLeaving = true) }
+        viewModelScope.launch {
+            when (val result = repository.leave(communityId)) {
+                is NetworkResult.Success -> {
+                    cache.forget(communityId)
+                    cache.refreshList()
+                    _state.update { it.copy(isLeaving = false) }
+                    _effects.send(CommunitySettingsEffect.Left)
+                }
+                is NetworkResult.Failure -> _state.update { it.copy(isLeaving = false, errorMessage = result.error.message) }
             }
         }
     }

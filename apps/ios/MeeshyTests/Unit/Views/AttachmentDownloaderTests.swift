@@ -210,6 +210,34 @@ final class MediaAutoDownloadDecisionTests: XCTestCase {
         )
     }
 
+    /// #14639 — une vidéo de moins de 100 Ko part quel que soit le réseau ; seul le hors-ligne la retient.
+    func test_video_under100KB_autoStartsOnAnyNetwork_butNotOffline() {
+        let prefs = MediaDownloadPreferences(video: .never)
+        XCTAssertTrue(VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+            autoDownload: false, condition: .badCellular, prefs: prefs, byteSize: 99_999))
+        XCTAssertFalse(VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+            autoDownload: false, condition: .badCellular, prefs: prefs, byteSize: 102_400))
+        XCTAssertFalse(VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+            autoDownload: false, condition: .offline, prefs: prefs, byteSize: 99_999))
+    }
+
+    /// La bulle remet la taille de la pièce au résolveur, et l'image du fil à son chargeur.
+    func test_bubbles_passTheAttachmentSize_toTheDownloadDecision() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        let expectations = [
+            "VideoAvailabilityResolver.swift": "byteSize: attachment.fileSize",
+            "Bubble/BubbleStandardLayout+Media.swift": "byteSize: attachment.fileSize",
+            "Bubble/BubbleCarouselView.swift": "byteSize: attachment.fileSize",
+        ]
+        for (file, needle) in expectations {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8))
+            XCTAssertTrue(code.contains(needle), file)
+        }
+    }
+
     func test_video_autoDownloadTrue_offline_returnsFalse() {
         let prefs = MediaDownloadPreferences(video: .always)
         XCTAssertFalse(

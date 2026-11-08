@@ -183,3 +183,36 @@ class ReelBuilderTest {
         assertThat(reels).isEmpty()
     }
 }
+
+class ReelCommentPresentationTest {
+    private class Prefs(override val systemLanguage: String?) : me.meeshy.sdk.lang.LanguageResolver.ContentLanguagePreferences {
+        override val regionalLanguage: String? = null
+        override val customDestinationLanguage: String? = null
+    }
+
+    private val audioReel = ApiPost(
+        id = "r",
+        type = "REEL",
+        media = listOf(
+            ApiPostMedia(
+                id = "a",
+                mimeType = "audio/mpeg",
+                fileUrl = "https://cdn.test/o.mp3",
+                transcription = me.meeshy.sdk.model.ApiAttachmentTranscription(language = "en"),
+                translations = mapOf("fr" to me.meeshy.sdk.model.ApiAttachmentTranslation(url = "https://cdn.test/fr.mp3")),
+            ),
+        ),
+    )
+
+    @Test
+    fun `un reel audio joue la piste du prisme du lecteur`() {
+        val reel = ReelBuilder.build(listOf(audioReel), null, Prefs("fr")).single()
+        assertThat(reel.audioUrl).isEqualTo("https://cdn.test/fr.mp3")
+    }
+
+    @Test
+    fun `sans piste dans sa langue le reel joue l'original`() {
+        val reel = ReelBuilder.build(listOf(audioReel), null, Prefs("de")).single()
+        assertThat(reel.audioUrl).isEqualTo("https://cdn.test/o.mp3")
+    }
+}

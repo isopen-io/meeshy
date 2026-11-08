@@ -2,37 +2,33 @@ import Foundation
 
 /// Le dépliage EN PLACE d'un message long (#8147) — loi pure, sans UIKit.
 ///
-/// « Lire la suite » déplie le message DANS le fil, « Réduire » le replie ; il
-/// n'existe plus de feuille de lecture. Un seul message est déplié à la fois,
-/// et tant qu'il l'est — et qu'il est à l'écran — il reçoit l'effet Focal :
-/// bloc de verre, loupe, voisins atténués. Les quatre modes de lecture
-/// (Bulles, Script, Focal, Rivière) obéissent à cette même loi.
+/// « Lire la suite » déplie le message DANS le fil ; il n'existe plus de
+/// feuille de lecture. Depuis #16463, le déplié est un message ORDINAIRE du
+/// mode courant (bulle, bloc Focal, rangée Script, Rivière) : aucune mise en
+/// avant, aucun « Réduire ». Il reste déplié tant que la conversation est
+/// ouverte — l'état vit chez l'hôte du fil, recréé à chaque ouverture — et
+/// plusieurs messages peuvent l'être.
 nonisolated enum LongMessageExpansionLaw {
 
-    /// Le message déplié après un toucher sur `toggled` : toucher le déplié
-    /// le replie, toucher un autre le remplace (le précédent se replie).
-    static func nextExpanded(current: String?, toggled: String) -> String? {
-        current == toggled ? nil : toggled
+    /// Les messages dépliés après un toucher sur `tapped` : il s'ajoute aux
+    /// dépliés, et rien ne se replie.
+    static func expanded(after current: Set<String>, tapping tapped: String) -> Set<String> {
+        current.union([tapped])
     }
 
-    /// Le bord de la cellule qui NE BOUGE PAS pendant l'animation de hauteur.
-    ///
-    /// - Déplier : le HAUT reste en place — l'extrait ne bouge pas, la suite
-    ///   se déroule dessous, là où l'œil lisait « Lire la suite ».
-    /// - Replier : le BAS reste en place — « Réduire » vit sous le texte
-    ///   entier ; tenir le haut renverrait le lecteur d'un message de trois
-    ///   écrans vers un début hors champ.
+    /// Le bord VISUEL d'une cellule.
     enum Anchor: Equatable {
         case top
         case bottom
     }
 
-    static func anchor(isExpanding: Bool) -> Anchor {
-        isExpanding ? .top : .bottom
-    }
+    /// Le bord du déplié qui NE BOUGE PAS pendant l'animation de hauteur : le
+    /// HAUT — l'extrait ne bouge pas, la suite se déroule dessous, là où l'œil
+    /// lisait « Lire la suite ».
+    static let anchor: Anchor = .top
 
-    /// La fenêtre pendant laquelle le bord ancré est tenu : la durée de la
-    /// mise en avant, plus la marge d'une re-mesure SwiftUI tardive. Au-delà,
+    /// La fenêtre pendant laquelle le bord ancré est tenu : la durée du
+    /// dépliage, plus la marge d'une re-mesure SwiftUI tardive. Au-delà,
     /// le fil redevient libre — une hauteur qui change plus tard (image,
     /// traduction) obéit aux lois ordinaires du fil.
     static let holdWindow: TimeInterval = FocalMetrics.Focus.expandDuration + 0.35
@@ -53,25 +49,9 @@ nonisolated enum LongMessageExpansionLaw {
         return min(max(target, minOffset), max(minOffset, maxOffset))
     }
 
-    /// Le cadre du bloc de verre du déplié (#8161), dans le repère de la
-    /// rangée. En Bulles, le verre ÉPOUSE la bulle et en déborde des cotes
-    /// partagées (`FOCAL_METRICS` : 6 pt de côté, 3 pt en haut et en bas) —
-    /// jamais la largeur entière de la rangée, qui ferait d'une bulle de
-    /// 70 % un bandeau. Sans bulle mesurée (rangée plate, Rivière, première
-    /// passe), il retombe sur la rangée moins sa gouttière.
-    static func glassFrame(bubble: CGRect?, row: CGRect) -> CGRect {
-        guard let bubble, !bubble.isEmpty else {
-            return row.insetBy(dx: FocalScrollPerspective.focusCardHorizontalInset, dy: 0)
-        }
-        return bubble.insetBy(
-            dx: -FocalScrollPerspective.focusCardHorizontalInset,
-            dy: -FocalScrollPerspective.focusCardInnerMargin
-        )
-    }
-
     // MARK: - La hauteur s'anime (#8232)
 
-    /// Le tempo du dépliage ET du repliage : la durée et la courbe que joue
+    /// Le tempo du dépliage : la durée et la courbe que joue
     /// le web (`FOCAL_METRICS.expandDurationMs` / `expandCurve`). Réduire le
     /// mouvement ⇒ aucun tempo : la hauteur se pose d'un coup.
     struct HeightTiming: Equatable {
@@ -137,15 +117,5 @@ nonisolated enum LongMessageExpansionLaw {
     /// de celles qu'elle en fait SORTIR (sans cellule d'après).
     static func regionShift(beyondEnd: Bool, expandedBefore: Span, expandedAfter: Span) -> CGFloat {
         beyondEnd ? expandedAfter.end - expandedBefore.end : expandedAfter.origin - expandedBefore.origin
-    }
-
-    /// L'opacité d'une cellule : le déplié reste pleinement lisible, ses
-    /// voisins s'atténuent — seulement tant que le déplié est VISIBLE. Hors
-    /// champ, le fil redevient uniforme (le message reste déplié). La
-    /// valeur est celle des voisins de la scène Focal
-    /// (`FocalScrollPerspective.alphaFloor`, `neighborOpacity` partagé).
-    static func alpha(isExpandedCell: Bool, expansionVisible: Bool) -> CGFloat {
-        guard expansionVisible, !isExpandedCell else { return 1 }
-        return FocalScrollPerspective.alphaFloor
     }
 }

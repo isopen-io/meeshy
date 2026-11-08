@@ -9,7 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * A seam over wall-clock time for the in-app toast orchestrator ([NotificationToastViewModel]).
+ * A seam over wall-clock time for the in-app toast orchestrator (the banner view model).
  * It needs BOTH forms: epoch millis for the dedup window ([ToastDedupWindow]) and a
  * [LocalDateTime] for the DND time-of-day check ([DndWindow.isActive]) the toast policy applies.
  * Injectable so a test pins both and asserts the exact dedup boundary and DND gating — no

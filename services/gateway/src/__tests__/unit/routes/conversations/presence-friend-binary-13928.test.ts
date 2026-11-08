@@ -30,6 +30,13 @@ type Viewer = { userId: string; role: string } | null;
 const mockResolveForTargets = jest.fn<any>();
 const mockResolveForTarget = jest.fn<any>();
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
     resolveForTargets: (...args: unknown[]) => mockResolveForTargets(...args),
@@ -479,7 +486,7 @@ describe('#13928 — un Ami voit « en ligne », jamais lastActiveAt, sur les ro
           }),
           update: jest.fn<any>().mockResolvedValue({}),
         },
-        user: { findUnique: jest.fn<any>().mockResolvedValue(friendUser()) },
+        user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(friendUser()) },
         participant: {
           findMany: jest.fn<any>().mockResolvedValue([]),
           create: jest.fn<any>().mockResolvedValue(friendRow({ user: friendUser() })),

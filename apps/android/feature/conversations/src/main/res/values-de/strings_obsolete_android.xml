@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_action_make_obsolete">Als veraltet markieren</string>
+    <string name="conversations_obsolete_confirm_title">Diese Unterhaltung als veraltet markieren?</string>
+    <string name="conversations_obsolete_confirm_message">„%1$s“ verschwindet sofort für alle Mitglieder, und der Inhalt wird innerhalb von 48 Stunden gelöscht. Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="conversations_obsolete_confirm_button">Als veraltet markieren</string>
+    <string name="conversations_obsolete_refused_pending_request">Nur der Empfänger einer nicht angenommenen Nachrichtenanfrage kann diese Unterhaltung als veraltet markieren.</string>
+</resources>

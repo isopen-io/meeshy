@@ -50,6 +50,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.audio.ComposerVoiceCapture
 import me.meeshy.sdk.audio.MediaRecorderEngine
+import me.meeshy.sdk.model.waveform.VoiceEncodingProfile
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.readMediaUploadItem
 import me.meeshy.sdk.model.composer.sound.ComposerAudioRole
@@ -86,7 +87,12 @@ internal fun StorySoundSheet(
     val recorder = rememberStorySoundRecorder(onTake = viewModel::onTake)
     val importFile = rememberStorySoundImport(onTake = viewModel::onTake, onFailed = viewModel::onImportFailed)
     Column(Modifier.fillMaxWidth()) {
-        StorySoundSheetHeader(onDone = onDone)
+        StorySoundSheetHeader(
+            onDone = {
+                viewModel.onDone(ComposerSoundRoles.automatic(state.selectedSlideAudio), composer::onPlaceSendingSound)
+                onDone()
+            },
+        )
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -100,7 +106,7 @@ internal fun StorySoundSheet(
                     take = take,
                     automatic = ComposerSoundRoles.automatic(state.selectedSlideAudio),
                     viewModel = viewModel,
-                    onAdd = { automatic -> viewModel.onAdd(automatic) { sound, role -> composer.onPlaceComposedSound(sound, role) } },
+                    onAdd = { automatic -> viewModel.onAdd(automatic, composer::onPlaceSendingSound) },
                 )
                 state.canBorrowSound -> StorySoundSources(
                     onRecord = recorder.request,
@@ -118,7 +124,6 @@ internal fun StorySoundSheet(
 private val SoundSheetFailure.message: Int
     get() = when (this) {
         SoundSheetFailure.IMPORT -> R.string.story_sound_sheet_import_failed
-        SoundSheetFailure.UPLOAD -> R.string.story_sound_sheet_upload_failed
     }
 
 /** Le titre et OK — la feuille n'a rien à annuler : chaque réglage s'applique à la scène (et se défait par l'historique). */
@@ -200,13 +205,18 @@ internal class StorySoundRecorder(
 @Composable
 private fun rememberStorySoundRecorder(onTake: (MediaUploadItem, Float?) -> Unit): StorySoundRecorder {
     val context = LocalContext.current
-    val capture = remember { ComposerVoiceCapture(File(context.cacheDir, RECORDINGS), { MediaRecorderEngine(context) }) }
+    val capture = remember {
+        ComposerVoiceCapture(
+            File(context.cacheDir, RECORDINGS),
+            { MediaRecorderEngine(context, VoiceEncodingProfile.of(VoiceEncodingProfile.Kind.STORY_SOUND)) },
+        )
+    }
     var session by remember { mutableStateOf(capture.session) }
     var denied by remember { mutableStateOf(false) }
     val deliver by rememberUpdatedState(onTake)
     fun start() {
         denied = false
-        capture.start()
+        capture.start { session = capture.session }
         session = capture.session
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -226,9 +236,10 @@ private fun rememberStorySoundRecorder(onTake: (MediaUploadItem, Float?) -> Unit
         denied = denied,
         request = { if (context.hasMic()) start() else permission.launch(Manifest.permission.RECORD_AUDIO) },
         stop = {
-            val take = capture.finish()
+            capture.finish { take ->
+                take?.let { deliver(MediaUploadItem.onDisk(it.file, it.file.name, RECORDED_MIME, (it.durationSeconds * 1000).toLong()), it.durationSeconds.toFloat()) }
+            }
             session = capture.session
-            take?.let { deliver(MediaUploadItem.onDisk(it.file, it.file.name, RECORDED_MIME, (it.durationSeconds * 1000).toLong()), it.durationSeconds.toFloat()) }
         },
     )
 }
@@ -257,10 +268,6 @@ private fun rememberStorySoundImport(onTake: (MediaUploadItem, Float?) -> Unit, 
     }
     return { picker.launch(arrayOf("audio/*")) }
 }
-
-/** Le compositeur pose le son que la feuille a préparé — une étape d'historique, comme tout geste de la scène. */
-internal fun StoryComposerViewModel.onPlaceComposedSound(sound: ComposedStorySound, role: ComposerAudioRole) =
-    onSceneReduce { state -> state.withDeckTransform { it.placeComposedSoundOnSelected(sound, role) } }
 
 private const val RECORDINGS = "story-sounds"
 private const val RECORDED_MIME = "audio/mp4"

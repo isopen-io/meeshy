@@ -3,7 +3,14 @@ package me.meeshy.sdk.conversation
 import java.time.Instant
 import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.MessageEditOrdering
+import me.meeshy.sdk.model.MessageReactionRows
+import me.meeshy.sdk.model.PendingEdit
+import me.meeshy.sdk.model.PendingReaction
+import me.meeshy.sdk.model.QuotePropagation
+import me.meeshy.sdk.model.ReactionSummaryShift
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.outbox.OutboxKind
@@ -24,7 +31,14 @@ internal class MessageMutationWriter(
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock,
     private val revisions: EditRevisionLedger? = null,
+    /** Les événements arrivés avant leur message : gardés ici, rejoués par l'ingestion. */
+    private val events: MessageEventBuffer? = null,
+    /** L'utilisateur courant, clé de MA ligne de réaction ; par défaut le compte du geste. */
+    private val selfId: (suspend () -> String?)? = null,
+    /** L'index des médias de la conversation : un message supprimé quitte TOUS les genres. */
+    private val mediaIndex: ConversationMediaHubIndex? = null,
 ) {
+    private val tombstones = MessageTombstoneWriter(updater, revisions, events, mediaIndex)
 
     /**
      * Optimistic reaction toggle: the cached `reactionSummary` moves instantly
@@ -33,8 +47,11 @@ internal class MessageMutationWriter(
      * whether the toggle was applied.
      */
     suspend fun toggleReactionOptimistic(messageId: String, emoji: String, isAdding: Boolean): Boolean {
+        val me = selfId?.invoke() ?: updater.ticket()?.ownerId
         val updated = updater.update(messageId, requireSynced = true) { message ->
-            message.copy(reactionSummary = message.reactionSummary.shifted(emoji, if (isAdding) 1 else -1))
+            // Les lignes se dressent du résumé D'AVANT le décalage, sinon ma ligne compterait deux fois.
+            MessageReactionRows.withOwn(message, emoji, isAdding, me)
+                .let { it.copy(reactionSummary = ReactionSummaryShift.shifted(it.reactionSummary, emoji, if (isAdding) 1 else -1)) }
         } ?: return false
         outboxRepository.enqueue(
             OutboxMutation(
@@ -49,9 +66,11 @@ internal class MessageMutationWriter(
 
     /** Applies a socket-driven reaction delta to the cache — no outbox involved. */
     suspend fun applyReactionDelta(messageId: String, emoji: String, delta: Int) {
-        updater.update(messageId, requireSynced = false) { message ->
-            message.copy(reactionSummary = message.reactionSummary.shifted(emoji, delta))
+        val updated = updater.update(messageId, requireSynced = false) { message ->
+            message.copy(reactionSummary = ReactionSummaryShift.shifted(message.reactionSummary, emoji, delta))
         }
+        // Une réaction arrivée avant son message est gardée, puis rejouée à l'arrivée de la ligne.
+        if (updated == null) events?.rememberReaction(messageId, PendingReaction(emoji, delta))
     }
 
     /**
@@ -62,8 +81,64 @@ internal class MessageMutationWriter(
      * written) when this device never cached the message or only holds its optimistic
      * local bubble.
      */
-    suspend fun applyServerEdit(message: ApiMessage): Boolean =
-        updater.update(message.id, requireSynced = true) { message } != null
+    suspend fun applyServerEdit(message: ApiMessage): Boolean {
+        val ticket = updater.ticket()
+        var previous: ApiMessage? = null
+        val updated = updater.update(ticket, message.id, requireSynced = true) { current ->
+            previous = current
+            // Garde d'ordre : une livraison retardée ou en double ne régresse pas une édition plus récente.
+            if (MessageEditOrdering.acceptsIso(current.editedAt, message.editedAt)) message else current
+        }
+        if (updated == null) {
+            // Un message encore inconnu : l'édition attend sa ligne. Une bulle locale non acquittée n'attend rien.
+            if (updater.find(message.id) == null) {
+                events?.rememberEdit(message.id, PendingEdit(message.content, message.editedAt, marksEdited = message.isEdited))
+            }
+            return false
+        }
+        val before = previous
+        if (before != null && updated === message && before.content != message.content) {
+            val parentIds = listOfNotNull(updated.id, updated.clientMessageId)
+            updater.updateCiting(ticket, updated.conversationId, parentIds) { reply ->
+                QuotePropagation.followEdit(reply, parentIds, updated.content, QuotePropagation.holdsProtectedContent(updated))
+            }
+        }
+        return true
+    }
+
+    /** Une suppression annoncée par le SERVEUR ; voir [MessageTombstoneWriter.markDeleted]. */
+    suspend fun markDeleted(
+        messageId: String,
+        deletedAtIso: String,
+        sparingOpenedViewOnce: Boolean = false,
+        expired: Boolean = false,
+    ): Boolean = tombstones.markDeleted(messageId, deletedAtIso, sparingOpenedViewOnce, expired)
+
+    /** Retour arrière d'une suppression refusée ; voir [MessageTombstoneWriter.markUndeleted]. */
+    suspend fun markUndeleted(messageId: String, snapshot: ApiMessage? = null): Boolean =
+        tombstones.markUndeleted(messageId, snapshot)
+
+    /** Retire les lignes nommées — par l'une ou l'autre de leurs deux clés — et leurs versions antérieures. */
+    suspend fun purgeMessages(messageIds: Collection<String>) = updater.purge(updater.ticket(), messageIds)
+
+    /** Épingle posée ou retirée par un événement, sans toucher au reste de la ligne ni à l'outbox. */
+    suspend fun setPinned(messageId: String, pinnedAtIso: String?, pinnedBy: String?): Boolean =
+        updater.update(messageId, requireSynced = false) { message ->
+            if (message.pinnedAt == pinnedAtIso && message.pinnedBy == pinnedBy) message
+            else message.copy(pinnedAt = pinnedAtIso, pinnedBy = pinnedBy)
+        } != null
+
+    /** Le message est flouté (ou ne l'est plus), sans réécrire le reste. */
+    suspend fun setBlurred(messageId: String, blurred: Boolean): Boolean =
+        updater.update(messageId, requireSynced = false) { message ->
+            if ((message.isBlurred == true) == blurred) message else message.copy(isBlurred = blurred)
+        } != null
+
+    /** Le compteur de vues d'une vue unique, sans réécrire le reste ; il ne descend jamais. */
+    suspend fun setViewOnceCount(messageId: String, count: Int): Boolean =
+        updater.update(messageId, requireSynced = false) { message ->
+            if (count <= message.viewOnceCount) message else message.copy(viewOnceCount = count)
+        } != null
 
     /**
      * Optimistic edit of a server-acked message: the cached content flips
@@ -104,6 +179,14 @@ internal class MessageMutationWriter(
             )
         } ?: return false
         revisions?.forget(listOf(messageId))
+        mediaIndex?.forgetMessage(updated.conversationId, messageId, updater.ticket())
+        val deletedAt = updated.deletedAt
+        if (deletedAt != null) {
+            val parentIds = listOfNotNull(updated.id, updated.clientMessageId)
+            updater.updateCiting(updater.ticket(), updated.conversationId, parentIds) { reply ->
+                QuotePropagation.sealDeleted(reply, parentIds, deletedAt)
+            }
+        }
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.DELETE_MESSAGE,
@@ -136,10 +219,5 @@ internal class MessageMutationWriter(
             ),
         )
         return true
-    }
-
-    private fun Map<String, Int>?.shifted(emoji: String, delta: Int): Map<String, Int>? {
-        val next = (this ?: emptyMap()) + (emoji to ((this?.get(emoji) ?: 0) + delta))
-        return next.filterValues { it > 0 }.ifEmpty { null }
     }
 }

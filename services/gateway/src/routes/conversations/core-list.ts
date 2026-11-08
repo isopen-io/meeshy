@@ -10,7 +10,7 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { CONVERSATION_LIST_PAGINATION, conversationListQuerystringSchema } from './list-querystring';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { participantAccountClosure, resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import {
@@ -54,6 +54,9 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
+import { loadListViewerCapabilities } from '../../services/conversations/obsoleteCapability';
+import { servedMessageRequest, withoutRequestFields, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
+import { emptyDirectVisibility, withViewerRequests } from './utils/list-viewer-scope';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -76,7 +79,7 @@ export function registerConversationListRoute(
   optionalAuth: any
 ) {
   // Route pour obtenir toutes les conversations de l'utilisateur
-  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string } }>('/conversations', {
+  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string; requests?: MessageRequestListMode } }>('/conversations', {
     schema: {
       description: 'Get all conversations for the authenticated user with pagination support',
       tags: ['conversations'],
@@ -103,7 +106,7 @@ export function registerConversationListRoute(
       }
     },
     preValidation: [optionalAuth]
-  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string } }>, reply) => {
+  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string; requests?: MessageRequestListMode } }>, reply) => {
     try {
       const authRequest = request as UnifiedAuthRequest;
 
@@ -222,28 +225,9 @@ export function registerConversationListRoute(
         delete whereClause.participants;
       }
 
-      // Visibilité DM vide — Prisme design doc 2026-08-04. Ajouté APRÈS le
-      // bloc withUserId ci-dessus (qui reconstruit whereClause.participants
-      // /.AND) pour ne jamais être écrasé par lui : un OR à la racine du
-      // whereClause se combine par ET implicite avec .AND/.participants,
-      // quel que soit leur contenu.
-      whereClause.OR = [
-        { type: { not: 'direct' } },
-        {
-          // `NOT: { firstMessageSentAt: null }` seul ne matche PAS les
-          // documents où le champ est ABSENT sur le connecteur MongoDB de
-          // Prisma (il ne matche que present-et-non-null) — il exclurait donc
-          // à tort tout DM legacy (créé avant cette migration, jamais
-          // backfillé). Les deux branches sont nécessaires : déjà posé (message
-          // envoyé) OU absent (legacy, avant migration) ⇒ visible.
-          OR: [
-            { NOT: { firstMessageSentAt: null } },
-            { firstMessageSentAt: { isSet: false } }
-          ]
-        },
-        { participants: { some: { userId, role: 'creator' } } },
-        { participants: { none: { role: 'creator' } } } // aucun créateur identifiable ⇒ comportement actuel
-      ];
+      // Visibilité DM vide (Prisme 2026-08-04) et boîte de demandes (#14107) : `utils/list-viewer-scope.ts`.
+      whereClause.OR = emptyDirectVisibility(userId);
+      if (request.query.requests) whereClause.AND = withViewerRequests(whereClause.AND, userId, request.query.requests);
 
       // Pagination par curseur — résolue DANS LE SCOPE DU LECTEUR (#6991).
       //
@@ -354,7 +338,7 @@ export function registerConversationListRoute(
               isActive: true,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            select: { id: true, conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
+            select: { id: true, conversationId: true, type: true, leftAt: true, bannedAt: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : [];
       const { floors: historyFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, readerJoins);
@@ -412,6 +396,7 @@ export function registerConversationListRoute(
       // Only fall back to a batch query for large groups where the current user wasn't in top 5.
       const currentUserRoleMap = new Map<string, string>();
       const currentUserJoinedAtMap = new Map<string, Date | null>();
+      const currentUserRequestMap = new Map<string, ServedMessageRequest | null>();
       // Participant.id du LECTEUR par conversation — G-123 : c'est la clé qui
       // relie une conversation à son curseur de lecture (`lastOpenedAt` de
       // l'orchestrateur, voir plus bas). Repose sur la même résolution que les
@@ -434,6 +419,7 @@ export function registerConversationListRoute(
             currentUserRoleMap.set(conv.id, found.role);
             currentUserJoinedAtMap.set(conv.id, found.joinedAt);
             currentUserParticipantIdMap.set(conv.id, found.id);
+            currentUserRequestMap.set(conv.id, isAnonymousViewer ? null : servedMessageRequest(found));
           } else {
             convsMissingCurrentUser.push(conv.id);
           }
@@ -463,7 +449,7 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation] = await Promise.all([
+      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation, viewerCapabilitiesOf] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -486,6 +472,12 @@ export function registerConversationListRoute(
         // « N (M) 🔥 » du lecteur (#8906) — UNE lecture groupée pour la page.
         // Un invité anonyme n'a pas de compte, donc pas d'état d'engagement.
         loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
+
+        // #14690 — ce que le lecteur peut faire de chaque ligne, par la décision qui garde la route.
+        loadListViewerCapabilities(prisma, {
+          authContext: authRequest.authContext, conversations, readerJoins,
+          onError: (error) => logger.warn('viewer capabilities read failed', { error }),
+        }),
       ]);
 
       // Par CONVERSATION plutôt que par participant — c'est la clé que la
@@ -755,9 +747,11 @@ export function registerConversationListRoute(
             const hideLastSeen = !vis.showLastSeenTimestamp;
             const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
             return {
-              ...m,
+              ...withoutRequestFields(m),
               // #10713 — le contour équipé du pair, dessiné par la ligne de liste.
               ...(profileDecor === undefined ? {} : { profileDecor }),
+              // #15717 — le compte du pair est fermé : un booléen, clé absente sinon.
+              ...participantAccountClosure(m),
               // Bannière de profil top-level : le schéma participant (minimal) est
               // plat et strippe `user`, donc on lève la bannière au niveau
               // participant pour la remontée en DM. Réservé aux DM — en groupe le
@@ -823,9 +817,8 @@ export function registerConversationListRoute(
         const ownExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
         const quotedDeathAt = firstId ? quotedDeaths.get(firstId) ?? null : null;
         const servedExpiresAt = quotedDeathAt ? inheritedEphemeralExpiresAt([ownExpiresAt, quotedDeathAt]) : ownExpiresAt;
-        const lastMessageProtected = latestMessage
-          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }))
-          : false;
+        const lastMessageProtection = latestMessage ? resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }) : null;
+        const lastMessageProtected = isPreviewWithheld(lastMessageProtection);
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
         // le schéma wire ne déclare pas, et le champ que les clients lisent est
@@ -882,7 +875,7 @@ export function registerConversationListRoute(
             const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
             return {
               ...servePostReplyCitation(projectListLastMessageBody(msg, {
-                withheld: lastMessageProtected,
+                protection: lastMessageProtection,
                 servedExpiresAt,
                 viewOnceConsumed: readerParticipantId !== undefined
                   && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),
@@ -923,6 +916,8 @@ export function registerConversationListRoute(
           ...projectReadCursorBoundary(readCursorByConversation.get(conversation.id)),
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
           currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null,
+          messageRequest: currentUserRequestMap.get(conversation.id) ?? null,
+          viewerCapabilities: viewerCapabilitiesOf(userId, conversation.id),
           // ABSENT tant que le lecteur n'a rien crédité ici (#8906).
           ...(viewerEngagementByConversation.has(conversation.id)
             ? { viewerEngagement: viewerEngagementByConversation.get(conversation.id) }

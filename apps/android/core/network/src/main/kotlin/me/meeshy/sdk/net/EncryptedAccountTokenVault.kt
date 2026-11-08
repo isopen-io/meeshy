@@ -27,6 +27,7 @@ class EncryptedAccountTokenVault(private val store: SecureStore) : AccountTokenV
     override fun remove(userId: String) {
         store.remove(KEY_JWT, userId)
         store.remove(KEY_SESSION, userId)
+        store.remove(KEY_TOKEN_DATE, userId)
     }
 
     /** Moves tokens written before [userId] was known (bare keys) into its namespace. */
@@ -41,6 +42,7 @@ class EncryptedAccountTokenVault(private val store: SecureStore) : AccountTokenV
     companion object {
         const val KEY_JWT = "jwt"
         const val KEY_SESSION = "session_token"
-        val TOKEN_KEYS: List<String> = listOf(KEY_JWT, KEY_SESSION)
+        const val KEY_TOKEN_DATE = "token_date"
+        val TOKEN_KEYS: List<String> = listOf(KEY_JWT, KEY_SESSION, KEY_TOKEN_DATE)
     }
 }

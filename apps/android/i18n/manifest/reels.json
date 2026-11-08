@@ -16,8 +16,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "a11y.post.comments",
-          "androidName": "reels_comments",
+          "iosKey": "reels.action.comment",
+          "androidName": "reels_action_comment",
           "status": "adopted"
         },
         {
@@ -92,8 +92,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "a11y.post.repost",
-          "androidName": "reels_repost",
+          "iosKey": "feed.post.repost",
+          "androidName": "reels_action_repost",
           "status": "adopted"
         },
         {

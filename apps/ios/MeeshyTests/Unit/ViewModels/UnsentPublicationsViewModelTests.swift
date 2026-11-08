@@ -114,6 +114,14 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
         XCTAssertTrue(drafts.reopened.isEmpty)
     }
 
+    func test_typeLabel_ofAStatus_saysMood_neverPost() {
+        XCTAssertEqual(
+            UnsentPublicationsCopy.typeLabel("STATUS"),
+            String(localized: "content.kind.mood", defaultValue: "Humeur", bundle: .main)
+        )
+        XCTAssertNotEqual(UnsentPublicationsCopy.typeLabel("STATUS"), UnsentPublicationsCopy.typeLabel("POST"))
+    }
+
     func test_failureReason_saysTheCauseInWords_neverTheTrace() {
         XCTAssertEqual(UnsentPublicationFailureReason(lastError: "UnsupportedImageFormatRefusal()"), .unsupportedFormat)
         XCTAssertEqual(UnsentPublicationFailureReason(lastError: "server(statusCode: 415, message: nil)"), .unsupportedFormat)

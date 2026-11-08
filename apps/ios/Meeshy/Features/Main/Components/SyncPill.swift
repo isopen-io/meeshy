@@ -113,6 +113,10 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     /// (« Publier un post »). La pastille est le seul étage
     /// que les deux racines partagent.
     let retryOutboxId: String?
+    /// **Le cmid d'une publication encore dans la file** (#10331) — celui que
+    /// « Annuler l'envoi » retire. `nil` pour tout ce qui n'est pas une
+    /// publication en attente (`PendingPublicationPill.cancellableId`).
+    let pendingPublicationId: String?
 
     init(
         id: String,
@@ -121,7 +125,8 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
         dotStyle: SyncPillDotStyle,
         source: OutboxUIItem.Source?,
         showsActivityDots: Bool = true,
-        retryOutboxId: String? = nil
+        retryOutboxId: String? = nil,
+        pendingPublicationId: String? = nil
     ) {
         self.id = id
         self.label = label
@@ -130,27 +135,37 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
         self.source = source
         self.showsActivityDots = showsActivityDots
         self.retryOutboxId = retryOutboxId
+        self.pendingPublicationId = pendingPublicationId
     }
 
     /// **Ce qu'un doigt sur CETTE entrée déclenche** — une seule question, une
     /// seule réponse, hors de la vue pour être jouable sans écran.
     ///
-    /// L'ordre n'est pas arbitraire : sur une ligne définitivement échouée,
-    /// RELANCER est ce que le doigt veut. Naviguer vers « l'emplacement de
-    /// l'opération » n'a d'ailleurs pas de sens pour une publication — le post
-    /// n'existe pas encore, et c'est bien pour ça que `mapCreatePost` rend
-    /// `.unknown`.
+    /// L'ordre n'est pas arbitraire : une publication en file ouvre son choix
+    /// (annuler, ou relancer si elle a renoncé) ; sur toute autre ligne
+    /// définitivement échouée, RELANCER est ce que le doigt veut. Naviguer vers
+    /// « l'emplacement de l'opération » n'a pas de sens pour une publication —
+    /// le post n'existe pas encore côté serveur, sa source ne vise que sa carte
+    /// optimiste.
     enum TapOutcome: Equatable {
+        /// Une publication en file : le doigt ouvre le choix « Annuler
+        /// l'envoi », à côté de « Réessayer » quand la ligne est terminale
+        /// (#10331). Elle ne navigue pas — son détail n'existe pas encore.
+        case publicationChoices(cmid: String, retryOutboxId: String?)
         case retry(outboxId: String)
         case navigate(OutboxUIItem.Source)
-        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation) :
-        /// le tap fait juste avancer la rotation.
+        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation), ou
+        /// entrée sans destination (`.unknown`) : le tap fait juste avancer la
+        /// rotation, et VoiceOver ne promet aucune ouverture.
         case advance
     }
 
     var tapOutcome: TapOutcome {
+        if let pendingPublicationId {
+            return .publicationChoices(cmid: pendingPublicationId, retryOutboxId: retryOutboxId)
+        }
         if let retryOutboxId { return .retry(outboxId: retryOutboxId) }
-        if let source { return .navigate(source) }
+        if let source, source != .unknown { return .navigate(source) }
         return .advance
     }
 }
@@ -224,14 +239,21 @@ nonisolated enum SyncPillVisibility {
 struct SyncPill: View {
     let entries: [SyncPillEntry]
     /// Invoked when the user taps the pill and the currently visible
-    /// entry has a non-nil `source`. The caller is expected to push onto
-    /// the navigation stack (`Router.push(.conversation/.postDetail/...)`).
-    let onTap: ((OutboxUIItem.Source) -> Void)?
+    /// entry has a navigable `source`. The caller applies
+    /// `SyncPillDestination` and returns `false` when nothing was opened —
+    /// the pill then advances its rotation instead of staying inert.
+    let onTap: ((OutboxUIItem.Source) -> Bool)?
     /// Invoked when the user taps an entry carrying a `retryOutboxId` — a
     /// publication or a send that has definitively failed. Prioritaire sur
     /// `onTap` : sur une ligne épuisée, RELANCER est ce que le doigt veut, pas
     /// naviguer vers un contenu qui n'existe pas encore.
     let onRetry: ((String) -> Void)?
+    /// « Annuler l'envoi » d'une publication en file (#10331), reçu avec son cmid.
+    let onCancelPublication: ((String) -> Void)?
+
+    /// Le choix ouvert par un doigt sur une publication en file. Capturé au
+    /// tap : la rotation peut changer d'entrée pendant que le choix est ouvert.
+    @State private var publicationChoice: SyncPillPublicationChoice?
 
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
@@ -302,12 +324,14 @@ struct SyncPill: View {
 
     init(
         entries: [SyncPillEntry],
-        onTap: ((OutboxUIItem.Source) -> Void)? = nil,
-        onRetry: ((String) -> Void)? = nil
+        onTap: ((OutboxUIItem.Source) -> Bool)? = nil,
+        onRetry: ((String) -> Void)? = nil,
+        onCancelPublication: ((String) -> Void)? = nil
     ) {
         self.entries = entries
         self.onTap = onTap
         self.onRetry = onRetry
+        self.onCancelPublication = onCancelPublication
     }
 
     private var isDark: Bool { colorScheme == .dark }
@@ -354,6 +378,31 @@ struct SyncPill: View {
             rotator.setItemCount(entries.count)
             handleEntriesChange()
         }
+        .confirmationDialog(
+            UnsentPublicationsCopy.waiting,
+            isPresented: publicationChoiceIsPresented,
+            titleVisibility: .visible,
+            presenting: publicationChoice
+        ) { choice in
+            if let outboxId = choice.retryOutboxId, let onRetry {
+                Button(UnsentPublicationsCopy.retry) { onRetry(outboxId) }
+            }
+            Button(UnsentPublicationsCopy.cancelSend, role: .destructive) {
+                onCancelPublication?(choice.cmid)
+            }
+            Button(UnsentPublicationsCopy.close, role: .cancel) {}
+        }
+    }
+
+    private var publicationChoiceIsPresented: Binding<Bool> {
+        Binding(
+            get: { publicationChoice != nil },
+            set: { presented in
+                guard !presented else { return }
+                publicationChoice = nil
+                scheduleAutoHide()
+            }
+        )
     }
 
     // MARK: - Pilotage de la visibilité et de l'accent
@@ -685,6 +734,8 @@ struct SyncPill: View {
     /// qu'un silence.
     private var accessibilityHintText: String {
         switch visibleEntry?.tapOutcome {
+        case .publicationChoices:
+            return String(localized: "sync.pill.a11y.pendingPublication.hint", defaultValue: "Touchez pour annuler l'envoi ou réessayer.", bundle: .main)
         case .retry:
             return String(localized: "sync.pill.a11y.retry.hint", defaultValue: "Touchez pour réessayer l’opération.", bundle: .main)
         case .navigate:
@@ -697,12 +748,15 @@ struct SyncPill: View {
     private func handleTap() {
         guard let entry = visibleEntry else { return }
         switch entry.tapOutcome {
+        case .publicationChoices(let cmid, let retryOutboxId):
+            guard onCancelPublication != nil else { return rotator.advance() }
+            hideSettle.cancel()
+            publicationChoice = SyncPillPublicationChoice(cmid: cmid, retryOutboxId: retryOutboxId)
         case .retry(let outboxId):
             guard let onRetry else { return rotator.advance() }
             onRetry(outboxId)
         case .navigate(let source):
-            guard let onTap else { return rotator.advance() }
-            onTap(source)
+            guard let onTap, onTap(source) else { return rotator.advance() }
         case .advance:
             // Pure status row (offline/syncing/reconnecting) — single tap
             // just advances the rotation manually.
@@ -731,6 +785,12 @@ struct SyncPill: View {
         }
         return String(localized: "sync.pill.a11y.multiple", defaultValue: "\(entries.count) signaux. Actif : \(entry.label).", bundle: .main)
     }
+}
+
+/// Ce que le choix « Annuler l'envoi » d'une publication en file porte (#10331).
+struct SyncPillPublicationChoice: Equatable {
+    let cmid: String
+    let retryOutboxId: String?
 }
 
 /// **Les points d'activité « . .. ... » d'une entrée en cours**

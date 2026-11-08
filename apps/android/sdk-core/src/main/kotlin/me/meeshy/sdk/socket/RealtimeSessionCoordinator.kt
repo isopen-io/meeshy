@@ -34,11 +34,33 @@ class RealtimeSessionCoordinator @Inject constructor(
 ) {
     private var lastAuthenticated = false
 
+    /** Injecte par membre (Provider : l'executeur dépend du runner, qui dépend de ce coordinateur). */
+    @set:Inject
+    lateinit var transitions: javax.inject.Provider<me.meeshy.sdk.session.SessionTransitionExecutor>
+
     @Synchronized
     fun onAuthenticatedChanged(isAuthenticated: Boolean) {
+        if (::transitions.isInitialized) {
+            transitions.get().onAuthenticatedChanged(isAuthenticated)
+            return
+        }
         val commands = RealtimeLifecyclePlan.commandsFor(lastAuthenticated, isAuthenticated)
         lastAuthenticated = isAuthenticated
         commands.forEach(::execute)
+    }
+
+    /** Étape « reconnecter les sockets » du plan d'ouverture. */
+    @Synchronized
+    fun openRealtime() {
+        lastAuthenticated = true
+        RealtimeLifecyclePlan.commandsFor(false, true).forEach(::execute)
+    }
+
+    /** Étapes « couper sockets et relais » du plan de fermeture. */
+    @Synchronized
+    fun closeRealtime() {
+        lastAuthenticated = false
+        RealtimeLifecyclePlan.commandsFor(true, false).forEach(::execute)
     }
 
     private fun execute(command: RealtimeCommand) {

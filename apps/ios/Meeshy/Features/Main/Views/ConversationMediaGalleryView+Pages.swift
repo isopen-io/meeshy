@@ -454,14 +454,16 @@ struct GalleryVideoPage: View, Equatable {
         self.onEnterStage = onEnterStage
         self.onCacheActivation = onCacheActivation
         self.onDismiss = onDismiss
-        // Poster NET déjà persisté : lu de façon SYNCHRONE au montage — la page
-        // de départ s'ouvre dessus, sans transition. Fenêtre seulement : hors
-        // fenêtre, aucune lecture disque par page traversée (leçon 292).
-        let persisted = isWindowed ? VideoPosterResolver.persistedPoster(for: attachment) : nil
-        _poster = State(initialValue: persisted)
-        _thumbHashBackdrop = State(initialValue: (isWindowed && persisted == nil)
-            ? attachment.thumbHash.flatMap(UIImage.fromThumbHash)
-            : nil)
+        // Poster NET au montage. La page OUVERTE peut le lire du disque — elle
+        // s'ouvre dessus, sans transition ; la VOISINE se construit pendant le
+        // glissement et ne lit que la mémoire, que `GalleryPrewarm` a remplie
+        // (#16470). Hors fenêtre, rien (leçon 292).
+        let poster: UIImage? = switch (isWindowed, isActive) {
+        case (true, true): VideoPosterResolver.persistedPoster(for: attachment)
+        case (true, false): VideoPosterResolver.residentPoster(for: attachment)
+        case (false, _): nil
+        }
+        _poster = State(initialValue: poster)
     }
 
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player`/
@@ -480,13 +482,8 @@ struct GalleryVideoPage: View, Equatable {
     @State private var offset: CGSize = .zero
     /// Poster NET (feature 3) : première image de la vidéo, extraite de son
     /// fichier — persisté sous `thumb:<url>`, résolu sinon par la cascade app
-    /// (`VideoPosterResolver`). Jamais la vignette serveur comme image affichée.
+    /// (`VideoPosterResolver`). La vignette serveur n'en est que l'attente.
     @State private var poster: UIImage?
-    /// Fond décoratif (thumbHash, flou assumé) le temps de la résolution.
-    @State private var thumbHashBackdrop: UIImage?
-    /// La cascade n'a rien rendu : dernier recours, la vignette serveur
-    /// (nette si disponible) forcée, puis le thumbHash.
-    @State private var posterUnavailable = false
     /// La couche vidéo a COMPOSÉ sa première frame (KVO `isReadyForDisplay`).
     /// Tant que non : le poster reste — `isPlaying` bascule AVANT la première
     /// frame, et retirer le poster sur ce seul signal laissait l'écran noir.
@@ -640,7 +637,6 @@ struct GalleryVideoPage: View, Equatable {
         // rien rendu : la première image nette se décode maintenant du fichier.
         .task(id: downloader.isCached) {
             guard isWindowed, downloader.isCached, poster == nil else { return }
-            posterUnavailable = false
             await resolvePosterIfNeeded()
         }
         // La page voisine DEVIENT courante : le geste arrive après coup. Sans ce
@@ -648,7 +644,6 @@ struct GalleryVideoPage: View, Equatable {
         // donc aucun poster) resterait sur son thumbHash jusqu'au démontage.
         .task(id: isActive) {
             guard isWindowed, isActive, poster == nil else { return }
-            posterUnavailable = false
             await resolvePosterIfNeeded()
         }
         // Autoplay en plein écran (retour porteur 2026-08-27, cf. #4015) : la
@@ -762,18 +757,18 @@ struct GalleryVideoPage: View, Equatable {
     }
 
     /// Ce qui tient l'écran avant la première frame composée : le poster NET
-    /// dès qu'il existe ; sinon, le temps de sa résolution, le thumbHash en fond
-    /// décoratif ; et en tout dernier recours — la cascade n'a rien rendu — la
-    /// vignette serveur, forcée (geste manuel) et nette si le serveur l'a
-    /// produite ainsi, puis le thumbHash. Jamais la vignette comme étage
-    /// intermédiaire : elle pouvait rester l'image affichée, floue au plein écran.
+    /// dès qu'il existe ; sinon la vignette serveur — la MÊME première image —,
+    /// forcée, sur le thumbHash. Elle ne tenait l'écran qu'après l'échec de la
+    /// cascade : la voisine glissait donc en place sous un thumbHash flou que
+    /// le poster remplaçait à l'arrivée (#16470). Le poster la recouvre dès
+    /// qu'il est résolu ; elle n'est jamais l'étage FINAL d'une page ouverte.
     @ViewBuilder
     private var thumbnailLayer: some View {
         if let poster {
             Image(uiImage: poster)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-        } else if posterUnavailable, serverThumbnailURL != nil || attachment.thumbHash != nil {
+        } else if serverThumbnailURL != nil || attachment.thumbHash != nil {
             ProgressiveCachedImage(
                 thumbHash: attachment.thumbHash,
                 thumbnailUrl: nil,
@@ -783,11 +778,6 @@ struct GalleryVideoPage: View, Equatable {
                 Color(hex: attachment.thumbnailColor)
             }
             .aspectRatio(contentMode: .fit)
-        } else if let thumbHashBackdrop {
-            Image(uiImage: thumbHashBackdrop)
-                .resizable()
-                .interpolation(.low)
-                .aspectRatio(contentMode: .fit)
         }
     }
 
@@ -797,19 +787,12 @@ struct GalleryVideoPage: View, Equatable {
 
     private func resolvePosterIfNeeded() async {
         guard poster == nil else { return }
-        if thumbHashBackdrop == nil {
-            thumbHashBackdrop = attachment.thumbHash.flatMap(UIImage.fromThumbHash)
-        }
         let resolved = await VideoPosterResolver.resolve(
             attachment: attachment,
             allowsNetwork: true,
             intent: isActive ? .userOpened : .ambientPrewarm
         )
-        guard !Task.isCancelled else { return }
-        guard let resolved else {
-            posterUnavailable = true
-            return
-        }
+        guard !Task.isCancelled, let resolved else { return }
         withAnimation(.easeIn(duration: 0.15)) { poster = resolved }
     }
 

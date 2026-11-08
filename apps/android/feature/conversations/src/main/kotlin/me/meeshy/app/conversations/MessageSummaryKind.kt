@@ -1,7 +1,6 @@
 package me.meeshy.app.conversations
 
-import me.meeshy.sdk.model.ApiConversationLastMessage
-import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.LastMessageSummaryKind
 import me.meeshy.sdk.model.media.MediaKindLabel
 import me.meeshy.sdk.model.media.MediaKindStrings
 
@@ -27,28 +26,7 @@ import me.meeshy.sdk.model.media.MediaKindStrings
  * `expiresAt <= now`, so a message whose expiry hits precisely at the sampled
  * instant already reads as EXPIRED — one less way a row can flash old content.
  */
-enum class MessageSummaryKind {
-    STANDARD,
-    HIDDEN,
-    VIEW_ONCE,
-    EPHEMERAL_ACTIVE,
-    EXPIRED,
-    ENCRYPTED,
-    ;
-
-    companion object {
-        fun of(message: ApiConversationLastMessage?, nowMillis: Long): MessageSummaryKind {
-            if (message == null) return STANDARD
-            val expiresAt = isoToEpochMillisOrNull(message.expiresAt)
-            if (expiresAt != null && expiresAt <= nowMillis) return EXPIRED
-            if (message.isEncrypted == true) return ENCRYPTED
-            if (message.isBlurred) return HIDDEN
-            if (message.isViewOnce) return VIEW_ONCE
-            if (expiresAt != null) return EPHEMERAL_ACTIVE
-            return STANDARD
-        }
-    }
-}
+typealias MessageSummaryKind = LastMessageSummaryKind
 
 /**
  * A row's summary line: the display [text] plus the classifier [kind] that drives

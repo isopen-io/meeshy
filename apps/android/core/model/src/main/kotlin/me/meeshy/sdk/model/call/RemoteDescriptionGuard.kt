@@ -38,6 +38,12 @@ class RemoteDescriptionGuard {
         localOfferPending = true
     }
 
+    /** Collision d'offres, côté poli : mon offre est annulée, plus aucune réponse n'est attendue. */
+    @Synchronized
+    fun onLocalOfferRolledBack() {
+        localOfferPending = false
+    }
+
     @Synchronized
     fun judge(type: DescriptionType, sdp: String): Verdict = when {
         lastApplied == type to sdp -> Verdict.Duplicate

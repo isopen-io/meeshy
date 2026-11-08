@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "voiceProfile.recording.readAloud",
+          "androidName": "voiceProfile_recording_readAloud",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "voiceProfile.recording.sample",
+          "androidName": "voiceProfile_recording_sample",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "voiceProfile.recording.createProfile",
+          "androidName": "voiceProfile_recording_createProfile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "voiceProfile.recording.min_duration",
+          "androidName": "voiceProfile_recording_min_duration",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "voiceProfile.recording.languagePicker",
+          "androidName": "voiceProfile_recording_languagePicker",
+          "status": "adopted"
+        },
+        {
+          "androidName": "voice_prompts_delete_sample",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

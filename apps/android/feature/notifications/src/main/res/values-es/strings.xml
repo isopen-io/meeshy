@@ -1,27 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="notifications_title">Notificaciones</string>
     <string name="notifications_mark_all_read">Marcar todo como leído</string>
-    <string name="notifications_empty">Sin notificaciones</string>
-    <string name="notifications_system_sender">Sistema</string>
-    <string name="notifications_action_delete">Eliminar</string>
     <string name="notifications_action_mark_read">Leído</string>
     <string name="notifications_empty_category">Sin notificaciones aquí</string>
-    <string name="notifications_category_all">Todas</string>
-    <string name="notifications_category_unread">No leídas</string>
-    <string name="notifications_category_messages">Mensajes</string>
-    <string name="notifications_category_reactions">Reacciones</string>
-    <string name="notifications_category_mentions">Menciones</string>
-    <string name="notifications_category_social">Social</string>
-    <string name="notifications_category_contacts">Contactos</string>
-    <string name="notifications_category_groups">Grupos</string>
-    <string name="notifications_category_calls">Llamadas</string>
-    <string name="notifications_category_translations">Traducciones</string>
-    <string name="notifications_category_system">Sistema</string>
-    <string name="notification_banner_in_conversation">%1$s en %2$s</string>
-    <string name="notification_banner_media_photo">📷 Foto</string>
-    <string name="notification_banner_media_video">🎥 Vídeo</string>
-    <string name="notification_banner_media_audio">🎵 Audio</string>
     <string name="notification_banner_preview_hidden">Nueva notificación</string>
     <string name="notifications_unread_prefix">Sin leer.</string>
     <string name="notifications_error_title">Notificaciones no disponibles</string>

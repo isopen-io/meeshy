@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileStore } from '@/lib/calls/call-self-tile';
+import type { AuthenticatedSession } from '@/lib/api/session';
+import { sessionStore } from '@/lib/api/session';
+import { speakerColor } from '@/lib/calls/call-speaker-color';
+import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileSize, selfTileStore } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
@@ -72,7 +75,7 @@ const fresh = () => selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_T
 
 const MINE = ['flip', 'camera', 'effects', 'screen'] as const;
 
-function Harness({ active, onSwap }: { readonly active: ActiveCall; readonly onSwap: () => void }) {
+function Harness({ active, onSwap, chromeVisible = true }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly chromeVisible?: boolean }) {
   const [full, setFull] = useState(false);
   const self = {
     full,
@@ -85,7 +88,7 @@ function Harness({ active, onSwap }: { readonly active: ActiveCall; readonly onS
     row: (group?: string) => <div data-test-row={group ?? 'all'} />,
     column: () => null,
   };
-  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
+  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} />;
 }
 
 /** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */
@@ -120,12 +123,13 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   return played;
 }
 
-const mount = (active: ActiveCall = call()) => {
+const mount = (active: ActiveCall = call(), { chromeVisible = true }: { readonly chromeVisible?: boolean } = {}) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   const swaps = { count: 0 };
-  act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} />));
+  const render = (visible: boolean) => act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} chromeVisible={visible} />));
+  render(chromeVisible);
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const tile = () => find('[data-call-corner]') as HTMLElement;
   const frame = () => find('[data-call-corner-frame]') as HTMLElement;
@@ -143,7 +147,7 @@ const mount = (active: ActiveCall = call()) => {
     act(() => root.unmount());
     host.remove();
   };
-  return { find, tile, frame, drag, key, swaps, done };
+  return { find, tile, frame, drag, key, swaps, done, render };
 };
 
 describe('ma vignette se glisse de coin en coin (#8747)', () => {
@@ -277,6 +281,34 @@ describe('le micro coupé du correspondant se voit en vidéo (#8787)', () => {
     act(() => view.tile().click());
     expect(view.find('[data-call-peer-muted="main"]')).toBeNull();
     expect(view.find('[data-call-corner] [data-call-peer-muted="corner"]')).not.toBeNull();
+    view.done();
+  });
+});
+
+describe('la couleur de la vignette du coin (#16635)', () => {
+  const asMe = () => sessionStore.setState({ session: { status: 'authenticated', token: 'jwt', sessionToken: 's', expiresAt: Number.MAX_SAFE_INTEGER, user: { id: 'u-moi', username: 'moi', displayName: 'Moi' } } as unknown as AuthenticatedSession });
+
+  test('ma vignette porte MA couleur ; échangée, elle porte celle du correspondant', () => {
+    fresh();
+    asMe();
+    const view = mount();
+    expect(view.tile().style.borderColor).toBe(speakerColor('u-moi'));
+    act(() => view.tile().click());
+    expect(view.tile().style.borderColor).toBe(speakerColor('u-peer'));
+    view.done();
+    sessionStore.setState({ session: { status: 'anonymous' } });
+  });
+});
+
+describe('un toucher range tout : ma vignette passe à sa petite taille (#16663)', () => {
+  test('chrome retiré, ma vignette prend la petite taille ; chrome rendu, elle reprend la taille choisie', () => {
+    fresh();
+    const view = mount(call(), { chromeVisible: false });
+    expect(view.frame().style.width).toBe(`${selfTileSize(1, { width: window.innerWidth, height: window.innerHeight }).width}px`);
+    expect(view.frame().getAttribute('data-call-self-tile-compact')).toBe('');
+    view.render(true);
+    expect(view.frame().style.width).toBe(`${selfTileSize(DEFAULT_SELF_TILE, { width: window.innerWidth, height: window.innerHeight }).width}px`);
+    expect(view.frame().getAttribute('data-call-self-tile-compact')).toBeNull();
     view.done();
   });
 });

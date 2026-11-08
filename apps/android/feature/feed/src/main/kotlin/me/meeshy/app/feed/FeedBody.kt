@@ -6,15 +6,19 @@ package me.meeshy.app.feed
  */
 enum class FeedBody { SKELETON, POSTS, EMPTY, LOAD_ERROR, OFFLINE_EMPTY }
 
-val FeedUiState.body: FeedBody
-    get() = when {
-        showSkeleton -> FeedBody.SKELETON
-        posts.isNotEmpty() -> FeedBody.POSTS
-        loadFailed && isOffline -> FeedBody.OFFLINE_EMPTY
-        loadFailed -> FeedBody.LOAD_ERROR
-        else -> FeedBody.EMPTY
-    }
+val FeedUiState.body: FeedBody get() = body(hasPending = false)
+
+/** Une publication encore sur l'appareil se lit dans le fil quel que soit l'état du reste (#14902). */
+fun FeedUiState.body(hasPending: Boolean): FeedBody = when {
+    hasPending -> FeedBody.POSTS
+    showSkeleton -> FeedBody.SKELETON
+    posts.isNotEmpty() -> FeedBody.POSTS
+    loadFailed && isOffline -> FeedBody.OFFLINE_EMPTY
+    loadFailed -> FeedBody.LOAD_ERROR
+    else -> FeedBody.EMPTY
+}
 
 /** Le bandeau « Hors ligne — les publications déjà vues restent affichées » ne se pose que sur des publications lisibles. */
-val FeedUiState.showsOfflineBand: Boolean
-    get() = isOffline && body == FeedBody.POSTS
+val FeedUiState.showsOfflineBand: Boolean get() = showsOfflineBand(hasPending = false)
+
+fun FeedUiState.showsOfflineBand(hasPending: Boolean): Boolean = isOffline && body(hasPending) == FeedBody.POSTS

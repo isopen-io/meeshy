@@ -150,7 +150,7 @@ function detailLabel(table: SynthesisStrings, detail: NotificationContentDetail 
 /**
  * La synthèse d'un contenu entier : le texte (sans l'adresse d'un lien ou d'une
  * invitation qu'il porte), ce que son détail EST, puis ses pièces jointes — sauf
- * celle d'un autocollant, dont l'image EST l'autocollant.
+ * celle d'un sticker, dont l'image EST le sticker.
  * `''` quand il n'a rien de tout cela.
  */
 export function contentSynthesis(lang: string, params: {

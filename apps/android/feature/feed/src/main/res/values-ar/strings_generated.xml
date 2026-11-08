@@ -2,6 +2,7 @@
 <resources>
     <string name="bookmarks_back">رجوع</string>
     <string name="feed_action_bookmark">حفظ</string>
+    <string name="feed_action_cancel">إلغاء</string>
     <string name="feed_action_copy_link">نسخ الرابط</string>
     <string name="feed_action_copy_text">نسخ النص</string>
     <string name="feed_action_delete">حذف</string>
@@ -12,6 +13,12 @@
     <string name="feed_action_send">إرسال</string>
     <string name="feed_action_share">مشاركة</string>
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
+    <string name="feed_bookmark_success">تمت الإضافة إلى المفضلة</string>
+    <string name="feed_caption_collapse">أقل</string>
+    <string name="feed_caption_expand">المزيد…</string>
+    <string name="feed_carousel_a11y_position">الوسائط %1$d من %2$d</string>
+    <string name="feed_carousel_next">الوسائط التالية</string>
+    <string name="feed_carousel_previous">الوسائط السابقة</string>
     <string name="feed_comment_card_folded">+%1$d ردود</string>
     <string name="feed_comment_card_thread">سلسلة التعليقات</string>
     <string name="feed_comment_imagine">حوِّل إلى صورة</string>
@@ -19,6 +26,7 @@
     <string name="feed_composer_open_label">شارِك شيئًا</string>
     <string name="feed_delete_cancel">إلغاء</string>
     <string name="feed_delete_confirm">حذف</string>
+    <string name="feed_draft_recovered">تمت استعادة المسودة دون اتصال</string>
     <string name="feed_empty">لا توجد منشورات</string>
     <string name="feed_empty_subtitle">ستظهر منشورات جهات اتصالك هنا</string>
     <string name="feed_header_nearby">المنشورات القريبة</string>
@@ -27,6 +35,7 @@
     <string name="feed_load_error">تعذّر تحميل التدفق</string>
     <string name="feed_location_shared">موقع تمت مشاركته</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
+    <string name="feed_media_view_fullscreen">اضغط للتكبير</string>
     <plurals name="feed_new_posts">
         <item quantity="zero">%1$d منشورات جديدة</item>
         <item quantity="one">%1$d منشور جديد</item>
@@ -40,17 +49,68 @@
     <string name="feed_notice_like_failed">تعذّر الإعجاب بالمنشور</string>
     <string name="feed_notice_pin_failed">خطأ في تثبيت المنشور</string>
     <string name="feed_notice_publish_failed">فشل نشر المنشور</string>
+    <string name="feed_notice_publish_queued_offline">المنشور بانتظار الإرسال</string>
     <string name="feed_notice_published">تم نشر المنشور</string>
     <string name="feed_notice_report_failed">خطأ في الإبلاغ عن المنشور</string>
     <string name="feed_notice_reported">تم الإبلاغ عن المنشور</string>
     <string name="feed_notice_repost_failed">خطأ في إعادة النشر</string>
     <string name="feed_notice_translation_failed">خطأ في الترجمة</string>
+    <string name="feed_pending_already_sent">تم إرسال هذا المنشور للتو. احذفه بعد ظهوره على الإنترنت.</string>
+    <string name="feed_pending_cancel_send">إلغاء الإرسال</string>
+    <string name="feed_pending_chip">في الانتظار</string>
+    <string name="feed_pending_retry_failed">تعذَّرت إعادة محاولة هذه العملية.</string>
+    <string name="feed_pending_retry_started">جارٍ إعادة المحاولة…</string>
+    <string name="feed_pending_waiting">في انتظار الإرسال</string>
+    <string name="feed_pending_withdraw_failed">خطأ في حذف المنشور</string>
+    <string name="feed_pending_withdrawn">تم إلغاء الإرسال</string>
+    <string name="feed_post_deleted">تم حذف المنشور</string>
+    <string name="feed_post_detail_document">مستند</string>
+    <string name="feed_post_detail_pages">صفحات</string>
+    <string name="feed_post_detail_story_unavailable">القصة غير متاحة</string>
+    <string name="feed_post_open">فتح</string>
+    <string name="feed_post_pinned">تم تثبيت المنشور</string>
     <string name="feed_post_reposted_from">أعاد النشر من @%1$s</string>
+    <plurals name="feed_post_stat_comments">
+        <item quantity="zero">لا توجد تعليقات</item>
+        <item quantity="one">تعليق واحد</item>
+        <item quantity="two">تعليقان</item>
+        <item quantity="few">%1$d تعليقات</item>
+        <item quantity="many">%1$d تعليقًا</item>
+        <item quantity="other">%1$d تعليق</item>
+    </plurals>
+    <plurals name="feed_post_stat_likes">
+        <item quantity="zero">لا توجد إعجابات</item>
+        <item quantity="one">إعجاب واحد</item>
+        <item quantity="two">إعجابان</item>
+        <item quantity="few">%1$d إعجابات</item>
+        <item quantity="many">%1$d إعجابًا</item>
+        <item quantity="other">%1$d إعجاب</item>
+    </plurals>
+    <plurals name="feed_post_stat_replies">
+        <item quantity="zero">لا توجد ردود</item>
+        <item quantity="one">رد واحد</item>
+        <item quantity="two">ردان</item>
+        <item quantity="few">%1$d ردود</item>
+        <item quantity="many">%1$d ردًا</item>
+        <item quantity="other">%1$d رد</item>
+    </plurals>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="zero">لا توجد إعادات نشر</item>
+        <item quantity="one">إعادة نشر واحدة</item>
+        <item quantity="two">إعادتا نشر</item>
+        <item quantity="few">%1$d إعادات نشر</item>
+        <item quantity="many">%1$d إعادة نشر</item>
+        <item quantity="other">%1$d إعادة نشر</item>
+    </plurals>
+    <string name="feed_post_stat_saves">%1$d عملية حفظ</string>
+    <string name="feed_post_stat_shares">%1$d مشاركة</string>
     <string name="feed_quote_cancel">إلغاء</string>
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
     <string name="feed_reel_card_a11y">ريل من %1$s</string>
+    <string name="feed_reel_impressions">الظهور</string>
     <string name="feed_reel_republished_by">أعاد نشره %1$s</string>
+    <string name="feed_reel_views">المشاهدات</string>
     <string name="feed_report_reason_harassment">تحرّش</string>
     <string name="feed_report_reason_hate_speech">خطاب كراهية</string>
     <string name="feed_report_reason_impersonation">انتحال الهوية</string>
@@ -86,8 +146,10 @@
     <string name="feed_translated">الترجمة متاحة</string>
     <string name="feed_translation_available">الترجمات المتاحة</string>
     <string name="feed_translation_close">إغلاق</string>
+    <string name="feed_translation_confidence_a11y">دقة الترجمة %1$s</string>
     <string name="feed_translation_original">الأصل</string>
     <string name="feed_translation_other_languages">لغات أخرى</string>
+    <string name="feed_translation_requested">مطلوبة</string>
     <string name="feed_translation_title">اللغات</string>
     <string name="feed_translation_translate">ترجمة</string>
     <string name="feed_translations_badge">الترجمات</string>
@@ -103,6 +165,7 @@
         <item quantity="other">عرض %1$d تعليق</item>
     </plurals>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%1$s</string>
+    <string name="media_download_video">تنزيل الفيديو</string>
     <string name="mood_bubble_react">تفاعل %1$s</string>
     <string name="mood_bubble_reply">رد</string>
     <string name="mood_spotlight_close">إغلاق</string>
@@ -113,8 +176,12 @@
     <string name="mood_spotlight_reply_sent">تم إرسال الرد</string>
     <string name="mood_spotlight_unavailable">لم يعد هذا المزاج متاحًا</string>
     <string name="nearby_back">رجوع</string>
+    <string name="nearby_denied_action">فتح الإعدادات</string>
+    <string name="nearby_denied_detail">لا يمكن لـ Meeshy الوصول إلى موقعك. اسمح بذلك من الإعدادات، أو حرّك الخريطة يدويًا.</string>
+    <string name="nearby_denied_title">الموقع غير مسموح به</string>
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
+    <string name="post_bookmark_removed">تمت الإزالة من المفضلة</string>
     <string name="post_comments_cancel_reply">إلغاء الرد</string>
     <string name="post_comments_composer_hint">تعليق…</string>
     <string name="post_comments_composer_reply_hint">رد…</string>
@@ -158,8 +225,23 @@
         <item quantity="other">عرض %1$d رد</item>
     </plurals>
     <string name="post_detail_back">رجوع</string>
+    <string name="post_detail_media_image">صورة مشارَكة</string>
+    <string name="post_detail_media_more">عرض الوسائط الـ %1$d</string>
+    <string name="post_detail_media_open_hint">فتح بملء الشاشة</string>
+    <string name="post_detail_media_video">فيديو مشارَك</string>
     <string name="post_detail_title">منشور</string>
     <string name="post_detail_viewers">المشاهدات</string>
+    <string name="profile_posts_empty">لا توجد منشورات</string>
+    <string name="profile_posts_empty_filter_subtitle">المس المربع مرة أخرى لعرض كل شيء</string>
+    <string name="profile_posts_empty_posts">لا توجد منشورات</string>
+    <string name="profile_posts_empty_reels">لا توجد مقاطع</string>
+    <string name="profile_posts_empty_subtitle">ستظهر المنشورات هنا</string>
+    <string name="profile_posts_end_of_content">لقد شاهدت كل شيء</string>
+    <string name="profile_posts_first_published_at">تم نشر أول محتوى في %1$s</string>
+    <string name="profile_posts_load_error">خطأ أثناء تحميل المنشورات</string>
+    <string name="profile_posts_stat_posts">المنشورات</string>
+    <string name="profile_posts_stat_reels">المقاطع</string>
+    <string name="profile_posts_stat_stories">القصص</string>
     <string name="status_bubble_republish">إعادة النشر</string>
     <string name="status_bubble_via">عبر @%1$s</string>
     <string name="status_composer_bare_add">إضافة كلمة</string>
@@ -170,11 +252,13 @@
     <string name="status_composer_emoji_more">رموز تعبيرية أخرى</string>
     <string name="status_composer_mood_question">كيف تشعر؟</string>
     <string name="status_composer_publish">نشر</string>
+    <string name="status_composer_publish_disabled_hint">اختر رمزًا تعبيريًا لنشر حالتك</string>
     <string name="status_composer_title">الحالة</string>
     <string name="status_composer_visibility_community">المجتمعات</string>
-    <string name="status_composer_visibility_friends">جهات الاتصال</string>
+    <string name="status_composer_visibility_friends">الأصدقاء</string>
     <string name="status_composer_visibility_private">خاص</string>
     <string name="status_composer_visibility_public">عام</string>
+    <string name="status_queued_offline">المزاج بانتظار الإرسال</string>
     <string name="status_react_error">تعذّر التفاعل مع الحالة</string>
     <string name="user_posts_back">رجوع</string>
     <string name="user_posts_empty">لا توجد منشورات</string>

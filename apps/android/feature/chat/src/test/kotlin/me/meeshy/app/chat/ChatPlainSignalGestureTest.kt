@@ -79,7 +79,11 @@ class ChatPlainSignalGestureTest {
     )
 
     /** [sealedOwn] (#13804) : un message à moi écrit APRÈS l'activation, scellé (`m3`), à côté de `m1` écrit en clair avant elle. */
-    private fun harness(encryptionMode: String?, sealedOwn: Boolean = false): Harness {
+    private fun harness(
+        encryptionMode: String?,
+        sealedOwn: Boolean = false,
+        endToEnd: me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess = me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess.None,
+    ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns flowOf(
             CacheResult.Fresh(
@@ -160,6 +164,8 @@ class ChatPlainSignalGestureTest {
             SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1")),
             ownReactionWithdrawals = OwnReactionWithdrawals(),
             outOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
+            openConversations = io.mockk.mockk(relaxed = true),
+            endToEnd = endToEnd,
         )
         return Harness(vm, repo, workManager, hidden)
     }
@@ -216,6 +222,24 @@ class ChatPlainSignalGestureTest {
 
         assertThat(h.hidden.hidden.value.isHidden("m2")).isTrue()
         coVerify(exactly = 0) { h.repo.deleteOptimistic(any()) }
+    }
+
+    /** #14655 — « pour moi » est irréversible : le clair du message quitte le coffre, comme le retrait pour moi d'iOS. */
+    @Test
+    fun `en bout en bout, supprimer pour moi retire le clair du coffre`() = runTest(dispatcher) {
+        val forgotten = mutableListOf<String>()
+        val endToEnd = object : me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess by me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess.None {
+            override suspend fun forgetHiddenForMe(messageIds: Collection<String>) {
+                forgotten += messageIds
+            }
+        }
+        val h = harness("e2ee", endToEnd = endToEnd)
+        advanceUntilIdle()
+
+        h.vm.deleteForMe("m2")
+        advanceUntilIdle()
+
+        assertThat(forgotten).containsExactly("m2")
     }
 
     @Test

@@ -39,6 +39,9 @@ struct ThemedConversationRow: View {
     /// « Conversation verrouillée » à la place du dernier message, de la
     /// frappe, du brouillon et de toute vignette — et VoiceOver aussi.
     var isContentLocked: Bool = false
+    /// Ce qu'ouvre le toucher de l'avatar (#15887), résolu par la ligne
+    /// (`ConversationOpenRoute.avatarRoute`). Défaut : les détails, jamais rien.
+    var avatarRoute: ConversationAvatarRoute = .info
     /// B1 (Prisme Linguistique) — viewer's preferred content languages,
     /// passed by `ConversationListView` from `AuthManager.currentUser?
     /// .preferredContentLanguages`. Used to resolve `lastMessagePreview`
@@ -334,7 +337,8 @@ struct ThemedConversationRow: View {
             onViewProfile: onViewProfile,
             onViewConversationInfo: onViewConversationInfo,
             onMoodBadgeTap: onMoodBadgeTap,
-            onCreateShareLink: onCreateShareLink
+            onCreateShareLink: onCreateShareLink,
+            avatarRoute: avatarRoute
         )
     }
 
@@ -557,6 +561,7 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.isContentLocked == rhs.isContentLocked &&
+        lhs.avatarRoute == rhs.avatarRoute &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
         lhs.deviceText == rhs.deviceText
     }
@@ -565,10 +570,28 @@ extension ThemedConversationRow: @MainActor Equatable {
 // MARK: - Avatar context menu (pure, testable)
 
 /// Rôles des entrées du menu contextuel de l'avatar d'une ligne de conversation.
-enum AvatarMenuRole: Equatable {
+nonisolated enum AvatarMenuRole: Hashable {
     case conversationInfo
     case profile
     case shareLink
+
+    /// Le libellé de l'entrée — le même pour le menu de l'avatar et pour
+    /// l'action VoiceOver qui le remplace (#15887).
+    var label: String {
+        switch self {
+        case .conversationInfo: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main)
+        case .profile: String(localized: "Voir le profil", bundle: .main)
+        case .shareLink: String(localized: "menu.create_share_link", bundle: .main)
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .conversationInfo: "info.circle.fill"
+        case .profile: "person.circle.fill"
+        case .shareLink: "link.badge.plus"
+        }
+    }
 }
 
 /// Construction PURE des rôles du menu contextuel de l'avatar. Isolée ici pour
@@ -587,6 +610,19 @@ enum ConversationAvatarMenu {
     static func groupRoles(canShare: Bool) -> [AvatarMenuRole] {
         canShare ? [.conversationInfo, .shareLink] : [.conversationInfo]
     }
+
+    /// Les entrées d'une ligne, d'après ce qu'ouvre son avatar (#15887) : une
+    /// directe sans profil à montrer — pair bloqué, compte fermé, anonyme,
+    /// conversation verrouillée — n'offre plus d'entrée « Voir le profil » qui
+    /// ne mène nulle part. Les DEUX rangs et l'élément VoiceOver la lisent.
+    static func roles(type: MeeshyConversation.ConversationType, opensProfile: Bool, hasShareAction: Bool) -> [AvatarMenuRole] {
+        guard type == .direct else {
+            return groupRoles(canShare: shareableTypes.contains(type) && hasShareAction)
+        }
+        return opensProfile ? directRoles() : [.conversationInfo]
+    }
+
+    private static let shareableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
 }
 
 // MARK: - Conversation Avatar View (extracted struct to avoid PAC issues with @State + escaping closures)
@@ -603,39 +639,25 @@ private struct ConversationAvatarView: View {
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
     var onCreateShareLink: (() -> Void)? = nil
+    var avatarRoute: ConversationAvatarRoute = .info
 
     @State private var showLastSeenTooltip = false
 
     private var isDirect: Bool { conversation.type == .direct }
 
-    private var directContextMenuItems: [AvatarContextMenuItem] {
-        ConversationAvatarMenu.directRoles().map { menuItem(for: $0) }
-    }
-
-    private var groupContextMenuItems: [AvatarContextMenuItem] {
-        let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
-        let canShare = sharableTypes.contains(conversation.type) && onCreateShareLink != nil
-        return ConversationAvatarMenu.groupRoles(canShare: canShare).map { menuItem(for: $0) }
+    private var contextMenuItems: [AvatarContextMenuItem] {
+        ConversationAvatarMenu.roles(
+            type: conversation.type, opensProfile: avatarRoute.opensProfile, hasShareAction: onCreateShareLink != nil
+        ).map { menuItem(for: $0) }
     }
 
     private func menuItem(for role: AvatarMenuRole) -> AvatarContextMenuItem {
-        switch role {
-        case .conversationInfo:
-            return AvatarContextMenuItem(
-                label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main),
-                icon: "info.circle.fill"
-            ) { onViewConversationInfo?() }
-        case .profile:
-            return AvatarContextMenuItem(
-                label: String(localized: "Voir le profil", bundle: .main),
-                icon: "person.circle.fill"
-            ) { onViewProfile?() }
-        case .shareLink:
-            return AvatarContextMenuItem(
-                label: String(localized: "menu.create_share_link", bundle: .main),
-                icon: "link.badge.plus"
-            ) { onCreateShareLink?() }
+        let action: (() -> Void)? = switch role {
+        case .conversationInfo: onViewConversationInfo
+        case .profile: onViewProfile
+        case .shareLink: onCreateShareLink
         }
+        return AvatarContextMenuItem(label: role.label, icon: role.icon) { action?() }
     }
 
     var body: some View {
@@ -653,13 +675,12 @@ private struct ConversationAvatarView: View {
                 // LE CONTOUR DU PAIR (#10713) — l'avatar le pose dans son empreinte, l'anneau de
                 // story concentrique à l'intérieur (#10714) ; sans contour servi, l'avatar d'avant.
                 ring: isDirect ? conversation.participantRing : nil,
-                // DM : tap → story (si non lue) sinon profil, via handleTap() de MeeshyAvatar.
-                //   Le handler profil passe par `onTap` (et NON `onViewProfile`) pour
-                //   préserver le tap-vers-profil sans déclencher l'auto-injection d'une
-                //   entrée « Voir le profil » codée en dur par MeeshyAvatar. L'entrée
-                //   profil localisée est fournie une seule fois par `directContextMenuItems`.
-                // Groupe : tap → infos conversation directement via onTap.
-                onTap: isDirect ? onViewProfile : onViewConversationInfo,
+                // Tap → story (si non lue) sinon ce que la loi décide (#15887) : le
+                //   profil du pair, sinon les détails — jamais rien. Le handler profil
+                //   passe par `onTap` (et NON `onViewProfile`) pour ne pas déclencher
+                //   l'auto-injection d'une entrée « Voir le profil » codée en dur par
+                //   MeeshyAvatar. L'entrée localisée vient de `contextMenuItems`.
+                onTap: avatarRoute.opensProfile ? onViewProfile : onViewConversationInfo,
                 onViewProfile: nil,
                 onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
                 onMoodTap: onMoodBadgeTap,
@@ -673,7 +694,7 @@ private struct ConversationAvatarView: View {
                         }
                     }
                 },
-                contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
+                contextMenuItems: contextMenuItems
             )
 
             // Last seen tooltip
@@ -692,6 +713,9 @@ private struct ConversationAvatarView: View {
                     .accessibilityHidden(true)
             }
         }
+        // Hors de la fusion VoiceOver de la ligne : l'élément frère posé par
+        // `ConversationRowItem` parle pour lui (#15887).
+        .accessibilityHidden(true)
     }
 }
 

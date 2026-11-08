@@ -18,12 +18,15 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
+import { participantAccountClosure } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
 import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
 import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
+import { loadViewerCapabilities, obsoleteViewerOf } from '../../services/conversations/obsoleteCapability';
+import { servedMessageRequest, type ServedMessageRequest } from '../../services/messaging/messageRequests';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -210,6 +213,10 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   // Ce que le lecteur n'a pas le droit d'écrire ici (#9927) — composé depuis
   // le type de la conversation et sa date de naissance déclarée.
   'viewerWriteRestriction',
+  // La demande de message en attente du lecteur (#14107) — composée, aucune colonne.
+  'messageRequest',
+  // Ce que le lecteur peut faire de la conversation (#14690) — composé, aucune colonne.
+  'viewerCapabilities',
   // Le fond et l'accent PERSONNELS du lecteur (#10736) — un fil ouvert par son
   // adresse (`/c/:id`) n'a que cette route : sans eux il se peint en Signature.
   'userPreferences',
@@ -246,6 +253,8 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     lastReadMessageCreatedAt: [],
     viewerEngagement: [],
     viewerWriteRestriction: ['type'],
+    messageRequest: [],
+    viewerCapabilities: [],
     userPreferences: [],
   },
 };
@@ -452,13 +461,16 @@ export function registerConversationDetailRoute(
        * et « non calculé » sont deux propriétés distinctes, et seule la seconde
        * économise quelque chose en amont.
        */
-      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture || sertCurrentUserJoinedAt;
+      const sertDemande = isFieldServed(champs, 'messageRequest');
+      let messageRequest: ServedMessageRequest | null = null;
+      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture || sertCurrentUserJoinedAt || sertDemande;
       try {
         const participant = veutParticipantAppelant
           ? await resolveCallerParticipant(prisma, authRequest.authContext, conversationId)
           : null;
         if (participant) {
           callerConversationRole = participant.role;
+          messageRequest = authRequest.authContext.isAnonymous ? null : servedMessageRequest(participant);
           if (sertCurrentUserJoinedAt) {
             currentUserJoinedAt = participant.joinedAt ?? null;
           }
@@ -527,6 +539,7 @@ export function registerConversationDetailRoute(
               return {
                 ...m,
                 ...(profileDecor === undefined ? {} : { profileDecor }),
+                ...participantAccountClosure(m),
                 isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,
                 lastActiveAt: vis.showLastSeenTimestamp ? m.lastActiveAt : null
               };
@@ -607,6 +620,21 @@ export function registerConversationDetailRoute(
           birthDate,
           now: new Date()
         });
+      }
+
+      // #14107 — la demande de message en attente du lecteur, lue sur SA ligne ; `null` hors demande.
+      if (sertDemande) charge.messageRequest = messageRequest;
+
+      // #14690 — la décision même de `DELETE /conversations/:id/obsolete`, pour CE lecteur.
+      if (isFieldServed(champs, 'viewerCapabilities')) {
+        const viewer = obsoleteViewerOf(authRequest.authContext);
+        const capabilitiesOf = await loadViewerCapabilities(prisma, {
+          viewers: [viewer],
+          conversationIds: [conversationId],
+          onError: (error) => logger.warn('viewer capabilities read failed', { error }),
+        });
+        const viewerCapabilities = capabilitiesOf(viewer.userId, conversationId);
+        if (viewerCapabilities) charge.viewerCapabilities = viewerCapabilities;
       }
 
       return sendSuccess(reply, restrictFields(charge, champs, CONVERSATION_DETAIL_PINNED));

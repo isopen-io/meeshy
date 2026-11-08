@@ -44,7 +44,7 @@ export async function deliverMessageCard(
   const mimeType = blob.type === '' ? 'image/png' : (blob.type.split(';')[0] ?? blob.type);
   if (intent === 'save' && doors.gallery !== null) {
     const saved = await doors.gallery.save({ blob, fileName, mimeType });
-    if (saved === 'saved') return 'gallery';
+    if (saved === 'saved' || saved === 'already-saved') return 'gallery';
   }
   const portal = await doors.portal();
   if (portal === null) return 'unavailable';

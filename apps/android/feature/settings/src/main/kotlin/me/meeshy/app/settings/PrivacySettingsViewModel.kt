@@ -18,7 +18,6 @@ import me.meeshy.sdk.model.PrivacyCatalog
 import me.meeshy.sdk.model.PrivacyInfoTopic
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.PrivacyToggle
-import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.AnalyticsCollectionGate
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.privacy.PrivacyPreferencesSyncRepository
@@ -56,6 +55,8 @@ class PrivacySettingsViewModel @Inject constructor(
 
     private val presentedInfo = MutableStateFlow<PrivacyInfoTopic?>(null)
 
+    private val writer = PrivacyToggleWriter(store, syncRepository, workManager, analyticsGate)
+
     val state: StateFlow<PrivacyUiState> =
         combine(store.preferences, locationStore.preferences, presentedInfo) { privacy, location, info ->
             PrivacyUiState(preferences = privacy, locationSharing = location, presentedInfo = info)
@@ -87,16 +88,6 @@ class PrivacySettingsViewModel @Inject constructor(
 
     fun setToggle(toggle: PrivacyToggle, enabled: Boolean) {
         if (!PrivacyCatalog.isWritable(toggle)) return
-        // Read the base *inside* the launch so back-to-back edits on different toggles
-        // serialize through viewModelScope and never clobber each other's write.
-        viewModelScope.launch {
-            val current = store.preferences.value
-            if (PrivacyCatalog.isEnabled(current, toggle) == enabled) return@launch
-            val updated = PrivacyCatalog.set(current, toggle, enabled)
-            store.setPreferences(updated)
-            if (toggle == PrivacyToggle.ALLOW_ANALYTICS) analyticsGate.onAnalyticsConsentChanged(enabled)
-            val cmid = syncRepository.enqueueSync(updated)
-            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
-        }
+        viewModelScope.launch { writer.set(toggle, enabled) }
     }
 }

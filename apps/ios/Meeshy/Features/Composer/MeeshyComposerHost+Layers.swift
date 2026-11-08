@@ -34,7 +34,7 @@ import MeeshyUI
 // (qui déclare le `@StateObject`) sans re-rendre la couche, dont la valeur
 // n'aurait pas changé d'un octet — et la pile afficherait l'état d'avant.
 
-/// Les huit magasins du meuble, observés par chaque couche. Le `body` inline
+/// Les sept magasins du meuble, observés par chaque couche. Le `body` inline
 /// se ré-évaluait sur la publication de n'importe lequel ; chaque couche doit
 /// en faire autant pour que le découpage ne change rien à ce qui s'affiche.
 struct ComposerHostObservation: DynamicProperty {
@@ -44,7 +44,6 @@ struct ComposerHostObservation: DynamicProperty {
     @ObservedObject var sceneExport: ComposerSceneExportController
     @ObservedObject var sceneMentionBox: ComposerMentionControllerBox
     @ObservedObject var mediaPorterStore: ComposerMediaPorterStore
-    @ObservedObject var publishTrigger: ComposerPublishTrigger
     @ObservedObject var autosave: ComposerAutosaveController
 }
 
@@ -83,7 +82,7 @@ struct ComposerHostSocleSlot: View {
     var body: some View { host.socleSlot.frame(maxWidth: ComposerSceneArrangementRelay(host: host).publishWidth) }
 }
 
-/// La rangée du socle — audience · texte du post · publier (`socle`).
+/// La rangée du socle — audience · publier (`socle`).
 struct ComposerHostSocleRow: View {
     let host: MeeshyComposerHost
     var observation: ComposerHostObservation
@@ -140,7 +139,6 @@ extension MeeshyComposerHost {
             sceneExport: sceneExport,
             sceneMentionBox: sceneMentionBox,
             mediaPorterStore: mediaPorterStore,
-            publishTrigger: publishTrigger,
             autosave: autosave
         )
     }
@@ -176,10 +174,7 @@ extension MeeshyComposerHost {
         // **La saisie s'ancre en BAS, la scène monte au-dessus** (#4361). Elle
         // fut une couche plein écran voilant la scène ; écrire une description,
         // c'est regarder la scène qu'on décrit, et le voile la retirait au
-        // moment précis où elle sert. La remontée passe par
-        // `storyComposerCanvasBottomReservation`, posée sur `composerSurface` —
-        // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
-        // seconde.
+        // moment précis où elle sert.
         .overlay(alignment: .bottom) { textEditingZones }
         // Le socle revient APRÈS le panneau qui part, jamais pendant (#9448).
         .modifier(ComposerWritingAnimation(writesText: writesText))

@@ -11,13 +11,66 @@ Responsabilités:
 import asyncio
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 from collections import defaultdict
 
 # Import local
 from ..zmq_models import TranslationTask
+from ..task_privacy import is_live_call_caption
 
 logger = logging.getLogger(__name__)
+
+RejectedTasksHandler = Callable[[List[TranslationTask]], Awaitable[None]]
+
+
+class SignalingQueue(asyncio.Queue):
+    """
+    #16780 — une file qui lève le drapeau partagé « du travail est arrivé » à
+    chaque dépôt. Les workers attendent ce drapeau, jamais un `get()` : un
+    `Event.wait()` annulé ne consomme rien, là où un `get()` perdant d'un
+    `asyncio.wait` sur deux files peut avoir déjà retiré son élément.
+    `Queue.put` dépose par `put_nowait` : surcharger ce seul point couvre les deux.
+    """
+
+    def __init__(self, maxsize: int, work_arrived: asyncio.Event):
+        super().__init__(maxsize=maxsize)
+        self._work_arrived = work_arrived
+
+    def put_nowait(self, item) -> None:
+        super().put_nowait(item)
+        self._work_arrived.set()
+
+
+async def take_next_task(
+    queues: Tuple[asyncio.Queue, ...],
+    work_arrived: asyncio.Event,
+    timeout: float
+) -> Optional[TranslationTask]:
+    """
+    Prend la première tâche disponible dans `queues`, DANS L'ORDRE (la voie
+    rapide d'abord), en attendant au plus `timeout` secondes qu'une arrive.
+
+    Le drapeau est baissé AVANT de regarder les files, sans `await` entre les
+    deux : un dépôt postérieur le relève donc forcément, et aucun réveil ne se
+    perd. Un réveil pour rien (un autre worker a pris la tâche, ou elle est
+    tombée dans une file que ce worker ne sert pas) ne fait que reboucler.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        work_arrived.clear()
+        for queue in queues:
+            try:
+                return queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return None
+        try:
+            await asyncio.wait_for(work_arrived.wait(), timeout=remaining)
+        except asyncio.TimeoutError:
+            pass
 
 
 class ConnectionManager:
@@ -35,7 +88,8 @@ class ConnectionManager:
         self,
         normal_pool_size: int = 10000,
         any_pool_size: int = 10000,
-        fast_pool_size: int = 5000
+        fast_pool_size: int = 5000,
+        on_tasks_rejected: Optional[RejectedTasksHandler] = None
     ):
         """
         Initialize connection manager
@@ -44,11 +98,15 @@ class ConnectionManager:
             normal_pool_size: Taille max de la pool normale
             any_pool_size: Taille max de la pool "any"
             fast_pool_size: Taille max de la fast pool (textes courts)
+            on_tasks_rejected: rappel des tâches d'un lot refusé par une file
+                pleine (#16781). Sans rappel, le refus est compté et journalisé.
         """
-        # Queues FIFO
-        self.normal_pool = asyncio.Queue(maxsize=normal_pool_size)
-        self.any_pool = asyncio.Queue(maxsize=any_pool_size)
-        self.fast_pool = asyncio.Queue(maxsize=fast_pool_size)
+        self.on_tasks_rejected = on_tasks_rejected
+        # Queues FIFO, toutes reliées au même drapeau « du travail est arrivé » (#16780)
+        self.work_arrived = asyncio.Event()
+        self.normal_pool = SignalingQueue(normal_pool_size, self.work_arrived)
+        self.any_pool = SignalingQueue(any_pool_size, self.work_arrived)
+        self.fast_pool = SignalingQueue(fast_pool_size, self.work_arrived)
 
         # Configuration batch accumulation
         self.enable_batching = os.getenv("TRANSLATOR_BATCH_ENABLED", "true").lower() == "true"
@@ -127,6 +185,9 @@ class ConnectionManager:
             True si enfilée avec succès, False sinon
         """
         try:
+            if is_live_call_caption(task.message_id):
+                return await self._enqueue_live_caption(task)
+
             # ════════════════════════════════════════════════════════════════
             # OPTIMISATION: Textes courts → fast_pool (traités en priorité)
             # ════════════════════════════════════════════════════════════════
@@ -155,15 +216,21 @@ class ConnectionManager:
                     self._batch_accumulator[batch_key].append(task)
 
                     # Flush immédiat si batch max atteint
+                    rejected: List[TranslationTask] = []
                     if len(self._batch_accumulator[batch_key]) >= self.batch_max_size:
                         tasks_to_flush = self._batch_accumulator.pop(batch_key)
-                        await self._enqueue_batch(tasks_to_flush)
+                        if not await self._enqueue_batch(tasks_to_flush):
+                            rejected = tasks_to_flush
                         logger.debug(
                             f"⚡ [BATCH] Max size reached, immediate flush of "
                             f"{len(tasks_to_flush)} tasks"
                         )
 
-                    return True
+                # #16781 — une tâche entrée dans l'accumulateur est ACCEPTÉE :
+                # son éventuel refus se dit par le rappel, jamais par ce retour,
+                # sinon la tâche déclenchante serait signalée deux fois.
+                await self._report_rejected(rejected)
+                return True
 
             # Fallback: pas de batching, enqueue directement
             return await self._enqueue_single_task(task)
@@ -171,6 +238,19 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error enqueueing task {task.task_id}: {e}")
             return False
+
+    async def _enqueue_live_caption(self, task: TranslationTask) -> bool:
+        """
+        #16780 — un sous-titre d'appel se lit pendant qu'on parle : voie rapide
+        quelle que soit sa longueur, sans `utils.performance`, jamais en lot.
+        Voie rapide pleine : la file régulière directe, dont le refus se dit.
+        """
+        if self.fast_pool.full():
+            return await self._enqueue_single_task(task)
+        await self.fast_pool.put(task)
+        self.stats['fast_pool_size'] = self.fast_pool.qsize()
+        self.stats['fast_track_count'] += 1
+        return True
 
     async def _enqueue_single_task(self, task: TranslationTask) -> bool:
         """Enfile une tâche unique (sans batching)"""
@@ -200,10 +280,16 @@ class ConnectionManager:
 
         return True
 
-    async def _enqueue_batch(self, tasks: List[TranslationTask]):
-        """Enfile un batch de tâches comme une seule unité"""
+    async def _enqueue_batch(self, tasks: List[TranslationTask]) -> bool:
+        """
+        Enfile un batch de tâches comme une seule unité.
+
+        Returns:
+            False si la file est pleine : le lot est compté (une rejection par
+            tâche) et journalisé par ses task_id, jamais par son texte (#16781).
+        """
         if not tasks:
-            return
+            return True
 
         # Créer une tâche batch
         batch_task = TranslationTask(
@@ -220,15 +306,32 @@ class ConnectionManager:
         # Stocker les tâches originales
         batch_task._batch_tasks = tasks  # type: ignore
 
-        # Enqueue dans la pool appropriée
-        if tasks[0].conversation_id == "any":
-            if not self.any_pool.full():
-                await self.any_pool.put(batch_task)
-                self.stats['batches_created'] += 1
-        else:
-            if not self.normal_pool.full():
-                await self.normal_pool.put(batch_task)
-                self.stats['batches_created'] += 1
+        pool_name = "any" if tasks[0].conversation_id == "any" else "normal"
+        pool = self.any_pool if pool_name == "any" else self.normal_pool
+        if pool.full():
+            self.stats['pool_full_rejections'] += len(tasks)
+            logger.warning(
+                f"[TRANSLATOR] {pool_name} pool full, rejecting batch of {len(tasks)} "
+                f"tasks: {[t.task_id for t in tasks]}"
+            )
+            return False
+
+        await pool.put(batch_task)
+        self.stats['batches_created'] += 1
+        return True
+
+    async def _report_rejected(self, tasks: List[TranslationTask]) -> None:
+        """Remet les tâches refusées au rappel, appelé HORS du verrou de lot ;
+        un rappel qui lève est journalisé et n'interrompt rien."""
+        if not tasks or self.on_tasks_rejected is None:
+            return
+        try:
+            await self.on_tasks_rejected(tasks)
+        except Exception as e:
+            logger.error(
+                f"[TRANSLATOR] Rejection callback failed for {len(tasks)} tasks "
+                f"{[t.task_id for t in tasks]}: {type(e).__name__}"
+            )
 
     def _get_batch_key(self, task: TranslationTask) -> str:
         """
@@ -257,6 +360,7 @@ class ConnectionManager:
 
     async def _flush_batches(self):
         """Transfère les batches accumulés vers les queues de traitement"""
+        rejected_batches: List[List[TranslationTask]] = []
         async with self._batch_lock:
             if not self._batch_accumulator:
                 return
@@ -265,8 +369,9 @@ class ConnectionManager:
                 if not tasks:
                     continue
 
-                # Créer et enqueuer le batch
-                await self._enqueue_batch(tasks)
+                if not await self._enqueue_batch(tasks):
+                    rejected_batches.append(tasks)
+                    continue
                 logger.debug(
                     f"⚡ [BATCH] Flushed {len(tasks)} tasks to "
                     f"{'any' if tasks[0].conversation_id == 'any' else 'normal'} pool"
@@ -274,6 +379,9 @@ class ConnectionManager:
 
             # Vider l'accumulateur
             self._batch_accumulator.clear()
+
+        for tasks in rejected_batches:
+            await self._report_rejected(tasks)
 
     def get_stats(self) -> dict:
         """Retourne les statistiques des connexions"""

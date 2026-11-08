@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
+import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 import {
   sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendInternalError,
 } from '../../utils/response.js';
@@ -11,6 +13,8 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { getCacheStore } from '../../services/CacheStore';
 import { blockCacheKey } from '../../utils/block-cache';
 import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcquaintance';
+import { stopBringsAfterUserBlock } from '../bring';
+import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { sendWithETag } from '../../utils/etag';
@@ -101,6 +105,9 @@ export async function bloquer(
   });
 
   const dejaBloque = courant?.blockedUserIds.includes(cibleId) ?? false;
+  // #13934 — ce que chacun voit de l'écoute de l'autre, capturé AVANT : seul qui voyait reçoit l'effacement.
+  const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, '[BLOCKS] Now playing not cleared after block', error) };
+  const ecouteAvant = dejaBloque ? new Map() : await captureNowPlayingBefore(ecoute, { userA: moi, userB: cibleId });
 
   if (!dejaBloque) {
     // Le `MutationLog` enregistre l'id de la CIBLE : un blocage ne produit
@@ -131,6 +138,15 @@ export async function bloquer(
 
   // Les cercles (#13932) : un blocage annule la Connaissance née toute seule.
   cancelAutoAcquaintanceOnBlock(fastify.prisma, { blockerId: moi, blockedId: cibleId });
+
+  // Le Bring (#13936) : un Bring qui sonne entre les deux s'arrête, sans rien apprendre au bloqué.
+  stopBringsAfterUserBlock(fastify, moi, cibleId);
+  // Le talkie (#13935) : une voix qui passe entre les deux est coupée, sans rien apprendre au bloqué.
+  const couper = async () => cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: moi, blockedId: cibleId, scope: 'user' });
+  couper().catch((error: unknown) => logError(fastify.log, '[BLOCKS] Talkie not cut after block', error));
+  // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
+  refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

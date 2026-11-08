@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -70,7 +71,7 @@ internal fun PinnedBannerStrip(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (banner.count > 1) {
-                        stringResource(R.string.chat_pinned_count, banner.count)
+                        pluralStringResource(R.plurals.chat_pinned_count, banner.count, banner.count)
                     } else {
                         stringResource(R.string.chat_pinned_title)
                     },

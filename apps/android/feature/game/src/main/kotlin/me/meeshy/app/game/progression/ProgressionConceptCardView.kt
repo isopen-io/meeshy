@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -108,7 +109,7 @@ internal fun ProgressionConceptCardView(
                 Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs), verticalAlignment = Alignment.CenterVertically) {
                     if (card.urgent) {
                         androidx.compose.foundation.layout.Box(
-                            Modifier.size(URGENT_DOT).clip(CircleShape).background(MeeshyPalette.Warning),
+                            Modifier.testTag(URGENT_DOT_TAG).size(URGENT_DOT).clip(CircleShape).background(MeeshyPalette.Warning),
                         )
                     }
                     Text(
@@ -163,5 +164,6 @@ internal fun GameValueRoll(
 }
 
 private val MIN_TAP_TARGET = 44.dp
+internal const val URGENT_DOT_TAG = "progression.card.urgent"
 private val URGENT_DOT = 8.dp
 private const val ROLL_MILLIS = 350

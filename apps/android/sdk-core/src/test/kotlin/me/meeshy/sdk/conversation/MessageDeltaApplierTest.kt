@@ -153,6 +153,51 @@ class MessageDeltaApplierTest {
     }
 
     @Test
+    fun `closing a view-once locally seals the row like a consumption by the reader`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+
+        applier(harness).erasePlaintexts(listOf("m1"))
+        applier(harness).erasePlaintexts(listOf("m1"))
+
+        val row = harness.cachedMessage("m1")
+        assertThat(row.consumedByMe).isTrue()
+        assertThat(row.content).isEmpty()
+        assertThat(row.translations).isEmpty()
+        assertThat(row.attachments.all { it.fileUrl == null }).isTrue()
+    }
+
+    @Test
+    fun `the opening instant is the clock's, not the instant the row was cached`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        harness.clock.now += 60_000
+
+        applier(harness).erasePlaintexts(listOf("m1"))
+        harness.clock.now += 60_000
+        applier(harness).apply(MessageConsumedEvent("m1", "c1", userId = "me", viewOnceCount = 1), viewerId = "me")
+
+        assertThat(harness.database.messageDao().find("m1")!!.viewOnceOpenedAt).isEqualTo(harness.clock.now - 60_000)
+    }
+
+    @Test
+    fun `a consumption by the reader from another device stamps the clock's instant`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        harness.clock.now += 60_000
+
+        applier(harness).apply(MessageConsumedEvent("m1", "c1", userId = "me", viewOnceCount = 1), viewerId = "me")
+
+        assertThat(harness.database.messageDao().find("m1")!!.viewOnceOpenedAt).isEqualTo(harness.clock.now)
+    }
+
+    @Test
+    fun `a consumption by someone else stamps nothing`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+
+        applier(harness).apply(MessageConsumedEvent("m1", "c1", userId = "someone", viewOnceCount = 1), viewerId = "me")
+
+        assertThat(harness.database.messageDao().find("m1")!!.viewOnceOpenedAt).isNull()
+    }
+
+    @Test
     fun `a view-once purge keeps the bubble but drops its content`() = runHarnessTest { harness ->
         harness.seedSynced(message())
 

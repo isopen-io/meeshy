@@ -6,17 +6,9 @@
 # une ligne qui ne correspond plus à aucun littéral aussi (le littéral a été traduit : la retirer).
 # Le fichier ne peut donc que rétrécir. Pas de numéro de ligne : un déplacement ne le casse pas.
 
-# Marque (logo, mot-symbole) : le nom propre ne se traduit pas, mais la description d'accessibilité
-# du logo gagnera sa clé quand l'accessibilité sera passée en revue.
-contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/BrandLogo.kt | Meeshy
-contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshySplashScreen.kt | Meeshy
+# Marque : le mot-symbole « Meeshy » est un nom propre qui ne se traduit pas ; la description
+# d'accessibilité du logo, elle, passe par une ressource (brand_logo_description).
 Text | sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshySplashScreen.kt | Meeshy
-
-# Pilule d'enregistrement vocal : trois descriptions d'accessibilité en anglais, à passer en
-# ressources (clés iOS adoptées) par le lot du composeur vocal.
-contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/recording/VoiceRecordingPill.kt | Cancel recording
-contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/recording/VoiceRecordingPill.kt | Stop and add to attachments
-contentDescription | sdk-ui/src/main/kotlin/me/meeshy/ui/component/recording/VoiceRecordingPill.kt | Send voice message
 
 # Nom du canal de notifications des messages, écrit deux fois (installeur de canaux et service FCM)
 # et visible dans les réglages système : à passer en ressource par le lot du pipeline push.

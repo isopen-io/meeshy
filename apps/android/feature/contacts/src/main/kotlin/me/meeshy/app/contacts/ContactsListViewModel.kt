@@ -17,12 +17,16 @@ import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.model.friend.repainted
+import me.meeshy.sdk.model.UserUpdatedEvent
+import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
@@ -93,6 +97,7 @@ class ContactsListViewModel @Inject constructor(
     private val presenceStore: PresenceStore,
     private val blockCache: BlockCache = BlockCache(),
     private val blockRepository: BlockRepository? = null,
+    private val messageSocket: MessageSocketManager? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsListUiState())
@@ -106,11 +111,19 @@ class ContactsListViewModel @Inject constructor(
      */
     private var servedRoster: List<FriendRequestUser> = emptyList()
 
+    /**
+     * Le compte sous lequel [servedRoster] a été chargé (cache ou réseau) — pris AVANT la lecture,
+     * jamais au moment d'une écriture dérivée : un repeint ou une réconciliation qui arrive après un
+     * changement de compte écrit sous le compte du carnet, et la barrière le refuse (#13560).
+     */
+    private var servedTicket: AccountTicket? = null
+
     private var lastReconciledFriendIds: Set<String> = friendshipCache.currentFriendIds
 
     init {
         observeFriendshipCache()
         observePresence()
+        observeUserUpdates()
         load()
     }
 
@@ -153,8 +166,12 @@ class ContactsListViewModel @Inject constructor(
      */
     private suspend fun paintFromCache() {
         if (_state.value.friends.isNotEmpty()) return
+        val ticket = friendListRepository.ticket()
         val cached = friendListRepository.cachedSnapshot()
-        if (cached != null) servedRoster = BlockedExclusion.friends(cached, blockCache.currentBlockedIds)
+        if (cached != null) {
+            servedRoster = BlockedExclusion.friends(cached, blockCache.currentBlockedIds)
+            servedTicket = ticket
+        }
         _state.update {
             if (cached == null) it.copy(isLoading = true)
             else it.copy(friends = withPresence(servedRoster), isLoading = false)
@@ -194,6 +211,7 @@ class ContactsListViewModel @Inject constructor(
                 friendshipCache.hydrate(sent = sent, received = received, ticket = ticket)
                 lastReconciledFriendIds = friendshipCache.currentFriendIds
                 servedRoster = ContactList.fromAcceptedRequests(received + sent, currentUserId)
+                servedTicket = ticket
                 val persisted = servedRoster
                 _state.update { it.copy(friends = withPresence(persisted), isLoading = false, errorMessage = null) }
                 friendListRepository.persist(persisted, ticket)
@@ -227,6 +245,38 @@ class ContactsListViewModel @Inject constructor(
         }
     }
 
+    /**
+     * `user:updated` (nom, photo) repeint la ligne en place — sans relecture du carnet. Le carnet
+     * SERVI est repeint (et réécrit en base) : la carte de présence se recouvre ensuite par-dessus.
+     */
+    private fun observeUserUpdates() {
+        val updates = messageSocket?.userUpdated ?: return
+        viewModelScope.launch {
+            updates.collect { event ->
+                try {
+                    repaint(event)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    Unit
+                }
+            }
+        }
+    }
+
+    private suspend fun repaint(event: UserUpdatedEvent) {
+        val ticket = servedTicket
+        if (ticket != friendListRepository.ticket()) return
+        var changed = false
+        val next = servedRoster.map { friend ->
+            event.repainted(friend)?.also { changed = true } ?: friend
+        }
+        if (!changed) return
+        servedRoster = next
+        _state.update { it.copy(friends = withPresence(next)) }
+        friendListRepository.persist(next, ticket)
+    }
+
     private fun withPresence(friends: List<FriendRequestUser>): List<FriendRequestUser> =
         PresenceOverlay.apply(friends, presenceStore.entriesNow())
 
@@ -240,7 +290,7 @@ class ContactsListViewModel @Inject constructor(
         if (result.friends != current) {
             servedRoster = result.friends
             _state.update { it.copy(friends = withPresence(result.friends)) }
-            val ticket = friendListRepository.ticket()
+            val ticket = servedTicket
             viewModelScope.launch { friendListRepository.persist(result.friends, ticket) }
         }
         if (result.needsRefetch) refetch()

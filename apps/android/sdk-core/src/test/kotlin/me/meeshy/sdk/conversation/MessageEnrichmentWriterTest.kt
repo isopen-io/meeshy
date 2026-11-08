@@ -31,6 +31,10 @@ class MessageEnrichmentWriterTest {
             lastRequest = body
             return response
         }
+
+        override suspend fun job(jobId: String): ApiResponse<me.meeshy.sdk.model.TranslationJob> = ApiResponse(success = false)
+
+        override suspend fun cancelJob(jobId: String): ApiResponse<kotlinx.serialization.json.JsonElement> = ApiResponse(success = false)
     }
 
     private fun translated(text: String) =

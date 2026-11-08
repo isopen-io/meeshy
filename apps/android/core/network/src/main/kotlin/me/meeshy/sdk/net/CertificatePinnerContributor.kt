@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
+import me.meeshy.sdk.model.media.MediaClientRole
 import me.meeshy.sdk.model.net.CertificatePinDecision
 import me.meeshy.sdk.model.net.CertificatePinEvaluator
 import me.meeshy.sdk.model.net.CertificatePinMode
@@ -81,7 +82,7 @@ object CertificatePinnerContributor {
         policy: CertificatePinPolicy = GatewayPins.POLICY,
         clock: () -> Long = System::currentTimeMillis,
         sink: PinLogSink = LogcatPinLogSink,
-    ): HttpClientContributor = HttpClientContributor.of(ID, PRIORITY) {
+    ): HttpClientContributor = HttpClientContributor.granted(ID, PRIORITY, MediaClientRole.CERTIFICATE_PINNING) {
         it.addNetworkInterceptor(CertificatePinInterceptor(policy, clock, sink))
     }
 }

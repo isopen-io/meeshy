@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "audio.fullscreen.language.choose",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "translation.audio.error",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

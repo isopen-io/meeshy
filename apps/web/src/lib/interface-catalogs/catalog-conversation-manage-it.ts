@@ -67,6 +67,11 @@ const it = {
   'conversationManage.options.pin': 'Fissa',
   'conversationManage.options.mute': 'Silenzia',
   'conversationManage.options.archive': 'Archivia',
+  'conversationManage.obsolete': 'Rendi obsoleta',
+  'conversationManage.obsolete.title': 'Rendere obsoleta la conversazione?',
+  'conversationManage.obsolete.message': 'Scomparirà per tutti i partecipanti. Il contenuto diventerà illeggibile e verrà cancellato entro 48 ore.',
+  'conversationManage.obsolete.error': 'Impossibile rendere obsoleta la conversazione.',
+  'conversationManage.obsolete.requestSender': 'Solo il destinatario della richiesta può eliminare questa conversazione.',
   'conversationManage.header.created_on': 'Creata il {date}',
   'conversationManage.header.muted': 'Notifiche disattivate',
 } satisfies ConversationManageCatalog;

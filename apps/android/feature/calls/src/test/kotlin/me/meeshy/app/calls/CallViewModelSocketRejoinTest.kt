@@ -77,6 +77,7 @@ class CallViewModelSocketRejoinTest {
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns endedCalls
         every { signalManager.iceServersRefreshed } returns MutableSharedFlow<IceServersRefreshedPayload>()
+        every { signalManager.callErrors } returns MutableSharedFlow<me.meeshy.sdk.model.call.CallErrorSignal>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()
@@ -110,7 +111,7 @@ class CallViewModelSocketRejoinTest {
         }),
         CallWaitingController(signalManager, silentTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, object : CallHeartbeatTicker { override val beats: Flow<Unit> = emptyFlow() }, silentTimer, silentTimer),
-        CallAnalyticsController(signalManager, clock),
+        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
         CallExtensionPoints(
             controllers = CallFeatureControllerRegistry(emptySet()),
             overlays = CallOverlayRegistry(emptySet()),
@@ -123,6 +124,8 @@ class CallViewModelSocketRejoinTest {
         recordingCallPreview(),
         silentTurnCredentials(signalManager),
         testGroupTitleWording,
+        CallEndReconciler(signalManager),
+        CallTeardownController(emptySet()),
     )
 
     private fun socketDropsAndReturns() {

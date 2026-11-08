@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { fixtureSendFriendRequest, resetFixtureFriendsForTests } from '@/lib/api/fixtures-friends';
 import { GAME_V2_QUERY_PREFIX } from '@/lib/api/game-v2-queries';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -54,6 +55,7 @@ beforeAll(async () => {
     reportError(...args);
   };
   await loadInterfaceCatalog('fr');
+  resetFixtureFriendsForTests();
 });
 
 afterAll(async () => {
@@ -75,6 +77,7 @@ afterEach(async () => {
   unregister = null;
   closeProfilePeek();
   appQueryClient.clear();
+  resetFixtureFriendsForTests();
   window.history.replaceState(null, '', '/c/c-direct-kwame');
   expect(leaked).toEqual([]);
 });
@@ -186,6 +189,10 @@ describe('le toucher ouvre la feuille, et l’adresse ne bouge pas', () => {
 });
 
 describe('la feuille montre la personne, ses gestes, et la porte vers la page', () => {
+  test('un geste qu’un témoin précédent a laissé ne décide pas des gestes de la feuille', () => {
+    expect(fixtureSendFriendRequest('u-rich-kwame').ok).toBe(true);
+  });
+
   test('identité, gestes de relation et lien vers le profil complet', async () => {
     const el = await mountSheet(<ProfilePeekSheet username="kwame-mensah" onClose={() => {}} />);
     expect(el.querySelector('dialog')).not.toBeNull();

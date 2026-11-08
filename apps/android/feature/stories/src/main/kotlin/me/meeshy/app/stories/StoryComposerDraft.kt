@@ -59,6 +59,8 @@ data class StoryComposerDraft(
     val mediaCaption: Map<String, String> = emptyMap(),
     /** `null` = l'auteur n'a rien décidé ; la passerelle applique son défaut. */
     val allowSoundExtraction: Boolean? = null,
+    /** La publication naît commentaires fermés (#16541) ; `false` : ouverts, le défaut du serveur. */
+    val commentsDisabled: Boolean = false,
     /** Les sons de la slide : le fond (emprunté à l'étagère ou capté) et les pistes de premier plan. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
     val frame: SceneFrame = SceneFrame(),
@@ -172,6 +174,7 @@ data class StoryComposerDraft(
             mediaCaption = MediaDescriptionLaw.wire(mediaCaption, publishedMediaIds),
             allowSoundExtraction = allowSoundExtraction,
             mobileTranscription = transcription,
+            commentsDisabled = commentsDisabled.takeIf { it },
         )
     }
 

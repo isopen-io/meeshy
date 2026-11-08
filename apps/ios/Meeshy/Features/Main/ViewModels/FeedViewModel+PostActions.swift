@@ -61,6 +61,7 @@ extension FeedViewModel {
     }
 
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
+        guard !PendingPublicationMarker.isPending(postId: postId) else { return }
         do {
             // La RÉFÉRENCE remonte à la racine, le FORMAT reste celui de la
             // carte : reposter depuis le fil le repost-de-story de quelqu'un
@@ -112,6 +113,7 @@ extension FeedViewModel {
     /// hand it off to a `UIActivityViewController` / `ShareLink`.
     @discardableResult
     func sharePost(_ postId: String, platform: String? = nil, generateLink: Bool = false) async -> String? {
+        guard !PendingPublicationMarker.isPending(postId: postId) else { return nil }
         var body: [String: Any] = [:]
         if let platform { body["platform"] = platform }
         if generateLink { body["generateLink"] = true }
@@ -181,7 +183,7 @@ extension FeedViewModel {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil, additions: PostEditAdditions = PostEditAdditions()
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -210,11 +212,11 @@ extension FeedViewModel {
             // Le corps ne se construit plus ici : `known` dit ce que la
             // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
             // champ non déclaré est OMIS, et le serveur préserve le sien.
-            let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
+            let updated = try await postService.update(postId: postId, known: known, draft: additions.completing(PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
                 originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
-            ))
+            )))
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation

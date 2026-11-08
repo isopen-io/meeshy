@@ -22,9 +22,13 @@ import me.meeshy.sdk.session.PerAccountCache
  * Les packs de fonds installés et possédés (`GET /packs/wallpaper/installed`) — cache d'abord : la dernière liste lue
  * pour CE compte se repeint aussitôt à la réouverture du sélecteur (`InstalledWallpapersMemo` d'iOS), la relecture
  * réseau la remplace. Une panne ne conclut rien (`null` : les packs installés d'office) ; un 404 (ancien serveur) ⇒ aucun pack.
+ * Les packs servis non embarqués de la liste chargent leur contrat (#16265) : ils se peignent dans le sélecteur ET au fond du fil.
  */
 @Singleton
-class WallpaperPackRepository @Inject constructor(private val api: PackApi) : PerAccountCache {
+class WallpaperPackRepository @Inject constructor(
+    private val api: PackApi,
+    private val served: ServedAppearanceContractStore,
+) : PerAccountCache {
 
     @Volatile
     private var memo: List<InstalledPackSummary>? = null
@@ -38,6 +42,7 @@ class WallpaperPackRepository @Inject constructor(private val api: PackApi) : Pe
             is NetworkResult.Failure -> WallpaperPackOptions.installedFromFailure(result.error.httpStatus)
         }
         if (list != null) memo = list
+        served.sync(AppearancePackDomain.WALLPAPER, list)
         return list
     }
 

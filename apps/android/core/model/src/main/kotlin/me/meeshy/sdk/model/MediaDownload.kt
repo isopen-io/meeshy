@@ -71,15 +71,27 @@ public data class MediaDownloadPreferences(
 
 /**
  * Pure auto-download decision — port of iOS `MediaDownloadPolicyEngine`. The output is a
- * function of the inputs only (a 4×4 truth table plus the offline gate); no I/O, no state.
+ * function of the inputs only (a 4×4 truth table, the offline gate and the small-media
+ * threshold); no I/O, no state.
+ *
+ * **Under [SMALL_MEDIA_AUTO_DOWNLOAD_BYTES], an image or a video downloads by itself, whatever
+ * the network and the per-kind preference** (#14639, directive porteur 2026-11-02): only offline
+ * stops it. Mirror of `SMALL_MEDIA_AUTO_DOWNLOAD_BYTES` (`packages/shared`) and of the Swift
+ * constant. An unknown, zero or negative size proves nothing and falls back to the policy.
  */
 public object MediaDownloadPolicyEngine {
+
+    /** 100 Ko : sous ce poids, une image ou une vidéo se télécharge seule dès que l'appareil est en ligne. */
+    public const val SMALL_MEDIA_AUTO_DOWNLOAD_BYTES: Long = 102_400L
+
     public fun shouldAutoDownload(
         kind: MediaKind,
         condition: NetworkCondition,
         prefs: MediaDownloadPreferences,
+        sizeBytes: Long? = null,
     ): Boolean {
         if (condition == NetworkCondition.OFFLINE) return false
+        if (isSmallVisualMedia(kind, sizeBytes)) return true
         return when (prefs.policy(kind)) {
             AutoDownloadPolicy.NEVER -> false
             AutoDownloadPolicy.ALWAYS -> true
@@ -88,6 +100,11 @@ public object MediaDownloadPolicyEngine {
                 condition == NetworkCondition.WIFI || condition == NetworkCondition.GOOD_CELLULAR
         }
     }
+
+    /** Une image ou une vidéo de taille CONNUE, strictement sous le seuil. */
+    public fun isSmallVisualMedia(kind: MediaKind, sizeBytes: Long?): Boolean =
+        (kind == MediaKind.IMAGE || kind == MediaKind.VIDEO) &&
+            sizeBytes != null && sizeBytes in 1 until SMALL_MEDIA_AUTO_DOWNLOAD_BYTES
 }
 
 /**

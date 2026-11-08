@@ -231,6 +231,20 @@ describe('MagicLink Routes', () => {
       expect(response.json()).toMatchObject({ success: false, code: 'RATE_LIMITED' });
     });
 
+    // #16491 — une adresse réservée ou jetable SANS compte n'en ouvre pas un,
+    // mais cette porte ne le DIT pas : la réponse est celle de tout autre cas,
+    // sans quoi elle apprendrait qu'aucun compte ne porte l'adresse.
+    it('answers an address that may not open an account exactly like an existing account (no enumeration)', async () => {
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'existing-account' });
+      const existant = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'email-domain-not-allowed' });
+      const refuse = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
+
+      expect(refuse.statusCode).toBe(200);
+      expect(refuse.json()).toEqual(existant.json());
+      expect(JSON.stringify(refuse.json())).not.toContain('EMAIL_DOMAIN_NOT_ALLOWED');
+    });
+
     it('returns 500 and logs error when the service throws', async () => {
       mockStartAccountFromEmail.mockRejectedValue(new Error('Mongo down'));
 

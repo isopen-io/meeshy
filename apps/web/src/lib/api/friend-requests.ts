@@ -2,6 +2,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
 import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+import { parseRequestLevel, type RelationRequestLevel } from '@meeshy/shared/types/relation';
 
 import { servedRingOf } from '@/lib/profile-decor/served-ring';
 
@@ -56,6 +57,13 @@ export type FriendRequestRecord = {
   readonly createdAt: string;
   readonly sender: PersonSummary | null;
   readonly receiver: PersonSummary | null;
+  /**
+   * Le cran que la demande vise (#13933, #13938) — Connaissance, Proche ou Sang.
+   * ABSENT = Ami, le sens historique d'une demande (`targetLevel` nul ou absent
+   * sur le fil) ; une valeur illisible reste une demande simple, jamais un cran
+   * inventé (iso `FriendRequest.requestedLevel`).
+   */
+  readonly targetLevel?: Exclude<RelationRequestLevel, 'FRIEND'>;
 };
 
 export type FriendRequestsPage = { readonly requests: readonly FriendRequestRecord[]; readonly nextCursor: string | null };
@@ -96,7 +104,13 @@ const WireRequest = z.object({
   createdAt: z.string().check(z.refine((value) => Number.isFinite(Date.parse(value)))),
   sender: z.optional(z.unknown()),
   receiver: z.optional(z.unknown()),
+  targetLevel: z.optional(z.unknown()),
 });
+
+const raisedLevelOf = (value: unknown): { readonly targetLevel?: Exclude<RelationRequestLevel, 'FRIEND'> } => {
+  const level = parseRequestLevel(value);
+  return level === null || level === 'FRIEND' ? {} : { targetLevel: level };
+};
 
 export function decodeFriendRequest(raw: unknown): FriendRequestRecord | null {
   const parsed = WireRequest.safeParse(raw);
@@ -111,6 +125,7 @@ export function decodeFriendRequest(raw: unknown): FriendRequestRecord | null {
     createdAt: new Date(wire.createdAt).toISOString(),
     sender: decodePerson(wire.sender),
     receiver: decodePerson(wire.receiver),
+    ...raisedLevelOf(wire.targetLevel),
   };
 }
 
@@ -236,12 +251,24 @@ export async function respondToFriendRequest(
   return result.ok ? { ...result, data: decodeFriendRequest(result.data) } : result;
 }
 
-export async function sendFriendRequest(deps: FriendRequestsDeps, receiverId: string): Promise<ApiResult<FriendRequestRecord>> {
+/**
+ * Envoyer une demande — d'Ami (le sens historique) ou d'un CRAN (#13938) :
+ * `targetLevel` n'entre dans le corps que s'il est posé et n'est pas Ami, donc
+ * la demande simple part exactement comme avant. Le serveur refuse les sauts de
+ * phase, le cool-down et l'inéligibilité (409) ; le client ne fait que ne pas
+ * proposer ce qu'il refusera.
+ */
+export async function sendFriendRequest(
+  deps: FriendRequestsDeps,
+  receiverId: string,
+  targetLevel?: RelationRequestLevel,
+): Promise<ApiResult<FriendRequestRecord>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     const { fixtureSendFriendRequest } = await import('./fixtures-friends');
     return fixtureSendFriendRequest(receiverId);
   }
-  const result = await deps.transport.request<unknown>({ method: 'POST', path: directoryEndpoints.friendRequests, body: { receiverId } });
+  const body = targetLevel === undefined || targetLevel === 'FRIEND' ? { receiverId } : { receiverId, targetLevel };
+  const result = await deps.transport.request<unknown>({ method: 'POST', path: directoryEndpoints.friendRequests, body });
   if (!result.ok) return result;
   const request = decodeFriendRequest(result.data);
   return request === null ? { ok: false, status: 0, error: 'Demande illisible' } : { ...result, data: request };

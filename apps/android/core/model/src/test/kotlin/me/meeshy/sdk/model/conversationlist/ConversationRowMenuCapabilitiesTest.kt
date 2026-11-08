@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.ConversationViewerCapabilities
 import me.meeshy.sdk.model.ConversationWriteRestriction
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities.Removal
@@ -24,6 +25,7 @@ class ConversationRowMenuCapabilitiesTest {
         peerUserId: String? = null,
         isActive: Boolean = true,
         restriction: ConversationWriteRestriction? = null,
+        capabilities: ConversationViewerCapabilities? = null,
     ) = ApiConversation(
         id = "c1",
         identifier = "c1",
@@ -33,6 +35,7 @@ class ConversationRowMenuCapabilitiesTest {
         currentUserRole = currentUserRole,
         participants = peerUserId?.let { listOf(ApiParticipant(id = "p-peer", userId = it)) }.orEmpty(),
         viewerWriteRestriction = restriction,
+        viewerCapabilities = capabilities,
     )
 
     private fun caps(conversation: ApiConversation, user: MeeshyUser?) =
@@ -237,5 +240,146 @@ class ConversationRowMenuCapabilitiesTest {
     fun `the admin console url points at the conversation sheet of the web console`() {
         assertThat(ConversationRowMenuCapabilities.adminConsoleUrl("c1", "https://meeshy.me"))
             .isEqualTo("https://meeshy.me/admin/conversations/c1")
+    }
+
+    // ── Rendre obsolète (#14645) ──
+
+    @Test
+    fun `an admin of a group, a public conversation or a channel may make it obsolete, a moderator may not`() {
+        listOf("group", "public", "broadcast").forEach { type ->
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "admin"), user()).obsolete).isTrue()
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "creator"), user()).obsolete).isTrue()
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "moderator"), user()).obsolete).isFalse()
+        }
+    }
+
+    @Test
+    fun `Global and an ended conversation are never made obsolete`() {
+        assertThat(caps(conversation(type = "global", currentUserRole = "creator"), user(role = "ADMIN")).obsolete).isFalse()
+        assertThat(caps(conversation(currentUserRole = "creator", isActive = false), user()).obsolete).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer", isActive = false), user()).obsolete).isFalse()
+    }
+
+    // ── #14653 : dans un tête-à-tête, l'un OU l'autre des deux membres le rend obsolète ──
+
+    @Test
+    fun `either member of an open direct may make it obsolete, creator or not`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user()).obsolete).isTrue()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).obsolete).isTrue()
+    }
+
+    @Test
+    fun `an anonymous or unloaded reader never makes a direct obsolete, and a group member still may not`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user(isAnonymous = true)).obsolete).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), null).obsolete).isFalse()
+        assertThat(caps(conversation(type = "group", currentUserRole = "member"), user()).obsolete).isFalse()
+    }
+
+    // ── Appeler (#14897) ──
+
+    @Test
+    fun `a direct with a known peer offers the call, audio and video`() {
+        val caps = caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user())
+        assertThat(caps.call).isTrue()
+        assertThat(caps.videoCall).isTrue()
+    }
+
+    @Test
+    fun `a group never offers the call from the menu, it would ring no single peer`() {
+        val caps = caps(conversation(type = "group", currentUserRole = "creator"), user())
+        assertThat(caps.call).isFalse()
+        assertThat(caps.videoCall).isFalse()
+    }
+
+    @Test
+    fun `a direct with oneself or without peer offers no call`() {
+        assertThat(caps(conversation(type = "direct", peerUserId = "me"), user()).call).isFalse()
+        assertThat(caps(conversation(type = "direct"), user()).call).isFalse()
+    }
+
+    @Test
+    fun `an ended direct and an unloaded reader offer no call`() {
+        assertThat(caps(conversation(type = "direct", peerUserId = "peer", isActive = false), user()).call).isFalse()
+        assertThat(caps(conversation(type = "direct", peerUserId = "peer"), null).call).isFalse()
+    }
+
+    @Test
+    fun `only an admin or more of an open group deletes for everyone`() {
+        assertThat(caps(conversation(currentUserRole = "admin"), user()).deleteForAll).isTrue()
+        assertThat(caps(conversation(currentUserRole = "moderator"), user()).deleteForAll).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).deleteForAll).isFalse()
+    }
+
+    // ── Lecteur d'une conversation ouverte (#15269) ──
+
+    @Test
+    fun `an open thread falls back on the viewer participation when the row serves no role`() {
+        val served = conversation(currentUserRole = null).copy(
+            participants = listOf(ApiParticipant(id = "p-me", userId = "me", role = "admin")),
+        )
+
+        val viewer = ConversationRowMenuCapabilities.forViewer(served, user())
+
+        assertThat(viewer.rename).isTrue()
+        assertThat(viewer.invite).isTrue()
+        assertThat(viewer.deleteForAll).isTrue()
+    }
+
+    @Test
+    fun `an open thread with no role anywhere offers no authority action`() {
+        val viewer = ConversationRowMenuCapabilities.forViewer(conversation(currentUserRole = null), user())
+
+        assertThat(viewer.rename).isFalse()
+        assertThat(viewer.invite).isFalse()
+        assertThat(viewer.manageMembers).isFalse()
+    }
+
+    @Test
+    fun `in Global only platform admins invite and nobody renames, leaves or deletes for all`() {
+        val global = conversation(type = "global", currentUserRole = "member")
+
+        val admin = ConversationRowMenuCapabilities.forViewer(global, user(role = "ADMIN"))
+        val ordinary = ConversationRowMenuCapabilities.forViewer(global, user(role = "USER"))
+
+        assertThat(admin.invite).isTrue()
+        assertThat(ordinary.invite).isFalse()
+        listOf(admin, ordinary).forEach {
+            assertThat(it.rename).isFalse()
+            assertThat(it.leave).isFalse()
+            assertThat(it.deleteForAll).isFalse()
+        }
+    }
+
+    @Test
+    fun `a direct offers no authority action to either member`() {
+        val direct = conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer")
+
+        val viewer = ConversationRowMenuCapabilities.forViewer(direct, user())
+
+        assertThat(viewer.rename).isFalse()
+        assertThat(viewer.invite).isFalse()
+        assertThat(viewer.leave).isFalse()
+        assertThat(viewer.manageMembers).isFalse()
+    }
+
+    // ── La capacité servie (#14690) ──
+
+    @Test
+    fun `a served false hides make obsolete from the sender of a pending request, a member of an open direct`() {
+        val served = ConversationViewerCapabilities(canMakeObsolete = false)
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer", capabilities = served), user()).obsolete).isFalse()
+        assertThat(caps(conversation(currentUserRole = "admin", capabilities = served), user()).obsolete).isFalse()
+    }
+
+    @Test
+    fun `a served true opens make obsolete where the local rule refused it`() {
+        val served = ConversationViewerCapabilities(canMakeObsolete = true)
+        assertThat(caps(conversation(currentUserRole = "member", capabilities = served), user()).obsolete).isTrue()
+    }
+
+    @Test
+    fun `an absent capability keeps the local rule, never an implicit false`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user()).obsolete).isTrue()
+        assertThat(caps(conversation(currentUserRole = "member"), user()).obsolete).isFalse()
     }
 }

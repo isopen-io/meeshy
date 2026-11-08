@@ -114,13 +114,6 @@ interface CallPreviewSignaling {
     fun emit(callId: String, type: String, from: String, to: String, negotiationId: Int, fields: Map<String, Any?>)
 }
 
-/** Le choix de l'appelant, retenu par (compte, correspondant) — iOS `CallPreviewConsentStoring`. */
-interface CallPreviewConsentStoring {
-    fun consent(localUserId: String, peerUserId: String): CallPreviewConsent
-
-    fun remember(consent: CallPreviewConsent, localUserId: String, peerUserId: String)
-}
-
 /** Le geste que seul l'hôte de l'appel peut faire : ouvrir le son pendant la sonnerie. */
 fun interface CallPreviewHostActions {
     /** L'appelé entend l'appelant : la sonnerie se tait, la route audio s'ouvre ; `false` la rend. */

@@ -36,6 +36,15 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     var findDirectsWithResult: Result<[APIConversation], Error>?
     var lastFindDirectWithUserId: String?
     var deleteResult: Result<Void, Error> = .success(())
+    var obsoleteResult: Result<ConversationObsoleteResult, Error> = .success(
+        ConversationObsoleteResult(
+            conversationId: "000000000000000000000001",
+            obsoletedAt: "2026-11-02T10:00:00.000Z",
+            purgeAfter: "2026-11-04T10:00:00.000Z"
+        )
+    )
+    var obsoleteCallCount = 0
+    var lastObsoleteConversationId: String?
     var markReadResult: Result<Void, Error> = .success(())
     var markAsReceivedResult: Result<Void, Error> = .success(())
     var markUnreadResult: Result<Void, Error> = .success(())
@@ -79,6 +88,14 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
 
     var getByIdCallCount = 0
     var lastGetByIdConversationId: String?
+
+    /// La relecture aux refus TYPÉS (#14708) a son propre résultat : un témoin
+    /// de refus définitif le pose, lui seul, et rougit si l'appelant repasse
+    /// par `getById`. `nil` : le défaut du protocole (`getById`).
+    var getByIdTypedRefusalsResult: Result<APIConversation, Error>?
+    var getByIdTypedRefusalsCallCount = 0
+    /// Ce qui se passe PENDANT la relecture (un changement de compte, #14706).
+    var onGetByIdTypedRefusals: (@MainActor () -> Void)?
 
     var createCallCount = 0
     var lastCreateType: String?
@@ -190,6 +207,16 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         return try getByIdResult.get()
     }
 
+    nonisolated func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        let typed = await MainActor.run { () -> Result<APIConversation, Error>? in
+            getByIdTypedRefusalsCallCount += 1
+            onGetByIdTypedRefusals?()
+            return getByIdTypedRefusalsResult
+        }
+        guard let typed else { return try await getById(conversationId) }
+        return try typed.get()
+    }
+
     nonisolated func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse {
         await MainActor.run {
             createCallCount += 1
@@ -206,6 +233,14 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
             lastDeleteConversationId = conversationId
         }
         try deleteResult.get()
+    }
+
+    nonisolated func obsolete(conversationId: String) async throws -> ConversationObsoleteResult {
+        await MainActor.run {
+            obsoleteCallCount += 1
+            lastObsoleteConversationId = conversationId
+        }
+        return try obsoleteResult.get()
     }
 
     nonisolated func markRead(conversationId: String) async throws {
@@ -351,6 +386,9 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         searchHandler = nil
         getByIdCallCount = 0
         lastGetByIdConversationId = nil
+        getByIdTypedRefusalsResult = nil
+        getByIdTypedRefusalsCallCount = 0
+        onGetByIdTypedRefusals = nil
         createCallCount = 0
         lastCreateType = nil
         lastCreateTitle = nil

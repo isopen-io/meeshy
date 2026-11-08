@@ -255,11 +255,23 @@ public enum StoryExportOutro {
 
     // MARK: - Composition (crossfade sur la fin de la story)
 
+    /// La story est éteinte quand la signature de fermeture entre (`StoryExportJingleMix`).
+    private static func storyAudioMix(_ track: AVMutableCompositionTrack, duration: CMTime, jingleStart: CMTime,
+                                      authorCard: Bool, overlap: CMTime) -> AVMutableAudioMix {
+        let parameters = AVMutableAudioMixInputParameters(track: track)
+        StoryExportBranding.applyStoryEnvelope(
+            to: parameters, story: CMTimeRange(start: .zero, duration: duration), introJingleEnd: nil,
+            outroJingleStart: jingleStart,
+            outroFade: StoryExportJingleMix.outroFade(authorCard: authorCard, overlap: overlap.seconds))
+        let audioMix = AVMutableAudioMix()
+        audioMix.inputParameters = [parameters]
+        return audioMix
+    }
+
     /// Compose la carte de fin SUR la fin du MP4 fourni : elle entre en fondu par
     /// crossfade pendant les 1,5 dernières secondes de la story, puis tient 0,5 s
-    /// (2 s au total ; la vidéo finale est allongée de 0,5 s). L'audio de la story
-    /// s'estompe en même temps que l'image et la signature sonore de fermeture est
-    /// mixée par-dessus.
+    /// (2 s au total ; la vidéo finale est allongée de 0,5 s). Le son de la story
+    /// est éteint quand la signature sonore de fermeture entre.
     ///
     /// Crossfade SYMÉTRIQUE (sortant 1→0 + entrant 0→1) — même approche que
     /// `VideoCompositor`, dont le résultat aux deux bornes ne dépend pas de l'ordre
@@ -337,11 +349,8 @@ public enum StoryExportOutro {
         videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
-        // Audio — la story s'estompe pendant que la signature de fermeture entre.
-        let audioMix = AVMutableAudioMix()
-        let baseParams = AVMutableAudioMixInputParameters(track: baseAudio)
-        baseParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeRange)
-        audioMix.inputParameters = [baseParams]
+        let audioMix = storyAudioMix(baseAudio, duration: baseDuration, jingleStart: jingleStart,
+                                     authorCard: content != nil, overlap: overlap)
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")

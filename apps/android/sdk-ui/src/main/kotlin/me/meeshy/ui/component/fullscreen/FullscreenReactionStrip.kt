@@ -121,3 +121,69 @@ public fun FullscreenReplyAction(
         activeTint = MeeshyPalette.Indigo400,
     )
 }
+
+/**
+ * « Transférer » — ouvre la feuille de transfert de la pièce regardée, dans une autre conversation. Un transfert ne
+ * quitte pas le visualiseur : la feuille se pose dessus et le média, la lecture comprise, reprend à sa fermeture.
+ */
+@Composable
+public fun FullscreenForwardAction(
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    style: FullscreenActionStyle = FullscreenActionStyle.Floating(),
+    caption: String? = null,
+) {
+    FullscreenActionButton(
+        icon = FullscreenChromeSymbol.Forward.icon,
+        label = label,
+        onClick = onClick,
+        modifier = modifier,
+        hint = hint,
+        style = style,
+        caption = caption,
+    )
+}
+
+/** « Créer avec ce média » — ferme le visualiseur et ouvre le composeur avec la pièce posée. */
+@Composable
+public fun FullscreenComposeAction(
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    style: FullscreenActionStyle = FullscreenActionStyle.Floating(),
+    caption: String? = null,
+) {
+    FullscreenActionButton(
+        icon = FullscreenChromeSymbol.Compose.icon,
+        label = label,
+        onClick = onClick,
+        modifier = modifier,
+        hint = hint,
+        style = style,
+        caption = caption,
+    )
+}
+
+/** « Imager » — la baguette du rail : fait de l'élément affiché une carte image (#16334). */
+@Composable
+public fun FullscreenImagerAction(
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    style: FullscreenActionStyle = FullscreenActionStyle.Floating(),
+    caption: String? = null,
+) {
+    FullscreenActionButton(
+        icon = FullscreenChromeSymbol.Imager.icon,
+        label = label,
+        onClick = onClick,
+        modifier = modifier,
+        hint = hint,
+        style = style,
+        caption = caption,
+    )
+}

@@ -24,7 +24,10 @@
  * compilateur. Portée exacte de ce qu'ils gardent (mesurée, pas supposée) :
  * `socketio/clientReceive.ts`.
  */
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from './typed-socket';
+import { startSilentGroup } from '../services/conversations/announceStartedGroup';
+import { sealMessageIfConversationObsoleted } from '../services/conversations/obsoleteMessageSeal';
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import { CallService, CallAlreadyEndedError } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -43,6 +46,7 @@ import { departedMemberParticipantWhere, participantKeyWhere } from './departed-
 import { registerCallControlEvents } from './call-controls';
 import { CallRecordingService } from '../services/calls/callRecording';
 import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
+import { prismaCallCaptureJournal, type CallCaptureJournal } from '../services/calls/callCaptureJournal';
 import { buildCallInitiatedEvent, pushIncomingCall, ringCalleeSockets } from './call-ring';
 import {
   type CallParticipantResolverDeps,
@@ -52,14 +56,10 @@ import {
   resolveActiveCallParticipantDetailed,
   resolveActiveCallParticipantId,
   resolvePreJoinDeclineParticipantId,
-  resolveActiveCallSpeaker,
   resolveEverCallParticipantId,
 } from './call-participants';
-import {
-  type CallTranscriptionRelayDeps,
-  persistTranscriptionSegment,
-  translateAndEmitSegment,
-} from './call-transcription-relay';
+import type { CallTranscriptionRelayDeps } from './call-transcription-relay';
+import { relayTranscriptionSegment } from './call-transcription-segment';
 import { admitCallCaptions } from './call-captions-admission';
 import type { AckOf } from '@meeshy/shared/types/socketio-events';
 import {
@@ -67,7 +67,6 @@ import {
   type CallClientReportDeps,
 } from './call-client-reports';
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
-import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { ringableCallees } from '../services/calls/callRingPolicy';
 import { isInvitedToCall } from '../services/calls/callInvitation';
@@ -136,6 +135,7 @@ export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
   private readonly callRecording: CallRecordingService;
+  private readonly captureJournal: CallCaptureJournal;
   private pushService: PushNotificationService | null = null;
   private readonly callInvitations: CallInvitationLifecycle;
   private zmqClient: ZmqTranslationClient | null = null;
@@ -305,6 +305,7 @@ export class CallEventsHandler {
   constructor(private prisma: PrismaClient, callService?: CallService) {
     this.callService = callService ?? new CallService(prisma);
     this.callInvitations = createCallInvitationLifecycle({ prisma, pushService: () => this.pushService, notificationService: () => this.notificationService });
+    this.captureJournal = prismaCallCaptureJournal(prisma);
     this.callRecording = new CallRecordingService({ repository: prismaCallRecordingRepository(prisma), roster: callRosterFrom(this.callService), now: () => new Date() });
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
     // call ended via a path that skipped clearBufferedOffer (error branches,
@@ -1391,13 +1392,6 @@ export class CallEventsHandler {
     return resolvePreJoinDeclineParticipantId(this.participantResolverDependencies(), userId, callId);
   }
 
-  private resolveActiveCallSpeaker(
-    userId: string,
-    callId: string
-  ): ReturnType<typeof resolveActiveCallSpeaker> {
-    return resolveActiveCallSpeaker(this.participantResolverDependencies(), userId, callId);
-  }
-
   private resolveEverCallParticipantId(userId: string, callId: string): Promise<string | null> {
     return resolveEverCallParticipantId(this.participantResolverDependencies(), userId, callId);
   }
@@ -1568,33 +1562,12 @@ export class CallEventsHandler {
       resolveActiveCallParticipant: (userId, callId) => this.resolveActiveCallParticipant(userId, callId),
       resolveActiveCallParticipantId: (userId, callId) => this.resolveActiveCallParticipantId(userId, callId),
       resolveEverCallParticipantId: (userId, callId) => this.resolveEverCallParticipantId(userId, callId),
+      captureJournal: this.captureJournal,
     };
   }
 
   private transcriptionRelayDependencies(): CallTranscriptionRelayDeps {
     return { prisma: this.prisma, zmqClient: () => this.zmqClient };
-  }
-
-  private persistTranscriptionSegment(
-    data: CallTranscriptionSegmentEvent,
-    participantId: string
-  ): Promise<string | null> {
-    return persistTranscriptionSegment(this.transcriptionRelayDependencies(), data, participantId);
-  }
-
-  private async translateAndEmitSegment(
-    socket: Socket,
-    data: CallTranscriptionSegmentEvent,
-    speaker: { userId: string; displayName: string | null },
-    persistedTranscriptionId: Promise<string | null> | null = null
-  ): Promise<void> {
-    return translateAndEmitSegment(
-      this.transcriptionRelayDependencies(),
-      socket,
-      data,
-      speaker,
-      persistedTranscriptionId,
-    );
   }
 
   /**
@@ -1609,7 +1582,7 @@ export class CallEventsHandler {
     const BASE_DELAY_MS = 1000;
     try {
       const result = await this.callService.createCallSummaryMessage(callId);
-      if (!result) {
+      if (!result || (await this.sealedByObsolescence(result.message))) {
         return;
       }
       // `created` → the summary is a brand-new message (message:new fanout);
@@ -1647,12 +1620,17 @@ export class CallEventsHandler {
    * and NEVER affect call setup — the terminal path then simply falls back to
    * creating the summary, the exact pre-live behaviour.
    */
+  /** #14643 — un message d'appel d'une conversation devenue obsolète naît effacé et ne part pas. */
+  private sealedByObsolescence(message: { id: string; conversationId: string }): Promise<boolean> {
+    return sealMessageIfConversationObsoleted(this.prisma, { conversationId: message.conversationId, messageId: message.id });
+  }
+
   private async postLiveCallMessage(callId: string, attempt = 1): Promise<void> {
     const MAX_ATTEMPTS = 3;
     const BASE_DELAY_MS = 1000;
     try {
       const message = await this.callService.createLiveCallMessage(callId);
-      if (!message || !this.messageBroadcaster) {
+      if (!message || !this.messageBroadcaster || (await this.sealedByObsolescence(message))) {
         return;
       }
       await this.messageBroadcaster(message, message.conversationId);
@@ -1977,6 +1955,10 @@ export class CallEventsHandler {
           }
         });
 
+        // #14644 — un groupe silencieux s'annonce (conversation:new + invitation) AVANT de sonner.
+        await startSilentGroup({ prisma: this.prisma, io, notificationService: this.notificationService }, data.conversationId)
+          .catch((err) => logger.error('silent group not announced before the ring', { conversationId: data.conversationId, err }));
+
         // Live-call message — fire-and-forget, AFTER the ack: the "Appel …
         // en cours" bubble must never gate (or fail) the call setup.
         /* istanbul ignore next -- postLiveCallMessage has its own internal catch and never rejects */
@@ -1988,17 +1970,17 @@ export class CallEventsHandler {
         const conversationParticipants = await this.prisma.participant.findMany({
           where: {
             conversationId: data.conversationId,
-            isActive: true,
+            ...PARTICIPATION_VIVANTE,
             userId: { not: null }
           },
           select: {
-            userId: true
+            userId: true, messageRequestAt: true
           }
         });
 
         const memberUserIds = await ringableCallees(this.prisma, {
           callerUserId: userId,
-          calleeUserIds: conversationParticipants.flatMap(p => (p.userId ? [p.userId] : [])),
+          calleeUserIds: conversationParticipants.flatMap(p => (p.userId && !p.messageRequestAt ? [p.userId] : [])), // #14107 (M2) : une demande en attente ne sonne pas
         });
         logger.info('📋 Conversation members to notify', {
           conversationId: data.conversationId,
@@ -2238,7 +2220,7 @@ export class CallEventsHandler {
             iceServers: remoteIceServers
           });
         }
-        announceRecordingArrival({ io, authority: this.callRecording }, callSession.id, userId).catch((error: unknown) => logger.error('call-recording arrival failed', { error }));
+        announceRecordingArrival({ io, authority: this.callRecording, journal: this.captureJournal }, callSession.id, userId).catch((error: unknown) => logger.error('call-recording arrival failed', { error }));
 
         // §4.6 — replay a buffered offer to the joining participant. If the
         // caller's offer arrived before this socket was in the room (PushKit
@@ -3760,74 +3742,13 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketTranscriptionSegmentSchema, data);
         if (!validation.success) return;
 
-        // Authorization — only an ACTIVE PARTICIPANT OF THIS CALL may inject
-        // transcription text into it (not merely a member of its conversation
-        // — `resolveParticipantIdFromCall` only checked that, letting any
-        // other conversation member broadcast arbitrary text into a call
-        // they never joined). Same fix as QUALITY_REPORT / RECONNECTING.
-        const speaker = await this.resolveActiveCallSpeaker(userId, data.callId);
-        if (!speaker) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // #13720 — AVANT tout relais, traduction ou écriture : une parole d'un
-        // appel e2ee (ou au régime illisible) n'atteint rien (call-captions-admission.ts).
-        if (!(await admitCallCaptions(this.prisma, { callId: data.callId, userId, event: CALL_EVENTS.TRANSCRIPTION_SEGMENT, ack }))) return;
-
-        // Journal metadata normalized once so every downstream emission
-        // (translated or not, success or timeout) stamps the SAME
-        // capturedAtMs — the clients' journal ordering key. Legacy clients
-        // that don't send it get reception time.
-        const segmentEvent: CallTranscriptionSegmentEvent = {
-          callId: data.callId,
-          segment: {
-            ...data.segment,
-            capturedAtMs: data.segment.capturedAtMs ?? Date.now()
-          }
-        };
-        const stampedSpeaker = { userId, displayName: speaker.displayName };
-
-        // Persistance serveur du journal (décision produit 2026-08-13) : les
-        // segments FINAUX sont stockés (modèle Transcription) pour le replay
-        // post-appel via GET /calls/:callId/transcript — le journal survit à
-        // la suppression de l'app et de ses caches locaux. Les partiels
-        // (révisions du stream de corrections) ne sont JAMAIS persistés :
-        // seule la dernière valeur dite compte. Fire-and-forget interne
-        // (jamais de rejet — voir persistTranscriptionSegment) : un échec de
-        // persistance ne bloque ni le relais ni la traduction. La promesse
-        // (id de ligne) est transmise au chemin de traduction pour y
-        // accrocher les TranslationCall.
-        const persistedTranscriptionId = data.segment.isFinal
-          ? this.persistTranscriptionSegment(segmentEvent, speaker.participantId)
-          : null;
-
-        // No callSession.metadata.translationEnabled gate — the real product
-        // control is client-side (the speaker's own captions toggle; no
-        // client ever emits a segment unless the user turned captions on).
-        // See docs/superpowers/specs/2026-07-10-live-call-transcription-design.md.
-        if (this.zmqClient && data.segment.isFinal) {
-          await this.translateAndEmitSegment(socket, segmentEvent, stampedSpeaker, persistedTranscriptionId);
-        } else {
-          // Security fix 2026-08-13: stamp the authenticated `userId` (and a
-          // server-resolved displayName), never the client-supplied
-          // `data.segment.speakerId` — see translateAndEmitSegment's doc
-          // comment for the spoofing this closes.
-          socket.to(ROOMS.call(data.callId)).emit(
-            CALL_EVENTS.TRANSLATED_SEGMENT,
-            buildTranslatedSegment(segmentEvent, stampedSpeaker, data.segment.language)
-          );
-        }
-
-        logger.debug('Transcription segment relayed', {
-          callId: data.callId,
-          speakerId: userId,
-          isFinal: data.segment.isFinal
-        });
+        // #16575 — locuteur, admission e2ee et auditeurs lus EN PARALLÈLE,
+        // décidés dans l'ordre : voir call-transcription-segment.ts.
+        await relayTranscriptionSegment(
+          { ...this.transcriptionRelayDependencies(), callService: this.callService },
+          socket,
+          { userId, data, ack }
+        );
       } catch (error) {
         logger.error('Error handling transcription segment', { error });
       }
@@ -3921,7 +3842,7 @@ export class CallEventsHandler {
     // `call-client-reports.ts` (#7632) ; leur doctrine commune — le
     // `participantId` du client n'est jamais cru sur parole — y est écrite.
     registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
-    registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter }, socket, getUserId);
+    registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter, journal: this.captureJournal }, socket, getUserId);
     registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService, invitations: this.callInvitations }, socket, getUserId);
 
     /**

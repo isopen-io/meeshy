@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "androidName": "feed_composer_plus_audio",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_plus_camera",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_plus_file",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_plus_location",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_plus_menu",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_plus_photo_video",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

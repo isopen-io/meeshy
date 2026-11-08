@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
@@ -26,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
+import me.meeshy.ui.component.chrome.ConversationStreakMark
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
@@ -55,9 +58,14 @@ internal fun conversationRowRelativeTime(conversation: ApiConversation, nowMilli
 
 /** La troisième ligne: la date seule, poussée à droite, 12 sp gras, troisième niveau de texte. */
 @Composable
-internal fun ConversationRowDateLine(timeLabel: String?, modifier: Modifier = Modifier) {
+internal fun ConversationRowDateLine(
+    timeLabel: String?,
+    modifier: Modifier = Modifier,
+    engagement: ConversationEngagementSnapshot? = null,
+) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.weight(1f))
+        ConversationStreakMark(engagement, modifier = Modifier.padding(end = MeeshySpacing.sm))
         timeLabel?.let {
             Text(
                 text = it,

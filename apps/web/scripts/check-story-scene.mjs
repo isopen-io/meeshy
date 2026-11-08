@@ -680,9 +680,11 @@ async function runScheme(colorScheme) {
       const declencheur = document.querySelector(selecteur)?.getBoundingClientRect();
       const entrees = [...(panneau?.querySelectorAll('[role="menuitem"]') ?? [])];
       const boite = panneau?.getBoundingClientRect();
+      const imager = document.querySelector('[data-comment-row="cm-st-2"] [data-comment-rail-image]')?.getBoundingClientRect();
       return {
         entrees: entrees.map((e) => e.getAttribute('data-comment-gesture')),
         hauteurs: entrees.map((e) => Math.round(e.getBoundingClientRect().height)),
+        imagerRail: imager === undefined ? null : [Math.round(imager.width), Math.round(imager.height)],
         declencheur: declencheur === undefined ? null : [Math.round(declencheur.width), Math.round(declencheur.height)],
         dessus: entrees.length > 0 && entrees.every((e) => {
           const r = e.getBoundingClientRect();
@@ -692,8 +694,14 @@ async function runScheme(colorScheme) {
       };
     }, plus);
     check(
-      JSON.stringify(menu.entrees) === '["copy","image","report"]' && menu.hauteurs.every((h) => h >= 44) && (menu.declencheur?.every((c) => c >= 44) ?? false),
-      `${tag} st-amie-2 : le « … » d'un commentaire d'autrui offre Copier, Imager, Signaler, cibles de 44 px (#8734) — ${JSON.stringify(menu)}`,
+      JSON.stringify(menu.entrees) === '["copy","report"]' && menu.hauteurs.every((h) => h >= 44) && (menu.declencheur?.every((c) => c >= 44) ?? false),
+      `${tag} st-amie-2 : le « … » d'un commentaire d'autrui offre Copier, Signaler, cibles de 44 px (#8734) — ${JSON.stringify(menu)}`,
+    );
+    /* « Imager » a quitté le « … » (#16541) : il vit à découvert dans le rail
+       de la rangée, en icône seule, cible de 44 px. */
+    check(
+      menu.imagerRail !== null && menu.imagerRail.every((c) => c >= 44),
+      `${tag} st-amie-2 : « Imager » est dans le RAIL du commentaire, cible de 44 px (#16541) — ${JSON.stringify(menu)}`,
     );
     check(menu.dessus && menu.dansEcran, `${tag} st-amie-2 : le menu se pose AU-DESSUS de la feuille, dans l'écran (#8734) — ${JSON.stringify(menu)}`);
     if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-comment-menu-${colorScheme}-${viewport.width}.png` });
@@ -855,8 +863,8 @@ async function runAuthorRail(colorScheme) {
      ASSERTAIT l'absence d'un bouton que le produit sert désormais se met à
      jour, jamais l'inverse. */
   check(
-    JSON.stringify(rail) === JSON.stringify(['forward', 'views', 'share', 'save', 'comments', 'translations']),
-    `${tag} : le rail de MA story doit porter EXACTEMENT Envoyer, Vues, Partager, Enregistrer, Commentaires, Traductions — reçu ${JSON.stringify(rail)}`,
+    JSON.stringify(rail) === JSON.stringify(['forward', 'views', 'imager', 'share', 'save', 'comments', 'translations']),
+    `${tag} : le rail de MA story doit porter EXACTEMENT Envoyer, Vues, Imager, Partager, Enregistrer, Commentaires, Traductions — reçu ${JSON.stringify(rail)}`,
   );
   const vuesCompte = await page.$eval('[data-story-action="views"] [data-viewer-count]', (el) => el.textContent?.trim() ?? '').catch(() => '');
   check(vuesCompte === '8', `${tag} : « Vues » doit porter le compte SERVI (8) — reçu « ${vuesCompte} »`);
@@ -884,7 +892,10 @@ async function runAuthorRail(colorScheme) {
   });
   /* #9727 — une ligne ouvre le DÉTAIL de la personne (ce qu'elle a fait), et
      le profil s'y ouvre par « Voir le profil » : chaque lecteur mène toujours
-     à son profil, à un toucher de plus. « Retour aux vues » rend la liste. */
+     à son profil, à un toucher de plus. #16386 — le détail est une SECONDE
+     feuille plein écran posée sur la liste (`data-viewer-detail-sheet`), dont
+     le chevron (<) de l'en-tête (`data-sheet-back`, « Retour aux vues ») la
+     referme et rend la liste. */
   const liens = [];
   for (const id of await page.$$eval('dialog[open] [data-story-viewer]', (els) => els.map((e) => e.getAttribute('data-story-viewer')))) {
     await page.click(`dialog[open] [data-story-viewer="${id}"] [data-story-viewer-open]`, { timeout: 3000 }).catch(() => {});
@@ -894,7 +905,8 @@ async function runAuthorRail(colorScheme) {
         .then((lien) => lien.getAttribute('href'))
         .catch(() => null),
     );
-    await page.click('dialog[open] [data-viewer-detail-back]', { timeout: 3000 }).catch(() => {});
+    await page.click('dialog[open][data-viewer-detail-sheet] [data-sheet-back]', { timeout: 3000 }).catch(() => {});
+    await page.waitForSelector('dialog[open][data-viewer-detail-sheet]', { state: 'detached', timeout: 3000 }).catch(() => {});
     await page.waitForSelector(`dialog[open] [data-story-viewer="${id}"]`, { timeout: 3000 }).catch(() => {});
   }
   feuille.liens = liens;
@@ -913,11 +925,16 @@ async function runAuthorRail(colorScheme) {
      feuille fermée ET le focus posé quelque part — ou le lecteur parti, le
      défaut que ce témoin existe pour attraper. Échap ferme le `<dialog>` natif
      AVANT que React ne démonte la feuille et ne rende le focus (un effet) :
-     lire le focus dès `open` retiré lisait l'entre-deux, `BODY`. */
+     lire le focus dès `open` retiré lisait l'entre-deux, `BODY` — ou, depuis
+     la feuille détail imbriquée (#16386), le bouton de la feuille FERMÉE qui
+     garde le focus jusqu'au démontage. Le fait attendu est donc un focus HORS
+     de tout `<dialog>`. */
   await page
     .waitForFunction(
       () =>
-        document.querySelector('dialog[open]') === null && document.activeElement !== document.body,
+        document.querySelector('dialog[open]') === null &&
+        document.activeElement !== document.body &&
+        document.activeElement?.closest('dialog') === null,
       undefined,
       { timeout: 3000 },
     )

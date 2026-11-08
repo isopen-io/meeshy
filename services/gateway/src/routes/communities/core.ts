@@ -17,14 +17,15 @@ import {
 import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { communityConversationSchema, flattenCommunityCounts } from './serialization';
+import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
+import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -182,7 +183,7 @@ export async function registerCoreRoutes(
       const whereClause: any = {
         OR: [
           { createdBy: userId },
-          { members: { some: { userId: userId } } }
+          { members: { some: activeMembershipOf(userId) } }
         ],
         AND: [{ isActive: true }]
       };
@@ -200,35 +201,7 @@ export async function registerCoreRoutes(
       const [communities, totalCount] = await Promise.all([
         fastify.prisma.community.findMany({
           where: whereClause,
-          include: {
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            members: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    avatar: true,
-                    isOnline: true
-                  }
-                }
-              }
-            },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
-          },
+          include: communityDetailInclude(userId),
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum
@@ -236,7 +209,7 @@ export async function registerCoreRoutes(
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      sendPaginatedSuccess(reply, communities.map(flattenCommunityCounts), {
+      sendPaginatedSuccess(reply, communities.map((community) => communityForViewer(community, userId)), {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -303,91 +276,24 @@ export async function registerCoreRoutes(
       }
 
       const userId = authContext.userId;
+      const include = communityDetailInclude(userId);
 
-      // Chercher d'abord par ID, puis par identifier si pas trouve
-      let community = await fastify.prisma.community.findFirst({
-        // #8876 — une communauté désactivée n'existe plus pour un lecteur public.
-        where: { id, isActive: true },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          members: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
-                }
-              }
-            }
-          },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
-        }
-      });
-
-      // Si pas trouve par ID, essayer par identifier
-      if (!community) {
-        community = await fastify.prisma.community.findFirst({
-          where: { identifier: id, isActive: true },
-          include: {
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            members: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    avatar: true,
-                    isOnline: true
-                  }
-                }
-              }
-            },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
-          }
-        });
-      }
+      // #8876 — une communauté désactivée n'existe plus pour un lecteur public.
+      const community =
+        (await fastify.prisma.community.findFirst({ where: { id, isActive: true }, include })) ??
+        (await fastify.prisma.community.findFirst({ where: { identifier: id, isActive: true }, include }));
 
       if (!community) {
         return sendNotFound(reply, 'Community not found');
       }
 
-      // Verifier l'acces (createur ou membre)
-      const hasAccess = community.createdBy === userId ||
-                       community.members.some(member => member.userId === userId);
+      const served = communityForViewer(community, userId);
 
-      if (!hasAccess && community.isPrivate) {
+      if (served.currentUserRole === null && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      sendSuccess(reply, flattenCommunityCounts(community));
+      sendSuccess(reply, served);
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -411,6 +317,10 @@ export async function registerCoreRoutes(
             data: communitySchema
           }
         },
+        400: {
+          description: 'Invalid community (INVALID_COMMUNITY) — e.g. an avatar that is not an identity image reference',
+          ...errorResponseSchema
+        },
         401: {
           description: 'User not authenticated',
           ...errorResponseSchema
@@ -427,7 +337,11 @@ export async function registerCoreRoutes(
     }
   }, async (request, reply) => {
     try {
-      const validatedData = CreateCommunitySchema.parse(request.body);
+      const parsed = CreateCommunitySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid community', { code: 'INVALID_COMMUNITY' });
+      }
+      const validatedData = parsed.data;
 
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
@@ -487,12 +401,7 @@ export async function registerCoreRoutes(
               }
             }
           },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
+          _count: { select: COMMUNITY_ACTIVE_COUNTS }
         }
       });
 
@@ -611,7 +520,7 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           createdBy: true,
           isPrivate: true,
-          members: { select: { userId: true } }
+          members: { where: activeMembershipOf(userId), select: { userId: true }, take: 1 }
         }
       });
 
@@ -619,8 +528,7 @@ const community = await fastify.prisma.community.findFirst({
         return sendNotFound(reply, 'Community not found');
       }
 
-      const hasAccess = community.createdBy === userId ||
-                       community.members.some(member => member.userId === userId);
+      const hasAccess = community.createdBy === userId || community.members.length > 0;
 
       if (!hasAccess && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
@@ -760,7 +668,8 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           id: true,
           createdBy: true,
-          members: { select: { userId: true, role: true } }
+          isPrivate: true,
+          members: { where: activeMembershipOf(userId), select: { role: true }, take: 1 }
         }
       });
 
@@ -769,8 +678,7 @@ const community = await fastify.prisma.community.findFirst({
       }
 
       const isCreator = community.createdBy === userId;
-      const memberRecord = community.members.find(m => m.userId === userId);
-      const isAdmin = memberRecord?.role === CommunityRole.ADMIN;
+      const isAdmin = community.members[0]?.role === CommunityRole.ADMIN;
 
       if (!isCreator && !isAdmin) {
         return sendForbidden(reply, 'Only community admins can add conversations');
@@ -821,17 +729,12 @@ const community = await fastify.prisma.community.findFirst({
           where: { id: conversation.communityId },
           select: {
             createdBy: true,
-            members: { select: { userId: true, role: true } }
+            members: { where: activeMembershipOf(userId), select: { role: true }, take: 1 }
           }
         });
 
         const peutDetacher = Boolean(
-          source && (
-            source.createdBy === userId ||
-            source.members.some(
-              (m: { userId: string; role: string }) => m.userId === userId && m.role === CommunityRole.ADMIN
-            )
-          )
+          source && (source.createdBy === userId || source.members[0]?.role === CommunityRole.ADMIN)
         );
 
         if (!peutDetacher) {
@@ -840,6 +743,35 @@ const community = await fastify.prisma.community.findFirst({
           // divulgue rien qu'il ne sache.
           return sendForbidden(reply, 'You must administer the community this conversation currently belongs to');
         }
+      }
+
+      // #16703 — rattacher à une communauté PRIVÉE fait de ses participants
+      // les occupants d'un salon qu'elle réserve à ses membres : ils y entrent
+      // sous la loi d'une invitation (`planCommunityAdmission`), ou rien ne
+      // se rattache.
+      const admission = community.isPrivate
+        ? await planCommunityAdmission(fastify.prisma, {
+            communityId: id,
+            actorId: userId,
+            createdBy: community.createdBy,
+            isPrivate: true,
+            actorRole: community.members[0]?.role ?? null,
+            participantIds: conversation.participants
+              .filter((p: { userId: string | null; isActive?: boolean }) => p.isActive !== false)
+              .flatMap((p: { userId: string | null }) => (p.userId ? [p.userId] : [])),
+            admitActor: false,
+          })
+        : null;
+      if (admission?.kind === 'refused') {
+        return admission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' });
+      }
+
+      // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est
+      // rattaché (au pire des membres en plus, jamais un salon ouvert).
+      if (admission?.kind === 'admitted') {
+        await applyCommunityAdmission(fastify.prisma, id, admission);
       }
 
       // Update conversation to belong to this community (allows moving between communities)

@@ -210,6 +210,8 @@ data class ApiMessage(
     @Serializable(with = LossyApiTextTranslationListSerializer::class)
     val translations: List<ApiTextTranslation> = emptyList(),
     val reactionSummary: Map<String, Int>? = null,
+    /** Les lignes de réaction persistées (qui a réagi, hors-ligne) ; absent du fil, écrit par [ReactionLedger]. */
+    val reactionRows: List<ReactionRow>? = null,
     val deliveredCount: Int = 0,
     val readCount: Int = 0,
     val readByAllAt: String? = null,
@@ -323,6 +325,8 @@ data class ApiMessage(
 
     val arrivalsNotice: ArrivalsNoticeMetadata? by lazy { MessageRichMetadata.arrivalsNotice(metadata) }
 
+    val captureNotice: CaptureNoticeMetadata? by lazy { MessageRichMetadata.captureNotice(metadata) }
+
     /**
      * The resolved visual/lifecycle effects for this message. A positive
      * [effectFlags] bitfield is authoritative; otherwise lifecycle flags are
@@ -351,40 +355,6 @@ data class ApiMessage(
     val isSystemMessage: Boolean
         get() = messageSource == "system"
 }
-
-@Serializable
-data class SendMessageRequest(
-    val content: String,
-    val originalLanguage: String,
-    val messageType: String = "text",
-    val replyToId: String? = null,
-    // Wire twin of `ApiMessage.storyReplyToId` above — the RECEIVE side already
-    // carried it; the SEND side never did, so no client could ever construct a
-    // request the gateway's `storyReplyToId` (SendMessageBodySchema) accepts.
-    val storyReplyToId: String? = null,
-    val clientMessageId: String,
-    val attachmentIds: List<String>? = null,
-    val forwardedFromId: String? = null,
-    val forwardedFromConversationId: String? = null,
-    /**
-     * Les seules pièces de `forwardedFromId` que la passerelle recopie (#9914, #13596) ; absent ⇒ tout le lot.
-     * Une pièce étrangère au message source est refusée (`forwarded-attachment-not-in-source`).
-     */
-    val forwardedAttachmentIds: List<String>? = null,
-    val effectFlags: Int? = null,
-    val isBlurred: Boolean? = null,
-    val isViewOnce: Boolean? = null,
-    val ephemeralDuration: Int? = null,
-    val expiresAt: String? = null,
-    val maxViewOnceCount: Int? = null,
-    /** Lieu partagé : champ dédié que la passerelle valide (`parseSharedPlace`) et écrit dans `metadata.location`. */
-    val location: SharedPlace? = null,
-    /**
-     * Le sticker du message (#14334) : champ dédié que la passerelle valide (`parseMessageSticker`) et écrit dans
-     * `metadata.sticker` ; l'image jointe en est le rendu de repli. Absent pour tout autre message.
-     */
-    val sticker: MessageSticker? = null,
-)
 
 internal object TolerantPostReplyTargetSerializer :
     KSerializer<ApiPostReplyTarget?> by TolerantSerializer(ApiPostReplyTarget.serializer())

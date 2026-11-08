@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_camera_rail_fold_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_rail_folded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_rail_unfolded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_failed_connect_timed_out",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_failed_initiate_malformed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_failed_initiate_timed_out",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_failed_join_refused",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_failed_media_setup",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_history_open_profile_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_video_notice_low_light",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_video_notice_reduced",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_video_thermal_audio_only",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

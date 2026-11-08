@@ -1,8 +1,11 @@
 import UIKit
 
-/// L'état du dépliage EN PLACE d'un message long dans le fil UIKit (#8147,
-/// #8157) : le message déplié et, le temps que sa hauteur se pose, le bord
-/// qu'il faut tenir immobile.
+/// L'état du dépliage EN PLACE des messages longs dans le fil UIKit (#8147,
+/// #8157, #16463) : les messages dépliés et, le temps que la hauteur du
+/// dernier se pose, le bord qu'il faut tenir immobile.
+///
+/// Propriété du contrôleur du fil, recréé à chaque ouverture de la
+/// conversation : rouvrir la conversation rend tout replié.
 ///
 /// La hauteur d'une cellule `UIHostingConfiguration` se pose dans la passe
 /// forcée par le dépliage — ou dans une passe ultérieure, quand SwiftUI
@@ -20,8 +23,8 @@ struct LongMessageExpansionState {
         let edge: CGFloat
     }
 
-    /// Le message déplié — un seul à la fois.
-    var localId: String?
+    /// Les messages dépliés — ils le restent tant que le fil vit.
+    var expandedIds: Set<String> = []
     var hold: Hold?
     var contentSizeObservation: NSKeyValueObservation?
 }

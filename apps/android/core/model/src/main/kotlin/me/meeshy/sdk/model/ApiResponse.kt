@@ -2,6 +2,7 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 /**
  * Standard Meeshy API envelope (all services):
@@ -35,6 +36,16 @@ data class ApiResponse<T>(
     /** Les nombres d'un refus de plafond, étalés à la racine par `sendError` (`ONLY_UNLINKED_RECIPIENTS_LIMIT`, #14169). */
     val limit: Int? = null,
     val unlinked: Int? = null,
+    /** Le détenteur masqué d'un `EMAIL_TAKEN` (#8214), lu en tolérance par `MaskedEmailOwner.from`. */
+    val emailOwner: JsonElement? = null,
+    /** Une limite du jour (`DAILY_*_LIMIT`) : l'instant ISO de remise à zéro, à la racine (#9584). */
+    val resetAt: String? = null,
+    /** Secondes avant de pouvoir réessayer (`NEWCOMER_SLOW_MODE`, limites du jour), entier ou décimal. */
+    val retryAfter: Double? = null,
+    /** Les consentements à donner d'un 403 de pièce jointe (`/attachments/:id/translate`). */
+    val requiredConsents: List<String>? = null,
+    /** La pagination par curseur des routes qui ne passent pas par `sendSuccess` (`messages/search`), à la racine. */
+    val cursorPagination: CursorPagination? = null,
 )
 
 /**

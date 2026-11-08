@@ -260,4 +260,46 @@ final class CreatePostPayloadFidelityTests: XCTestCase {
         let json = try jsonObject(payload)
         XCTAssertFalse(json.keys.contains("allowSoundExtraction"))
     }
+
+    // MARK: - #16585 — la fermeture des commentaires voyage on-disk
+
+    func test_createPostPayload_decodeUneLigneEcriteAvantCeChamp_commentsDisabledAbsent() throws {
+        let ligneHistorique = Data("""
+        {
+          "clientMutationId": "cmid_00000000-0000-4000-8000-000000000008",
+          "content": "Un post d'avant ce champ",
+          "attachmentIds": [],
+          "visibility": "PUBLIC",
+          "type": "POST"
+        }
+        """.utf8)
+
+        let payload = try JSONDecoder().decode(CreatePostPayload.self, from: ligneHistorique)
+
+        XCTAssertNil(payload.commentsDisabled, "une ligne d'avant ce champ se relit ouverte")
+    }
+
+    func test_createPostPayload_porteLaFermetureDesCommentaires() throws {
+        let payload = CreatePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000009",
+            content: "",
+            attachmentIds: [],
+            visibility: "PUBLIC",
+            commentsDisabled: true
+        )
+
+        XCTAssertEqual(try jsonObject(payload)["commentsDisabled"] as? Bool, true)
+        XCTAssertEqual(try JSONDecoder().decode(CreatePostPayload.self, from: encoder.encode(payload)), payload)
+    }
+
+    func test_createPostPayload_ouverte_nEcritPasLaCle() throws {
+        let payload = CreatePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000010",
+            content: "Un post ordinaire",
+            attachmentIds: [],
+            visibility: "PUBLIC"
+        )
+
+        XCTAssertFalse(try jsonObject(payload).keys.contains("commentsDisabled"))
+    }
 }

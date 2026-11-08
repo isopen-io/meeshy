@@ -39,6 +39,8 @@ class CategoryRepositoryTest {
 
         override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
 
+        override suspend fun updateApplication(body: me.meeshy.sdk.model.ApplicationPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
         var calls: Int = 0
         var createCalls: Int = 0
         var lastCreateBody: CreateCategoryBody? = null
@@ -90,10 +92,14 @@ class CategoryRepositoryTest {
     private fun wire(id: String, name: String, order: Int? = null) =
         ApiCategory(id = id, name = name, color = "#123456", icon = "star", order = order, isExpanded = true)
 
+    /** What [wire] narrows to: the render attributes travel with the option since 986a39c2bb (#15834). */
+    private fun served(id: String, name: String, order: Int? = null) =
+        CategoryOption(id = id, name = name, order = order, color = "#123456", icon = "star", isExpanded = true)
+
     // ── CategoryCacheSource ──────────────────────────────────────────────────
 
     @Test
-    fun `revalidate fetches, narrows render-only fields and records the sync time`() = runTest {
+    fun `revalidate fetches, keeps the render attributes and records the sync time`() = runTest {
         val api = FakePreferencesApi(ok(wire("work", "Work", order = 1), wire("fam", "Family", order = 0)))
         val store = InMemoryCategorySnapshotStore()
         val source = CategoryCacheSource(store, api, FixedClock(4_242L))
@@ -101,8 +107,8 @@ class CategoryRepositoryTest {
         source.revalidate()
 
         assertThat(source.observe().first()).containsExactly(
-            CategoryOption(id = "work", name = "Work", order = 1),
-            CategoryOption(id = "fam", name = "Family", order = 0),
+            served("work", "Work", order = 1),
+            served("fam", "Family", order = 0),
         ).inOrder()
         assertThat(source.lastSyncedAt().first()).isEqualTo(4_242L)
     }
@@ -209,7 +215,7 @@ class CategoryRepositoryTest {
         repository(api, store).refresh()
 
         assertThat(store.observe().first()).containsExactly(
-            CategoryOption(id = "a", name = "Alpha", order = 2),
+            served("a", "Alpha", order = 2),
         )
         assertThat(api.calls).isEqualTo(1)
     }
@@ -229,11 +235,11 @@ class CategoryRepositoryTest {
 
         val result = repository(api, store, clock = FixedClock(5_000L)).create("Errands")
 
-        assertThat(result).isEqualTo(NetworkResult.Success(CategoryOption(id = "new", name = "Errands", order = 3)))
+        assertThat(result).isEqualTo(NetworkResult.Success(served("new", "Errands", order = 3)))
         assertThat(api.lastCreateBody).isEqualTo(CreateCategoryBody(name = "Errands"))
         assertThat(store.observe().first()).containsExactly(
             CategoryOption(id = "work", name = "Work", order = 0),
-            CategoryOption(id = "new", name = "Errands", order = 3),
+            served("new", "Errands", order = 3),
         ).inOrder()
         assertThat(store.lastSyncedAt().first()).isEqualTo(5_000L)
     }
@@ -248,8 +254,8 @@ class CategoryRepositoryTest {
 
         val result = repository(api, store, clock = FixedClock(9L)).create("Trips")
 
-        assertThat(result.getOrNull()).isEqualTo(CategoryOption(id = "first", name = "Trips", order = null))
-        assertThat(store.observe().first()).containsExactly(CategoryOption(id = "first", name = "Trips"))
+        assertThat(result.getOrNull()).isEqualTo(served("first", "Trips"))
+        assertThat(store.observe().first()).containsExactly(served("first", "Trips"))
     }
 
     @Test

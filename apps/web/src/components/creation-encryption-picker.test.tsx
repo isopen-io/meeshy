@@ -90,7 +90,8 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
   test('chaque mode porte sa phrase en description', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
     expect(describedText(radio('server'))).toBe('Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.');
-    expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt.');
+    expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin. Cet appareil ne la porte pas encore.');
+    expect(describedText(radio('hybrid'))).not.toMatch(/bout en bout|chaque message/u);
   });
 
   test('le pied du choix dit que le bout en bout ne se désactive jamais, et qu’une autre conversation reste possible', async () => {
@@ -98,6 +99,23 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
     expect(document.querySelector('[data-creation-encryption-footer]')?.textContent).toBe(
       'Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
     );
+  });
+});
+
+describe('replié par défaut, le mode retenu reste dit (#14646)', () => {
+  test('la feuille ne montre que « Chiffrement · Serveur » ; déplier offre les modes', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    const disclosure = document.querySelector<HTMLDetailsElement>('details[data-creation-encryption-disclosure]');
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure?.querySelector('summary')?.textContent).toBe('Chiffrement · Serveur');
+    expect(disclosure?.querySelector('fieldset[data-creation-encryption]')).not.toBeNull();
+  });
+
+  test('le résumé suit le mode choisi', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    act(() => radio('hybrid')?.click());
+    await settle();
+    expect(document.querySelector('[data-creation-encryption-disclosure] summary')?.textContent).toBe('Chiffrement · Hybride');
   });
 });
 

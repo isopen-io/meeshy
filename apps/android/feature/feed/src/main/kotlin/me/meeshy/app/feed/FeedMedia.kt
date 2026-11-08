@@ -5,10 +5,13 @@ import java.util.Locale
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.DurationFormat
+import me.meeshy.sdk.model.EffectiveAudioTrack
+import me.meeshy.sdk.model.SocialAudioSurface
+import me.meeshy.sdk.model.SocialAudioTrack
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MAX_POST_MEDIA
 import me.meeshy.sdk.model.MessageTranscription
-import me.meeshy.sdk.model.MessageTranscriptionSegment
+import me.meeshy.sdk.model.AttachmentMetadataMapping
 import me.meeshy.sdk.model.MessageTranslatedAudio
 import me.meeshy.sdk.model.PostMediaFraming
 import me.meeshy.sdk.model.media.AttachmentKind
@@ -56,6 +59,21 @@ data class FeedMediaItem(
      */
     val accessibilityDescription: String?
         get() = alt?.trim()?.takeIf { it.isNotEmpty() } ?: caption?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** La piste audio servie sur [surface] : la loi du chat, projetée au social (langue de transcription d'abord). */
+    fun servedAudio(
+        surface: SocialAudioSurface,
+        carrierLanguage: String?,
+        preferredLanguages: List<String>,
+    ): EffectiveAudioTrack.Served = SocialAudioTrack.served(
+        surface = surface,
+        originalUrl = url,
+        originalDurationMs = durationSeconds?.let { it * 1000 },
+        transcription = transcription,
+        carrierLanguage = carrierLanguage,
+        preferredLanguages = preferredLanguages,
+        translatedAudios = translatedAudios,
+    )
 
     /** La hauteur de ce média pour une carte de [cardWidth], bornée par le ratio. */
     fun fittedHeight(cardWidth: Float): Float =
@@ -124,30 +142,12 @@ internal object FeedMediaMapper {
         language = source.language ?: "und",
         confidence = source.confidence,
         durationMs = source.durationMs,
-        segments = source.segments.orEmpty().map {
-            MessageTranscriptionSegment(text = it.text, startTime = it.startTime, endTime = it.endTime, speakerId = it.speakerId)
-        },
+        segments = source.segments.orEmpty().map(AttachmentMetadataMapping::segment),
         speakerCount = source.speakerCount,
     )
 
     private fun translatedAudios(media: ApiPostMedia, mediaBaseUrl: String?): List<MessageTranslatedAudio> =
         media.translations.orEmpty().mapNotNull { (language, track) ->
-            val url = track.url?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            MessageTranslatedAudio(
-                id = "${media.id}_$language",
-                attachmentId = media.id,
-                targetLanguage = language,
-                url = resolveFeedMediaUrl(url, mediaBaseUrl),
-                transcription = track.transcription.orEmpty(),
-                durationMs = track.durationMs ?: 0,
-                format = track.format ?: "mp3",
-                cloned = track.cloned ?: false,
-                quality = track.quality ?: 0.0,
-                voiceModelId = track.voiceModelId,
-                ttsModel = track.ttsModel ?: "xtts",
-                segments = track.segments.orEmpty().map {
-                    MessageTranscriptionSegment(text = it.text, startTime = it.startTime, endTime = it.endTime, speakerId = it.speakerId)
-                },
-            )
+            AttachmentMetadataMapping.translatedAudio(media.id, language, track) { resolveFeedMediaUrl(it, mediaBaseUrl) }
         }
 }

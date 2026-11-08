@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "ui", "iosKey": "conversation.role.admin", "androidName": "identity_role_admin", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "conversation.role.creator", "androidName": "identity_role_creator", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "conversation.role.moderator", "androidName": "identity_role_moderator", "status": "adopted"}
+      ]
+    }
+  }
+}

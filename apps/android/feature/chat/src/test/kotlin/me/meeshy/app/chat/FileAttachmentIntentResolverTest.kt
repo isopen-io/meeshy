@@ -58,4 +58,13 @@ class FileAttachmentIntentResolverTest {
         assertThat(FileAttachmentIntentResolver.canHandOff("https")).isFalse()
         assertThat(FileAttachmentIntentResolver.canHandOff(null)).isFalse()
     }
+
+    @Test
+    fun a_card_phone_number_is_reduced_to_what_a_dialer_accepts() {
+        assertThat(FileAttachmentIntentResolver.dialableNumber("+33 6 12-34.56 78")).isEqualTo("+33612345678")
+        assertThat(FileAttachmentIntentResolver.dialableNumber("(555) 010 99")).isEqualTo("55501099")
+        assertThat(FileAttachmentIntentResolver.dialableNumber("*#*#")).isNull()
+        assertThat(FileAttachmentIntentResolver.dialableNumber("pas un numero")).isNull()
+        assertThat(FileAttachmentIntentResolver.dialableNumber(null)).isNull()
+    }
 }

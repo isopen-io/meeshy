@@ -48,4 +48,14 @@ class ConversationStickerRecipeTest {
         assertThat(ConversationStickerRecipe.of(StickerSheetChoice.Library(serverId), StickerChoiceRoute.LibraryImage(serverId)))
             .isEqualTo(MessageSticker(stickerId = serverId.lowercase()))
     }
+
+    @Test
+    fun `un Instant part sous mee point id avec ses emplacements et son emoji de repli`() {
+        val slots = mapOf("message" to "Coucou", "time" to "08:00")
+        val recipe = ConversationStickerRecipe.of(
+            StickerSheetChoice.Instant("instant-bonjour", slots),
+            StickerChoiceRoute.InstantImage("instant-bonjour", slots),
+        )
+        assertThat(recipe).isEqualTo(MessageSticker(templateId = "mee.instant-bonjour", slots = slots, emoji = "🌅"))
+    }
 }

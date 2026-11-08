@@ -48,6 +48,12 @@ public data class ComposerAffordances(
             canSendLocations = false,
             canSendLinks = false,
         )
+
+        /**
+         * Le TEXTE seul (tête-à-tête chiffré de bout en bout, #14591) : il part scellé par libsignal. Ni pièce, ni vocal,
+         * ni lieu, ni aperçu de lien — rien de ce qui partirait à côté du texte ne se chiffre encore sur Android.
+         */
+        public val TEXT_ONLY: ComposerAffordances = CLOSED.copy(canSendText = true)
     }
 }
 

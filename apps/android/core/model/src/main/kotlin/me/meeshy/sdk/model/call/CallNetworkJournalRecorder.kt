@@ -21,6 +21,7 @@ sealed interface CallNetworkJournalInput {
     data class Reading(val reading: CallQualityReading) : CallNetworkJournalInput
     data class Tier(val level: VideoQualityLevel) : CallNetworkJournalInput
     data class MediaFault(val reason: String) : CallNetworkJournalInput
+    data class Profile(val profile: CallDataProfile) : CallNetworkJournalInput
 }
 
 /** The next recorder and the events to persist. */
@@ -44,6 +45,7 @@ data class CallNetworkJournalRecorder(
     val lastTier: VideoQualityLevel? = null,
     val lastSampleAtMs: Long? = null,
     val lastSampleGrades: List<CallQualityGrade?> = emptyList(),
+    val lastProfile: CallDataProfile? = null,
 ) {
     fun reducing(input: CallNetworkJournalInput, nowMs: Long): CallNetworkJournalStep {
         if (input is CallNetworkJournalInput.Call) return startingCall(input.id, nowMs)
@@ -65,6 +67,12 @@ data class CallNetworkJournalRecorder(
                     step(copy(lastTier = input.level), nowMs, CallNetworkEventKind.Tier(tierLabel(input.level)))
                 }
             is CallNetworkJournalInput.MediaFault -> step(this, nowMs, CallNetworkEventKind.MediaFault(input.reason))
+            is CallNetworkJournalInput.Profile ->
+                if (input.profile == lastProfile) {
+                    unchanged()
+                } else {
+                    step(copy(lastProfile = input.profile), nowMs, CallNetworkEventKind.Profile(input.profile.wireName))
+                }
         }
     }
 

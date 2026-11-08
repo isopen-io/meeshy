@@ -193,7 +193,10 @@ function passerelleServant(ligne: Record<string, unknown>) {
       update: jest.fn<any>(async (args: any) => ({ id: args?.where?.id, ...args?.data, user: ligne })),
       count: jest.fn<any>().mockResolvedValue(2),
     },
-    user: { findUnique: surLeCompte, findFirst: surLeCompte },
+    user: { findUnique: surLeCompte, findFirst: surLeCompte, findMany: jest.fn<any>().mockResolvedValue([]) },
+    userRelation: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    friendRequest: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    communityMember: { findMany: jest.fn<any>().mockResolvedValue([]) },
     message: { create: jest.fn<any>(async (args: any) => ({ id: 'sys-row', ...args?.data })) },
     __surLeCompte: surLeCompte,
   } as any;

@@ -1,5 +1,6 @@
 package me.meeshy.app.chat.river
 
+import me.meeshy.sdk.model.ForwardAttribution
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeOut
@@ -34,6 +35,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -52,15 +55,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.BubbleStickerSpec
+import me.meeshy.sdk.model.StickerBoxLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.model.reading.river.RiverMetrics
+import me.meeshy.app.chat.ChatVoicePlayback
+import me.meeshy.app.chat.rememberBubbleVoicePlayback
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.BubbleCallbacks
+import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.river.RiverAttachmentBlock
+import me.meeshy.ui.component.river.RiverEmojiText
+import me.meeshy.ui.component.river.RiverQuotedMediaFace
+import me.meeshy.ui.component.river.RiverStoryCitation
 import me.meeshy.ui.component.bubble.BubbleBlurReveal
 import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.sticker.MessageStickerArtwork
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -80,6 +94,14 @@ internal class RiverBubbleActions(
     val onOpenReply: (targetMessageId: String) -> Unit = {},
     val onOpenProfile: (ProfileSheetUser) -> Unit = {},
     val onOpenInThread: (messageId: String) -> Unit = {},
+    /** Le toucher sur l'aperçu du média cité : la visionneuse du cité, ou le saut à l'original (une zone n'est jamais morte). */
+    val onOpenQuotedMedia: (messageId: String, quotedId: String) -> Unit = { _, _ -> },
+    /** La carte d'une story citée ouvre son post. */
+    val onOpenStory: (postId: String) -> Unit = {},
+    /** Les gestes des pièces d'une bulle : les MÊMES que ceux de la rangée du fil. */
+    val attachmentCallbacks: (BubbleContent) -> BubbleCallbacks = { BubbleCallbacks.None },
+    /** Le lecteur de vocaux du fil : sans lui, une pièce audio se lit mais ne se joue pas. */
+    val audioPlayer: ChatVoicePlayback? = null,
 )
 
 private val BubbleTextStyle = TextStyle(fontSize = 15.sp, lineHeight = (15f * FocalMetrics.Text.LINE_HEIGHT_RATIO.toFloat()).sp)
@@ -175,7 +197,23 @@ private fun SpeechRow(content: RiverBubbleContent, contentWidth: Dp, actions: Ri
             .combinedClickable(onClick = { actions.onTap(messageId) }, onLongClick = { actions.onLongPress(messageId) }),
     ) {
         if (content.bubble.isFirstInGroup) IdentityHeader(content, laneColor, contentWidth, actions)
-        MessageBox(content, contentWidth, laneColor, actions)
+        val sticker = content.sticker
+        if (sticker == null) MessageBox(content, contentWidth, laneColor, actions) else StickerBox(sticker, content, contentWidth)
+    }
+}
+
+/**
+ * Le sticker de la Rivière (#14534, iOS `FocalRow.stickerBlock`) : ni fond ni contour, le dessin posé dans le couloir
+ * de sa voix, l'heure dessous comme sous une bulle. Un couloir trop étroit réduit le film, jamais sa marge.
+ */
+@Composable
+private fun StickerBox(sticker: BubbleStickerSpec, content: RiverBubbleContent, contentWidth: Dp) {
+    val side = StickerBoxLaw.filmSideWithin(width = contentWidth.value, preferred = FocalMetrics.Sticker.SIDE.toFloat()).dp
+    Column(verticalArrangement = Arrangement.spacedBy(RiverMetrics.Bubble.BASE_GAP.dp), modifier = Modifier.width(contentWidth)) {
+        MessageStickerArtwork(sticker, side = side)
+        if (content.timeString.isNotEmpty()) {
+            Text(text = content.timeString, color = metaTint(), fontSize = FocalMetrics.Time.SIZE.toFloat().sp)
+        }
     }
 }
 
@@ -206,9 +244,17 @@ private fun MessageBox(content: RiverBubbleContent, contentWidth: Dp, laneColor:
             .riverBubbleOutline(content.groupPosition, content.layout, laneColor, tokens.hairline)
             .padding(pad),
     ) {
-        if (content.isForwarded) ForwardedLine(content.forwardedFromName)
-        content.replyPreview?.let { QuotedReply(it, content.bubble.replyToMessageId, laneColor, actions) }
+        if (content.isForwarded) ForwardedLine(content.forwardAttribution)
+        content.storyReply?.let { story ->
+            RiverStoryCitation(
+                story = story,
+                accentColor = laneColor,
+                onOpen = story.postId?.takeIf { story.opensTarget }?.let { postId -> { actions.onOpenStory(postId) } },
+            )
+        }
+        content.replyPreview?.let { QuotedReply(it, content.bubble.messageId, content.bubble.replyToMessageId, laneColor, actions) }
         BubbleBody(content, laneColor)
+        content.attachments?.let { source -> RiverAttachments(source, content, laneColor, actions) }
         if (content.timeString.isNotEmpty()) {
             Text(
                 text = content.timeString,
@@ -230,9 +276,13 @@ private fun metaTint(): Color =
     }
 
 @Composable
-private fun ForwardedLine(from: String?) {
+private fun ForwardedLine(attribution: ForwardAttribution) {
     Text(
-        text = from?.let { stringResource(UiR.string.bubble_forwarded_from, it) } ?: stringResource(UiR.string.bubble_forwarded),
+        text = when (attribution) {
+            is ForwardAttribution.Group -> stringResource(UiR.string.bubble_forwarded_from, attribution.name)
+            is ForwardAttribution.Person -> stringResource(UiR.string.bubble_forwarded_from_person, attribution.name)
+            ForwardAttribution.Anonymous -> stringResource(UiR.string.bubble_forwarded)
+        },
         color = metaTint(),
         fontSize = 12.sp,
         fontStyle = FontStyle.Italic,
@@ -241,32 +291,71 @@ private fun ForwardedLine(from: String?) {
     )
 }
 
-/** La citation tient sur UNE ligne, sous un rail à la couleur de la voix ; elle mène à sa cible. */
+/**
+ * La citation tient sur UNE ligne, sous un rail à la couleur de la voix ; elle mène à sa cible. Un média cité
+ * (vignette) s'affiche sous la ligne, que le même rail longe : son toucher ouvre la pièce, le reste de la citation saute.
+ */
 @Composable
-private fun QuotedReply(reply: RiverReplyPreview, targetId: String?, laneColor: Color, actions: RiverBubbleActions) {
+private fun QuotedReply(reply: RiverReplyPreview, messageId: String, targetId: String?, laneColor: Color, actions: RiverBubbleActions) {
     val hint = stringResource(R.string.riviere_bubble_reply_hint)
-    Row(
-        Modifier
-            .height(IntrinsicSize.Min)
-            .let { base ->
-                if (targetId == null) base
-                else base.clickable(onClickLabel = hint) { actions.onOpenReply(targetId) }
-            },
-    ) {
-        Box(
+    val follow: (() -> Unit)? = targetId?.let { id -> { actions.onOpenReply(id) } }
+    Column {
+        Row(
             Modifier
-                .width(FocalMetrics.Quote.RAIL_WIDTH.toFloat().dp)
-                .fillMaxHeight()
-                .background(laneColor.copy(alpha = 0.6f)),
-        )
-        Text(
-            text = "${reply.authorDisplayName} · ${reply.text}",
-            color = metaTint(),
-            fontSize = (BubbleTextStyle.fontSize.value - 2f).sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = MeeshySpacing.sm),
-        )
+                .height(IntrinsicSize.Min)
+                .let { base -> if (follow == null) base else base.clickable(onClickLabel = hint, onClick = follow) },
+        ) {
+            QuoteRail(laneColor)
+            Text(
+                text = listOf(reply.authorDisplayName, reply.text).filter { it.isNotEmpty() }.joinToString(" · "),
+                color = metaTint(),
+                fontSize = (BubbleTextStyle.fontSize.value - 2f).sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = MeeshySpacing.sm),
+            )
+        }
+        reply.thumbnailUrl?.let { url ->
+            Row(
+                Modifier
+                    .height(IntrinsicSize.Min)
+                    .let { base -> if (follow == null) base else base.clickable(onClick = follow) },
+            ) {
+                QuoteRail(laneColor)
+                RiverQuotedMediaFace(
+                    thumbnailUrl = url,
+                    tint = laneColor,
+                    onClick = targetId?.let { id -> { actions.onOpenQuotedMedia(messageId, id) } },
+                    modifier = Modifier.padding(start = MeeshySpacing.sm, top = MeeshySpacing.xs),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuoteRail(laneColor: Color) {
+    Box(
+        Modifier
+            .width(FocalMetrics.Quote.RAIL_WIDTH.toFloat().dp)
+            .fillMaxHeight()
+            .background(laneColor.copy(alpha = 0.6f)),
+    )
+}
+
+/** Les pièces de la bulle : les atomes de la rangée plate, voilés comme le texte tant que la révélation n'a pas eu lieu. */
+@Composable
+private fun RiverAttachments(source: BubbleContent, content: RiverBubbleContent, laneColor: Color, actions: RiverBubbleActions) {
+    val callbacks = remember(source, actions) { actions.attachmentCallbacks(source) }
+    val playback by rememberBubbleVoicePlayback(actions.audioPlayer, source.audios)
+    val block: @Composable () -> Unit = {
+        RiverAttachmentBlock(source, MeeshyTheme.tokens.textPrimary, callbacks, playback, laneColor)
+    }
+    val spec = content.blurReveal
+    if (spec == null) {
+        block()
+    } else {
+        BubbleBlurReveal(content.bubble.messageId, spec, shape = RoundedCornerShape(MeeshyRadius.md)) { block() }
     }
 }
 
@@ -278,12 +367,14 @@ private fun BubbleBody(content: RiverBubbleContent, laneColor: Color) {
         RiverProtection.NONE -> {
             if (content.text.isBlank()) return
             val spec = content.blurReveal
+            val body: @Composable () -> Unit = {
+                val emojiSize = content.emojiFontSizeSp
+                if (emojiSize != null) RiverEmojiText(content.text, emojiSize) else RiverText(content, laneColor)
+            }
             if (spec == null) {
-                RiverText(content, laneColor)
+                body()
             } else {
-                BubbleBlurReveal(content.bubble.messageId, spec, shape = RoundedCornerShape(MeeshyRadius.md)) {
-                    RiverText(content, laneColor)
-                }
+                BubbleBlurReveal(content.bubble.messageId, spec, shape = RoundedCornerShape(MeeshyRadius.md)) { body() }
             }
         }
     }
@@ -294,7 +385,10 @@ private fun MutedLine(text: String) {
     Text(text, style = BubbleTextStyle, fontStyle = FontStyle.Italic, color = MeeshyTheme.tokens.textMuted)
 }
 
-/** Le texte PRISME servi par le fil ; un message très long se replie sur son extrait. */
+/**
+ * Le texte PRISME servi par le fil ; un message très long s'ouvre sur son extrait, et « Lire la suite » l'affiche en
+ * entier pour toute la durée d'ouverture du fil — aucun « Réduire » (#16465, iOS #16463).
+ */
 @Composable
 private fun RiverText(content: RiverBubbleContent, laneColor: Color) {
     val excerpt = remember(content.text) { LongMessageExcerpt.of(content.text) }
@@ -305,15 +399,16 @@ private fun RiverText(content: RiverBubbleContent, laneColor: Color) {
         style = BubbleTextStyle,
         linkColor = laneColor,
     )
-    if (excerpt.truncated) {
+    if (excerpt.truncated && !expanded) {
         Text(
-            text = stringResource(if (expanded) UiR.string.message_long_collapse else UiR.string.message_long_read_more),
+            text = stringResource(UiR.string.message_long_read_more),
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = laneColor,
             modifier = Modifier
+                .minimumInteractiveComponentSize()
                 .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { expanded = !expanded }
+                .clickable(role = Role.Button) { expanded = true }
                 .padding(vertical = MeeshySpacing.xxs),
         )
     }
@@ -343,6 +438,7 @@ private fun IdentityHeader(content: RiverBubbleContent, laneColor: Color, conten
             presence = rememberPresence(identity?.userId),
             here = rememberConversationHere(identity?.userId, identity?.conversationId),
             imageUrl = identity?.avatarUrl,
+            decorRing = identity?.avatarRing,
         )
         Text(
             text = content.senderDisplayName,

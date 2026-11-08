@@ -7,6 +7,7 @@ import MeeshySDK
 struct ConversationCollaborators {
     let readReceipts: any ConversationReadReceiptSenderProviding
     let voiceConsent: any VoiceConsentGateProviding
+    let voiceConsentRefresher: VoiceConsentRefresher
     let cacheReader: any ConversationCacheReaderProviding
     let windowFetcher: any ConversationWindowFetcherProviding
     let stager: any OptimisticMessageStagerProviding
@@ -16,6 +17,9 @@ struct ConversationCollaborators {
     /// Le régime relu à la passerelle quand elle dit qu'il a changé (#12522).
     let encryptionService: any ConversationEncryptionServiceProviding
     let regimeRefresher: EndToEndRegimeRefresher
+    /// La progression de téléversement de chaque bulle, par `clientMessageId` : celle de toute
+    /// l'application, la bulle la retrouve quand la conversation se rouvre (#14702, #16275).
+    let uploadProgress = MessageUploadProgressStore.shared
 
     init(
         persistence: MessagePersistenceActor,
@@ -32,6 +36,7 @@ struct ConversationCollaborators {
     ) {
         self.readReceipts = readReceipts ?? ConversationReadReceiptSender(syncEngine: syncEngine)
         self.voiceConsent = voiceConsent ?? VoiceConsentGate()
+        self.voiceConsentRefresher = VoiceConsentRefresher(gate: self.voiceConsent)
         self.cacheReader = cacheReader ?? ConversationCacheReader()
         self.windowFetcher = windowFetcher ?? ConversationWindowFetcher(messageService: messageService, persistence: persistence)
         self.stager = stager ?? OptimisticMessageStager(persistence: persistence)

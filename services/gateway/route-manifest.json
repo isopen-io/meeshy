@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 781,
+  "routeCount": 796,
   "routes": [
     {
       "method": "DELETE",
@@ -321,6 +321,20 @@
     },
     {
       "method": "DELETE",
+      "path": "/api/v1/bring/:bringId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/calls/:callId",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
@@ -462,6 +476,20 @@
     {
       "method": "DELETE",
       "path": "/api/v1/conversations/:id/messages/:messageId/pin",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/conversations/:id/obsolete",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -2912,6 +2940,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/bring/:userId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/calls/:callId",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
@@ -4451,6 +4493,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/messages/search",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/notifications",
       "module": "notificationRoutes",
       "mountPrefix": "/api/v1",
@@ -5225,6 +5281,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/posts/search",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/posts/stories/mine",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
@@ -5250,6 +5320,63 @@
         "S3"
       ],
       "securityBasisKey": "optional-identity",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/publishers/:slug",
+      "module": "packPublisherRoutes",
+      "mountPrefix": "/api/v1/publishers",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/publishers/:slug/page",
+      "module": "packPublisherRoutes",
+      "mountPrefix": "/api/v1/publishers",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/publishers/admin",
+      "module": "packPublisherRoutes",
+      "mountPrefix": "/api/v1/publishers",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/publishers/me",
+      "module": "packPublisherRoutes",
+      "mountPrefix": "/api/v1/publishers",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5311,7 +5438,35 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/relations/:userId/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/relations/config",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/now-playing",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
@@ -6866,6 +7021,20 @@
     },
     {
       "method": "PATCH",
+      "path": "/api/v1/posts/:postId/comment-settings",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PATCH",
       "path": "/api/v1/posts/:postId/comments/:commentId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
@@ -8271,6 +8440,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/bring/:userId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/calls",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
@@ -8582,6 +8765,20 @@
     {
       "method": "POST",
       "path": "/api/v1/conversations/:id/mark-unread",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:id/message-request/accept",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -10980,6 +11177,20 @@
       "path": "/api/v1/posts/:postId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/relations/:userId/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

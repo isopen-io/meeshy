@@ -13,13 +13,17 @@ import {
   departureStore,
   dismissDepartureFailure,
   failDeparture,
+  markObsoleteRefused,
   type DepartureFailure,
+  type DepartureKind,
   type DepartureRequest,
 } from '@/lib/conversation-departure';
 import { translate } from '@/lib/i18n-catalog';
+import { translateConversationManage } from '@/lib/i18n-conversation-manage-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { navigate } from '@/lib/router';
 import { titleOf } from '@/lib/view/conversation';
+import { useConversationManageCatalog } from '@/lib/view/use-conversation-manage-catalog';
 import { href } from '@/routes/route-table';
 
 import { ConfirmDialog } from './confirm-dialog';
@@ -56,18 +60,29 @@ export function ConversationDepartureHost({
   const failure = useStore(departureStore, (state) => state.failure);
   const session = useStore(sessionStore, (state) => state.session);
   const language = currentInterfaceLanguage();
+  /* RENDRE OBSOLÈTE (#14645) parle avec le catalogue de gestion, chargé à la demande. */
+  const manageReady = useConversationManageCatalog(language);
 
   const confirm = async (pending: DepartureRequest): Promise<void> => {
     cancelDeparture();
     const online = isOnline();
     if (online && pending.returnToList) onReturnToList();
     const outcome = await performDeparture({ conversationId: pending.conversationId, kind: pending.kind, online, deps });
+    if (outcome === 'refused') return refuse(pending);
     if (outcome !== 'departed') failDeparture({ kind: pending.kind, offline: outcome === 'offline' });
+  };
+
+  /* REFUSÉ (#14690) — le geste ne se repropose plus pour cette conversation ;
+     sur un tête-à-tête, le refus a un seul motif à dire. */
+  const refuse = (pending: DepartureRequest): void => {
+    markObsoleteRefused(pending.conversationId);
+    const direct = cachedConversation(deps, pending.conversationId)?.type === 'direct';
+    failDeparture({ kind: pending.kind, offline: false, ...(direct ? { refusal: 'requestSender' as const } : {}) });
   };
 
   return (
     <>
-      {request === null ? null : (
+      {request === null || (request.kind === 'obsolete' && !manageReady) ? null : (
         <DepartureConfirm
           request={request}
           language={language}
@@ -75,7 +90,7 @@ export function ConversationDepartureHost({
           onConfirm={() => void confirm(request)}
         />
       )}
-      {failure === null ? null : <DepartureFailureNotice failure={failure} language={language} />}
+      {failure === null || (failure.kind === 'obsolete' && !manageReady) ? null : <DepartureFailureNotice failure={failure} language={language} />}
     </>
   );
 }
@@ -96,20 +111,52 @@ function DepartureConfirm({
   readonly title: string;
   readonly onConfirm: () => void;
 }) {
-  const leave = request.kind === 'leave';
+  const words = confirmWordsOf(request.kind, language, title);
   return (
     <ConfirmDialog
       name="conversation-departure"
-      title={translate(language, leave ? 'conversation.departure.leave.title' : 'conversation.departure.delete.title')}
-      body={leave ? translate(language, 'conversation.departure.leave.message') : translate(language, 'conversation.departure.delete.message', { title })}
+      title={words.title}
+      body={words.body}
       cancelLabel={translate(language, 'common.cancel')}
-      confirmLabel={translate(language, leave ? 'conversation.departure.leave' : 'rowActions.delete')}
+      confirmLabel={words.confirm}
       tone="destructive"
       onConfirm={onConfirm}
       onCancel={cancelDeparture}
     />
   );
 }
+
+type ConfirmWords = { readonly title: string; readonly body: string; readonly confirm: string };
+
+/** Les mots de chaque geste ; RENDRE OBSOLÈTE (#14645) dit que TOUS la perdent, et que son contenu sera effacé. */
+function confirmWordsOf(kind: DepartureKind, language: InterfaceLanguage, title: string): ConfirmWords {
+  if (kind === 'leave') {
+    return {
+      title: translate(language, 'conversation.departure.leave.title'),
+      body: translate(language, 'conversation.departure.leave.message'),
+      confirm: translate(language, 'conversation.departure.leave'),
+    };
+  }
+  if (kind === 'obsolete') {
+    return {
+      title: translateConversationManage(language, 'conversationManage.obsolete.title'),
+      body: `${title} — ${translateConversationManage(language, 'conversationManage.obsolete.message')}`,
+      confirm: translateConversationManage(language, 'conversationManage.obsolete'),
+    };
+  }
+  return {
+    title: translate(language, 'conversation.departure.delete.title'),
+    body: translate(language, 'conversation.departure.delete.message', { title }),
+    confirm: translate(language, 'rowActions.delete'),
+  };
+}
+
+const failureTextOf = (failure: DepartureFailure, language: InterfaceLanguage): string => {
+  const { kind } = failure;
+  if (failure.refusal === 'requestSender') return translateConversationManage(language, 'conversationManage.obsolete.requestSender');
+  if (kind === 'obsolete') return translateConversationManage(language, 'conversationManage.obsolete.error');
+  return translate(language, kind === 'leave' ? 'conversation.departure.leave.error' : 'conversation.departure.delete.error');
+};
 
 function DepartureFailureNotice({ failure, language }: { readonly failure: DepartureFailure; readonly language: InterfaceLanguage }) {
   useEffect(() => {
@@ -119,7 +166,7 @@ function DepartureFailureNotice({ failure, language }: { readonly failure: Depar
 
   const message = failure.offline
     ? translate(language, 'conversation.departure.offline')
-    : translate(language, failure.kind === 'leave' ? 'conversation.departure.leave.error' : 'conversation.departure.delete.error');
+    : failureTextOf(failure, language);
 
   return (
     <div className="fixed inset-x-0 z-50 flex justify-center px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>

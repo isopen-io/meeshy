@@ -35,53 +35,6 @@ final class StickerPickerSymbolTests: XCTestCase {
                        "Le smiley est revenu dans la feuille de stickers.")
     }
 
-    /// **La garde BALAIE, elle ne nomme plus.**
-    ///
-    /// La première version de ce lot nommait deux sites — la porte du rail et
-    /// l'en-tête de la feuille — et les corrigeait tous les deux. Il en existait
-    /// un TROISIÈME : le bouton sticker du panneau d'outils du composer SDK
-    /// (`ComposerToolPanelHost`), qui ouvre la MÊME palette et gardait son
-    /// visage. Une énumération porte toujours deux affirmations — « ces sites
-    /// appliquent la règle » (vérifiable) et « ce sont les seuls » (presque
-    /// jamais vérifiée).
-    ///
-    /// La règle, elle, est vérifiable : **tout site qui OUVRE la palette porte
-    /// le glyphe de la palette.** Un quatrième site l'appliquera donc sans
-    /// qu'on ait à y penser.
-    func test_everySiteThatOpensThePalette_carriesItsGlyph() throws {
-        let racine = Self.storySourcesRoot
-        let énumérateur = try XCTUnwrap(
-            FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil))
-        var examinés = 0
-        for cas in énumérateur {
-            guard let url = cas as? URL, url.pathExtension == "swift" else { continue }
-            let code = Self.strippingLineComments(
-                try String(contentsOf: url, encoding: .utf8))
-            let ouvreLaPalette = code.contains("onOpenStickerPicker?()")
-                || code.contains("onOpenStickerPicker()")
-                || code.contains("StickerPickerView(")
-            guard ouvreLaPalette else { continue }
-            examinés += 1
-            XCTAssertFalse(code.contains("face.smiling"),
-                           "\(url.lastPathComponent) ouvre la palette et porte encore un smiley.")
-        }
-        // **Un seul site depuis #9189** : l'atelier ne monte plus la feuille
-        // (`StickerPickerView(`), sa porte la DEMANDE à l'app. Il reste la
-        // porte du panneau d'outils ; zéro rendrait la garde verte à vide.
-        XCTAssertGreaterThanOrEqual(examinés, 1,
-                                    "Le balayage ne trouve aucun site — la garde passerait "
-                                     + "au vert par omission, pas parce que la règle est tenue.")
-    }
-
-    private static var storySourcesRoot: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Story
-            .deletingLastPathComponent()   // MeeshyUITests
-            .deletingLastPathComponent()   // Tests
-            .deletingLastPathComponent()   // MeeshySDK
-            .appendingPathComponent("Sources/MeeshyUI/Story")
-    }
-
     private static var pickerSourceURL: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Story

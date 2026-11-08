@@ -201,9 +201,38 @@ export type ReaderPage<T> = {
 };
 
 /**
- * Les deux coupures de service d'une page lue par UN lecteur, pour une porte
- * qui n'avait ni l'une ni l'autre (recherche, fil, lien de partage) : l'éphémère
- * échu pour lui (#7451), puis la réponse à ce qui est mort pour lui (#8630).
+ * Les deux coupures de service d'une page lue par UN lecteur : l'éphémère échu
+ * pour lui (#7451), puis la réponse à ce qui est mort pour lui (#8630).
+ *
+ * ─── CE DOC-COMMENT N'EST PAS UN PÉRIMÈTRE (#16578) ─────────────────────────
+ *
+ * Il énumérait ses portes — « recherche, fil, lien de partage ». Elles
+ * l'appelaient toutes les trois, et la phrase était donc vraie ; elle se
+ * relisait pourtant comme la LISTE DES PORTES QUI EN ONT BESOIN, et a servi
+ * d'alibi à qui cherchait s'il en manquait une. Il en manquait DEUX, et toutes
+ * deux servaient une bulle complète : `GET …/pinned-messages` (#16578) et
+ * `GET /messages/:messageId` (#16581, par la forme unitaire ci-dessous).
+ *
+ * Une liste d'appelants écrite ici affirme deux choses — « ces portes
+ * m'appellent », vérifiable en une commande, et « ce sont les portes qui
+ * devraient m'appeler », presque jamais vérifiée. Elle n'est donc plus écrite :
+ * la question se pose dans l'autre sens, et elle est outillée —
+ * `grep -l 'prisma\.message\.' | xargs grep -L 'keepAliveForReader'`, croisé
+ * avec « cette porte sert-elle `Message.content` à un lecteur ? ».
+ *
+ * ─── ET CETTE BORNE EST CELLE DU SERVICE, PAS CELLE DE LA SORTIE ────────────
+ *
+ * `D(u) + 1 h`. Une porte qui fait SORTIR le contenu vers un tiers — transfert,
+ * téléchargement, publication — prend `contentStillVisibleToReader`, qui borne à
+ * `D(u)` SANS grâce et lit la chaîne citée de façon CIBLÉE. Les deux gardent
+ * « le même » éphémère et diffèrent d'une heure ; l'heure est le sujet. Avant
+ * d'emprunter l'une ou l'autre, lire ce qu'elle GARDE, pas ce qu'elle lit.
+ *
+ * La case « chaîne citée CIBLÉE + borne de SERVICE » n'existe pas : elle est
+ * celle qu'une porte UNITAIRE de service voudrait, et son absence est suivie en
+ * #16582. Celle-ci lit la chaîne par un balayage PLAFONNÉ (#4165) qui SERT
+ * quand il échoue (#9625) — juste pour une page, trop lâche pour une porte qui
+ * décide seule.
  */
 export async function keepAliveForReader<T extends ReaderPageRow>(
   prisma: QuoteCascadePrisma,
@@ -219,6 +248,70 @@ export async function keepAliveForReader<T extends ReaderPageRow>(
     deadlines,
     inherited,
   };
+}
+
+/**
+ * Les mêmes deux coupures, pour une page qui TRAVERSE les conversations
+ * (#16583).
+ *
+ * ─── POURQUOI UNE SECONDE FORME, ET PAS UN APPEL DE PLUS ────────────────────
+ *
+ * `MessageStatusEntry` est indexé par `Participant.id`, et un `Participant` est
+ * scopé par CONVERSATION : une liste qui mêle plusieurs conversations n'a pas
+ * UNE clé de lecteur, elle en a une par conversation. Passer une clé unique à
+ * {@link keepAliveForReader} sur une telle page lirait les échéances du lecteur
+ * dans la seule conversation d'où vient sa clé — et les messages des autres
+ * paraîtraient « décompte pas démarré », donc servis. La porte échouerait en
+ * montrant PLUS, exactement ce qu'elle ne doit jamais faire.
+ *
+ * `globalMessageSearch.servableForReader` résolvait déjà ce problème chez lui,
+ * en groupant par conversation. Cette unité en est le site PARTAGÉ : la boucle
+ * n'est plus à retaper, et c'est ce qui compte — une règle qu'il faut récrire à
+ * chaque site est une règle qu'un site finira par ne pas avoir.
+ *
+ * La carte est un PARAMÈTRE, jamais une requête interne : les deux appelants la
+ * tiennent déjà d'une lecture qu'ils font pour d'autres raisons (la portée
+ * d'accès pour la recherche, la participation du lecteur pour les mentions), et
+ * la relire ici doublerait une requête sans rien apprendre.
+ *
+ * Une conversation ABSENTE de la carte reçoit `undefined` — soit « aucune
+ * échéance de lecteur », soit la posture de {@link keepAliveForReader} : servi
+ * SANS décompte, jamais le décompte d'un autre.
+ */
+export async function keepAliveForReaderAcrossConversations<
+  T extends ReaderPageRow & { readonly conversationId: string },
+>(
+  prisma: QuoteCascadePrisma,
+  rows: readonly T[],
+  participantByConversation: ReadonlyMap<string, string | undefined>,
+  now: Date = new Date(),
+): Promise<ReaderPage<T>> {
+  if (rows.length === 0) return { alive: [], deadlines: new Map(), inherited: new Map() };
+
+  const byConversation = new Map<string, T[]>();
+  for (const row of rows) {
+    const bucket = byConversation.get(row.conversationId);
+    if (bucket) bucket.push(row);
+    else byConversation.set(row.conversationId, [row]);
+  }
+
+  const pages = await Promise.all(
+    [...byConversation].map(([conversationId, group]) =>
+      keepAliveForReader(prisma, group, participantByConversation.get(conversationId), now),
+    ),
+  );
+
+  const deadlines = new Map<string, EphemeralReaderResolution>();
+  const inherited = new Map<string, Date>();
+  for (const page of pages) {
+    for (const [id, resolution] of page.deadlines) deadlines.set(id, resolution);
+    for (const [id, deadline] of page.inherited) inherited.set(id, deadline);
+  }
+
+  // L'ordre d'ENTRÉE est rendu, pas l'ordre des groupes : cette unité garde une
+  // page, elle ne la trie pas — l'appelant a déjà choisi son `orderBy`.
+  const alive = new Set(pages.flatMap((page) => page.alive).map((row) => row.id));
+  return { alive: rows.filter((row) => alive.has(row.id)), deadlines, inherited };
 }
 
 export type QuoteDescendant = { readonly id: string; readonly conversationId: string };

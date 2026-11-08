@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "game.concept.fact.after", "status": "adopted" },
+        { "catalog": "app", "iosKey": "game.concept.fact.required", "status": "adopted" },
+        { "catalog": "app", "iosKey": "game.spend.missing.mint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "game.spend.missing.unlock", "status": "adopted" },
+        { "catalog": "app", "iosKey": "progression.a11y.tier.pending", "status": "adopted" },
+        { "catalog": "app", "iosKey": "progression.a11y.tier.reached", "status": "adopted" },
+        { "catalog": "app", "iosKey": "progression.a11y.bar.streak", "status": "adopted" }
+      ]
+    }
+  }
+}

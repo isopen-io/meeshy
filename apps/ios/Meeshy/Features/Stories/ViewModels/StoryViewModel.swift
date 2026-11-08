@@ -255,6 +255,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // donc sans ré-injection elles disparaîtraient du tray de l'auteur après
         // un refetch (alors qu'elles sont toujours en attente dans la queue).
         let pendingBeforeFetch = currentPendingStoryItems()
+        let announcedMark = trayAnnouncements.mark
 
         do {
             // Drainé lui aussi : ce chemin est celui qui REMPLACE le tray, donc
@@ -263,13 +264,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // juste après grave la troncature.
             let drained = try await trayPager.drain(updatedSince: nil)
 
-            var groups = drained.posts.toStoryGroups()
+            var groups = trayAnnouncements.joining(since: announcedMark, drained.posts).toStoryGroups()
 
-            // Preserve locally-viewed state for stories the API hasn't synced yet.
-            // Garde raffinée : une édition de CONTENU postérieure à la vue
-            // locale (reset d'engagement serveur) fait céder la monotonie —
-            // sauf pour ses PROPRES stories, dont l'état « vu » est
-            // client-only par construction (recordView exclut l'auteur).
+            // Garde l'état « vu » local que l'API n'a pas encore synchronisé, sauf
+            // édition de CONTENU postérieure à la vue (reset d'engagement serveur) —
+            // jamais pour ses PROPRES stories, dont l'état « vu » est client-only.
             let locallyViewed = buildLocallyViewedMap()
             let selfId = AuthManager.shared.currentUser?.id
             if !locallyViewed.isEmpty {
@@ -385,10 +384,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Optimistic offline stories (visibilité auteur hors-ligne)
 
-    /// Préfixe d'id des stories optimistes (non encore publiées). Permet de les
-    /// repérer pour la réconciliation et pour les préserver à travers un refetch
-    /// réseau (`fetchStoriesFromNetwork`).
-    static let pendingStoryIdPrefix = "pending_"
+    /// Préfixe d'id des stories optimistes, voir `PendingStoryMarker`.
+    static let pendingStoryIdPrefix = PendingStoryMarker.prefix
 
     // MARK: - Reprise d'un échec de publication (spec 2026-08-01, incrément 5)
 
@@ -403,6 +400,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     // MARK: - Delete Story
 
     func deleteStory(storyId: String, reason: String? = nil) async -> Bool {
+        guard !PendingStoryMarker.isPending(storyId: storyId) else { return false }
         do {
             try await Self.deleteRemotely(storyId: storyId, reason: reason, with: storyService)
             // Même chemin que les tombstones et l'event socket. Une suppression
@@ -519,24 +517,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             Logger.messages.error("[StoryVM] ensureStoryLoaded fetch failed postId=\(postId, privacy: .public): \(error.localizedDescription)")
             return false
         }
-        // Exception AUTEUR (cohérente avec `purgeDeadStories` et le
-        // skip-resolver) : mes propres stories expirées restent chargeables —
-        // deep link depuis « Mes stories » vers une story archivée.
-        let myId = AuthManager.shared.currentUser?.id
-        let groups = [post].toStoryGroups(currentUserId: myId)
-            .compactMap { group -> StoryGroup? in
-                let alive = group.id == myId
-                    ? group.stories
-                    // Task 9 (post-references) — une story expirée dont le lecteur
-                    // détient un droit de référence ACCORDÉ reste ouvrable : le
-                    // droit se DÉCLARE (`referenceAccess`), il ne se déduit jamais
-                    // de `expiresAt`. Le serveur ne sert jamais dans ce payload une
-                    // story où le lecteur n'a ni auteur ni référence (§3.5 spec) —
-                    // ce filtre ne fait donc qu'éviter de faire disparaître une
-                    // story DÉJÀ présente à son échéance.
-                    : group.stories.filter { !$0.isExpired() || $0.referenceAccess == .granted }
-                return alive.isEmpty ? nil : group.with(stories: alive)
-            }
+        let groups = StoryTrayRules.openableGroups(of: post, myId: AuthManager.shared.currentUser?.id)
         guard !groups.isEmpty else { return false }
         insertOrMergeStoryGroups(groups)
         return true
@@ -560,22 +541,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// cache (chemin normal, sans notification).
     func refreshFromCachedPostIfAvailable(postId: String) {
         guard let cached = storyService.cachedPost(id: postId) else { return }
-        // Même exception auteur que `ensureStoryLoaded` ci-dessus.
-        let myId = AuthManager.shared.currentUser?.id
-        let groups = [cached].toStoryGroups(currentUserId: myId)
-            .compactMap { group -> StoryGroup? in
-                let alive = group.id == myId
-                    ? group.stories
-                    // Task 9 (post-references) — une story expirée dont le lecteur
-                    // détient un droit de référence ACCORDÉ reste ouvrable : le
-                    // droit se DÉCLARE (`referenceAccess`), il ne se déduit jamais
-                    // de `expiresAt`. Le serveur ne sert jamais dans ce payload une
-                    // story où le lecteur n'a ni auteur ni référence (§3.5 spec) —
-                    // ce filtre ne fait donc qu'éviter de faire disparaître une
-                    // story DÉJÀ présente à son échéance.
-                    : group.stories.filter { !$0.isExpired() || $0.referenceAccess == .granted }
-                return alive.isEmpty ? nil : group.with(stories: alive)
-            }
+        let groups = StoryTrayRules.openableGroups(of: cached, myId: AuthManager.shared.currentUser?.id)
         guard !groups.isEmpty else { return }
         insertOrMergeStoryGroups(groups, replacingExisting: true)
     }
@@ -584,6 +550,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// sink de reconnexion posé à l'init) — garde d'idempotence resettable,
     /// même idiome que `FeedViewModel.subscribeToSocketEvents`.
     private var socketCancellables = Set<AnyCancellable>()
+    /// Stories annoncées en direct, rejouées par une passe complète partie avant elles.
+    var trayAnnouncements = StoryTrayAnnouncements()
 
     func subscribeToSocketEvents() {
         // Un second appel (re-run du `.task` racine) dupliquerait les 12+
@@ -605,13 +573,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             .store(in: &socketCancellables)
 
+        // Une republication EN STORY n'est annoncée que par `post:reposted`,
+        // jamais par `story:created` : elle rejoint la barre par le même geste (#14484).
         socialSocket.storyCreated
+            .merge(with: socialSocket.postReposted.compactMap(StoryTrayAnnouncements.story(announcedBy:)))
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiPost in
-                guard let self else { return }
-                let currentUserId = AuthManager.shared.currentUser?.id
-                self.insertOrMergeStoryGroups([apiPost].toStoryGroups(currentUserId: currentUserId))
-            }
+            .sink { [weak self] in self?.adoptAnnounced($0) }
             .store(in: &socketCancellables)
 
         socialSocket.storyViewed
@@ -705,6 +672,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         socialSocket.storyDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                self?.trayAnnouncements.forget(event.storyId)
                 self?.purgeDeadStories(deletedIds: [event.storyId], includingExpired: false)
             }
             .store(in: &socketCancellables)

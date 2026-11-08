@@ -233,7 +233,7 @@ extension ConversationViewModel {
         markDeparture()
         let outcome: Result<SentMessageReceipt, any Error>
         do {
-            outcome = .success(try await emit(outgoing, payload: payload, context: context))
+            outcome = .success(try await HybridTextRoute(viewModel: self, sealer: sealer).emit(outgoing, plain: payload, context: context))
         } catch {
             outcome = .failure(error)
         }
@@ -458,7 +458,7 @@ extension ConversationViewModel {
         do {
             try await offlineQueue.retryByClientMessageId(messageId)
             await sendCoordinator.markRetrying(localId: messageId)
-        } catch {
+        } catch OfflineQueueError.itemInFlight { await sendCoordinator.markRetrying(localId: messageId) } catch { // #16749
             Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
         }
         await OutboxFlushTrigger.flushNow()

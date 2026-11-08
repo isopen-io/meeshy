@@ -111,28 +111,53 @@ public enum AvatarRingGeometry {
     }
 }
 
+/// La mise en place d'un contour dans sa boîte (#15157) : l'échelle de l'avatar, le film illustré
+/// s'il s'affiche, et si l'anneau fixe se dessine. Le film ne sort de la boîte que de la place que
+/// l'hôte déclare libre (`AvatarRingDecor.fit`) ; quand il s'affiche, l'anneau fixe — son image de
+/// repli — ne se dessine pas dessous. Il s'affiche à toutes les tailles (#16114) ; seul l'hôte qui
+/// le retire (`decor: false`, la bulle de frappe) garde l'anneau seul.
+public struct AvatarRingLayout: Equatable {
+    public let contentScale: CGFloat
+    public let decor: AvatarRingDecorFit?
+    public var drawsStill: Bool { decor == nil }
+    /// L'échelle de la couche `lottie` du contour : elle suit l'avatar quand le cadre se réduit.
+    public var ringScale: CGFloat { CGFloat(decor?.scale ?? 1) }
+    /// Le côté peint, film compris : jamais plus que la boîte et la place déclarée.
+    public func paintedSide(box: CGFloat) -> CGFloat { decor.map { CGFloat($0.side) } ?? box }
+
+    /// Ce que le film d'un cadre demande au-delà de sa boîte, de chaque côté : la place qu'un hôte
+    /// RÉSERVE (et déclare en `decorRoom`) pour le montrer sans réduire l'avatar. `0` sans film.
+    public static func fullSpill(_ design: AvatarRingDesign?, box: CGFloat) -> CGFloat {
+        guard let decor = design?.decor else { return 0 }
+        return box * CGFloat(decor.reach - 1) / 2
+    }
+
+    /// Ce qu'un avatar posé par `avatarRing` (boîte = `avatarSize / 0,84`) peint sous son bord quand
+    /// l'hôte déclare toute la place : la marge à réserver avant un texte. `0` sans film.
+    public static func paintBeyondAvatar(_ design: AvatarRingDesign?, avatarSize: CGFloat) -> CGFloat {
+        let box = avatarSize * 100 / 84
+        let spill = fullSpill(design, box: box)
+        return spill > 0 ? (box + 2 * spill - avatarSize) / 2 : 0
+    }
+
+    public static func make(_ design: AvatarRingDesign, box: CGFloat, baseScale: CGFloat, room: CGFloat = 0, decor showsDecor: Bool = true) -> AvatarRingLayout {
+        let decor = showsDecor ? design.decor?.fit(box: Double(box), room: Double(room)) : nil
+        return AvatarRingLayout(contentScale: baseScale * CGFloat(decor?.scale ?? 1), decor: decor)
+    }
+}
+
 public extension View {
     /// Pose le contour AUTOUR de l'avatar sans changer sa mise en page : le contour est une superposition
     /// agrandie (l'avatar occupe le rayon 42 du viewBox 100). `nil` ⇒ la vue telle quelle (rendu historique).
     /// `storyRingSize` (l'emprise de l'anneau de story quand l'avatar en porte un) réduit l'avatar pour que
-    /// l'anneau passe DANS le contour, concentrique, au lieu d'être recouvert (#10714).
+    /// l'anneau passe DANS le contour, concentrique, au lieu d'être recouvert (#10714). `decorRoom` : la place
+    /// libre (pt) que l'hôte garantit autour de la boîte du contour — aucun texte ni avatar voisin n'y vit (#15157).
     @ViewBuilder
-    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true) -> some View {
+    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true, decorRoom: CGFloat = 0) -> some View {
         if let design {
             let box = avatarSize * 100 / 84
-            scaleEffect(AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize))
-            .background { AvatarRingDecorFilm(decor: design.decor, side: .back, box: box, animates: animates) }
-            .overlay {
-                ZStack {
-                    AvatarRingView(design: design, animates: animates)
-                        .equatable()
-                    if let lottie = design.lottie {
-                        PackLottieLayer(ref: lottie, animates: animates)
-                    }
-                    AvatarRingDecorFilm(decor: design.decor, side: .front, box: box, animates: animates)
-                }
-                .frame(width: box, height: box)
-            }
+            let layout = AvatarRingLayout.make(design, box: box, baseScale: AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize), room: decorRoom)
+            modifier(AvatarRingFrameModifier(design: design, box: box, layout: layout, animates: animates))
         } else {
             self
         }
@@ -146,45 +171,58 @@ public extension View {
     /// films vivants (`LottieLiveBudget`) n'en fait jouer que quelques-uns à la fois — les
     /// autres montrent leur première image fixe, et un même fichier ne se décode qu'une fois.
     @ViewBuilder
-    func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true) -> some View {
+    func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true, decorRoom: CGFloat = 0, decor: Bool = true) -> some View {
         if let design {
-            scaleEffect(AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize))
-            .background { AvatarRingDecorFilm(decor: design.decor, side: .back, box: footprint, animates: animates) }
-            .overlay {
-                ZStack {
-                    AvatarRingView(design: design, animates: animates)
-                        .equatable()
-                    if let lottie = design.lottie {
-                        PackLottieLayer(ref: lottie, animates: animates)
-                    }
-                    AvatarRingDecorFilm(decor: design.decor, side: .front, box: footprint, animates: animates)
-                }
-                .frame(width: footprint, height: footprint)
-            }
+            let layout = AvatarRingLayout.make(design, box: footprint, baseScale: AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize), room: decorRoom, decor: decor)
+            modifier(AvatarRingFrameModifier(design: design, box: footprint, layout: layout, animates: animates))
         } else {
             self
         }
     }
 }
 
+private struct AvatarRingFrameModifier: ViewModifier {
+    let design: AvatarRingDesign
+    let box: CGFloat
+    let layout: AvatarRingLayout
+    let animates: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(layout.contentScale)
+            .background { AvatarRingDecorFilm(film: design.decor?.back, fit: layout.decor, animates: animates) }
+            .overlay {
+                ZStack {
+                    if layout.drawsStill {
+                        AvatarRingView(design: design, animates: animates)
+                            .equatable()
+                    }
+                    if let lottie = design.lottie {
+                        PackLottieLayer(ref: lottie, animates: animates)
+                            .scaleEffect(layout.ringScale)
+                    }
+                }
+                .frame(width: box, height: box)
+            }
+            .overlay { AvatarRingDecorFilm(film: design.decor?.front, fit: layout.decor, animates: animates) }
+    }
+}
+
 // MARK: - Les calques illustrés d'un cadre (#13960)
 
 /// Un film d'un cadre illustré : `back` posé en arrière-plan de l'avatar, `front` au-dessus,
-/// carré, centré, de côté `reach ×` la boîte du contour — il déborde sans rien grandir ni décaler
-/// (une superposition SwiftUI ne compte pas dans la mise en page). Sans calque, aucune vue.
+/// carré, centré, du côté que `AvatarRingDecor.fit` lui donne (#15157) — il ne sort de la boîte que
+/// de la place déclarée libre (une superposition SwiftUI ne compte pas dans la mise en page).
+/// Sans film ou sans place, aucune vue.
 struct AvatarRingDecorFilm: View {
-    enum Side { case back, front }
-
-    let decor: AvatarRingDecor?
-    let side: Side
-    let box: CGFloat
+    let film: PackAssetRef?
+    let fit: AvatarRingDecorFit?
     let animates: Bool
 
     var body: some View {
-        if let decor, let ref = side == .back ? decor.back : decor.front {
-            let length = CGFloat(decor.side(forBox: Double(box)))
-            PackLottieLayer(ref: ref, animates: animates)
-                .frame(width: length, height: length)
+        if let film, let fit {
+            PackLottieLayer(ref: film, animates: animates)
+                .frame(width: CGFloat(fit.side), height: CGFloat(fit.side))
         }
     }
 }

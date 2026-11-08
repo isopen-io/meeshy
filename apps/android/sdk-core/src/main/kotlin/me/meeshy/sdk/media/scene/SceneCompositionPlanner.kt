@@ -6,8 +6,11 @@ import me.meeshy.sdk.model.scene.export.StoryExportClipLoop
 import me.meeshy.sdk.model.scene.export.StoryExportClipRange
 import me.meeshy.sdk.model.scene.export.StoryExportVolumePoint
 
-/** Un élément de la séquence vidéo : une plage d'un fichier vidéo, ou une image tenue [imageMillis]. */
-internal data class SceneVideoItem(val file: File, val clip: StoryExportClipRange?, val imageMillis: Long?)
+/** Un élément de la séquence vidéo : une plage d'un fichier vidéo, ou une image tenue [imageMillis] ; [look] : le réglage que le rendu y pose. */
+internal data class SceneVideoItem(val file: File, val clip: StoryExportClipRange?, val imageMillis: Long?, val look: SceneExportVideoLook? = null) {
+    /** Sa durée sur l'horloge de la séquence. */
+    val spanMillis: Long get() = clip?.durationMillis ?: imageMillis ?: 0L
+}
 
 /** Un morceau d'un son, tel que sa séquence audio le lit. */
 internal data class SceneAudioItem(
@@ -45,8 +48,8 @@ internal object SceneCompositionPlanner {
         val storyVideo = job.plan.slides.zip(job.fills).flatMap { (slide, fill) ->
             when (fill) {
                 is SceneExportSlideFill.Picture -> listOf(SceneVideoItem(fill.file, clip = null, imageMillis = slide.durationMillis))
-                is SceneExportSlideFill.Video -> fill.laps.map { SceneVideoItem(fill.file, it, imageMillis = null) } +
-                    listOfNotNull(fill.hold?.let { SceneVideoItem(it.file, clip = null, imageMillis = it.millis) })
+                is SceneExportSlideFill.Video -> fill.laps.map { SceneVideoItem(fill.file, it, imageMillis = null, fill.look) } +
+                    listOfNotNull(fill.hold?.let { SceneVideoItem(it.file, clip = null, imageMillis = it.millis, fill.look) })
             }
         }
         val sounds = if (branding == null) job.plan.sounds else {
@@ -93,7 +96,8 @@ internal object SceneCompositionPlanner {
 /** Ce que le moteur reçoit, en une ligne de journal (#13986) : ce qu'une recette doit pouvoir lire de ce qui est parti au rendu. */
 internal fun SceneComposition.describe(overlays: Int, placed: List<SceneExportPlacedVideo> = emptyList()): String {
     val items = video.joinToString(", ") { item ->
-        item.clip?.let { "plage ${it.startMillis}–${it.endMillis} ms de ${item.file.name}" } ?: "image ${item.imageMillis} ms (${item.file.name})"
+        val looked = if (item.look != null) " sous son look" else ""
+        (item.clip?.let { "plage ${it.startMillis}–${it.endMillis} ms de ${item.file.name}" } ?: "image ${item.imageMillis} ms (${item.file.name})") + looked
     }
     val videos = placed.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = ", vidéo(s) posée(s) [", postfix = "]") { video ->
         "${video.clock.startMillis}–${video.clock.endMillis} ms de ${video.file.name} (plage ${video.clock.window.startMillis}–" +

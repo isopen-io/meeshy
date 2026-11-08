@@ -293,7 +293,7 @@ nonisolated enum ComposerDropResolver {
                         sourceURL: sourceURL
                     )
                     let destination = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("drop_\(UUID().uuidString)_\(name)")
+                        .appendingPathComponent(ImportedCopyName.copyName(of: name, through: .drop))
                     try FileManager.default.copyItem(at: sourceURL, to: destination)
                     continuation.resume(returning: (destination, name))
                 } catch {
@@ -334,7 +334,7 @@ nonisolated enum ComposerDropResolver {
                     name = "image.\(ext)"
                 }
                 let destination = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("drop_\(UUID().uuidString)_\(name)")
+                    .appendingPathComponent(ImportedCopyName.copyName(of: name, through: .drop))
                 do {
                     try data.write(to: destination)
                     continuation.resume(returning: (destination, name))

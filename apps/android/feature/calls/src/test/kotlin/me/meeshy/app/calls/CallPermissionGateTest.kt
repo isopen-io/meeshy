@@ -1,5 +1,7 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallPreflightDecision
+import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -117,5 +119,41 @@ class CallPermissionGateTest {
         h.pending.settle()
 
         assertThat(answer).isEqualTo(IncomingCallAnswer.AnswerAudioOnly)
+    }
+
+    @Test
+    fun `dialling with everything granted decides at once`() {
+        val h = Harness(micGranted = true)
+        var decision: CallPreflightDecision? = null
+
+        h.gate.preflightOutgoing(isVideo = true) { decision = it }
+
+        assertThat(decision).isEqualTo(CallPreflightDecision.Proceed(isVideo = true))
+        assertThat(h.asked).isEqualTo(0)
+    }
+
+    @Test
+    fun `a refused microphone cancels the call once the prompt is answered`() {
+        val h = Harness(micGranted = false)
+        var decision: CallPreflightDecision? = null
+
+        h.gate.preflightOutgoing(isVideo = false) { decision = it }
+        assertThat(decision).isNull()
+        h.pending.settle()
+
+        assertThat(decision).isEqualTo(CallPreflightDecision.MicrophoneDenied)
+    }
+
+    @Test
+    fun `a refused camera dials audio only and says why`() {
+        val h = Harness(micGranted = true, cameraGranted = false)
+        var decision: CallPreflightDecision? = null
+
+        h.gate.preflightOutgoing(isVideo = true) { decision = it }
+        h.pending.settle()
+
+        assertThat(decision).isEqualTo(
+            CallPreflightDecision.Proceed(isVideo = false, fallback = CallVideoFallback.CameraPermissionDenied),
+        )
     }
 }

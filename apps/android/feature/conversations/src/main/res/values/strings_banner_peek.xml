@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_peek_open_full">Open the full conversation</string>
+    <string name="conversation_peek_placeholder">Message</string>
+    <string name="conversation_peek_send">Send</string>
+    <string name="conversation_peek_empty">No messages yet</string>
+    <string name="conversation_peek_unavailable">Couldn\'t load messages</string>
+    <string name="conversation_peek_sealed">Encrypted conversation</string>
+    <string name="conversation_peek_sealed_message">Encrypted message</string>
+    <string name="conversation_peek_composer_locked">Encrypted conversation: write from the full view</string>
+</resources>

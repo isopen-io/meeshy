@@ -38,6 +38,11 @@ import type { ApiResult, HttpTransport } from './http';
  *  - `privacy.notifyContactsOnReturn` — l'ÉMISSION de « X était sur Meeshy
  *    récemment » vers les amis et les porteurs du numéro ou de l'e-mail
  *    (#8285), jamais quand la présence est masquée ;
+ *  - `privacy.saveMediaToGallery` — « Sauvegarder média » (#14641), la porte
+ *    de l'enregistrement automatique des médias reçus dans la galerie de la
+ *    coque Android (`gallery/auto-save-runtime.ts`), synchronisée avec iOS ;
+ *    ABSENTE à la lecture (ancien serveur) : coupée — un média ne rejoint la
+ *    galerie que si on le veut ;
  *  - `privacy.allowAnalytics` — LUE seulement (#10502) : la bascule
  *    « Analytique » d'iOS, qui gouverne le consentement que la télémétrie
  *    déclare (`lib/telemetry/analytics-consent.ts`) ; coupée ⇒ `denied`, et
@@ -77,6 +82,7 @@ const Privacy = z.object({
   hideProfileFromSearch: z.boolean(),
   acceptCallsFromNonContacts: z.boolean(),
   notifyContactsOnReturn: z.boolean(),
+  saveMediaToGallery: z.optional(z.boolean()),
   allowAnalytics: z.optional(z.boolean()),
 });
 
@@ -92,7 +98,11 @@ export type ThemeMode = z.infer<typeof ThemeMode>;
 export type AppPreferences = Readonly<
   z.infer<typeof Application> &
     Omit<z.infer<typeof Notification>, 'gameEnabled' | 'gamePhotoEnabled'> &
-    z.infer<typeof Privacy> & { readonly gameEnabled: boolean; readonly gamePhotoEnabled: boolean }
+    Omit<z.infer<typeof Privacy>, 'saveMediaToGallery'> & {
+      readonly gameEnabled: boolean;
+      readonly gamePhotoEnabled: boolean;
+      readonly saveMediaToGallery: boolean;
+    }
 >;
 
 export type PreferencesPatch = Partial<AppPreferences>;
@@ -114,6 +124,7 @@ export const APP_PREFERENCE_FIELDS = {
   hideProfileFromSearch: 'privacy',
   acceptCallsFromNonContacts: 'privacy',
   notifyContactsOnReturn: 'privacy',
+  saveMediaToGallery: 'privacy',
   allowAnalytics: 'privacy',
 } as const satisfies Readonly<Record<keyof AppPreferences, PreferenceCategory>>;
 
@@ -134,6 +145,7 @@ export function decodeAppPreferences(raw: unknown): AppPreferences | null {
     ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
     gameEnabled: parsed.data.notification.gameEnabled ?? true,
     gamePhotoEnabled: parsed.data.notification.gamePhotoEnabled ?? true,
+    saveMediaToGallery: parsed.data.privacy.saveMediaToGallery ?? false,
   };
 }
 
@@ -141,7 +153,7 @@ export function decodeServedPreferences(raw: unknown): PreferencesPatch | null {
   const parsed = Served.safeParse(raw);
   if (!parsed.success) return null;
   const { gameEnabled, gamePhotoEnabled, ...notification } = parsed.data.notification ?? {};
-  const { allowAnalytics, ...privacy } = parsed.data.privacy ?? {};
+  const { allowAnalytics, saveMediaToGallery, ...privacy } = parsed.data.privacy ?? {};
   return {
     ...parsed.data.application,
     ...notification,
@@ -149,6 +161,7 @@ export function decodeServedPreferences(raw: unknown): PreferencesPatch | null {
     ...(gamePhotoEnabled === undefined ? {} : { gamePhotoEnabled }),
     ...privacy,
     ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
+    ...(saveMediaToGallery === undefined ? {} : { saveMediaToGallery }),
   };
 }
 

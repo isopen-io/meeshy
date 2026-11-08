@@ -68,6 +68,19 @@ private struct HistoryGrantBody: Encodable {
     }
 }
 
+/// La réponse de `DELETE /conversations/:id/obsolete` (#14643) : dates ISO 8601.
+public struct ConversationObsoleteResult: Decodable, Sendable, Equatable {
+    public let conversationId: String
+    public let obsoletedAt: String
+    public let purgeAfter: String
+
+    public init(conversationId: String, obsoletedAt: String, purgeAfter: String) {
+        self.conversationId = conversationId
+        self.obsoletedAt = obsoletedAt
+        self.purgeAfter = purgeAfter
+    }
+}
+
 // MARK: - Protocol
 
 public protocol ConversationServiceProviding: Sendable {
@@ -79,8 +92,16 @@ public protocol ConversationServiceProviding: Sendable {
     /// les projette via `toConversation(currentUserId:)` quand il en a besoin.
     func search(query: String) async throws -> [APIConversation]
     func getById(_ conversationId: String) async throws -> APIConversation
+    /// `GET /conversations/:id` dont un refus 4xx garde le code de la
+    /// passerelle (`TypedRefusals`) : un 404 SERVI se distingue de celui d'un
+    /// intermédiaire (#14693). Les autres appelants gardent `getById`.
+    func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
     func delete(conversationId: String) async throws
+    /// `DELETE /conversations/:id/obsolete` (#14643) — rend la conversation
+    /// OBSOLÈTE : son contenu est effacé pour tous. Idempotent ; la passerelle
+    /// refuse en 403 un lecteur qui n'en est pas administrateur.
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult
     func markRead(conversationId: String) async throws
     func markAsReceived(conversationId: String) async throws
     func markUnread(conversationId: String) async throws
@@ -183,6 +204,13 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
         return response.data
     }
 
+    public func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        let response: APIResponse<APIConversation> = try await api.request(
+            TypedRefusals(ConversationsEndpoint.byId(id: conversationId))
+        )
+        return response.data
+    }
+
     /// `GET /conversations/:id/engagement` — « N (M) 🔥 » du lecteur dans
     /// cette conversation (#8906). Zéros tant qu'il n'y a rien gagné.
     public func engagement(conversationId: String) async throws -> ConversationEngagementSnapshot {
@@ -213,6 +241,13 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
 
     public func delete(conversationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byId(id: conversationId))
+    }
+
+    public func obsolete(conversationId: String) async throws -> ConversationObsoleteResult {
+        let response: APIResponse<ConversationObsoleteResult> = try await api.request(
+            ConversationsEndpoint.byIdObsolete(id: conversationId), method: "DELETE", body: nil, queryItems: nil
+        )
+        return response.data
     }
 
     // Endpoints fire-and-forget : la reponse est ignoree (`let _`). Les trois
@@ -368,7 +403,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     /// `update` sur la ligne résolue : une expulsion qui ne trouve pas sa cible
     /// échoue au lieu de mentir.
     public func removeParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             ConversationsEndpoint.byIdParticipantsByUserId(id: conversationId, userId: key),
             method: "DELETE"
         )
@@ -387,7 +422,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     /// promouvable : ses droits passent par `updateParticipantRights`.
     public func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {
         struct RoleBody: Encodable { let role: String }
-        let _: APIResponse<[String: String]> = try await api.patch(
+        let _: APIResponse<DiscardedResponseBody> = try await api.patch(
             ConversationsEndpoint.byIdParticipantsByUserIdRole(id: conversationId, userId: userId),
             body: RoleBody(role: role.lowercased())
         )
@@ -463,7 +498,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     ///
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func banParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<BanParticipantResponse> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             ConversationsEndpoint.byIdParticipantsByUserIdBan(id: conversationId, userId: key),
             method: "PATCH"
         )
@@ -474,7 +509,7 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     ///
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func unbanParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<UnbanParticipantResponse> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             ConversationsEndpoint.byIdParticipantsByUserIdUnban(id: conversationId, userId: key),
             method: "PATCH"
         )
@@ -519,6 +554,12 @@ public extension ConversationServiceProviding {
     func findDirectsWith(userId: String) async throws -> [APIConversation] {
         try await findDirectWith(userId: userId).map { [$0] } ?? []
     }
+
+    /// Un service qui ne type pas ses refus rend la forme opaque, qu'un
+    /// appelant prudent lit comme transitoire.
+    func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        try await getById(conversationId)
+    }
 }
 
 // MARK: - Response Types
@@ -528,11 +569,3 @@ struct LeaveConversationResponse: Decodable {
     let leftAt: String
 }
 
-struct BanParticipantResponse: Decodable {
-    let userId: String
-    let bannedAt: String
-}
-
-struct UnbanParticipantResponse: Decodable {
-    let userId: String
-}

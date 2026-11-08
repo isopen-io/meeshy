@@ -28,6 +28,7 @@ const harness = (overrides: { userId?: string; allowed?: boolean; outcome?: Reco
     arrival: jest.fn(async (_callId: string, _userId: string) => [started]),
     expire: jest.fn(async (_recordingId: string) => []),
   };
+  const journal = { callRecording: jest.fn(async (_input: unknown) => true) };
   const io = {
     to: (room: string) => ({
       emit: (event: string, payload: unknown) => {
@@ -47,6 +48,7 @@ const harness = (overrides: { userId?: string; allowed?: boolean; outcome?: Reco
       io: io as never,
       authority: authority as unknown as CallRecordingAuthority,
       rateLimiter: { checkLimit: async () => overrides.allowed ?? true },
+      journal,
       schedule: (task) => {
         scheduled.push(task);
       },
@@ -59,7 +61,7 @@ const harness = (overrides: { userId?: string; allowed?: boolean; outcome?: Reco
     await handlers.get(event)?.(raw, (r) => acks.push(r));
     return acks[0];
   };
-  return { send, emitted, authority, scheduled, io };
+  return { send, emitted, authority, scheduled, io, journal };
 };
 
 describe('call-recording-events — la porte socket du consentement (#8064)', () => {
@@ -112,7 +114,7 @@ describe('call-recording-events — la porte socket du consentement (#8064)', ()
 
   it('l’arrivée d’un participant diffuse l’arrêt que l’autorité décide', async () => {
     const h = harness();
-    await announceRecordingArrival({ io: h.io as never, authority: h.authority as unknown as CallRecordingAuthority }, CALL, 'dave');
+    await announceRecordingArrival({ io: h.io as never, authority: h.authority as unknown as CallRecordingAuthority, journal: h.journal }, CALL, 'dave');
     expect(h.authority.arrival).toHaveBeenCalledWith(CALL, 'dave');
     expect(h.emitted.map((e) => e.event)).toEqual([SERVER_EVENTS.CALL_RECORDING_STARTED]);
   });
@@ -126,5 +128,41 @@ describe('call-recording-events — le type demandé passe la porte (#8437)', ()
 
     expect(await h.send(CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId: CALL, kind: 'hologram' }))
       .toEqual({ success: false, code: 'VALIDATION_ERROR' });
+  });
+});
+
+describe('call-recording-events — le journal note le début et la fin de l’enregistrement (#16665)', () => {
+  const stopped = (wasRecording: boolean, byUserId: string | null): RecordingBroadcast => ({
+    event: 'stopped',
+    payload: { callId: CALL, recordingId: REC, reason: 'stopped', byUserId, wasRecording },
+  });
+  const requested: RecordingBroadcast = {
+    event: 'requested',
+    payload: { callId: CALL, recordingId: REC, requesterId: 'alice', requiredUserIds: ['bob'], expiresAt: '2026-09-27T10:00:30.000Z', kind: 'audio' },
+  };
+
+  it('écrit le début au nom de l’enregistreur', async () => {
+    const h = harness();
+    await h.send(CLIENT_EVENTS.CALL_RECORDING_CONSENT, { callId: CALL, recordingId: REC, accepted: true });
+    expect(h.journal.callRecording).toHaveBeenCalledWith({ callId: CALL, userId: 'alice', kind: 'call-recording-started' });
+  });
+
+  it('écrit la fin d’un enregistrement qui avait commencé, avec qui l’arrête', async () => {
+    const h = harness({ outcome: { ack: { success: true, recordingId: REC }, broadcasts: [stopped(true, 'bob')] } });
+    await h.send(CLIENT_EVENTS.CALL_RECORDING_STOP, { callId: CALL, recordingId: REC });
+    expect(h.journal.callRecording).toHaveBeenCalledWith({ callId: CALL, userId: 'bob', kind: 'call-recording-stopped' });
+  });
+
+  it('n’écrit ni une demande, ni l’arrêt d’un enregistrement qui n’a jamais commencé', async () => {
+    const h = harness({ outcome: { ack: { success: true, recordingId: REC }, broadcasts: [requested, stopped(false, null)] } });
+    await h.send(CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId: CALL });
+    expect(h.journal.callRecording).not.toHaveBeenCalled();
+  });
+
+  it('diffuse quand même si l’écriture au journal échoue', async () => {
+    const h = harness();
+    h.journal.callRecording.mockRejectedValueOnce(new Error('db down'));
+    await h.send(CLIENT_EVENTS.CALL_RECORDING_CONSENT, { callId: CALL, recordingId: REC, accepted: true });
+    expect(h.emitted.map((e) => e.event)).toEqual([SERVER_EVENTS.CALL_RECORDING_STARTED]);
   });
 });

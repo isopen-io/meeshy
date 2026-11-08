@@ -1,5 +1,12 @@
 package me.meeshy.sdk.notification
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -7,15 +14,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.MarkReadResponse
+import me.meeshy.sdk.model.NotificationCachePatch
 import me.meeshy.sdk.model.NotificationCounts
 import me.meeshy.sdk.model.NotificationTypeSelection
 import me.meeshy.sdk.model.RegisterDeviceTokenRequest
@@ -36,8 +52,11 @@ import javax.inject.Singleton
 class NotificationRepository @Inject constructor(
     private val notificationApi: NotificationApi,
     private val clock: CacheClock = SystemCacheClock,
+    private val store: NotificationCacheStore = NoNotificationCacheStore,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    // In-memory cache, mirrors PostRepository.feedStream (ARCHITECTURE.md §4).
+    // L1 en mémoire ; la portée « all » est relue du disque au premier cadre ([hydrateOnce]) et réécrite à chaque
+    // changement ([startPersisting]), de sorte qu'un démarrage à froid ou hors ligne affiche la liste sans réseau.
     private val _notificationsCache = MutableStateFlow<List<ApiNotification>?>(null)
     private val _notificationsSyncedAt = MutableStateFlow<Long?>(null)
     private val _unreadCount = MutableStateFlow(0)
@@ -53,7 +72,25 @@ class NotificationRepository @Inject constructor(
      * défaut connu et VISIBLE (une insertion en tête fait resservir une ligne —
      * le doublon est le signal, il ne se masque plus).
      */
-    private var nextCursor: String? = null
+    private val _nextCursor = MutableStateFlow<String?>(null)
+
+    /** Les portées autres que « all » : en mémoire, pour la session, vidées à la déconnexion. */
+    private val scopedLists = ConcurrentHashMap<NotificationScope, List<ApiNotification>>()
+
+    private val hydration = Mutex()
+    @Volatile private var hydrated = false
+
+    /** Change à chaque [clear] : une écriture différée d'un compte qui part ne se pose jamais sur le suivant. */
+    @Volatile private var epoch = 0L
+    private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
+    private var lastPersisted: PersistedNotifications? = null
+
+    /** Le vidage disque de [clear] : toute relecture ou écriture du compte suivant l'attend, jamais l'inverse. */
+    @Volatile private var pendingDiskClear: Job? = null
+
+    init {
+        if (store !== NoNotificationCacheStore) startPersisting()
+    }
 
     /** The server's unread count, kept fresh alongside every [notificationsStream] revalidate. */
     val unreadCountStream: StateFlow<Int> = _unreadCount.asStateFlow()
@@ -69,6 +106,14 @@ class NotificationRepository @Inject constructor(
     fun notificationsStream(
         policy: CachePolicy = CachePolicy.Notifications,
         onSyncError: (Throwable) -> Unit = {},
+    ): Flow<CacheResult<List<ApiNotification>>> = flow {
+        hydrateOnce()
+        emitAll(liveStream(policy, onSyncError))
+    }
+
+    private fun liveStream(
+        policy: CachePolicy,
+        onSyncError: (Throwable) -> Unit,
     ): Flow<CacheResult<List<ApiNotification>>> =
         combine(_notificationsCache, _notificationsSyncedAt) { data, syncedAt -> data to syncedAt }
             .distinctUntilChanged()
@@ -96,16 +141,84 @@ class NotificationRepository @Inject constructor(
     suspend fun refresh() = revalidateNotifications()
 
     /**
+     * La relecture silencieuse des 30 dernières notifications (resynchro après un trou, une reconnexion ou un retour au
+     * premier plan). Le compteur est lu INDÉPENDAMMENT de la liste et posé même quand la liste échoue ; un échec
+     * laisse le cache intact et se rend à l'appelant, qui le journalise. `null` = tout a abouti.
+     */
+    suspend fun resync(): Throwable? {
+        var failure: Throwable? = null
+        revalidateNotifications { failure = it }
+        return failure
+    }
+
+    /**
      * A real-time `notification:new` arrival (feature-parity §M) prepends into the SAME cache
      * [notificationsStream] serves — a live notification is never silently overwritten by the
      * next observer's re-read or a concurrent revalidate. Dedupes by id (a REST-list race or a
      * duplicate delivery is a no-op) and bumps [unreadCountStream] only when unread.
      */
     fun prependLive(notification: ApiNotification) {
-        val current = _notificationsCache.value ?: emptyList()
+        val current = _notificationsCache.value
+        if (current == null) {
+            // Aucune liste chargée : fabriquer un cache d'une ligne ferait croire qu'il est complet et masquerait la
+            // vraie liste. Le compteur, lui, est exact — la prochaine révalidation apporte la ligne.
+            if (!notification.state.isRead) _unreadCount.update { it + 1 }
+            return
+        }
         if (current.any { it.id == notification.id }) return
-        _notificationsCache.value = listOf(notification) + current
+        _notificationsCache.value = NotificationCachePatch.insertingAtHead(current, notification)
         if (!notification.state.isRead) _unreadCount.update { it + 1 }
+    }
+
+    /**
+     * Primitive idempotente pour les lots qui suivent : applique [transform] à la liste de [scope]. Sur « all », rien
+     * ne se passe tant que la liste n'est pas chargée ; sur une autre portée, la liste en mémoire de la session.
+     */
+    fun patch(scope: NotificationScope = NotificationScope.All, transform: (List<ApiNotification>) -> List<ApiNotification>) {
+        if (scope.isAll) {
+            _notificationsCache.update { current -> current?.let(transform) }
+        } else {
+            scopedLists.computeIfPresent(scope) { _, current -> transform(current) }
+        }
+    }
+
+    /** Remplace la liste de [scope] ; sur « all », le curseur et `hasMore` accompagnent la liste et sont persistés avec elle. */
+    fun replaceAll(
+        scope: NotificationScope = NotificationScope.All,
+        items: List<ApiNotification>,
+        hasMore: Boolean = false,
+        nextCursor: String? = null,
+    ) {
+        if (!scope.isAll) {
+            scopedLists[scope] = items
+            return
+        }
+        _hasMore.value = hasMore
+        _nextCursor.value = nextCursor
+        _notificationsCache.value = items
+        _notificationsSyncedAt.value = clock.nowMillis()
+    }
+
+    /**
+     * Applique [transform] à la liste « all » ET à chaque liste de portée chargée dans la session : un marquage « lu » se
+     * lit dans TOUTES les vues montées (cloche, onglets, non lues seulement), pas seulement dans la liste complète.
+     */
+    fun patchEverywhere(transform: (List<ApiNotification>) -> List<ApiNotification>) {
+        _notificationsCache.update { current -> current?.let(transform) }
+        scopedLists.replaceAll { _, current -> transform(current) }
+    }
+
+    /** Corrige le compteur de non-lues d'un [delta] relatif (jamais en dessous de zéro) : atomique, contrairement à lire puis écrire. */
+    fun adjustUnreadCount(delta: Int) {
+        _unreadCount.update { (it + delta).coerceAtLeast(0) }
+    }
+
+    /** La liste en mémoire d'une portée autre que « all » ; `null` tant qu'elle n'a pas été chargée dans cette session. */
+    fun cachedItems(scope: NotificationScope): List<ApiNotification>? =
+        if (scope.isAll) _notificationsCache.value else scopedLists[scope]
+
+    fun setUnreadCount(count: Int) {
+        _unreadCount.value = count.coerceAtLeast(0)
     }
 
     /**
@@ -210,6 +323,39 @@ class NotificationRepository @Inject constructor(
             )
         }
 
+    /**
+     * Une page de la liste de [scope] avec sa pagination PROPRE (curseur servi, sinon rang [offset]) : chaque catégorie
+     * de la cloche pagine sa liste, indépendamment de la liste « all ». Rien n'est écrit ici — l'appelant range le
+     * résultat par [replaceAll].
+     */
+    suspend fun listScopePage(
+        scope: NotificationScope,
+        cursor: String? = null,
+        offset: Int = 0,
+        limit: Int = PAGE_SIZE,
+    ): NetworkResult<NotificationScopePage> =
+        when (
+            val result = pagedApiCall {
+                notificationApi.list(
+                    offset = if (cursor === null) offset else null,
+                    limit = limit,
+                    unreadOnly = if (scope.unreadOnly) true else null,
+                    cursor = cursor,
+                    types = NotificationTypeSelection.csv(scope.types.sorted()),
+                    hideReadTypes = NotificationTypeSelection.csv(scope.hideReadTypes.sorted()),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> NetworkResult.Success(
+                NotificationScopePage(
+                    items = result.data.data,
+                    hasMore = result.data.pagination?.hasMore ?: (result.data.data.size >= limit),
+                    nextCursor = result.data.pagination?.nextCursor,
+                ),
+            )
+            is NetworkResult.Failure -> result
+        }
+
     /** Les totaux de toute la boîte par type brut, tels que le serveur les compte (même prédicat que la liste). */
     suspend fun counts(): NetworkResult<NotificationCounts> = apiCall { notificationApi.counts() }
 
@@ -229,7 +375,7 @@ class NotificationRepository @Inject constructor(
         // face à un gateway antérieur — et SANS dédoublonnage : l'union par
         // curseur est propre par construction, et au rang le doublon est le
         // SIGNAL (le `filterNot` d'avant supprimait la ligne perdue avec lui).
-        val ancre = nextCursor
+        val ancre = _nextCursor.value
         return when (
             val result = pagedApiCall {
                 notificationApi.list(if (ancre === null) current.size else null, PAGE_SIZE, null, ancre)
@@ -238,7 +384,7 @@ class NotificationRepository @Inject constructor(
             is NetworkResult.Success -> {
                 _notificationsCache.value = current + result.data.data
                 _hasMore.value = result.data.pagination?.hasMore ?: false
-                nextCursor = result.data.pagination?.nextCursor
+                _nextCursor.value = result.data.pagination?.nextCursor
                 NetworkResult.Success(Unit)
             }
             is NetworkResult.Failure -> result
@@ -312,13 +458,14 @@ class NotificationRepository @Inject constructor(
      * on failure. A deleted row that was unread also decrements [unreadCountStream] — mirrors
      * [markAsRead]'s exact optimistic-mutation shape. Port of iOS `NotificationRowView`'s
      * trailing swipe / `NotificationListViewModel.deleteNotification`. The rollback is
-     * TARGETED — it reinserts only the removed row into whichever list is current at that
+     * TARGETED — it reinserts only the removed row, at its ORIGINAL index, into whichever list is current at that
      * point (deduped by id, like [prependLive]), never a wholesale restore of the pre-mutation
      * snapshot.
      */
     suspend fun delete(notificationId: String): NetworkResult<Unit> {
         val previous = _notificationsCache.value
-        val removed = previous?.firstOrNull { it.id == notificationId }
+        val removedIndex = previous?.indexOfFirst { it.id == notificationId } ?: -1
+        val removed = previous?.getOrNull(removedIndex)
         val wasUnread = removed?.state?.isRead == false
         _notificationsCache.value = previous?.filterNot { it.id == notificationId }
         if (wasUnread) _unreadCount.update { (it - 1).coerceAtLeast(0) }
@@ -328,7 +475,8 @@ class NotificationRepository @Inject constructor(
             if (removed != null) {
                 _notificationsCache.update { current ->
                     val list = current.orEmpty()
-                    if (list.any { it.id == notificationId }) list else listOf(removed) + list
+                    if (list.any { it.id == notificationId }) list
+                    else list.toMutableList().apply { add(removedIndex.coerceIn(0, size), removed) }
                 }
             }
             if (wasUnread) _unreadCount.update { it + 1 }
@@ -480,7 +628,7 @@ class NotificationRepository @Inject constructor(
         when (page) {
             is NetworkResult.Success -> {
                 _hasMore.value = page.data.pagination?.hasMore ?: false
-                nextCursor = page.data.pagination?.nextCursor
+                _nextCursor.value = page.data.pagination?.nextCursor
                 _notificationsCache.value = page.data.data
                 _notificationsSyncedAt.value = clock.nowMillis()
             }
@@ -499,11 +647,87 @@ class NotificationRepository @Inject constructor(
         _notificationsSyncedAt.value = null
         _unreadCount.value = 0
         _hasMore.value = false
-        nextCursor = null
+        _nextCursor.value = null
+        scopedLists.clear()
+        epoch += 1
+        lastPersisted = null
+        hydrated = false
+        if (store !== NoNotificationCacheStore) {
+            pendingDiskClear = persistScope.launch {
+                try {
+                    store.clear()
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Le disque est un confort ; la barrière de compte l'a de toute façon purgé.
+                }
+            }
+        }
+    }
+
+    /**
+     * Relit une fois la portée « all » du disque dans le cache en mémoire, AVANT la première émission : le premier cadre
+     * porte les lignes en cache. Sans effet si une liste est déjà là (révalidation arrivée la première).
+     */
+    private suspend fun hydrateOnce() {
+        if (hydrated) return
+        hydration.withLock {
+            if (hydrated) return
+            pendingDiskClear?.join()
+            val loaded = try {
+                store.read()?.withinRetention()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (loaded != null && _notificationsCache.value == null) {
+                lastPersisted = loaded
+                _hasMore.value = loaded.hasMore
+                _nextCursor.value = loaded.nextCursor
+                if (_unreadCount.value == 0) _unreadCount.value = loaded.unreadCount
+                _notificationsSyncedAt.value = loaded.syncedAt
+                _notificationsCache.value = loaded.items
+            }
+            hydrated = true
+        }
+    }
+
+    /** Rétention et plafond du disque (24 h, 200) : une liste plus vieille que la fenêtre n'est pas rejouée. */
+    private fun PersistedNotifications.withinRetention(): PersistedNotifications? {
+        val policy = CachePolicy.Notifications
+        val age = syncedAt?.let { clock.nowMillis() - it }
+        if (age != null && age > policy.keepForMillis) return null
+        val cap = policy.maxItemCount ?: return this
+        return if (items.size <= cap) this else copy(items = items.take(cap), nextCursor = null, hasMore = true)
+    }
+
+    @OptIn(FlowPreview::class)
+    private fun startPersisting() {
+        combine(_notificationsCache, _notificationsSyncedAt, _unreadCount, _hasMore, _nextCursor) { items, syncedAt, unread, hasMore, cursor ->
+            items?.let { PersistedNotifications(it, cursor, hasMore, unread, syncedAt) }
+        }
+            .debounce(PERSIST_DEBOUNCE_MILLIS)
+            .onEach { snapshot ->
+                if (snapshot == null || snapshot == lastPersisted) return@onEach
+                val written = epoch
+                pendingDiskClear?.join()
+                if (written != epoch) return@onEach
+                try {
+                    store.write(snapshot) { written == epoch }
+                    if (written == epoch) lastPersisted = snapshot
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Le disque est un confort : l'écran continue de servir la mémoire.
+                }
+            }
+            .launchIn(persistScope)
     }
 
     private companion object {
-        const val PAGE_SIZE = 20
+        const val PAGE_SIZE = 30
+        const val PERSIST_DEBOUNCE_MILLIS = 200L
         const val INVALID_ARGUMENT = "INVALID_ARGUMENT"
     }
 }

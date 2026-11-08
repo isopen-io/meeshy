@@ -86,6 +86,14 @@ class PostSceneSoundCreditTest {
         assertThat(moving.moving).containsExactly(true)
     }
 
+    @Test
+    fun `a post of one scene names the original sound its document declares`() {
+        val original = requireNotNull(build("""{ "id": "p4", "type": "POST", "storyEffects": ${fixture("post-sound-original")} }""").scenes)
+
+        assertThat(original.items).hasSize(1)
+        assertThat(original.soundCredit).isEqualTo(SceneSoundCredit.Original)
+    }
+
     /**
      * Recette S8 (post « Recette 14200 texte du post », staging) : un son de la bibliothèque posé SUR la scène, sans aucun son de
      * fond. La barre de la fiche offrait 🔊 ⏸ sans dire ce qu'elle jouait : elle nomme le son posé quand la scène n'a pas de fond.

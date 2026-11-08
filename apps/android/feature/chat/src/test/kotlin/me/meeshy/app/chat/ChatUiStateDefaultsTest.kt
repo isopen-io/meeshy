@@ -19,13 +19,13 @@ import org.junit.Test
 class ChatUiStateDefaultsTest {
 
     @Test
-    fun `the state keeps exactly its forty-nine stored fields`() {
+    fun `the state keeps exactly its fifty stored fields`() {
         val stored = ChatUiState::class.java.declaredFields
             .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
             .map { it.name }
 
         assertThat(stored).containsExactlyElementsIn(STORED_FIELDS)
-        assertThat(stored).hasSize(49)
+        assertThat(stored).hasSize(50)
     }
 
     @Test
@@ -75,6 +75,7 @@ class ChatUiStateDefaultsTest {
             slowModeExempt = false,
             lastSelfSentAtMillis = null,
             directPeerUserId = null,
+            endToEndAvailable = false,
             isOffline = false,
             showReadReceipts = true,
             composerLanguage = ComposerLanguageState(),
@@ -147,6 +148,7 @@ class ChatUiStateDefaultsTest {
             "slowModeExempt",
             "lastSelfSentAtMillis",
             "directPeerUserId",
+            "endToEndAvailable",
             "isOffline",
             "showReadReceipts",
             "composerLanguage",

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.recording.cancel",
+          "androidName": "composer_recording_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recording.stopAndAttach",
+          "androidName": "composer_recording_stop_and_attach",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recording.send",
+          "androidName": "composer_recording_send",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

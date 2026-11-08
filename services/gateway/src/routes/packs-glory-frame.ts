@@ -19,7 +19,7 @@ import { PackCatalog } from '../services/packs/PackCatalog';
 import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { gloryFramePackSpec, type FramePackDetail, type FramePackSummary } from '../services/packs/gloryFramePackSpec';
 import { atmosphereRemovalGuard } from '../services/game/GamePhotoService';
-import { packInstallationBroadcaster, packRouteGuard, registerPackRoutes } from './pack-routes';
+import { packInstallationBroadcaster, packPublisherJsonSchema, packRouteGuard, registerPackRoutes } from './pack-routes';
 
 export const PACK_ERROR_CODES = {
   NOT_FOUND: 'PACK_NOT_FOUND',
@@ -58,6 +58,7 @@ const summaryProperties = {
   name: { type: 'string' },
   description: { type: 'string' },
   author: { type: 'string' },
+  publisher: packPublisherJsonSchema,
   builtin: { type: 'boolean' },
   status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
   itemCount: { type: 'integer' },

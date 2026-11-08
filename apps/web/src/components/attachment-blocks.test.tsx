@@ -57,8 +57,13 @@ const renderOne = (attachment: Attachment, params: { readonly languages: readonl
 describe('Attachments — l’image (#5805)', () => {
   const image = attachmentOf(MEDIA_IMAGE_WITNESS_ID);
 
+  test('une image de moins de 100 Ko se charge sans attendre le défilement (#14639)', () => {
+    expect(renderOne({ ...image, fileSize: 99_999 }, { languages: ['en', 'fr'] })).toContain('loading="eager"');
+    expect(renderOne({ ...image, fileSize: 102_400 }, { languages: ['en', 'fr'] })).toContain('loading="lazy"');
+  });
+
   test('rang 1 : alt anglais, lang="en"', () => {
-    const html = renderOne(image, { languages: ['en', 'fr'] });
+    const html = renderOne({ ...image, fileSize: 2_000_000 }, { languages: ['en', 'fr'] });
     expect(html).toContain('<img');
     expect(html).toContain('lang="en"');
     expect(html).toContain('Deployment dashboard screenshot, every service green');

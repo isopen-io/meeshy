@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode, type Ref } from 'react';
+import { Suspense, lazy, useCallback, useMemo, useState, type ReactNode, type Ref } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -10,7 +10,6 @@ import { FocalRow } from '@/components/focal-row';
 import { MessageEffectsHost } from '@/components/message-effects-host';
 import { MessageSwipe } from '@/components/message-swipe';
 import { ReactionAddCapsule } from '@/components/reaction-quick-bar';
-import { UnfoldStage } from '@/components/unfold-stage';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
 import { UnreadSeparator } from '@/components/unread-separator';
@@ -30,7 +29,8 @@ import type { MessageMenuController } from '@/lib/view/use-message-menu';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
-import { collapseUnfolded } from '@/lib/view/unfold-store';
+import { UnfoldStoreContext, createUnfoldStore } from '@/lib/view/unfold-store';
+import { keepReadingInPlaceExceptUnfolding } from '@/lib/view/thread-resize-compensation';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { isSystemMessage } from '@/lib/view/message-badges';
 import { reactionCapsuleInset, reactionCapsuleTargetId } from '@/lib/view/reaction-capsule';
@@ -422,9 +422,13 @@ export function ThreadModes({
    * l'effacement ou `consumed`), mesurés à ≈ 1,1 ms pour 20 rangées visibles.
    */
   const [revealPhases, setRevealPhases] = useState<ReadonlyMap<string, RevealPhase>>(() => new Map());
-  /* Quitter le fil replie le message long déplié (#8147) : rouvrir une
-     conversation ne ressuscite pas un dépliage d'une autre visite. */
-  useEffect(() => collapseUnfolded, []);
+  /* LES MESSAGES LONGS DÉPLIÉS vivent avec CE fil (#16464) : une autre
+     conversation, ou la même rouverte, repart repliée. Le fil tient ici le
+     prédicat de compensation du virtualiseur, pour les DEUX hôtes (fil et
+     lecture d'administration) : la mesure qui suit un dépliage n'est pas
+     compensée, le haut du message reste en place. */
+  const unfolds = useMemo(createUnfoldStore, [placed[0]?.message.conversationId]);
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlaceExceptUnfolding(unfolds);
   /* La coque Android signale les captures ; le fil déclare ce qu'il montre (#9617). */
   useScreenCaptureReports(summary?.conversation.id ?? '', viewerId);
   const publishRevealPhase = useCallback((messageId: string, phase: RevealPhase) => {
@@ -512,6 +516,7 @@ export function ThreadModes({
 
 
   return (
+    <UnfoldStoreContext.Provider value={unfolds}>
     <HighlightedPieceContext.Provider value={highlightedPieceId}>
       <RevealPhaseChannel publish={publishRevealPhase}>
         {placed.length === 0 ? (
@@ -588,6 +593,7 @@ export function ThreadModes({
                     ...(rowPermanent || retry === undefined || retryableOf?.(p.message.id) !== true ? {} : { onRetry: () => retry(p.message.id) }),
                     ...(rowDelivery !== 'failed' || discard === undefined || discardableOf?.(p.message.id) !== true ? {} : { onDiscard: () => discard(p.message.id) }),
                     ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
+                    ...(rowDelivery === 'pending' ? { sendProgressKey: p.message.id } : {}),
                     ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                   };
             /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif
@@ -844,7 +850,6 @@ export function ThreadModes({
                     createdAt={p.message.createdAt}
                     locale={interfaceLanguage}
                   >
-                  <UnfoldStage messageId={p.message.id}>
                     <MessageEffectsHost effectFlags={p.message.effectFlags}>
                       {usesFlatRow(mode) ? (
                         <FocalRow
@@ -902,7 +907,6 @@ export function ThreadModes({
                         />
                       )}
                     </MessageEffectsHost>
-                  </UnfoldStage>
                   </MessageSwipe>
                 </div>
                 {/* LA CAPSULE « + » (#10583) — sous le dernier message reçu, HORS de
@@ -955,5 +959,6 @@ export function ThreadModes({
         />
       </RevealPhaseChannel>
     </HighlightedPieceContext.Provider>
+    </UnfoldStoreContext.Provider>
   );
 }

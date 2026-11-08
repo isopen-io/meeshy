@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_history_open_profile_a11y">Abrir el perfil de %1$s</string>
+</resources>

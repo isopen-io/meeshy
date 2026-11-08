@@ -14,7 +14,7 @@ import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.notification.NotificationRepository
-import me.meeshy.sdk.friend.observeFriendshipLive
+import me.meeshy.sdk.notification.UnreadBadgeCoordinator
 import me.meeshy.sdk.notification.observeNotificationSync
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -48,6 +48,7 @@ class ChromeViewModel @Inject constructor(
     private val friendshipCache: FriendshipCache,
     messageSocketManager: MessageSocketManager,
     private val config: MeeshyConfig,
+    private val unreadBadge: UnreadBadgeCoordinator,
 ) : ViewModel() {
 
     val currentUser: StateFlow<MeeshyUser?> = sessionRepository.currentUser
@@ -55,7 +56,14 @@ class ChromeViewModel @Inject constructor(
     /** The chrome avatar's loadable address — the stored key resolved against the API base. */
     fun avatarModel(user: MeeshyUser?): String? = chromeAvatarModel(user?.avatar, config.apiBaseUrl)
 
-    val unreadNotifications: StateFlow<Int> = notificationRepository.unreadCountStream
+    /** La cloche et la pastille lisent le MEME etat du coordinateur que les widgets et le nombre d'icone. */
+    val unreadNotifications: StateFlow<Int> = unreadBadge.state
+        .map { it.bell }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, unreadBadge.state.value.bell)
+
+    val unreadMessages: StateFlow<Int> = unreadBadge.state
+        .map { it.total }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, unreadBadge.state.value.total)
 
     val pendingFriendRequests: StateFlow<Int> = friendshipCache.version
         .map { friendshipCache.pendingReceivedCount }
@@ -65,7 +73,6 @@ class ChromeViewModel @Inject constructor(
 
     init {
         viewModelScope.observeNotificationSync(notificationRepository, messageSocketManager)
-        viewModelScope.observeFriendshipLive(friendshipCache, messageSocketManager)
     }
 
     fun warmUpIfAuthenticated(isAuthenticated: Boolean) {

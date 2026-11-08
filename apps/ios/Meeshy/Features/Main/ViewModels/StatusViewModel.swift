@@ -435,11 +435,15 @@ class StatusViewModel: ObservableObject {
     /// Supersedes a recovered mood when the user re-sends it from the composer,
     /// so the resend replaces the stuck row instead of duplicating it.
     func supersedeRecoveredStatus(clientMutationId: String) async {
-        await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
+        _ = await offlineQueue.cancelPendingPublication(clientMutationId: clientMutationId)
     }
 
     // MARK: - Clear Status
 
+    /// Une humeur encore dans la file d'envoi (son id est le cmid de sa ligne
+    /// `.createPost`) n'existe pas côté serveur : elle s'ANNULE par la même
+    /// action que la pastille et le détail (`PendingPublicationCancel`), jamais
+    /// par un `DELETE` (#10331).
     func clearStatus() async {
         guard let status = myStatus else { return }
 
@@ -447,19 +451,30 @@ class StatusViewModel: ObservableObject {
         statuses.removeAll { $0.id == status.id }
         myStatus = nil
 
+        guard !PendingPublicationMarker.isPending(postId: status.id) else {
+            guard await PendingPublicationCancel.run(status.id, queue: offlineQueue) else {
+                return restore(status, at: index)
+            }
+            return await saveCacheSnapshot()
+        }
+
         do {
             try await statusService.delete(statusId: status.id)
             await saveCacheSnapshot()
         } catch {
-            // Défaire CE retrait : les humeurs arrivées par socket pendant
-            // l'attente restent, et une humeur publiée entre-temps n'est pas
-            // remplacée par l'ancienne.
-            if let index {
-                statuses = OptimisticRollback.restoring(status, at: index, into: statuses)
-            }
-            if myStatus == nil { myStatus = status }
+            restore(status, at: index)
             FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Impossible de supprimer le statut", bundle: .main))
         }
+    }
+
+    /// Défaire CE retrait : les humeurs arrivées par socket pendant l'attente
+    /// restent, et une humeur publiée entre-temps n'est pas remplacée par
+    /// l'ancienne.
+    private func restore(_ status: StatusEntry, at index: Int?) {
+        if let index {
+            statuses = OptimisticRollback.restoring(status, at: index, into: statuses)
+        }
+        if myStatus == nil { myStatus = status }
     }
 
     private func saveCacheSnapshot() async {

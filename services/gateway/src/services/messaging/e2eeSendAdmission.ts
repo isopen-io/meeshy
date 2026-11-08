@@ -23,9 +23,19 @@
  * (`encryptionMetadata.regimeEpoch`) est refusé de même quand l'époque a
  * changé depuis. Un envoi sans époque déclarée (client antérieur) n'est pas
  * jugé sur elle.
+ *
+ * Depuis #14369, le mode `hybrid` chiffre réellement deux fois : un envoi y
+ * porte le clair (couche SERVEUR, scellée au repos par `MessageProcessor`) et,
+ * s'il vient d'un appareil libsignal, une couche APPAREIL (`deviceLayerRelay`)
+ * admise par Sesame exactement comme un envoi `e2ee`. Sans couche appareil
+ * (Android, web, ancien iOS), l'envoi hybride reste admis, couche serveur
+ * seule. Une couche appareil vers tout autre régime est refusée
+ * `E2EE_REGIME_CHANGED` : en `server` ou sans chiffrement, aucun appareil n'en
+ * attend ; en `e2ee`, le clair qu'elle accompagne est refusé avant elle, et
+ * sans clair ni chiffré elle n'est rien qu'un appareil sache ranger.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { E2EE_ERROR_CODES, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_ERROR_CODES, type E2EEDeviceLayerRequest, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { createE2EEEnvelopeRelay, type AdmittedRelay } from '../e2ee/E2EEEnvelopeRelay';
 import { regimeEpochOf } from '../conversations/encryptionRegime';
 import { clientOutdated, E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors';
@@ -54,6 +64,8 @@ export type SendUnderRegime = {
   readonly senderId?: string;
   /** L'envoi libsignal par appareil (#3706), absent de tout autre envoi. */
   readonly e2eeRelay?: E2EERelayRequest;
+  /** La couche appareil d'un envoi hybride (#14369), à côté du clair. */
+  readonly deviceLayerRelay?: E2EEDeviceLayerRequest;
   /** Le lieu déclaré à côté (#12526) : seul, sans chiffré, c'est un message en clair. */
   readonly location?: unknown;
 };
@@ -64,6 +76,8 @@ export type SendAdmission = {
   readonly endToEnd: boolean;
   /** Les enveloppes admises, à ranger une fois le message persisté. */
   readonly relay: AdmittedRelay | null;
+  /** Les enveloppes admises sont la couche appareil d'un message hybride (#14369). */
+  readonly deviceLayer: boolean;
 };
 
 type AdmissionPrisma = Pick<PrismaClient, 'conversation' | 'messageAttachment' | 'participant' | 'e2EEDevice' | 'messageEnvelope'>;
@@ -79,6 +93,7 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     encryptionMode: regime?.encryptionMode,
     plaintext: carriesCiphertext ? plaintextBesideCiphertext(request.content) : request.content,
   });
+  if (request.deviceLayerRelay && !isHybridMode(regime?.encryptionMode)) throw notHybrid();
   if (!endToEnd) {
     if (request.e2eeRelay) {
       throw new E2eeRelayRefusedError(E2EE_ERROR_CODES.REGIME_CHANGED, 409, 'Cette conversation n’est plus chiffrée de bout en bout');
@@ -87,13 +102,14 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     // client est refusé avec sa phrase (« envoyez en clair ») ; ailleurs, #12562.
     if (carriesCiphertext && isServerAtRestMode(regime?.encryptionMode)) throw new ServerAtRestCiphertextRefusedError();
     if (carriesCiphertext) throw regimeChanged();
-    return { regime, carriesCiphertext, endToEnd, relay: null };
+    if (!request.deviceLayerRelay) return { regime, carriesCiphertext, endToEnd, relay: null, deviceLayer: false };
+    return { regime, carriesCiphertext, endToEnd, relay: await admitDeviceLayer(prisma, request, request.deviceLayerRelay, regime), deviceLayer: true };
   }
   assertNoPlaintextPieces({ encryptionMode: regime?.encryptionMode, carriedPieceCount: await countCarriedPieces(prisma, request) });
   // #12526 — à côté d'un chiffré, un lieu en clair est RETENU (`admitSharedPlace`) ;
   // sans chiffré, le lieu EST le message : un clair, refusé comme tel.
   if (!carriesCiphertext && parseSharedPlace(request.location)) throw new E2eePlaintextRefusedError(E2EE_PLAINTEXT_LOCATION_REFUSAL_MESSAGE);
-  if (!carriesCiphertext) return { regime, carriesCiphertext, endToEnd, relay: null };
+  if (!carriesCiphertext) return { regime, carriesCiphertext, endToEnd, relay: null, deviceLayer: false };
   if (sealedUnderStaleEpoch(request.encryptionMetadata, regimeEpochOf(regime))) throw regimeChanged();
   if (!request.e2eeRelay) throw clientOutdated();
   const relay = await createE2EEEnvelopeRelay({ prisma }).admit({
@@ -101,7 +117,37 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     senderUserId: await senderUserIdOf(prisma, request.senderId),
     relay: request.e2eeRelay,
   });
-  return { regime, carriesCiphertext, endToEnd, relay };
+  return { regime, carriesCiphertext, endToEnd, relay, deviceLayer: false };
+}
+
+const isHybridMode = (mode: string | null | undefined): boolean =>
+  typeof mode === 'string' && mode.trim().toLowerCase() === 'hybrid';
+
+const notHybrid = (): E2eeRelayRefusedError =>
+  new E2eeRelayRefusedError(
+    E2EE_ERROR_CODES.REGIME_CHANGED,
+    409,
+    'Cette conversation n’est pas en mode hybride : son chiffrement a changé depuis la rédaction de ce message',
+  );
+
+/**
+ * La couche appareil d'un hybride (#14369) passe la MÊME admission qu'un envoi
+ * `e2ee` : époque déclarée, appareil émetteur lié à la session, et Sesame
+ * contre l'annuaire de TOUS les membres (un groupe reçoit une enveloppe par
+ * appareil de chaque membre, fan-out par paire).
+ */
+async function admitDeviceLayer(
+  prisma: AdmissionPrisma,
+  request: SendUnderRegime,
+  layer: E2EEDeviceLayerRequest,
+  regime: { readonly encryptionEpoch?: number | null } | null,
+): Promise<AdmittedRelay> {
+  if (layer.regimeEpoch !== undefined && layer.regimeEpoch !== regimeEpochOf(regime)) throw regimeChanged();
+  return createE2EEEnvelopeRelay({ prisma }).admit({
+    conversationId: request.conversationId,
+    senderUserId: await senderUserIdOf(prisma, request.senderId),
+    relay: layer.relay,
+  });
 }
 
 const regimeChanged = (): E2eeRelayRefusedError =>

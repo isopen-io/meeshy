@@ -68,6 +68,8 @@ class PreferencesSyncCoordinatorTest {
 
         override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
 
+        override suspend fun updateApplication(body: me.meeshy.sdk.model.ApplicationPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
         override suspend fun getCategories(limit: Int?) =
             ApiResponse<List<ApiCategory>>(success = false)
 
@@ -100,9 +102,18 @@ class PreferencesSyncCoordinatorTest {
     private class CountingApi(
         private val notification: NotificationPreferenceSyncBody? = null,
         private val privacy: PrivacyPreferenceSyncBody? = null,
+        private val audio: me.meeshy.sdk.model.AudioPreferenceSyncBody? = null,
     ) : StubPreferencesApi() {
         var notificationReads: Int = 0
         var privacyReads: Int = 0
+        var audioReads: Int = 0
+
+        override suspend fun getAudio(): ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody> {
+            audioReads++
+            return audio
+                ?.let { ApiResponse(success = true, data = it) }
+                ?: ApiResponse(success = false)
+        }
 
         override suspend fun getNotification(): ApiResponse<NotificationPreferenceSyncBody> {
             notificationReads++
@@ -131,6 +142,7 @@ class PreferencesSyncCoordinatorTest {
         val api: PreferencesApi,
         notification: UserNotificationPreferences = UserNotificationPreferences(),
         privacy: PrivacyPreferences = PrivacyPreferences(),
+        audio: me.meeshy.sdk.model.AudioPreferences = me.meeshy.sdk.model.AudioPreferences(),
         pendingWrites: Set<OutboxKind> = emptySet(),
         outboxThrows: Boolean = false,
     ) {
@@ -138,6 +150,7 @@ class PreferencesSyncCoordinatorTest {
         val connection = MutableStateFlow(SocketConnectionState.DISCONNECTED)
         val notificationStore = InMemoryNotificationPreferencesStore(notification)
         val privacyStore = InMemoryPrivacyPreferencesStore(privacy)
+        val audioStore = me.meeshy.sdk.audio.InMemoryAudioPreferencesStore(audio)
         val socket: PreferencesSocketManager = mockk {
             every { categoryPreferencesUpdated } returns events
         }
@@ -173,6 +186,7 @@ class PreferencesSyncCoordinatorTest {
             outboxRepository = outbox,
             notificationStore = notificationStore,
             privacyStore = privacyStore,
+            audioStore = audioStore,
             scope = scope,
         )
     }
@@ -228,7 +242,6 @@ class PreferencesSyncCoordinatorTest {
         val harness = Harness(api = api)
         val coordinator = harness.coordinator(this)
 
-        coordinator.refreshCategory("audio")
         coordinator.refreshCategory("video")
         coordinator.refreshCategory("message")
         coordinator.refreshCategory("document")
@@ -236,6 +249,49 @@ class PreferencesSyncCoordinatorTest {
 
         assertThat(api.notificationReads).isEqualTo(0)
         assertThat(api.privacyReads).isEqualTo(0)
+    }
+
+    @Test
+    fun `an audio category re-read lands on the store`() = runTest {
+        val api = CountingApi(audio = me.meeshy.sdk.model.AudioPreferenceSyncBody(autoTranscribeIncoming = false, ttsEnabled = false))
+        val harness = Harness(api = api)
+
+        harness.coordinator(this).refreshCategory("audio")
+
+        assertThat(harness.audioStore.preferences.value.autoTranscribeIncoming).isFalse()
+        assertThat(harness.audioStore.preferences.value.ttsEnabled).isFalse()
+    }
+
+    @Test
+    fun `a pending audio write vetoes its re-read`() = runTest {
+        val api = CountingApi(audio = me.meeshy.sdk.model.AudioPreferenceSyncBody(autoTranscribeIncoming = false))
+        val harness = Harness(api = api, pendingWrites = setOf(OutboxKind.UPDATE_AUDIO_SETTINGS))
+
+        harness.coordinator(this).refreshCategory("audio")
+
+        assertThat(api.audioReads).isEqualTo(0)
+        assertThat(harness.audioStore.preferences.value.autoTranscribeIncoming).isTrue()
+    }
+
+    @Test
+    fun `a pending privacy write leaves the audio re-read alone`() = runTest {
+        val api = CountingApi(audio = me.meeshy.sdk.model.AudioPreferenceSyncBody(autoTranscribeIncoming = false))
+        val harness = Harness(api = api, pendingWrites = setOf(OutboxKind.UPDATE_PRIVACY_SETTINGS))
+
+        harness.coordinator(this).refreshCategory("audio")
+
+        assertThat(harness.audioStore.preferences.value.autoTranscribeIncoming).isFalse()
+    }
+
+    @Test
+    fun `hydration also re-reads the audio block`() = runTest {
+        val api = CountingApi(audio = me.meeshy.sdk.model.AudioPreferenceSyncBody(autoTranscribeIncoming = false))
+        val harness = Harness(api = api)
+
+        harness.coordinator(this).hydrateCachedCategories()
+
+        assertThat(api.audioReads).isEqualTo(1)
+        assertThat(harness.audioStore.preferences.value.autoTranscribeIncoming).isFalse()
     }
 
     /**

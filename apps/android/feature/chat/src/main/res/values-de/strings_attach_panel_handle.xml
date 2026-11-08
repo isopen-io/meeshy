@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_panel_handle_label">Griff des Anhangsfelds</string>
+    <string name="composer_panel_handle_open_library">Gesamte Fotomediathek öffnen</string>
+    <string name="composer_panel_handle_close">Anhänge schließen</string>
+</resources>

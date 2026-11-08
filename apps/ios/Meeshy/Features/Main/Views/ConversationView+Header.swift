@@ -499,6 +499,15 @@ struct ConversationHeaderAvatarView: View {
         onSetExpanded(!showsIdentity)
     }
 
+    /// La porte de l'avatar du pair, et ce qu'il écoute posé dessus (#16755) : un élément VoiceOver à part.
+    private func peerDoor(direct: Bool, context: AvatarContext) -> HeaderPeerListening {
+        HeaderPeerListening(
+            door: doorAccessibility(menu: direct ? directAccessibilityMenu : []),
+            userId: direct ? conversation?.participantUserId : nil,
+            avatarSize: context.size
+        )
+    }
+
     private func doorAccessibility(menu: [AvatarContextMenuItem]) -> HeaderAvatarDoorAccessibility {
         HeaderAvatarDoorAccessibility(
             label: door.accessibilityLabel(name: conversation?.name ?? "?", expanded: showsIdentity),
@@ -545,7 +554,7 @@ struct ConversationHeaderAvatarView: View {
                     onMoodTap: statusViewModel.moodSpotlightHandler(for: userId),
                     contextMenuItems: directContextMenu
                 )
-                .modifier(doorAccessibility(menu: directAccessibilityMenu))
+                .modifier(peerDoor(direct: true, context: .conversationHeaderExpanded))
             } else {
                 HStack(spacing: MeeshySpacing.xs) {
                     // Stacked active member avatars
@@ -608,7 +617,7 @@ struct ConversationHeaderAvatarView: View {
                 onMoodTap: isDirect ? statusViewModel.moodSpotlightHandler(for: conversation?.participantUserId ?? "") : nil,
                 contextMenuItems: directContextMenu
             )
-            .modifier(doorAccessibility(menu: isDirect ? directAccessibilityMenu : []))
+            .modifier(peerDoor(direct: isDirect, context: .conversationHeaderCollapsed))
             // La flamme du jour, sous l'avatar replié (#9031).
             .modifier(HeaderFlameDecoration(
                 conversationId: conversation?.id ?? "",

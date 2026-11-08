@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.callAndCapture",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.captureOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.photoOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.videoOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.rankOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.rankDivisionOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.prestigeOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.achievementOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.achievementRarityOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.momentOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.avatarOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "frame.usage.bannerFrameOnly",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "pack.shelf.needsUpdate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "pack.shelf.unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frame.family.tier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frame.family.meesh",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frame.family.treasury",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frame.family.flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frame.family.day",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frame.family.level-100",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -138,33 +138,33 @@ final class PerfectNegotiationRoleTests: XCTestCase {
     // The polite peer is the lexicographically-smaller userId. The rule MUST be
     // symmetric: whichever side we view it from, exactly one peer is polite.
     func test_isPolitePeer_smallerUserId_isPolite() {
-        XCTAssertTrue(CallManager.isPolitePeer(localUserId: "aaa", remoteUserId: "bbb"))
+        XCTAssertTrue(CallNegotiationRules.isPolitePeer(localUserId: "aaa", remoteUserId: "bbb"))
     }
 
     func test_isPolitePeer_largerUserId_isImpolite() {
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "bbb", remoteUserId: "aaa"))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "bbb", remoteUserId: "aaa"))
     }
 
     func test_isPolitePeer_symmetric_exactlyOnePolite() {
         let a = "507f1f77bcf86cd799439011"
         let b = "507f1f77bcf86cd799439012"
-        let aSeesItself = CallManager.isPolitePeer(localUserId: a, remoteUserId: b)
-        let bSeesItself = CallManager.isPolitePeer(localUserId: b, remoteUserId: a)
+        let aSeesItself = CallNegotiationRules.isPolitePeer(localUserId: a, remoteUserId: b)
+        let bSeesItself = CallNegotiationRules.isPolitePeer(localUserId: b, remoteUserId: a)
         XCTAssertNotEqual(aSeesItself, bSeesItself, "exactly one peer must be polite")
         XCTAssertTrue(aSeesItself, "smaller id (a) is polite")
     }
 
     func test_isPolitePeer_missingLocalId_isImpolite() {
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "", remoteUserId: "bbb"))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "", remoteUserId: "bbb"))
     }
 
     func test_isPolitePeer_missingRemoteId_isImpolite() {
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "aaa", remoteUserId: ""))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "aaa", remoteUserId: ""))
     }
 
     func test_isPolitePeer_identicalIds_isImpolite() {
         // Degenerate (should not happen in a 1:1 call) — never yield blindly.
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "same", remoteUserId: "same"))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "same", remoteUserId: "same"))
     }
 }
 
@@ -173,21 +173,21 @@ final class PerfectNegotiationRoleTests: XCTestCase {
 @MainActor
 final class NegotiationEpochTests: XCTestCase {
     func test_isStale_olderGeneration_isStale() {
-        XCTAssertTrue(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 2))
+        XCTAssertTrue(CallNegotiationRules.isStaleNegotiation(incoming: 1, highWaterMark: 2))
     }
 
     func test_isStale_sameGeneration_isAccepted() {
         // Offer, its answer, and matching ICE all carry the same generation.
-        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 2, highWaterMark: 2))
+        XCTAssertFalse(CallNegotiationRules.isStaleNegotiation(incoming: 2, highWaterMark: 2))
     }
 
     func test_isStale_newerGeneration_isAccepted() {
-        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 3, highWaterMark: 2))
+        XCTAssertFalse(CallNegotiationRules.isStaleNegotiation(incoming: 3, highWaterMark: 2))
     }
 
     func test_isStale_firstSignal_isAccepted() {
         // Fresh call: high-water mark 0, first offer is generation 1.
-        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 0))
+        XCTAssertFalse(CallNegotiationRules.isStaleNegotiation(incoming: 1, highWaterMark: 0))
     }
 }
 
@@ -1442,7 +1442,7 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
 
 // MARK: - Prisme Linguistique: preferredCallLanguage (§Transcription Language Resolution)
 
-/// Behavioural tests for `CallManager.preferredCallLanguage(for:)`.
+/// Behavioural tests for `CallLanguagePreference.preferredCallLanguage(for:)`.
 /// Pure static function: no network, no singletons, no async.
 /// Full 5-level Prisme Linguistique chain:
 ///   1. systemLanguage > 2. regionalLanguage > 3. customDestinationLanguage > 4. deviceLocale > 5. "fr"
@@ -1465,12 +1465,12 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
     // MARK: Priority 5 — fallback
 
     func test_nilUser_returnsFrFallback() {
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: nil), "fr")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: nil), "fr")
     }
 
     func test_allNil_returnsFrFallback() {
         let user = makeUser()
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "fr")
     }
 
     // MARK: Priority 1 — systemLanguage
@@ -1478,47 +1478,47 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
     func test_systemLanguagePresent_returnsSystemLanguage() {
         let user = makeUser(systemLanguage: "en", regionalLanguage: "es",
                             customDestinationLanguage: "de", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "en")
     }
 
     func test_systemLanguagePrioritisedOverRegional() {
         let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "de")
     }
 
     func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
         let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "zh")
     }
 
     func test_onlySystemLanguage_noRegional_returnsSystem() {
         let user = makeUser(systemLanguage: "ar")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "ar")
     }
 
     // MARK: Priority 2 — regionalLanguage
 
     func test_systemLanguageNil_regionalPresent_returnsRegionalLanguage() {
         let user = makeUser(systemLanguage: nil, regionalLanguage: "es")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "es")
     }
 
     func test_regionalLanguagePrioritisedOverCustomDestination() {
         let user = makeUser(systemLanguage: nil, regionalLanguage: "it",
                             customDestinationLanguage: "de", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "it")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "it")
     }
 
     // MARK: Priority 3 — customDestinationLanguage
 
     func test_systemAndRegionalNil_customDestinationPresent_returnsCustom() {
         let user = makeUser(customDestinationLanguage: "pt")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "pt")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "pt")
     }
 
     func test_customDestinationPrioritisedOverDeviceLocale() {
         let user = makeUser(customDestinationLanguage: "ko", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ko")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "ko")
     }
 
     // MARK: Priority 4 — deviceLocale
@@ -1526,26 +1526,26 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
     func test_allNilExceptDeviceLocale_returnsNormalisedLocale() {
         // deviceLocale "fr_FR" normalises to "fr"
         let user = makeUser(deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "fr")
     }
 
     func test_deviceLocale_hyphenFormat_normalisedToISO639() {
         // "zh-Hant-HK" → normalised to "zh" by MeeshyUser.normalizeLanguageCode
         let user = makeUser(deviceLocale: "zh-Hant-HK")
-        let result = CallManager.preferredCallLanguage(for: user)
+        let result = CallLanguagePreference.preferredCallLanguage(for: user)
         XCTAssertFalse(result.isEmpty, "deviceLocale must yield a non-empty language code")
         XCTAssertEqual(result, MeeshyUser.normalizeLanguageCode("zh-Hant-HK") ?? "fr")
     }
 
     func test_deviceLocale_underscoreFormat_normalisedToISO639() {
         let user = makeUser(deviceLocale: "en_US")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "en")
     }
 
     func test_deviceLocale_notUsedWhenRegionalPresent() {
         // Prisme rule: priority 2 (regional) beats priority 4 (deviceLocale)
         let user = makeUser(regionalLanguage: "es", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "es")
     }
 }
 
@@ -1799,37 +1799,38 @@ final class CallManagerStaleCallIdGuardTests: XCTestCase {
         // The thermal-critical branch calls `createOffer()` under `await`. Without a
         // post-await `self.currentCallId == callId` guard, the offer is emitted for a
         // call that may have ended during the SDP-creation suspension window.
-        let src = try source()
+        // The handler lives in `CallVideoSuspension` (`CallCollaborators/`, #11522).
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallVideoSuspension.swift")
 
-        guard let thermalRange = src.range(of: "thermalStateDidChange") else {
-            XCTFail("thermalStateDidChange not found in CallManager.swift")
+        guard let thermalRange = src.range(of: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {") else {
+            XCTFail("thermalStateDidChange not found in CallVideoSuspension.swift")
             return
         }
-        // Bound to the thermal handler body — up to the next top-level closing brace
-        // that returns to the class scope (heuristic: next `\n    func ` or `\n}`).
+        // Bound to the thermal handler body — up to the closing brace of the
+        // collaborator's class (`\n}\n`), the handler being its last member.
         let searchEnd = src.range(
-            of: "\n    func ",
+            of: "\n}\n",
             range: thermalRange.upperBound..<src.endIndex
         )?.lowerBound ?? src.endIndex
         let thermalBody = String(src[thermalRange.lowerBound..<searchEnd])
 
-        // Must see `let offer = await self.webRTCService.createOffer()` followed by
-        // `, self.currentCallId == callId` (the post-await stale-callId guard).
-        let hasCreateOffer = thermalBody.contains("await self.webRTCService.createOffer()")
+        // Must see `let offer = await call.webRTCService.createOffer()` followed by
+        // `, call.currentCallId == callId` (the post-await stale-callId guard).
+        let hasCreateOffer = thermalBody.contains("await call.webRTCService.createOffer()")
         XCTAssertTrue(hasCreateOffer,
             "thermalStateDidChange must contain a createOffer() suspension point")
 
         // The guard must appear as part of the same `if let` chain: the condition
-        // `, self.currentCallId == callId` must follow `let offer = await`.
-        guard let createOfferIdx = thermalBody.range(of: "let offer = await self.webRTCService.createOffer()")?.lowerBound else {
+        // `, call.currentCallId == callId` must follow `let offer = await`.
+        guard let createOfferIdx = thermalBody.range(of: "let offer = await call.webRTCService.createOffer()")?.lowerBound else {
             XCTFail("createOffer expression not found in thermalStateDidChange body")
             return
         }
         let afterOffer = String(thermalBody[createOfferIdx...])
         XCTAssertTrue(
-            afterOffer.contains("self.currentCallId == callId"),
+            afterOffer.contains("call.currentCallId == callId"),
             "Fix 9 regression: thermalStateDidChange renegotiation block must guard " +
-            "`self.currentCallId == callId` after `await createOffer()` to prevent " +
+            "`call.currentCallId == callId` after `await createOffer()` to prevent " +
             "emitting a stale SDP offer for a call that ended during the suspension window."
         )
     }
@@ -2273,18 +2274,18 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<nextFunc])
 
-        let previousHoldCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
+        let previousHoldCaptures = body.components(separatedBy: "let inFlight = call.videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousHoldCaptures, 2,
             "Both the hold and unhold branches must capture the in-flight holdVideoTask before replacing it"
         )
-        let previousToggleCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
+        let previousToggleCaptures = body.components(separatedBy: "let inFlight = call.videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousToggleCaptures, 2,
             "Both branches must also capture the in-flight videoToggleTask — a manual toggle racing " +
             "a hold transition actuates the same camera/transceiver."
         )
-        let previousSurvivalCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
+        let previousSurvivalCaptures = body.components(separatedBy: "let inFlight = call.videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousSurvivalCaptures, 2,
             "Both branches must also capture the in-flight survivalVideoTask — a network-survival " +
@@ -2364,7 +2365,7 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         }
         let catchBody = String(body[catchRange.lowerBound...])
         XCTAssertTrue(
-            catchBody.contains("self.isVideoEnabled = false"),
+            catchBody.contains("call.isVideoEnabled = false"),
             "On camera-permission denial during unhold recovery, isVideoEnabled must be corrected to false " +
             "— otherwise the app believes video is active with no track and no way to recover."
         )
@@ -3204,8 +3205,10 @@ final class EndCallInternalTeardownOrderTests: XCTestCase {
             "endCallInternal must cancel the TURN refresh and its watchdog to stop TURN credential " +
             "refreshes on a dead call."
         )
-        guard let cancelAll = DeclarationBodyScanner.body(containing: "func cancelAll()", in: source) else {
-            XCTFail("CallTurnCredentials.cancelAll() not found in the CallManager unit"); return
+        let turnCredentials = try AppSourceGuard.unit(
+            "Meeshy/Features/Call/Services/CallCollaborators/CallTurnCredentials.swift")
+        guard let cancelAll = DeclarationBodyScanner.body(containing: "func cancelAll()", in: turnCredentials) else {
+            XCTFail("CallTurnCredentials.cancelAll() not found in CallTurnCredentials.swift"); return
         }
         XCTAssertTrue(
             cancelAll.contains("turnRefreshTask?.cancel()") && cancelAll.contains("turnRefreshTask = nil"),
@@ -3545,11 +3548,9 @@ final class CallManagerDTMFTests: XCTestCase {
     func test_sendDTMF_validatesInput_inSourceCode() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
-        guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
-            XCTFail("sendDTMF not found in CallManager.swift"); return
+        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String)", in: source) else {
+            XCTFail("sendDTMF not found in the CallManager unit"); return
         }
-        let blockEnd = source.range(of: "}", range: funcRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let funcBody = String(source[funcRange.lowerBound..<blockEnd])
 
         XCTAssertTrue(
             funcBody.contains("guard") || funcBody.contains("allSatisfy") || funcBody.contains("CharacterSet"),
@@ -3561,11 +3562,9 @@ final class CallManagerDTMFTests: XCTestCase {
     func test_sendDTMF_rejectsEmptyString_inSourceCode() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
-        guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
-            XCTFail("sendDTMF not found in CallManager.swift"); return
+        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String)", in: source) else {
+            XCTFail("sendDTMF not found in the CallManager unit"); return
         }
-        let blockEnd = source.range(of: "}", range: funcRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let funcBody = String(source[funcRange.lowerBound..<blockEnd])
 
         XCTAssertTrue(
             funcBody.contains("isEmpty"),
@@ -5552,7 +5551,7 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         let toggleFunc = String(source[funcRange.lowerBound..<searchEnd])
 
         XCTAssertTrue(
-            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
+            toggleFunc.contains("let inFlight = call.videoTransitionsInFlight()"),
             "toggleVideo must capture the previous videoToggleTask before overwriting it, " +
             "so the new Task can await its completion."
         )
@@ -5566,7 +5565,7 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         // and the network-survival controller — a hold landing exactly as a manual
         // toggle fires (or vice versa) actuates the same camera/transceiver otherwise.
         XCTAssertTrue(
-            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
+            toggleFunc.contains("let inFlight = call.videoTransitionsInFlight()"),
             "toggleVideo must also capture the in-flight holdVideoTask before starting its own Task."
         )
         XCTAssertTrue(
@@ -5574,7 +5573,7 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
             "toggleVideo must await the previous hold task's completion too."
         )
         XCTAssertTrue(
-            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
+            toggleFunc.contains("let inFlight = call.videoTransitionsInFlight()"),
             "toggleVideo must also capture the in-flight survivalVideoTask before starting its own Task."
         )
         XCTAssertTrue(
@@ -7233,7 +7232,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_guardsHoldAndCaptureSuspensionBeforeUpgrading() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
+            body.contains("call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "toggleVideo must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard applySurvivalVideoSend already applies for the " +
             "automatic survival-recovery path."
@@ -7332,7 +7331,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
             return ""
         }
         let bodyEnd = source.range(
-            of: "private func publishListeningIntentIfChanged()",
+            of: "protocol CallCameraActuatorProviding",
             range: funcRange.upperBound..<source.endIndex
         )?.lowerBound ?? source.endIndex
         return String(source[funcRange.lowerBound..<bodyEnd])
@@ -7343,7 +7342,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
+            body.contains("call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "switchCamera must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard toggleVideo() applies (Vague 158) for the same " +
             "camera-actuation task chain."
@@ -7424,7 +7423,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
+            body.contains("call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "selectCamera(id:) must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — same capturer, same task chain as switchCamera()."
         )

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.groupIntro.online",
+          "androidName": "story_group_intro_online",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.groupIntro.idle",
+          "androidName": "story_group_intro_idle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.groupIntro.away",
+          "androidName": "story_group_intro_away",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.groupIntro.offline",
+          "androidName": "story_group_intro_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.groupIntro.skipHint",
+          "androidName": "story_group_intro_skip_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

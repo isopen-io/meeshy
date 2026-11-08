@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.starter.busy",
+          "androidName": "call_starter_busy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "permission.microphone.denied",
+          "androidName": "permission_microphone_denied",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

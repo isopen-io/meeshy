@@ -2,6 +2,7 @@ import SwiftUI
 import Photos
 import AVFoundation
 import UIKit
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -108,10 +109,10 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     /// True once a fetch attempt has run, so the view never re-prompts.
     private var didLoad = false
     private var fetchLimit = RecentMediaStrip.headSampleCount
-    private var isObservingLibrary = false
+    private let isObservingLibrary = OSAllocatedUnfairLock(initialState: false)
 
-    deinit {
-        if isObservingLibrary {
+    nonisolated deinit {
+        if isObservingLibrary.withLock({ $0 }) {
             PHPhotoLibrary.shared().unregisterChangeObserver(self)
         }
     }
@@ -165,8 +166,8 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         imageManager.stopCachingImagesForAllAssets()
         cachedIds = []
         assets = fetched
-        if !isObservingLibrary {
-            isObservingLibrary = true
+        if !isObservingLibrary.withLock({ $0 }) {
+            isObservingLibrary.withLock { $0 = true }
             PHPhotoLibrary.shared().register(self)
         }
     }

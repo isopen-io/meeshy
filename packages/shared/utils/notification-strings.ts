@@ -31,6 +31,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
   'call.missed', 'call.incoming.title', 'call.incoming.body', 'call.action.answer', 'call.action.decline', 'call.action.callBack',
   'call.recordingReady', 'call.recordingReady.video',
+  'bring.ring.title', 'bring.ring.titleHidden', 'bring.ring.body', 'bring.action.stop', 'bring.stopped.title',
   'contact.request', 'contact.accepted',
   'contact.requestAction', 'contact.acceptedAction',
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',

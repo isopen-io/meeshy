@@ -245,6 +245,11 @@ export interface NotificationContext extends NotificationAttachmentWire {
    *  groupe). @see schema.prisma Conversation.avatar */
   readonly conversationAvatar?: string;
   readonly conversationType?: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
+  /** #14669 — régime de chiffrement de la conversation tel que la passerelle le
+   *  sert (`e2ee`, `server`, `hybrid`) ; absent pour le clair. Le client décide
+   *  où part une réponse rapide sans relire la conversation.
+   *  @see schema.prisma Conversation.encryptionMode */
+  readonly conversationEncryptionMode?: string;
   readonly messageId?: string;
   readonly originalMessageId?: string;
   readonly callSessionId?: string;

@@ -12,6 +12,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // libsignal (#14591, ADR-030) : Signal ne publie plus sur Maven Central depuis la 0.86.
+        maven("https://build-artifacts.signal.org/libraries/maven/") {
+            content { includeGroup("org.signal") }
+        }
     }
 }
 
@@ -26,6 +30,7 @@ include(":core:network")
 include(":core:database")
 include(":core:datastore")
 include(":core:crypto")
+include(":core:e2ee")
 include(":core:navigation")
 include(":feature:auth")
 include(":feature:conversations")

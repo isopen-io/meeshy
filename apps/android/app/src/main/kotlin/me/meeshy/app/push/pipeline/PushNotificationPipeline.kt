@@ -1,24 +1,23 @@
 package me.meeshy.app.push.pipeline
 
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import me.meeshy.app.MainActivity
 import me.meeshy.app.R
-import me.meeshy.app.push.PushTapExtras
+import me.meeshy.app.push.PushInteraction
+import me.meeshy.app.push.PushDisplayGate
+import me.meeshy.app.push.PushInteractionBus
+import me.meeshy.app.push.PushTapIntentFactory
 import me.meeshy.app.push.IncomingPush
 import me.meeshy.app.push.MessageNotificationId
 import me.meeshy.app.push.NotificationChannelIds
 import me.meeshy.sdk.model.FocusFilterSnapshot
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.push.PushBadgePolicy
-import me.meeshy.sdk.model.push.PushChannelCategory
 import me.meeshy.sdk.model.push.PushDelivery
 import me.meeshy.sdk.model.push.PushDeliveryContext
 import me.meeshy.sdk.model.push.PushDeliveryGate
@@ -51,7 +50,11 @@ class PushNotificationPipeline @Inject constructor(
     private val environment: PushEnvironment,
     enrichers: Set<@JvmSuppressWildcards NotificationEnricher>,
     private val summaryNotifier: PushSummaryNotifier,
+    private val interactions: PushInteractionBus = PushInteractionBus(),
+    private val displayGates: Set<@JvmSuppressWildcards PushDisplayGate> = emptySet(),
 ) {
+    private val tapIntents = PushTapIntentFactory(context)
+
     private val enrichers: List<NotificationEnricher> =
         enrichers.sortedWith(compareBy<NotificationEnricher> { it.phase }.thenBy { it.javaClass.name })
 
@@ -63,16 +66,18 @@ class PushNotificationPipeline @Inject constructor(
     }
 
     /** `true` when a notification was posted. */
-    suspend fun renderNow(push: IncomingPush): Boolean {
-        val payload = push.payload
-        val title = push.notificationTitle ?: payload.title
-        val body = push.notificationBody ?: payload.body
+    suspend fun renderNow(incoming: IncomingPush): Boolean {
+        val payload = incoming.payload
         // A data push with nothing to show is a silent sync : the observers handle it.
-        if (title == null && body == null) return false
+        if ((incoming.notificationTitle ?: payload.title) == null && (incoming.notificationBody ?: payload.body) == null) return false
+        if (displayGates.any { gate -> !runCatching { gate.allows(incoming) }.getOrDefault(true) }) return false
         if (!firstDelivery(payload.notificationId)) return false
 
         val deadline = environment.nowMillis() + DEADLINE_MILLIS
         val preferences = hydratedPreferences()
+        val push = PushBannerText.apply(context, incoming, preferences)
+        val title = push.notificationTitle ?: payload.title
+        val body = push.notificationBody ?: payload.body
         val decision = PushDeliveryGate.decide(
             payload,
             PushDeliveryContext(
@@ -94,7 +99,7 @@ class PushNotificationPipeline @Inject constructor(
         val channelId = if (passive) {
             NotificationChannelIds.CHANNEL_SILENT
         } else {
-            NotificationChannelIds.forCategory(PushChannelCategory.of(payload.type))
+            NotificationChannelIds.forPayload(payload)
         }
         val notificationId = MessageNotificationId.of(payload.type, payload.conversationId, payload.notificationId)
         val groupKey = PushGrouping.groupKey(payload, preferences)
@@ -105,7 +110,8 @@ class PushNotificationPipeline @Inject constructor(
             .setContentTitle(title ?: DEFAULT_TITLE)
             .setContentText(body.orEmpty())
             .setAutoCancel(true)
-            .setContentIntent(tapIntent(push, notificationId))
+            .setContentIntent(tapIntents.contentIntent(push.data, notificationId))
+            .setDeleteIntent(tapIntents.deleteIntent(payload.notificationId, notificationId))
             .setPriority(if (passive) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
             // « Sons » coupé ou livraison passive ⇒ ni son ni vibration.
             .setSilent(!playSound)
@@ -116,6 +122,7 @@ class PushNotificationPipeline @Inject constructor(
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         payload.replacesNotificationId?.let { manager.cancel(MessageNotificationId.forNotification(it)) }
         manager.notify(notificationId, builder.build())
+        interactions.emit(PushInteraction.Displayed(payload.notificationId))
         groupKey?.let { summaryNotifier.post(it, channelId, badge) }
         return true
     }
@@ -159,19 +166,6 @@ class PushNotificationPipeline @Inject constructor(
             if (rendered.size > DEDUP_CAPACITY) rendered.remove(rendered.first())
         }
         return true
-    }
-
-    private fun tapIntent(push: IncomingPush, requestCode: Int): PendingIntent {
-        val tapIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            PushTapExtras.put(this, push.data)
-        }
-        return PendingIntent.getActivity(
-            context,
-            requestCode,
-            tapIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
     }
 
     internal companion object {

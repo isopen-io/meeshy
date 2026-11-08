@@ -77,6 +77,7 @@ enum SocialSocketRoutes {
         [
             .raw(.conversationDeleted) { [weak m] data in m?.handleConversationLifecyclePayload(data) },
             .raw(.conversationClosed) { [weak m] data in m?.handleConversationLifecyclePayload(data) },
+            .raw(.conversationObsoleted) { [weak m] data in m?.handleConversationLifecyclePayload(data) },
         ]
     }
 }

@@ -19,13 +19,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,11 +53,21 @@ fun HashtagResultsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
-    val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
+    val sheets = rememberListedPostSheets()
+    val share = rememberListedPostShare(snackbar)
+    ListedPostOverlays(
+        sheets = sheets,
+        actions = viewModel.cards,
+        quoteComposer = state.quoteComposer,
+        notice = state.notice,
+        commentCount = { id -> state.posts.firstOrNull { it.id == id }?.commentCount ?: 0 },
+        commentsClosed = { id -> state.posts.firstOrNull { it.id == id }?.commentsClosed },
+        snackbar = snackbar,
+    )
 
     MeeshyBackground {
         Scaffold(
@@ -105,22 +113,16 @@ fun HashtagResultsScreen(
                             LaunchedEffect(post.id, state.posts.size) {
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
-                            PostCard(
+                            ListedPostCard(
                                 post = post,
-                                modifier = Modifier.animateItem(),
-                                onLike = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    viewModel.toggleLike(post.id)
-                                },
-                                onBookmark = { viewModel.toggleBookmark(post.id) },
-                                onFlagTap = {},
-                                onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
+                                actions = viewModel.cards,
+                                sheets = sheets,
+                                share = share,
                                 onOpenPost = onOpenPost,
                                 onOpenReel = onPostClick,
-                                onImageTap = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
-                                isOwn = post.isAuthor,
                                 onOpenProfile = onOpenProfile,
                                 onOpenHashtag = onOpenHashtag,
+                                modifier = Modifier.animateItem(),
                             )
                         }
                         if (state.isLoadingMore) {

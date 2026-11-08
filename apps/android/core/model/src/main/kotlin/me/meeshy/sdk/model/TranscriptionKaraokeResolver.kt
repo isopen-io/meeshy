@@ -58,4 +58,58 @@ public object TranscriptionKaraokeResolver {
         val proportional = (progress * segments.size).toInt()
         return proportional.coerceIn(0, segments.size - 1)
     }
+
+    /** Coupe de la carte (bulle), en caractères — sans rapport avec la coupe en mots de la rangée plate. */
+    public const val CARD_CHARACTER_LIMIT: Int = 255
+
+    public fun wordCount(segments: List<MessageTranscriptionSegment>): Int =
+        segments.sumOf { words(it.text).size }
+
+    /** `wordLimit <= 0` = pas de coupe : une limite nulle ne vide jamais le bloc. */
+    public fun exceedsWordLimit(segments: List<MessageTranscriptionSegment>, wordLimit: Int): Boolean =
+        wordLimit > 0 && wordCount(segments) > wordLimit
+
+    /**
+     * Les [wordLimit] premiers mots, ellipse posée sur le dernier segment gardé. Les horodatages du segment coupé sont
+     * conservés tels quels : le karaoké s'y appuie pour allumer et chercher.
+     */
+    public fun limitedSegments(segments: List<MessageTranscriptionSegment>, wordLimit: Int): List<MessageTranscriptionSegment> {
+        if (!exceedsWordLimit(segments, wordLimit)) return segments
+        var remaining = wordLimit
+        val kept = mutableListOf<MessageTranscriptionSegment>()
+        for (segment in segments) {
+            if (remaining <= 0) break
+            val words = words(segment.text)
+            if (words.size <= remaining) {
+                remaining -= words.size
+                kept += segment
+            } else {
+                kept += segment.copy(text = words.take(remaining).joinToString(" "))
+                remaining = 0
+            }
+        }
+        val last = kept.removeLastOrNull() ?: return kept
+        return kept + last.copy(text = last.text + "\u2026")
+    }
+
+    public fun exceedsCardLimit(segments: List<MessageTranscriptionSegment>): Boolean =
+        segments.sumOf { it.text.length } > CARD_CHARACTER_LIMIT
+
+    /** La coupe de la carte : 255 caractères, trois points sur le segment coupé. */
+    public fun cardSegments(segments: List<MessageTranscriptionSegment>): List<MessageTranscriptionSegment> {
+        var count = 0
+        val result = mutableListOf<MessageTranscriptionSegment>()
+        for (segment in segments) {
+            count += segment.text.length
+            if (count > CARD_CHARACTER_LIMIT) {
+                val trimmed = segment.text.dropLast(count - CARD_CHARACTER_LIMIT)
+                if (trimmed.isNotEmpty()) result += segment.copy(text = "$trimmed...")
+                break
+            }
+            result += segment
+        }
+        return result
+    }
+
+    private fun words(text: String): List<String> = text.split(Regex("\\s+")).filter { it.isNotEmpty() }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_effects_panel_shake">اهتزاز</string>
+    <string name="chat_effects_panel_zoom">تكبير</string>
+    <string name="chat_effects_panel_explode">انفجار</string>
+    <string name="chat_effects_panel_confetti">قصاصات ورقية</string>
+    <string name="chat_effects_panel_fireworks">ألعاب نارية</string>
+    <string name="chat_effects_panel_waoo">واو</string>
+    <string name="chat_effects_panel_glow">توهّج</string>
+    <string name="chat_effects_panel_pulse">نبض</string>
+    <string name="chat_effects_panel_rainbow">قوس قزح</string>
+    <string name="chat_effects_panel_sparkle">لمعان</string>
+    <string name="chat_effects_panel_section_entry">حركة الدخول</string>
+    <string name="chat_effects_panel_section_permanent">تأثير دائم</string>
+    <string name="chat_effects_panel_clear_all">مسح الكل</string>
+</resources>

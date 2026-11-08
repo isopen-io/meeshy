@@ -62,6 +62,8 @@ struct StoryViewersSheet: View {
             viewCount: story.viewCount,
             impressionCount: story.impressionCount,
             anonymousViewCount: story.anonymousViewCount,
+            reactionCount: story.reactionCount,
+            commentCount: story.commentCount,
             subject: .story,
             accentColor: accentColor,
             moodEmoji: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
@@ -79,9 +81,9 @@ struct StoryViewersSheet: View {
 /// d'une story et à ADMIN/BIGBOSS (`PublicationViewersAccess`) ; un refus (403)
 /// se DIT, il ne se montre jamais comme une liste vide.
 ///
-/// **Toucher une ligne REBONDIT et pousse son DÉTAIL** dans la pile de la
-/// feuille : ce que la personne a fait, en toutes lettres, et « Voir le
-/// profil ». Le retour natif rend la liste.
+/// **Toucher une ligne REBONDIT et ouvre son DÉTAIL en feuille PLEIN ÉCRAN**
+/// (#16386) : un en-tête et son chevron (<), ce que la personne a fait en
+/// toutes lettres, et « Voir le profil ». Le chevron rend la liste.
 ///
 /// Miroir web : `apps/web/src/components/publication-viewers-sheet.tsx`.
 struct PublicationViewersSheet: View {
@@ -94,6 +96,10 @@ struct PublicationViewersSheet: View {
     /// #10483 — les lecteurs SANS compte : jamais nommés, seulement comptés
     /// (« et N visiteurs »). `nil` d'un serveur antérieur — aucune ligne.
     var anonymousViewCount: Int? = nil
+    /// #16386 — l'en-tête dit aussi les réactions et les commentaires du
+    /// contenu. `nil` : la pastille ne se dessine pas.
+    var reactionCount: Int? = nil
+    var commentCount: Int? = nil
     let subject: PublicationViewersSubject
     let accentColor: Color
     let moodEmoji: (String) -> String?
@@ -139,11 +145,7 @@ struct PublicationViewersSheet: View {
                     )
                 } else {
                     List {
-                        Section(header: Text(String(localized: "story.viewer.viewsAndImpressions", defaultValue: "\(headerCounts.views) Vues · \(headerCounts.impressions) impressions", bundle: .main))
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .textCase(nil)
-                        ) {
+                        Section(header: PublicationViewersStats(stats: headerStats, accentColor: accentColor)) {
                             ForEach(viewers) { viewer in
                                 viewerRow(viewer)
                             }
@@ -170,19 +172,12 @@ struct PublicationViewersSheet: View {
                     .foregroundColor(accentColor)
                 }
             }
-            .navigationDestination(isPresented: Binding(
-                get: { openedViewer != nil },
-                set: { if !$0 { openedViewer = nil } }
-            )) {
-                if let viewer = openedViewer {
-                    ViewerEngagementDetailView(
-                        viewer: viewer,
-                        accentColor: accentColor,
-                        moodEmoji: moodEmoji(viewer.id),
-                        onOpenProfile: { onOpenProfile(viewer) }
-                    )
-                }
-            }
+            .modifier(ViewerEngagementDetailCover(
+                openedViewer: $openedViewer,
+                accentColor: accentColor,
+                moodEmoji: moodEmoji,
+                onOpenProfile: onOpenProfile
+            ))
             .task {
                 await loadViewers()
             }
@@ -246,6 +241,15 @@ struct PublicationViewersSheet: View {
         .accessibilityHint(String(localized: "viewer.engagement.openDetail.hint", defaultValue: "Ouvre ce que cette personne a fait", bundle: .main))
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         .listRowBackground(isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
+    }
+
+    private var headerStats: [PublicationViewersStat] {
+        PublicationViewersHeader.stats(
+            views: headerCounts.views,
+            impressions: headerCounts.impressions,
+            reactions: reactionCount,
+            comments: commentCount
+        )
     }
 
     private var headerCounts: (views: Int, impressions: Int) {
@@ -363,78 +367,6 @@ private struct ViewerEngagementStrip: View {
     }
 }
 
-// MARK: - Le détail d'une personne
-
-/// Ce qu'UNE personne a fait sur ce contenu, en toutes lettres, et le chemin
-/// vers son profil.
-struct ViewerEngagementDetailView: View {
-    let viewer: StoryViewerItem
-    let accentColor: Color
-    let moodEmoji: String?
-    let onOpenProfile: () -> Void
-
-    var body: some View {
-        List {
-            Section {
-                VStack(spacing: MeeshySpacing.sm) {
-                    LivePresence { MeeshyAvatar(
-                        name: viewer.displayName,
-                        context: .profileSheet,
-                        avatarURL: viewer.avatarUrl,
-                        moodEmoji: moodEmoji,
-                        presenceState: PresenceManager.shared.resolvedState(userId: viewer.id, isOnline: nil)
-                    ) }
-                    .padding(.vertical, MeeshySpacing.sm)
-                    .accessibilityHidden(true)
-
-                    Text(viewer.displayName)
-                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    Text(String(
-                        format: String(localized: "viewer.engagement.viewedAt", defaultValue: "Vu à %@", bundle: .main),
-                        viewer.viewedAt.formatted(date: .omitted, time: .shortened)
-                    ))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
-            }
-
-            Section(header: Text(String(localized: "viewer.engagement.detail.title", defaultValue: "Sur ce contenu", bundle: .main))) {
-                let marks = viewer.engagement.marks
-                if marks.isEmpty {
-                    Text(String(localized: "viewer.engagement.onlyViewed", defaultValue: "A vu, sans autre interaction", bundle: .main))
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(marks, id: \.self) { mark in
-                        Label {
-                            Text(ViewerEngagementWording.sentence(for: mark))
-                        } icon: {
-                            Image(systemName: ViewerEngagementWording.symbol(for: mark))
-                                .foregroundColor(accentColor)
-                        }
-                    }
-                }
-            }
-
-            Section {
-                Button {
-                    HapticFeedback.light()
-                    onOpenProfile()
-                } label: {
-                    Text(String(localized: "viewer.engagement.openProfile", defaultValue: "Voir le profil", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                        .foregroundColor(accentColor)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle(viewer.displayName)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 // MARK: - Les mots et les glyphes
 
 /// UNE source pour la phrase et le glyphe de chaque marque — la ligne, le
@@ -527,6 +459,8 @@ private struct PublicationViewersSheetModifier: ViewModifier {
                 viewCount: post.viewCount,
                 impressionCount: post.impressionCount,
                 anonymousViewCount: post.anonymousViewCount,
+                reactionCount: post.likes,
+                commentCount: post.commentCount,
                 subject: .publication,
                 accentColor: Color(hex: post.authorColor),
                 moodEmoji: { moodLookup?($0).emoji },

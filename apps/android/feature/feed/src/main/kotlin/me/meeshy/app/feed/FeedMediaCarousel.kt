@@ -31,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.FeedCarouselPaging
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -151,8 +153,8 @@ internal fun PageArrow(icon: ImageVector, label: String, modifier: Modifier, onC
 
 /** Sous les pages, sur le fond de la carte : posées dedans, elles disputeraient le bas à la légende. */
 @Composable
-internal fun PageDots(count: Int, current: Int) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+internal fun PageDots(count: Int, current: Int, accent: Color = MeeshyPalette.Indigo500, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(count) { position ->
             val active = position == current
             val width by animateDpAsState(targetValue = if (active) 18.dp else 6.dp, label = "feed-carousel-dot")
@@ -161,8 +163,110 @@ internal fun PageDots(count: Int, current: Int) {
                     .width(width)
                     .height(6.dp)
                     .clip(RoundedCornerShape(MeeshyRadius.pill))
-                    .background(MeeshyPalette.Indigo500.copy(alpha = if (active) 1f else 0.28f)),
+                    .background(accent.copy(alpha = if (active) 1f else 0.28f)),
             )
         }
+    }
+}
+
+internal const val FEED_CAROUSEL_DOTS_TAG: String = "feed-carousel-dots"
+
+/**
+ * **Le carrousel de la carte du fil — vue `3f`** (iOS `FeedPostCardCarousel`) : un média à la fois, tous types, avec SA légende
+ * superposée (vingt mots), le compteur « n / N », les pastilles sous le média, les flèches précédent / suivant (montées seulement
+ * là où elles ont un effet, et qui se retournent en arabe). La boîte prend le rapport du PREMIER média, figé pour tout le lot :
+ * une hauteur par page ferait sauter la carte à chaque glissement.
+ *
+ * L'index de page vit ICI : la carte ne peut pas l'apprendre, donc « la pagination ne change ni le texte du post ni l'annonce du
+ * son » est une impossibilité de structure.
+ */
+@Composable
+internal fun FeedMediaItemsCarousel(
+    media: List<FeedMediaItem>,
+    accent: Color,
+    carrierLanguage: String?,
+    onMediaTap: (Int) -> Unit,
+) {
+    val pagerState = rememberPagerState(pageCount = { media.size })
+    val scope = rememberCoroutineScope()
+    val lead = media.first()
+    val ratio = remember(lead.id) { feedMediaAspectRatio(lead.width, lead.height) }
+    val current = FeedCarouselPaging.page(pagerState.currentPage, media.size)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(ratio)
+                .clip(RoundedCornerShape(MeeshyRadius.md))
+                .background(FEED_MEDIA_GROUND),
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                key = { page -> media[page].id },
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                FeedCarouselSlide(
+                    item = media[page],
+                    position = page + 1,
+                    count = media.size,
+                    media = media,
+                    accent = accent,
+                    carrierLanguage = carrierLanguage,
+                    onMediaTap = onMediaTap,
+                )
+            }
+            PageCounter(position = current + 1, count = media.size, modifier = Modifier.align(Alignment.TopEnd))
+            if (current > 0) {
+                PageArrow(
+                    icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    label = stringResource(R.string.feed_carousel_previous),
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    onClick = { scope.launch { pagerState.animateScrollToPage(current - 1) } },
+                )
+            }
+            if (current < media.size - 1) {
+                PageArrow(
+                    icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    label = stringResource(R.string.feed_carousel_next),
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    onClick = { scope.launch { pagerState.animateScrollToPage(current + 1) } },
+                )
+            }
+        }
+        PageDots(count = media.size, current = current, accent = accent, modifier = Modifier.testTag(FEED_CAROUSEL_DOTS_TAG))
+    }
+}
+
+@Composable
+private fun FeedCarouselSlide(
+    item: FeedMediaItem,
+    position: Int,
+    count: Int,
+    media: List<FeedMediaItem>,
+    accent: Color,
+    carrierLanguage: String?,
+    onMediaTap: (Int) -> Unit,
+) {
+    val visual = FeedCardMediaRouting.isVisual(item)
+    val label = FeedCardMediaRouting.slideLabel(
+        position = stringResource(R.string.feed_carousel_a11y_position, position, count),
+        text = item.accessibilityDescription,
+    )
+    val galleryIndex = FeedCardMediaRouting.galleryIndex(media, item.id)
+    val onOpen = galleryIndex?.let { index -> { onMediaTap(index) } }
+    Box(Modifier.fillMaxSize()) {
+        FeedMediaCell(
+            item = item,
+            accent = accent,
+            carrierLanguage = carrierLanguage,
+            description = label,
+            onOpen = onOpen,
+            modifier = if (visual) Modifier.fillMaxSize() else Modifier.align(Alignment.Center).padding(horizontal = MeeshySpacing.md),
+        )
+        if (visual) FeedCaptionOverlay(caption = item.caption, modifier = Modifier.align(Alignment.BottomStart))
     }
 }

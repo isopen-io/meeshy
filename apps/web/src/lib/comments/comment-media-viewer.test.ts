@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FeedMedia } from '@/lib/api/feed-pages';
-import type { SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
 
 import { commentMediaAttachment, commentMediaPage, viewableCommentMedia } from './comment-media-viewer';
 
@@ -27,27 +26,21 @@ describe('le plein écran d’un média de commentaire (#13881)', () => {
     expect(attachment.isViewOnce || attachment.isBlurred || attachment.isEncrypted).toBe(false);
   });
 
-  test('la page offre Partager ET Imager ; Imager rend la MÊME pièce, composée, filigranée par l’auteur du commentaire', () => {
-    const launched: SceneExportSubject[] = [];
-    const page = commentMediaPage({ piece: piece(), commentId: 'c-1', watermark: 'alice', imager: (subject) => launched.push(subject) });
+  test('la page offre Partager ET Imager ; Imager remet CETTE pièce à l’atelier de carte (#16393)', () => {
+    const imaged: FeedMedia[] = [];
+    const page = commentMediaPage({ piece: piece(), commentId: 'c-1', imager: (chosen) => imaged.push(chosen) });
     expect(page?.offers.share).toBe(true);
     expect(page?.share?.intent).toBe('share');
     page?.imager?.();
-    expect(launched).toHaveLength(1);
-    const [subject] = launched;
-    expect(subject?.key).toBe('comment:c-1:pm-1');
-    expect(subject?.fileStem).toBe('comment-c-1');
-    expect(subject?.watermark).toBe('alice');
-    expect(subject?.carrier.media.map((m) => m.mimeType)).toEqual(['video/mp4']);
-    expect(subject?.document.scenes[0]?.timelineDuration).toBe(90);
+    expect(imaged.map((chosen) => chosen.id)).toEqual(['pm-1']);
   });
 
   test('une photo s’image aussi (image fixe)', () => {
-    const page = commentMediaPage({ piece: piece({ mimeType: 'image/jpeg', duration: null }), commentId: 'c-1', watermark: null, imager: () => undefined });
+    const page = commentMediaPage({ piece: piece({ mimeType: 'image/jpeg', duration: null }), commentId: 'c-1', imager: () => undefined });
     expect(page?.imager).toBeDefined();
   });
 
   test('une pièce qui ne peut pas sortir (aperçu local de l’appareil) n’offre ni Partager ni Imager', () => {
-    expect(commentMediaPage({ piece: piece({ fileUrl: 'blob:http://local/1' }), commentId: 'c-1', watermark: null, imager: () => undefined })).toBeNull();
+    expect(commentMediaPage({ piece: piece({ fileUrl: 'blob:http://local/1' }), commentId: 'c-1', imager: () => undefined })).toBeNull();
   });
 });

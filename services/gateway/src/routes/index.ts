@@ -147,6 +147,7 @@ import { gloryFramePacksRoutes } from './packs-glory-frame';
 import { captureFramePacksRoutes } from './packs-capture-frame';
 import { lensPacksRoutes } from './packs-lens';
 import { lensPartnerRoutes } from './lens-partners';
+import { packPublisherRoutes } from './pack-publishers';
 import { packAssetsRoutes } from './pack-assets';
 import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
 import { packsShopRoutes } from './packs-shop';
@@ -160,6 +161,7 @@ import { directoryFriendRequestsRoutes } from './directory/friend-requests';
 import { relationsRoutes } from './relations';
 import { directoryContactsRoutes } from './directory/contacts';
 import { relationsLevelRoutes } from './relations/level';
+import { bringRoutes } from './bring';
 import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
 import conversationPreferencesRoutes from './conversation-preferences';
@@ -384,6 +386,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // L'identité des partenaires, le crédit « Lens par X » et l'usage k-anonyme (#11327). Préfixe
   // DISTINCT de `/packs/lens` : ses chemins statiques (`credits`, `partners`) y masqueraient des slugs.
   { name: 'lens-partners', prefix: `${API_PREFIX}/lens`, module: lensPartnerRoutes },
+  // Les éditeurs de packs (#16274) : l'éditeur d'un compte, sa fiche en boutique, et leur liste avec propriétaire pour l'admin.
+  { name: 'pack-publishers', prefix: `${API_PREFIX}/publishers`, module: packPublisherRoutes },
   { name: 'packs-shop', prefix: `${API_PREFIX}/packs/shop`, module: packsShopRoutes },
   // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
   // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
@@ -401,6 +405,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
   // Le niveau EFFECTIF du lien avec une personne (#13998) — lecture seule, niveauEffectif pour seule loi.
   { name: 'relations-level', prefix: `${API_PREFIX}/relations`, module: relationsLevelRoutes },
+  // Le Bring (#13936, D-3) : faire sonner un Ami, un Proche ou un Sang pour l'urgence extrême.
+  { name: 'bring', prefix: `${API_PREFIX}/bring`, module: bringRoutes },
   // La carte de visite partagée (#8101) — vCard → profils publics. Montage
   // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
   { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },

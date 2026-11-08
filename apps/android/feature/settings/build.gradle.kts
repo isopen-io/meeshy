@@ -26,6 +26,12 @@ android {
             isReturnDefaultValues = true
         }
     }
+    sourceSets {
+        getByName("test") {
+            java.srcDir(rootProject.file("test-support/compose-robolectric/kotlin"))
+            resources.srcDir(rootProject.file("test-support/compose-robolectric/resources"))
+        }
+    }
 }
 
 dependencies {
@@ -36,6 +42,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // #16269 — la fiche et le plein écran de la boutique se referment au retour système (BackHandler).
+    implementation(libs.androidx.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)
     implementation(libs.hilt.android)
@@ -43,6 +51,9 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.work.runtime)
     implementation(libs.coil.compose)
+    implementation(libs.play.review.ktx)
+    // lot: cache-purge-attribution-service — la purge par clé lit et vide les SimpleCache Media3 (audio, vidéo).
+    implementation(libs.androidx.media3.datasource)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 

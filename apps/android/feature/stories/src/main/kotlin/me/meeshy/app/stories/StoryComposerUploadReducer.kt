@@ -39,13 +39,15 @@ internal object StoryComposerUploadReducer {
         landings: List<ComposerMediaPlacement.Landing>,
         refused: Int = 0,
         items: List<MediaUploadItem> = emptyList(),
+        hints: List<IncomingMediaHint> = emptyList(),
     ): StoryComposerUiState =
         state.copy(
-            isUploadingMedia = true,
+            isPreparingMedia = true,
             errorMessage = SLIDES_FULL.takeIf { refused > 0 },
             uploadingMedia = List(landings.size) { MediaUploadProgress.Idle },
             mediaLandings = landings,
             incomingMedia = items,
+            incomingHints = hints,
             canRetryMedia = false,
         )
 
@@ -70,15 +72,6 @@ internal object StoryComposerUploadReducer {
             acc.landing(media.id, landings.getOrNull(index), asBackground && index == 0)
         }
         return settled(landed).mirrorDraftToSelection()
-    }
-
-    /**
-     * One media of the pick, RECEIVED (#13959): it takes the place decided for it at the pick ([index]), whatever became of
-     * its siblings — a video the gateway holds is never thrown back into the queue because the photo picked with it failed.
-     */
-    fun landedAt(state: StoryComposerUiState, media: UploadedMedia, asBackground: Boolean = false, index: Int? = 0): StoryComposerUiState {
-        val landing = index?.let(state.mediaLandings::getOrNull) ?: landings(state, 1, asBackground).firstOrNull()
-        return state.copy(attachments = state.attachments + media).landing(media.id, landing, asBackground && index == 0).mirrorDraftToSelection()
     }
 
     /**
@@ -109,13 +102,7 @@ internal object StoryComposerUploadReducer {
         if (mediaId == null || isSelectedBackgroundMedia(mediaId)) this else toggleSelectedBackgroundMedia(mediaId)
 
     fun settled(state: StoryComposerUiState): StoryComposerUiState =
-        state.copy(isUploadingMedia = false, uploadingMedia = emptyList(), mediaLandings = emptyList(), incomingMedia = emptyList())
-
-    /**
-     * A pick whose location cannot be removed (#13550) is NOT kept behind a placeholder: the same bytes would be refused on
-     * every retry. The pick is dropped and [LOCATION_REFUSED] tells the author to choose another file.
-     */
-    fun locationRefused(state: StoryComposerUiState): StoryComposerUiState = settled(state).copy(errorMessage = LOCATION_REFUSED)
+        state.copy(isPreparingMedia = false, uploadingMedia = emptyList(), mediaLandings = emptyList(), incomingMedia = emptyList(), incomingHints = emptyList())
 
     /** The upload failed because a media's location cannot be removed ([MediaLocationRefusal]), not for a reason a retry could fix. */
     fun refusesForLocation(error: ApiError): Boolean = MediaLocationRefusal.isCode(error.code)

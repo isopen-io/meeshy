@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="paste_media_too_large">Cet élément est trop volumineux pour être collé.</string>
+</resources>

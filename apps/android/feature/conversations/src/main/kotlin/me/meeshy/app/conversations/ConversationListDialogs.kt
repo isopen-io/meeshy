@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,6 +46,8 @@ internal fun ConversationListDialogHost(
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 4) }
     val openSettings by rememberUpdatedState(onOpenSettings)
     val armSearch by rememberUpdatedState(onOpenConversationSearch)
+    val uriHandler = LocalUriHandler.current
+    val openUrl by rememberUpdatedState { url: String -> uriHandler.openUri(url) }
     LaunchedEffect(controller) {
         controller.effects.collect { effect ->
             when (effect) {
@@ -52,6 +55,7 @@ internal fun ConversationListDialogHost(
                 is ConversationListDialogEffect.Toast -> toasts.tryEmit(effect.request)
                 ConversationListDialogEffect.OpenSettings -> openSettings()
                 is ConversationListDialogEffect.ArmSearch -> armSearch(effect.conversationId)
+                is ConversationListDialogEffect.OpenUrl -> openUrl(effect.url)
             }
         }
     }
@@ -72,6 +76,13 @@ internal fun ConversationListDialogHost(
             message = stringResource(R.string.dialogs_removal_message, current.conversationName),
             confirmLabel = stringResource(current.removal.labelRes()),
             onConfirm = controller::confirmRemoval,
+            onDismiss = controller::dismiss,
+        )
+        is ConversationListDialog.Obsolete -> ConfirmDialog(
+            title = stringResource(R.string.conversations_obsolete_confirm_title),
+            message = stringResource(R.string.conversations_obsolete_confirm_message, current.conversationName),
+            confirmLabel = stringResource(R.string.conversations_obsolete_confirm_button),
+            onConfirm = controller::confirmObsolete,
             onDismiss = controller::dismiss,
         )
         is ConversationListDialog.Leave -> ConfirmDialog(
@@ -101,11 +112,23 @@ internal fun ConversationListDialogHost(
             onSubmit = controller::submitReport,
             onDismiss = controller::dismiss,
         )
-        is ConversationListDialog.Info, is ConversationListDialog.Invite -> Unit
+        is ConversationListDialog.Info -> Unit
+        is ConversationListDialog.Invite -> controller.conversationOf(current.conversationId)?.let { conversation ->
+            InviteFriendsSheet(
+                conversationId = current.conversationId,
+                info = InviteConversationInfo(
+                    name = controller.displayTitleOf(current.conversationId).orEmpty(),
+                    memberCount = conversation.memberCount,
+                    type = conversation.type,
+                ),
+                accent = hexColor(conversation.accentColorPalette().primary, MeeshyPalette.Indigo500),
+                onDismiss = controller::dismiss,
+            )
+        }
     }
 }
 
-/** « Infos » et « Inviter » : pris une fois ([ConversationListDialogController.takeNavigation]), puis ouverts. */
+/** « Infos » : pris une fois ([ConversationListDialogController.takeNavigation]), puis ouvert. « Inviter » a sa feuille. */
 private fun routeNavigation(
     dialog: ConversationListDialog,
     controller: ConversationListDialogController,
@@ -113,7 +136,6 @@ private fun routeNavigation(
 ) {
     val open = when (dialog) {
         is ConversationListDialog.Info -> navigation.onViewInfo
-        is ConversationListDialog.Invite -> navigation.onCreateShareLink
         else -> return
     }
     if (controller.takeNavigation(dialog)) open?.invoke(dialog.conversationId)

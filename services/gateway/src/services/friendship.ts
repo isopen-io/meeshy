@@ -126,6 +126,26 @@ export async function niveauEffectif(prisma: RelationLevelDb, a: string, b: stri
 }
 
 /**
+ * La paire a-t-elle été liée au SANG depuis `since` (#14110, MIN-04, audit M3) ?
+ * Lu sur la LIGNE enregistrée, jamais sur un verdict d'accès : la loi rend
+ * `allowed: false` dès qu'il y a blocage, et bloquer puis signaler est le geste
+ * naturel. Une baisse posée depuis `since` (transition partant du Sang) compte
+ * encore : la baisse juste avant de signaler n'efface pas ce qui qualifie le
+ * signalement. Aucun accès n'en dépend : la réponse ORDONNE la file, elle ne
+ * garde rien.
+ */
+export async function lienSangDepuis(prisma: Pick<PrismaClient, 'userRelation'>, a: string, b: string, since: Date): Promise<boolean> {
+  if (!a || !b || a === b) return false;
+  const ligne: UserRelationRow | null = await prisma.userRelation.findUnique({
+    where: { userLowId_userHighId: relationPairKey(a, b) },
+    select: LINK_SELECT,
+  });
+  if (!ligne) return false;
+  if (grantedMinimum(ligne) === 'BLOOD') return true;
+  return (ligne.transitions ?? []).some((t) => t.from === 'BLOOD' && t.at instanceof Date && t.at.getTime() >= since.getTime());
+}
+
+/**
  * {@link niveauEffectif}, lu de façon UNIFORME : la ligne et la demande acceptée
  * sont lues ensemble, quel que soit le lien. Pour une porte dont le LECTEUR
  * choisit la cible (`GET /relations/:userId`) : le nombre de lectures ne dit

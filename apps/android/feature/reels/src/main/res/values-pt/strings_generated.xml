@@ -1,10 +1,11 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_action_comment">Comentar</string>
+    <string name="reels_action_repost">Republicar</string>
     <string name="reels_action_send">Enviar</string>
     <string name="reels_author_profile">Perfil do autor</string>
     <string name="reels_caption_translated">Tradução disponível</string>
     <string name="reels_close">Fechar</string>
-    <string name="reels_comments">Comentários</string>
     <string name="reels_comments_composer_hint">Comentar…</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d comentário</item>
@@ -20,6 +21,7 @@
     <string name="reels_like">Curtir</string>
     <string name="reels_menu_copy_text">Copiar o texto</string>
     <string name="reels_menu_delete">Excluir</string>
+    <string name="reels_menu_edit">Editar</string>
     <string name="reels_menu_hint">Abre o menu de ações</string>
     <string name="reels_menu_open">Abrir</string>
     <string name="reels_menu_pin">Fixar</string>
@@ -27,7 +29,13 @@
     <string name="reels_menu_share">Compartilhar</string>
     <string name="reels_mute">Silenciar</string>
     <string name="reels_open_failure_back">Voltar</string>
-    <string name="reels_repost">Republicar</string>
+    <string name="reels_report_reason_harassment">Assédio</string>
+    <string name="reels_report_reason_hate_speech">Discurso de ódio</string>
+    <string name="reels_report_reason_impersonation">Falsidade ideológica</string>
+    <string name="reels_report_reason_inappropriate">Conteúdo inadequado</string>
+    <string name="reels_report_reason_other">Outro</string>
+    <string name="reels_report_reason_spam">Spam</string>
+    <string name="reels_report_reason_violence">Violência</string>
     <string name="reels_scrub">Avançar ou voltar</string>
     <string name="reels_share">Compartilhar</string>
     <string name="reels_toast_delete_failed">Erro ao excluir a publicação</string>
@@ -36,6 +44,8 @@
     <string name="reels_toast_pinned">Publicação fixada</string>
     <string name="reels_toast_report_failed">Erro ao denunciar a publicação</string>
     <string name="reels_toast_reported">Publicação denunciada</string>
+    <string name="reels_toast_repost_failed">Erro ao republicar</string>
+    <string name="reels_toast_reposted">Republicado</string>
     <string name="reels_unlike">Descurtir</string>
     <string name="reels_unmute">Ativar o som</string>
     <string name="reels_views">Visualizações</string>

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "audio.consent.notice.message",
+          "androidName": "audio_consent_notice_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "audio.consent.notice.action",
+          "androidName": "audio_consent_notice_action",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

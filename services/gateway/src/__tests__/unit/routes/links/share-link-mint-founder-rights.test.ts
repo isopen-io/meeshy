@@ -18,6 +18,13 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../routes/links/utils/link-helpers', () => ({
   ...(jest.requireActual('../../../../routes/links/utils/link-helpers') as object),
   generateUniqueShareLinkId: jest.fn<any>().mockResolvedValue('mshy_TestLnk1'),

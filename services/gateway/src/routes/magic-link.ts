@@ -167,8 +167,9 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
        * AVANT toute lecture du compte (`startAccountFromEmail`, porte
        * `email-only`), donc il parle de l'APPELANT.
        *
-       * Tout autre cas — compte créé, compte existant, compte supprimé — rend
-       * la MÊME réponse : c'est la garde anti-énumération.
+       * Tout autre cas — compte créé, compte existant, compte supprimé, adresse
+       * réservée ou jetable sans compte (#16491 : rien n'est créé ni envoyé) —
+       * rend la MÊME réponse : c'est la garde anti-énumération.
        */
       if (issue.kind === 'rate-limited') {
         return sendError(reply, 429, 'Too many requests. Please try again in about an hour.', { code: 'RATE_LIMITED' });

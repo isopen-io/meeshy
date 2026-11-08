@@ -52,7 +52,7 @@ export const SYNTHESIS_STRINGS: Readonly<Record<NotificationLanguage, SynthesisS
       archive: ['archive', 'archives'], contact: ['carte de visite', 'cartes de visite'], file: ['fichier', 'fichiers'],
     },
     countPhrase: '{n} {noun}', listSeparator: ', ',
-    location: 'Position partagée', link: 'Lien web', invitation: 'Invitation à une conversation', sticker: 'Autocollant',
+    location: 'Position partagée', link: 'Lien web', invitation: 'Invitation à une conversation', sticker: 'Sticker',
   },
   en: {
     text: ['One-word message', 'Short text message', 'Text message', 'Long text message', 'Short text essay', 'Text essay', 'Long text essay'],

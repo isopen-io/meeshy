@@ -1,17 +1,15 @@
 package me.meeshy.app.chat
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import me.meeshy.ui.component.focal.ScrollTimePill
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
@@ -48,11 +46,12 @@ internal fun ChatMessageList(
     renderedItems: List<ChatListItem>,
     accentColor: Color,
     isLoadingOlder: Boolean,
-    pinnedDayMillis: Long?,
+    scrollTimePill: ScrollTimePillState,
     scrollAffordance: ScrollAffordanceState,
     typingParticipants: List<TypingParticipant>,
     isOffline: Boolean,
     onScrollToBottom: () -> Unit,
+    scrollConnection: NestedScrollConnection,
     modifier: Modifier = Modifier,
     /** La hauteur de l'en-tête flottant posé au-dessus du fil : les bulles passent dessous. */
     topInset: Dp = 0.dp,
@@ -61,9 +60,6 @@ internal fun ChatMessageList(
     itemContent: @Composable (ChatListItem) -> Unit,
 ) {
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // La pastille garde son dernier jour le temps de son fondu de sortie (iOS : 0,18 s).
-    var lastPinnedDay by remember { mutableStateOf(pinnedDayMillis) }
-    if (pinnedDayMillis != null) lastPinnedDay = pinnedDayMillis
     val rowKeys = remember(renderedItems) { layoutKeys(renderedItems) }
     Box(modifier = modifier) {
         LazyColumn(
@@ -71,6 +67,7 @@ internal fun ChatMessageList(
             reverseLayout = true,
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(scrollConnection)
                 .topEdgeVeil(statusBarHeight = statusBarHeight, bandHeight = topInset),
             contentPadding = PaddingValues(top = MeeshySpacing.sm + topInset, bottom = MeeshySpacing.sm + bottomInset),
         ) {
@@ -78,27 +75,24 @@ internal fun ChatMessageList(
             // at the visual TOP — so the "loading older history" spinner
             // goes AFTER `items(renderedItems)` (not before, as it did
             // pre-flip) to land above the oldest currently-loaded message.
-            itemsIndexed(renderedItems, key = { index, _ -> rowKeys[index] }) { _, item ->
+            itemsIndexed(renderedItems, key = { index, _ -> rowKeys[index] }, contentType = { _, item -> item.contentType }) { _, item ->
                 Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = ARRIVAL_SPEC, placementSpec = PLACEMENT_SPEC, fadeOutSpec = ARRIVAL_SPEC)) {
                     itemContent(item)
                 }
             }
             if (isLoadingOlder) {
-                item(key = "loading-older") {
+                item(key = "loading-older", contentType = LOADING_OLDER_CONTENT_TYPE) {
                     ChatLoadingOlderIndicator(accentColor)
                 }
             }
         }
-        AnimatedVisibility(
-            visible = pinnedDayMillis != null,
-            enter = fadeIn(tween(PINNED_DAY_FADE_MS)),
-            exit = fadeOut(tween(PINNED_DAY_FADE_MS)),
+        ScrollTimePill(
+            label = { scrollTimePill.label },
+            isVisible = { scrollTimePill.isVisible },
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = MeeshySpacing.sm + topInset),
-        ) {
-            lastPinnedDay?.let { millis -> PinnedDayHeaderPill(dayMillis = millis) }
-        }
+                .padding(top = FocalMetrics.Pill.TOP.toFloat().dp),
+        )
         ScrollToBottomControl(
             affordance = scrollAffordance,
             typingParticipants = typingParticipants,

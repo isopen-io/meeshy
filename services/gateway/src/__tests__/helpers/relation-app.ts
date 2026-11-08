@@ -55,6 +55,8 @@ export type AppOptions = {
   readonly naissances?: Readonly<Record<string, Date | null>>;
   readonly headers?: Readonly<Record<string, string>>;
   readonly cache?: Map<string, string>;
+  /** Les lignes `RelationFeatureSetting` déjà écrites (consentements du rituel, réglages). */
+  readonly reglages?: ReadonlyArray<Record<string, unknown>>;
 };
 
 export type TestApp = {
@@ -62,6 +64,8 @@ export type TestApp = {
   readonly emissions: Emission[];
   readonly notifier: Record<string, jest.Mock>;
   readonly consents: Record<string, unknown>[];
+  /** L'état des lignes `RelationFeatureSetting` après les appels. */
+  readonly reglages: () => Record<string, unknown>[];
   /** Le double Prisma, pour qu'un témoin fasse ÉCHOUER une écriture précise. */
   readonly prisma: Readonly<Record<'friendRequest' | 'userRelation', Record<string, unknown>>>;
   readonly call: (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, body?: unknown, as?: string) => Promise<{ status: number; body: any }>;
@@ -77,6 +81,9 @@ export async function buildRelationApp(
   const store = relationStore({ friendRequests: options.demandes ?? [], relations: options.liens ?? [] });
   const emissions: Emission[] = [];
   const consents: Record<string, unknown>[] = [];
+  const reglages: Record<string, unknown>[] = (options.reglages ?? []).map((r) => ({ ...r }));
+  const reglageDe = (where: { ownerId?: unknown; otherId?: unknown }) =>
+    reglages.filter((r) => r.ownerId === where.ownerId && r.otherId === where.otherId);
   const jours = [...(options.jours ?? [])];
   const notifier = {
     createFriendRequestNotification: jest.fn(async () => undefined),
@@ -118,7 +125,22 @@ export async function buildRelationApp(
     userRelation: store.prisma.userRelation,
     pairInteractionDay: { findMany: jest.fn(async () => jours) },
     relationFeatureSetting: {
-      upsert: jest.fn(async (args: { create: Record<string, unknown> }) => { consents.push(args.create); return args.create; }),
+      upsert: jest.fn(async (args: { where: { ownerId_otherId: { ownerId: string; otherId: string } }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        consents.push(args.create);
+        const [found] = reglageDe(args.where.ownerId_otherId);
+        if (found) return Object.assign(found, args.update);
+        reglages.push({ ...args.create });
+        return args.create;
+      }),
+      findUnique: jest.fn(async (args: { where: { ownerId_otherId: { ownerId: string; otherId: string } } }) => {
+        const [found] = reglageDe(args.where.ownerId_otherId);
+        return found ? { ...found } : null;
+      }),
+      updateMany: jest.fn(async (args: { where: { ownerId: string; otherId: string }; data: Record<string, unknown> }) => {
+        const found = reglageDe(args.where);
+        found.forEach((r) => Object.assign(r, args.data));
+        return { count: found.length };
+      }),
     },
     conversation: {
       findFirst: jest.fn(async () => null),
@@ -145,7 +167,7 @@ export async function buildRelationApp(
   await app.ready();
   void CACHE;
   return {
-    store, emissions, notifier, consents, prisma,
+    store, emissions, notifier, consents, prisma, reglages: () => reglages.map((r) => ({ ...r })),
     call: async (method, url, body, as) => {
       acting = as ?? options.userId ?? MOI;
       const res = await app.inject({

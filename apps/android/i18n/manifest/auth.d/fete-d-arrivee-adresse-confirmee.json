@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "arrival.celebration.title", "androidName": "arrival_celebration_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "arrival.celebration.lead", "androidName": "arrival_celebration_lead", "status": "adopted" },
+        { "catalog": "app", "iosKey": "arrival.celebration.skip", "androidName": "arrival_celebration_skip", "status": "adopted" },
+        { "catalog": "app", "iosKey": "arrival.celebration.status", "androidName": "arrival_celebration_status", "status": "adopted" }
+      ]
+    }
+  }
+}

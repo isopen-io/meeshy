@@ -381,7 +381,10 @@ final class ConversationViewModelTests: XCTestCase {
 
         let grew = await MessageStoreObservationHelper.awaitMessagesCount(equals: 201, in: sut)
         XCTAssertTrue(grew, "the offline path must surface the GRDB-cached older message")
-        XCTAssertEqual(mockMessageService.listBeforeCallCount, 1, "the REST call must still be attempted (to extend the window)")
+        let attempted = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listBeforeCallCount == 1
+        }
+        XCTAssertTrue(attempted, "the REST call must still be attempted (to extend the window)")
         XCTAssertEqual(
             messageCountWhenRESTFired, 201,
             "cache-FIRST : la page GRDB doit être servie AVANT l'appel réseau — un gateway mort ne doit jamais retarder des rangées déjà sur disque"

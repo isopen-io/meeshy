@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_prompt_placeholder" translatable="false">+33 6 12 34 56 78</string>
+</resources>

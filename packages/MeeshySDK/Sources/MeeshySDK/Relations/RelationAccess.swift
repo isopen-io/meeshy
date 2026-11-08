@@ -49,6 +49,12 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case relayCommentersOnMyPosts = "relay.commentersOnMyPosts"
     case relayMyCommentsElsewhere = "relay.myCommentsElsewhere"
     case dmDirect = "dm.direct"
+    case dmRequest = "dm.request"
+    case dmReadReceipts = "dm.readReceipts"
+    case dmTyping = "dm.typing"
+    case presenceDnd = "presence.dnd"
+    case callRing = "call.ring"
+    case viewsIdentity = "views.identity"
     case audienceAcquaintances = "audience.acquaintances"
     case audienceClose = "audience.close"
     case audienceBlood = "audience.blood"
@@ -78,8 +84,9 @@ public enum RelationFeature: String, CaseIterable, Sendable {
              .audienceClose, .listeningCategory, .talkie: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity: return .blood
-        case .dmDirect, .audienceAcquaintances: return .acquaintance
-        case .acquaintanceAuto: return .public
+        case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
+        case .acquaintanceAuto, .dmRequest, .callRing: return .public
+        case .viewsIdentity: return .community
         }
     }
 
@@ -97,14 +104,42 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// (`RELATION_DIRECTED_FEATURES`).
     public var isDirected: Bool {
         switch self {
-        case .bring, .talkie, .acquaintanceAuto: return true
+        case .bring, .talkie, .acquaintanceAuto, .dmRequest, .callRing: return true
         default: return false
         }
+    }
+
+    /// Le bouclier des mineurs (`RELATION_MINOR_TARGET_MIN_LEVEL`, RG-21) : le
+    /// niveau qu'un viewer non mineur doit atteindre face à un mineur DÉCLARÉ.
+    /// `nil` = la feature n'est pas bouclée.
+    public var minorTargetMinimum: RelationLevel? {
+        switch self {
+        case .dmRequest: return .acquaintance
+        case .callRing: return .friend
+        default: return nil
+        }
+    }
+
+    /// Le minimum de la matrice, relevé par le bouclier quand un viewer non
+    /// mineur s'adresse à un mineur déclaré — jamais abaissé.
+    public func minimumLevel(viewerMinor: RelationAgeClass, targetMinor: RelationAgeClass) -> RelationLevel {
+        guard let shield = minorTargetMinimum, targetMinor == .minor, viewerMinor != .minor else { return minimumLevel }
+        return max(minimumLevel, shield)
     }
 
     /// Les seules features qu'ADMIN/BIGBOSS lit sans lien (`RELATION_PRESENCE_FEATURES`).
     public var isPresence: Bool {
         self == .presenceOnline || self == .presenceDetailed
+    }
+
+    /// Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : une audience de
+    /// contenu, une notification d'entourage, la Connaissance automatique restent au lien réel.
+    public var isClosedToTeam: Bool {
+        switch self {
+        case .notifyNewContent, .relayCommentersOnMyPosts, .relayMyCommentsElsewhere,
+             .audienceAcquaintances, .audienceClose, .audienceBlood, .acquaintanceAuto: return true
+        default: return false
+        }
     }
 }
 
@@ -144,6 +179,8 @@ public struct RelationAccessInput: Sendable, Equatable {
     public let viewerMinor: RelationAgeClass
     public let targetMinor: RelationAgeClass
     public let viewerRole: PlatformRole?
+    /// Le rôle de la cible : `nil` (absent ou inconnu), le privilège d'équipe reste fermé (#16623).
+    public let targetRole: PlatformRole?
     public let feature: RelationFeature
     public let consent: RelationConsent?
 
@@ -152,7 +189,8 @@ public struct RelationAccessInput: Sendable, Equatable {
         grantedByViewer: RelationLevel, grantedByTarget: RelationLevel,
         sharesCommunity: Bool, blockedEitherWay: Bool,
         viewerMinor: RelationAgeClass, targetMinor: RelationAgeClass,
-        viewerRole: PlatformRole?, feature: RelationFeature, consent: RelationConsent?
+        viewerRole: PlatformRole?, targetRole: PlatformRole? = nil,
+        feature: RelationFeature, consent: RelationConsent?
     ) {
         self.viewerId = viewerId
         self.targetId = targetId
@@ -163,6 +201,7 @@ public struct RelationAccessInput: Sendable, Equatable {
         self.viewerMinor = viewerMinor
         self.targetMinor = targetMinor
         self.viewerRole = viewerRole
+        self.targetRole = targetRole
         self.feature = feature
         self.consent = consent
     }
@@ -176,7 +215,9 @@ public struct RelationAccessInput: Sendable, Equatable {
 /// pas PROPOSER une action qu'il refusera. Pur, sans état, sans I/O.
 ///
 /// Ordre des verdicts : blocage, identité absente, soi, rôle (présence seule),
-/// âge (Connaissance automatique seule), niveau, consentement.
+/// âge (Connaissance automatique seule), niveau (relevé par le bouclier des
+/// mineurs, refus dit `level`), consentement. Entre deux comptes de l'équipe, le
+/// niveau d'un outil vaut Sang (#16623), sauf face à un mineur déclaré.
 public struct RelationAccess: Sendable, Equatable {
     public let allowed: Bool
     public let effectiveLevel: RelationLevel
@@ -194,8 +235,16 @@ public struct RelationAccess: Sendable, Equatable {
         return granted == .public && sharesCommunity ? .community : granted
     }
 
+    /// Le privilège d'équipe s'applique-t-il à cette paire, pour cette feature (`teamOpens`) ?
+    static func teamOpens(_ input: RelationAccessInput) -> Bool {
+        input.viewerRole?.isTeam == true
+            && input.targetRole?.isTeam == true
+            && !input.feature.isClosedToTeam
+            && !(input.targetMinor == .minor && input.viewerMinor != .minor)
+    }
+
     public static func resolve(_ input: RelationAccessInput) -> RelationAccess {
-        let level = combinedLevel(
+        let level = teamOpens(input) ? .blood : combinedLevel(
             grantedByViewer: input.grantedByViewer,
             grantedByTarget: input.grantedByTarget,
             sharesCommunity: input.sharesCommunity
@@ -216,7 +265,7 @@ public struct RelationAccess: Sendable, Equatable {
             return RelationAccess(allowed: false, effectiveLevel: level, reason: .minor, requiresConsent: false)
         }
 
-        let reached = level >= feature.minimumLevel
+        let reached = level >= feature.minimumLevel(viewerMinor: input.viewerMinor, targetMinor: input.targetMinor)
         guard reached, feature.requiresConsent else {
             return RelationAccess(allowed: reached, effectiveLevel: level, reason: .level, requiresConsent: false)
         }

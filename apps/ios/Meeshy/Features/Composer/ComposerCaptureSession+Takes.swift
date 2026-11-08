@@ -79,10 +79,8 @@ extension ComposerCaptureSession {
     /// cadrage ont besoin d'une géométrie : la vue les fait elle-même.
     func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?) {
         switch action {
-        case .photoToEdit:
-            shootPhoto(intent: .edit)
-        case .photoToGallery:
-            shootPhoto(intent: frameIntent)
+        case .photoToEdit, .photoToGallery:
+            shootPhoto(intent: action == .photoToEdit ? .edit : frameIntent)
         case .filmSegment:
             beginHold()
         case .filmToGallery:
@@ -111,9 +109,12 @@ extension ComposerCaptureSession {
         endHold()
     }
 
-    /// L'intention voyage avec la demande ; l'obturateur la fige en partant.
+    /// L'intention voyage avec la demande ; le retardateur (CAM-4) la diffère.
     func shootPhoto(intent: ComposerTakeIntent) {
-        photographWhenReady(intent: intent)
+        selfTimer.run { [weak self] in
+            self?.camera.noteShutterPress()
+            self?.photographWhenReady(intent: intent)
+        }
     }
 
     /// L'appui long de la miniature : la tenue de la scène, vers la galerie —
@@ -207,9 +208,9 @@ extension ComposerCaptureSession {
         guard let url = camera.capturedVideoURL else { return }
         let intent = filmIntents.removeValue(forKey: id) ?? .edit
         guard stage != .off || intent == .gallery else {
-            discardTake(url, context: "prise arrivée après la fermeture du viseur")
-            return
+            return discardTake(url, context: "prise arrivée après la fermeture du viseur")
         }
+        if stage == .recording { closeTake() } // Close par le système (appel, arrière-plan, Siri : OPUS-11).
         switch intent {
         case .gallery where stage == .off: saveRenderedVideo(url)
         case .gallery: openFrameTake(video: url)
@@ -236,13 +237,12 @@ extension ComposerCaptureSession {
     func saveRenderedPhoto(_ image: UIImage, data: Data?) {
         let repli = data == nil ? image : nil
         let regard = look
-        let auteur = lookPerson
-        let date = lookDate
+        let (auteur, date) = (lookPerson, lookDate)
         let cache = scenes
         let galerie = gallery
         let brut = camera.librarySave
         let precedent = galleryChain
-        let proportions = canvasAspect
+        let proportions = ComposerTakeAspect.aspect(canvas: canvasAspect, take: image.size)
         beginGallerySave()
         galleryChain = Task { @MainActor [weak self] in
             defer { self?.endGallerySave() }
@@ -302,7 +302,7 @@ extension ComposerCaptureSession {
             }
             await precedent?.value
             guard await brut?.value ?? true else { return }
-            let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: proportions,
+            let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: await ComposerTakeAspect.aspect(canvas: proportions, video: url),
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
             guard let rendue = rendue?.gallery else { return }

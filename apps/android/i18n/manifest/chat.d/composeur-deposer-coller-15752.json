@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_drop_here",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_drop_import_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_drop_unnamed_item",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

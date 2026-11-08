@@ -17,7 +17,9 @@ import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostHashtagRepository
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 data class HashtagResultsUiState(
@@ -29,21 +31,27 @@ data class HashtagResultsUiState(
     /** L'échec d'un premier chargement sans rien à montrer : l'écran offre « Réessayer ». */
     val loadFailed: Boolean = false,
     val errorMessage: String? = null,
+    /** Le compositeur de citation ouvert par « Citer » (#12234) ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
+    /** L'issue d'un repartage, dite une fois puis consommée. */
+    val notice: FeedNotice? = null,
 )
 
 /**
  * Les résultats d'un hashtag — port de `HashtagResultsViewModel` d'iOS. Cache-first : la
  * première page déjà vue s'affiche à l'ouverture (jamais de squelette dessus) et se
  * revalide en silence. Le texte de chaque post descend le Prisme par [FeedPostBuilder],
- * comme le fil. Le cœur est optimiste, avec retour à l'instantané si le serveur refuse.
+ * comme le fil. Les gestes des cartes sont ceux du fil ([ListedPostActions]) : au geste, rendus si le serveur refuse.
  */
 @HiltViewModel
 class HashtagResultsViewModel @Inject constructor(
     private val hashtags: PostHashtagRepository,
     private val postRepository: PostRepository,
+    reports: ReportRepository,
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
+    socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val tag: String = (savedStateHandle[TAG_ARG] ?: "").removePrefix("#").trim().lowercase()
@@ -56,10 +64,16 @@ class HashtagResultsViewModel @Inject constructor(
     private val _state = MutableStateFlow(HashtagResultsUiState(tag = tag))
     val state: StateFlow<HashtagResultsUiState> = _state.asStateFlow()
 
+    /** Les gestes du fil sur les résultats (#13244 ; Repartager / Citer : iOS `HashtagResultsViewModel.toggleRepost`, #15934). */
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState, socialSocket.listedPostTranslations()) { sessionRepository.currentUser.value }
+
+    /** Ce que font les cartes des résultats : les gestes du fil, chacun câblé ([ListedPostCardActions]). */
+    val cards: ListedPostCardActions get() = actions
+
     init {
         viewModelScope.launch {
-            combine(listState, sessionRepository.currentUser, status) { list, user, st ->
-                project(list, user, st)
+            combine(listState, sessionRepository.currentUser, status, actions.state) { list, user, st, gestures ->
+                project(list, user, st, gestures)
             }.collect { projected -> _state.value = projected }
         }
         revalidate(refreshing = false)
@@ -113,54 +127,11 @@ class HashtagResultsViewModel @Inject constructor(
         }
     }
 
-    fun toggleLike(postId: String) {
-        val snapshot = listState.value
-        val wasLiked = snapshot.posts.firstOrNull { it.id == postId }?.isLikedByMe == true
-        val next = snapshot.liked(postId, liked = !wasLiked)
-        if (next === snapshot) return
-        listState.value = next
-        viewModelScope.launch {
-            try {
-                val result = if (wasLiked) postRepository.unlike(postId) else postRepository.like(postId)
-                if (result is NetworkResult.Failure) rollbackPost(postId, snapshot, result.error.message)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                rollbackPost(postId, snapshot, e.message)
-            }
-        }
-    }
-
-    fun toggleBookmark(postId: String) {
-        val snapshot = listState.value
-        val was = snapshot.posts.firstOrNull { it.id == postId }?.isBookmarkedByMe == true
-        val next = snapshot.bookmarked(postId, bookmarked = !was)
-        if (next === snapshot) return
-        listState.value = next
-        viewModelScope.launch {
-            try {
-                val result = if (was) postRepository.removeBookmark(postId) else postRepository.bookmark(postId)
-                if (result is NetworkResult.Failure) rollbackPost(postId, snapshot, result.error.message)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                rollbackPost(postId, snapshot, e.message)
-            }
-        }
-    }
-
-    /** Restaure le seul post touché : une page arrivée entre-temps ne doit pas être écrasée. */
-    private fun rollbackPost(postId: String, snapshot: PostPageListState, message: String?) {
-        val original = snapshot.posts.firstOrNull { it.id == postId } ?: return
-        listState.update { current ->
-            current.copy(posts = current.posts.map { if (it.id == postId) original else it })
-        }
-        status.update { it.copy(error = message ?: "") }
-    }
-
-    private fun project(list: PostPageListState, user: MeeshyUser?, st: HashtagStatus): HashtagResultsUiState {
+    private fun project(list: PostPageListState, user: MeeshyUser?, st: HashtagStatus, gestures: ListedPostCardsState): HashtagResultsUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.apiBaseUrl, currentUserId = user?.id) }
+        val projected = list.posts.map {
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, gestures.languageOverrides[it.id], currentUserId = user?.id)
+        }
         val cold = projected.isEmpty() && !list.hasLoaded
         return HashtagResultsUiState(
             tag = tag,
@@ -170,6 +141,8 @@ class HashtagResultsViewModel @Inject constructor(
             showSkeleton = cold && st.isFetching && st.error == null,
             loadFailed = cold && !st.isFetching && st.error != null,
             errorMessage = st.error?.takeIf { it.isNotEmpty() && !cold },
+            quoteComposer = gestures.quoteComposer,
+            notice = gestures.notice,
         )
     }
 

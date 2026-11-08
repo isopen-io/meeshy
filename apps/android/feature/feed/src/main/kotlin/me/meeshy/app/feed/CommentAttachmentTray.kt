@@ -5,16 +5,43 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.TusUploadRepository
+import me.meeshy.sdk.model.CommentAttachmentIntake
+import me.meeshy.sdk.model.CommentPieceKind
 import me.meeshy.sdk.model.MAX_POST_MEDIA
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.look.ComposerPhotoRecipe
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.ui.component.retouch.ComposerLookAuthor
 
-/** Une pièce du bandeau : ses octets locaux (la retouche les rouvre) et, une fois téléversée, son média. */
+/**
+ * La retouche d'une photo du bandeau (#14844) : l'[original] et sa [recipe], signée par [author] — la retouche rouverte
+ * les restaure, modifiables ; ce qui se téléverse n'en est que la cuisson.
+ */
 @Immutable
-data class CommentPendingPiece(val id: String, val item: MediaUploadItem, val uploaded: UploadedMedia? = null) {
+data class CommentPieceRetouch(val original: MediaUploadItem, val recipe: ComposerPhotoRecipe, val author: ComposerLookAuthor)
+
+/**
+ * Une pièce du bandeau : ce qui se téléverse ([item]) et, une fois téléversée, son média ; une photo retouchée garde à
+ * côté son original et sa recette ([retouch]).
+ */
+@Immutable
+data class CommentPendingPiece(
+    val id: String,
+    val item: MediaUploadItem,
+    val uploaded: UploadedMedia? = null,
+    val retouch: CommentPieceRetouch? = null,
+) {
+    /** Ce que la retouche rouvre : l'original, jamais la cuisson. */
+    val source: MediaUploadItem get() = retouch?.original ?: item
+
+    /** Les fichiers que la pièce tient : sa cuisson et son original, chacun une fois. */
+    val owned: List<MediaUploadItem> get() = listOfNotNull(item, retouch?.original.takeIf { it !== item })
+
     val isVideo: Boolean get() = item.mimeType.startsWith("video")
     val isAudio: Boolean get() = item.mimeType.startsWith("audio")
+    /** Ni photo, ni vidéo, ni vocal : un fichier (#14386), montré par son nom, jamais décodé en vignette. */
+    val isFile: Boolean get() = CommentPieceKind.of(item.mimeType) == CommentPieceKind.FILE
 }
 
 /**
@@ -40,8 +67,16 @@ data class CommentAttachmentTray(val pieces: List<CommentPendingPiece> = emptyLi
 
     fun removing(id: String): CommentAttachmentTray = copy(pieces = pieces.filterNot { it.id == id })
 
-    fun replacing(id: String, item: MediaUploadItem): CommentAttachmentTray =
-        copy(pieces = pieces.map { if (it.id == id) CommentPendingPiece(id, item) else it })
+    fun replacing(id: String, item: MediaUploadItem, retouch: CommentPieceRetouch? = null): CommentAttachmentTray =
+        copy(pieces = pieces.map { if (it.id == id) CommentPendingPiece(id, item, retouch = retouch) else it })
+
+    /** Ce que la zone dit d'une pièce qui frappe à la porte : le plafond du serveur et ce qui n'est pas une pièce (iOS `CommentAttachmentIntake.admit`). */
+    fun admission(item: MediaUploadItem, nextPieceId: String): CommentAttachmentIntake.Outcome =
+        CommentAttachmentIntake.admit(
+            incoming = listOf(CommentAttachmentIntake.Candidate(nextPieceId, item.mimeType, item.fileName, isReady = false)),
+            staged = pieces.map { CommentAttachmentIntake.Candidate(it.id, it.item.mimeType, it.item.fileName, isReady = it.uploaded != null) },
+            limit = MAX_PIECES,
+        )
 
     fun piece(id: String): CommentPendingPiece? = pieces.firstOrNull { it.id == id }
 
@@ -55,4 +90,16 @@ data class CommentAttachmentTray(val pieces: List<CommentPendingPiece> = emptyLi
 @Singleton
 class CommentMediaUploader @Inject constructor(private val tus: TusUploadRepository) {
     suspend fun upload(item: MediaUploadItem): NetworkResult<List<UploadedMedia>> = tus.uploadAll(listOf(item), TusUploadContext.COMMENT)
+}
+
+/** La première pièce téléversée, ou `null` : sans téléverseur, sur échec ou sur exception (l'annulation, elle, se propage). */
+internal suspend fun CommentMediaUploader?.firstUploaded(item: MediaUploadItem): UploadedMedia? {
+    val result = try {
+        this?.upload(item)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+    return (result as? NetworkResult.Success)?.data?.firstOrNull()
 }

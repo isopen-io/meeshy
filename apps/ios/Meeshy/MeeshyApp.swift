@@ -124,97 +124,101 @@ struct MeeshyApp: App {
         #endif
     }
 
+    /// Les scènes ne reçoivent que des fonctions `nonisolated` (#11167) : sous iOS 27, le rendu asynchrone de
+    /// SwiftUI peut redemander le contenu d'une fenêtre hors du fil principal, et une fermeture héritant du main
+    /// actor y trappait à son entrée (SIGTRAP, `closure #1 in MeeshyApp.body.getter`). Le contenu est construit
+    /// ici, sur le fil principal ; la scène ne fait que le relire.
     var body: some Scene {
-        WindowGroup {
-            let inputs = rootInputs
-            MainWindowGate {
-            SystemThemeDetector {
-                AppRootGate { session, commands in
-                    RootScene(
-                        session: session,
-                        commands: commands,
-                        state: inputs.scene,
-                        actions: RootSceneActions(
-                            onLoginAppear: { deepLinkRouter.discardPendingCallRequest() },
-                            onSkipCelebration: { arrivalCelebration.dismiss() },
-                            holdSplashUntilCeiling: { await launchSplash.holdUntilCeiling() }
-                        )
+        WindowGroup(content: PrebuiltSceneContent(mainWindow).make)
+            .commands(content: PrebuiltSceneContent(MeeshyCommands()).make)
+        detachedWindows
+    }
+
+    @ViewBuilder
+    private var mainWindow: some View {
+        let inputs = rootInputs
+        MainWindowGate {
+        SystemThemeDetector {
+            AppRootGate { session, commands in
+                RootScene(
+                    session: session,
+                    commands: commands,
+                    state: inputs.scene,
+                    actions: RootSceneActions(
+                        onLoginAppear: { deepLinkRouter.discardPendingCallRequest() },
+                        onSkipCelebration: { arrivalCelebration.dismiss() },
+                        holdSplashUntilCeiling: { await launchSplash.holdUntilCeiling() }
                     )
-                    .modifier(GuestSessionCover(
-                        guest: inputs.activeGuestSession,
+                )
+                .modifier(GuestSessionCover(
+                    guest: inputs.activeGuestSession,
+                    isAuthenticated: session.isAuthenticated,
+                    actions: guestSessionCoverActions
+                ))
+                .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
+                .visitorContentCover(
+                    presenter: visitorPresenter,
+                    isEligible: RootPresentationRules.visitorContentIsEligible(
                         isAuthenticated: session.isAuthenticated,
-                        actions: guestSessionCoverActions
-                    ))
-                    .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
-                    .visitorContentCover(
-                        presenter: visitorPresenter,
-                        isEligible: RootPresentationRules.visitorContentIsEligible(
-                            isAuthenticated: session.isAuthenticated,
-                            hasGuestSession: inputs.activeGuestSession != nil,
-                            splashPhase: inputs.splashPhase
-                        )
+                        hasGuestSession: inputs.activeGuestSession != nil,
+                        splashPhase: inputs.splashPhase
                     )
-                    .fullScreenCover(isPresented: .init(
-                        get: {
-                            RootPresentationRules.showsOnboarding(
-                                hasCompletedOnboarding: inputs.hasCompletedOnboarding,
-                                isAuthenticated: session.isAuthenticated,
-                                splashPhase: inputs.splashPhase,
-                                hasGuestSession: inputs.activeGuestSession != nil,
-                                hasVisitorRequest: inputs.hasVisitorRequest
-                            )
-                        },
-                        set: { _ in }
-                    )) {
-                        WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
-                    }
-                    .modifier(OverlayHost(crashReports: inputs.crashReports, isCrashSheetPresented: $showCrashSheet))
-                    .environmentObject(AuthManager.shared)
-                    .environmentObject(deepLinkRouter)
-                    .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
-                    .meeshyThemeRoot(theme)
-                    .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))
-                    .task { await runLaunchSequence() }
-                    .adaptiveOnChange(of: session.isAuthenticated) { _, isAuth in
-                        if isAuth { activeGuestSession = nil }
-                    }
-                    .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
-                        handleGuestDeepLink(link)
-                    }
-                    .adaptiveOnChange(of: deepLinkRouter.requestedGuestJoin) { _, identifier in
-                        openRequestedGuestJoin(identifier)
-                    }
-                    .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
-                        openRequestedWorldEntry(entry)
-                    }
-                    .adaptiveOnChange(of: session.systemLanguage) { _, newLanguage in
-                        UILanguageOverride.cache(from: newLanguage)
-                        UILanguageOverride.refreshNotificationLanguage()
-                    }
+                )
+                .fullScreenCover(isPresented: .init(
+                    get: {
+                        RootPresentationRules.showsOnboarding(
+                            hasCompletedOnboarding: inputs.hasCompletedOnboarding,
+                            isAuthenticated: session.isAuthenticated,
+                            splashPhase: inputs.splashPhase,
+                            hasGuestSession: inputs.activeGuestSession != nil,
+                            hasVisitorRequest: inputs.hasVisitorRequest
+                        )
+                    },
+                    set: { _ in }
+                )) {
+                    WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                }
+                .modifier(OverlayHost(crashReports: inputs.crashReports, isCrashSheetPresented: $showCrashSheet))
+                .environmentObject(AuthManager.shared)
+                .environmentObject(deepLinkRouter)
+                .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
+                .meeshyThemeRoot(theme)
+                .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))
+                .task { await runLaunchSequence() }
+                .adaptiveOnChange(of: session.isAuthenticated) { _, isAuth in
+                    if isAuth { activeGuestSession = nil }
+                }
+                .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
+                    handleGuestDeepLink(link)
+                }
+                .adaptiveOnChange(of: deepLinkRouter.requestedGuestJoin) { _, identifier in
+                    openRequestedGuestJoin(identifier)
+                }
+                .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
+                    openRequestedWorldEntry(entry)
+                }
+                .adaptiveOnChange(of: session.systemLanguage) { _, newLanguage in
+                    UILanguageOverride.cache(from: newLanguage)
+                    UILanguageOverride.refreshNotificationLanguage()
                 }
             }
-            }
-            .publishingSceneWindowSize()
         }
-        .commands { MeeshyCommands() }
-        detachedWindows
+        }
+        .publishingSceneWindowSize()
     }
 
     @SceneBuilder
     private var detachedWindows: some Scene {
         // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
-        WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self) { $content in
-            DetachedWindowView(content: content)
-                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                .feedbackToastOverlay()
-                // Mêmes barrière d'âge et préférence d'animation que la fenêtre principale.
-                .ageGateOverlay()
-                .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
-                .environmentObject(AuthManager.shared)
-                .environmentObject(deepLinkRouter)
-                .meeshyThemeRoot(theme)
-                .publishingSceneWindowSize()
-        }
+        WindowGroup(
+            id: DetachedWindowOpener.sceneId,
+            for: DetachedWindowContent.self,
+            content: DetachedWindowScene(decoration: DetachedWindowDecoration(
+                reduceMotion: a11yPrefs.reduceMotion,
+                deepLinkRouter: deepLinkRouter,
+                theme: theme
+            )).make
+        )
         .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
     }
 
@@ -436,6 +440,45 @@ struct MeeshyApp: App {
     }
 }
 
+// MARK: - Detached window scene (#11167)
+
+/// Le contenu d'une fenêtre détachée, sans fermeture isolée : la scène appelle `make` (non isolée) avec la
+/// liaison de la fenêtre ; la décoration a été construite par le `body` de l'`App`, sur le fil principal.
+nonisolated struct DetachedWindowScene {
+    let decoration: DetachedWindowDecoration
+
+    func make(_ content: Binding<DetachedWindowContent?>) -> ModifiedContent<DetachedWindowSlot, DetachedWindowDecoration> {
+        DetachedWindowSlot(content: content.wrappedValue).modifier(decoration)
+    }
+}
+
+nonisolated struct DetachedWindowSlot: View {
+    let content: DetachedWindowContent?
+
+    @MainActor var body: some View {
+        DetachedWindowView(content: content)
+    }
+}
+
+/// Mêmes barrière d'âge, préférence d'animation, routeur et thème que la fenêtre principale.
+struct DetachedWindowDecoration: ViewModifier {
+    let reduceMotion: Bool
+    let deepLinkRouter: DeepLinkRouter
+    let theme: ThemeManager
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+            .feedbackToastOverlay()
+            .ageGateOverlay()
+            .environment(\.meeshyForceReduceMotion, reduceMotion)
+            .environmentObject(AuthManager.shared)
+            .environmentObject(deepLinkRouter)
+            .meeshyThemeRoot(theme)
+            .publishingSceneWindowSize()
+    }
+}
+
 // MARK: - System Theme Detector
 // Sits OUTSIDE preferredColorScheme to always see the real system colorScheme
 struct SystemThemeDetector<Content: View>: View {
@@ -465,9 +508,41 @@ struct ProfileSheetEnvironment: ViewModifier {
     /// injection, toutes les feuilles de profil la reçoivent.
     func body(content: Content) -> some View {
         content
-            .environment(\.profileGameSection, ProfileGameSection { userId, _ in
-                AnyView(GameBannerBadge(userId: userId))
+            .environment(\.profileGameSection, ProfileGameSection { userId, displayName in
+                ProfileSlot.view(.banner, userId: userId, displayName: displayName)
+            })
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
             })
             .environment(\.profileLoading, LiveProfileLoading())
+            .environment(\.avatarListeningSource, ListeningCenter.shared.source)
+    }
+}
+
+/// Les emplacements opaques de la fiche de profil, effacés en UN seul point : le jeu sur la bannière et le cercle à la
+/// place de « Connectés » (#13940). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
+/// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
+enum ProfileSlot {
+    case banner, relation
+
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) -> AnyView {
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked))
+    }
+}
+
+private struct ProfileSlotContent: View {
+    let slot: ProfileSlot
+    let userId: String
+    let displayName: String
+    @Binding var linked: Bool
+
+    var body: some View {
+        switch slot {
+        case .banner:
+            GameBannerBadge(userId: userId)
+        case .relation:
+            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
+                .id(userId)
+        }
     }
 }

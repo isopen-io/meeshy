@@ -27,4 +27,5 @@ fun PostEditDraft.toUpdateRequest(): UpdatePostRequest =
         allowSoundExtraction = allowSoundExtraction,
         mediaAlt = mediaAlt,
         mediaCaption = mediaCaption,
+        commentsDisabled = commentsDisabled,
     )

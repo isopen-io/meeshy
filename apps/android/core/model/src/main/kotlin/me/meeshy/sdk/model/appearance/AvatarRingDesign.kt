@@ -66,9 +66,9 @@ data class AvatarRingOrnament(
 
 /**
  * Les CALQUES ILLUSTRÉS d'un contour (#13960, miroir de `AvatarRingDecorSchema`) : un film [back] DERRIÈRE
- * l'avatar, un film [front] AU-DESSUS, chacun carré, centré sur l'avatar, de côté [reach] × la boîte du contour —
- * il DÉBORDE sans grandir la mise en page. L'anneau fixe reste l'image de repli et celle de « Réduire les
- * animations ». Hors bornes ou sans film, le calque ne se construit pas ([LossyRingDecorSerializer] le tait seul).
+ * l'avatar, un film [front] AU-DESSUS, chacun carré, centré sur l'avatar, de côté [reach] × la boîte du contour,
+ * posé par [fit] dans la place que l'hôte lui donne (#15157). L'anneau fixe reste l'image de repli, jamais dessinée
+ * SOUS un film affiché. Hors bornes ou sans film, le calque ne se construit pas ([LossyRingDecorSerializer] le tait seul).
  */
 @Serializable
 data class AvatarRingDecor(
@@ -83,14 +83,26 @@ data class AvatarRingDecor(
         require(back != null || front != null) { "aucun film" }
     }
 
-    /** Le côté d'un film dans une boîte de contour de côté [box] (miroir de `ringDecorCanvas`). */
-    fun side(box: Float): Float = (box * reach).toFloat()
+    /**
+     * Miroir de `ringDecorFit` (#15157) : le film ne peint jamais hors de la boîte [box] de l'anneau seul, sauf la
+     * place [room] que l'hôte déclare libre de chaque côté ; quand il demande plus, l'avatar, son contour et ses films
+     * se réduisent ENSEMBLE. Le cadre se pose ENTIER à toutes les tailles (#16114) : liste, bulle, mini-avatar
+     * comme profil.
+     */
+    fun fit(box: Double, room: Double = 0.0): RingDecorFit {
+        val need = box * reach
+        val side = minOf(need, box + 2 * maxOf(0.0, room))
+        return RingDecorFit(scale = side / need, side = side, offset = (box - side) / 2)
+    }
 
     companion object {
         /** Le débordement maximal : un film de côté 1,5 × la boîte du contour (`RING_DECOR_MAX_REACH`). */
         const val MAX_REACH = 1.5
     }
 }
+
+/** Où se pose un cadre illustré dans sa boîte (#15157) : l'échelle commune de l'avatar et de ses films, le côté du film et son décalage. */
+data class RingDecorFit(val scale: Double, val side: Double, val offset: Double)
 
 /** Un calque illustré illisible s'ignore : le contour reste. */
 object LossyRingDecorSerializer : KSerializer<AvatarRingDecor?> by LossyNullableSerializer(AvatarRingDecor.serializer())

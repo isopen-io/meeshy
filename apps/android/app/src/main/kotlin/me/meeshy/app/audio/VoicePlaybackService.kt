@@ -19,6 +19,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import me.meeshy.sdk.model.playback.NowPlayingArtworkPlan
+import me.meeshy.sdk.playback.NowPlayingArtworkRenderer
 import timber.log.Timber
 
 @EntryPoint
@@ -95,11 +97,22 @@ internal class VoicePlaybackService : Service(), VoicePlaybackForeground {
 
     private suspend fun artwork(context: Context, url: String): Bitmap? {
         if (!me.meeshy.sdk.model.playback.VoicePlaybackCardRules.isArtworkFetchable(url)) return null
-        val request = ImageRequest.Builder(context).data(url).allowHardware(false).size(ARTWORK_PX).build()
-        return (context.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
+        val request = ImageRequest.Builder(context).data(url).allowHardware(false).size(NowPlayingArtworkPlan.CANVAS_SIDE).build()
+        val avatar = (context.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
+        return NowPlayingArtworkRenderer.compose(avatar, appIcon(context)) ?: avatar
     }
 
+    /** L'icône de l'app, apposée en badge sur l'avatar (iso iOS `NowPlayingArtwork`). */
+    private fun appIcon(context: Context): Bitmap? = runCatching {
+        val icon = context.packageManager.getApplicationIcon(context.packageName)
+        val side = ICON_PX
+        val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+        icon.setBounds(0, 0, side, side)
+        icon.draw(android.graphics.Canvas(bitmap))
+        bitmap
+    }.getOrNull()
+
     private companion object {
-        const val ARTWORK_PX = 256
+        const val ICON_PX = 156
     }
 }

@@ -801,6 +801,9 @@ export * from './conversation-bridge.js';
 export * from './contact-card.js';
 export * from './relation.js';
 export * from './relation-level-response.js';
+export * from './bring.js';
+export * from './talkie.js';
+export * from './now-playing.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

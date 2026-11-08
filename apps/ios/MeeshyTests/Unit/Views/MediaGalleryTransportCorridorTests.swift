@@ -389,7 +389,7 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
 
         guard let region = corps("var cadreRegion: some View {", dans: code),
               let couche = compact(region).range(of: "cadreCenterPlayPause"),
-              let cadrage = compact(region).range(of: ".frame(width:currentStage.frame.width")
+              let cadrage = compact(region).range(of: ".modifier(OfferedStageFrame(stage:currentStage.frame))")
         else {
             return XCTFail("la couche centrale ne se lit pas dans la région du cadre")
         }

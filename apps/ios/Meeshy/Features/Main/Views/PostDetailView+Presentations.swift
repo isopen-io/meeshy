@@ -3,28 +3,15 @@ import MeeshySDK
 import MeeshyUI
 
 /// **Ce que le détail d'un post présente par-dessus lui** — traductions,
-/// profil, partage système, édition, lieu, galerie, plein écran audio et
-/// enregistrement local. Extrait du `body` de `PostDetailView.swift` (#10956).
+/// profil, partage système, édition, lieu, galerie, plein écran audio,
+/// enregistrement local et porte de citation. Extrait du `body` de `PostDetailView.swift` (#10956).
 extension PostDetailView {
 
     func detailPresentations(_ content: some View) -> some View {
         content
             .sheet(isPresented: $showTranslationSheet) {
                 if let post = displayPost {
-                    PostTranslationSheet(
-                        post: post,
-                        onSelectLanguage: { language in
-                            let langLower = language.lowercased()
-                            let isOriginal = langLower == post.originalLanguage?.lowercased()
-                            let hasTranslation = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == langLower }) == true
-                            if hasTranslation {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    activeDisplayLangCode = langLower
-                                    secondaryLangCode = nil
-                                }
-                            }
-                        }
-                    )
+                    PostTranslationSheet(post: post, onSelectLanguage: { selectDisplayLanguage($0, of: post) })
                 }
             }
             .sheet(item: $selectedProfileUser) { user in
@@ -51,23 +38,8 @@ extension PostDetailView {
                 // TrackingLink owned by the current user.
                 ShareSheet(activityItems: link.activityItems)
             }
-            .postEditCover(post: displayPost, isPresented: $isEditing) {
-                if let post = displayPost {
-                    EditPostSheet(
-                        originalContent: post.content,
-                        originalLanguage: post.originalLanguage,
-                        originalType: post.type,
-                        media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
-                        originalLocation: post.location,
-                        originalVisibility: post.visibility,
-                        originalVisibilityUserIds: post.visibilityUserIds ?? [],
-                        isRepost: post.repost != nil,
-                        onSave: { draft in
-                            await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                        },
-                        onDismiss: { isEditing = false }
-                    )
-                }
+            .postEditCover(post: displayPost, isPresented: $isEditing) { _, draft in
+                await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
             }
             .fullScreenCover(item: $detailFullscreenPlace) { item in
                 // Même surface plein écran que la bulle et la card feed :
@@ -95,14 +67,28 @@ extension PostDetailView {
             // déjà `SocialMediaCaption.serving(for:carrier:)`, mot pour mot, et le
             // site unique appelle la même.
             .socialMediaGallery(
-                post: displayPost,
-                isPresented: $showFullscreenGallery,
+                post: displayPost, isPresented: $showFullscreenGallery,
                 startMediaId: fullscreenMediaId,
                 startSceneIndex: detailSceneIndex,
                 accentColor: accentColor,
                 preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             )
+            .commentMediaGallery(topLevel: viewModel.topLevelComments, replies: viewModel.repliesMap, post: displayPost)
             .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
             .mediaSaveFlow(mediaSaveCoordinator)
+            .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
+    }
+
+    /// Une langue choisie dans la feuille de traductions s'affiche si le post
+    /// y est écrit ou traduit.
+    private func selectDisplayLanguage(_ language: String, of post: FeedPost) {
+        let langLower = language.lowercased()
+        let isOriginal = langLower == post.originalLanguage?.lowercased()
+        let hasTranslation = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == langLower }) == true
+        guard hasTranslation else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            activeDisplayLangCode = langLower
+            secondaryLangCode = nil
+        }
     }
 }

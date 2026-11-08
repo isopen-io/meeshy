@@ -20,6 +20,8 @@ internal object WidgetTheme {
     val chipText = ColorProvider(day = MeeshyPalette.Indigo700, night = MeeshyPalette.Indigo400)
     val unreadBadge = ColorProvider(day = MeeshyPalette.Indigo500, night = MeeshyPalette.Indigo400)
 
+    val pin = ColorProvider(day = MeeshyPalette.Orange500, night = MeeshyPalette.Orange500)
+
     /** Bordure de la pastille de présence : la couleur du fond du widget. */
     fun dotBorder(night: Boolean): Color = if (night) MeeshyPalette.SurfaceDarkDeep else Color.White
 }

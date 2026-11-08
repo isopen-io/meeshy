@@ -21,14 +21,7 @@ final class StoryRepostAudienceTests: XCTestCase {
         // cible est un rétrécissement.
         XCTAssertEqual(
             Set(StoryRepostAudience.allowed(from: .public)),
-            Set(all)
-        )
-    }
-
-    func test_friendsOriginal_allowsOnlyFriendsOrPrivate() {
-        XCTAssertEqual(
-            Set(StoryRepostAudience.allowed(from: .friends)),
-            Set([.friends, .private] as [PostVisibility])
+            Set(all + [.acquaintances, .close, .blood])
         )
     }
 
@@ -114,6 +107,36 @@ final class StoryRepostAudienceTests: XCTestCase {
         XCTAssertEqual(StoryRepostAudience.allowed(fromRawValue: ""), [.private])
         XCTAssertEqual(StoryRepostAudience.allowed(fromRawValue: "WAT"), [.private])
         XCTAssertEqual(Set(StoryRepostAudience.allowed(fromRawValue: "public")),
-                       Set(all), "la casse ne doit pas décider de l'audience")
+                       Set(all + [.acquaintances, .close, .blood]), "la casse ne doit pas décider de l'audience")
+    }
+
+    // MARK: - Les cercles (#13931, #13939)
+
+    /// Chaque cercle est « le niveau effectif atteint AU MOINS tel cran » : Proches ⊆ Connaissances et Sang ⊆ Proches,
+    /// quel que soit le graphe. Le miroir dit la loi TS mot pour mot (`allowedRepostVisibilities`).
+    func test_aCircleOriginal_narrowsOnlyTowardATighterCircle() {
+        XCTAssertEqual(StoryRepostAudience.allowed(from: .acquaintances), [.acquaintances, .close, .blood, .private])
+        XCTAssertEqual(StoryRepostAudience.allowed(from: .friends), [.friends, .close, .blood, .private])
+        XCTAssertEqual(StoryRepostAudience.allowed(from: .close), [.close, .blood, .private])
+    }
+
+    /// `FRIENDS` admet aussi les contacts de message direct, qui ne sont pas forcément des Connaissances : passer de
+    /// Connaissances à Amis ouvrirait le contenu à d'autres gens.
+    func test_acquaintancesNeverWidenToFriends_norFriendsToAcquaintances() {
+        XCTAssertFalse(StoryRepostAudience.isAllowed(.friends, from: .acquaintances))
+        XCTAssertFalse(StoryRepostAudience.isAllowed(.acquaintances, from: .friends))
+        XCTAssertFalse(StoryRepostAudience.isAllowed(.acquaintances, from: .close))
+        XCTAssertFalse(StoryRepostAudience.isAllowed(.public, from: .close))
+    }
+
+    /// RG-18 : un contenu `BLOOD` ne se repartage pas, pas même en privé.
+    func test_aBloodOriginal_isNeverRepublishable() {
+        XCTAssertEqual(StoryRepostAudience.allowed(from: .blood), [])
+        XCTAssertEqual(StoryRepostAudience.allowed(fromRawValue: "BLOOD"), [])
+    }
+
+    func test_aPublicOriginal_alsoAllowsEveryCircle() {
+        let allowed = Set(StoryRepostAudience.allowed(from: .public))
+        XCTAssertTrue(allowed.isSuperset(of: [.acquaintances, .close, .blood]))
     }
 }

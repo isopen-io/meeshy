@@ -25,6 +25,11 @@ public struct RepostContent: Identifiable, Sendable {
     public let storyEffects: StoryEffects?
     public let media: [FeedMedia]
     public let translations: [String: PostTranslation]?
+    /// Le texte que le Prisme du lecteur sert pour la publication citée —
+    /// `nil` = l'original (#16002). Posé par `resolved(preferredLanguages:)`,
+    /// jamais recopié : le fil, le détail et le compositeur lisent la MÊME
+    /// descente que la carte (`PrismTranslationResolver`).
+    public var translatedContent: String? = nil
     public let originalRepostOfId: String?
     public let visibility: String?
     public let expiresAt: Date?
@@ -36,6 +41,9 @@ public struct RepostContent: Identifiable, Sendable {
     /// disait rien ; `[]` = elle affirme qu'il n'y en a aucune. Le renderer du
     /// texte cité s'appuie sur cette différence pour décider quoi linkifier.
     public let mentions: [PostReference]?
+    /// Les commentaires de la publication citée sont fermés (#16541) : la
+    /// republication l'est aussi (`FeedPost.commentsClosed`).
+    public var commentsDisabled: Bool = false
 
     /// Les pseudos que le texte cité a le droit de rendre cliquables — miroir
     /// exact de `FeedPost.validMentionUsernames`, même règle, même casse.
@@ -84,6 +92,7 @@ extension RepostContent: Codable {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
         case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
         case originalRepostOfId, visibility, expiresAt, location, mentions, authorRing
+        case translatedContent, commentsDisabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -118,6 +127,8 @@ extension RepostContent: Codable {
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
         authorRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .authorRing)
+        translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        commentsDisabled = (try? c.decodeIfPresent(Bool.self, forKey: .commentsDisabled)) ?? false
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -145,6 +156,31 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(mentions, forKey: .mentions)
         try c.encodeIfPresent(authorRing, forKey: .authorRing)
+        try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        if commentsDisabled { try c.encode(commentsDisabled, forKey: .commentsDisabled) }
+    }
+}
+
+// MARK: - Prisme
+
+public extension RepostContent {
+    /// Le texte de la publication citée tel que le lecteur doit le lire.
+    var displayContent: String { translatedContent ?? content }
+
+    /// La descente du Prisme sur la publication citée — la même que
+    /// `FeedPost.resolved(preferredLanguages:)` : les rangs DANS L'ORDRE, la
+    /// langue d'origine concourant à son rang, jamais de repli sur une
+    /// traduction quelconque.
+    func resolved(preferredLanguages: [String]) -> RepostContent {
+        var copy = self
+        copy.translatedContent = translations.flatMap { dict in
+            PrismTranslationResolver.resolve(
+                originalLanguage: originalLanguage,
+                candidates: dict.map { PrismCandidate(language: $0.key, value: $0.value.text) },
+                preferredLanguages: preferredLanguages
+            )?.text
+        }
+        return copy
     }
 }
 

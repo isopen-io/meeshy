@@ -2,9 +2,12 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.model.AudioTranscriptionReveal
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -21,9 +24,9 @@ internal fun BubbleAttachmentSections(
     onColor: Color,
     callbacks: BubbleCallbacks,
     audioPlayback: BubbleAudioPlayback?,
+    accent: Color = MeeshyPalette.Indigo500,
 ) {
     if (content.isDeleted) return
-    val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
     if (content.images.isNotEmpty()) {
         BubbleImageGrid(
             images = content.images,
@@ -35,7 +38,41 @@ internal fun BubbleAttachmentSections(
     content.sealedPieceIds.forEach { _ ->
         BubbleSealedPieceRow(onColor = onColor, modifier = Modifier.padding(bottom = MeeshySpacing.xs))
     }
-    content.files.forEach { file ->
+    val videoIds = content.videos.mapTo(HashSet()) { it.attachmentId }
+    content.videos.forEach { video ->
+        val file = content.files.firstOrNull { it.attachmentId == video.attachmentId } ?: return@forEach
+        key(video.attachmentId) {
+            val transfers = LocalBubbleFileTransfers.current
+            val badge = rememberVideoAutoDownloadBadge(file, remember(file, transfers) { transfers.badgeOf(file) })
+            BubbleVideoRow(
+                video = video,
+                badge = badge,
+                accent = accent,
+                onClick = callbacks.onFileClick?.takeIf { file.opensOnTap }?.let { { it(file) } },
+                modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+            )
+        }
+    }
+    BubbleNonVisualSections(content, onColor, callbacks, audioPlayback, videoIds, accent = accent)
+}
+
+/**
+ * Les pièces qui ne sont ni une image ni une vidéo — fichiers, lieux partagés, notes vocales —, dans leur ordre fixe.
+ * Partagée par la bulle et par le bloc non-média de la rangée plate ([videoIds] : les vidéos déjà montrées ailleurs).
+ */
+@Composable
+internal fun BubbleNonVisualSections(
+    content: BubbleContent,
+    onColor: Color,
+    callbacks: BubbleCallbacks,
+    audioPlayback: BubbleAudioPlayback?,
+    videoIds: Set<String> = content.videos.mapTo(HashSet()) { it.attachmentId },
+    includeAudios: Boolean = true,
+    accent: Color = MeeshyPalette.Indigo500,
+) {
+    if (content.isDeleted) return
+    val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
+    content.files.filterNot { it.attachmentId in videoIds }.forEach { file ->
         BubbleFileRow(
             file = file,
             onColor = onColor,
@@ -53,15 +90,14 @@ internal fun BubbleAttachmentSections(
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }
-    content.audios.forEach { audio ->
-        AudioBubble(
-            audio = audio,
-            playback = audioPlayback?.takeIf { it.attachmentId == audio.attachmentId },
+    if (includeAudios) {
+        BubbleAudioStack(
+            content = content,
+            playback = audioPlayback,
             onColor = onColor,
+            accent = accent,
+            callbacks = callbacks,
             autoRevealTranscription = autoReveal,
-            onClick = callbacks.onAudioClick?.takeIf { audio.isPlayable }
-                ?.let { { it(audio) } },
-            onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -50,6 +51,8 @@ class ConversationListScreenScrollTest {
         val viewModel = mockk<ConversationListViewModel>(relaxed = true) {
             every { this@mockk.state } returns MutableStateFlow(state)
             every { rowSignals } returns MutableStateFlow(ConversationRowSignals())
+            every { rememberedSections } returns MutableStateFlow<Set<String>?>(null)
+            every { messageSearch } returns MutableStateFlow(ListMessageSearchState.Idle)
             every { pullRefreshSucceeded } returns emptyFlow()
             every { openConversation } returns emptyFlow()
             every { dialogs } returns mockk<ConversationListDialogController>(relaxed = true) {

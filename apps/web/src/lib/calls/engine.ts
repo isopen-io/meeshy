@@ -39,6 +39,7 @@ import {
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { PASSTHROUGH_EFFECTS, type CameraEffectsPort } from './camera-effects';
 import { feedbackActions, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
+import { recordingNote, withJournalNote } from './call-journal-notes';
 import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
@@ -221,6 +222,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.unwatchNetwork = null;
     for (const timer of session.alertTimers.values()) deps.cancel(timer);
     session.alertTimers.clear();
+    session.recordingPeers.clear();
     session.captions?.stop(false);
     incomingTimer = clear(incomingTimer);
     controls.reset();
@@ -238,6 +240,26 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     stream.removeTrack(from);
     stream.addTrack(to);
   };
+
+  /** Remplace la piste vidéo envoyée sur chaque lien — `replaceTrack`, sans renégociation. */
+  const applyVideoTrack = async (next: MediaStreamTrack): Promise<void> => {
+    const stream = localStream;
+    const current = stream?.getVideoTracks()[0];
+    if (stream === null || current === undefined || current === next) return;
+    swapTrack(stream, current, next);
+    await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(next).catch(() => undefined)));
+    update((call) => ({ ...call, localStream: deps.createStream(stream.getTracks()) }));
+  };
+
+  /**
+   * Un traitement d'effets MORT en cours d'appel (#9187) : la caméra brute
+   * reprend la place de la piste traitée, sur chaque lien, sans renégociation.
+   */
+  effects.onFailure((camera) => {
+    const call = read();
+    if (call === null || !call.cameraOn || call.screenSharing) return;
+    void applyVideoTrack(camera);
+  });
 
   const teardownMedia = (): void => {
     preview.close();
@@ -470,16 +492,30 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   const onPeerAlert = (event: string, payload: unknown): void => {
     const alert = peerAlert(event, payload, userOf);
     if (alert === null || read()?.callId !== alert.callId) return;
-    update((current) => patchMember(current, alert.userId, alert.patch));
-    if (alert.clearAfterMs === null) return;
-    clear(session.alertTimers.get(alert.userId) ?? null);
+    const at = deps.now();
+    const note = alert.capture === null ? null : { id: `capture:${alert.userId}:${alert.capture}:${at}`, kind: alert.capture, userId: alert.userId, name: null, at };
+    update((current) => (note === null ? patchMember(current, alert.userId, alert.patch) : withJournalNote(patchMember(current, alert.userId, alert.patch), note)));
+    const timer = `${alert.userId}:${Object.keys(alert.reset).join()}`;
+    if (alert.recording !== null) {
+      if (alert.recording) session.recordingPeers.add(alert.userId);
+      else session.recordingPeers.delete(alert.userId);
+      clear(session.alertTimers.get(timer) ?? null);
+      session.alertTimers.delete(timer);
+    }
+    if (alert.clearAfterMs === null || session.recordingPeers.has(alert.userId)) return;
+    clear(session.alertTimers.get(timer) ?? null);
     session.alertTimers.set(
-      alert.userId,
+      timer,
       deps.schedule(() => {
-        session.alertTimers.delete(alert.userId);
-        update((current) => patchMember(current, alert.userId, { weakNetwork: false }));
+        session.alertTimers.delete(timer);
+        update((current) => patchMember(current, alert.userId, alert.reset));
       }, alert.clearAfterMs),
     );
+  };
+
+  const onRecordingNote = (event: string, payload: unknown): void => {
+    const moment = recordingNote(event, payload, deps.now());
+    if (moment !== null && read()?.callId === moment.callId) update((current) => withJournalNote(current, moment.note));
   };
 
   /* Le micro coupé AVANT que le média soit prêt (#8434) — pendant la demande
@@ -807,6 +843,10 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       case SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT:
         onPeerAlert(event, payload);
         return;
+      case SERVER_EVENTS.CALL_RECORDING_STARTED:
+      case SERVER_EVENTS.CALL_RECORDING_STOPPED:
+        onRecordingNote(event, payload);
+        return;
       case SERVER_EVENTS.CALL_PARTICIPANT_INVITED:
       case SERVER_EVENTS.CALL_INVITE_DECLINED:
       case SERVER_EVENTS.CALL_INVITE_EXPIRED:
@@ -863,9 +903,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       effects.release(next);
       return;
     }
-    swapTrack(stream, current, next);
-    await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(next).catch(() => undefined)));
-    update((latest) => ({ ...latest, localStream: deps.createStream(stream.getTracks()) }));
+    await applyVideoTrack(next);
   };
 
   const camera = createEngineCamera({
@@ -896,6 +934,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
    * une renégociation quand la ligne vidéo ne faisait que recevoir (appel
    * vocal). La caméra, si elle tournait, est relâchée : elle revient à l'arrêt.
    */
+  /** Partager réduit l'appel en capsule (#16664) : on part montrer autre chose, l'appel suit. */
   const startScreen = async (call: ActiveCall): Promise<void> => {
     if (screenPicking) return;
     screenPicking = true;
@@ -910,7 +949,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.cameraBeforeShare = current.cameraOn;
     display.onended = () => void stopScreen();
     await setCamera(display, false);
-    update((next) => ({ ...next, screenSharing: true }));
+    update((next) => ({ ...next, screenSharing: true, display: 'pill' }));
     announceScreen(true);
   };
 

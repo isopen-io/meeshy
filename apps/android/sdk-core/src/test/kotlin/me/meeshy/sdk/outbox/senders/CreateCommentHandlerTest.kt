@@ -51,6 +51,18 @@ class CreateCommentHandlerTest {
     }
 
     @Test
+    fun `un commentaire part avec ses medias, son lieu et ses effets`() = runTest {
+        val place = me.meeshy.sdk.model.SharedPlace(latitude = 1.0, longitude = 2.0, name = "Ici")
+        val withMedia = CreateCommentRequest(content = "", attachmentIds = listOf("srv-1"), effectFlags = 4, location = place)
+        coEvery { postApi.addComment("p1", withMedia, "cmid_c1") } returns accepted(ApiPostComment(id = "c-new"))
+
+        val payload = CommentPayload("", attachmentIds = listOf("srv-1"), effectFlags = 4, location = place)
+        assertThat(handler.send(row(payload))).isEqualTo(SendResult.Success)
+
+        coVerify(exactly = 1) { postApi.addComment("p1", withMedia, "cmid_c1") }
+    }
+
+    @Test
     fun `un commentaire racine n envoie aucun parent`() = runTest {
         val root = CreateCommentRequest(content = "Joli")
         coEvery { postApi.addComment("p1", root, "cmid_c1") } returns accepted(ApiPostComment(id = "c-new"))

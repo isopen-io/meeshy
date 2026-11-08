@@ -2,6 +2,7 @@ package me.meeshy.sdk.conversation
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ReadStatusSummary
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -104,6 +105,75 @@ class MessageReceiptWriterTest {
         writer(harness).applyReadReceipt("c1", "me", deliveredCount = 1, readCount = 1, frontierIso = T4)
 
         assertThat(harness.cachedMessage("m1").readCount).isEqualTo(0)
+    }
+
+    // ── Le résumé d'accusé d'UN message (#7433) ──
+
+    private fun summary(messageId: String? = null, total: Int = 3, delivered: Int = 2, read: Int = 1, readByAllAt: String? = null) =
+        ReadStatusSummary(totalMembers = total, deliveredCount = delivered, readCount = read, messageId = messageId, readByAllAt = readByAllAt)
+
+    @Test
+    fun `a named summary moves only the message it names and adopts the denominator`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+        harness.seedSynced(message("m2", T2))
+
+        val changed = writer(harness).applyReadStatusSummary("c1", summary(messageId = "m1"), "me")
+
+        assertThat(changed).isTrue()
+        assertThat(harness.cachedMessage("m1").readCount).isEqualTo(1)
+        assertThat(harness.cachedMessage("m1").recipientCount).isEqualTo(3)
+        assertThat(harness.cachedMessage("m2").readCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `an unnamed summary lands on the latest acknowledged message and never on an in-flight send`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+        harness.seedSynced(message("m2", T2))
+        harness.database.messageDao().upsertAll(
+            listOf(MessageEntityFactory.local(message("cid_1", T4), harness.clock.now, LocalSendState.SENDING)),
+        )
+
+        val changed = writer(harness).applyReadStatusSummary("c1", summary(), "me")
+
+        assertThat(changed).isTrue()
+        assertThat(harness.cachedMessage("m2").readCount).isEqualTo(1)
+        assertThat(harness.cachedMessage("m1").readCount).isEqualTo(0)
+        assertThat(harness.cachedMessage("cid_1").readCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a summary about a message of someone else changes nothing`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1, senderId = "other"))
+
+        val changed = writer(harness).applyReadStatusSummary("c1", summary(messageId = "m1"), "me")
+
+        assertThat(changed).isFalse()
+        assertThat(harness.cachedMessage("m1").readCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `replaying the same summary reports no change and an older one never goes back`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+        val writer = writer(harness)
+        writer.applyReadStatusSummary("c1", summary(messageId = "m1", delivered = 3, read = 2, readByAllAt = T2), "me")
+
+        val replay = writer.applyReadStatusSummary("c1", summary(messageId = "m1", delivered = 3, read = 2, readByAllAt = T2), "me")
+        val older = writer.applyReadStatusSummary("c1", summary(messageId = "m1", delivered = 1, read = 0), "me")
+
+        assertThat(replay).isFalse()
+        assertThat(older).isFalse()
+        assertThat(harness.cachedMessage("m1").readCount).isEqualTo(2)
+        assertThat(harness.cachedMessage("m1").readByAllAt).isEqualTo(T2)
+    }
+
+    @Test
+    fun `a summary with no denominator asserts nothing`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+
+        val changed = writer(harness).applyReadStatusSummary("c1", summary(messageId = "m1", total = 0), "me")
+
+        assertThat(changed).isFalse()
+        assertThat(harness.cachedMessage("m1").deliveredCount).isEqualTo(0)
     }
 
     private companion object {

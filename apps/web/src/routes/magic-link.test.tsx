@@ -13,7 +13,7 @@ import { MagicLinkValidation } from '@/components/magic-link-validation';
 import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import type { auth } from '@/lib/api/auth';
-import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
+import { perceivableText } from '@/test-support/perceivable-text';
 
 /**
  * T9 (#5816) — « MagicLinkFlow », les cinq états (vide, saisie, envoi,
@@ -200,23 +200,20 @@ describe('MagicLinkFlow — retour après connexion (#6742)', () => {
 });
 
 /**
- * LES INDÉSIRABLES, NOMMÉS PENDANT L'ATTENTE — derrière un (i) « Rien reçu ? »
- * depuis #6626.
+ * LES INDÉSIRABLES, NOMMÉS PENDANT L'ATTENTE — EN CLAIR depuis #16452
+ * (directive porteur 2026-11-06), après un passage derrière un (i) « Rien
+ * reçu ? » (#6626).
  *
  * La passerelle rend 200 même pour une adresse inconnue
  * (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut donc ni
- * promettre l'envoi ni le démentir. #6404 posait la note EN CLAIR ; la
- * directive porteur du 2026-09-15 (« moins de détails […] utiliser des (i) »)
- * la replie derrière un contrôle qui NOMME la question qu'on se pose à cet
- * instant. Repliée ne veut pas dire absente : le texte reste dans le DOM,
- * `sr-only`, et un lecteur d'écran l'atteint sans trouver le bouton.
+ * promettre l'envoi ni le démentir, mais il dit où regarder, à tous.
  */
 describe('MagicLinkFlow — la note sur les indésirables', () => {
-  test('absente à la saisie ; à l’attente, un (i) « Rien reçu ? » replié qui s’ouvre', async () => {
+  test('absente à la saisie ; à l’attente, dite EN CLAIR (#16452)', async () => {
     const { clock, now } = fakeClock();
     const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
     const el = mount({ request: stub.request, clock, now });
-    expect(el.querySelector('[aria-label="Rien reçu ?"]')).toBeNull();
+    expect(el.querySelector('[data-spam-hint]')).toBeNull();
 
     fill(el, 'ada@meeshy.example');
     await act(async () => {
@@ -224,18 +221,9 @@ describe('MagicLinkFlow — la note sur les indésirables', () => {
       await Promise.resolve();
     });
 
-    const info = el.querySelector('button[aria-label="Rien reçu ?"]') as HTMLButtonElement | null;
-    expect(info).not.toBeNull();
-    expect(info?.getAttribute('aria-expanded')).toBe('false');
-    const note = controlledBy(info);
-    expect(note?.textContent).toBe('Regardez vos indésirables (spam) : le message peut y être tombé.');
-    expect(note?.classList.contains('sr-only')).toBe(true);
-
-    act(() => {
-      info?.click();
-    });
-    expect(info?.getAttribute('aria-expanded')).toBe('true');
-    expect(note?.classList.contains('sr-only')).toBe(false);
+    const note = el.querySelector('[data-spam-hint]');
+    expect(note?.textContent).toBe('Rien reçu ? Regardez aussi dans vos spams ou courriers indésirables.');
+    expect(note?.closest('.sr-only')).toBeNull();
   });
 });
 
@@ -377,12 +365,12 @@ describe('MagicLinkFlow — (f) erreurs', () => {
  * centre. La largeur se mesure en navigateur (`check-access-column.mjs`) ; ici,
  * que tout vive dans UNE colonne.
  */
-describe('MagicLinkFlow — tout tient dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
-  test('saisie : l’en-tête « Connexion par e-mail » et sa puce « Fermer » vivent dans la colonne', () => {
+describe('MagicLinkFlow — tout tient dans UNE colonne, le retour « < » compris (#6643)', () => {
+  test('saisie : l’en-tête « Connexion par e-mail » et son retour « < » vivent dans la colonne', () => {
     const { clock, now } = fakeClock();
     const el = mount({ request: requestStub([]).request, clock, now });
     const column = authColumnIn(el);
-    expect(column?.querySelector('a[aria-label="Fermer"]')).not.toBeNull();
+    expect(column?.querySelector('a[aria-label="Retour"]')).not.toBeNull();
     expect(column?.querySelector('#magic-link-email')).not.toBeNull();
     expect(strayFromAuthColumn(el)).toEqual([]);
   });

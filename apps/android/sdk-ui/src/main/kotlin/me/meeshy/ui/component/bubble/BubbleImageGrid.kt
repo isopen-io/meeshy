@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import kotlin.math.min
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -37,7 +38,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -75,10 +75,11 @@ internal fun BubbleImageGrid(
                             .semantics { role = Role.Button }
                     },
             ) {
-                AsyncImage(
-                    model = image.url,
+                BubblePolicyImage(
+                    url = image.url,
+                    fallbackUrl = image.thumbnailUrl,
+                    sizeBytes = image.sizeBytes,
                     contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
                 TileReactions(image.reactionLabel)
@@ -148,15 +149,16 @@ private fun BubbleImageCell(
                 ).semantics { role = Role.Button }
             },
     ) {
-        AsyncImage(
-            model = image.thumbnailUrl ?: image.url,
+        BubblePolicyImage(
+            url = image.thumbnailUrl ?: image.url,
+            fallbackUrl = image.thumbnailUrl,
+            sizeBytes = if (image.thumbnailUrl != null) null else image.sizeBytes,
             contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
-            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
         if (hiddenCount == 0) TileReactions(image.reactionLabel)
         if (hiddenCount > 0) {
-            val hiddenLabel = stringResource(R.string.bubble_hidden_images, hiddenCount)
+            val hiddenLabel = pluralStringResource(R.plurals.bubble_hidden_images, hiddenCount, hiddenCount)
             Box(
                 modifier = Modifier
                     .fillMaxSize()

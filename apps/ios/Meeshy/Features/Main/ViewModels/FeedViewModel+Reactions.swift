@@ -6,7 +6,7 @@ import MeeshyUI
 
 extension FeedViewModel {
     func likePost(_ postId: String) async {
-        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        guard !PendingPublicationMarker.isPending(postId: postId), let index = posts.firstIndex(where: { $0.id == postId }) else { return }
 
         // Snapshot pre-mutation state so both the synchronous enqueue-refusal
         // path and the async `.exhausted` observer roll back to the exact prior
@@ -118,47 +118,6 @@ extension FeedViewModel {
                     FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid) ?? toast)
                 }
             }
-        }
-    }
-
-    func bookmarkPost(_ postId: String) async {
-        guard let post = posts.first(where: { $0.id == postId }) else { return }
-
-        // Optimistic: insert into the local "bookmarks" cache so opening the
-        // Favoris tab shows the post immediately. Mirror BookmarksViewModel's
-        // snapshot/rollback pattern on failure.
-        //
-        // SWR: an in-cache list (fresh or stale) is the rollback target; an
-        // expired/empty cache means there is nothing to roll back to and we
-        // simply seed the bookmarks list with this post. The bookmarks list
-        // itself is revalidated by `BookmarksViewModel` when the user opens
-        // the Favoris tab, so we do NOT trigger a remote refresh here.
-        let bookmarksKey = "bookmarks"
-        let result = await feedCache.load(for: bookmarksKey)
-        let cachedBookmarks: [FeedPost]
-        switch result {
-        case .fresh(let v, _), .stale(let v, _):
-            cachedBookmarks = v
-        case .expired, .empty:
-            cachedBookmarks = []
-        }
-        let snapshot = cachedBookmarks
-        if !cachedBookmarks.contains(where: { $0.id == postId }) {
-            var updated = cachedBookmarks
-            updated.insert(post, at: 0)
-            await bestEffort("feedViewModelReactions.feedCache.savePreservingFreshness", category: .cache) { try await feedCache.savePreservingFreshness(updated, for: bookmarksKey) }
-        }
-        FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Ajouté aux favoris", bundle: .main))
-
-        do {
-            let _: APIResponse<[String: Bool]> = try await api.request(
-                PostsEndpoint.byPostIdBookmark(postId: postId),
-                method: "POST"
-            )
-        } catch {
-            // Rollback the optimistic cache insertion.
-            await bestEffort("feedViewModelReactions.feedCache.savePreservingFreshness.2", category: .cache) { try await feedCache.savePreservingFreshness(snapshot, for: bookmarksKey) }
-            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Impossible d'enregistrer le favori", bundle: .main))
         }
     }
 }

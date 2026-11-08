@@ -65,6 +65,10 @@ function makePrisma(overrides: any = {}) {
       }),
       ...overrides.community,
     },
+    // #16704 — retirer d'une communauté privée fait sortir de ses salons ; ici, aucun salon.
+    conversation: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
     communityMember: {
       findMany: jest.fn<any>().mockResolvedValue([mockMember]),
       count: jest.fn<any>().mockResolvedValue(1),
@@ -75,7 +79,7 @@ function makePrisma(overrides: any = {}) {
       ...overrides.communityMember,
     },
     user: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
+      findFirst: jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID })),
       ...overrides.user,
     },
     ...overrides,

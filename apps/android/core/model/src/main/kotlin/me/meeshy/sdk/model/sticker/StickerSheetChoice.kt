@@ -11,7 +11,8 @@ sealed interface StickerSheetChoice {
     data class Template(val templateId: String, val slots: Map<String, String> = emptyMap()) : StickerSheetChoice
     data class LocationTemplate(val templateId: String) : StickerSheetChoice
     data class Mee(val stickerId: String) : StickerSheetChoice
-    data class Instant(val instantId: String) : StickerSheetChoice
+    /** Un Instant et ses emplacements saisis, au format du fil (`slots` du message). */
+    data class Instant(val instantId: String, val slots: Map<String, String> = emptyMap()) : StickerSheetChoice
     data class PackItem(val packSlug: String, val itemId: String) : StickerSheetChoice
 
     /**

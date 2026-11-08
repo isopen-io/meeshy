@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.unsent.waiting", "androidName": "feed_pending_waiting", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.mine.waiting.cancel", "androidName": "feed_pending_cancel_send", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.pending.withdrawn", "androidName": "feed_pending_withdrawn", "status": "adopted" }
+      ]
+    }
+  }
+}

@@ -11,6 +11,7 @@ const itMediaViewer = {
   'media.viewer.compose': 'Crea con questo contenuto',
   'media.viewer.imager': 'Crea immagine',
   'media.viewer.saved': 'Salvato',
+  'media.viewer.already_saved': 'Già salvato',
   'media.viewer.save_failed': 'Impossibile salvare',
   'media.viewer.offline': 'Offline: riprova quando sei connesso',
   'media.viewer.retry': 'Tocca di nuovo per salvare',

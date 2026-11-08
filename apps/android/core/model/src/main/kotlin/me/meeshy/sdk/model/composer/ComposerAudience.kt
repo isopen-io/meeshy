@@ -6,7 +6,8 @@ import me.meeshy.sdk.model.StoryVisibility
  * Une mention est-elle SERVIE par l'audience choisie ? Miroir de `ComposerAudienceReach` (iOS).
  *
  * Ne répond que là où le client SAIT : `ONLY` / `EXCEPT` portent leur liste, `PRIVATE` ne sert
- * personne. Pour `PUBLIC`, `FRIENDS`, `COMMUNITY` le graphe est inconnu : un avertissement FAUX
+ * personne. Pour `PUBLIC`, `COMMUNITY` et les audiences de cercle, le graphe (et le niveau effectif du cercle) est
+ * inconnu : un avertissement FAUX
  * apprend à l'auteur à ignorer l'écran, donc on se tait ([UNKNOWN]).
  */
 enum class ComposerAudienceReach {
@@ -27,7 +28,9 @@ enum class ComposerAudienceReach {
             StoryVisibility.PRIVATE -> EXCLUDED
             StoryVisibility.ONLY -> mentionUserId?.let { if (it in audienceUserIds) REACHES else EXCLUDED } ?: UNKNOWN
             StoryVisibility.EXCEPT -> mentionUserId?.let { if (it in audienceUserIds) EXCLUDED else REACHES } ?: UNKNOWN
-            StoryVisibility.PUBLIC, StoryVisibility.COMMUNITY, StoryVisibility.FRIENDS -> UNKNOWN
+            StoryVisibility.PUBLIC, StoryVisibility.COMMUNITY, StoryVisibility.ACQUAINTANCES,
+            StoryVisibility.FRIENDS, StoryVisibility.CLOSE, StoryVisibility.BLOOD,
+            -> UNKNOWN
         }
     }
 }
@@ -37,12 +40,15 @@ enum class ComposerAudienceReach {
  * audiences NOMMÉES ; ailleurs il décrit la règle — « Public (0) » serait une erreur apparente.
  */
 object ComposerAudienceSubtitle {
-    enum class Kind { PUBLIC, COMMUNITY, FRIENDS, PRIVATE, PICK, COUNT }
+    enum class Kind { PUBLIC, COMMUNITY, ACQUAINTANCES, FRIENDS, CLOSE, BLOOD, PRIVATE, PICK, COUNT }
 
     fun of(visibility: StoryVisibility, selectedCount: Int): Kind = when (visibility) {
         StoryVisibility.PUBLIC -> Kind.PUBLIC
         StoryVisibility.COMMUNITY -> Kind.COMMUNITY
+        StoryVisibility.ACQUAINTANCES -> Kind.ACQUAINTANCES
         StoryVisibility.FRIENDS -> Kind.FRIENDS
+        StoryVisibility.CLOSE -> Kind.CLOSE
+        StoryVisibility.BLOOD -> Kind.BLOOD
         StoryVisibility.PRIVATE -> Kind.PRIVATE
         StoryVisibility.ONLY, StoryVisibility.EXCEPT -> if (selectedCount > 0) Kind.COUNT else Kind.PICK
     }
@@ -58,13 +64,20 @@ object ComposerAudienceSelection {
     /** Plafond de la passerelle (`visibilityUserIds.max(500)`). */
     const val MAX_USERS: Int = 500
 
-    /** Les modes proposés, dans l'ordre de la feuille. */
+    /**
+     * Les modes proposés, dans l'ordre de la feuille — iso `PostVisibility.composerSelectableCases` (iOS, #13939) :
+     * l'échelle des cercles du plus large au plus étroit (Public → Communauté → Connaissances → Amis → Proches → Sang),
+     * puis les audiences nommées et le privé.
+     */
     val offered: List<StoryVisibility> = listOf(
         StoryVisibility.PUBLIC,
-        StoryVisibility.FRIENDS,
         StoryVisibility.COMMUNITY,
-        StoryVisibility.ONLY,
+        StoryVisibility.ACQUAINTANCES,
+        StoryVisibility.FRIENDS,
+        StoryVisibility.CLOSE,
+        StoryVisibility.BLOOD,
         StoryVisibility.EXCEPT,
+        StoryVisibility.ONLY,
         StoryVisibility.PRIVATE,
     )
 

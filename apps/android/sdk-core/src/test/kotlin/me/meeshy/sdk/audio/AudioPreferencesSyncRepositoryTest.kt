@@ -58,6 +58,8 @@ class AudioPreferencesSyncRepositoryTest {
         assertThat(captured.captured.targetId).isEqualTo("me-42")
         val body = MeeshyApi.json.decodeFromString<AudioPreferenceSyncBody>(captured.captured.payload)
         assertThat(body.autoTranscribeIncoming).isFalse()
+        assertThat(body.transcriptionEnabled).isTrue()
+        assertThat(body.ttsEnabled).isTrue()
     }
 
     @Test

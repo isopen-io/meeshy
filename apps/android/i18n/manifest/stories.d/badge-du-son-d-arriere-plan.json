@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.viewer.a11y.backgroundAudio", "androidName": "stories_viewer_a11y_background_audio", "status": "adopted" }
+      ]
+    }
+  }
+}

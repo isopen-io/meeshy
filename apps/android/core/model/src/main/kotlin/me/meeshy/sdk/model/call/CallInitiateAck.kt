@@ -10,11 +10,13 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
+import me.meeshy.sdk.model.socket.SocketAck
+import me.meeshy.sdk.model.socket.SocketAckParsing
+import me.meeshy.sdk.model.socket.SocketAckPayloadSource
 
 /**
  * A single ICE server (STUN/TURN) as returned in the `call:initiate` ACK,
@@ -109,35 +111,20 @@ object CallInitiateAckParser {
         isLenient = true
     }
 
-    fun parse(rawJson: String): CallInitiateResult = runCatching {
-        val response = json.decodeFromString<AckResponse>(rawJson)
-        val callId = response.data?.callId
-        if (response.success && !callId.isNullOrBlank()) {
-            CallInitiateResult.Success(
-                CallInitiateAck(
-                    callId = callId,
-                    mode = response.data.mode,
-                    iceServers = response.data.iceServers,
-                    ttlSeconds = response.data.ttl,
-                ),
-            )
-        } else {
-            CallInitiateResult.ServerError(messageOf(response.error))
-        }
-    }.getOrElse { CallInitiateResult.Malformed }
-
-    private fun messageOf(error: JsonElement?): String = when (error) {
-        is JsonObject -> error["message"]?.jsonPrimitive?.contentOrNull ?: UNKNOWN_ERROR
-        is JsonPrimitive -> error.contentOrNull?.takeIf { error.isString } ?: UNKNOWN_ERROR
-        else -> UNKNOWN_ERROR
+    fun parse(rawJson: String): CallInitiateResult = when (val ack = SocketAckParsing.parse(rawJson, SocketAckPayloadSource.DATA)) {
+        is SocketAck.Timeout -> CallInitiateResult.Malformed
+        is SocketAck.Refused -> CallInitiateResult.ServerError(ack.refusal.message ?: UNKNOWN_ERROR)
+        is SocketAck.Accepted -> accepted(ack.payload)
     }
 
-    @Serializable
-    private data class AckResponse(
-        val success: Boolean = false,
-        val data: AckData? = null,
-        val error: JsonElement? = null,
-    )
+    private fun accepted(payload: JsonObject?): CallInitiateResult {
+        val data = payload?.let { runCatching { json.decodeFromJsonElement<AckData>(it) }.getOrElse { return CallInitiateResult.Malformed } }
+        val callId = data?.callId
+        if (data == null || callId.isNullOrBlank()) return CallInitiateResult.ServerError(UNKNOWN_ERROR)
+        return CallInitiateResult.Success(
+            CallInitiateAck(callId = callId, mode = data.mode, iceServers = data.iceServers, ttlSeconds = data.ttl),
+        )
+    }
 
     @Serializable
     private data class AckData(

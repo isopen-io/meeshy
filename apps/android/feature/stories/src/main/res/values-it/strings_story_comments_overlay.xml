@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comments_overlay_expired">Storia scaduta: i commenti restano visibili</string>
+    <string name="stories_comments_overlay_reply">Rispondi</string>
+    <string name="stories_comments_overlay_more">Opzioni del commento</string>
+    <string name="stories_comments_overlay_copy">Copia testo</string>
+    <string name="stories_comments_overlay_edit">Modifica</string>
+    <string name="stories_comments_overlay_delete">Elimina</string>
+    <string name="stories_comments_overlay_report">Segnala</string>
+    <string name="stories_comments_overlay_remove">Rimuovi</string>
+    <string name="stories_comments_overlay_save">Salva</string>
+    <string name="stories_comments_overlay_cancel">Annulla</string>
+    <string name="stories_comments_overlay_editing">Modifica del commento</string>
+    <string name="stories_comments_overlay_like">Mi piace</string>
+    <string name="stories_comments_overlay_unlike">Non mi piace più</string>
+    <string name="stories_comments_overlay_show_original">Mostra originale</string>
+    <string name="stories_comments_overlay_show_translated">Mostra traduzione</string>
+    <string name="stories_comments_overlay_show_replies">Mostra risposte</string>
+    <string name="stories_comments_overlay_hide_replies">Nascondi risposte</string>
+    <string name="stories_comments_overlay_more_replies">Carica altre risposte</string>
+    <string name="stories_comments_overlay_retry">Riprova</string>
+    <string name="stories_comments_overlay_media">Contenuto allegato</string>
+    <string name="stories_comments_overlay_cancel_reply">Annulla risposta</string>
+</resources>

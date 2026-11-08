@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comment_attach">Joindre une photo, une vidéo ou un fichier</string>
+    <string name="stories_comment_attach_remove">Retirer la pièce jointe</string>
+    <string name="stories_comment_attach_uploading">Envoi en cours…</string>
+    <string name="stories_comment_attach_failed">La pièce jointe n\'a pas pu être envoyée</string>
+</resources>

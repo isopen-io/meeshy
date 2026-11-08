@@ -23,6 +23,8 @@ import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from './ca
 import { E2EE_CLIENT_EVENTS, E2EE_SERVER_EVENTS } from './e2ee-event-names.js';
 import { RELATION_SERVER_EVENTS } from './relation-event-names.js';
 import { SESSION_SERVER_EVENTS } from './session-event-names.js';
+import { TALKIE_CLIENT_EVENTS, TALKIE_SERVER_EVENTS } from './talkie-event-names.js';
+import { NOW_PLAYING_CLIENT_EVENTS, NOW_PLAYING_SERVER_EVENTS } from './now-playing-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
 
 // ===== ROOM HELPERS =====
@@ -161,6 +163,12 @@ export const SERVER_EVENTS = {
    * émis dans la room `user:<id>` du seul compte concerné, jamais ailleurs.
    */
   GAME_UPDATED: 'game:updated',
+  /**
+   * Une mission du jour du joueur a AVANCÉ ou s'est TERMINÉE, ou son coffre s'est ouvert (#16425) —
+   * `GameMissionsUpdatedEventData` (`types/game-sync.ts`) : `{ dayKey }`, invalidation pure, émise dans la room
+   * `user:<id>` du seul compte concerné. Le client relit ses défis du jour.
+   */
+  GAME_MISSIONS_UPDATED: 'game:missions-updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement
@@ -178,6 +186,8 @@ export const SERVER_EVENTS = {
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   ...SESSION_SERVER_EVENTS,
   ...RELATION_SERVER_EVENTS,
+  ...TALKIE_SERVER_EVENTS,
+  ...NOW_PLAYING_SERVER_EVENTS,
   ...E2EE_SERVER_EVENTS,
   ERROR: 'error',
   NOTIFICATION_NEW: 'notification:new',
@@ -405,6 +415,15 @@ export const SERVER_EVENTS = {
    */
   CONVERSATION_CLOSED: 'conversation:closed',
   /**
+   * #14643 — an admin made the conversation OBSOLETE
+   * (`DELETE /conversations/:id/obsolete`): its content is unreadable at once,
+   * it leaves every member's list, and its data is erased after `purgeAfter`.
+   * Emitted to each member's **user room** right AFTER `CONVERSATION_CLOSED`
+   * (which old clients keep handling — the conversation is also closed):
+   * a new client drops the conversation AND its cached messages.
+   */
+  CONVERSATION_OBSOLETED: 'conversation:obsoleted',
+  /**
    * PER-USER "delete for me" (`DELETE /conversations/:id/delete-for-me`):
    * removes the conversation from the caller's own device list only — the
    * conversation stays active for every other participant. Broadcast to the
@@ -601,6 +620,9 @@ export const SERVER_EVENTS = {
   // --- Décor de profil (#10632) : contour d'avatar et bannière équipés, synchronisés entre mes appareils ---
   PROFILE_DECOR_UPDATED: 'profile:decor-updated',
 
+  // --- Mes stickers (#16515) : la bibliothèque de stickers du COMPTE, synchronisée entre mes appareils ---
+  STICKER_LIBRARY_UPDATED: 'sticker:library-updated',
+
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
 
@@ -687,6 +709,8 @@ export const CLIENT_EVENTS = {
   ...VIEWING_CLIENT_EVENTS,
   ...ADMIN_METRICS_CLIENT_EVENTS,
   ...E2EE_CLIENT_EVENTS,
+  ...TALKIE_CLIENT_EVENTS,
+  ...NOW_PLAYING_CLIENT_EVENTS,
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et

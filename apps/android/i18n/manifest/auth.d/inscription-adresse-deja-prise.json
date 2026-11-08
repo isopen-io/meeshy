@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "auth.signup.email.isItYou", "androidName": "signup_email_is_it_you", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.signup.email.itsMe", "androidName": "signup_email_its_me", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.signup.email.notMe", "androidName": "signup_email_not_me", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.signup.email.notMe.note", "androidName": "signup_email_not_me_note", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.signup.email.sendSignInLink", "androidName": "signup_email_send_sign_in_link", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.signup.email.forgotPassword", "androidName": "signup_email_forgot_password", "status": "adopted"}
+      ]
+    }
+  }
+}

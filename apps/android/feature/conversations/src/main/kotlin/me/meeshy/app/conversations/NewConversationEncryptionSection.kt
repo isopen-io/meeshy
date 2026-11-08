@@ -111,7 +111,7 @@ private fun EncryptionChoiceRow(
 }
 
 @StringRes
-private fun CreationEncryptionMode.labelRes(): Int = when (this) {
+internal fun CreationEncryptionMode.labelRes(): Int = when (this) {
     CreationEncryptionMode.SERVER -> R.string.encryption_mode_server_label
     CreationEncryptionMode.HYBRID -> R.string.encryption_mode_hybrid_label
     CreationEncryptionMode.E2EE -> R.string.encryption_mode_e2ee_label

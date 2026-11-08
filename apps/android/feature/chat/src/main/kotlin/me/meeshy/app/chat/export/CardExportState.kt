@@ -11,6 +11,7 @@ import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.ui.component.export.ExportAnnouncement
 
 internal enum class CardOutcome { GALLERY, SHARED, DENIED, FAILED }
 
@@ -55,7 +56,9 @@ internal class CardExportState(
 
     val subject: CardSubject? get() = source.subject(exportLanguage)
 
-    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${pictures.keys.sorted().joinToString(",")}"
+    val preparing: Boolean get() = source.preparing
+
+    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${pictures.keys.sorted().joinToString(",")}|${subject?.hero?.id.orEmpty()}"
     val ready: Boolean get() = rendered != null && renderedKey == renderKey
     val isDefault: Boolean get() = savedDefault == format
 
@@ -136,4 +139,11 @@ internal fun rememberCardExportState(source: CardSource, viewer: CardViewer, con
             initialFormat = CardFormat.readDefault(store) ?: CardFormat.initial,
         )
     }
+}
+
+/** Ce que la fin d'un export annonce une fois la feuille fermée ; un refus ou un échec reste dit DANS la feuille, ouverte. */
+internal fun cardExportAnnouncement(outcome: CardOutcome, saved: String, shared: String): ExportAnnouncement? = when (outcome) {
+    CardOutcome.GALLERY -> ExportAnnouncement(saved)
+    CardOutcome.SHARED -> ExportAnnouncement(shared)
+    CardOutcome.DENIED, CardOutcome.FAILED -> null
 }

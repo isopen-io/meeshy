@@ -120,6 +120,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
+    var onGreetArrivals: ((String) -> Void)?
     /// **Mode sélection multiple.** `false`/`[]` par défaut — sans
     /// effet sur les écrans qui ne câblent pas ces trois paramètres.
     var isSelectionModeActive: Bool = false
@@ -296,6 +297,7 @@ struct MessageListView: UIViewControllerRepresentable {
             conversationViewModel?.callBack(for: summary)
         }
         vc.onCallDetailRequest = onCallDetailRequest
+        vc.onGreetArrivals = onGreetArrivals
         vc.conversationViewModel = conversationViewModel
         // Le MONTAGE reste sec : animer un inset depuis 0 sur un contrôleur
         // qui vient de naître ferait glisser le fil à chaque ouverture de
@@ -311,9 +313,7 @@ struct MessageListView: UIViewControllerRepresentable {
         // Posé AVANT `applyBottomInset`/`applyTopInset` plus bas
         // — mêmes raisons que `makeUIViewController`. Le `didSet` côté
         // contrôleur ne rejoue le pass QUE si la valeur change réellement
-        // (garde `oldValue != newValue`) : une réaffectation identique à
-        // chaque tick SwiftUI est un no-op.
-        //
+        // (garde `oldValue != newValue`) : une réaffectation identique est un no-op.
         // LE MODE D'ABORD, avant tout ORDRE POSITIONNEL. Ce
         // `didSet` est l'instant du RÉVEIL : c'est lui qui réapplique
         // `.allItems` quand un pane opaque cesse de couvrir la liste, que
@@ -416,6 +416,7 @@ struct MessageListView: UIViewControllerRepresentable {
             conversationViewModel?.callBack(for: summary)
         }
         vc.onCallDetailRequest = onCallDetailRequest
+        vc.onGreetArrivals = onGreetArrivals
         vc.conversationViewModel = conversationViewModel
         // La réserve basse rejoint sa valeur SUR la courbe de ce qui
         // l'a causée (le clavier qui monte ou descend), jamais en un pas sec.

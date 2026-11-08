@@ -4,16 +4,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { FLIP_PROPERTIES } from '@/lib/view/flip';
-import { collapseUnfolded } from '@/lib/view/unfold-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { LongMessageText } from './long-message-text';
 
 /**
- * **LE DÉPLIAGE D'UN MESSAGE LONG SE JOUE EN FLIP** (#11314) : la hauteur ne
- * s'anime plus. Le texte intégral prend sa place d'un coup ; le bouton, seul
- * élément qui change de place, repart de l'ancienne en `transform`, et le
- * corps s'allume en `opacity`.
+ * **LE DÉPLIAGE D'UN MESSAGE LONG** (#11314, #16464) : la hauteur ne s'anime
+ * pas. Le texte intégral prend sa place d'un coup, le corps s'allume en
+ * `opacity`, et le message reste déplié — aucun contrôle ne le replie.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const LONG = `${'Bonjour tout le monde, voici un très long message. '.repeat(30)}Fin.`;
@@ -43,7 +41,6 @@ afterEach(() => {
   container = null;
   root = null;
   played.length = 0;
-  collapseUnfolded();
   if (realAnimate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
   else Object.defineProperty(HTMLElement.prototype, 'animate', realAnimate);
   if (realRect === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
@@ -70,8 +67,8 @@ function stub(): void {
   });
 }
 
-describe('LongMessageText — dépliage et repli', () => {
-  test('déplier : le bouton repart de sa place d’avant en transform, le corps s’allume en opacity — aucune hauteur', async () => {
+describe('LongMessageText — un toucher déplie, rien ne replie (#16464)', () => {
+  test('déplier : le texte intégral prend sa place, le corps s’allume en opacity — aucune hauteur, aucun « Réduire »', async () => {
     stub();
     container = document.body.appendChild(document.createElement('div'));
     root = createRoot(container);
@@ -79,20 +76,49 @@ describe('LongMessageText — dépliage et repli', () => {
     expect(played).toHaveLength(0);
     await act(async () => container?.querySelector<HTMLButtonElement>('[data-long-message-toggle]')?.click());
     expect(container.querySelector('[data-long-message]')?.getAttribute('data-long-message')).toBe('unfolded');
-    expect(played).toContainEqual([{ transform: 'translate(0px, -300px)' }, { transform: 'none' }]);
+    expect(container.textContent).toContain('Fin.');
+    expect(container.querySelector('button')).toBeNull();
+    expect(container.textContent).not.toContain('Réduire');
     expect(played).toContainEqual([{ opacity: 0.4 }, { opacity: 1 }]);
     for (const frames of played) for (const key of frames.flatMap((frame) => Object.keys(frame))) expect(FLIP_PROPERTIES).toContain(key);
   });
 
-  test('replier : le bouton remonte de 300 px, repart du bas', async () => {
+  test('le bouton disparu, le focus clavier se pose sur le texte déplié — il ne tombe pas sur la page', async () => {
     stub();
     container = document.body.appendChild(document.createElement('div'));
     root = createRoot(container);
     await act(async () => root?.render(<LongMessageText messageId="m-2" text={LONG} />));
-    const toggle = () => container?.querySelector<HTMLButtonElement>('[data-long-message-toggle]')?.click();
-    await act(async () => toggle());
-    played.length = 0;
-    await act(async () => toggle());
-    expect(played).toContainEqual([{ transform: 'translate(0px, 300px)' }, { transform: 'none' }]);
+    container.querySelector<HTMLButtonElement>('[data-long-message-toggle]')?.focus();
+    await act(async () => container?.querySelector<HTMLButtonElement>('[data-long-message-toggle]')?.click());
+    expect(document.activeElement).toBe(container.querySelector('[data-long-message]'));
+  });
+
+  test('deux messages dépliés le restent ensemble', async () => {
+    stub();
+    container = document.body.appendChild(document.createElement('div'));
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <>
+          <LongMessageText messageId="m-a" text={LONG} />
+          <LongMessageText messageId="m-b" text={LONG} />
+        </>,
+      ),
+    );
+    for (const button of Array.from(container.querySelectorAll<HTMLButtonElement>('[data-long-message-toggle]'))) {
+      await act(async () => button.click());
+    }
+    const states = Array.from(container.querySelectorAll('[data-long-message]')).map((node) => node.getAttribute('data-long-message'));
+    expect(states).toEqual(['unfolded', 'unfolded']);
+  });
+
+  test('le bouton se nomme « Lire la suite », annonce son état replié et offre une cible de 44 px', async () => {
+    container = document.body.appendChild(document.createElement('div'));
+    root = createRoot(container);
+    await act(async () => root?.render(<LongMessageText messageId="m-3" text={LONG} />));
+    const button = container.querySelector<HTMLButtonElement>('[data-long-message-toggle]');
+    expect(button?.textContent).toBe('Lire la suite');
+    expect(button?.getAttribute('aria-expanded')).toBe('false');
+    expect(button?.classList.contains('min-h-11')).toBe(true);
   });
 });

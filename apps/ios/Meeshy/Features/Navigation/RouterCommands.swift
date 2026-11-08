@@ -25,6 +25,17 @@ final class RouterCommands {
         router?.popToRoot()
     }
 
+    /// Le disque de tête du détail d'un post : ✕ sur la feuille, « Retour »
+    /// dans le panneau de l'iPad (#16676).
+    var postDetailHeaderGlyph: CollapsibleHeaderBackGlyph {
+        router?.presentsPostDetailAsSheet == false ? .back : .close
+    }
+
+    /// Ferme le détail d'un post : sa feuille, ou sa page hors feuille (#16676).
+    func closePostDetail() {
+        router?.closePostDetail()
+    }
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         router?.navigateToConversation(conversation, highlightMessageId: highlightMessageId)
     }
@@ -65,16 +76,33 @@ final class RouterCommands {
     func openPackShop(domain: PackDomain?) {
         router?.openPackShop(domain: domain)
     }
+
+    func openMyPacks() {
+        router?.openMyPacks()
+    }
 }
 
 private struct RouterCommandsKey: EnvironmentKey {
     static let defaultValue = RouterCommands.inert
 }
 
+/// Le routeur LUI-MÊME, pour les rares surfaces qui le remettent à un lecteur
+/// monté plus bas (l'aperçu d'un composer). Optionnel, donc jamais un piège :
+/// absent, la surface se passe de ce qu'il porte au lieu de trapper comme un
+/// `@EnvironmentObject` manquant.
+private struct MeeshyRouterKey: EnvironmentKey {
+    static let defaultValue: Router? = nil
+}
+
 extension EnvironmentValues {
     var routerCommands: RouterCommands {
         get { self[RouterCommandsKey.self] }
         set { self[RouterCommandsKey.self] = newValue }
+    }
+
+    var meeshyRouter: Router? {
+        get { self[MeeshyRouterKey.self] }
+        set { self[MeeshyRouterKey.self] = newValue }
     }
 }
 
@@ -85,5 +113,6 @@ struct MeeshyRouterInjection: ViewModifier {
         content
             .environmentObject(router)
             .environment(\.routerCommands, router.commands)
+            .environment(\.meeshyRouter, router)
     }
 }

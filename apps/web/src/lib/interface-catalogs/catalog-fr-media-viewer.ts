@@ -11,6 +11,7 @@ const frMediaViewer = {
   'media.viewer.compose': 'Créer avec ce média',
   'media.viewer.imager': 'Imager',
   'media.viewer.saved': 'Enregistré',
+  'media.viewer.already_saved': 'Déjà enregistré',
   'media.viewer.save_failed': 'Enregistrement impossible',
   'media.viewer.offline': 'Hors ligne — réessayez une fois connecté',
   'media.viewer.retry': 'Touchez de nouveau pour enregistrer',

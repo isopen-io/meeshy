@@ -12,6 +12,8 @@ import { FastifyInstance } from 'fastify';
 import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { readerParticipantIdOf } from './readerParticipant';
+import { MESSAGE_PROTECTION_SELECT, mapMessageProtectionFields } from './messageProtectionProjection';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
@@ -530,10 +532,13 @@ export function registerMessagePinRoutes(
           forwardedFromConversationId: true,
           pinnedAt: true,
           pinnedBy: true,
-          isViewOnce: true,
-          isBlurred: true,
-          expiresAt: true,
-          effectFlags: true,
+          // #16578 — le bloc PARTAGÉ, jamais quatre champs recopiés. La copie
+          // manuscrite portait `isViewOnce`, `isBlurred`, `expiresAt` et
+          // `effectFlags` — assez pour ressembler à une porte conforme, et sans
+          // les deux compteurs de vue unique ni la DURÉE de l'éphémère, que
+          // `messageSchema` déclare tous les trois. Une cinquième famille de
+          // protection ajoutée demain arrive ici sans qu'on y pense.
+          ...MESSAGE_PROTECTION_SELECT,
           translations: true,
           createdAt: true,
           updatedAt: true,
@@ -619,7 +624,24 @@ export function registerMessagePinRoutes(
           .filter((uid: string | null | undefined): uid is string => !!uid)
       );
 
-      const openedPins = await revealAtRestRows(pinnedMessages, gatewayKeyring(prisma));
+      // #16578 — LES DEUX COUPURES DE SERVICE D'UNE PAGE LUE PAR UN LECTEUR.
+      //
+      // `keepAliveForReader` porte l'éphémère échu pour CE lecteur (#7451) puis
+      // la réponse à ce qui est mort pour lui (#8630). Son doc-comment ÉNUMÈRE
+      // ses portes — « recherche, fil, lien de partage » — et l'épingle était
+      // la quatrième, absente de l'énumération (leçon 261 : une liste de sites
+      // affirme aussi « ce sont les sites où la règle s'applique », et cette
+      // seconde moitié n'est presque jamais vérifiée). Or `admitMessagePin` ne
+      // refuse ni l'éphémère, ni la vue unique, ni le flou : un message à
+      // flamme est épinglable, et l'épingle est la porte la plus évidente sur
+      // l'historique — ce fichier l'écrit lui-même à propos du plancher.
+      //
+      // La clé de lecteur est résolue ICI, une fois, et réutilisée par la
+      // signature des pièces jointes plus bas, qui la relisait pour son compte.
+      const pinnedReaderParticipantId = await readerParticipantIdOf(prisma, conversationId, authRequest.authContext);
+      const pinnedReaderPage = await keepAliveForReader(prisma, pinnedMessages, pinnedReaderParticipantId);
+
+      const openedPins = await revealAtRestRows(pinnedReaderPage.alive, gatewayKeyring(prisma));
       const formattedMessages = openedPins.map((message: any) => {
         const sender = message.sender;
         const place = sharedPlaceFromMetadata(message.metadata);
@@ -649,10 +671,14 @@ export function registerMessagePinRoutes(
           forwardedFromConversationId: message.forwardedFromConversationId,
           pinnedAt: message.pinnedAt,
           pinnedBy: message.pinnedBy,
-          isViewOnce: message.isViewOnce,
-          isBlurred: message.isBlurred,
-          expiresAt: message.expiresAt,
-          effectFlags: message.effectFlags,
+          // #16578 — la MÊME projection que `GET .../messages` et la recherche
+          // (`mapMessageProtectionFields`), donc l'échéance DU LECTEUR. La
+          // copie manuscrite servait `message.expiresAt` BRUT : depuis #7451
+          // cette colonne porte l'heure INTERNE de destruction, qui vaut le
+          // plafond de rétention de sept jours tant que personne n'a reçu —
+          // « ce message disparaît dans 7 jours » sous un éphémère de trente
+          // secondes.
+          ...mapMessageProtectionFields(message, pinnedReaderPage.deadlines.get(message.id)),
           // `Message.translations` est une CARTE Mongo, jamais un tableau — et
           // le schéma de cette réponse déclare `translations: { type: 'array' }`
           // (`messageSchema`). `fast-json-stringify` ne coerce pas : la carte
@@ -692,13 +718,26 @@ export function registerMessagePinRoutes(
         };
       });
 
+      // #16578 — une épingle qui CITE un éphémère n'en survit pas : son
+      // échéance servie devient la plus proche de la sienne et de celle qu'elle
+      // hérite. `keepAliveForReader` a déjà RETIRÉ celles dont la chaîne est
+      // morte ; celle-ci raccourcit ce qui vit encore. N'allonge jamais une vie.
+      const heirsApplied = formattedMessages.map((served) => withInheritedExpiry(served, pinnedReaderPage.inherited));
+
       // #9646 — les pièces d'un message protégé épinglé, signées pour CE lecteur.
       const servedMessages = await signMessagesAttachmentsForReader(prisma, {
-        messages: formattedMessages,
-        readerParticipantId: await readerParticipantIdOf(prisma, conversationId, authRequest.authContext),
+        messages: heirsApplied,
+        readerParticipantId: pinnedReaderParticipantId,
         signer: readerFileUrlSignerFromEnv(new Date()),
       });
 
+      // #16578 — `total` est un `count()` : il ne peut pas appliquer une
+      // échéance PAR LECTEUR, qui vit dans `MessageStatusEntry`. Il compte donc
+      // les éphémères que les deux coupures ci-dessus retirent de la page, et
+      // `hasMore` reste vrai — le lecteur pagine, il ne perd rien. C'est la
+      // même propriété que la recherche et le fil, et elle échoue du bon côté
+      // (montrer MOINS). La faire disparaître demande de compter par lecteur :
+      // suivi #16579.
       return sendSuccess(reply, servedMessages, {
         pagination: { total, offset, limit, hasMore: offset + formattedMessages.length < total }
       });

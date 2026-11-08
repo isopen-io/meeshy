@@ -75,4 +75,42 @@ final class CommunityDetailViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isAdmin)
         XCTAssertTrue(viewModel.conversations.isEmpty)
     }
+    // #6378 — le détail ne sert jamais `members` : c'est `currentUserRole` qui
+    // dit au lecteur ce qu'il est. Sans lui, un membre se voyait offrir
+    // « Rejoindre » (409) et jamais « Quitter ».
+    func test_load_membreServiParSonRole_estMembreSansListeDeMembres() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: nil, currentUserRole: "member"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-member" })
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertFalse(viewModel.isCreator)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertEqual(viewModel.currentUserRole, .member)
+    }
+
+    func test_load_moderateurServiParSonRole_nEstPasAdmin() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: nil, currentUserRole: "moderator"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-mod" })
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator)
+    }
+
+    func test_load_roleServiNul_nEstPasMembre() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: nil, currentUserRole: nil))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-visitor" })
+
+        await viewModel.load()
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertEqual(service.getConversationsCallCount, 0)
+    }
 }

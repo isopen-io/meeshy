@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.audio.AudioProcessor
-import androidx.media3.common.util.Util
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.TextureOverlay
@@ -22,8 +21,8 @@ import java.io.File
  * vidéo des slides, une séquence par son, les calques des objets et les cartes de marque. À part du moteur pour que la
  * composition RÉELLE se vérifie contre les exigences de Media3 sans encodeur.
  *
- * **Les calques voyagent sur CHAQUE item, jamais sur la composition** (#13986) : Media3 1.4.1 n'applique, des effets de
- * la composition, que sa `Presentation` (`TransformerSingleInputVideoGraph`) — un `OverlayEffect` posé là était ignoré
+ * **Les calques voyagent sur CHAQUE item, jamais sur la composition** (#13986) : Media3 1.4.1 n'appliquait, des effets
+ * de la composition, que sa `Presentation` (`TransformerSingleInputVideoGraph`) — un `OverlayEffect` posé là était ignoré
  * sans un mot, et l'export rendait les fonds noirs des slides sans leurs calques peints : un fichier tout noir. Un item
  * voit ses images à l'heure de la séquence (`FrameInfo.offsetToAddUs`), l'horloge commune des calques ; et la MÊME liste
  * d'effets sur chaque item garde la chaîne GL configurée une fois (`DefaultVideoFrameProcessor` ne la refait que si les
@@ -41,14 +40,14 @@ internal object Media3SceneComposition {
         frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = GuardedVideoFrames::of,
     ): Composition {
         val frame = frameEffects(job.format, overlaysOf(job, planned, frames))
-        val video = EditedMediaItemSequence(planned.video.map { videoItem(it, job.format, frame) })
-        val sounds = planned.audio.map { sequence -> EditedMediaItemSequence(sequence.map(::audioItem)) }
+        val video = EditedMediaItemSequence.withVideoFrom(planned.video.map { videoItem(it, job.format, frame) })
+        val sounds = planned.audio.map { sequence -> EditedMediaItemSequence.withAudioFrom(sequence.map(::audioItem)) }
         return Composition.Builder(listOf(video) + sounds).build()
     }
 
     /**
-     * Les calques de la vidéo, du plus bas au plus haut : à chaque profondeur, les objets à leur instant puis les vidéos
-     * posées au-dessus d'eux ; enfin les cartes de marque qui se fondent.
+     * Les calques de la vidéo, du plus bas au plus haut : les cadres des vidéos de fond réglées sur leur fenêtre (#14875),
+     * puis à chaque profondeur les objets à leur instant et les vidéos posées au-dessus d'eux ; enfin les cartes de marque.
      */
     fun overlaysOf(
         job: SceneExportJob,
@@ -56,7 +55,8 @@ internal object Media3SceneComposition {
         frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = GuardedVideoFrames::of,
     ): List<TextureOverlay> {
         val deepest = (job.overlays.map { it.depth } + job.placedVideos.map { it.depth }).maxOrNull() ?: 0
-        val stack = (0..deepest).flatMap { depth ->
+        val lookFrames = SceneLookFrameOverlay.of(planned.video, job.format)
+        val stack = lookFrames + (0..deepest).flatMap { depth ->
             val layers = job.overlays.filter { it.depth == depth }
             listOfNotNull<TextureOverlay>(layers.takeIf { it.isNotEmpty() }?.let { TimedBitmapOverlay(it, gaps = depth > 0) }) +
                 job.placedVideos.filter { it.depth == depth }.map { PlacedVideoOverlay(it, job.format, frames) }
@@ -72,16 +72,20 @@ internal object Media3SceneComposition {
     }
 
     /**
+     * Une vidéo de fond réglée (#14875) reçoit son look AVANT le cadrage au format, sur chaque tour et sur son image tenue :
+     * la même liste pour toute sa slide, et la chaîne GL ne se refait qu'à l'entrée et à la sortie de la vidéo réglée.
+     *
      * Une plage d'une vidéo de fond (sans son : sa piste, quand elle joue, est une séquence audio du plan), ou une image tenue.
-     * Une image porte sa durée sur l'[EditedMediaItem] (`setDurationUs`) et sa cadence : Media3 1.4.1 ne lit pas
-     * `MediaItem.imageDurationMs` et son `ImageAssetLoader` refuse une image sans l'une ou l'autre (#13986).
+     * Une image porte sa durée sur le [MediaItem] (`imageDurationMs`, que l'[EditedMediaItem] lit depuis Media3 1.5 et qui
+     * fait d'un item une image depuis 1.8 — sous 1.4.1, il fallait la recopier par `setDurationUs`, #13986) et sa cadence,
+     * sans laquelle l'`ImageAssetLoader` la refuse encore (`frameRate != C.RATE_UNSET_INT`).
      */
-    private fun videoItem(item: SceneVideoItem, format: StoryExportVideoFormat, frame: Effects): EditedMediaItem {
+    private fun videoItem(item: SceneVideoItem, format: StoryExportVideoFormat, shared: Effects): EditedMediaItem {
+        val frame = item.look?.let { Effects(emptyList(), it.effects + shared.videoEffects) } ?: shared
         val clip = item.clip
         if (clip == null) {
             val millis = checkNotNull(item.imageMillis) { "image tenue sans durée : ${item.file.name}" }
             return EditedMediaItem.Builder(MediaItem.Builder().setUri(Uri.fromFile(item.file)).setImageDurationMs(millis).build())
-                .setDurationUs(Util.msToUs(millis))
                 .setFrameRate(format.fps)
                 .setEffects(frame)
                 .build()

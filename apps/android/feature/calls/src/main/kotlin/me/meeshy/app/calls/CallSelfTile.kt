@@ -1,10 +1,6 @@
 package me.meeshy.app.calls
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -54,7 +50,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
-import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallCameraFoldedTap
+import me.meeshy.sdk.model.call.CallCameraRail
 import me.meeshy.sdk.model.call.CallSafeInsets
 import me.meeshy.sdk.model.call.CallSelfTileControlsLaw
 import me.meeshy.sdk.model.call.CallSelfTileCorner
@@ -62,7 +59,6 @@ import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallTilePoint
-import me.meeshy.sdk.model.call.CallTileRect
 import me.meeshy.sdk.model.call.CallTileSize
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
@@ -117,10 +113,11 @@ internal fun CallSelfTile(
         var pinch by remember { mutableFloatStateOf(1f) }
         var drag by remember { mutableStateOf(Offset.Zero) }
         var snapJob by remember { mutableStateOf<Job?>(null) }
+        var unfolded by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         val haptics = LocalHapticFeedback.current
 
-        val size = CallSelfTileLaw.tileSize(container, insets, scale, pinch)
+        val size = CallSelfTileLaw.tileSize(container, insets, CallSelfTileLaw.resting(scale, controlsVisible), pinch)
         val rowBounds = CallSelfTileControlsLaw.bounds(container, insets)
         fun restingCenter(at: CallSelfTileCorner): CallTilePoint =
             CallSelfTileControlsLaw.restingCenter(CallSelfTileLaw.center(at, container, size, insets), size, rowBounds)
@@ -224,32 +221,28 @@ internal fun CallSelfTile(
             overlay()
         }
 
+        val hasControls = effectsCount + cameraCount > 0
+        val folded = hasControls && CallCameraRail.foldsRows(size.widthDp)
         val rows = CallSelfTileControlsLaw.rows(center, size, rowBounds, effectsCount, cameraCount)
-        rows.effects?.let { CallSelfTileControlRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
-        rows.camera?.let { CallSelfTileControlRowSlot(it, container, rtl, drag, controlsVisible, cameraControls) }
+        if (!folded) {
+            rows.effects?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
+            rows.camera?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, cameraControls) }
+        } else {
+            if (unfolded) CallCameraRailScrim(onDismiss = { unfolded = CallCameraRail.foldedMenu(true, CallCameraFoldedTap.Elsewhere) })
+            val foldFrame = CallSelfTileControlsLaw.rows(center, size, rowBounds, effectsCount = 0, cameraCount = 1).camera
+            foldFrame?.let {
+                CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible) {
+                    CallCameraFoldButton(unfolded, onTap = { unfolded = CallCameraRail.foldedMenu(unfolded, CallCameraFoldedTap.Button) })
+                }
+            }
+            if (unfolded) {
+                rows.effects?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
+                rows.camera?.let {
+                    CallCameraRailRowSlot(it.copy(yDp = it.yDp + CallSelfTileControlsLaw.ROW_SPAN_DP), container, rtl, drag, controlsVisible, cameraControls)
+                }
+            }
+        }
     }
-}
-
-/** Une rangée posée hors de la vignette, miroitée en lecture droite-à-gauche et décalée du glissé en cours. */
-@Composable
-private fun CallSelfTileControlRowSlot(
-    row: CallTileRect,
-    container: CallTileSize,
-    rtl: Boolean,
-    drag: Offset,
-    visible: Boolean,
-    content: @Composable () -> Unit,
-) {
-    val density = LocalDensity.current
-    val rowX = if (rtl) container.widthDp - row.xDp - row.widthDp else row.xDp
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
-        exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
-        modifier = Modifier
-            .offset { IntOffset((rowX * density.density + drag.x).roundToInt(), (row.yDp * density.density + drag.y).roundToInt()) }
-            .size(row.widthDp.dp, row.heightDp.dp),
-    ) { content() }
 }
 
 @Composable

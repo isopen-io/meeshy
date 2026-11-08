@@ -96,7 +96,7 @@ class ImageUploadValidatorTest {
     fun unsupportedTypeTakesPriorityOverOversize() {
         // A huge non-image reports the type error (more actionable) rather than TOO_LARGE.
         val huge = (ImageUploadTarget.BANNER.maxBytes + 1).toInt()
-        val result = ImageUploadValidator.validate(avatar, byteCount = huge, mimeType = "video/mp4")
+        val result = ImageUploadValidator.validateCompressed(avatar, byteCount = huge, mimeType = "video/mp4")
 
         assertThat(reasonOf(result)).isEqualTo(ImageUploadValidation.Reason.UNSUPPORTED_TYPE)
     }
@@ -111,21 +111,38 @@ class ImageUploadValidatorTest {
     }
 
     @Test
-    fun rejectsAFileOneByteOverTheAvatarCeilingAsTooLarge() {
+    fun aHugeImageIsNotTerminalBeforeCompression() {
+        val huge = (ImageUploadTarget.BANNER.maxBytes * 4).toInt()
+
+        assertThat(ImageUploadValidator.validate(avatar, byteCount = huge, mimeType = "image/jpeg"))
+            .isEqualTo(ImageUploadValidation.Accepted)
+    }
+
+    @Test
+    fun rejectsAFileOneByteOverTheAvatarCeilingAsTooLargeOnceCompressed() {
         val overLimit = (ImageUploadTarget.AVATAR.maxBytes + 1).toInt()
 
-        val result = ImageUploadValidator.validate(avatar, byteCount = overLimit, mimeType = "image/jpeg")
+        val result = ImageUploadValidator.validateCompressed(avatar, byteCount = overLimit, mimeType = "image/jpeg")
 
         assertThat(reasonOf(result)).isEqualTo(ImageUploadValidation.Reason.TOO_LARGE)
     }
 
     @Test
-    fun theSameFileFailsTheAvatarButPassesTheBanner() {
-        // 10 MiB: over the 8 MiB avatar ceiling, under the 12 MiB banner ceiling.
+    fun compressedCheckKeepsTheEmptyAndTypeReasonsFirst() {
+        val huge = (ImageUploadTarget.BANNER.maxBytes + 1).toInt()
+
+        assertThat(reasonOf(ImageUploadValidator.validateCompressed(avatar, 0, "image/jpeg")))
+            .isEqualTo(ImageUploadValidation.Reason.EMPTY)
+        assertThat(reasonOf(ImageUploadValidator.validateCompressed(avatar, huge, "video/mp4")))
+            .isEqualTo(ImageUploadValidation.Reason.UNSUPPORTED_TYPE)
+    }
+
+    @Test
+    fun theSameCompressedFileFailsTheAvatarButPassesTheBanner() {
         val tenMiB = 10 * 1024 * 1024
 
-        val asAvatar = ImageUploadValidator.validate(avatar, byteCount = tenMiB, mimeType = "image/jpeg")
-        val asBanner = ImageUploadValidator.validate(banner, byteCount = tenMiB, mimeType = "image/jpeg")
+        val asAvatar = ImageUploadValidator.validateCompressed(avatar, byteCount = tenMiB, mimeType = "image/jpeg")
+        val asBanner = ImageUploadValidator.validateCompressed(banner, byteCount = tenMiB, mimeType = "image/jpeg")
 
         assertThat(reasonOf(asAvatar)).isEqualTo(ImageUploadValidation.Reason.TOO_LARGE)
         assertThat(asBanner).isEqualTo(ImageUploadValidation.Accepted)

@@ -1,0 +1,138 @@
+Meeshy — NOTICE
+===============
+
+PROJET D'INGÉNIERIE DE CONFORMITÉ, PAS UN AVIS JURIDIQUE.
+La rédaction finale de ce fichier, du paragraphe « Licences » du README et des
+écrans « Licences » des applications doit être validée par l'avocat du projet
+(isopen-io/meeshy#11548). Suivi : isopen-io/meeshy#14628.
+
+1. Les fichiers source sont sous licence MIT
+--------------------------------------------
+
+Chaque fichier source écrit pour Meeshy dans ce dépôt est distribué sous la
+licence MIT (fichier LICENSE), sauf mention contraire en tête du fichier
+(par exemple `packages/libsignal-wasm/`, déclaré AGPL-3.0-only) ou dans le
+dossier d'un composant tiers (par exemple `packages/LibSignalClient/`, copie
+non modifiée de libsignal, AGPL-3.0-only, voir son LICENSE).
+
+2. Les binaires distribués sont des œuvres sous AGPL-3.0-only
+-------------------------------------------------------------
+
+Meeshy embarque libsignal (Signal Messenger, LLC — https://github.com/signalapp/libsignal),
+publié sous la GNU Affero General Public License, version 3 uniquement
+(AGPL-3.0-only). Décision du porteur du 2026-11-02 : libsignal est conservé et
+le projet s'y conforme.
+
+Tout binaire distribué qui embarque libsignal forme, avec le code de Meeshy,
+une œuvre combinée distribuée sous AGPL-3.0-only. Le code MIT de Meeshy reste
+MIT pris isolément (la licence MIT est compatible avec l'AGPL-3.0), mais le
+binaire dans son ensemble se reçoit et se redistribue aux conditions de
+l'AGPL-3.0-only. Sont concernés :
+
+  | binaire                         | libsignal embarqué                                   | version |
+  |---------------------------------|------------------------------------------------------|---------|
+  | application iOS (IPA)           | `packages/LibSignalClient` + `SignalFfi.xcframework` | 0.105.4 |
+  | application Android (APK / AAB) | `org.signal:libsignal-android`                       | 0.105.4 |
+  | bundle web avec moteur WASM     | `packages/libsignal-wasm` (pont navigateur)          | 0.105.4 |
+  | image Docker de la passerelle   | `@signalapp/libsignal-client` (prébuilds Node)       | 0.105.0 |
+
+  Les versions sont celles épinglées au moment de la rédaction ; la version
+  qui fait foi pour un build donné est celle que son commit déclare
+  (`packages/LibSignalClient/LIBSIGNAL_VERSION`,
+  `apps/android/gradle/libs.versions.toml`, `packages/libsignal-wasm/Cargo.toml`,
+  `services/gateway/package.json`).
+
+Le texte officiel de la licence est dans `LICENSES/AGPL-3.0.txt`. Il est
+identique octet pour octet à https://www.gnu.org/licenses/agpl-3.0.txt
+(SHA-256 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0, le
+même fichier que le LICENSE de libsignal au tag épinglé).
+
+3. Obtenir la Source Correspondante
+-----------------------------------
+
+La Source Correspondante (AGPL-3.0, section 1) de chaque binaire est publique,
+sans frais, sur https://github.com/isopen-io/meeshy :
+
+  - le COMMIT EXACT du build :
+      * iOS : clé `MeeshySourceCommit` de l'Info.plist (réglage de build
+        `MEESHY_SOURCE_COMMIT`, alimenté par `CI_COMMIT` sur Xcode Cloud et
+        `GITHUB_SHA` sur GitHub Actions) ; l'écran Réglages › À propos ›
+        Licences ouvre https://github.com/isopen-io/meeshy/tree/<commit> ;
+      * Android : `BuildConfig.SOURCE_COMMIT` (variable `GITHUB_SHA` du build),
+        même écran, même lien ;
+      * web : `__BUILD_COMMIT__` (variable `VCS_REF` du build Docker), même
+        écran, même lien ; également `dist/build-info.json` ;
+      * passerelle : label OCI `org.opencontainers.image.revision` de l'image,
+        et champ `build.commit` de `GET /health` sur une instance en service.
+    Un build local sans commit gravé renvoie au dépôt et à sa version.
+  - les scripts de construction, recettes libsignal comprises :
+      * iOS : `apps/ios/project.yml` (XcodeGen), `apps/ios/fastlane/`,
+        `packages/LibSignalClient/scripts/build-signal-ffi-xcframework.sh` et
+        `.github/workflows/libsignal-ffi.yml` (le `SignalFfi.xcframework` est
+        reconstruit depuis libsignal au tag épinglé et publié en release du
+        dépôt, vérifié par sa somme de contrôle dans `Package.swift`) ;
+      * Android : `apps/android/` (Gradle), `.github/workflows/android.yml` et
+        `android-release.yml` ; l'AAR `libsignal-android` est le binaire publié
+        par Signal pour le tag épinglé, dont la source est
+        https://github.com/signalapp/libsignal/tree/v0.105.4 ;
+      * web : `apps/web/Dockerfile`, `apps/web/vite.config.ts`,
+        `packages/libsignal-wasm/build.sh` (le pont WASM se reconstruit depuis
+        les sources, sans binaire téléchargé) ;
+      * passerelle : `services/gateway/Dockerfile`, `.github/workflows/docker.yml` ;
+        les prébuilds de `@signalapp/libsignal-client` viennent de
+        https://github.com/signalapp/libsignal/tree/v0.105.0.
+  - les sources de libsignal au tag épinglé : https://github.com/signalapp/libsignal
+    (tags `v0.105.4` et `v0.105.0`).
+
+Offre écrite (AGPL-3.0, section 6) : pendant au moins trois ans après la
+dernière distribution d'un binaire, et aussi longtemps que des pièces de
+rechange ou une assistance sont offertes pour ce modèle, toute personne qui en
+détient une copie peut obtenir la Source Correspondante de ce binaire, sur un
+support durable, pour un coût n'excédant pas le coût matériel de la copie, en
+écrivant à contact@meeshy.me avec la version et la plateforme du binaire.
+[À VALIDER PAR L'AVOCAT, #11548 : adresse, délai, modalités.]
+
+Passerelle et section 13 de l'AGPL : aucune route `legal` ou `about` n'existe
+dans la passerelle ; l'offre de source pour les utilisateurs qui interagissent
+avec elle à distance tient dans ce fichier, dans les écrans « Licences » des
+clients (qui pointent le dépôt public) et dans le champ `build.commit` de
+`GET /health`. Ajouter une route dédiée est une décision à prendre avec
+l'avocat (#11548).
+
+Images Docker : `.github/workflows/docker.yml` pousse sur Docker Hub
+(`docker.io/isopen/meeshy-*`). Vérifié le 2026-11-02 par l'API publique de
+Docker Hub : `isopen/meeshy-gateway` et `isopen/meeshy-webapp` sont PUBLIQUES
+(`is_private: false`). Chaque image publique est donc une distribution ; son
+label `org.opencontainers.image.revision` désigne le commit dont la Source
+Correspondante est publiée, et son label `org.opencontainers.image.licenses`
+le dit.
+
+4. Avis des composants tiers
+----------------------------
+
+  - libsignal et ses dépendances :
+      * iOS : `packages/LibSignalClient/acknowledgments-ios.plist` (embarqué
+        dans l'app, affiché par l'écran Licences) ;
+      * Android : `apps/android/feature/settings/src/main/res/raw/libsignal_acknowledgments.md`
+        (copie de `acknowledgments/acknowledgments-android.md` de libsignal au
+        tag v0.105.4, affichée par l'écran Licences quand libsignal est lié) ;
+      * web : la liste des avis du moteur WASM accompagnera son lot (#14592) ;
+        l'écran Licences renvoie, en attendant, à la liste publiée par Signal
+        au tag épinglé ;
+      * passerelle : `node_modules/@signalapp/libsignal-client/dist/acknowledgments.md`
+        dans l'image.
+  - Autres bibliothèques : écrans « Licences » de chaque application
+    (`apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift`,
+    `apps/android/core/model/.../licenses/OpenSourceLicenseCatalog.kt`,
+    `apps/web/src/routes/settings-licences.tsx`), polices sous
+    `apps/android/licenses/`.
+
+5. Magasins d'applications
+--------------------------
+
+La compatibilité des conditions de l'App Store et de Google Play avec
+l'AGPL-3.0 n'est pas acquise. Deux projets sont préparés sous `docs/legal/` :
+un contrat de licence propre (Custom EULA) qui renvoie à l'AGPL-3.0, et une
+lettre demandant à Signal une exception écrite pour la distribution en
+magasin. Aucun des deux n'est un avis juridique ; les deux attendent l'avocat
+(#11548).

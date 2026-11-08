@@ -15,7 +15,9 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 /**
@@ -36,15 +38,22 @@ data class NearbyUiState(
     val hasMore: Boolean = true,
     val hasLocation: Boolean = false,
     val permissionDenied: Boolean = false,
+    val awaitingAccess: Boolean = false,
     val locationUnavailable: Boolean = false,
     val errorMessage: String? = null,
+    /** Le compositeur de citation ouvert par « Citer » ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
+    /** L'issue d'un geste d'une carte, dite une fois puis consommée. */
+    val notice: FeedNotice? = null,
 )
 
 @HiltViewModel
 class NearbyViewModel @Inject constructor(
     private val postRepository: PostRepository,
+    reports: ReportRepository,
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
+    socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val listState = MutableStateFlow(NearbyListState())
@@ -55,10 +64,16 @@ class NearbyViewModel @Inject constructor(
     private val _state = MutableStateFlow(NearbyUiState())
     val state: StateFlow<NearbyUiState> = _state.asStateFlow()
 
+    /** Les gestes du fil sur les publications d'à côté (#13244). */
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState, socialSocket.listedPostTranslations()) { sessionRepository.currentUser.value }
+
+    /** Ce que font les cartes de la liste : les gestes du fil, chacun câblé ([ListedPostCardActions]). */
+    val cards: ListedPostCardActions get() = actions
+
     init {
         viewModelScope.launch {
-            combine(listState, sessionRepository.currentUser, status) { list, user, st ->
-                project(list, user, st)
+            combine(listState, sessionRepository.currentUser, status, actions.state) { list, user, st, gestures ->
+                project(list, user, st, gestures)
             }.collect { projected -> _state.value = projected }
         }
     }
@@ -80,6 +95,7 @@ class NearbyViewModel @Inject constructor(
                 isLocating = false,
                 error = null,
                 permissionDenied = false,
+                awaitingAccess = false,
                 locationUnavailable = false,
             )
         }
@@ -91,7 +107,12 @@ class NearbyViewModel @Inject constructor(
      * GPS/network fix itself in flight). Cleared once that attempt resolves, via
      * [loadNearby], [onPermissionDenied] or [onLocationUnavailable].
      */
-    fun onLocating() = status.update { it.copy(isLocating = true) }
+    fun onLocating() = status.update {
+        it.copy(isLocating = true, awaitingAccess = false, permissionDenied = false, locationUnavailable = false)
+    }
+
+    /** L'écran est ouvert sans accès à la position : rien n'est demandé avant le geste de l'utilisateur. */
+    fun onAwaitingAccess() = status.update { it.copy(awaitingAccess = true, isLocating = false) }
 
     /**
      * Pull-to-refresh: re-query the last known coordinates, no new GPS fix. Re-entrant
@@ -139,7 +160,9 @@ class NearbyViewModel @Inject constructor(
         }
     }
 
-    fun onPermissionDenied() = status.update { it.copy(permissionDenied = true, isLoading = false, isLocating = false) }
+    fun onPermissionDenied() = status.update {
+        it.copy(permissionDenied = true, awaitingAccess = false, isLoading = false, isLocating = false)
+    }
 
     fun onLocationUnavailable() = status.update { it.copy(locationUnavailable = true, isLoading = false, isLocating = false) }
 
@@ -165,9 +188,11 @@ class NearbyViewModel @Inject constructor(
         }
     }
 
-    private fun project(list: NearbyListState, user: MeeshyUser?, st: NearbyStatus): NearbyUiState {
+    private fun project(list: NearbyListState, user: MeeshyUser?, st: NearbyStatus, gestures: ListedPostCardsState): NearbyUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.apiBaseUrl) }
+        val projected = list.posts.map {
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, gestures.languageOverrides[it.id], currentUserId = user?.id)
+        }
         val showSkeleton = st.isLoading && !list.hasLoaded && projected.isEmpty() && st.error == null
         return NearbyUiState(
             posts = projected,
@@ -179,8 +204,11 @@ class NearbyViewModel @Inject constructor(
             hasMore = list.hasMore,
             hasLocation = lastLat != null,
             permissionDenied = st.permissionDenied,
+            awaitingAccess = st.awaitingAccess,
             locationUnavailable = st.locationUnavailable,
             errorMessage = st.error,
+            quoteComposer = gestures.quoteComposer,
+            notice = gestures.notice,
         )
     }
 
@@ -196,6 +224,7 @@ private data class NearbyStatus(
     val isLoadingMore: Boolean = false,
     val isLocating: Boolean = false,
     val permissionDenied: Boolean = false,
+    val awaitingAccess: Boolean = false,
     val locationUnavailable: Boolean = false,
     val error: String? = null,
 )

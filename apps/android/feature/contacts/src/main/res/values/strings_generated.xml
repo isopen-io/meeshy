@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_settings_block_talkie">Mute their talkie</string>
+    <string name="circles_settings_block_talkie_detail">Their voice will no longer play directly on your device: it will arrive as a voice message. They are not notified.</string>
     <string name="contacts_back">Back</string>
     <string name="contacts_blocked_empty">No blocked users</string>
     <string name="contacts_blocked_unblock">Unblock</string>
@@ -16,6 +18,7 @@
     <string name="contacts_discover_email_send">Send</string>
     <string name="contacts_discover_email_send_a11y">Send invitation by email</string>
     <string name="contacts_discover_email_title">Invite by email</string>
+    <string name="contacts_discover_invite_sent">Invitation sent to %1$s</string>
     <string name="contacts_discover_no_results">No user found</string>
     <string name="contacts_discover_pending">Pending</string>
     <string name="contacts_discover_search_hint">Search for a Meeshy user</string>
@@ -23,6 +26,8 @@
     <string name="contacts_discover_sms_send">Send</string>
     <string name="contacts_discover_sms_send_a11y">Send invitation by SMS</string>
     <string name="contacts_discover_sms_title">Invite by SMS</string>
+    <string name="contacts_discover_sms_unavailable">SMS unavailable</string>
+    <string name="contacts_discover_view_profile">View profile</string>
     <string name="contacts_filter_all">All</string>
     <string name="contacts_filter_offline">Offline</string>
     <string name="contacts_filter_online">Online</string>
@@ -44,4 +49,32 @@
     <string name="contacts_tab_discover">Discover</string>
     <string name="contacts_tab_requests">Requests</string>
     <string name="contacts_title">Contacts</string>
+    <string name="keypad_call">Call</string>
+    <string name="keypad_call_audio">Voice call</string>
+    <string name="keypad_call_video">Video call</string>
+    <string name="keypad_clear_a11y">Clear all</string>
+    <string name="keypad_delete_a11y">Clear</string>
+    <string name="keypad_delete_a11y_hint">Deletes the last character</string>
+    <string name="keypad_input_a11y">Number or name field</string>
+    <string name="keypad_input_placeholder">Number or name</string>
+    <string name="keypad_no_match_subtitle">Check the number or name you entered.</string>
+    <string name="keypad_no_match_title">No contact found</string>
+    <string name="keypad_online_lower">online</string>
+    <string name="keypad_prompt_subtitle">Find someone by phone number or name.</string>
+    <string name="keypad_prompt_title">Dial a number or name</string>
+    <string name="keypad_result_open_profile_a11y">Open profile</string>
+    <string name="phone_prompt_benefit">People you know find you on Meeshy through your number. You can also use it to sign in.</string>
+    <string name="phone_prompt_code_label">6-digit code</string>
+    <string name="phone_prompt_code_sent">Code sent by SMS</string>
+    <string name="phone_prompt_edit">Edit</string>
+    <string name="phone_prompt_error_code_invalid">Incorrect or expired code</string>
+    <string name="phone_prompt_error_generic">Something went wrong</string>
+    <string name="phone_prompt_implausible">This number doesn’t look real — please check it.</string>
+    <string name="phone_prompt_later">Later</string>
+    <string name="phone_prompt_later_a11y">Later, find my contacts without adding a number</string>
+    <string name="phone_prompt_phone_label">Phone</string>
+    <string name="phone_prompt_send_code">Get the code by text</string>
+    <string name="phone_prompt_title">Add your number</string>
+    <string name="phone_prompt_too_short">This number is too short: at least %1$d digits.</string>
+    <string name="phone_prompt_verify">Verify</string>
 </resources>

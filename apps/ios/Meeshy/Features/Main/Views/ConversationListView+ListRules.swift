@@ -97,6 +97,16 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     let report: Bool
     let adminOpen: Bool
     let removal: Removal?
+    /// « Rendre obsolète » (#14645, #14653) — effacer le contenu POUR TOUS : la
+    /// porte de `DELETE /conversations/:id/obsolete`. L'administrateur d'un type
+    /// à autorité ouvert (`deleteForAll`), ou, dans un tête-à-tête ouvert, l'un
+    /// OU l'autre membre inscrit et actif (`hide`) — même expression que le web
+    /// (`rowConversationActions`) et Android. Quand la passerelle sert
+    /// `viewerCapabilities.canMakeObsolete` (#14690), elle décide seule : c'est
+    /// ainsi que l'expéditeur d'une demande non acceptée ne se la voit plus
+    /// proposer. Absente, la règle locale reste, et un 403 rend la ligne avec
+    /// son motif (`ConversationObsolescence.Refusal`).
+    let obsolete: Bool
     /// Appeler le pair d'un direct — l'appel du menu compose UN pair, donc
     /// jamais un groupe ni soi-même (`CallPermission.canStartCall`).
     let call: Bool
@@ -113,21 +123,23 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     let manageMembers: Bool
 
     static func make(conversation: MeeshyConversation, currentUser: MeeshyUser?) -> ConversationRowMenuCapabilities {
+        let policyConversation = ConversationActionPolicy.Conversation(
+            type: conversation.type.rawValue,
+            encryptionMode: conversation.encryptionMode,
+            isActive: conversation.isActive,
+            closedAt: conversation.closedAt,
+            isAnnouncementChannel: conversation.isAnnouncementChannel,
+            defaultWriteRole: conversation.defaultWriteRole
+        )
         let actions = ConversationActionPolicy.actions(for: ConversationActionPolicy.Input(
-            conversation: ConversationActionPolicy.Conversation(
-                type: conversation.type.rawValue,
-                encryptionMode: conversation.encryptionMode,
-                isActive: conversation.isActive,
-                closedAt: conversation.closedAt,
-                isAnnouncementChannel: conversation.isAnnouncementChannel,
-                defaultWriteRole: conversation.defaultWriteRole
-            ),
+            conversation: policyConversation,
             viewer: viewer(of: conversation, currentUser: currentUser)
         ))
         let talksToSelf = conversation.type == .direct
             && conversation.participantUserId != nil
             && conversation.participantUserId == currentUser?.id
         let talksToPeer = conversation.type == .direct && conversation.participantUserId != nil && !talksToSelf
+        let directMember = conversation.type == .direct && !policyConversation.isClosed && actions.hide
         return ConversationRowMenuCapabilities(
             rename: actions.rename,
             invite: actions.invite,
@@ -135,6 +147,7 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
             report: actions.report && !talksToSelf,
             adminOpen: actions.adminOpen,
             removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil,
+            obsolete: conversation.viewerCapabilities?.canMakeObsolete ?? (actions.deleteForAll || directMember),
             call: actions.call && talksToPeer,
             videoCall: actions.videoCall && talksToPeer,
             groupSettings: actions.rename,

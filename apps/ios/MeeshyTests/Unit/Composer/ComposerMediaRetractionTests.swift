@@ -458,7 +458,7 @@ final class ComposerMediaRetractionTests: XCTestCase {
             transcription: charge.mobileTranscription, storyEffects: charge.storyEffects,
             mediaCaptions: charge.mediaCaptions, mediaAlts: charge.mediaAlts,
             mediaObjectIds: charge.mediaObjectIds,
-            allowSoundExtraction: charge.allowSoundExtraction)
+            allowSoundExtraction: charge.allowSoundExtraction, commentsDisabled: false)
         XCTAssertEqual(intention.localMediaURLs, [b.url],
             "L'intention publiée monte encore le fichier retiré — le fantôme part au TUS.")
 

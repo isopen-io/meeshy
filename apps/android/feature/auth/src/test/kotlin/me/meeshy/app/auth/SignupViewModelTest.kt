@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.RegisterResponse
 import me.meeshy.sdk.model.auth.CountryCatalog
 import me.meeshy.sdk.model.auth.SignupField
 import me.meeshy.sdk.model.auth.SignupFieldIssue
+import me.meeshy.sdk.model.auth.SignupPhase
 import me.meeshy.sdk.model.auth.SignupFieldMessage
 import me.meeshy.sdk.model.auth.SignupRefusal
 import me.meeshy.sdk.model.auth.SignupSubmitError
@@ -81,7 +82,7 @@ class SignupViewModelTest {
         override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
             ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
         override suspend fun listSessions() =
-            ApiResponse<me.meeshy.sdk.net.api.SessionsListData>(success = false)
+            ApiResponse<me.meeshy.sdk.model.session.UserSessionsPayload>(success = false)
         override suspend fun revokeSession(sessionId: String) = ApiResponse<Unit>(success = true)
         override suspend fun revokeOtherSessions() = ApiResponse<Unit>(success = true)
         override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =
@@ -143,13 +144,25 @@ class SignupViewModelTest {
         val api: FakeAuthApi,
         val coordinator: RealtimeSessionCoordinator,
         val tokenStore: InMemoryTokenStore,
+        val port: FakeProvenSessionPort,
+        val celebration: me.meeshy.sdk.auth.ArrivalCelebrating,
     )
 
     private fun scenario(
         registerResponse: ApiResponse<RegisterResponse> = ApiResponse(success = false),
         registerFailure: IOException? = null,
         deviceLocaleProvider: DeviceLocaleProvider = FakeDeviceLocaleProvider(),
+        referrals: me.meeshy.sdk.auth.PendingReferralStore = me.meeshy.sdk.auth.InMemoryPendingReferralStore(),
+        handoffs: me.meeshy.sdk.auth.LoginHandoffs = me.meeshy.sdk.auth.LoginHandoffs(),
+        port: FakeProvenSessionPort = FakeProvenSessionPort(),
+        now: () -> Long = { dispatcher.scheduler.currentTime },
     ): Scenario {
+        val opener = provenOpener(
+            port = port,
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + dispatcher),
+            nowMs = now,
+        )
+        val celebration = arrivalCelebration()
         val api = FakeAuthApi(registerResponse, registerFailure)
         val store = InMemoryTokenStore()
         val coordinator = mockk<RealtimeSessionCoordinator>(relaxed = true)
@@ -160,7 +173,7 @@ class SignupViewModelTest {
             mockk<SessionTeardown>(relaxed = true),
             SyncSeqTracker(),
         )
-        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider), api, coordinator, store)
+        return Scenario(SignupViewModel(repository, coordinator, deviceLocaleProvider, me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore(), referrals, handoffs, provenSessions = opener, celebration = celebration, clock = object : me.meeshy.sdk.cache.CacheClock { override fun nowMillis(): Long = now() }), api, coordinator, store, port, celebration)
     }
 
     private fun session() = RegisterResponse(
@@ -172,6 +185,7 @@ class SignupViewModelTest {
     private fun SignupViewModel.fillValid() {
         onDisplayNameChange("Ada Lovelace")
         onEmailChange("ada@meeshy.me")
+        onPhoneEntryChange("0612345678")
         onPasswordChange("secret1")
     }
 
@@ -234,24 +248,169 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun submitButtonLightsUpAsSoonAsNameEmailAndPasswordAreValid() {
+    fun phasesAppearInOrder_phoneFirstThenTheAddressThenTheCard() {
+        val vm = scenario().viewModel
+        assertThat(vm.state.value.phase).isEqualTo(SignupPhase.PHONE)
+
+        vm.onEmailChange("ada@meeshy.me")
+        assertThat(vm.state.value.progress.emailShown).isFalse()
+
+        vm.onPhoneEntryChange("0612345678")
+        assertThat(vm.state.value.phase).isEqualTo(SignupPhase.CARD)
+        assertThat(vm.state.value.progress.emailShown).isTrue()
+        assertThat(vm.state.value.progress.cardShown).isTrue()
+    }
+
+    @Test
+    fun aPhaseNeverDisappears_evenWhenTheNumberIsEmptiedAgain() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        assertThat(vm.state.value.progress.emailShown).isTrue()
+
+        vm.onPhoneEntryChange("")
+
+        assertThat(vm.state.value.progress.emailShown).isTrue()
+    }
+
+    @Test
+    fun submitButtonLightsUpOnlyOnceTheCardIsThereAndTheFormIsReady() {
         val vm = scenario().viewModel
 
-        vm.onDisplayNameChange("Ada")
+        vm.onPhoneEntryChange("0612345678")
         assertThat(vm.state.value.canSubmit).isFalse()
         vm.onEmailChange("ada@meeshy.me")
-        assertThat(vm.state.value.canSubmit).isFalse()
-        vm.onPasswordChange("secret1")
         assertThat(vm.state.value.canSubmit).isTrue()
     }
 
     @Test
-    fun anEmptyPhoneNeverBlocksTheButton() {
+    fun thePasswordIsOptional_andOnlyAppearsOnceTheIdentityIsDefined() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        assertThat(vm.state.value.passwordRevealed).isFalse()
+
+        vm.onEmailChange("ada@meeshy.me")
+
+        assertThat(vm.state.value.passwordRevealed).isTrue()
+        assertThat(vm.state.value.canSubmit).isTrue()
+    }
+
+    @Test
+    fun anEmptyPhoneBlocksTheButton() {
         val vm = scenario().viewModel
         vm.fillValid()
+        vm.onPhoneEntryChange("")
 
-        assertThat(vm.state.value.form.phoneDigits).isEmpty()
-        assertThat(vm.state.value.canSubmit).isTrue()
+        assertThat(vm.state.value.canSubmit).isFalse()
+    }
+
+    @Test
+    fun aFillerPhoneIsOnlyRefusedOutLoudOnceTheFieldIsLeft() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("11111111")
+        assertThat(vm.state.value.messageFor(SignupField.PHONE)).isNull()
+
+        vm.onPhoneFieldLeft()
+
+        assertThat(vm.state.value.messageFor(SignupField.PHONE)).isNotNull()
+    }
+
+    @Test
+    fun leavingAnEmptyPhoneFieldSaysNothing() {
+        val vm = scenario().viewModel
+
+        vm.onPhoneFieldLeft()
+
+        assertThat(vm.state.value.shownPhoneRefusal).isNull()
+        assertThat(vm.state.value.phoneRequiredShown).isFalse()
+    }
+
+    @Test
+    fun touchingTheInactiveButtonExplainsTheMissingPhone() = runTest(dispatcher) {
+        val scenario = scenario()
+
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.viewModel.state.value.phoneRequiredShown).isTrue()
+        assertThat(scenario.api.captured).isEmpty()
+    }
+
+    @Test
+    fun theDisplayNameAndThePseudoFollowTheAddressUntilTheyAreTouched() {
+        val vm = scenario().viewModel
+
+        vm.onPhoneEntryChange("0612345678")
+        vm.onEmailChange("jean.dupont@meeshy.me")
+
+        assertThat(vm.state.value.shownDisplayName).isEqualTo("Jean Dupont")
+        assertThat(vm.state.value.shownUsername).isEqualTo("jean-dupont")
+    }
+
+    @Test
+    fun aTypedPseudoWinsAndClearingItShowsTheDerivationAsPlaceholder() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        vm.onEmailChange("ada@meeshy.me")
+
+        vm.onUsernameChange("@ada_l")
+        assertThat(vm.state.value.usernameInput).isEqualTo("ada_l")
+        assertThat(vm.state.value.shownUsername).isEqualTo("ada_l")
+
+        vm.onUsernameChange("")
+        assertThat(vm.state.value.usernameInput).isEmpty()
+        assertThat(vm.state.value.usernamePlaceholder).isEqualTo("ada")
+        assertThat(vm.state.value.shownUsername).isEqualTo("ada")
+        assertThat(vm.state.value.form.effectiveUsername).isEqualTo("ada")
+    }
+
+    @Test
+    fun register_afterClearingTheNameAndPseudo_sendsThePlaceholdersTheCardShows() = runTest(dispatcher) {
+        val scenario = scenario(ApiResponse(success = true, data = session()))
+        scenario.viewModel.onPhoneEntryChange("0612345678")
+        scenario.viewModel.onEmailChange("jean.dupont@meeshy.me")
+
+        scenario.viewModel.onUsernameChange("")
+        scenario.viewModel.onDisplayNameChange("")
+        val state = scenario.viewModel.state.value
+        assertThat(state.usernameInput).isEmpty()
+        assertThat(state.displayNameInput).isEmpty()
+        assertThat(state.usernamePlaceholder).isEqualTo("jean-dupont")
+        assertThat(state.displayNamePlaceholder).isEqualTo("Jean Dupont")
+        assertThat(state.canSubmit).isTrue()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        val sent = scenario.api.captured.single()
+        assertThat(sent.username).isEqualTo(state.shownUsername)
+        assertThat(sent.displayName).isEqualTo(state.shownDisplayName)
+        assertThat(sent.username).isEqualTo("jean-dupont")
+        assertThat(sent.displayName).isEqualTo("Jean Dupont")
+    }
+
+    @Test
+    fun register_afterRetypingAClearedPseudo_sendsWhatWasTyped() = runTest(dispatcher) {
+        val scenario = scenario(ApiResponse(success = true, data = session()))
+        scenario.viewModel.fillValid()
+        scenario.viewModel.onUsernameChange("")
+        scenario.viewModel.onUsernameChange("jdupont")
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured.single().username).isEqualTo("jdupont")
+        assertThat(scenario.viewModel.state.value.shownUsername).isEqualTo("jdupont")
+    }
+
+    @Test
+    fun aTooShortPseudoIsRefusedLiveWhileTyping() {
+        val vm = scenario().viewModel
+        vm.onPhoneEntryChange("0612345678")
+        vm.onEmailChange("ada@meeshy.me")
+
+        vm.onUsernameChange("ab")
+
+        assertThat(vm.state.value.usernameRefusal)
+            .isEqualTo(me.meeshy.sdk.model.auth.RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(vm.state.value.canSubmit).isFalse()
     }
 
     @Test
@@ -290,21 +449,35 @@ class SignupViewModelTest {
         assertThat(sent.password).isEqualTo("secret1")
         assertThat(sent.systemLanguage).isEqualTo("fr")
         assertThat(sent.regionalLanguage).isEqualTo("en")
-        assertThat(sent.username).isNull()
+        assertThat(sent.username).isEqualTo("ada")
         assertThat(sent.firstName).isNull()
         assertThat(sent.lastName).isNull()
     }
 
     @Test
-    fun register_emptyPhone_omitsBothPhoneFields() = runTest(dispatcher) {
+    fun register_withoutPassword_omitsTheKeyAndStillCreatesTheAccount() = runTest(dispatcher) {
         val scenario = scenario(ApiResponse(success = true, data = session()))
         scenario.viewModel.fillValid()
+        scenario.viewModel.onPasswordChange("")
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured.single().password).isNull()
+        assertThat(scenario.viewModel.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun register_sendsTheEditedNameAndPseudo() = runTest(dispatcher) {
+        val scenario = scenario(ApiResponse(success = true, data = session()))
+        scenario.viewModel.fillValid()
+        scenario.viewModel.onDisplayNameChange("Ada L.")
+        scenario.viewModel.onUsernameChange("adal")
         scenario.viewModel.register()
         advanceUntilIdle()
 
         val sent = scenario.api.captured.single()
-        assertThat(sent.phoneNumber).isNull()
-        assertThat(sent.phoneCountryCode).isNull()
+        assertThat(sent.displayName).isEqualTo("Ada L.")
+        assertThat(sent.username).isEqualTo("adal")
     }
 
     @Test
@@ -480,7 +653,7 @@ class SignupViewModelTest {
         scenario.viewModel.onPhoneEntryChange("")
 
         assertThat(scenario.viewModel.state.value.messageFor(SignupField.PHONE)).isNull()
-        assertThat(scenario.viewModel.state.value.canSubmit).isTrue()
+        assertThat(scenario.viewModel.state.value.canSubmit).isFalse()
     }
 
     @Test
@@ -502,13 +675,12 @@ class SignupViewModelTest {
     // ---- verdict local affiché -----------------------------------------------
 
     @Test
-    fun aTypedButInvalidEmailShowsItsIssue_whileAnUntouchedOneShowsNothing() {
+    fun aHalfTypedEmailNeverNagsWhileTyping() {
         val vm = scenario().viewModel
 
-        assertThat(vm.state.value.messageFor(SignupField.EMAIL)).isNull()
         vm.onEmailChange("ada-at-meeshy")
-        assertThat(vm.state.value.messageFor(SignupField.EMAIL))
-            .isEqualTo(SignupFieldMessage.Local(SignupFieldIssue.EMAIL_INVALID))
+
+        assertThat(vm.state.value.messageFor(SignupField.EMAIL)).isNull()
     }
 
     @Test
@@ -522,7 +694,7 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun aFillerPhoneShowsItsReasonAndBlocksSubmit_whileAnEmptyOneNeverDoes() {
+    fun aFillerPhoneShowsItsReasonAndBlocksSubmit_whileAnEmptyOneOnlyBlocks() {
         val vm = scenario().viewModel
         vm.fillValid()
         assertThat(vm.state.value.canSubmit).isTrue()
@@ -539,7 +711,7 @@ class SignupViewModelTest {
 
         vm.onPhoneEntryChange("")
         assertThat(vm.state.value.messageFor(SignupField.PHONE)).isNull()
-        assertThat(vm.state.value.canSubmit).isTrue()
+        assertThat(vm.state.value.canSubmit).isFalse()
     }
 
     // ---- langue de lecture ---------------------------------------------------
@@ -566,5 +738,227 @@ class SignupViewModelTest {
         val sent = scenario.api.captured.single()
         assertThat(sent.systemLanguage).isEqualTo("en")
         assertThat(sent.regionalLanguage).isNull()
+    }
+
+    // ---- pseudo pris, parrainage, passage à la connexion ----------------------
+
+    @Test
+    fun usernameTaken_offersTheFreePseudosTheGatewaySuggests() = runTest(dispatcher) {
+        val scenario = scenario(
+            ApiResponse(
+                success = false,
+                error = "Username taken",
+                code = "USERNAME_TAKEN",
+                fieldName = "username",
+                suggestions = listOf("ada1", "ada_l"),
+            ),
+        )
+        scenario.viewModel.fillValid()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.viewModel.state.value.usernameSuggestions).containsExactly("ada1", "ada_l").inOrder()
+
+        scenario.viewModel.onUsernameSuggestionPicked("ada1")
+
+        assertThat(scenario.viewModel.state.value.usernameSuggestions).isEmpty()
+        assertThat(scenario.viewModel.state.value.form.effectiveUsername).isEqualTo("ada1")
+    }
+
+    @Test
+    fun aPendingReferralCodeTravelsWithTheRequest_andIsForgottenOnceTheAccountExists() = runTest(dispatcher) {
+        val referrals = me.meeshy.sdk.auth.InMemoryPendingReferralStore().apply { remember("friend-42") }
+        val scenario = scenario(ApiResponse(success = true, data = session()), referrals = referrals)
+        scenario.viewModel.fillValid()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(scenario.api.captured.single().affiliateToken).isEqualTo("friend-42")
+        assertThat(referrals.recall()).isNull()
+    }
+
+    @Test
+    fun aRefusedSignupKeepsTheReferralCodeForTheNextTry() = runTest(dispatcher) {
+        val referrals = me.meeshy.sdk.auth.InMemoryPendingReferralStore().apply { remember("friend-42") }
+        val scenario = scenario(ApiResponse(success = false, error = "boom"), referrals = referrals)
+        scenario.viewModel.fillValid()
+        scenario.viewModel.register()
+        advanceUntilIdle()
+
+        assertThat(referrals.recall()).isEqualTo("friend-42")
+    }
+
+    @Test
+    fun switchingToLogin_handsOverACompleteAddressOnce() {
+        val handoffs = me.meeshy.sdk.auth.LoginHandoffs()
+        val vm = scenario(handoffs = handoffs).viewModel
+        vm.onEmailChange("  ada@meeshy.me ")
+
+        vm.onSwitchToLogin()
+
+        assertThat(handoffs.signupEmail.take()).isEqualTo("ada@meeshy.me")
+        assertThat(handoffs.signupEmail.take()).isNull()
+    }
+
+    @Test
+    fun switchingToLogin_neverHandsOverAHalfTypedAddress() {
+        val handoffs = me.meeshy.sdk.auth.LoginHandoffs()
+        val vm = scenario(handoffs = handoffs).viewModel
+        vm.onEmailChange("ada@")
+
+        vm.onSwitchToLogin()
+
+        assertThat(handoffs.signupEmail.take()).isNull()
+    }
+
+    // ---- « Valider mon compte maintenant » : la session TENUE, le code dans la carte ---------------
+
+    private fun SignupViewModel.validated(): SignupViewModel = apply { fillValid() }
+
+    private val held = RegisterResponse(
+        user = MeeshyUser(id = "u1", username = "ada"),
+        token = "jwt-held",
+        sessionToken = "sess-held",
+        pendingSessionToken = "pending-1",
+    )
+
+    private val codeSession = AuthSession(MeeshyUser(id = "u1", username = "ada"), token = "jwt-code")
+
+    @Test
+    fun validateNow_createsTheAccountHoldingTheSessionAndShowsTheCodeInTheCard() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        val state = s.viewModel.state.value
+        val card = state.card as SignupCard.AwaitingCode
+        assertThat(card.step.email).isEqualTo("ada@meeshy.me")
+        assertThat(card.step.pendingSessionToken).isEqualTo("pending-1")
+        assertThat(state.phase).isEqualTo(SignupPhase.CODE)
+        assertThat(state.isRegistered).isFalse()
+        assertThat(s.tokenStore.jwt).isNull()
+        assertThat(s.port.installed).isEmpty()
+        verify(exactly = 0) { s.coordinator.onAuthenticatedChanged(true) }
+    }
+
+    @Test
+    fun validateNow_withARefusedPayload_staysOnTheEditingCardWithTheRefusal() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = RegisterResponse(phoneOwnershipConflict = true)))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        val state = s.viewModel.state.value
+        assertThat(state.card).isEqualTo(SignupCard.Editing)
+        assertThat(state.isValidating).isFalse()
+        assertThat(state.submitError).isNotNull()
+    }
+
+    @Test
+    fun aRightCode_turnsTheCardIntoAValidatedAccountWhoseButtonSpeaksToOthers() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        s.viewModel.onCodeVerified(me.meeshy.sdk.model.auth.LoginOutcome.Authenticated(codeSession))
+
+        val state = s.viewModel.state.value
+        assertThat(state.card).isInstanceOf(SignupCard.Verified::class.java)
+        assertThat(state.phase).isEqualTo(SignupPhase.VERIFIED)
+        assertThat(state.primaryAction).isEqualTo(me.meeshy.sdk.model.auth.SignupPrimaryAction.Talk)
+    }
+
+    @Test
+    fun aLinkOpenedElsewhere_validatesTheAccountWhoseSessionIsHeldHere() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        s.viewModel.onLinkOpenedElsewhere()
+
+        assertThat((s.viewModel.state.value.card as SignupCard.Verified).proof).isEqualTo(SignupProof.LINK)
+    }
+
+    @Test
+    fun talkingToOthers_afterTheLink_opensTheHeldSessionAndThePreload() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onLinkOpenedElsewhere()
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.installed.map { it.first.token }).containsExactly("jwt-held")
+        assertThat(s.viewModel.state.value.isRegistered).isTrue()
+        verify { s.celebration.prepare("u1") }
+        verify { s.coordinator.onAuthenticatedChanged(true) }
+    }
+
+    @Test
+    fun talkingToOthers_afterTheCode_prefersTheProvenSessionAndClosesTheHeldOne() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onCodeVerified(me.meeshy.sdk.model.auth.LoginOutcome.Authenticated(codeSession))
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.installed.map { it.first.token }).containsExactly("jwt-code")
+        assertThat(s.port.closedJwts).containsExactly("jwt-held")
+        assertThat(s.viewModel.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun aRefusedOpening_isSaidWithoutLosingTheValidatedCard() = runTest(dispatcher) {
+        val s = scenario(
+            registerResponse = ApiResponse(success = true, data = held),
+            port = FakeProvenSessionPort(isAuthenticated = true, activeUserId = "someone-else"),
+        )
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onLinkOpenedElsewhere()
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        val state = s.viewModel.state.value
+        assertThat(state.openRefused).isTrue()
+        assertThat(state.isRegistered).isFalse()
+        assertThat(state.card).isInstanceOf(SignupCard.Verified::class.java)
+        assertThat(s.port.installed).isEmpty()
+    }
+
+    @Test
+    fun signingUpWithoutACode_isAllowedDuringTheGracePeriodAndInstallsTheHeldSession() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+        assertThat(s.viewModel.state.value.primaryAction)
+            .isEqualTo(me.meeshy.sdk.model.auth.SignupPrimaryAction.SignUp(enabled = true))
+
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.installed.map { it.first.token }).containsExactly("jwt-held")
+        assertThat(s.viewModel.state.value.isRegistered).isTrue()
+    }
+
+    @Test
+    fun afterTheGracePeriod_theHeldSessionIsDiscardedAndTheUserIsSentToSignIn() = runTest(dispatcher) {
+        val s = scenario(registerResponse = ApiResponse(success = true, data = held))
+        s.viewModel.validated().validateNow()
+        dispatcher.scheduler.runCurrent()
+
+        dispatcher.scheduler.advanceTimeBy(600_000)
+        dispatcher.scheduler.runCurrent()
+        s.viewModel.onPrimary()
+        dispatcher.scheduler.runCurrent()
+
+        assertThat(s.port.closedJwts).containsExactly("jwt-held")
+        assertThat(s.port.installed).isEmpty()
+        val state = s.viewModel.state.value
+        assertThat(state.needsSignIn).isTrue()
+        assertThat(state.isRegistered).isFalse()
     }
 }

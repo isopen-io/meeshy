@@ -22,23 +22,26 @@ internal fun PostCard(
     onOpenReel: (String) -> Unit = onOpenPost,
     onImageTap: (Int) -> Unit,
     isOwn: Boolean = false,
-    onShare: () -> Unit = {},
+    onShare: (() -> Unit)? = null,
     onSend: (() -> Unit)? = null,
-    onCopyLink: () -> Unit = {},
-    onCopyText: () -> Unit = {},
+    onCopyLink: (() -> Unit)? = null,
+    onCopyText: (() -> Unit)? = null,
     onOpenProfile: ((String) -> Unit)? = null,
-    onRepost: () -> Unit = {},
-    onQuote: () -> Unit = {},
-    onPin: () -> Unit = {},
-    onReport: () -> Unit = {},
-    onDelete: () -> Unit = {},
+    onRepost: (() -> Unit)? = null,
+    onQuote: (() -> Unit)? = null,
+    onPin: (() -> Unit)? = null,
+    onReport: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onComments: () -> Unit = onClick,
+    onReplyToComment: (String) -> Unit = {},
     onOpenHashtag: (String) -> Unit = {},
     translatingCodes: Set<String> = emptySet(),
     onSelectLanguage: (String) -> Unit = onFlagTap,
+    pendingSend: PendingSendActions? = null,
     modifier: Modifier = Modifier,
+    onToggleComments: (() -> Unit)? = null,
 ) {
-    val reelCover = post.reelCover?.takeIf { post.showsReelCard }
+    val reelCover = post.reelCover?.takeIf { post.showsReelCard && pendingSend == null }
     if (reelCover != null) {
         ReelPostCard(
             post = post,
@@ -59,6 +62,7 @@ internal fun PostCard(
             onReport = onReport,
             onDelete = onDelete,
             onOpenProfile = onOpenProfile,
+            onToggleComments = onToggleComments,
         )
         return
     }
@@ -82,15 +86,23 @@ internal fun PostCard(
                 onPin = onPin,
                 onReport = onReport,
                 onDelete = onDelete,
+                onOpen = onClick,
+                pendingSend = pendingSend,
+                onToggleComments = onToggleComments,
             )
             FeedPostCardBody(
                 post = post,
                 onFlagTap = onFlagTap,
                 onOpenHashtag = onOpenHashtag,
+                onOpenProfile = onOpenProfile,
                 translatingCodes = translatingCodes,
                 onSelectLanguage = onSelectLanguage,
             )
             FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
+            if (pendingSend != null) {
+                FeedPendingPublicationChip(pendingSend)
+                return@Column
+            }
             FeedPostCardFooter(
                 post = post,
                 onLike = onLike,
@@ -100,7 +112,7 @@ internal fun PostCard(
                 onQuote = onQuote,
                 onSend = onSend,
             )
-            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments) }
+            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments, onReplyTo = onReplyToComment, onOpenProfile = onOpenProfile) }
         }
     }
 }

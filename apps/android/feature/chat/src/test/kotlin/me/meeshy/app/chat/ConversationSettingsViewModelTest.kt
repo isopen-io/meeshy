@@ -2,22 +2,29 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.appearance.AppearanceCatalogLoader
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.model.appearance.AppearanceCatalog
+import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -62,8 +69,17 @@ class ConversationSettingsViewModelTest {
         return repository
     }
 
-    private fun viewModel(repository: ConversationRepository) =
-        ConversationSettingsViewModel(repository)
+    private fun session(user: MeeshyUser?): SessionRepository = mockk<SessionRepository>(relaxed = true).also {
+        every { it.currentUser } returns MutableStateFlow(user)
+    }
+
+    private fun loader(): AppearanceCatalogLoader = mockk<AppearanceCatalogLoader>(relaxed = true).also {
+        every { it.current } returns AppearanceCatalog.EMPTY
+        coEvery { it.catalog() } returns AppearanceCatalog.EMPTY
+    }
+
+    private fun viewModel(repository: ConversationRepository, user: MeeshyUser? = MeeshyUser(id = "me", username = "me")) =
+        ConversationSettingsViewModel(repository, session(user), loader())
 
     @Test
     fun `load seeds a clean form from the cached conversation`() = runTest {
@@ -175,5 +191,101 @@ class ConversationSettingsViewModelTest {
 
         // Seeded from the FIRST emission; the second (announcement=true) must not overwrite the form.
         assertThat(vm.state.value.form?.isAnnouncementChannel).isFalse()
+    }
+
+    private fun ranked(type: String, role: String?) = conversation().copy(type = type, currentUserRole = role)
+
+    @Test
+    fun `a group moderator may edit the conversation`() = runTest {
+        val vm = viewModel(repo(ranked("group", "moderator")))
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.mayEdit).isTrue()
+    }
+
+    @Test
+    fun `a group member may not edit the conversation`() = runTest {
+        val vm = viewModel(repo(ranked("group", "member")))
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.mayEdit).isFalse()
+    }
+
+    @Test
+    fun `nobody edits Global or a direct, whatever the rank`() = runTest {
+        listOf("global", "direct").forEach { type ->
+            val vm = viewModel(repo(ranked(type, "creator")))
+            vm.load("c1")
+            advanceUntilIdle()
+            assertThat(vm.state.value.mayEdit).isFalse()
+        }
+    }
+
+    @Test
+    fun `setAccent writes the personal accent through the optimistic mutation`() = runTest {
+        val repository = repo()
+        coEvery { repository.setAppearanceOptimistic(any(), any()) } returns true
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.setAccent("coral")
+        advanceUntilIdle()
+
+        io.mockk.coVerify { repository.setAppearanceOptimistic("c1", ConversationAppearance.DEFAULT.withAccent("coral")) }
+        assertThat(vm.state.value.appearance.accent).isEqualTo("coral")
+    }
+
+    @Test
+    fun `setAccent returns to the previous choice when the write is refused`() = runTest {
+        val repository = repo()
+        coEvery { repository.setAppearanceOptimistic(any(), any()) } returns false
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.setAccent("coral")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.appearance.accent).isNull()
+    }
+
+    @Test
+    fun `setAccent with the current choice writes nothing`() = runTest {
+        val repository = repo()
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.setAccent(null)
+        advanceUntilIdle()
+
+        io.mockk.coVerify(exactly = 0) { repository.setAppearanceOptimistic(any(), any()) }
+    }
+
+    @Test
+    fun `member search is local and starts empty`() = runTest {
+        val vm = viewModel(repo())
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.memberQuery).isEmpty()
+
+        vm.setMemberQuery("ali")
+
+        assertThat(vm.state.value.memberQuery).isEqualTo("ali")
+    }
+
+    @Test
+    fun `the add member button follows the viewer rank`() = runTest {
+        suspend fun mayAdd(role: String): Boolean {
+            val vm = viewModel(repo(ApiConversation(id = "c1", currentUserRole = role)))
+            vm.load("c1")
+            advanceUntilIdle()
+            return vm.state.value.mayAddMember
+        }
+
+        assertThat(mayAdd("member")).isFalse()
+        assertThat(mayAdd("moderator")).isTrue()
+        assertThat(mayAdd("admin")).isTrue()
     }
 }

@@ -3,14 +3,19 @@ package me.meeshy.app.calls
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import me.meeshy.ui.component.permission.PermissionFlow
+import me.meeshy.ui.component.permission.rememberPermissionFlow
+import me.meeshy.sdk.model.call.CallPreflight
+import me.meeshy.sdk.model.call.CallPreflightDecision
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.sdk.model.call.IncomingCallPermissionPolicy
 
@@ -29,13 +34,37 @@ class CallPermissionGate internal constructor(
     private val request: () -> Unit,
     private val pending: PendingAction,
     private val isCameraGranted: () -> Boolean = { true },
+    private val preflight: CallPermissionPreflight? = null,
+    private val scope: CoroutineScope? = null,
+    internal val flow: PermissionFlow? = null,
 ) {
     /** Runs [action] now when the mic is granted, otherwise asks and runs it on the grant. */
     fun withMediaPermissions(action: () -> Unit) {
-        if (isMicGranted()) {
+        if (preflight != null && scope != null) {
+            scope.launch { if (preflight.microphone()) action() }
+        } else if (isMicGranted()) {
             action()
         } else {
             pending.set(action)
+            request()
+        }
+    }
+
+    /**
+     * Composer un appel (iOS `requestPermissionsThenStartCall`) : le micro est bloquant — refusé, l'appel ne part
+     * pas et [onDecision] reçoit [CallPreflightDecision.MicrophoneDenied] —, la caméra ne l'est jamais : refusée,
+     * l'appel part en audio avec le repli qui dit pourquoi. [onDecision] est appelé une fois, qu'on ait demandé ou non.
+     */
+    fun preflightOutgoing(isVideo: Boolean, onDecision: (CallPreflightDecision) -> Unit) {
+        if (preflight != null && scope != null) {
+            scope.launch { onDecision(preflight.outgoing(isVideo)) }
+            return
+        }
+        val decide = { onDecision(CallPreflight.decide(isMicGranted(), isCameraGranted(), isVideo)) }
+        if (isMicGranted() && (!isVideo || isCameraGranted())) {
+            decide()
+        } else {
+            pending.setDecision(decide)
             request()
         }
     }
@@ -46,6 +75,10 @@ class CallPermissionGate internal constructor(
      * en audio. [onDecision] est appelé une fois, qu'on ait demandé ou non.
      */
     fun answerIncoming(isVideo: Boolean, onDecision: (IncomingCallAnswer) -> Unit) {
+        if (preflight != null && scope != null) {
+            scope.launch { onDecision(preflight.incoming(isVideo)) }
+            return
+        }
         val decide = {
             onDecision(IncomingCallPermissionPolicy.decide(isMicGranted(), isCameraGranted(), isVideo))
         }
@@ -86,26 +119,25 @@ class CallPermissionGate internal constructor(
     }
 }
 
-/** The gate for a call of the given kind — camera is requested alongside the mic only for video. */
+/**
+ * The gate for a call. Every access goes through the single permission door: explanation sheet
+ * before the system prompt, « Open Settings » card after a permanent refusal, and the call resumes
+ * when the access is granted from the settings. [PermissionFlowHost] of [flow] must be composed by the screen.
+ */
 @Composable
-fun rememberCallPermissionGate(isVideo: Boolean): CallPermissionGate {
+fun rememberCallPermissionGate(): CallPermissionGate {
     val context = LocalContext.current
-    val required = remember(isVideo) { CallPermissions.required(isVideo) }
-    val pending = remember { CallPermissionGate.PendingAction() }
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { grants ->
-        val micGranted = grants[Manifest.permission.RECORD_AUDIO]
-            ?: hasSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-        pending.resolve(micGranted)
-        pending.settle()
-    }
-    return remember(context, required, pending, launcher) {
+    val scope = rememberCoroutineScope()
+    val flow = rememberPermissionFlow()
+    return remember(context, scope, flow) {
         CallPermissionGate(
             isMicGranted = { hasSelfPermission(context, Manifest.permission.RECORD_AUDIO) },
-            request = { launcher.launch(required) },
-            pending = pending,
+            request = {},
+            pending = CallPermissionGate.PendingAction(),
             isCameraGranted = { hasSelfPermission(context, Manifest.permission.CAMERA) },
+            preflight = CallPermissionPreflight { nature, announcesRefusal -> flow.ensure(nature, announcesRefusal) },
+            scope = scope,
+            flow = flow,
         )
     }
 }

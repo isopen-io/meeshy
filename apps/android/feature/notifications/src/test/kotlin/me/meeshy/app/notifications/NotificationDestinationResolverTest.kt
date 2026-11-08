@@ -1,5 +1,6 @@
 package me.meeshy.app.notifications
 
+import me.meeshy.sdk.model.StoryViewerInitialAction
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationActor
@@ -193,12 +194,31 @@ class NotificationDestinationResolverTest {
     }
 
     @Test
-    fun `a reaction on a story falls back to the post detail — the actor is the reactor, not the owner`() {
+    fun `a reaction on a story opens the viewer on that story by id with the views sheet`() {
         val dest = NotificationDestinationResolver.resolve(
             notification("story_reaction", postId = "p1", actorId = "reactor1", postType = "STORY"),
         )
 
-        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+        assertThat(dest).isEqualTo(NotificationDestination.StoryContent("p1", StoryViewerInitialAction.VIEWS, null, null))
+    }
+
+    @Test
+    fun `a comment on a story opens the viewer on its comments`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("story_new_comment", postId = "p1", actorId = "commenter1", postType = "STORY"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.StoryContent("p1", StoryViewerInitialAction.COMMENTS, null, null))
+    }
+
+    @Test
+    fun `a story destination without a dedicated opener falls back to the post detail`() {
+        val opened = mutableListOf<String>()
+        NotificationDestination.StoryContent("p1", null, null, null).dispatch(
+            onOpenConversation = {}, onOpenPost = { opened += it }, onOpenReel = {}, onOpenStory = {}, onOpenProfile = {},
+        )
+
+        assertThat(opened).containsExactly("p1")
     }
 
     @Test
@@ -211,12 +231,12 @@ class NotificationDestinationResolverTest {
     }
 
     @Test
-    fun `the friend_new_story owner shortcut still needs an actor id`() {
+    fun `the friend_new_story without an actor id opens the viewer by the story id`() {
         val dest = NotificationDestinationResolver.resolve(
             notification("friend_new_story", postId = "p1", postType = "STORY"),
         )
 
-        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+        assertThat(dest).isEqualTo(NotificationDestination.StoryContent("p1", null, null, null))
     }
 
     @Test
@@ -353,5 +373,22 @@ class NotificationDestinationResolverTest {
 
         assertThat(row).isEqualTo(NotificationDestination.Reel("p1"))
         assertThat(banner).isEqualTo(me.meeshy.sdk.model.push.PushTapDestination.Reel("p1"))
+    }
+
+    @Test
+    fun `une charge push et la notification de l API menent a la meme destination`() {
+        val fromApi = NotificationDestinationResolver.resolve(
+            notification(type = "post_comment", postId = "p1", postType = "STORY", actorId = "u2"),
+        )
+        val fromPush = NotificationDestinationResolver.resolve(
+            me.meeshy.sdk.model.push.PushPayload(type = "post_comment", postId = "p1", postType = "STORY", senderId = "u2"),
+        )
+        assertThat(fromPush).isEqualTo(fromApi)
+    }
+
+    @Test
+    fun `une charge push sans destination ne mene nulle part`() {
+        assertThat(NotificationDestinationResolver.resolve(me.meeshy.sdk.model.push.PushPayload(type = "login_new_device")))
+            .isEqualTo(NotificationDestination.None)
     }
 }

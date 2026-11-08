@@ -109,6 +109,15 @@ class FeedSceneCoordinator {
     }
 
     fun isLive(id: String): Boolean = activeId == id
+
+    /** L'élection du fil entier ([FeedAutoplayCoordinator]) désigne la scène vivante : elle remplace celle d'ici. */
+    fun adopt(id: String?) {
+        if (id != activeId) activeId = id
+    }
+
+    fun reportedFrames(): List<FeedSceneFrame> = reported.values.toList()
+
+    fun viewportBounds(): Pair<Float, Float> = viewportTop to viewportBottom
 }
 
 /** `null` hors d'un fil élisant (détail d'un post, listes d'un profil) : toute scène reste une image fixe. */

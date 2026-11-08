@@ -216,7 +216,7 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         let chrome = try source("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCaptureGesture.action(zone: .scene, gesture: .drag"),
                       "le glissé de la nappe lit la table, qui suit la même loi")
-        let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try source("Meeshy/Features/Main/Components/CameraModel+Lens.swift")
         XCTAssertTrue(camera.contains("setTorchModeOn(level:"))
         XCTAssertTrue(camera.contains("videoZoomFactor"))
     }
@@ -462,7 +462,7 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
     }
 
     func test_laCamera_seRegleEnContinuEtViseAuPoint() throws {
-        let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift") + source("Meeshy/Features/Main/Components/CameraFocusControl.swift")
+        let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift") + source("Meeshy/Features/Main/Components/CameraModel+Lens.swift") + source("Meeshy/Features/Main/Components/CameraFocusControl.swift")
         XCTAssertTrue(camera.contains("ComposerCaptureFocus.continuous("), "mise au point automatique à l'ouverture")
         XCTAssertTrue(camera.contains("ComposerCaptureFocus.focusing(at:"), "le double toucher vise")
         XCTAssertTrue(camera.contains("subjectAreaDidChangeNotification"), "la scène qui change rend le continu")

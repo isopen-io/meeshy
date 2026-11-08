@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reading_mode_unavailable_generic">غير متاح هنا</string>
+    <string name="reading_mode_not_yet_rendered">قريبًا على أندرويد</string>
+</resources>

@@ -63,8 +63,9 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// so on-disk rows written before this field existed keep decoding without
     /// migration (S7b — durable offline media, parity with `localAudioPaths`).
     public let localMediaPaths: [String]?
-    /// Le nom d'ORIGINE de chaque fichier de `localMediaPaths`, aligné par
-    /// index (#11531) : le chemin disque reste `<index>.<ext>` — le nom choisi
+    /// Le nom d'ORIGINE de chaque fichier de `localMediaPaths` — ou de
+    /// `localAudioPaths`, une ligne ne portant jamais les deux —, aligné par
+    /// index (#11531, #11166) : le chemin disque reste `<index>.<ext>` — le nom choisi
     /// par une autre app n'entre jamais dans un chemin —, le nom voyage ici
     /// jusqu'au `filename` TUS. `nil` pour un fichier sans nom connu ET pour
     /// les lignes écrites avant ce champ (`decodeIfPresent`).
@@ -140,7 +141,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let ephemeralDuration: Int?
     public let createdAt: Date
 
-    /// Le nom d'origine du fichier `index` de `localMediaPaths`, s'il est connu.
+    /// Le nom d'origine du fichier `index` de la ligne, s'il est connu.
     public func originalMediaName(at index: Int) -> String? {
         guard let names = localMediaOriginalNames, names.indices.contains(index) else { return nil }
         return names[index]

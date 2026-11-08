@@ -172,7 +172,11 @@ export class EngagementService {
     this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, {
       onPointsTakenBack: (userId, points, creditedAt) => this.game.onPointsTakenBack(userId, points, creditedAt),
     });
-    this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
+    this.game =
+      deps.game ??
+      new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey), {
+        emitIO: deps.emitIO ?? getEngagementEmitIO,
+      });
     this.streaks = new EngagementStreaks(prisma, this.quotas, this.game, (userId, points) => this.updateEngagementScore(userId, points));
   }
 

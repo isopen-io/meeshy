@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.scene
 import me.meeshy.sdk.model.SceneV3
 
 private const val PORTRAIT_ASPECT = 9.0 / 16.0
+private const val LANDSCAPE_WIRE = "landscape"
 
 /**
  * La forme du cadre d'une scène : portrait 9:16 par défaut, paysage 16:9 quand
@@ -17,6 +18,9 @@ enum class CanvasFormat(val ratio: Double) {
     PORTRAIT(PORTRAIT_ASPECT),
     LANDSCAPE(1.0 / PORTRAIT_ASPECT);
 
+    /** Le nom persisté dans le brouillon : `null` pour le portrait, qui est le défaut d'un blob d'avant. */
+    val wire: String? get() = if (this == LANDSCAPE) LANDSCAPE_WIRE else null
+
     companion object {
         /**
          * Déduit le format du `carrierAspect` d'une scène v3 (ratio largeur /
@@ -27,6 +31,20 @@ enum class CanvasFormat(val ratio: Double) {
          */
         fun fromCarrierAspect(carrierAspect: Double?): CanvasFormat =
             if (carrierAspect != null && carrierAspect.isFinite() && carrierAspect > 1.0) LANDSCAPE else PORTRAIT
+
+        /**
+         * Le format qu'impose un fond importé de [width] x [height] pixels (iOS `StoryCanvasAspect.from(width:height:)`) :
+         * strictement plus large que haut ⇒ paysage ; carré, portrait ou dimensions inconnues ⇒ portrait.
+         */
+        fun fromSourceSize(width: Double?, height: Double?): CanvasFormat =
+            if (width != null && height != null && width.isFinite() && height.isFinite() && width > 0.0 && height > 0.0 && width > height) {
+                LANDSCAPE
+            } else {
+                PORTRAIT
+            }
+
+        /** Relit le format persisté dans un brouillon : un nom absent ou inconnu se lit portrait (rétrocompatibilité). */
+        fun fromWire(wire: String?): CanvasFormat = if (wire.equals(LANDSCAPE_WIRE, ignoreCase = true)) LANDSCAPE else PORTRAIT
     }
 }
 

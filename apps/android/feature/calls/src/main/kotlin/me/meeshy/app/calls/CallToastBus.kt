@@ -12,6 +12,8 @@ import javax.inject.Singleton
 data class CallToast(
     val message: String,
     val kind: FeedbackKind = FeedbackKind.Info,
+    /** Ce que fait un toucher sur le toast (ouvrir les Paramètres…) ; `null` : le toast n'est qu'un message. */
+    val onTap: (() -> Unit)? = null,
 )
 
 /**

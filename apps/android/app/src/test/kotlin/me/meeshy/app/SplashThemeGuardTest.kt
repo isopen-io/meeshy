@@ -106,7 +106,8 @@ class SplashThemeGuardTest {
         listOf("values", "values-fr", "values-es", "values-pt").forEach { locale ->
             val strings = File(resDir(), "$locale/strings.xml")
             assertWithMessage("$locale/strings.xml exists").that(strings.isFile).isTrue()
-            val text = strings.readText()
+            val generated = File(resDir(), "$locale/strings_generated.xml")
+            val text = strings.readText() + if (generated.isFile) generated.readText() else ""
             assertWithMessage("$locale declares splash_version_label with 2 format args")
                 .that(text)
                 .contains("name=\"splash_version_label\">Meeshy %1\$s")

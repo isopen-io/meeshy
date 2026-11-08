@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.lock.LockPinMode
+import me.meeshy.sdk.model.lock.LockPinError
 import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
@@ -22,6 +24,7 @@ import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryEvent
@@ -61,11 +64,15 @@ class ConversationLockFlowViewModelTest {
         messageSocketManager = mockk<MessageSocketManager> {
             every { unreadUpdated } returns MutableSharedFlow()
             every { messageReceived } returns MutableSharedFlow()
+            every { messageEdited } returns MutableSharedFlow()
+            every { messageDeleted } returns MutableSharedFlow()
             every { conversationUpdated } returns MutableSharedFlow()
             every { conversationDeleted } returns MutableSharedFlow()
             every { conversationRestored } returns MutableSharedFlow()
             every { conversationClosed } returns MutableSharedFlow()
+            every { conversationObsoleted } returns MutableSharedFlow()
             every { participantLeft } returns MutableSharedFlow()
+            every { participantBanned } returns MutableSharedFlow()
             every { participantJoined } returns MutableSharedFlow()
             every { participantUnbanned } returns MutableSharedFlow()
             every { userStatus } returns MutableSharedFlow()
@@ -93,6 +100,7 @@ class ConversationLockFlowViewModelTest {
             every { currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         },
         lockStore = lockStore,
+        unlockSession = ConversationUnlockSessionStore(),
         storyRepository = mockk<me.meeshy.sdk.story.StoryRepository>(relaxed = true) {
             every { storiesStream(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
         },
@@ -103,6 +111,7 @@ class ConversationLockFlowViewModelTest {
         networkMonitor = me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         statusRepository = mockk(relaxed = true),
         rowSignalsSource = idleRowSignalsSource(),
+        livePatcher = mockk(relaxed = true),
     )
 
     private fun ConversationListViewModel.enter(digits: String) {

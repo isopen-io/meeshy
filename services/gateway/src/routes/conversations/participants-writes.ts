@@ -1,10 +1,11 @@
+import { decideDirectOpening, requestRecipientFields } from '../../services/messaging/messageRequests';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
-import { differsOrUnset } from '../../utils/prisma-unset';
+import { announceMemberArrival } from './memberArrivalFanOut';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { noticeActor } from '../../services/conversations/conversationNotice';
 import type { NoticeActor } from '@meeshy/shared/utils/conversation-notice';
@@ -14,7 +15,6 @@ import {
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   resolveConversationEntry,
@@ -30,6 +30,13 @@ import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
+import {
+  applyCommunityAdmission,
+  loadSalonCommunity,
+  planSalonEntry,
+  type SalonCommunity,
+} from '../../services/conversations/communityMembershipSync';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
 /**
@@ -46,7 +53,12 @@ export const MAX_PARTICIPANTS_PER_CALL = 50;
 /** Ce qui est arrivé à UN identifiant du lot. */
 export type ParticipantAdmissionVerdict = {
   readonly userId: string;
-  readonly outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found';
+  /**
+   * `community-forbidden` (#16695) : le salon appartient à une communauté
+   * PRIVÉE dont la personne n'est pas membre, et l'appelant n'y fait entrer
+   * personne (ni créateur, ni administrateur, ni modérateur de la communauté).
+   */
+  readonly outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found' | 'community-forbidden';
   readonly participantId?: string;
 };
 
@@ -247,11 +259,16 @@ export function registerParticipantWriteRoutes(
     currentUserId: string | undefined;
     /** Le membre qui ajoute — l'avis se lit « Demo a ajouté X » (#7593). */
     addedBy: NoticeActor;
+    /** La communauté PRIVÉE qui héberge le salon, lue une fois pour le lot (#16695). */
+    community: SalonCommunity | null;
   }): Promise<ParticipantAdmissionVerdict> {
-    const { conversationId, conversation, userId, currentUserId, addedBy } = options;
+    const { conversationId, conversation, userId, currentUserId, addedBy, community } = options;
 
     const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
     if (!userToAdd) return { userId, outcome: 'not-found' };
+    // #14107 (MSG-03, RG-22) — un groupe ne débloque rien : un membre ajouté par
+    // quelqu'un qui n'est pas au moins sa Connaissance entre par sa boîte de demandes.
+    const opening = currentUserId ? await decideDirectOpening(prisma, { senderId: currentUserId, recipientId: userId }) : { kind: 'direct' as const };
 
     // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
     // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui
@@ -264,6 +281,12 @@ export function registerParticipantWriteRoutes(
     if (entry.outcome === 'closed') return { userId, outcome: 'not-found' };
     if (entry.outcome === 'banned') return { userId, outcome: 'banned' };
     if (entry.outcome === 'already-member') return { userId, outcome: 'already-member' };
+
+    // #16695 — entrer dans un salon d'une communauté privée, c'est y être admis.
+    const communityAdmission = await planSalonEntry(prisma, community, { kind: 'registered', userId });
+    if (communityAdmission.kind === 'refused') {
+      return { userId, outcome: communityAdmission.reason === 'invite-forbidden' ? 'community-forbidden' : 'not-found' };
+    }
 
     // #4174 — la table de droits vient du site UNIQUE
     // (`services/participantRights.ts`), partagé avec `POST …/invite`.
@@ -286,7 +309,8 @@ export function registerParticipantWriteRoutes(
       // trancher « quelle langue pour un compte sans AUCUNE préférence ? » est
       // un arbitrage produit, pas un correctif de Prisme.
       language: recipientLanguage(userToAdd, 'en'),
-      permissions: { ...NEW_MEMBER_PERMISSIONS }
+      permissions: { ...NEW_MEMBER_PERMISSIONS },
+      ...requestRecipientFields(opening, new Date(), currentUserId ?? '')
     };
 
     // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du
@@ -299,7 +323,7 @@ export function registerParticipantWriteRoutes(
     if (entry.outcome === 'rejoin' && entry.participantId) {
       const rejoined = await prisma.participant.update({
         where: { id: entry.participantId },
-        data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
+        data: { ...REJOIN_PARTICIPANT_STATE, ...addedMemberFields }
       });
       joinedParticipantId = rejoined.id;
       invalidateParticipantLookup(entry.participantId, conversationId);
@@ -323,6 +347,7 @@ export function registerParticipantWriteRoutes(
       }).catch(() => undefined);
     }
 
+    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
     announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language, readerUserId: userId });
 
     // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
@@ -367,47 +392,20 @@ export function registerParticipantWriteRoutes(
       // pourquoi son effectif ne pouvait que DÉRIVER VERS LE BAS (départ −1,
       // bannissement −1, ajout rien).
       //
-      // D'où l'événement dédié, symétrique de `conversation:participant-left`
-      // jusque dans son payload, et adressé comme lui aux rooms PERSONNELLES :
-      // le compteur se lit sur l'écran de liste, que ses lecteurs regardent
-      // précisément quand ils ne sont pas dans la room de conversation.
-      //
-      // Le nouvel arrivant est ÉCARTÉ de l'éventail : il reçoit
-      // `CONVERSATION_NEW` ci-dessous, dont l'effectif vient du serveur et le
-      // compte DÉJÀ. L'incrémenter en plus le mettrait en trop.
-      const audience = await prisma.participant.findMany({
-        where: { conversationId, isActive: true, ...differsOrUnset('userId', userId) },
-        // `role` et `user.role` en plus : les deux titres qui ouvrent
-        // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
-        // connaître PAR DESTINATAIRE — un broadcast ne portait qu'une
-        // présentation, et c'était la plafonnée, pour tout le monde.
-        select: { id: true, userId: true, role: true, user: { select: { role: true } } },
-      });
-      // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
-      // rattrape jamais d'un événement manqué (hors ligne, trou de
-      // reconnexion), et les deux clients PERSISTENT la dérive (cache disque
-      // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
-      //
-      // `+ 1` parce que l'éventail ÉCARTE l'arrivant : il est actif depuis
-      // l'écriture juste au-dessus, donc il compte, mais il ne figure pas dans
-      // `audience`. Une seconde requête ne rendrait rien de plus.
-      //
-      // Deux chaînes disjointes : « 199+ » pour la room, l'effectif ENTIER
-      // pour les lecteurs autorisés. Un broadcast unique ne portait que la
-      // présentation plafonnée, et écrasait donc chez l'admin du groupe la
-      // valeur exacte que le REST venait de lui servir.
-      emitConversationMemberCountEvent({
+      // D'où l'événement dédié, désormais par son site UNIQUE
+      // (`announceMemberArrival`, #16837) : cette porte était la SEULE des
+      // trois à l'émettre, et la règle qu'il faut retaper à chaque site est
+      // celle qu'un site finit par ne pas avoir.
+      await announceMemberArrival({
+        prisma,
         io,
         conversationId,
-        participants: audience,
-        event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED,
-        payload: {
-          conversationId,
+        arrival: {
           userId,
           displayName: addedMemberFields.displayName,
-          joinedAt: joinedAt.toISOString(),
+          joinedAt,
         },
-        memberCount: audience.length + 1,
+        onError: (error) => logger.warn('member arrival fan-out failed', { userId, conversationId, err: error }),
       });
     }
     // Auto-join the added user's currently-connected sockets to the conversation
@@ -431,23 +429,29 @@ export function registerParticipantWriteRoutes(
           select: { userId: true },
         }).then(rows => rows.map(r => r.userId).filter((id): id is string => !!id));
         if (conv) {
-          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
-            conversationId,
-            conversationType: conv.type,
-            title: conv.title ?? null,
-            creatorId: currentUserId ?? userId,
-            participantIds: allParticipantIds,
-            createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
-          });
+          announceConversationNew(prisma, {
+            io,
+            recipientIds: [userId],
+            payload: {
+              conversationId,
+              conversationType: conv.type,
+              title: conv.title ?? null,
+              creatorId: currentUserId ?? userId,
+              participantIds: allParticipantIds,
+              createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
+            },
+            onError: (error) => logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err: error }),
+          }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
         }
       } catch (err) {
         logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err });
       }
     }
 
+    // #14107 (E2, audit 3 F-b) — la personne en demande n'est pas prévenue ; les membres présents, si.
     const notificationService = fastify.notificationService;
     if (notificationService) {
-      notificationService.createAddedToConversationNotification({
+      if (opening.kind === 'direct') notificationService.createAddedToConversationNotification({
         recipientUserId: userId,
         addedByUserId: currentUserId,
         conversationId,
@@ -558,7 +562,7 @@ export function registerParticipantWriteRoutes(
                       userId: { type: 'string' },
                       outcome: {
                         type: 'string',
-                        enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found'],
+                        enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found', 'community-forbidden'],
                         description: 'What happened to THIS identifier'
                       },
                       // Produit par `admitOneParticipant`, porté par
@@ -640,7 +644,7 @@ export function registerParticipantWriteRoutes(
       // fil terminé. Deux colonnes, cf. `conversationWriteAdmission`.
       const conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { isActive: true, closedAt: true },
+        select: { isActive: true, closedAt: true, communityId: true },
       });
       if (conversation && (conversation.isActive === false || conversation.closedAt)) {
         return sendError(reply, 410, 'Cette conversation est terminée');
@@ -650,10 +654,11 @@ export function registerParticipantWriteRoutes(
       // concurrentes sur la même conversation liraient le même effectif et
       // émettraient deux fois le même total. L'éventail de diffusion n'est pas
       // mécanique — chaque tour a ses destinataires et son compte.
+      const community = await loadSalonCommunity(prisma, { communityId: conversation?.communityId, actorId: currentUserId });
       const results: ParticipantAdmissionVerdict[] = [];
       for (const userId of demandes.userIds) {
         results.push(await admitOneParticipant({
-          conversationId, conversation, userId, currentUserId, addedBy: noticeActor(currentUserParticipant),
+          conversationId, conversation, userId, currentUserId, addedBy: noticeActor(currentUserParticipant), community,
         }));
       }
 
@@ -667,6 +672,9 @@ export function registerParticipantWriteRoutes(
       if (demandes.single && results.length === 1) {
         const seul = results[0];
         if (seul.outcome === 'not-found') return sendNotFound(reply, 'User not found');
+        if (seul.outcome === 'community-forbidden') {
+          return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+        }
         if (seul.outcome === 'banned') {
           return sendForbidden(reply, 'Cet utilisateur est banni de la conversation — levez le bannissement d\'abord');
         }

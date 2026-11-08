@@ -50,6 +50,19 @@ object RootPresentationRules {
         !hasGuestSession &&
         !hasVisitorRequest
 
+    /** L'accueil de premier lancement (iOS `WelcomeView`, meme conjonction que `showsOnboarding`) : une fois par appareil, jamais sous un autre parcours. */
+    fun showsWelcome(
+        hasSeenWelcome: Boolean,
+        isAuthenticated: Boolean,
+        splashPhase: SplashPhase,
+        hasGuestSession: Boolean,
+        hasVisitorRequest: Boolean,
+    ): Boolean = !hasSeenWelcome &&
+        !isAuthenticated &&
+        splashPhase != SplashPhase.COVERING &&
+        !hasGuestSession &&
+        !hasVisitorRequest
+
     fun showsCelebration(isAuthenticated: Boolean, isShowing: Boolean): Boolean = isAuthenticated && isShowing
 
     /** Le contenu reste dans l'arbre mais a opacite 0 tant que le rideau couvre. */

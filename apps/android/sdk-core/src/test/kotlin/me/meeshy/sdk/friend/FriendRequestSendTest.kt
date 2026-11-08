@@ -41,6 +41,15 @@ class FriendRequestSendTest {
     }
 
     @Test
+    fun `a 409 carrying a circles refusal is a permanent rejection, never an already-exists`() {
+        listOf("RELATION_PHASE_SKIP", "RELATION_COOLDOWN", "RELATION_NOT_ELIGIBLE").forEach { code ->
+            val outcome = FriendRequestSend.classify(failure(status = 409, code = code, message = "refused"))
+
+            assertThat(outcome).isEqualTo(FriendRequestDelivery.Rejected("refused"))
+        }
+    }
+
+    @Test
     fun `a 400 bad request is a permanent rejection carrying the reason`() {
         val outcome = FriendRequestSend.classify(failure(status = 400, message = "invalid receiver"))
 

@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model.push
 
+import me.meeshy.sdk.model.EndToEndRegime
+
 /**
  * La charge `data` d'un push FCM, decodee UNE seule fois. FCM ne transporte que des
  * chaines : nombres et booleens arrivent en texte. Une cle absente, vide ou illisible
@@ -14,6 +16,8 @@ public data class PushPayload(
     val senderId: String? = null,
     val postId: String? = null,
     val postType: String? = null,
+    /** Le discriminant que la famille `friend_new_*` expédie à la place de `postType` (iOS `NotificationContentRouter`). */
+    val contentType: String? = null,
     val commentId: String? = null,
     val parentCommentId: String? = null,
     val callId: String? = null,
@@ -40,7 +44,23 @@ public data class PushPayload(
     val senderAvatar: String? = null,
     /** Le compte que la passerelle vise (#13567) ; absent d'une passerelle antérieure. */
     val recipientUserId: String? = null,
+    /** Le média inline tel qu'il part sur le fil (`push-media-fields.ts`) : adresse, mime, durée, taille. */
+    val attachmentUrl: String? = null,
+    val attachmentMimeType: String? = null,
+    val attachmentDurationMs: Long? = null,
+    val attachmentFileSize: Long? = null,
+    /** La photo de l'acteur, sous le nom que la passerelle lui donne pour iOS (`imageURL`). */
+    val imageUrl: String? = null,
+    /** Le mode servi de la conversation (`e2ee` / `server` / `hybrid`, #14669) ; absent pour le clair ou d'une passerelle antérieure. */
+    val conversationEncryptionMode: String? = null,
 ) {
+    /**
+     * #13794 — la conversation que ce push apprend chiffrée de bout en bout, au même titre que la mémoire locale : le mode
+     * servi ne peut qu'AJOUTER le bout en bout au registre, jamais l'en retirer (#12949). `null` pour tout autre mode.
+     */
+    val teachesEndToEndTo: String?
+        get() = conversationId?.takeIf { EndToEndRegime.isEndToEnd(conversationEncryptionMode) }
+
     /**
      * Le média peut-il voyager jusqu'à la bannière ? Une protection déclarée
      * (`notificationLocKey` présent, drapeau de cycle de vie dans `effectFlags`) ou une
@@ -62,6 +82,7 @@ public data class PushPayload(
         public fun decode(data: Map<String, String>): PushPayload {
             fun text(key: String): String? = data[key]?.takeIf { it.isNotBlank() }
             fun int(key: String): Int? = text(key)?.trim()?.toIntOrNull()
+            fun long(key: String): Long? = text(key)?.trim()?.toLongOrNull()
             fun bool(key: String): Boolean? = when (text(key)?.trim()?.lowercase()) {
                 "true", "1" -> true
                 "false", "0" -> false
@@ -75,6 +96,7 @@ public data class PushPayload(
                 senderId = text("senderId"),
                 postId = text("postId"),
                 postType = text("postType"),
+                contentType = text("contentType"),
                 commentId = text("commentId"),
                 parentCommentId = text("parentCommentId"),
                 callId = text("callId"),
@@ -98,6 +120,12 @@ public data class PushPayload(
                 senderDisplayName = text("senderDisplayName"),
                 senderAvatar = text("senderAvatar"),
                 recipientUserId = text("recipientUserId"),
+                attachmentUrl = text("attachmentUrl"),
+                attachmentMimeType = text("attachmentMimeType"),
+                attachmentDurationMs = long("attachmentDurationMs"),
+                attachmentFileSize = long("attachmentFileSize"),
+                imageUrl = text("imageURL"),
+                conversationEncryptionMode = text("conversationEncryptionMode"),
             )
         }
     }

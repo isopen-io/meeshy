@@ -1,10 +1,11 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_action_comment">Commenta</string>
+    <string name="reels_action_repost">Ripubblica</string>
     <string name="reels_action_send">Invia</string>
     <string name="reels_author_profile">Profilo dell\'autore</string>
     <string name="reels_caption_translated">Traduzione disponibile</string>
     <string name="reels_close">Chiudi</string>
-    <string name="reels_comments">Commenti</string>
     <string name="reels_comments_composer_hint">Commenta…</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d commento</item>
@@ -20,6 +21,7 @@
     <string name="reels_like">Mi piace</string>
     <string name="reels_menu_copy_text">Copia il testo</string>
     <string name="reels_menu_delete">Elimina</string>
+    <string name="reels_menu_edit">Modifica</string>
     <string name="reels_menu_hint">Apre il menu delle azioni</string>
     <string name="reels_menu_open">Apri</string>
     <string name="reels_menu_pin">Fissa</string>
@@ -27,7 +29,13 @@
     <string name="reels_menu_share">Condividi</string>
     <string name="reels_mute">Disattiva audio</string>
     <string name="reels_open_failure_back">Indietro</string>
-    <string name="reels_repost">Ricondividi</string>
+    <string name="reels_report_reason_harassment">Molestie</string>
+    <string name="reels_report_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="reels_report_reason_impersonation">Furto d\'identità</string>
+    <string name="reels_report_reason_inappropriate">Contenuto inappropriato</string>
+    <string name="reels_report_reason_other">Altro</string>
+    <string name="reels_report_reason_spam">Spam</string>
+    <string name="reels_report_reason_violence">Violenza</string>
     <string name="reels_scrub">Avanti o indietro</string>
     <string name="reels_share">Condividi</string>
     <string name="reels_toast_delete_failed">Errore durante l\'eliminazione del post</string>
@@ -36,6 +44,8 @@
     <string name="reels_toast_pinned">Post fissato</string>
     <string name="reels_toast_report_failed">Errore durante la segnalazione del post</string>
     <string name="reels_toast_reported">Post segnalato</string>
+    <string name="reels_toast_repost_failed">Errore durante la ripubblicazione</string>
+    <string name="reels_toast_reposted">Ripubblicato</string>
     <string name="reels_unlike">Non mi piace più</string>
     <string name="reels_unmute">Attiva l\'audio</string>
     <string name="reels_views">Visualizzazioni</string>

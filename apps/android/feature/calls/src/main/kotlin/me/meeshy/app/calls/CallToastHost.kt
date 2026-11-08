@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -58,7 +59,11 @@ fun CallToastHost(
         enter = fadeIn() + slideInVertically { -it },
         exit = fadeOut() + slideOutVertically { -it },
     ) {
-        current?.let { toast -> MeeshyFeedbackToast(message = toast.message, kind = toast.kind) }
+        current?.let { toast -> MeeshyFeedbackToast(
+            message = toast.message,
+            kind = toast.kind,
+            modifier = toast.onTap?.let { Modifier.clickable(onClick = it) } ?: Modifier,
+        ) }
     }
 }
 

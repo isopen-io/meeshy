@@ -45,7 +45,10 @@ import { readDeviceServedTo } from '../utils/read-device-visibility';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { servePostReplyCitations } from '../services/messaging/servedPostReply';
 import { servedLinkMetadata } from '../services/messaging/linkTrackingAuthor';
+import { withNoticeUsernames } from '../services/messaging/noticeUsernames';
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
+import { isEphemeralServableToReader, readEphemeralReaderResolution } from './conversations/ephemeralReaderDeadlines';
+import { mapMessageProtectionFields } from './conversations/messageProtectionProjection';
 
 /**
  * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
@@ -311,6 +314,49 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         return sendNotFound(reply, 'Message non trouvé');
       }
 
+      // #16581 — LA COUPURE DE SERVICE D'UN ÉPHÉMÈRE, POUR CE LECTEUR.
+      //
+      // Cette porte n'en avait AUCUNE, et son seul consommateur mesuré est
+      // l'extension de notification iOS (`NSEDataSync.syncMessage`), qui dépose
+      // la charge dans l'App Group pour que l'application pré-remplisse la
+      // bulle au démarrage à froid : un éphémère expiré chez ce lecteur était
+      // donc réinjecté dans son fil — et daté de SEPT JOURS par la colonne
+      // brute (voir la projection plus bas), si bien que le client n'avait
+      // aucune raison de le retirer. La résurrection n'était pas transitoire.
+      //
+      // La borne est celle du SERVICE (`D(u) + 1 h`) et non celle de la sortie
+      // de contenu (`contentStillVisibleToReader`, `D(u)` sans grâce) : cette
+      // porte SERT une bulle, elle n'en fait pas sortir le contenu vers un
+      // tiers. L'en-tête de `messageReadAccess.ts` tranche la distinction — et
+      // la grâce est précisément ce qui permet à un second appareil d'apprendre
+      // qu'un message a expiré plutôt que de ne jamais savoir qu'il a existé,
+      // c'est-à-dire le travail de la NSE.
+      //
+      // La lecture est CIBLÉE (`readEphemeralReaderResolution`), jamais le
+      // balayage plafonné d'une page : sur une porte qui DÉCIDE, une ligne
+      // absente d'une tranche tronquée se lirait « décompte pas démarré » et
+      // ouvrirait la sortie. Un message non éphémère ne coûte aucune lecture.
+      // Elle PROPAGE ses erreurs — le `catch` du gestionnaire ferme en 500 :
+      // une échéance illisible n'est pas une échéance absente.
+      const ephemeralReaderParticipantId = (readerRow as { id?: string }).id;
+      const ephemeralReader = ephemeralReaderParticipantId
+        ? await readEphemeralReaderResolution(prisma, message as never, ephemeralReaderParticipantId)
+        : undefined;
+      if (!isEphemeralServableToReader(message as never, ephemeralReader, new Date())) {
+        return sendNotFound(reply, 'Message non trouvé');
+      }
+      // CE QUE CE LOT NE PORTE PAS, et pourquoi — suivi #16582. La coupure de
+      // CITATION (#8630, « une réponse meurt avec ce qu'elle cite ») exigerait
+      // une composition qui n'existe pas : la chaîne citée lue de façon CIBLÉE
+      // sous la borne de SERVICE. Les deux seules compositions du dépôt sont
+      // « chaîne plafonnée + borne de service » (`keepAliveForReader`, juste
+      // pour une page) et « chaîne ciblée + borne STRICTE »
+      // (`contentStillVisibleToReader`, juste pour un geste de sortie).
+      // Emprunter l'une ou l'autre ici défait ce que la garde ci-dessus vient
+      // d'obtenir : la première réintroduit le plafond sur une porte qui
+      // DÉCIDE, la seconde refuse la bulle pendant la grâce — donc casse la
+      // NSE. L'extraction est un lot en soi.
+
       // Le résumé se CALCULE — les colonnes dénormalisées de la ligne Message
       // n'ont aucun écrivain et valaient donc toujours `{0, 0, null, null}`.
       // Même source de vérité que la liste de messages et que le canal socket,
@@ -399,11 +445,19 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // #7950 — la citation d'une story retirée sort expurgée de `metadata`.
       // #11381 — un message `server`/`hybrid` sort en clair, ses traductions comprises.
       const opened = await revealAtRest(message, lazyKeyring(() => getEncryptionService(prisma)));
-      const [citedMessage] = await servePostReplyCitations(prisma, [opened]);
+      const [citedMessage] = await withNoticeUsernames(prisma, await servePostReplyCitations(prisma, [opened]));
       return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
         // #11375 — `data` traverse entier : les colonnes de l'éditeur tiers en
         // sortent, ce lecteur reçoit ce que `servedEditAttribution` lui accorde.
         ...withServedEditAttribution(citedMessage, editAttributionReaderOf(authRequest.authContext)),
+        // #16581 — les sept champs de protection, projetés comme sur
+        // `GET .../messages` et la liste des épingles : l'étalement
+        // `...citedMessage` servait `expiresAt` BRUT, et depuis #7451 cette
+        // colonne porte l'heure INTERNE de destruction — le plafond de
+        // rétention de sept jours tant que personne n'a reçu. Posé APRÈS
+        // l'étalement et AVANT `projectViewOnceForReader`, qui garde le dernier
+        // mot sur ce que ce lecteur voit d'une vue unique.
+        ...mapMessageProtectionFields(message as never, ephemeralReader),
         // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
         metadata: servedLinkMetadata(citedMessage.metadata, message.sender),
         sender: gatedSender,

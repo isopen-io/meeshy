@@ -277,7 +277,7 @@ describe('isSystemMessage / systemRowOf', () => {
         },
       }),
     );
-    expect(row).toEqual({ kind: 'join', displayName: 'Bob Martin', handle: '@ano_bob', isAnonymous: false });
+    expect(row).toEqual({ kind: 'join', displayName: 'Bob Martin', handle: '@ano_bob', isAnonymous: false, username: 'ano_bob' });
   });
 
   test('système sans metadata ⇒ {kind:"notice", text: content}', () => {

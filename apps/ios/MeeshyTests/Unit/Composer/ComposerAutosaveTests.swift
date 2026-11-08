@@ -357,25 +357,22 @@ final class ComposerAutosaveTests: XCTestCase {
     // MARK: - Ouverture
 
     func test_decide_blankDoor_restores() {
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: false,
                                                       resumesDraft: false, isSeeded: false,
                                                       opensOnMood: false), .restores)
     }
 
     func test_decide_seededDoor_preservesTheStoredDraft() {
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: false,
                                                       resumesDraft: false, isSeeded: true,
                                                       opensOnMood: false), .preservesStoredDraft)
     }
 
-    func test_decide_atelierOrEditOrResume_isDisabled() {
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: true, isHydrated: false,
+    func test_decide_editOrResume_isDisabled() {
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: true,
                                                       resumesDraft: false, isSeeded: false,
                                                       opensOnMood: false), .disabled)
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: true,
-                                                      resumesDraft: false, isSeeded: false,
-                                                      opensOnMood: false), .disabled)
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: false,
                                                       resumesDraft: true, isSeeded: false,
                                                       opensOnMood: false), .disabled)
     }
@@ -424,6 +421,60 @@ final class ComposerAutosaveTests: XCTestCase {
         let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
 
         XCTAssertEqual(relu.publishChoice, ComposerPublishChoice(format: .post, layout: .reel))
+    }
+
+    /// #16585 — « Rouvrir en brouillon » et la reprise après un kill passent
+    /// par ce tiroir : un brouillon qui oublierait le choix repartirait OUVERT
+    /// sous un nouvel identifiant, sans que rien ne le dise.
+    func test_save_thenLoad_keepsTheCommentClosure() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        var etat = makeState(format: .post)
+        etat.commentsDisabled = true
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertTrue(relu.commentsDisabled)
+    }
+
+    func test_save_thenLoad_withoutCommentClosure_staysOpen_andWritesNoKey() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        let ecrit = ComposerAutosaveCodec.write(from: makeState(format: .post))
+
+        store.save(ecrit, account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertNil(ecrit.snapshot.commentsDisabled, "un brouillon ouvert n'écrit rien")
+        XCTAssertFalse(relu.commentsDisabled)
+    }
+
+    /// #16595 — un auteur qui avait REFUSÉ la reprise du son la retrouvait
+    /// autorisée après un kill ou « Rouvrir en brouillon » : le choix ne
+    /// voyageait pas, et son absence vaut l'accord par défaut (#8012).
+    func test_save_thenLoad_keepsTheSoundReuseRefusal() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        var etat = makeState(format: .post)
+        etat.soundExtractionChoice = false
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertEqual(relu.soundExtractionChoice, false)
+    }
+
+    func test_save_thenLoad_withoutSoundReuseChoice_staysUnchosen_andWritesNoKey() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        let ecrit = ComposerAutosaveCodec.write(from: makeState(format: .post))
+
+        store.save(ecrit, account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertNil(ecrit.snapshot.soundExtractionChoice, "aucun choix, aucune clé")
+        XCTAssertNil(relu.soundExtractionChoice)
     }
 
     func test_save_thenLoad_withoutPublishChoice_restoresNone() throws {

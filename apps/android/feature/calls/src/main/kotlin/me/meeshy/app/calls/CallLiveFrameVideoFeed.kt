@@ -31,6 +31,9 @@ internal fun CallLiveFrameVideo(source: CallLiveFrameVideoSource, eglContext: Eg
     )
 }
 
+/** Le cadre en direct se compose à 30 images par seconde (iOS `preferredFramesPerSecond`). */
+private const val FRAMES_PER_SECOND = 30f
+
 /** Une `TextureView` qui reçoit les images d'une piste WebRTC par un [EglRenderer] à elle. */
 internal class CallLiveFrameTextureView(context: Context, eglContext: EglBase.Context) : TextureView(context), TextureView.SurfaceTextureListener {
     private val renderer = EglRenderer("call-live-frame").apply { init(eglContext, EglBase.CONFIG_PLAIN, GlRectDrawer()) }
@@ -38,6 +41,7 @@ internal class CallLiveFrameTextureView(context: Context, eglContext: EglBase.Co
 
     init {
         isOpaque = false
+        renderer.setFpsReduction(FRAMES_PER_SECOND)
         surfaceTextureListener = this
     }
 

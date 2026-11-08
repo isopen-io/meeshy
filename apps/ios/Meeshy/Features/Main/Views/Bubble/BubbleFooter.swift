@@ -30,6 +30,7 @@ struct BubbleFooter: View, Equatable {
     let isDark: Bool
     @Environment(\.bubbleSenderMoodTap) private var senderMoodTap
     @Environment(\.bubbleSkin) private var skin
+    @Environment(\.pendingUploadProgress) private var pendingUpload
 
     static func == (lhs: BubbleFooter, rhs: BubbleFooter) -> Bool {
         lhs.model == rhs.model && lhs.style == rhs.style && lhs.isDark == rhs.isDark
@@ -199,6 +200,7 @@ struct BubbleFooter: View, Equatable {
     /// Trailing meta: timestamp + delivery check (or retry button on failure).
     @ViewBuilder
     private var metaTrailing: some View {
+        integrityMark
         editMark
         if let timestamp = model.timestamp {
             Text(timestamp)
@@ -227,6 +229,14 @@ struct BubbleFooter: View, Equatable {
     /// #7620 — « modifié » se dit ICI, juste avant l'heure, comme la rangée
     /// plate (`FocalMetaRow`) le fait déjà. En tête de bulle, le crayon
     /// tombait dans le coin arrondi que le `clipShape` de la bulle rogne.
+    /// #14369 — le verdict de la couche appareil d'un hybride, avant l'heure.
+    @ViewBuilder
+    private var integrityMark: some View {
+        if let integrity = model.integrity {
+            BubbleDeviceLayerMark(integrity: integrity, isMe: model.isMe, isDark: isDark)
+        }
+    }
+
     @ViewBuilder
     private var editMark: some View {
         if let edit = model.edit {
@@ -245,7 +255,7 @@ struct BubbleFooter: View, Equatable {
                 readTint: readTint,
                 sendStartedAt: model.sendStartedAt
             )
-            if let onShowReadStatus = actions.onShowReadStatus {
+            if pendingUpload == nil || delivery != .sending, let onShowReadStatus = actions.onShowReadStatus {
                 // Tap sur les coches -> ouvre le sheet detail a l'onglet
                 // "Vues" pour consulter qui a recu / qui a lu. Le bouton
                 // englobe une hit-area 22pt pour rester confortable au

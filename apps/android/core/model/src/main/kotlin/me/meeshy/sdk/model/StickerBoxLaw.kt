@@ -19,6 +19,26 @@ object StickerBoxLaw {
         }
     }
 
+    /**
+     * Part du côté laissée VIDE autour d'un film de Mee (#14534) : ses étincelles et ses entrées dépassent la toile
+     * de 216 du film, comme sur iOS où rien ne le rogne ; la marge leur fait place sans rétrécir le colibri.
+     */
+    const val FILM_BLEED_RATIO: Float = 0.1f
+
+    fun filmBleed(side: Float = SIDE_DP): Float = side * FILM_BLEED_RATIO
+
+    /** La place qu'un film occupe dans la rangée : son côté plus la marge de débordement des deux bords. */
+    fun filmFootprint(side: Float = SIDE_DP): Float = side + 2 * filmBleed(side)
+
+    /** Le plus grand côté, au plus [preferred], dont l'empreinte (marge comprise) tient dans [width] : un couloir étroit. */
+    fun filmSideWithin(width: Float, preferred: Float): Float = min(preferred, width / (1 + 2 * FILM_BLEED_RATIO))
+
+    /**
+     * Interligne d'un emoji en grand, en part de son corps (#14534) : l'encre d'un emoji couleur (🥳, 🤯) dépasse
+     * l'ascendante et la descendante de sa police ; la ligne lui laisse cette place au lieu de le rogner.
+     */
+    const val EMOJI_LINE_HEIGHT_RATIO: Float = 1.3f
+
     fun templateBox(side: Float = SIDE_DP): Size = Size(side * TEMPLATE_RATIO, side)
 
     /** Réduit [size] pour tenir dans [box], sans jamais agrandir. */

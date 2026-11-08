@@ -39,10 +39,19 @@ export async function translationSourceOf<T extends AtRestReadableRow>(row: T, k
 /**
  * #12822 — le texte que le translator lit d'une ligne `Message` : son clair,
  * ouvert par la passerelle quand la ligne est scellée au repos ; `null` quand
- * il n'y a rien à traduire (texte vide, ligne qu'aucune clé n'ouvre). La ligne
- * fait foi, jamais le texte qu'un appelant affirme être le sien.
+ * il n'y a rien à traduire (texte vide, ligne qu'aucune clé n'ouvre, message
+ * rappelé). La ligne fait foi, jamais le texte qu'un appelant affirme être le
+ * sien.
+ *
+ * #16557 — tout chemin vers le traducteur passe ici, et les transports de
+ * suppression gardent `content` : c'est le seul endroit où un rappel arrête
+ * TOUTES les retraductions, quel que soit celui qui les a demandées.
  */
-export async function translatableTextOf(row: AtRestReadableRow, keyring: AtRestKeyring): Promise<string | null> {
+export async function translatableTextOf(
+  row: AtRestReadableRow & { readonly deletedAt?: Date | null },
+  keyring: AtRestKeyring,
+): Promise<string | null> {
+  if (row.deletedAt) return null;
   const source = await translationSourceOf(row, keyring);
   if (!source.readable) return null;
   const text = source.row.content;
@@ -65,13 +74,29 @@ export const atRestRequestFlag = (encryptionMode: string | null | undefined): { 
 export const translationRequestRegime = (message: { readonly encryptionMode?: string | null; readonly [field: string]: unknown }): { readonly atRest?: true } =>
   isServerAtRestMode(message.encryptionMode) || contentDisappears(message) ? { atRest: true } : {};
 
-/** Le message que `translation:request` retraduit, son texte ouvert ; `content` vide s'il reste scellé. */
+/**
+ * Le message que `translation:request` retraduit, son texte ouvert ; `content`
+ * vide s'il reste scellé.
+ *
+ * #16552 — la garde de VIVACITÉ se relit CHEZ ELLE, pas chez l'appelant. Les
+ * trois transports de suppression écrivent `{ translations: null, deletedAt }` :
+ * ils effacent les copies traduites À DESSEIN et gardent `content`. Un message
+ * rappelé passait donc la garde `!message.content` du handler, repartait au
+ * traducteur, et sa traduction était RÉÉCRITE en base puis rediffusée à toute la
+ * room et à la file hors ligne — le secret revenait sur le fil après qu'on a dit
+ * à l'utilisateur qu'il était détruit.
+ *
+ * `deletedAt` non nul est la SEULE preuve d'un rappel (aucun chemin de la
+ * passerelle ne supprime un message physiquement) : on refuse sur la PREUVE. Une
+ * ligne absente reste traitée comme avant par l'appelant — `null` ici — ce qui ne
+ * sert rien et ne divulgue pas l'existence du message.
+ */
 export async function loadTranslatableMessage(prisma: PrismaClient, messageId: string) {
   const row = await prisma.message.findUnique({
     where: { id: messageId },
-    select: { id: true, content: true, originalLanguage: true, senderId: true, ...AT_REST_MESSAGE_SELECT },
+    select: { id: true, content: true, originalLanguage: true, senderId: true, createdAt: true, deletedAt: true, ...AT_REST_MESSAGE_SELECT },
   });
-  if (!row) return null;
+  if (!row || row.deletedAt) return null;
   const source = await translationSourceOf(row, gatewayKeyring(prisma));
   const content = source.readable ? source.row.content : '';
   return {
@@ -81,5 +106,7 @@ export async function loadTranslatableMessage(prisma: PrismaClient, messageId: s
     originalLanguage: row.originalLanguage,
     senderId: row.senderId,
     encryptionMode: row.encryptionMode,
+    /** L'horloge que le plancher d'historique de l'appelant compare (#16552). */
+    createdAt: row.createdAt,
   };
 }

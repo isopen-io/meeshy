@@ -147,7 +147,7 @@ const UNKNOWN_TYPE_FALLBACK_HEX = 'FF6B6B';
  * (`vibrantPalette`), recomptée à 39 entrées (voir note de tête de fichier).
  * Identique au miroir Kotlin `DynamicColorGenerator.kt` L92-102.
  */
-const VIBRANT_PALETTE: readonly string[] = [
+export const VIBRANT_PALETTE: readonly string[] = [
   // Reds & Roses (350°–10°)
   'E74C3C', 'C0392B', 'DC4A5A', 'D94452', 'F43F5E',
   // Oranges & Corals (15°–40°)
@@ -447,3 +447,22 @@ export function colorForName(name: string): string {
   const index = Number(hash % BigInt(VIBRANT_PALETTE.length));
   return `#${VIBRANT_PALETTE[index]}`;
 }
+
+/**
+ * Accent de REPLI affiché AVANT qu'un auteur/profil soit connu — l'accent qu'on
+ * montre quand `authorAccentColor(id, name)` n'a pas encore d'entrée (en-tête de
+ * MON profil sans identité chargée, liste de décors et boutique de packs avant
+ * l'arrivée du profil).
+ *
+ * C'est l'indigo de marque Meeshy, le MÊME que :
+ *   - `ColorGeneration.swift` `indigo500` (`#6366F1`, la marque sur iOS),
+ *   - le jeton `--ios-indigo-500` (`packages/design-tokens/ios.css`, généré depuis iOS),
+ *   - la première entrée indigo de `VIBRANT_PALETTE` ci-dessus.
+ *
+ * Écrit UNE SEULE fois ici (source de vérité TS, à côté de `authorAccentColor`
+ * dont il est le repli). Les surfaces web qui l'affichent l'IMPORTENT au lieu de
+ * réécrire chacune `'#6366F1'` — trois jumelles qui divergeraient en silence si
+ * l'indigo de marque changeait. L'appartenance à la palette est gardée par
+ * `__tests__/conversation-colors.test.ts`.
+ */
+export const DEFAULT_AUTHOR_ACCENT = '#6366F1';

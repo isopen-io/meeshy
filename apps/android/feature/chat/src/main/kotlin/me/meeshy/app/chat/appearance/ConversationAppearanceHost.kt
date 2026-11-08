@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.ContentScale
@@ -26,11 +27,16 @@ import coil.request.ImageRequest
 import me.meeshy.sdk.mediahub.BackgroundPhotoSource
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.ConversationAppearance
+import me.meeshy.sdk.model.appearance.ConversationBackgroundPhotoVerdict
 import me.meeshy.sdk.model.appearance.ConversationBackgroundResolution
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.AppearanceDesignView
+import me.meeshy.ui.appearance.rememberPowerSaver
 import me.meeshy.ui.component.lottie.PackLottieLayer
+import me.meeshy.ui.component.chrome.ConversationAnimatedBackground
+import me.meeshy.ui.component.chrome.rememberReduceTransparency
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 
 /**
  * Ce que le fil lit du choix personnel du lecteur : l'accent EFFECTIF (le personnel s'il est choisi, sinon l'accent
@@ -44,9 +50,17 @@ internal class ConversationAppearanceHost(
     val photoSource: (String) -> BackgroundPhotoSource,
     val photoHeaders: (BackgroundPhotoSource) -> Map<String, String>,
     val isDark: Boolean,
+    val signature: SignatureBackground? = null,
 ) {
     val resolution: ConversationBackgroundResolution
         get() = catalog?.let { ConversationBackgroundResolution.resolve(appearance, isDark, it) } ?: ConversationBackgroundResolution.Signature
+
+    /** L'accent PERSONNEL choisi (jamais le calculé) : il colore la bulle envoyée ; `null` = indigo de marque. */
+    val personalAccentHex: String?
+        get() = catalog?.let { ConversationBackgroundResolution.personalAccentHex(appearance, isDark, it) }
+
+    fun withSignature(signature: SignatureBackground?): ConversationAppearanceHost =
+        ConversationAppearanceHost(accentHex, appearance, catalog, photoSource, photoHeaders, isDark, signature)
 
     companion object {
         val NONE = ConversationAppearanceHost(null, ConversationAppearance.DEFAULT, null, { BackgroundPhotoSource(null, "") }, { emptyMap() }, false)
@@ -74,18 +88,18 @@ internal fun rememberConversationAppearance(
 /** Le fond choisi, posé sous le fil : Signature ne peint rien (le fond de marque est dessous), le reste fond en 180 ms. */
 @Composable
 internal fun ConversationBackgroundLayer(host: ConversationAppearanceHost) {
-    if (host.appearance.isDefault) return
+    if (host.appearance.isDefault && host.signature == null) return
     Crossfade(targetState = host.resolution, animationSpec = tween(180), label = "conversation-background") { resolution ->
         val base = Modifier.fillMaxSize().clearAndSetSemantics { }
         when (resolution) {
-            ConversationBackgroundResolution.Signature -> Unit
+            ConversationBackgroundResolution.Signature -> host.signature?.let { ConversationAnimatedBackground(it.plan, hexColor(it.accentHex), hexColor(it.secondaryHex)) }
             // Dessin et couche se taisent chacun pour TalkBack : la boîte ne recouvre pas leur sémantique (#13952).
             is ConversationBackgroundResolution.Designed -> Box(Modifier.fillMaxSize().clipToBounds()) {
                 AppearanceDesignView(resolution.design, host.isDark, host.accentHex ?: "#6366F1", Modifier.fillMaxSize())
                 PackLottieLayer(
                     resolution.design.lottie,
                     Modifier.fillMaxSize(),
-                    animates = host.appearance.animate && !LocalReduceMotion.current,
+                    animates = ConversationBackgroundResolution.animatesLottieLayer(host.appearance, lowPower = rememberPowerSaver()) && !LocalReduceMotion.current,
                     contentScale = ContentScale.Crop,
                 )
             }
@@ -104,7 +118,7 @@ private fun PhotoLayer(photo: ConversationBackgroundResolution.Photo, host: Conv
             host.photoHeaders(source).forEach { (name, value) -> addHeader(name, value) }
         }.build()
     }
-    // Une pièce disparue, refusée ou chiffrée rend Signature : la couche s'efface plutôt que de peindre un fond mort.
+    // Une pièce disparue ou refusée (403/404/410) rend Signature ; une panne passagère garde la couche (verdict iOS).
     var failed by remember(photo.attachmentId) { mutableStateOf(false) }
     if (failed) return
     val backdrop = MeeshyTheme.tokens.backgroundPrimary
@@ -113,11 +127,14 @@ private fun PhotoLayer(photo: ConversationBackgroundResolution.Photo, host: Conv
             model = request,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            onError = { failed = true },
-            modifier = Modifier.fillMaxSize().blur(photo.blur.dp),
+            onError = { error ->
+                val status = (error.result.throwable as? coil.network.HttpException)?.response?.code
+                if (ConversationBackgroundPhotoVerdict.of(status) == ConversationBackgroundPhotoVerdict.GONE) failed = true
+            },
+            modifier = Modifier.fillMaxSize().blur(photo.blur.dp, BlurredEdgeTreatment.Unbounded),
         )
         Box(
-            Modifier.fillMaxSize().background(backdrop.copy(alpha = ConversationBackgroundResolution.effectiveVeil(photo.veil, reduceTransparency = false).toFloat())),
+            Modifier.fillMaxSize().background(backdrop.copy(alpha = ConversationBackgroundResolution.effectiveVeil(photo.veil, reduceTransparency = rememberReduceTransparency()).toFloat())),
         )
     }
 }

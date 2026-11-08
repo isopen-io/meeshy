@@ -49,6 +49,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.SceneFraming
+import me.meeshy.sdk.model.SceneMosaicLayout
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.media.MosaicArrangement
 import me.meeshy.ui.component.media.MosaicLayout
@@ -78,6 +79,7 @@ internal fun PostScenesView(
     modifier: Modifier = Modifier,
     host: PostScenesHost = PostScenesHost.FEED,
     muted: Boolean = false,
+    imager: (() -> Unit)? = null,
 ) {
     val sound = host.locksMute || muted
     var readerAt by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -92,7 +94,7 @@ internal fun PostScenesView(
     }
     val start = readerAt
     if (start != null && reader != null) {
-        PostSceneReader(scenes = scenes, start = start, renderer = reader, onDismiss = { readerAt = null })
+        PostSceneReader(scenes = scenes, start = start, renderer = reader, imager = imager, onDismiss = { readerAt = null })
     }
 }
 
@@ -129,13 +131,19 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
                         focus = frame?.focus,
                         modifier = Modifier.align(Alignment.Center).aspectRatio((frame?.pageAspect ?: boxAspect).toFloat()),
                     ) {
-                        SceneSurface(item = scenes.items[page], accentHex = scenes.accentHex, live = live && page == current, muted = muted, modifier = Modifier.fillMaxSize())
+                        SceneSurface(
+                            item = scenes.items[page],
+                            accentHex = scenes.accentHex,
+                            live = SceneMosaicLayout.plays(elected = live, page = page, currentPage = current, moves = moves),
+                            muted = muted,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                     scenes.captionAt(page, tileWidth = 1f)?.let { caption ->
                         FeedMediaCaption(text = caption, maxLines = CAPTION_LINES, modifier = Modifier.align(Alignment.BottomStart))
                     }
                     SceneCue(
-                        playing = live && page == current,
+                        playing = SceneMosaicLayout.isReadPage(elected = live, page = page, currentPage = current),
                         mutedSound = host.locksMute && scenes.offersSound,
                         moves = moves,
                         modifier = Modifier.align(Alignment.BottomEnd),
@@ -145,7 +153,7 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
             if (count > 1) {
                 PageCounter(position = current + 1, count = count, modifier = Modifier.align(Alignment.TopEnd))
             }
-            if (current > 0) {
+            if (SceneMosaicLayout.hasPrevious(current)) {
                 PageArrow(
                     icon = MeeshyIcons.ChevronBackward,
                     label = stringResource(R.string.feed_scene_previous),
@@ -153,7 +161,7 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
                     onClick = { scope.launch { pagerState.animateScrollToPage(current - 1) } },
                 )
             }
-            if (current < count - 1) {
+            if (SceneMosaicLayout.hasNext(current, count)) {
                 PageArrow(
                     icon = MeeshyIcons.ChevronForward,
                     label = stringResource(R.string.feed_scene_next),
@@ -283,7 +291,7 @@ private const val READER_CAPTION_LINES = 4
  * laisser voir de l'écran du dessous ([FullScreenDialogWindow]) ; ses contrôles se posent sous la barre d'état.
  */
 @Composable
-private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, onDismiss: () -> Unit) {
+private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, imager: (() -> Unit)?, onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -308,7 +316,7 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
                 modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(MeeshySpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                LocalPostSceneExportRenderer.current?.invoke(scenes.items, scenes.accentHex, Modifier)
+                LocalPostSceneExportRenderer.current?.invoke(scenes.items, scenes.accentHex, Modifier, imager?.let { open -> { onDismiss(); open() } })
                 IconButton(onClick = onDismiss) {
                     Box(
                         modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),

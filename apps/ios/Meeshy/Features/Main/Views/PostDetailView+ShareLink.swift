@@ -58,3 +58,22 @@ extension PostDetailView {
         }
     }
 }
+
+/// « Copier le lien » et « Partager » du menu « … » — tous deux frappent le
+/// même lien suivi, seule la suite diffère.
+struct PostDetailLinkMenuItems: View {
+    let mint: @MainActor (PostDetailView.ShareLinkAction) async -> Void
+
+    var body: some View {
+        Button {
+            Task { await mint(.copyToPasteboard) }
+        } label: {
+            Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
+        }
+        Button {
+            Task { await mint(.presentShareSheet) }
+        } label: {
+            Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+        }
+    }
+}

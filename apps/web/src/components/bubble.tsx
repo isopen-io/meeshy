@@ -6,6 +6,7 @@ import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
+import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
@@ -85,6 +86,7 @@ export function Bubble({
   viewerId,
   localDelivery,
   sendStartedAt,
+  sendProgressKey,
   sendFailureReason,
   onRetry,
   onDiscard,
@@ -138,6 +140,7 @@ export function Bubble({
   /** Epoch ms du début de la tentative en cours — l'horloge des 200 ms
    * (§5 étape 9 de la spécification #5813). */
   sendStartedAt?: number;
+  sendProgressKey?: string;
   /** LA CAUSE de l'échec, en clair (`sendFailureReason`) — portée par la
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
@@ -438,7 +441,7 @@ export function Bubble({
             (violation `aria-hidden-focus`, pire qu'un texte nu). Les liens
             restent atteignables, nommés et au clavier. */
         <LongMessageText
-          messageId={message.id}
+          messageId={threadRowKeyOf(message)}
           text={rendered.text}
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
@@ -614,6 +617,7 @@ export function Bubble({
                     status={checkStatus}
                     isMine={isMine}
                     {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                    {...(sendProgressKey === undefined ? {} : { progressKey: sendProgressKey })}
                     {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                   />
                 )}
@@ -746,6 +750,7 @@ export function Bubble({
                       status={checkStatus}
                       isMine={isMine}
                       {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                      {...(sendProgressKey === undefined ? {} : { progressKey: sendProgressKey })}
                       {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                     />
                   )}

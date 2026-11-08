@@ -1,0 +1,19 @@
+## 2026-11-02 : le Bring sonne sous une préférence de RÉCEPTION, pas sous un consentement
+
+**Statut** : Accepté (lot `proche-bring`, #13936, sous-lot serveur — chantier « Cercles de proximité et mode Sang », milestone #215). Applique la décision porteur D-3 (#13945, 2026-10-31) et l'écart E9 de l'analyse de conformité (#13942, #14407).
+
+**Contexte** : D-3 fait du Bring un son FORCÉ pour l'urgence extrême — ouvert dès Ami, quota par jour et par paire (Ami 1, Proche 3, Sang 30, Atome illimité), disponible par défaut, bloquable par personne (`BRING_BLOCKED`, le bouton disparaît), qui passe Ne pas déranger et les heures calmes. La loi d'accès (#13927) range `bring` parmi les features dont `allowed` exige `consent: 'granted'`. L'analyse de conformité (E9) relève la contradiction : « disponible par défaut » n'est pas un consentement au sens de l'art. 7 RGPD.
+
+**Décision** :
+1. **Deux natures derrière `consent`** (`packages/shared/utils/relation-levels.ts`) : `RELATION_EMITTER_CONSENT_FEATURES` (écoute, position — consentement RGPD de l'émetteur, faux par défaut, recueilli explicitement) et `RELATION_RECEPTION_PREFERENCE_FEATURES` (`bring`, `talkie` — préférence de réception du destinataire, base contractuelle art. 6(1)(b), active par défaut). La loi les traite de même ; l'orchestrateur traduit une préférence de réception non coupée en `consent: 'granted'`. L'interface dit « autorisation », jamais « consentement ».
+2. **Deux coupures**, servies toutes deux en `403 BRING_BLOCKED` (« Bring indisponible ») : par personne (`RelationFeatureSetting.bringBlockedAt`, `PUT /relations/:userId/settings { bringBlocked }`) et globale (`notification.bringEnabled`, « Recevoir des Bring », défaut vrai). Une préférence illisible ferme.
+3. **Le quota** compte le niveau EFFECTIF au moment de l'envoi, par paire orientée et par jour calendaire du DESTINATAIRE (`User.timezone`, UTC à défaut), avec le limiteur Redis existant (`createCustomRateLimiter` + `consume`, un plafond par niveau sur un compteur partagé). Un refus ne coûte rien ; un compteur injoignable refuse (`503 BRING_UNAVAILABLE`, fail-closed) : un son qui passe Ne pas déranger ne part pas sans être compté.
+4. **Un Bring en vol** vit en cache 120 s (`BRING_RING_WINDOW_MS`), indexé par paire en `SETNX` : un second envoi pendant la sonnerie rend le même, sans consommer ni resonner. L'arrêt (`DELETE /bring/:id`, destinataire ou expéditeur) prévient les deux et pousse un arrêt silencieux à tous les appareils du destinataire ; à l'expiration le serveur n'émet rien, chaque client cesse à `expiresAt`.
+5. **Un blocage n'est annoncé à personne** : bloquer l'utilisateur (`bloquer()`) ou son Bring arrête la sonnerie chez le destinataire et chez celui qui bloque, jamais chez le bloqué ; aucune raison d'arrêt ne dit « bloqué ».
+6. **La livraison** : le Bring est une catégorie à part au chokepoint (`push-delivery-preferences.ts`), comme l'appel — ni `pushEnabled`, ni Ne pas déranger, ni `soundEnabled` ne le gouvernent, puisque sa gouvernance (point 2) s'applique en amont. iOS : alerte `time-sensitive`, `Ringtone.caf`, expirée avec la fenêtre ; `critical` + son critique seulement quand Apple a accordé l'entitlement (`APNS_CRITICAL_ALERTS_ENABLED=true`). **Jamais PushKit** : un push VoIP doit ouvrir CallKit. Android : FCM data-only haute priorité, TTL = la fenêtre. Pas de push web. Aucune charge ne porte d'audio ni de position.
+
+**Alternatives rejetées** :
+- *Un consentement recueilli à l'entrée en Ami* : contredit D-3 (« disponible par défaut ») et qualifierait mal la base légale.
+- *`socket-rate-limiter`* : en mémoire par processus, il compterait autant de quotas que d'instances.
+- *Fail-open sur une panne du compteur* (le repli du middleware) : un Sang pourrait faire sonner sans borne à travers Ne pas déranger.
+- *Un `Notification` par Bring dès ce lot* : le journal de 30 jours exigé par l'analyse (§ 4) a son issue de suivi, il n'est pas dans le critère de D-3.

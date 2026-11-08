@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "androidName": "push_channel_calls_missed_description", "status": "android-only" },
+        { "androidName": "push_channel_calls_missed_name", "status": "android-only" },
+        { "androidName": "push_channel_ephemeral_description", "status": "android-only" },
+        { "androidName": "push_channel_ephemeral_name", "status": "android-only" },
+        { "androidName": "push_channel_friends_description", "status": "android-only" },
+        { "androidName": "push_channel_friends_name", "status": "android-only" },
+        { "androidName": "push_channel_invitations_description", "status": "android-only" },
+        { "androidName": "push_channel_invitations_name", "status": "android-only" },
+        { "androidName": "push_channel_mentions_description", "status": "android-only" },
+        { "androidName": "push_channel_mentions_name", "status": "android-only" },
+        { "androidName": "push_group_calls", "status": "android-only" },
+        { "androidName": "push_group_friends", "status": "android-only" },
+        { "androidName": "push_group_messages", "status": "android-only" },
+        { "androidName": "push_group_others", "status": "android-only" },
+        { "androidName": "push_group_social", "status": "android-only" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_preupload_unit_gb",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_preupload_unit_kb",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_preupload_unit_mb",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

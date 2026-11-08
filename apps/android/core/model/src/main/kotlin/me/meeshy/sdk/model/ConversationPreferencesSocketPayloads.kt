@@ -16,15 +16,10 @@ import kotlinx.serialization.Serializable
  * WHOLE event undecodable — the shape that made an Android decoder throw away a
  * row it could otherwise have rendered (cycle 118, `lastMessageTranslations`).
  *
- * Three keys are carried on the wire and deliberately NOT folded into the cached
- * [ApiConversationPreferences] by [applyRemote]:
- *
- * - [orderInCategory] — Android has no drag-reorder surface, and
- *   `ConversationSections.of` buckets on `isPinned` + `categoryId` only. Storing
- *   it would be an inert field, and relaying `user:preferences-reordered` into it
- *   an inert listener.
- * - [readingMode] and [clearHistoryBefore] — no Android reader either; both are
- *   already dropped at REST decode for the same reason.
+ * [readingMode] is carried on the wire and deliberately NOT folded into the cached
+ * [ApiConversationPreferences] by [applyRemote] (no Android reader). [orderInCategory] and
+ * [clearHistoryBefore] ARE folded since the unified user state (#14517): they feed the
+ * ConversationUserState sync cursors and the history mask.
  *
  * They stay declared HERE because the type's job is to describe what the emitter
  * sends, not what this client happens to consume: a key absent from the type is a
@@ -114,6 +109,8 @@ fun ApiConversationPreferences?.applyRemote(
             mentionsOnly = payload.mentionsOnly,
             reaction = payload.reaction,
             tags = payload.tags,
+            orderInCategory = payload.orderInCategory,
+            clearHistoryBefore = payload.clearHistoryBefore,
             appearance = payload.appearance ?: local.appearance,
             version = event.version,
         )

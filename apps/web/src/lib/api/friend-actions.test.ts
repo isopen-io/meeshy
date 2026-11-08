@@ -36,12 +36,14 @@ type Reply = { readonly status: number; readonly body: unknown };
 
 const harness = (reply: Reply, options: { readonly online?: boolean } = {}) => {
   const calls: { readonly method: string; readonly url: string }[] = [];
+  const bodies: unknown[] = [];
   let release: () => void = () => undefined;
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
   const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     calls.push({ method: init?.method ?? 'GET', url: String(input) });
+    bodies.push(typeof init?.body === 'string' ? JSON.parse(init.body) : undefined);
     await held;
     return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { 'content-type': 'application/json' } });
   };
@@ -55,7 +57,7 @@ const harness = (reply: Reply, options: { readonly online?: boolean } = {}) => {
   };
   const ids = (bucket: 'received' | 'sent' | 'accepted') =>
     queryClient.getQueryData<FriendRequestsData>(friendRequestsQueryKey(bucket))?.pages.flatMap((p) => p.requests.map((r) => r.id)) ?? null;
-  return { calls, deps, queryClient, ids, release: () => release() };
+  return { calls, bodies, deps, queryClient, ids, release: () => release() };
 };
 
 const ok = (data: unknown): Reply => ({ status: 200, body: { success: true, data } });
@@ -437,5 +439,48 @@ describe('l’identifiant de la demande suit les gestes sur la fiche (#7122)', (
     expect(requestIdIn(h.queryClient, 'ada')).toBeNull();
     h.release();
     expect(await outcome).toBe('done');
+  });
+});
+
+describe('demander un CRAN (#13938) — le même geste, la même ligne provisoire', () => {
+  const targetOf = (h: ReturnType<typeof harness>, id: string) =>
+    h.queryClient.getQueryData<FriendRequestsData>(friendRequestsQueryKey('sent'))?.pages.flatMap((p) => p.requests).find((r) => r.id === id)?.targetLevel;
+
+  test('la ligne provisoire porte le cran AU GESTE, et le corps le porte à la passerelle', async () => {
+    const h = harness({ status: 201, body: { success: true, data: { ...request('f-real', ada, false), targetLevel: 'CLOSE' } } });
+    h.queryClient.setQueryData(friendRequestsQueryKey('sent'), pages());
+    const outcome = performSendRequest({ person: ada, targetLevel: 'CLOSE', deps: h.deps });
+    expect(targetOf(h, 'optimiste:u-ada')).toBe('CLOSE');
+    h.release();
+    expect(await outcome).toBe('done');
+    expect(h.bodies).toEqual([{ receiverId: 'u-ada', targetLevel: 'CLOSE' }]);
+    expect(targetOf(h, 'f-real')).toBe('CLOSE');
+  });
+
+  test('demander Proche ou Sang à un Ami ne touche pas la fiche : il reste un contact, même si la passerelle refuse', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'friend'));
+    const outcome = performSendRequest({ person: ada, targetLevel: 'BLOOD', deps: h.deps });
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
+  });
+
+  test('refuser ou annuler une demande de Proche ne défait pas le contact sur la fiche', async () => {
+    const h = harness(ok(null));
+    h.queryClient.setQueryData(friendRequestsQueryKey('received'), pages({ ...request('f-ada', ada), targetLevel: 'CLOSE' }));
+    h.queryClient.setQueryData(friendRequestsQueryKey('sent'), pages({ ...request('f-grace', grace, false), targetLevel: 'CLOSE' }));
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'friend'));
+    h.queryClient.setQueryData(publicProfileQueryKey('grace'), profileView(grace, 'friend'));
+    const rejected = performRespondToRequest({ request: { ...request('f-ada', ada), targetLevel: 'CLOSE' }, action: 'reject', deps: h.deps });
+    const cancelled = performRespondToRequest({ request: { ...request('f-grace', grace, false), targetLevel: 'CLOSE' }, action: 'cancel', deps: h.deps });
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
+    expect(relationIn(h.queryClient, 'grace')).toBe('friend');
+    expect(h.ids('received')).toEqual([]);
+    expect(h.ids('sent')).toEqual([]);
+    h.release();
+    expect(await Promise.all([rejected, cancelled])).toEqual(['done', 'done']);
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
   });
 });

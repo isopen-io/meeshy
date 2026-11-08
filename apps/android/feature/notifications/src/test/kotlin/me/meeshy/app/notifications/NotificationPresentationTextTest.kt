@@ -67,6 +67,15 @@ class NotificationPresentationTextTest {
     }
 
     @Test
+    fun showPreviewFalse_clearsTheMessageDetail() {
+        val detail = me.meeshy.sdk.model.NotificationMessageDetail.Contact("Bob", null, null)
+
+        val result = presentation().copy(detail = detail).appliedPreviewSetting(showPreview = false)
+
+        assertThat(result.detail).isNull()
+    }
+
+    @Test
     fun showPreviewFalse_leavesTheHeadlineIntact() {
         val headline = BannerHeadline.InConversation(actor = "Alice", groupName = "Team")
 

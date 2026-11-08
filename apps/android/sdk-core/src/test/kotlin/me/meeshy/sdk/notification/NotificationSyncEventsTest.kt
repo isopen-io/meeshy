@@ -3,6 +3,7 @@ package me.meeshy.sdk.notification
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationContext
+import me.meeshy.sdk.model.NotificationReadScope
 import me.meeshy.sdk.model.NotificationState
 import org.junit.Test
 
@@ -104,5 +105,37 @@ class NotificationSyncEventsTest {
         val scope = NotificationDeletedBulkScope(kind = "future-server-kind")
 
         assertThat(notificationMatchesDeletedBulkScope(scope, notification(isRead = true))).isFalse()
+    }
+
+    // --- toReadScope / purgesReadRows (miroir de NotificationBulkScopeMapping iOS) ---
+
+    @Test
+    fun `bulk scope maps to the consumption scope`() {
+        assertThat(NotificationReadBulkScope(kind = "all").toReadScope()).isEqualTo(NotificationReadScope.All)
+        assertThat(
+            NotificationReadBulkScope(kind = "context", contextKey = "conversationId", contextValue = "c1").toReadScope()
+        ).isEqualTo(NotificationReadScope.Conversation("c1"))
+        assertThat(
+            NotificationReadBulkScope(kind = "context", contextKey = "postId", contextValue = "p1").toReadScope()
+        ).isEqualTo(NotificationReadScope.Post("p1"))
+        assertThat(
+            NotificationReadBulkScope(kind = "types", types = listOf("a", "b")).toReadScope()
+        ).isEqualTo(NotificationReadScope.Types(listOf("a", "b")))
+    }
+
+    @Test
+    fun `an untranslatable bulk scope maps to null`() {
+        assertThat(NotificationReadBulkScope(kind = "context", contextKey = "friendRequestId", contextValue = "f1").toReadScope()).isNull()
+        assertThat(NotificationReadBulkScope(kind = "context", contextKey = "conversationId", contextValue = "").toReadScope()).isNull()
+        assertThat(NotificationReadBulkScope(kind = "context", contextKey = "conversationId").toReadScope()).isNull()
+        assertThat(NotificationReadBulkScope(kind = "types", types = emptyList()).toReadScope()).isNull()
+        assertThat(NotificationReadBulkScope(kind = "types").toReadScope()).isNull()
+        assertThat(NotificationReadBulkScope(kind = "nope").toReadScope()).isNull()
+    }
+
+    @Test
+    fun `only the read kind purges read rows`() {
+        assertThat(NotificationDeletedBulkScope(kind = "read").purgesReadRows()).isTrue()
+        assertThat(NotificationDeletedBulkScope(kind = "all").purgesReadRows()).isFalse()
     }
 }

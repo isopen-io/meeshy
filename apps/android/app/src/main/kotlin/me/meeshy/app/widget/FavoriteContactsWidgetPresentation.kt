@@ -37,9 +37,28 @@ internal data class FavoriteContactsWidgetPresentation(
 ) {
     val isEmpty: Boolean get() = rows.isEmpty()
 
+    /** Les favoris que montre un widget de [heightDp] de haut (4 ou 8). */
+    fun visibleRows(heightDp: Float): List<FavoriteContactRow> = rows.take(visibleCount(heightDp))
+
     companion object {
         /** Matches iOS's own `.prefix(8)` in `publishFavoriteContacts`. */
         private const val MAX_ROWS = 8
+
+        /** iOS `contactsToShow` : 4 en moyen, 8 en grand. */
+        private const val MEDIUM_ROWS = 4
+
+        /** Entre le moyen (155 pt) et le grand (345 pt) d'iOS : en deçà, la face moyenne. */
+        private const val LARGE_MIN_HEIGHT_DP = 240f
+
+        /** Combien de favoris la hauteur courante du widget montre. */
+        fun visibleCount(heightDp: Float): Int = if (heightDp < LARGE_MIN_HEIGHT_DP) MEDIUM_ROWS else MAX_ROWS
+
+        /**
+         * La phrase d'un lecteur d'écran : « Nom, En ligne ». Sans présence servie, le nom seul — on
+         * ne dit pas ce que la passerelle n'a pas servi ; hors ligne se dit (aucun point, mais un état).
+         */
+        fun accessibilityLabel(name: String, presenceLabel: String?): String =
+            if (presenceLabel == null) name else "$name, $presenceLabel"
 
         /** Les conversations épinglées directes que le widget montre, dans l'ordre affiché. */
         fun selection(conversations: List<ApiConversation>): List<ApiConversation> =

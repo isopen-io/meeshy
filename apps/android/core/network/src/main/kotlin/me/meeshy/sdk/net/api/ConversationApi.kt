@@ -31,6 +31,20 @@ import retrofit2.http.Query
  * `PUT /user-preferences/conversations/{id}` (gateway `conversation-preferences`
  * route). Null fields are omitted so each call patches only what changed.
  */
+/**
+ * Corps de `POST conversations/{id}/mark-as-read` quand l'accusé NOMME ce qu'il lit (miroir de
+ * `MarkAsReadBody` iOS) : les messages vus, la langue DOMINANTE lue et ses exceptions par message. Le schéma
+ * gateway est strict : aucune autre clé, aucun identifiant mal formé. Tout est optionnel, un accusé d'avant
+ * ce corps (pas de corps du tout) reste servi.
+ */
+@Serializable
+data class MarkReadBody(
+    val messageIds: List<String>? = null,
+    val language: String? = null,
+    val messageLanguages: Map<String, String>? = null,
+    val caughtUpToMessageId: String? = null,
+)
+
 @Serializable
 data class ConversationPreferencesUpdate(
     val isPinned: Boolean? = null,
@@ -130,6 +144,17 @@ interface ConversationApi {
         @Query("limit") limit: Int,
     ): ApiResponse<List<ApiConversation>>
 
+    /**
+     * `GET /conversations?withUserId=…&limit=…` — every conversation the caller shares with
+     * [withUserId], groups included (gateway `core-list.ts`, parity iOS
+     * `ConversationService.listSharedWith`). Feeds the profile's Conversations tab.
+     */
+    @GET("conversations")
+    suspend fun sharedWith(
+        @Query("withUserId") withUserId: String,
+        @Query("limit") limit: Int,
+    ): ApiResponse<List<ApiConversation>>
+
     // Empty-body POST (no @Body — like markRead): the gateway derives the joiner
     // from the JWT. Idempotent server-side (routes/conversations/sharing.ts
     // resolveConversationEntry): an existing member gets the same canonical
@@ -143,6 +168,10 @@ interface ConversationApi {
     // et les badges ne se vidaient jamais durablement.
     @POST("conversations/{id}/mark-as-read")
     suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
+
+    /** Le même accusé, avec ce qui a été lu et dans quelle langue ([MarkReadBody]). */
+    @POST("conversations/{id}/mark-as-read")
+    suspend fun markReadDeclaring(@Path("id") id: String, @Body body: MarkReadBody): ApiResponse<Unit>
 
     /**
      * L'accusé de RÉCEPTION de toute la conversation (le curseur de livraison : la
@@ -306,6 +335,17 @@ interface ConversationApi {
         @Path("id") id: String,
         @Path("participantId") participantId: String,
         @Body body: HistoryGrantUpdate,
+    ): ApiResponse<ParticipantRightsUpdateResult>
+
+    /**
+     * Pose UN droit d'un participant : [ParticipantRightsUpdate.single] ne laisse partir que la clé touchée, la
+     * surcharge étant un delta côté gateway. Rend l'état RÉSOLU, que l'appelant pose tel quel.
+     */
+    @PATCH("conversations/{id}/participants/{participantId}/rights")
+    suspend fun updateParticipantRight(
+        @Path("id") id: String,
+        @Path("participantId") participantId: String,
+        @Body body: me.meeshy.sdk.model.ParticipantRightsUpdate,
     ): ApiResponse<ParticipantRightsUpdateResult>
 }
 

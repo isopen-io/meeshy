@@ -163,8 +163,22 @@ describe('GameBlockService.build', () => {
 
     const block = await build(db);
 
-    expect(block.chest.today).toEqual(chestContentForEffort(dayEffort(block.missions.items), 1221));
+    // 10 h UTC, minuit UTC : la Gloire « si on l'ouvre maintenant », à la dixième heure du jour de jeu (#16414).
+    expect(block.chest.today).toEqual(chestContentForEffort(dayEffort(block.missions.items), 1221, 10));
     expect(block.chest.today?.points).toBeGreaterThanOrEqual(500);
+  });
+
+  it('dit la Gloire du coffre si on l’ouvre maintenant : 2 800 de précocité dans la première heure du jour de jeu (#16414)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20, timezone: 'Europe/Paris' });
+    const missions = new MissionService(db.prisma, { creditPoints: async () => undefined });
+
+    // 22 h 30 UTC le 4 = 0 h 30 à Paris le 5 : la première heure du jour de jeu.
+    const block = await new GameBlockService(db.prisma, { missions }).build({ userId: USER, now: new Date('2026-10-04T22:30:00Z') });
+    if (block === null) throw new Error('le bloc ne tient pas le contrat partagé');
+
+    expect(block.chest.today).toMatchObject({ earlyGlory: 2800 });
+    expect(block.chest.today?.glory).toBe(chestContentForEffort(dayEffort(block.missions.items), 1221, 0).glory);
   });
 
   it('dit la prime au cours du DÉBUT du jour de jeu, et la grave : une frappe du jour ne la change pas (#10219)', async () => {
@@ -176,7 +190,7 @@ describe('GameBlockService.build', () => {
     db.meeshLedger.rows.push({ id: 'm9', userId: USER, delta: 1, reason: 'mint', requestId: 'frappe-9', createdAt: new Date('2026-10-05T09:30:00Z') });
     const after = await build(db);
 
-    expect(before.chest.today).toEqual(chestContentForEffort(dayEffort(before.missions.items), 1221));
+    expect(before.chest.today).toEqual(chestContentForEffort(dayEffort(before.missions.items), 1221, 10));
     expect(after.chest.today).toEqual(before.chest.today);
     expect(db.gameDay.rows.find((r) => r.dayKey === DAY)).toMatchObject({ chestMintBase: 9 });
   });

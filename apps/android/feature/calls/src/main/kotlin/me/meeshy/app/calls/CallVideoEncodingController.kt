@@ -46,6 +46,9 @@ internal class CallVideoEncodingController(
         onSurvivalFloor(false)
     }
 
+    /** Réécrit l'encodeur au palier courant, sous un plafond qui a changé (profil de données, #8697). */
+    fun reapply() = apply(ladder.budget, ladder.isFrozen)
+
     fun end() {
         job?.cancel()
         job = null

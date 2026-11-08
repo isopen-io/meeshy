@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -81,6 +82,7 @@ internal fun SwipeRowContainer(
     onReply: (() -> Unit)?,
     onForward: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    hiddenForOverlay: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val direction = replyDirection(isOutgoing)
@@ -106,6 +108,11 @@ internal fun SwipeRowContainer(
         spring<Float>(dampingRatio = 0.62f, stiffness = MeeshyMotion.stiffnessForResponse(0.42f))
     }
     val shownOffset = offsetDp.value
+    val cellAlpha by animateFloatAsState(
+        targetValue = if (hiddenForOverlay) 0f else 1f,
+        animationSpec = tween(durationMillis = 150),
+        label = "swipe-cell-overlay-fade",
+    )
 
     Box(modifier = modifier.fillMaxWidth()) {
         if (swipeMounted) {
@@ -125,6 +132,7 @@ internal fun SwipeRowContainer(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .graphicsLayer { alpha = cellAlpha }
                 .offset {
                     val px = with(density) { swipeReadingDelta(offsetDp.value, isRtl).dp.toPx() }
                     IntOffset(px.roundToInt(), 0)

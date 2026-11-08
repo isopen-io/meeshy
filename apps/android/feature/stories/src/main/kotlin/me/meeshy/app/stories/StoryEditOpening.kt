@@ -63,7 +63,7 @@ internal data class StoryEditOpening(
             draft = state.draft
                 .withVisibility(visibility)
                 .withVisibilityUserIds(post.visibilityUserIds.orEmpty())
-                .copy(mentions = mentions, repostOfId = null, allowSoundExtraction = post.allowSoundExtraction),
+                .copy(mentions = mentions, repostOfId = null, allowSoundExtraction = post.allowSoundExtraction, commentsDisabled = post.commentsDisabled),
         ).mirrorDraftToSelection()
     }
 
@@ -99,7 +99,7 @@ internal data class StoryEditOpening(
                 backgroundLoop = explicitBackground?.loop ?: true,
                 backgroundAdjustments = explicitBackground?.adjustments,
                 backgroundTrim = StoryBackgroundTrimWire.read(explicitBackground?.sourceStart, explicitBackground?.sourceEnd),
-                backgroundSetting = explicitBackground?.let { StoryBackgroundSettingWire.read(it.rotation, it.volume, it.mutedVolumeMemento) } ?: StoryBackgroundSetting(),
+                backgroundSetting = explicitBackground?.let { StoryBackgroundSettingWire.read(it.rotation, it.volume, it.mutedVolumeMemento, it.crop) } ?: StoryBackgroundSetting(),
                 audio = effects.audioPlayerObjects.orEmpty(),
                 frame = SceneFrame(
                     fitMode = effects.backgroundTransform?.videoFitMode,

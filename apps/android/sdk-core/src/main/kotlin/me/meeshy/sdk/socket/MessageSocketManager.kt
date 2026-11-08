@@ -38,6 +38,7 @@ import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
+import me.meeshy.sdk.model.ConversationObsoletedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationRestoredSocketEvent
 import me.meeshy.sdk.model.LiveLocationStartedEvent
@@ -93,6 +94,7 @@ class MessageSocketManager @Inject constructor(
     private val _conversationDeleted = SocketInboundRoute.subject<ConversationDeletedSocketEvent>()
     private val _conversationRestored = SocketInboundRoute.subject<ConversationRestoredSocketEvent>()
     private val _conversationClosed = SocketInboundRoute.subject<ConversationClosedSocketEvent>()
+    private val _conversationObsoleted = SocketInboundRoute.subject<ConversationObsoletedSocketEvent>()
     private val _userStatus = SocketInboundRoute.subject<UserStatusEvent>()
     private val _userUpdated = SocketInboundRoute.subject<UserUpdatedEvent>()
     private val _presenceSnapshot = SocketInboundRoute.subject<PresenceSnapshotEvent>()
@@ -152,6 +154,8 @@ class MessageSocketManager @Inject constructor(
     val conversationDeleted: SharedFlow<ConversationDeletedSocketEvent> = _conversationDeleted.exposed()
     val conversationRestored: SharedFlow<ConversationRestoredSocketEvent> = _conversationRestored.exposed()
     val conversationClosed: SharedFlow<ConversationClosedSocketEvent> = _conversationClosed.exposed()
+    /** `conversation:obsoleted` (#14645) — suit toujours `conversation:closed` ; la ligne et le fil partent pareil. */
+    val conversationObsoleted: SharedFlow<ConversationObsoletedSocketEvent> = _conversationObsoleted.exposed()
     val userStatus: SharedFlow<UserStatusEvent> = _userStatus.exposed()
     /**
      * `user:updated` — un contact a changé son nom ou sa photo ; chaque copie qui le garde est repeinte par
@@ -236,6 +240,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)
         route(SocketEventNames.CONVERSATION_RESTORED, _conversationRestored)
         route(SocketEventNames.CONVERSATION_CLOSED, _conversationClosed)
+        route(SocketEventNames.CONVERSATION_OBSOLETED, _conversationObsoleted)
         route(SocketEventNames.USER_STATUS, _userStatus)
         route(SocketEventNames.USER_UPDATED, _userUpdated)
         route(SocketEventNames.PRESENCE_SNAPSHOT, _presenceSnapshot)
@@ -268,14 +273,12 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.GAME_UPDATED, _gameUpdated)
     }
 
-    /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */
-    fun emitTypingStart(conversationId: String) {
-        socketManager.emit(SocketEventNames.TYPING_START, JSONObject().put("conversationId", conversationId))
-    }
+    private val activitySignals = ActivitySignalsSocket(socketManager)
 
-    fun emitTypingStop(conversationId: String) {
-        socketManager.emit(SocketEventNames.TYPING_STOP, JSONObject().put("conversationId", conversationId))
-    }
+    /** Fire-and-forget, et gardé par l'état connecté : un signal de frappe hors connexion ne part pas. */
+    fun emitTypingStart(conversationId: String) = activitySignals.emitTypingStart(conversationId)
+
+    fun emitTypingStop(conversationId: String) = activitySignals.emitTypingStop(conversationId)
 
     private inline fun <reified T> MutableList<SocketInboundRoute>.route(
         event: String,

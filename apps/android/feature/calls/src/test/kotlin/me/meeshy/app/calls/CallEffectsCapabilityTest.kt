@@ -40,6 +40,22 @@ class CallEffectsCapabilityTest {
     }
 
     @Test
+    fun `serious heat sheds blur and smoothing from the sent image but keeps the chosen look`() {
+        val sink = RecordingSink()
+        val health = CallVideoHealthImpl()
+        val controller = CallVideoEffectsController(sink, health)
+        val chosen = warm.copy(backgroundBlurEnabled = true, skinSmoothingEnabled = true)
+        controller.apply(chosen)
+        health.setThermal(me.meeshy.sdk.model.call.ThermalState.SERIOUS)
+        assertThat(sink.applied.last().backgroundBlurEnabled).isFalse()
+        assertThat(sink.applied.last().skinSmoothingEnabled).isFalse()
+        assertThat(sink.applied.last().temperature).isEqualTo(chosen.temperature)
+        assertThat(controller.config.value).isEqualTo(chosen)
+        health.setThermal(me.meeshy.sdk.model.call.ThermalState.NOMINAL)
+        assertThat(sink.applied.last()).isEqualTo(chosen)
+    }
+
+    @Test
     fun `the effects belong to one call, its end brings the image back to neutral`() {
         val sink = RecordingSink()
         val controller = CallVideoEffectsController(sink)

@@ -15,7 +15,6 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.language.InMemoryInterfaceLanguageStore
 import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.InMemoryThemeStore
 import me.meeshy.sdk.theme.ThemeStore
@@ -56,8 +55,7 @@ class SettingsViewModelLanguageTest {
             userRepository = mockk<UserRepository>(relaxed = true),
             themeStore = themeStore,
             interfaceLanguageStore = languageStore,
-            notificationPreferencesStore = InMemoryNotificationPreferencesStore(),
-            notificationPreferencesSyncRepository = mockk(relaxed = true),
+            applicationSync = mockk(relaxed = true),
             workManager = mockk(relaxed = true),
         )
     }

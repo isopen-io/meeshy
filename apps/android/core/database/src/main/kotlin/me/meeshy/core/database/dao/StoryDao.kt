@@ -24,6 +24,17 @@ public interface StoryDao {
     @Query("DELETE FROM stories WHERE id = :id")
     public suspend fun deleteById(id: String)
 
+    @Query("DELETE FROM stories WHERE id IN (:ids)")
+    public suspend fun deleteByIds(ids: List<String>)
+
     @Query("DELETE FROM stories")
     public suspend fun clear()
+
+    /** Purge du cache : une page de charges (l'attribution des médias les relit). */
+    @Query("SELECT payload FROM stories ORDER BY id LIMIT :limit OFFSET :offset")
+    public suspend fun payloadPage(limit: Int, offset: Int): List<String>
+
+    /** Octets réels des charges en cache (longueur des octets, pas des caractères). */
+    @Query("SELECT COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM stories")
+    public suspend fun payloadBytes(): Long
 }

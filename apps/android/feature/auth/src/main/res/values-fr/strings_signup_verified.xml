@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signup_verified_open_failed">Votre compte est validé, mais cet appareil n’a pas pu ouvrir sa session. Réessayez.</string>
+    <string name="signup_verified_no_session">Votre compte est validé. Connectez-vous pour continuer.</string>
+</resources>

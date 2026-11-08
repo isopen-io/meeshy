@@ -1,0 +1,125 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "flocons-cristal",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#F6F9FC",
+     "ink": "#1E3A8A",
+     "soft": "#E6EEF6"
+    },
+    "dark": {
+     "base": "#0A0F1A",
+     "ink": "#BFDBFE",
+     "soft": "#121A2A"
+    }
+   },
+   "tile": {
+    "width": 64,
+    "height": 64,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M18 26L18 10M11.07 22L24.93 14M11.07 14L24.93 22M24.48 19.78L22.16 20.4L22.78 22.72M19.7 24.5L18 22.8L16.3 24.5M13.22 22.72L13.84 20.4L11.52 19.78M11.52 16.22L13.84 15.6L13.22 13.28M16.3 11.5L18 13.2L19.7 11.5M22.78 13.28L22.16 15.6L24.48 16.22",
+      "role": "ink",
+      "opacity": 0.07,
+      "width": 0.7
+     },
+     {
+      "d": "M50 53.5L50 42.5M45.24 50.75L54.76 45.25M45.24 45.25L54.76 50.75M54.45 49.22L52.86 49.65L53.28 51.24M51.17 52.47L50 51.3L48.83 52.47M46.72 51.24L47.14 49.65L45.55 49.22M45.55 46.78L47.14 46.35L46.72 44.76M48.83 43.53L50 44.7L51.17 43.53M53.28 44.76L52.86 46.35L54.45 46.78",
+      "role": "ink",
+      "opacity": 0.06,
+      "width": 0.6
+     },
+     {
+      "d": "M49.2 14A0.8 0.8 0 1 0 50.8 14A0.8 0.8 0 1 0 49.2 14ZM13.2 50A0.8 0.8 0 1 0 14.8 50A0.8 0.8 0 1 0 13.2 50Z",
+      "role": "ink",
+      "opacity": 0.08
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "guirlande-etoilee",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#FBF8F1",
+     "ink": "#92400E",
+     "soft": "#F3ECDD"
+    },
+    "dark": {
+     "base": "#100D08",
+     "ink": "#FCD34D",
+     "soft": "#1B160E"
+    }
+   },
+   "tile": {
+    "width": 80,
+    "height": 56,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M0 8C13 20 27 20 40 8C53 20 67 20 80 8",
+      "role": "ink",
+      "opacity": 0.07,
+      "width": 0.6
+     },
+     {
+      "d": "M17.4 20.5A2.6 2.6 0 1 0 22.6 20.5A2.6 2.6 0 1 0 17.4 20.5ZM57.4 20.5A2.6 2.6 0 1 0 62.6 20.5A2.6 2.6 0 1 0 57.4 20.5Z",
+      "role": "ink",
+      "opacity": 0.08
+     },
+     {
+      "d": "M40 33.5L40.99 37.01L44.5 38L40.99 38.99L40 42.5L39.01 38.99L35.5 38L39.01 37.01Z",
+      "role": "ink",
+      "opacity": 0.07
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "sucre-d-orge-raye",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#FCF7F7",
+     "ink": "#B91C1C",
+     "soft": "#F4E6E6"
+    },
+    "dark": {
+     "base": "#120A0B",
+     "ink": "#FCA5A5",
+     "soft": "#1E1213"
+    }
+   },
+   "tile": {
+    "width": 32,
+    "height": 32,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M-4 4L4 -4M0 32L32 0M28 36L36 28",
+      "role": "ink",
+      "opacity": 0.06,
+      "width": 3
+     },
+     {
+      "d": "M0 16L16 0M16 32L32 16",
+      "role": "ink",
+      "opacity": 0.08,
+      "width": 0.6
+     }
+    ]
+   },
+   "fit": "fill"
+  }
+ ]
+}

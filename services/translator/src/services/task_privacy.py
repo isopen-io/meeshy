@@ -22,11 +22,24 @@ import functools
 from contextlib import contextmanager
 from contextvars import ContextVar
 import re
-from typing import Iterator, Optional
+from typing import Iterable, Iterator, Optional, Tuple
 
 _AT_REST: ContextVar[Optional[bool]] = ContextVar("meeshy_task_at_rest", default=None)
 _MESSAGE: ContextVar[Optional[str]] = ContextVar("meeshy_task_message_id", default=None)
+_LIVE_CAPTION: ContextVar[bool] = ContextVar("meeshy_task_live_caption", default=False)
 _OBJECT_ID = re.compile(r"^[0-9a-f]{24}$")
+_LIVE_CAPTION_PREFIXES = ("call-caption:", "call-")
+
+
+def is_live_call_caption(message_id) -> bool:
+    """
+    #16648 — l'identifiant désigne un sous-titre d'appel en direct :
+    `call-caption:<callId>:<startMs>` (#16625) ou l'ancien
+    `call-<callId>-<startMs>`, gardé pendant la transition. Un sous-titre ne
+    se retraduit jamais à l'identique : il ne se lit ni ne se range dans aucun
+    cache. Un ObjectId (24 hex) ne commence jamais par `call`.
+    """
+    return isinstance(message_id, str) and message_id.startswith(_LIVE_CAPTION_PREFIXES)
 
 
 def request_is_at_rest(request_data: dict) -> bool:
@@ -40,8 +53,13 @@ def in_at_rest_task() -> bool:
 
 
 def cache_allowed() -> bool:
-    """Le cache ne sert qu'une tâche dont le régime ORDINAIRE a été déclaré."""
-    return _AT_REST.get() is False
+    """Le cache ne sert qu'une tâche dont le régime ORDINAIRE a été déclaré — jamais un sous-titre d'appel (#16648)."""
+    return _AT_REST.get() is False and not _LIVE_CAPTION.get()
+
+
+def text_may_be_logged() -> bool:
+    """Un journal ne dit le texte que d'une tâche ordinaire DÉCLARÉE — jamais d'un sous-titre d'appel (#16682)."""
+    return not in_at_rest_task() and not _LIVE_CAPTION.get()
 
 
 @contextmanager
@@ -65,9 +83,11 @@ def message_scope(message_id) -> Iterator[None]:
     puisse la faire oublier par l'identifiant seul, sans renvoyer le texte.
     """
     token = _MESSAGE.set(message_id if isinstance(message_id, str) and _OBJECT_ID.match(message_id) else None)
+    caption_token = _LIVE_CAPTION.set(is_live_call_caption(message_id))
     try:
         yield
     finally:
+        _LIVE_CAPTION.reset(caption_token)
         _MESSAGE.reset(token)
 
 
@@ -77,16 +97,50 @@ def task_scope(at_rest: bool, message_id) -> Iterator[None]:
         yield
 
 
+def batch_is_ordinary(regimes: Iterable[Tuple[bool, object]]) -> bool:
+    """#16716 — un lot n'est ordinaire que si chacune de ses tâches `(at_rest, message_id)` l'est."""
+    members = list(regimes)
+    return bool(members) and all(
+        at_rest is False and not is_live_call_caption(message_id) for at_rest, message_id in members
+    )
+
+
+@contextmanager
+def batch_scope(regimes: Iterable[Tuple[bool, object]]) -> Iterator[None]:
+    """
+    Le régime d'un lot qui traduit plusieurs tâches d'un appel : ordinaire si
+    toutes le sont, tu sinon. Aucun message n'est nommé : le lot n'en traduit
+    pas un seul.
+    """
+    with task_scope(not batch_is_ordinary(regimes), None):
+        yield
+
+
 def shown(text, limit=None) -> str:
     """
     Ce qu'un journal peut dire d'un texte : le texte (tronqué à `limit`) pour
-    une tâche ordinaire, sa seule longueur pour une tâche au repos. Les
-    journaux du translator sont un stockage comme un autre.
+    une tâche ordinaire, sa seule longueur pour une tâche au repos ou un
+    sous-titre d'appel. Les journaux du translator sont un stockage comme un
+    autre.
     """
     value = "" if text is None else str(text)
-    if in_at_rest_task():
+    if not text_may_be_logged():
         return f"<{len(value)} caractères tus>"
     return value if limit is None else value[:limit]
+
+
+def caused_by(error: BaseException, cause: BaseException) -> BaseException:
+    """
+    #16715 — la cause qu'une erreur peut porter : l'exception d'origine pour
+    une tâche ordinaire, aucune pour une tâche au repos ou un sous-titre
+    d'appel. Une exception du pipeline peut citer l'entrée, et un
+    `exc_info=True` ou un `traceback.print_exc()` en amont rendrait la chaîne
+    entière. L'appelant lève l'erreur rendue HORS de son bloc `except`, pour
+    qu'aucun `__context__` ne la rattache non plus à l'exception d'origine.
+    """
+    if text_may_be_logged():
+        error.__cause__ = cause
+    return error
 
 
 def under_declared_regime(handler):

@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntries
 import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntry
 import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.scene.export.StoryExportMode
+import me.meeshy.ui.component.retouch.ComposerLookAuthor
 
 /**
  * **LE COMPOSITEUR EXPORTE TOUTES SES SLIDES** (#13897) : chaque slide publiable, bout à bout, telle que l'aperçu la joue et
@@ -18,14 +19,19 @@ internal object ComposerSceneExport {
     fun entries(state: StoryComposerUiState): List<ComposerOverflowEntry> =
         ComposerOverflowEntries.served(hasScene = state.deck.publishableSlides.isNotEmpty())
 
-    /** [project] : la projection que le lecteur peint, celle de l'aperçu plein écran. */
+    /**
+     * [project] : la projection que le lecteur peint, celle de l'aperçu plein écran. [author] signe les looks des médias
+     * (#13841) : l'export rend les filtres, effets et cadres que la publication cuira.
+     */
     fun scenes(
         state: StoryComposerUiState,
         language: String,
         floor: StoryBackgroundValue?,
+        mediaBaseUrl: String? = null,
+        author: ComposerLookAuthor? = null,
         project: (StoryItem) -> StorySlideView,
     ): List<Pair<StoryItem, StorySlideView>> =
-        StoryComposerPreview.items(state, language, floor).map { it to project(it) }
+        StoryComposerPreview.scenes(state, language, floor, mediaBaseUrl, author, project)
 
     fun mode(destination: SceneExportDestination): StoryExportMode = when (destination) {
         SceneExportDestination.GALLERY -> StoryExportMode.SAVE

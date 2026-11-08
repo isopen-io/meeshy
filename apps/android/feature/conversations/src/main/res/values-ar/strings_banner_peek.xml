@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_peek_open_full">فتح المحادثة كاملة</string>
+    <string name="conversation_peek_placeholder">رسالة</string>
+    <string name="conversation_peek_send">إرسال</string>
+    <string name="conversation_peek_empty">لا توجد رسائل بعد</string>
+    <string name="conversation_peek_unavailable">تعذّر تحميل الرسائل</string>
+    <string name="conversation_peek_sealed">محادثة مشفّرة</string>
+    <string name="conversation_peek_sealed_message">رسالة مشفّرة</string>
+    <string name="conversation_peek_composer_locked">محادثة مشفّرة: اكتب من العرض الكامل</string>
+</resources>

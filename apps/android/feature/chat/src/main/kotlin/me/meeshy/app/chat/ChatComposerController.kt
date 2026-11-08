@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import androidx.work.WorkManager
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -22,12 +23,17 @@ import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionLookupDriver
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.reset
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.ArrivalGreeting
+import me.meeshy.sdk.model.composer.SendPlaceTileLaw
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ConversationDraft
@@ -81,6 +87,8 @@ internal class ChatComposerController(
     private val recentEmojis: RecentEmojiStore? = null,
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     mentionContacts: MentionContacts = MentionContacts.None,
+    private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
+    private val pendingPreviews: PendingMediaPreviewing = PendingMediaPreviewing.None,
 ) {
 
     private val mentions = MentionLookupDriver(
@@ -96,6 +104,7 @@ internal class ChatComposerController(
     private var typingIdleJob: Job? = null
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
+    private var endToEndDraftForgotten = false
 
     /** The draft being written when « Modifier » was tapped, given back when the edit ends (iOS `draftBeforeEdit`). */
     private var draftBeforeEdit: String? = null
@@ -103,14 +112,39 @@ internal class ChatComposerController(
     /** The edited message's text, so an unchanged edit is dropped instead of sent (iOS `editingOriginalContent`). */
     private var editingOriginal: String? = null
 
+    /** Le pseudo de chaque participation du fil, pour saluer des arrivées groupées (#16338). */
+    private var usernameByParticipant: Map<String, String> = emptyMap()
+
     /**
      * Replaces the people of the conversation the `@mention` panel serves locally (its
      * participants) and the [context] the network is asked about from the third character
      * (#14053). A direct or group conversation only offers its members.
      */
-    fun updateMentionRoster(roster: List<MentionCandidate>, context: MentionContext? = null) {
+    fun updateMentionRoster(
+        roster: List<MentionCandidate>,
+        context: MentionContext? = null,
+        participants: List<ApiParticipant> = emptyList(),
+    ) {
         mentions.updateRoster(roster)
         mentions.bind(context ?: MentionContext.conversation(conversationId, conversationType = null, isMember = false))
+        usernameByParticipant = participants.mapNotNull { p -> p.username?.trim()?.takeIf { it.isNotEmpty() }?.let { p.id to it } }.toMap()
+    }
+
+    /**
+     * « Dis-lui salut » (#16338) : les `@mentions` des arrivants que [message] annonce s'écrivent à la suite du brouillon
+     * ([ArrivalGreeting]), puis le composeur prend le focus — même quand personne n'a de pseudo à écrire.
+     */
+    fun greetArrivals(message: ApiMessage?) {
+        val handles = message?.joinNotice?.let { listOfNotNull(ArrivalGreeting.handleOf(it, isOwn = false)) }
+            ?: message?.arrivalsNotice?.let { ArrivalGreeting.handlesOf(it, usernameByParticipant) }
+            .orEmpty()
+        val written = ArrivalGreeting.mentions(handles)?.let { ArrivalGreeting.inserted(composerText.text, it) }
+        if (written != null && written != composerText.text) {
+            composerText.replace(written)
+            mentions.onTextChange(written)
+            persistDraft(written, state.value.replyingToMessageId)
+        }
+        composerText.requestFocus()
     }
 
     /**
@@ -215,6 +249,7 @@ internal class ChatComposerController(
      */
     private fun persistDraft(rawText: String, replyToId: String?) {
         if (state.value.isEditing) return
+        if (state.value.isEndToEnd) return forgetEndToEndDraftOnDisk()
         val decision = DraftAutosave.resolve(
             conversationId = conversationId,
             rawText = rawText,
@@ -241,6 +276,30 @@ internal class ChatComposerController(
                 throw e
             } catch (_: Exception) {
                 // Draft persistence is best-effort; a failed write never disrupts composing.
+            }
+        }
+    }
+
+    /**
+     * #14632 — le brouillon d'une conversation chiffrée de bout en bout ne s'écrit pas sur le disque (miroir de
+     * `ConversationDraftCoordinator.keepsDraftsOnDisk`, iOS) : le magasin des brouillons est un fichier ordinaire, hors du
+     * coffre. Le texte reste dans le composeur, en mémoire ; un brouillon écrit en clair AVANT (conversation pas encore
+     * reconnue chiffrée, réponse gardée depuis une notification) est d'abord repris dans le composeur, puis effacé.
+     * Une fois par écran : les frappes suivantes n'écrivent rien.
+     */
+    fun forgetEndToEndDraftOnDisk() {
+        if (!state.value.isEndToEnd || endToEndDraftForgotten) return
+        endToEndDraftForgotten = true
+        draftPersistJob?.cancel()
+        draftPersistJob = scope.launch {
+            try {
+                restoreStoredDraft()
+                lastPersistedDraft = null
+                draftStore.clear(conversationId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                endToEndDraftForgotten = false
             }
         }
     }
@@ -311,8 +370,10 @@ internal class ChatComposerController(
         val tray = pendingTray()
         val hasStaged = tray?.state?.value?.isEmpty == false
         if (!ComposerSendEligibility.canSend(text, hasStaged || clipboard != null, place != null)) return
-        // #13110 — an edit is a send: in an end-to-end conversation nothing leaves the device.
-        if (state.value.isEndToEnd) return
+        // #13110 — an edit is a send: in an end-to-end conversation nothing leaves the device in clear. #14591 — only the
+        // TEXT of a direct end-to-end conversation leaves, sealed by libsignal: no edit, no paste-as-file, no place.
+        if (state.value.isEndToEnd && !state.value.endToEndTextOpen) return
+        if (state.value.isEndToEnd && (state.value.editingMessageId != null || clipboard != null || place != null || hasStaged)) return
         stopTypingEmission()
         val editingId = state.value.editingMessageId
         if (editingId != null) {
@@ -340,6 +401,8 @@ internal class ChatComposerController(
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = state.value.replyingToMessageId
         val effects = state.value.pendingEffects
+        // #14591 — fixé au geste : un fil chiffré de bout en bout n'envoie JAMAIS par le chemin en clair.
+        val endToEndPeer = if (state.value.isEndToEnd) state.value.directPeerUserId ?: return else null
         val batch = tray?.takeForSend()
         // A manual pick is the source language; otherwise the text is identified at send, the
         // sender's own language as the fallback — never a partial detection of the typing (#12484).
@@ -391,6 +454,8 @@ internal class ChatComposerController(
                     )
                 } else if (clipboard != null) {
                     sendClipboardContent(text, clipboard, user, replyToId, effects)
+                } else if (endToEndPeer != null) {
+                    endToEnd.sendText(conversationId, endToEndPeer, text, sentLanguage, user, replyToId)
                 } else {
                     messageRepository.sendOptimistic(
                         conversationId = conversationId,
@@ -407,7 +472,7 @@ internal class ChatComposerController(
                 throw e
             } catch (e: Exception) {
                 state.update { it.copy(errorMessage = e.message) }
-                if (_pendingPlace.value == null) _pendingPlace.value = place
+                SendPlaceTileLaw.restoration(place, sent = false, current = _pendingPlace.value)?.let { _pendingPlace.value = it }
             }
         }
     }
@@ -553,15 +618,19 @@ internal class ChatComposerController(
             val mime = MimeTypeResolver.resolve(item.mimeType, name)
             val upload = tray.uploadItem(item, name, mime) ?: return@mapNotNull null
             val cmid = mediaUploadQueue.enqueue(upload, conversationId = conversationId)
+            pendingPreviews.keepSharp(cmid, upload, effects)
             cmid to ApiMessageAttachment(
                 id = cmid,
                 fileName = name,
                 originalName = name,
                 mimeType = mime,
                 fileSize = upload.sizeBytes.toInt(),
+                fileUrl = pendingPreviews.keepPlayable(cmid, upload, effects),
+                thumbnailUrl = pendingPreviews.keep(cmid, item.thumbnailPath, effects),
                 width = item.width,
                 height = item.height,
                 duration = item.durationMs?.toInt(),
+                effectFlags = effects.flags,
             )
         }
         tray.release(batch)
@@ -635,6 +704,11 @@ internal class ChatComposerController(
         persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
+    fun clearPanelEffects() {
+        state.update { it.copy(pendingEffects = MessageEffectsEditor.clearPanelFlags(it.pendingEffects)) }
+        persistDraft(composerText.text, state.value.replyingToMessageId)
+    }
+
     fun startEdit(messageId: String) {
         val message = messages.value.firstOrNull {
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
@@ -658,6 +732,9 @@ internal class ChatComposerController(
             )
         }
     }
+
+    /** Met le brouillon à l'abri (ON_STOP) : sans effet quand le magasin est déjà à jour. */
+    fun flushDraft() = persistDraft(composerText.text, state.value.replyingToMessageId)
 
     fun startReply(messageId: String) {
         val message = messages.value.firstOrNull {

@@ -47,7 +47,6 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.auth.EmailGateRequest
 
-private const val CODE_FOCUS_DELAY_MS = 350L
 private const val STEP_FADE_MS = 220
 
 /**

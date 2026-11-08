@@ -234,7 +234,10 @@ export const PLAFOND_ADMINS = 500
 export const PLAFOND_TRACES = 2000
 
 /**
- * Un DM jamais utilisé ne se transmet pas.
+ * Un DM jamais utilisé ne se transmet pas — ni un GROUPE encore silencieux
+ * (#14644) : ses invités ne l'ont jamais vu (aucun `conversation:new`, aucune
+ * invitation), le transmettre ferait d'un invité le créateur d'un groupe qu'il
+ * n'a ni demandé ni vu, et la liste le lui montrerait sans annonce. Il se ferme.
  *
  * Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien quand le
  * champ est present-et-null que quand il est ABSENT (legacy, jamais backfillé) —
@@ -247,7 +250,7 @@ async function estDirectJamaisUtilise(
   conversationId: string
 ): Promise<boolean> {
   const combien = await prisma.conversation.count({
-    where: { id: conversationId, type: 'direct', firstMessageSentAt: null },
+    where: { id: conversationId, type: { in: ['direct', 'group'] }, firstMessageSentAt: null },
   })
   return combien > 0
 }

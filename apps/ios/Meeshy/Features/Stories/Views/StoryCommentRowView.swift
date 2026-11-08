@@ -244,17 +244,23 @@ struct StoryCommentRowView: View, Equatable {
 
             Spacer()
 
+            // « Imager » en icône seule, comme sur un commentaire de post
+            // (#16541) — il a quitté le menu « … ».
+            CommentImagerButton(
+                target: CommentImagerTarget(comment: comment, showOriginal: showOriginal, accentColor: comment.authorColor,
+                                            root: root, loadedReplies: loadedReplies, story: story),
+                glyphSize: 13,
+                tint: overlayColor.opacity(MeeshyOpacity.intense)
+            )
+
             // Le menu « … » des commentaires de post, à la même place — bout
-            // de la rangée d'actions (#8709) : Copier, Imager, Modifier (auteur),
+            // de la rangée d'actions (#8709) : Copier, Modifier (auteur),
             // Signaler (les autres), Retirer (la modération, #11159).
             CommentMoreMenu(
                 comment: comment,
                 servedText: displayContent,
                 showOriginal: showOriginal,
                 accentColor: comment.authorColor,
-                root: root,
-                loadedReplies: loadedReplies,
-                story: story,
                 onEdit: onCommitEdit == nil ? nil : { beginEditing() }, onRemove: onRemove,
                 glyphSize: 13,
                 glyphColor: overlayColor.opacity(MeeshyOpacity.intense)

@@ -1,91 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Meeshy</string>
-    <string name="splash_tagline">Quebre a barreira do idioma</string>
-    <string name="splash_version_label">Meeshy %1$s · %2$s</string>
     <string name="brand_signature_credit">Services CEO</string>
 
     <!-- Navigation tabs -->
-    <string name="tab_feed">Feed</string>
-    <string name="tab_profile">Perfil</string>
-    <string name="tab_calls">Chamadas</string>
-    <string name="menu_my_links">Meus links</string>
-    <string name="menu_notifications">Notificações</string>
-    <string name="menu_discover">Descobrir</string>
-    <string name="menu_contacts">Contatos</string>
-    <string name="menu_settings">Configurações</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bem-vindo de volta</string>
-    <string name="login_username_label">Nome de usuário</string>
-    <string name="login_password_label">Senha</string>
-    <string name="login_button">Entrar</string>
 
     <!-- Chat screen -->
-    <string name="chat_title">Mensagens</string>
-    <string name="chat_back">Voltar</string>
-    <string name="chat_message_placeholder">Mensagem</string>
-    <string name="chat_send">Enviar</string>
     <string name="chat_no_messages">Ainda não há mensagens</string>
-    <string name="chat_retry">Tentar novamente</string>
 
     <!-- Conversation list screen -->
     <string name="conversations_title">Meeshy Chats</string>
-    <string name="conversations_logout">Sair</string>
     <string name="conversations_empty">Ainda não há conversas</string>
-    <string name="conversations_retry">Tentar novamente</string>
     <string name="conversations_no_messages">Ainda não há mensagens</string>
 
     <!-- Notifications screen -->
-    <string name="notifications_title">Notificações</string>
     <string name="notifications_mark_all_read">Marcar tudo como lido</string>
-    <string name="notifications_empty">Nenhuma notificação</string>
 
     <!-- Feed screen -->
-    <string name="feed_title">Feed</string>
-    <string name="feed_empty">Ainda não há publicações</string>
-    <string name="feed_like">Curtir</string>
 
     <!-- Profile screen -->
-    <string name="profile_title">Perfil</string>
-    <string name="profile_edit_title">Editar perfil</string>
-    <string name="profile_back">Voltar</string>
-    <string name="profile_edit">Editar</string>
-    <string name="profile_display_name_label">Nome de exibição</string>
-    <string name="profile_bio_label">Bio</string>
-    <string name="profile_cancel">Cancelar</string>
-    <string name="profile_save">Salvar</string>
-    <string name="profile_unknown">Desconhecido</string>
-    <string name="call_channel_name">Chamadas</string>
+    <string name="bring_channel_name">Bring</string>
+    <string name="bring_channel_description">Faz tocar o seu telefone quando alguém próximo aciona um Bring, mesmo no silencioso</string>
     <string name="call_channel_description">Chamadas de voz e vídeo recebidas</string>
-    <string name="call_incoming_audio">Chamada recebida</string>
-    <string name="call_incoming_video">Chamada de vídeo recebida</string>
     <string name="a11y_floating_menu">Menu de navegação</string>
-    <string name="a11y_floating_menu_unread">Menu, %1$d notificações pendentes</string>
-    <string name="a11y_state_open">Aberto</string>
-    <string name="a11y_edit_profile">Editar perfil</string>
 
     <!-- Widget de tela inicial: contador de não lidas -->
-    <string name="widget_unread_count_title">Mensagens não lidas</string>
-    <string name="widget_unread_count_description">Veja rapidamente suas mensagens não lidas</string>
-    <string name="widget_unread_label">Não lidas</string>
-    <string name="widget_all_read_label">Tudo em dia</string>
 
     <!-- Widget de tela inicial: conversas recentes -->
-    <string name="widget_recent_conversations_title">Conversas recentes</string>
-    <string name="widget_recent_conversations_description">Veja suas conversas recentes rapidamente</string>
-    <string name="widget_recent_conversations_empty">Abra o Meeshy para começar</string>
 
     <!-- Widget de tela inicial: contatos favoritos -->
-    <string name="widget_favorite_contacts_title">Favoritos</string>
-    <string name="widget_favorite_contacts_description">Acesso rápido aos seus contatos favoritos</string>
     <string name="widget_favorite_contacts_empty">Fixe uma conversa direta para adicionar um favorito</string>
 
     <!-- Widget de tela inicial: resposta rápida -->
-    <string name="widget_quick_reply_title">Resposta rápida</string>
-    <string name="widget_quick_reply_description">Responda rapidamente às mensagens recentes</string>
-    <string name="widget_quick_reply_empty">Abra o Meeshy para começar</string>
-    <string name="widget_quick_reply_ok">OK</string>
-    <string name="widget_quick_reply_thanks">Obrigado!</string>
-    <string name="widget_quick_reply_call_me">Me ligue</string>
 </resources>

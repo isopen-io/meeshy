@@ -13,7 +13,7 @@ const address = (query: string) => new URLSearchParams(query);
 describe('POST_LIST_SPEC — l’adresse porte les filtres que la passerelle comprend', () => {
   test('les valeurs fermées sont celles du schéma de la route', () => {
     expect([...POST_TYPES]).toEqual(['POST', 'STORY', 'REEL', 'STATUS']);
-    expect([...POST_VISIBILITIES]).toEqual(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']);
+    expect([...POST_VISIBILITIES]).toEqual(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', 'ACQUAINTANCES', 'CLOSE', 'BLOOD']);
     expect([...POST_PERIODS]).toEqual(['today', 'week', 'month']);
   });
 

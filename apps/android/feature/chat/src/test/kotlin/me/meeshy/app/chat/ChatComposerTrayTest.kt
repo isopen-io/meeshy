@@ -26,9 +26,14 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.PendingMediaPreview
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -60,6 +65,21 @@ class ChatComposerTrayTest {
         override suspend fun delete(paths: Collection<String>) = Unit
     }
 
+    private class Previews : PendingMediaPreviewing {
+        val kept = mutableListOf<Triple<String, String?, MessageEffects>>()
+        override suspend fun keep(cmid: String, thumbnailPath: String?, effects: MessageEffects): String? {
+            kept += Triple(cmid, thumbnailPath, effects)
+            return thumbnailPath?.let { "file:///previews/$cmid.jpg" }
+        }
+        override suspend fun render(cmid: String, item: MediaUploadItem, effects: MessageEffects): PendingMediaPreview? = null
+        val playable = mutableListOf<Triple<String, String, MessageEffects>>()
+        override suspend fun keepPlayable(cmid: String, item: MediaUploadItem, effects: MessageEffects): String? {
+            playable += Triple(cmid, item.mimeType, effects)
+            return "file:///previews/$cmid.voice.m4a".takeIf { item.mimeType.startsWith("audio/") }
+        }
+        override suspend fun release(attachments: List<ApiMessageAttachment>) = Unit
+    }
+
     private class Host(scope: kotlinx.coroutines.CoroutineScope) : ChatControllerHost {
         override val scope = scope
         override val conversationId = "c1"
@@ -75,6 +95,7 @@ class ChatComposerTrayTest {
         val repo: MessageRepository,
         val uploads: MediaUploadQueue,
         val flow: MutableStateFlow<ChatUiState>,
+        val previews: Previews,
     )
 
     private fun TestScope.rig(open: Boolean = true): Rig {
@@ -91,6 +112,7 @@ class ChatComposerTrayTest {
         coEvery { uploads.enqueue(any(), any(), any()) } answers { "upload-${count++}" }
         val ingestor = Ingestor().also { if (!open) it.gate = CompletableDeferred() }
         val tray = ComposerTrayController(RuntimeEnvironment.getApplication(), ingestor)
+        val previews = Previews()
         tray.attach(Host(this))
         val composer = ChatComposerController(
             scope = screenScope(),
@@ -109,8 +131,9 @@ class ChatComposerTrayTest {
                 override fun nowMillis(): Long = 1_700_000_000_000L
             },
             pendingTray = { tray },
+            pendingPreviews = previews,
         )
-        return Rig(composer, tray, ingestor, repo, uploads, flow)
+        return Rig(composer, tray, ingestor, repo, uploads, flow, previews)
     }
 
     @Test
@@ -290,5 +313,110 @@ class ChatComposerTrayTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    private fun Rig.sentAttachments(): List<ApiMessageAttachment> {
+        val attachments = slot<List<ApiMessageAttachment>>()
+        coVerify(exactly = 1) {
+            repo.sendOptimistic(
+                conversationId = "c1",
+                content = any(),
+                originalLanguage = any(),
+                sender = me,
+                replyToId = any(),
+                effects = any(),
+                messageType = any(),
+                attachmentUploadCmids = any(),
+                attachments = capture(attachments),
+            )
+        }
+        return attachments.captured
+    }
+
+    @Test
+    fun `a staged photo leaves with its local preview so the pending bubble paints it without the network`() = runTest {
+        val r = rig()
+        r.ingestor.thumbnail = AttachmentThumbnail(thumbnailPath = "/work/a.thumb.jpg", width = 1024, height = 768)
+        r.tray.stageBytes(byteArrayOf(1), "a.jpg", "image/jpeg")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        val sent = r.sentAttachments().single()
+        assertThat(sent.thumbnailUrl).isEqualTo("file:///previews/upload-0.jpg")
+        assertThat(sent.fileUrl).isNull()
+        assertThat(r.previews.kept.single().first).isEqualTo("upload-0")
+        assertThat(r.previews.kept.single().second).isEqualTo("/work/a.thumb.jpg")
+    }
+
+    @Test
+    fun `a staged video leaves with its first frame, its duration and an open declaration so its poster is painted`() = runTest {
+        val r = rig()
+        r.ingestor.thumbnail = AttachmentThumbnail(thumbnailPath = "/work/v.thumb.jpg", width = 1920, height = 1080, durationMs = 12_000L)
+        r.tray.stageBytes(byteArrayOf(1), "v.mp4", "video/mp4")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        val sent = r.sentAttachments().single()
+        assertThat(sent.thumbnailUrl).isEqualTo("file:///previews/upload-0.jpg")
+        assertThat(sent.duration).isEqualTo(12_000)
+        assertThat(sent.isProtected).isFalse()
+    }
+
+    @Test
+    fun `the preview is asked under the effects armed at send so a view-once piece keeps none`() = runTest {
+        val r = rig()
+        r.ingestor.thumbnail = AttachmentThumbnail(thumbnailPath = "/work/a.thumb.jpg")
+        r.composer.toggleEffect(MessageEffectFlags.VIEW_ONCE)
+        r.tray.stageBytes(byteArrayOf(1), "a.jpg", "image/jpeg")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        assertThat(r.previews.kept.single().third.has(MessageEffectFlags.VIEW_ONCE)).isTrue()
+        assertThat(r.sentAttachments().single().isProtected).isTrue()
+    }
+
+    @Test
+    fun `a staged voice note leaves with a playable local copy so the pending bubble plays it offline`() = runTest {
+        val r = rig()
+        r.tray.stageBytes(byteArrayOf(1, 2), "voice_1.m4a", "audio/mp4")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        val sent = r.sentAttachments().single()
+        assertThat(sent.fileUrl).isEqualTo("file:///previews/upload-0.voice.m4a")
+        assertThat(r.previews.playable.single().first).isEqualTo("upload-0")
+    }
+
+    @Test
+    fun `the playable copy is asked under the effects armed at send`() = runTest {
+        val r = rig()
+        r.composer.toggleEffect(MessageEffectFlags.VIEW_ONCE)
+        r.tray.stageBytes(byteArrayOf(1, 2), "voice_1.m4a", "audio/mp4")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        assertThat(r.previews.playable.single().third.has(MessageEffectFlags.VIEW_ONCE)).isTrue()
+    }
+
+    @Test
+    fun `a staged photo keeps no playable copy`() = runTest {
+        val r = rig()
+        r.tray.stageBytes(byteArrayOf(1), "a.jpg", "image/jpeg")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        assertThat(r.sentAttachments().single().fileUrl).isNull()
     }
 }

@@ -30,8 +30,14 @@ struct ReelActionRail: View {
     /// « Envoyer » (#14310) : la feuille de partage MEESHY, avec le lien de
     /// l'utilisateur. « Partager » (hors de Meeshy) vit dans le menu « … ».
     var onSend: () -> Void
+    /// « Citer » du choix Repost (#15869) — `nil` = absent du choix.
+    var onQuote: (() -> Void)? = nil
+    /// « Imager » (#16332) : la baguette fait du réel une carte image — `nil`
+    /// quand le réel n'a pas de scène à rendre.
+    var onImager: (() -> Void)? = nil
 
     @State private var showsReactionPalette = false
+    @State private var showRepostOptions = false
     @State private var stripRoom: CGFloat = 0
 
     var body: some View {
@@ -125,8 +131,13 @@ struct ReelActionRail: View {
             isActive: isReposted,
             activeTint: MeeshyColors.success,
             accentHex: reel.authorColor,
-            action: { viewModel.repost(reel) }
+            action: { showRepostOptions = true }
         )
+        .modifier(RepostChoiceDialog(
+            isPresented: $showRepostOptions,
+            onRepost: { viewModel.repost(reel) },
+            onQuote: onQuote
+        ))
 
         ReelRailAction(
             systemImage: "paperplane.fill",
@@ -134,6 +145,14 @@ struct ReelActionRail: View {
             count: reel.shareCount,
             action: onSend
         )
+
+        if let onImager {
+            ReelRailAction(
+                systemImage: FullscreenChromeSymbol.imager,
+                label: MessageCardExportMenu.imageLabel,
+                action: onImager
+            )
+        }
     }
 
     private func closeReactionPalette() {
@@ -215,6 +234,11 @@ struct ReelMoreOptionsMenu: View {
                 onImager()
             } label: {
                 Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
+            }
+        }
+        if CommentSettingsToggle.isOffered(authorId: reel.authorId) {
+            CommentSettingsMenuItem(commentsDisabled: reel.commentsDisabled) {
+                Task { await viewModel.toggleComments(reel.id) }
             }
         }
         if isOwnReel {

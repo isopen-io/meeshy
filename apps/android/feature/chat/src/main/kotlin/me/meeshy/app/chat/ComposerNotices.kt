@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.composer.SlowModeState
+import me.meeshy.sdk.model.ComposerClosure
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -44,6 +45,33 @@ internal fun ComposerReadOnlyNotice(modifier: Modifier = Modifier) {
         )
         Text(
             text = stringResource(R.string.chat_composer_read_only),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(start = MeeshySpacing.xs),
+        )
+    }
+}
+
+/**
+ * Le bandeau qui REMPLACE le composeur quand l'écriture est fermée (#15269) : la conversation est terminée (cadenas), ou
+ * Global attend les 18 ans du lecteur (sablier). Une zone statique, sans action, qui dit pourquoi — jamais un composeur grisé.
+ */
+@Composable
+internal fun ComposerClosureNotice(closure: ComposerClosure, accentColor: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    val minor = closure == ComposerClosure.MINOR_GLOBAL
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (minor) Icons.Filled.HourglassEmpty else Icons.Filled.Lock,
+            contentDescription = null,
+            tint = if (minor) accentColor else MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = stringResource(if (minor) R.string.chat_composer_minor_global else R.string.chat_composer_closed),
             style = MaterialTheme.typography.bodySmall,
             color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(start = MeeshySpacing.xs),

@@ -24,6 +24,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
+import me.meeshy.sdk.model.story.PinnedBandReveal
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -46,6 +47,7 @@ fun ConversationListScreen(
     onGlobalSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     header: @Composable () -> Unit = {},
+    pinnedBand: (@Composable (reveal: Float) -> Unit)? = null,
     searchSyncPill: @Composable () -> Unit = {},
     searchCommunitiesBand: @Composable () -> Unit = {},
     searchCommunityCount: Int = 0,
@@ -53,8 +55,10 @@ fun ConversationListScreen(
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
     onOpenSettings: () -> Unit = {},
     onOpenConversationSearch: (String) -> Unit = {},
+    onOpenMessage: (conversationId: String, messageId: String) -> Unit = { conversationId, _ -> onConversationClick(conversationId) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val messageSearch by viewModel.messageSearch.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
     // A tap resolves to navigation only through the ViewModel's one-shot gate: an
@@ -63,6 +67,12 @@ fun ConversationListScreen(
     // from re-navigating.
     LaunchedEffect(viewModel) {
         viewModel.openConversation.collect { onConversationClick(it) }
+    }
+    val avatarNavigation by rememberUpdatedState(rowNavigation)
+    LaunchedEffect(viewModel) {
+        viewModel.avatarEffects.collect { effect ->
+            avatarNavigation.open(effect, viewModel.state.value.currentUserId, viewModel::conversationFor)
+        }
     }
 
     val density = LocalDensity.current
@@ -129,6 +139,8 @@ fun ConversationListScreen(
                 onRemoveMasterPin = viewModel::onRemoveMasterPin,
                 onOpenShareLinkPicker = onOpenShareLinkPicker,
                 onNewConversation = onNewConversation,
+                scrollOffsetDp = pinnedBand?.let { PinnedBandReveal.scrollOffsetDp(listState.firstVisibleItemIndex, with(density) { listState.firstVisibleItemScrollOffset.toDp().value }) },
+                pinnedBand = pinnedBand,
             )
         },
         bottomBar = {
@@ -160,22 +172,27 @@ fun ConversationListScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            ConnectionBannerStrip(state.banner)
-            val content = ConversationListContent.of(state)
+            val content = ConversationListContent.of(state, messageSectionShown = messageSearch.showsSection)
             // iOS : le rail puis les filtres sont les premières lignes de la liste, dans tous les états (#13664).
             Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
                 ConversationListBody(
                     state = state,
                     listState = listState,
                     viewModel = viewModel,
-                    content = ConversationListContent.of(state),
+                    content = content,
                     onNewConversation = onNewConversation,
                     onRefresh = onRefresh,
                     rowNavigation = rowNavigation,
+                    messageSearch = messageSearch,
+                    // #14670 — le clavier de la recherche ne suit pas l'utilisateur dans la conversation ouverte.
+                    onOpenMessage = { hit ->
+                        focusManager.clearFocus()
+                        onOpenMessage(hit.conversationId, hit.messageId)
+                    },
                     header = {
                         ConversationListHead(
                             rail = header,
-                            filters = { ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter) },
+                            filters = { ConversationFilterBar(selected = state.selectedFilters, onToggle = viewModel::toggleFilter) },
                         )
                     },
                 )

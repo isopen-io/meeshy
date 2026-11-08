@@ -8,3 +8,10 @@ plugins {
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.google.services) apply false
 }
+
+subprojects {
+    tasks.withType<Test>().configureEach {
+        maxHeapSize = "2g"
+        jvmArgs("-XX:MaxMetaspaceSize=1g", "-XX:+HeapDumpOnOutOfMemoryError")
+    }
+}

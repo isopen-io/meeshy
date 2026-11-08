@@ -24,8 +24,9 @@ import me.meeshy.ui.theme.MeeshyRadius
 /**
  * La scène d'une story reposté, incrustée dans une carte du fil — iOS `StoryRepostEmbedCell` : la scène seule
  * (9:16, muette), au même rendu que le lecteur de stories : même projection ([StorySlideProjector]),
- * même lecteur ([StoryScenePlayer]). Elle joue seulement quand le fil l'élit ([live]) ; sinon c'est une image fixe, sans
- * aucun lecteur (#13663) ; un appui appelle [onOpen] — l'appelant choisit entre la story en plein écran et la fiche du post.
+ * même lecteur ([StoryScenePlayer]), même fond — sans fond déclaré, le dégradé de son auteur (#14250).
+ * Elle joue seulement quand le fil l'élit ([live]) ; sinon c'est une image fixe, sans aucun lecteur (#13663) ;
+ * un appui appelle [onOpen] — l'appelant choisit entre la story en plein écran et la fiche du post.
  */
 @Composable
 fun RepostSceneCard(
@@ -36,8 +37,9 @@ fun RepostSceneCard(
     modifier: Modifier = Modifier,
     viewModel: RepostSceneViewModel = hiltViewModel(),
 ) {
-    val slide = remember(item) { viewModel.slideOf(item, accentHex = SCENE_FALLBACK_ACCENT) }
+    val slide = remember(item, authorName) { viewModel.repostSlideOf(item, authorName) }
     val by = stringResource(R.string.stories_repost_by)
+    val openHint = stringResource(R.string.stories_repost_open_fullscreen)
     val label = authorName?.let { "$by $it" } ?: by
     Box(
         modifier = modifier
@@ -45,7 +47,7 @@ fun RepostSceneCard(
             .aspectRatio(SCENE_ASPECT)
             .clip(RoundedCornerShape(MeeshyRadius.lg))
             .background(StorySceneFill.resolve(slide.background, slide.accentHex).brush())
-            .clickable(role = Role.Button, onClick = onOpen)
+            .clickable(role = Role.Button, onClickLabel = openHint, onClick = onOpen)
             .semantics { contentDescription = label },
     ) {
         StoryScenePlayer(
@@ -62,4 +64,3 @@ fun RepostSceneCard(
 
 private const val SCENE_ASPECT = 9f / 16f
 private val SCENE_MAX_WIDTH = 420.dp
-private const val SCENE_FALLBACK_ACCENT = "6366F1"

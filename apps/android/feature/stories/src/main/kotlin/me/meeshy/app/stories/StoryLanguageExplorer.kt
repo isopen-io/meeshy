@@ -5,6 +5,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.story.StoryViewerContentRules
 import me.meeshy.ui.component.bubble.LanguageExplorerRow
 import me.meeshy.ui.component.bubble.MessageDetailExplorer
 
@@ -14,7 +15,7 @@ import me.meeshy.ui.component.bubble.MessageDetailExplorer
  * leur propre texte, dans leur propre langue. Elle ne peut pas entrer en collision avec un code BCP-47.
  */
 object StoryLanguageOverride {
-    const val ORIGINAL: String = "__meeshy.original__"
+    const val ORIGINAL: String = StoryViewerContentRules.ORIGINAL_LANGUAGE_OVERRIDE
 
     fun isOriginal(code: String?): Boolean = code == ORIGINAL
 }
@@ -66,6 +67,7 @@ object StoryLanguageExplorerBuilder {
             preferences = preferences,
             translatingCodes = translatingCodes,
             selectedCode = servedCode,
+            previewLength = StoryViewerContentRules.ROW_PREVIEW_LENGTH,
         ).rows
         val current = resolved.content.takeIf { it.isNotBlank() }?.let {
             StoryCurrentContent(code = servedCode, info = LanguageData.info(servedCode), text = it)

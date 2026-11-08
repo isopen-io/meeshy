@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import java.io.File
+import me.meeshy.ui.component.bubble.LocalUploadProgress
 import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.media.MediaIntake
 import android.content.ContentResolver
@@ -20,12 +21,17 @@ import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import android.widget.Toast
+import me.meeshy.feature.chat.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,6 +42,8 @@ import me.meeshy.ui.component.bubble.LocalBubbleContactCardAccounts
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.app.chat.appearance.rememberConversationAppearance
+import me.meeshy.ui.component.bubble.BubbleSkin
+import me.meeshy.ui.component.bubble.LocalBubbleSkin
 import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
 
 /**
@@ -53,6 +61,7 @@ fun ChatScreen(
      * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
      * to rejoin the call it's already in. */
     hasLocalLiveCall: Boolean = false,
+    localCall: ChatLocalCall = ChatLocalCall.NONE,
     /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
     onOpenCitedPost: (postId: String) -> Unit = {},
     onOpenConversation: (conversationId: String) -> Unit = {},
@@ -61,6 +70,14 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Un seul retour par fil : la fin de la conversation (#14645) peut arriver deux fois — la feuille
+    // d'infos qui l'a rendue obsolète, puis l'événement socket — et un second pop sortirait de la liste.
+    val leave = remember(onBack, state.conversationId) { OnceAction(onBack) }
+    val endController = remember(viewModel) { viewModel.controllers.find<ConversationEndController>() }
+    val conversationEnded by (endController?.ended ?: NOT_ENDED).collectAsStateWithLifecycle()
+    LaunchedEffect(conversationEnded) { if (conversationEnded) leave() }
+    ChatShellEffects(viewModel, remember(viewModel) { ChatLifecycleHooks() }, leave)
+    EncryptionSwitchAnnouncementEffect(remember(viewModel) { viewModel.controllers.find<EncryptionSwitchAnnouncementController>() })
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
@@ -91,7 +108,7 @@ fun ChatScreen(
     val engagement = remember(engagementSnapshot, engagementController) {
         ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
     }
-    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
+    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>()?.let(::ThreadReadingModeViewModel) }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
     val summaryBinding = remember(summaryController) {
@@ -106,6 +123,12 @@ fun ChatScreen(
         )
     }
     val downloadedFileIds by viewModel.downloadedFileIds.collectAsStateWithLifecycle()
+    val landingState by viewModel.landingState.collectAsStateWithLifecycle()
+    val governance = remember(viewModel) { viewModel.controllers.find<ConversationGovernanceController>() }
+    val composerClosure by (governance?.composerClosure ?: NO_CLOSURE).collectAsStateWithLifecycle()
+    val capabilities by (governance?.capabilities ?: NO_CAPABILITIES).collectAsStateWithLifecycle()
+    val viewerRole by (governance?.viewerRole ?: NO_VIEWER_ROLE).collectAsStateWithLifecycle()
+    val unreadAtOpening by viewModel.unreadAtOpening.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -113,11 +136,12 @@ fun ChatScreen(
         accentColor = accentColor,
         actions = actions,
         navigation = ChatNavigationActions(
-            onBack = onBack,
+            onBack = leave,
             onStartCall = onStartCall,
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
+            localCall = localCall,
             onOpenCitedPost = onOpenCitedPost,
             onOpenConversation = onOpenConversation,
             callEntry = callEntry,
@@ -130,9 +154,19 @@ fun ChatScreen(
         selection = selection,
         engagement = engagement,
         downloadedFileIds = downloadedFileIds,
+        takeLandingMessageId = viewModel::takeLandingMessageId,
+        landing = landingState,
+        composerClosure = composerClosure,
+        capabilities = capabilities,
+        listGate = viewModel.listGate,
+        viewerRole = viewerRole,
+        unreadAtOpening = unreadAtOpening,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
+    val uploadProgress = hiltViewModel<ChatUploadProgressViewModel>().progress
+    val voicePlayback: ChatAudioViewModel = hiltViewModel()
+    val transcriptionRequests: ChatTranscriptionRequestsViewModel = hiltViewModel()
     val isEndToEnd = state.isEndToEnd
     val clearance = remember(cardsViewModel, state.conversationId, state.encryptionMode, isEndToEnd) {
         cardsViewModel.clearance(state.conversationId, state.encryptionMode)
@@ -148,10 +182,14 @@ fun ChatScreen(
     )
     CompositionLocalProvider(
         LocalBubbleContactCardAccounts provides contactCards,
+        LocalUploadProgress provides uploadProgress,
         LocalChatContactCardScope provides contactCards::underConversation,
         LocalChatSignalClearance provides signalClearance,
+        LocalChatVoicePlayback provides voicePlayback,
+        LocalChatTranscriptionRequests provides transcriptionRequests,
+        LocalBubbleSkin provides remember(appearance.personalAccentHex) { BubbleSkin.of(appearance.personalAccentHex) },
     ) {
-    ChatBackgroundHost(appearance) {
+    ChatBackgroundHost(appearance, state) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
         var headerHeightPx by remember { mutableIntStateOf(0) }
@@ -161,37 +199,30 @@ fun ChatScreen(
         // défilent sous le verre.
         var composerHeightPx by remember { mutableIntStateOf(0) }
         val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
+        val listBottomInset = rememberKeyboardFollowingInset(composerHeight + MeeshySpacing.sm, rememberComposerKeyboardState())
         Scaffold(containerColor = Color.Transparent) { _ ->
             Box(Modifier.fillMaxSize()) {
                 ChatListHost(
                     host,
                     topInset = headerHeight,
-                    bottomInset = composerHeight + MeeshySpacing.sm,
+                    bottomInset = listBottomInset,
                 )
-                // Rangée plate (Script) : pendant un défilement du doigt, l'en-tête ET le composeur
-                // s'effacent par opacité — aucun inset ne bouge — et reviennent à l'arrêt ; sauf
-                // recherche ouverte ou suggestions de mention (iOS `FocalChromeReturn`).
-                val chromeHidden = host.readingMode?.state?.mode?.usesFlatRow == true &&
-                    host.chrome.isUserScrolling &&
-                    !state.search.isActive &&
-                    !state.mention.isActive
-                val chromeAlpha by animateFloatAsState(
-                    targetValue = if (chromeHidden) 0f else 1f,
-                    animationSpec = tween((FocalMetrics.HiddenChrome.EASE_OUT_SECONDS * 1000).toInt()),
-                    label = "flat-chrome",
-                )
+                // Pendant le geste du doigt l'en-tête et la barre de saisie glissent vers leur bord en se
+                // fondant, et reviennent doigt levé (iOS `EdgeHiddenChrome`, `FocalChromeReturn`) ; sauf
+                // recherche ouverte ou suggestions de mention.
+                val chromeHidden = host.chrome.threadScroll.chromeHidden && !state.search.isActive && !state.mention.isActive
                 Box(
                     Modifier
                         .onSizeChanged { headerHeightPx = it.height }
-                        .graphicsLayer { alpha = chromeAlpha },
+                        .hiddenTowardsEdge(chromeHidden, ChromeEdge.Top),
                 ) {
-                    ChatHeaderHost(host)
+                    ChatHeaderHost(host, remember(viewModel) { viewModel.controllers.find<ChatServerSearch>() })
                 }
                 Box(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .onSizeChanged { composerHeightPx = it.height }
-                        .graphicsLayer { alpha = chromeAlpha },
+                        .hiddenTowardsEdge(chromeHidden, ChromeEdge.Bottom),
                 ) {
                     ChatBottomBarHost(host)
                 }
@@ -243,3 +274,28 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
         }
     }.getOrNull()
 
+private val NO_CLOSURE: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.ComposerClosure?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NO_CAPABILITIES: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NO_VIEWER_ROLE: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NOT_ENDED: kotlinx.coroutines.flow.StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+/** Une action qui ne s'exécute qu'une fois : le retour d'un fil qui se ferme (#14645). */
+internal class OnceAction(private val action: () -> Unit) : () -> Unit {
+    private var done = false
+
+    override fun invoke() {
+        if (done) return
+        done = true
+        action()
+    }
+}
+
+/** #13794 — le passage au bout en bout fait sous les yeux du fil s'annonce, avec le libellé d'iOS (toast d'information). */
+@Composable
+private fun EncryptionSwitchAnnouncementEffect(announcer: EncryptionSwitchAnnouncementController?) {
+    val context = LocalContext.current
+    val notice = stringResource(R.string.conversation_encryption_switched_enabled)
+    LaunchedEffect(announcer, notice) {
+        announcer?.announcements?.collect { Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
+    }
+}

@@ -34,6 +34,31 @@ enum class CallSignalStrength(
     CONNECTING(0.5, isDegraded = false, isCritical = false),
     ;
 
+    /** Barres pleines sur les quatre du glyphe (1 → 4, 0,75 → 3, 0,5 → 2, 0,25 → 1, 0 → 0). */
+    val filledBars: Int get() = Math.round(barsFraction * CallSignalGlyphSpec.BAR_COUNT).toInt()
+
+    /** La teinte sémantique : vert sain, ambre dégradé, rouge critique, indigo pendant la négociation. */
+    val tone: CallSignalTone
+        get() = when (this) {
+            EXCELLENT, GOOD -> CallSignalTone.SUCCESS
+            FAIR -> CallSignalTone.WARNING
+            POOR, LOST -> CallSignalTone.ERROR
+            CONNECTING -> CallSignalTone.NEGOTIATING
+        }
+
+    /**
+     * Décrit UNIQUEMENT la force du signal, jamais un événement de connexion : un libellé « Reconnexion »
+     * mentirait à TalkBack sur un appel dégradé mais jamais interrompu.
+     */
+    val label: CallSignalLabel
+        get() = when (this) {
+            EXCELLENT, GOOD -> CallSignalLabel.GOOD
+            FAIR -> CallSignalLabel.FAIR
+            POOR -> CallSignalLabel.POOR
+            LOST -> CallSignalLabel.LOST
+            CONNECTING -> CallSignalLabel.CONNECTING
+        }
+
     companion object {
         /** Les statistiques temps réel priment ; l'état binaire de la liaison ne sert qu'avant le 1er tick. */
         fun from(level: VideoQualityLevel?, connection: CallLinkState): CallSignalStrength {
@@ -55,3 +80,14 @@ enum class CallSignalStrength(
         }
     }
 }
+
+/** Les quatre barres du glyphe de signal. */
+object CallSignalGlyphSpec {
+    const val BAR_COUNT: Int = 4
+}
+
+/** La teinte du glyphe ; la couleur est choisie à l'écran par les jetons du thème. */
+enum class CallSignalTone { SUCCESS, WARNING, ERROR, NEGOTIATING }
+
+/** Le libellé parlé du glyphe ; le texte localisé est choisi à l'écran. */
+enum class CallSignalLabel { GOOD, FAIR, POOR, LOST, CONNECTING }

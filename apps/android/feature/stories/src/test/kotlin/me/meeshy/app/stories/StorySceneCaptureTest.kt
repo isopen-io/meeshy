@@ -45,6 +45,13 @@ class StorySceneCaptureTest {
     }
 
     @Test
+    fun `while a media enters the scene, the scene offers no camera`() {
+        val capture = StorySceneCapture(offer = SceneQuickCapture.Offer(allowsPhoto = true, allowsVideo = true), onCaptured = {})
+
+        assertThat(capture.offeredOn(StoryComposerUiState(isPreparingMedia = true), somethingOpen = false)).isFalse()
+    }
+
+    @Test
     fun `the scene offers its camera only at rest, on a blank slide, with nothing selected or open`() {
         val capture = StorySceneCapture(offer = SceneQuickCapture.Offer(allowsPhoto = true, allowsVideo = true), onCaptured = {})
         val rest = StoryComposerUiState()

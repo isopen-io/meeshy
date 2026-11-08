@@ -140,9 +140,11 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
             "transforme un refus serveur en échec inexpliqué au moment de publier."
         )
         XCTAssertTrue(
-            hydration.contains("case .editingStory:") && hydration.contains("return nil"),
-            "… et l'ÉDITION rend `nil` : le ViewModel hydraté porte sa propre visibilité initiale, " +
-            "et en poser une seconde ici ferait deux sources pour une même valeur."
+            hydration.contains("case .editingStory(let hydrate):")
+                && hydration.contains("return hydrate.editingInitialVisibility"),
+            "… et l'ÉDITION part de l'audience actuelle de la story, que porte le ViewModel hydraté " +
+            "(`editingInitialVisibility`) : l'atelier qui la réassignait a quitté le dépôt (#15629), " +
+            "et la scène du meuble la lit ici — une seule source, jamais un dernier choix mémorisé."
         )
 
         let host = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())

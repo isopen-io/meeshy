@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Audiences du cercle (#13939) : android-only tant que les clés ne sont pas au catalogue iOS de dev ; texte exact de lot/ui-audience-ios-13939. -->
+<resources>
+    <string name="status_composer_visibility_acquaintances">Bekannte</string>
+    <string name="status_composer_visibility_close">Vertraute</string>
+    <string name="status_composer_visibility_blood">Blut</string>
+</resources>

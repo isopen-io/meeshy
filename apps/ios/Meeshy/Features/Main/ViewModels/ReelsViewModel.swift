@@ -96,6 +96,8 @@ final class ReelsViewModel: ObservableObject {
     /// #10483 — l'impression d'un réel porte sa surface (`reels`) ; la source
     /// `feed` reste celle du compteur historique. Groupée et persistée.
     private lazy var impressions = ImpressionBatcher(source: "feed", surface: .reels, postService: service)
+    /// « Enregistrer » (#15994) : l'écrivain du fil — cache des favoris et toasts compris.
+    private lazy var bookmarker = PostBookmarkWriter()
     /// #10501 — l'impression du réel actuellement à l'écran.
     private var listedImpression: String?
     /// #10483 — l'entrée du lecteur : le PREMIER réel compté porte la marque
@@ -461,12 +463,10 @@ final class ReelsViewModel: ObservableObject {
             EngagementTracker.shared.recordAction(.bookmarked, surface: .reels)
         }
         HapticFeedback.light()
-        Task {
-            do {
-                if wasBookmarked { try await service.removeBookmark(postId: id) }
-                else { try await service.bookmark(postId: id) }
-            } catch {
-                // Rollback both the icon and the optimistic count.
+        Task { [weak self] in
+            guard let self else { return }
+            await bookmarker.write(bookmarked: !wasBookmarked, postId: id, post: post, onRejected: { [weak self] in
+                guard let self else { return }
                 if wasBookmarked {
                     bookmarkedIds.insert(id)
                     bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) + 1
@@ -474,7 +474,7 @@ final class ReelsViewModel: ObservableObject {
                     bookmarkedIds.remove(id)
                     bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) - 1
                 }
-            }
+            })
             bookmarkInFlight.remove(id)
         }
     }
@@ -567,6 +567,15 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
+    /// Ferme / rouvre les commentaires d'un réel (#16541) — même geste que le fil.
+    func toggleComments(_ postId: String) async {
+        guard let current = reels.first(where: { $0.id == postId })?.commentsDisabled else { return }
+        await CommentSettingsToggle.run(postId: postId, current: current, service: service) { closed in
+            guard let index = reels.firstIndex(where: { $0.id == postId }) else { return }
+            reels[index].commentsDisabled = closed
+        }
+    }
+
     func pinPost(_ postId: String) async {
         do {
             try await service.pinPost(postId: postId)
@@ -588,7 +597,7 @@ final class ReelsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil, additions: PostEditAdditions = PostEditAdditions()
     ) async {
         guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = reels[idx]
@@ -613,11 +622,11 @@ final class ReelsViewModel: ObservableObject {
             // Le corps ne se construit plus ici : `known` dit ce que la
             // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
             // champ non déclaré est OMIS, et le serveur préserve le sien.
-            let updated = try await service.update(postId: postId, known: known, draft: PostEditDraft(
+            let updated = try await service.update(postId: postId, known: known, draft: additions.completing(PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
                 originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
-            ))
+            )))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
                 reels[newIdx] = updated.toFeedPost(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             }

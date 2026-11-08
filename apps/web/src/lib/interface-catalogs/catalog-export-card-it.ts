@@ -70,6 +70,7 @@ const it = {
   'export.card.typeface.pairs': 'Il carattere veste la citazione e la risposta',
   'export.card.tab.frame': 'Cornice',
   'export.card.tab.media': 'Media',
+  'export.card.tab.content': 'Contenuto',
   'export.card.part.media': 'Media',
   'export.card.part.replies': 'Risposte',
   'export.card.aspect': 'Formato immagine',

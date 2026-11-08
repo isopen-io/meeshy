@@ -19,6 +19,7 @@ import type { AppPreferences } from '@/lib/api/app-preferences';
 import type { DeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { isDeviceTranslationCatalogLoaded, loadDeviceTranslationCatalog, translateDeviceTranslation } from '@/lib/i18n-device-translation-catalog';
+import { isLicencesCatalogLoaded, loadLicencesCatalog, translateLicences } from '@/lib/i18n-licences-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -26,6 +27,7 @@ import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
 import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
+import { MediaDownloadRows } from '@/routes/settings-media-download';
 import { useMyRing } from '@/lib/profile-decor/my-ring';
 
 /**
@@ -61,6 +63,8 @@ export const SECURITY_PANEL = 'securite';
 export const E2EE_DEVICES_PANEL = 'appareils-chiffres';
 /** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
 export const PACKS_PANEL = 'packs';
+/** Le volet des licences (#14628) — `/settings?volet=licences`, chargé à la demande. */
+export const LICENCES_PANEL = 'licences';
 
 type IconSpec = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: SettingsGlyphName };
 
@@ -180,26 +184,22 @@ export function AccountSection({ language }: { readonly language: InterfaceLangu
   );
 }
 
-/* La section « Données » (#6335) — MÉDIAS et MESSAGES restent MASQUÉS, chacun
-   derrière sa propre issue de portage (#6723, #6724) : une rangée n'entre ici
-   que le jour où sa destination existe (loi 4). L'EXPORT est la première à
-   revenir (#6725), à une adresse propre à la v2 — `/settings/data-export`,
-   jamais l'ancienne `meeshy.me/settings#privacy`. */
-export type GalleryToggle = { readonly enabled: boolean; readonly onToggle: (enabled: boolean) => void };
-
+/* La section « Données » (#6335) — MESSAGES reste MASQUÉ derrière son issue
+   de portage (#6724) : une rangée n'entre ici que le jour où sa destination
+   existe (loi 4). Le téléchargement automatique des MÉDIAS y vit (#6333) : le
+   fil l'entend. L'EXPORT (#6725) a une adresse propre à la v2 —
+   `/settings/data-export`, jamais l'ancienne `meeshy.me/settings#privacy`. */
 export function DataSection({
   language,
-  gallery,
   deviceTranslation,
 }: {
   readonly language: InterfaceLanguage;
-  readonly gallery?: GalleryToggle;
   readonly deviceTranslation?: DeviceTranslationSetting;
 }) {
   return (
     <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
-      {gallery === undefined ? null : <GalleryToggleRow language={language} gallery={gallery} />}
       {deviceTranslation === undefined ? null : <DeviceTranslationRow language={language} toggle={deviceTranslation} />}
+      <MediaDownloadRows language={language} />
       <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
@@ -211,8 +211,7 @@ export function DataSection({
   );
 }
 
-/* UNE BASCULE LOCALE À L'APPAREIL — la galerie de la coque (#8308) et la
-   traduction sur l'appareil (#9898) : un réglage qui n'attend aucune passerelle,
+/* UNE BASCULE LOCALE À L'APPAREIL — la traduction sur l'appareil (#9898) : un réglage qui n'attend aucune passerelle,
    donc jamais grisé hors ligne. `disabled` ne sert qu'à poser une bascule dont
    l'état n'est pas encore lu. */
 function LocalToggleRow({
@@ -275,23 +274,6 @@ export function PacksSection({ language }: { readonly language: InterfaceLanguag
         <Chevron />
       </Link>
     </GroupedSection>
-  );
-}
-
-/* LA GALERIE DE LA COQUE ANDROID (#8308) — réglage LOCAL à l'appareil (la
-   galerie est la sienne), offert sur la seule coque qui sait y écrire (loi 4) :
-   l'écran l'omet partout ailleurs. Actif par défaut. */
-function GalleryToggleRow({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery: GalleryToggle }) {
-  return (
-    <LocalToggleRow
-      setting="galleryAutoSave"
-      name={translate(language, 'settings.gallery.auto_save')}
-      caption={translate(language, 'settings.gallery.auto_save.info')}
-      icon={{ set: 'socle', name: 'image' }}
-      tint="var(--color-success)"
-      enabled={gallery.enabled}
-      onToggle={gallery.onToggle}
-    />
   );
 }
 
@@ -502,6 +484,10 @@ const PRIVACY_TOGGLES = [
     icon: { set: 'socle', name: 'users' },
     tint: 'var(--color-success)',
   },
+  /* « Sauvegarder média » (#14641) — même place et même nom qu'iOS
+     (`PrivacySettingsView.mediaSection`), synchronisé par `/me/preferences` :
+     la porte de l'enregistrement des médias reçus dans la galerie. */
+  { key: 'saveMediaToGallery', label: 'settings.privacy.save_media', icon: { set: 'socle', name: 'image' }, tint: 'var(--color-success)' },
 ] as const satisfies readonly ToggleSpec[];
 
 const NOTIFICATION_TOGGLES = [
@@ -774,11 +760,43 @@ function DocumentRow({ href, label, glyph }: { readonly href: string; readonly l
   );
 }
 
+/* LES LICENCES (#14628) — l'AGPL-3.0 de libsignal demande que l'app dise sa
+   licence et offre sa source : la ligne mène au volet `?volet=licences`. Son
+   libellé vit dans le catalogue paresseux de l'écran (le catalogue d'interface
+   est à son plafond) : la ligne paraît quand il est chargé. */
+function LicencesRow({ language }: { readonly language: InterfaceLanguage }) {
+  const [, setLoadedLanguage] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    if (isLicencesCatalogLoaded(language)) return undefined;
+    let live = true;
+    loadLicencesCatalog(language).then(
+      () => {
+        if (live) setLoadedLanguage(language);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language]);
+  if (!isLicencesCatalogLoaded(language)) return null;
+  return (
+    <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: LICENCES_PANEL }} data-settings-licences className={ROW_CLASS} style={ROW_STYLE}>
+      <RowIcon tint="var(--ios-indigo-400)">
+        <GlyphSvg glyph={SETTINGS_GLYPHS.fileText} size={15} />
+      </RowIcon>
+      <RowText label={translateLicences(language, 'licences.row')} />
+      <Chevron />
+    </Link>
+  );
+}
+
 export function AboutSection({ language, version }: { readonly language: InterfaceLanguage; readonly version: string }) {
   return (
     <GroupedSection id="settings-about" title={upper(language, 'settings.section.about')} icon={SECTION_ICON({ set: 'ecran', name: 'info' })}>
       <DocumentRow href={appInstitutionalHref('terms')} label={translate(language, 'settings.terms')} glyph="fileText" />
       <DocumentRow href={appInstitutionalHref('privacy')} label={translate(language, 'settings.privacy_policy')} glyph="handPalm" />
+      <LicencesRow language={language} />
       <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
         <RowIcon tint="var(--color-warning)">
           <GlyphSvg glyph={SETTINGS_GLYPHS.sparkle} size={15} />

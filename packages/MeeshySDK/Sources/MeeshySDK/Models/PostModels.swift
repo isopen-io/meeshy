@@ -132,6 +132,10 @@ public struct APIRepostOf: Codable, Sendable {
     /// sans rien changer au décodage (Swift décode la clé quand elle est là,
     /// garde le défaut sinon).
     public var mentions: [PostReference]? = nil
+    /// Les commentaires de la publication SOURCE sont fermés (#16541) — une
+    /// republication d'un contenu fermé l'est aussi (`APIPost.commentsClosed`).
+    /// `nil` d'un serveur antérieur : ouvert.
+    public var commentsDisabled: Bool? = nil
 }
 
 public struct APIPostComment: Decodable, Sendable {
@@ -322,6 +326,9 @@ public struct APIPost: Sendable {
     /// (#10501) — recopiée dans `listing.rankingSource` de son impression.
     /// `nil` sur une route ou un serveur qui ne la sert pas.
     public var rankingSource: String? = nil
+    /// L'auteur (ou la modération) a fermé les commentaires (#16541). `nil`
+    /// d'un serveur antérieur : ouvert. Lu par `commentsClosed`, jamais seul.
+    public var commentsDisabled: Bool? = nil
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
     public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
@@ -339,7 +346,7 @@ extension APIPost: Decodable {
         case audioUrl, audioDuration, storyEffects, translations
         case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
         case currentUserReactions, mentions, referenceAccess, viaUsername
-        case trackingLinks, metadata, viewerPoints, rankingSource
+        case trackingLinks, metadata, viewerPoints, rankingSource, commentsDisabled
     }
 
     /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
@@ -419,6 +426,7 @@ extension APIPost: Decodable {
         viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
         viewerPoints = (try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)).flatMap { $0 >= 0 ? $0 : nil }
         rankingSource = (try? c.decodeIfPresent(String.self, forKey: .rankingSource)) ?? nil
+        commentsDisabled = (try? c.decodeIfPresent(Bool.self, forKey: .commentsDisabled)) ?? nil
         // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
         // (socket), else recover from the REST `metadata` envelope. Tolerant.
         if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
@@ -564,34 +572,9 @@ extension APIPost {
 
         let feedMedia: [FeedMedia] = (media ?? []).map { $0.toFeedMedia() }
 
-        let feedComments: [FeedComment] = (comments ?? []).map { c in
-            let commentTranslatedContent: String? = Self.resolveTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-            )
-            if let username = c.author.username {
-                UserDisplayNameCache.shared.track(username: username, displayName: c.author.name)
-            }
-            var comment = FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
-                        authorUsername: c.author.username,
-                        authorAvatarURL: c.author.avatar,
-                        content: c.content,
-                        timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                        parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
-                        originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
-                        translations: c.translations?.mapValues { entry in
-                            PostTranslation(text: entry.text, translationModel: entry.translationModel,
-                                            confidenceScore: entry.confidenceScore)
-                        },
-                        currentUserReactions: c.currentUserReactions,
-                        media: (c.media ?? []).map { $0.toFeedMedia() },
-                        location: c.location,
-                        quotedMedia: c.quotedCitation,
-                        trackedLinkMap: c.trackedLinkMap)
-            comment.authorRing = c.author.avatarRing
-            return comment
-        }
+        let feedComments = Self.feedComments(comments, preferredLanguages: langs)
 
-        let repost: RepostContent? = repostOf?.toRepostContent()
+        let repost: RepostContent? = repostOf?.toRepostContent(preferredLanguages: langs)
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
@@ -648,7 +631,38 @@ extension APIPost {
         feedPost.visibilityUserIds = visibilityUserIds
         feedPost.viewerPoints = viewerPoints
         feedPost.authorRing = author.avatarRing
+        feedPost.commentsDisabled = commentsDisabled ?? false
         return feedPost
+    }
+
+    /// Les commentaires embarqués, résolus par le Prisme du lecteur.
+    private static func feedComments(_ comments: [APIPostComment]?, preferredLanguages langs: [String]) -> [FeedComment] {
+        (comments ?? []).map { c in
+            let commentTranslatedContent: String? = Self.resolveTranslation(
+                translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+            )
+            if let username = c.author.username {
+                UserDisplayNameCache.shared.track(username: username, displayName: c.author.name)
+            }
+            var comment = FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
+                        authorAvatarURL: c.author.avatar,
+                        content: c.content,
+                        timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
+                        originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
+                        translations: c.translations?.mapValues { entry in
+                            PostTranslation(text: entry.text, translationModel: entry.translationModel,
+                                            confidenceScore: entry.confidenceScore)
+                        },
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() },
+                        location: c.location,
+                        quotedMedia: c.quotedCitation,
+                        trackedLinkMap: c.trackedLinkMap)
+            comment.authorRing = c.author.avatarRing
+            return comment
+        }
     }
 
     /// Prisme Linguistique resolution: walk preferred languages in order.
@@ -681,7 +695,7 @@ extension APIRepostOf {
     /// Conversion partagée `APIRepostOf` → `RepostContent` — utilisée par
     /// `APIPost.toFeedPost` (réseau) ET `PostRecord.toFeedPost` (cache GRDB,
     /// stores-05) : une seule projection, pas deux qui divergent.
-    func toRepostContent() -> RepostContent {
+    func toRepostContent(preferredLanguages: [String] = []) -> RepostContent {
         let repostMedia: [FeedMedia] = (media ?? []).map { m in
             FeedMedia(
                 id: m.id, type: m.mediaType, url: m.fileUrl,
@@ -715,6 +729,7 @@ extension APIRepostOf {
                              location: location,
                              mentions: mentions)
         repost.authorRing = author.avatarRing
-        return repost
+        repost.commentsDisabled = commentsDisabled ?? false
+        return repost.resolved(preferredLanguages: preferredLanguages)
     }
 }

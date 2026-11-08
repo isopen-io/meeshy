@@ -39,6 +39,7 @@ import * as apiLegacyUserGroup from './endpoints/api-legacy-user.js';
 import * as appGroup from './endpoints/app.js';
 import * as attachmentsGroup from './endpoints/attachments.js';
 import * as authGroup from './endpoints/auth.js';
+import * as bringGroup from './endpoints/bring.js';
 import * as callsGroup from './endpoints/calls.js';
 import * as communitiesGroup from './endpoints/communities.js';
 import * as contactsGroup from './endpoints/contacts.js';
@@ -61,6 +62,7 @@ import * as notificationsGroup from './endpoints/notifications.js';
 import * as packAssetsGroup from './endpoints/pack-assets.js';
 import * as packsGroup from './endpoints/packs.js';
 import * as postsGroup from './endpoints/posts.js';
+import * as publishersGroup from './endpoints/publishers.js';
 import * as reactionsGroup from './endpoints/reactions.js';
 import * as relationsGroup from './endpoints/relations.js';
 import * as reportsGroup from './endpoints/reports.js';
@@ -102,6 +104,7 @@ export const API_ENDPOINTS = {
   app: appGroup,
   attachments: attachmentsGroup,
   auth: authGroup,
+  bring: bringGroup,
   calls: callsGroup,
   communities: communitiesGroup,
   contacts: contactsGroup,
@@ -124,6 +127,7 @@ export const API_ENDPOINTS = {
   packAssets: packAssetsGroup,
   packs: packsGroup,
   posts: postsGroup,
+  publishers: publishersGroup,
   reactions: reactionsGroup,
   relations: relationsGroup,
   reports: reportsGroup,
@@ -374,6 +378,8 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/auth/verification/status',
   '/api/v1/auth/verify-email',
   '/api/v1/auth/verify-phone',
+  '/api/v1/bring/:bringId',
+  '/api/v1/bring/:userId',
   '/api/v1/calls',
   '/api/v1/calls/:callId',
   '/api/v1/calls/:callId/participants',
@@ -419,6 +425,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/conversations/:id/leave',
   '/api/v1/conversations/:id/mark-read',
   '/api/v1/conversations/:id/mark-unread',
+  '/api/v1/conversations/:id/message-request/accept',
   '/api/v1/conversations/:id/messages',
   '/api/v1/conversations/:id/messages/:messageId',
   '/api/v1/conversations/:id/messages/:messageId/consume',
@@ -427,6 +434,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/conversations/:id/messages/capture',
   '/api/v1/conversations/:id/messages/search',
   '/api/v1/conversations/:id/new-link',
+  '/api/v1/conversations/:id/obsolete',
   '/api/v1/conversations/:id/participants',
   '/api/v1/conversations/:id/participants/:participantId/profile',
   '/api/v1/conversations/:id/participants/:participantId/rights',
@@ -566,6 +574,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/messages/:messageId/status-details',
   '/api/v1/messages/:messageId/translations',
   '/api/v1/messages/bulk/delete-for-me',
+  '/api/v1/messages/search',
   '/api/v1/notifications',
   '/api/v1/notifications/:id',
   '/api/v1/notifications/:id/read',
@@ -633,6 +642,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/posts/:postId',
   '/api/v1/posts/:postId/anonymous-view',
   '/api/v1/posts/:postId/bookmark',
+  '/api/v1/posts/:postId/comment-settings',
   '/api/v1/posts/:postId/comments',
   '/api/v1/posts/:postId/comments/:commentId',
   '/api/v1/posts/:postId/comments/:commentId/like',
@@ -666,8 +676,13 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/posts/media/:mediaId/caption/translate',
   '/api/v1/posts/nearby',
   '/api/v1/posts/nearby/density',
+  '/api/v1/posts/search',
   '/api/v1/posts/stories/mine',
   '/api/v1/posts/user/:userId',
+  '/api/v1/publishers/:slug',
+  '/api/v1/publishers/:slug/page',
+  '/api/v1/publishers/admin',
+  '/api/v1/publishers/me',
   '/api/v1/reactions',
   '/api/v1/reactions/:messageId',
   '/api/v1/reactions/:messageId/:emoji',
@@ -676,7 +691,9 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/relations/:userId',
   '/api/v1/relations/:userId/level',
   '/api/v1/relations/:userId/ritual',
+  '/api/v1/relations/:userId/settings',
   '/api/v1/relations/config',
+  '/api/v1/relations/now-playing',
   '/api/v1/reports',
   '/api/v1/signal/keys',
   '/api/v1/signal/keys/:userId',
@@ -1014,6 +1031,8 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/auth/verification/status': ['POST'],
   '/api/v1/auth/verify-email': ['POST'],
   '/api/v1/auth/verify-phone': ['POST'],
+  '/api/v1/bring/:bringId': ['DELETE'],
+  '/api/v1/bring/:userId': ['GET', 'POST'],
   '/api/v1/calls': ['POST'],
   '/api/v1/calls/:callId': ['GET', 'DELETE'],
   '/api/v1/calls/:callId/participants': ['POST'],
@@ -1059,6 +1078,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/conversations/:id/leave': ['POST'],
   '/api/v1/conversations/:id/mark-read': ['POST'],
   '/api/v1/conversations/:id/mark-unread': ['POST'],
+  '/api/v1/conversations/:id/message-request/accept': ['POST'],
   '/api/v1/conversations/:id/messages': ['GET', 'POST'],
   '/api/v1/conversations/:id/messages/:messageId': ['PUT', 'DELETE'],
   '/api/v1/conversations/:id/messages/:messageId/consume': ['POST'],
@@ -1067,6 +1087,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/conversations/:id/messages/capture': ['POST'],
   '/api/v1/conversations/:id/messages/search': ['GET'],
   '/api/v1/conversations/:id/new-link': ['POST'],
+  '/api/v1/conversations/:id/obsolete': ['DELETE'],
   '/api/v1/conversations/:id/participants': ['GET', 'POST'],
   '/api/v1/conversations/:id/participants/:participantId/profile': ['GET'],
   '/api/v1/conversations/:id/participants/:participantId/rights': ['PATCH'],
@@ -1206,6 +1227,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/messages/:messageId/status-details': ['GET'],
   '/api/v1/messages/:messageId/translations': ['GET'],
   '/api/v1/messages/bulk/delete-for-me': ['DELETE'],
+  '/api/v1/messages/search': ['GET'],
   '/api/v1/notifications': ['GET'],
   '/api/v1/notifications/:id': ['DELETE'],
   '/api/v1/notifications/:id/read': ['POST'],
@@ -1273,6 +1295,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/posts/:postId': ['GET', 'PUT', 'DELETE'],
   '/api/v1/posts/:postId/anonymous-view': ['POST'],
   '/api/v1/posts/:postId/bookmark': ['POST', 'DELETE'],
+  '/api/v1/posts/:postId/comment-settings': ['PATCH'],
   '/api/v1/posts/:postId/comments': ['GET', 'POST'],
   '/api/v1/posts/:postId/comments/:commentId': ['PATCH', 'DELETE'],
   '/api/v1/posts/:postId/comments/:commentId/like': ['POST', 'DELETE'],
@@ -1306,8 +1329,13 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/posts/media/:mediaId/caption/translate': ['POST'],
   '/api/v1/posts/nearby': ['GET'],
   '/api/v1/posts/nearby/density': ['GET'],
+  '/api/v1/posts/search': ['GET'],
   '/api/v1/posts/stories/mine': ['GET'],
   '/api/v1/posts/user/:userId': ['GET'],
+  '/api/v1/publishers/:slug': ['GET'],
+  '/api/v1/publishers/:slug/page': ['GET'],
+  '/api/v1/publishers/admin': ['GET'],
+  '/api/v1/publishers/me': ['GET'],
   '/api/v1/reactions': ['POST'],
   '/api/v1/reactions/:messageId': ['GET'],
   '/api/v1/reactions/:messageId/:emoji': ['DELETE'],
@@ -1316,7 +1344,9 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/relations/:userId': ['GET'],
   '/api/v1/relations/:userId/level': ['POST'],
   '/api/v1/relations/:userId/ritual': ['POST'],
+  '/api/v1/relations/:userId/settings': ['GET', 'PUT'],
   '/api/v1/relations/config': ['GET'],
+  '/api/v1/relations/now-playing': ['GET'],
   '/api/v1/reports': ['POST'],
   '/api/v1/signal/keys': ['POST'],
   '/api/v1/signal/keys/:userId': ['GET'],

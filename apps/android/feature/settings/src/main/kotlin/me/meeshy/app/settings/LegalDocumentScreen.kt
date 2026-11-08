@@ -7,116 +7,158 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import android.content.Context
+import android.content.res.Configuration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Locale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.legal.LegalDocumentCatalog
 import me.meeshy.sdk.model.legal.LegalDocumentKind
+import me.meeshy.sdk.model.legal.LegalDocumentLanguage
 import me.meeshy.sdk.model.legal.LegalSectionKey
+import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.ui.component.chrome.leadingNavigationIcon
-import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
- * Legal document screen (feature-parity §L) — the Android port of the iOS `TermsOfServiceView` and
- * `PrivacyPolicyView`, unified into one data-driven screen keyed by [LegalDocumentKind]. Pure
- * Compose glue over the tested [LegalDocumentCatalog]: renders the "last updated" line and the
- * numbered section cards (heading + body), each section resolved to a localized string. Unlike iOS's
- * manual fr/en picker, the document follows the app's language automatically across values-* (Prisme
- * philosophy — content in the user's language, no friction).
+ * Legal document screen - the Android port of the iOS `TermsOfServiceView` / `PrivacyPolicyView`,
+ * unified into one data-driven screen keyed by [LegalDocumentKind]. A collapsing header page, a
+ * segmented language picker (the document opens in the first delivered language of the reader's
+ * Prisme and switches without leaving the screen), the "last updated" mention and the numbered
+ * section cards - all read in the DOCUMENT language, not the app one.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LegalDocumentScreen(kind: LegalDocumentKind, onBack: () -> Unit) {
+fun LegalDocumentScreen(
+    kind: LegalDocumentKind,
+    onBack: () -> Unit,
+    viewModel: LegalDocumentViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val documentContext = rememberLocalizedContext(state.language)
+    val document = remember(kind, state.language) { LegalDocumentCatalog.document(kind, state.language) }
+
     MeeshyBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                        titleContentColor = MeeshyTheme.tokens.textPrimary,
-                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
-                    ),
-                    title = { Text(stringResource(kind.titleRes())) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                leadingNavigationIcon(),
-                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
-                            )
-                        }
-                    },
-                )
-            },
-        ) { padding ->
+        CollapsibleHeaderPage(
+            title = stringResource(kind.titleRes()),
+            onBack = onBack,
+            titleColor = MeeshyTheme.tokens.textPrimary,
+            backArrowColor = MeeshyPalette.Indigo500,
+            backgroundColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
-                Text(
-                    text = stringResource(R.string.legal_last_updated),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                    modifier = Modifier.fillMaxWidth(),
+                LanguagePicker(
+                    selected = state.language,
+                    onSelect = { viewModel.onEvent(LegalDocumentUiEvent.SelectLanguage(it)) },
                 )
-
-                LegalDocumentCatalog.numbered(kind).forEach { section ->
+                Text(
+                    text = documentContext.getString(R.string.legal_last_updated),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MeeshyTheme.tokens.textMuted,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = MeeshySpacing.xs),
+                )
+                document.sections.forEach { section ->
                     LegalSectionCard(
                         number = section.number,
-                        title = stringResource(section.key.titleRes()),
-                        body = stringResource(section.key.bodyRes()),
+                        title = documentContext.getString(section.key.titleRes()),
+                        body = documentContext.getString(section.key.bodyRes()),
                     )
                 }
-
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LanguagePicker(selected: LegalDocumentLanguage, onSelect: (LegalDocumentLanguage) -> Unit) {
+    val label = stringResource(R.string.legal_language_picker_a11y)
+    val appLocale = LocalConfiguration.current.locales[0]
+    val languages = LegalDocumentCatalog.languages
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = label },
+    ) {
+        languages.forEachIndexed { index, language ->
+            SegmentedButton(
+                selected = language == selected,
+                onClick = { onSelect(language) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = languages.size),
+            ) {
+                Text(
+                    Locale(language.code).getDisplayLanguage(appLocale)
+                        .replaceFirstChar { it.titlecase(appLocale) },
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/** A context whose resources resolve in [language], so a document is read in its own language. */
+@Composable
+private fun rememberLocalizedContext(language: LegalDocumentLanguage): Context {
+    val base = LocalContext.current
+    val configuration = LocalConfiguration.current
+    return remember(base, configuration, language) {
+        val localized = Configuration(configuration).apply { setLocale(Locale(language.code)) }
+        base.createConfigurationContext(localized)
+    }
+}
+
 @Composable
 private fun LegalSectionCard(number: Int, title: String, body: String) {
+    val accent = MeeshyPalette.Indigo500
+    val shape = RoundedCornerShape(MeeshyRadius.lg)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MeeshyTheme.tokens.backgroundSecondary, RoundedCornerShape(MeeshySpacing.md))
-            .border(
-                1.dp,
-                MeeshyPalette.Info.copy(alpha = 0.15f),
-                RoundedCornerShape(MeeshySpacing.md),
-            )
-            .padding(MeeshySpacing.lg),
+            .background(MeeshyTheme.tokens.backgroundSecondary, shape)
+            .border(1.dp, accent.copy(alpha = 0.15f), shape)
+            .padding(MeeshySpacing.lg)
+            .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Row(
@@ -126,7 +168,7 @@ private fun LegalSectionCard(number: Int, title: String, body: String) {
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .background(MeeshyPalette.Info, CircleShape),
+                    .background(accent, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -138,14 +180,14 @@ private fun LegalSectionCard(number: Int, title: String, body: String) {
             }
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = MeeshyTheme.tokens.textPrimary,
             )
         }
         Text(
             text = body,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
             color = MeeshyTheme.tokens.textSecondary,
         )
     }

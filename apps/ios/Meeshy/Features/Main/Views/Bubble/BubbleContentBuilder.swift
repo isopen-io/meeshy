@@ -203,7 +203,7 @@ extension BubbleContent {
             emojiFontSize: emojiResult.fontSize,
             authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
         )
-
+        self.arrivalsInvite = ArrivalGreeting.invite(for: message, noticeText: effective)
         // --- Translation panel ---
         let hasAny = !translations.isEmpty || !translatedAudios.isEmpty
         if hasAny && !isEmojiOnly {
@@ -309,7 +309,7 @@ extension BubbleContent {
         // déjà recueilli le geste, le contenu est là pour être lu.
         let protection = message.protection()
         self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
-        self.isBurning = message.isBurning
+        (self.isBurning, self.deviceLayerIntegrity) = (message.isBurning, Self.displayedIntegrity(message.deviceLayerIntegrity, displaysOriginal: effective == message.content))
         self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
         self.exitGate = message.exitGate
         self.captureVerdict = ContentCaptureVisibility.renderedVerdict(for: message)
@@ -327,15 +327,19 @@ extension BubbleContent {
         // --- Reactions ---
         self.reactions = Self.summarizeReactions(message.reactions, currentUserId: currentUserId)
 
-        // --- Meta ---
+        self.meta = Self.resolveMeta(message: message, timeString: resolvedTimeString, recipientCount: recipientCount)
+    }
+
+    /// L'heure et l'accusé de la bulle, et l'instant de départ de MON envoi.
+    static func resolveMeta(message: MeeshyMessage, timeString: String, recipientCount: Int) -> Meta {
         // The footer checkmark must EXACTLY represent the real state of every
         // other interlocutor. `message.deliveryStatus` is promoted to
         // delivered/read as soon as a SINGLE recipient does so — correct for a
         // 1:1 but misleading in a group. Re-resolve with the recipient count so
         // ✓✓ (delivered) / indigo ✓✓ (read) only light up once ALL recipients
         // have received / read. `recipientCount <= 1` trusts the stored status.
-        self.meta = Meta(
-            timeString: resolvedTimeString,
+        return Meta(
+            timeString: timeString,
             deliveryStatus: message.isMe
                 ? DeliveryStatusResolver.resolve(
                     status: message.deliveryStatus,
@@ -351,7 +355,8 @@ extension BubbleContent {
                     // stocké, qui doit rester vrai quelle que soit la préférence.
                     // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts)
-                : nil
+                : nil,
+            sendStartedAt: message.isMe ? message.createdAt : nil
         )
     }
 
@@ -444,6 +449,16 @@ extension BubbleContent {
             ?? preferredTranslation?.targetLanguage
             ?? preferredAudioLangCode
             ?? message.originalLanguage
+    }
+
+    /// **Ce que le pied dit de la couche appareil d'un hybride** (#14369). Le
+    /// sceau « vérifié » ne couvre que le texte ORIGINAL : à côté d'une
+    /// traduction produite par le serveur, il mentirait — il ne s'affiche donc
+    /// que sur l'original, et revient quand le lecteur bascule vers lui. Un
+    /// écart, lui, se dit dans les deux cas : la traduction vient du texte servi.
+    static func displayedIntegrity(_ integrity: HybridDeviceLayerIntegrity?, displaysOriginal: Bool) -> HybridDeviceLayerIntegrity? {
+        guard integrity == .verified, !displaysOriginal else { return integrity }
+        return nil
     }
 
     /// **Le texte que la bulle AFFICHE** (#11233) — le site unique que « Copier »

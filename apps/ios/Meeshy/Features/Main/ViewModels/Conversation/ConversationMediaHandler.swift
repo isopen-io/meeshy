@@ -50,7 +50,12 @@ final class ConversationMediaHandler {
         let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
         let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
         let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition: condition, prefs: prefs)
-        guard allowImage || allowVideo || allowAudio else { return }
+        // #14639 — sous 100 Ko, un média part quel que soit le réseau ; seul le hors-ligne le retient.
+        let online = condition != .offline
+        let isSmall: @Sendable (MessageAttachment) -> Bool = { attachment in
+            online && MediaDownloadPolicyEngine.isSmallMedia(attachment.fileSize)
+        }
+        guard allowImage || allowVideo || allowAudio || snapshot.contains(where: { $0.attachments.contains(where: isSmall) }) else { return }
         inFlightTask = Task(priority: .utility) {
             let imageStore = await CacheCoordinator.shared.images
 
@@ -61,7 +66,7 @@ final class ConversationMediaHandler {
                         guard !Task.isCancelled else { return }
                         switch attachment.type {
                         case .image:
-                            guard allowImage else { continue }
+                            guard allowImage || isSmall(attachment) else { continue }
                             if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
                                let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
@@ -71,7 +76,7 @@ final class ConversationMediaHandler {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
                             }
                         case .video:
-                            guard allowVideo else { continue }
+                            guard allowVideo || isSmall(attachment) else { continue }
                             if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
                                let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
                                 group.addTask { _ = await imageStore.image(for: resolved) }

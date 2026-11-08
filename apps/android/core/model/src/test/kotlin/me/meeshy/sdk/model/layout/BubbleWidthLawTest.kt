@@ -51,4 +51,15 @@ class BubbleWidthLawTest {
         assertThat(BubbleWidthLaw.maxWidthDp(-20f, WindowWidthClass.EXPANDED)).isEqualTo(0f)
         assertThat(BubbleWidthLaw.maxWidthDp(Float.NaN, WindowWidthClass.MEDIUM)).isEqualTo(0f)
     }
+
+    @Test
+    fun `a narrow container keeps the fifty dp spacer on the opposite side`() {
+        assertThat(BubbleWidthLaw.maxWidthDp(100f, WindowWidthClass.COMPACT)).isEqualTo(50f)
+        assertThat(BubbleWidthLaw.maxWidthDp(40f, WindowWidthClass.COMPACT)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `a roomy container keeps the ratio as the spacer is already wider than fifty dp`() {
+        assertThat(BubbleWidthLaw.maxWidthDp(400f, WindowWidthClass.COMPACT)).isEqualTo(280f)
+    }
 }

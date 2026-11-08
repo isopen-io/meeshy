@@ -183,7 +183,7 @@ public enum ConversationPreviewComposer {
             }
             return ConversationPreview(
                 kind: .message, icon: .ephemeral, author: author,
-                segments: countdown + body.labelled, liveUntil: expiresAt
+                segments: countdown + body.sealed, liveUntil: expiresAt
             )
         case .none:
             let body = ConversationPreviewBody.of(message, input, strings)

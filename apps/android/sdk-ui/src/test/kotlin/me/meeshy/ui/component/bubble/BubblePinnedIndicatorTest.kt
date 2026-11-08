@@ -3,8 +3,8 @@ package me.meeshy.ui.component.bubble
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -40,16 +40,16 @@ class BubblePinnedIndicatorTest {
     }
 
     @Test
-    fun `a pinned bubble carries a visible pin`() {
+    fun `a pinned bubble carries a visible pin and its label`() {
         show(bubble(pinnedAtIso = "2026-10-23T08:00:00Z"))
 
-        compose.onNodeWithContentDescription("Pinned").assertIsDisplayed()
+        compose.onNodeWithText("Pinned message").assertIsDisplayed()
     }
 
     @Test
     fun `an unpinned bubble carries no pin`() {
         show(bubble(pinnedAtIso = null))
 
-        compose.onAllNodesWithContentDescription("Pinned").assertCountEquals(0)
+        compose.onAllNodesWithText("Pinned message").assertCountEquals(0)
     }
 }

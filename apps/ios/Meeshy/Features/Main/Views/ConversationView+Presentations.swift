@@ -14,10 +14,13 @@ import MeeshyUI
 /// consentement de définition du profil vocal ET la traduction utilisant ce
 /// profil, puis relance l'envoi ; « Plus tard » envoie tel quel (le composer
 /// n'a pas encore été vidé quand ce popup interrompt le send).
+/// « Configurer » (#16418) n'envoie rien : il ouvre la configuration de la voix
+/// et laisse le brouillon intact, prêt à repartir.
 struct ConversationVoiceConsentAlert: ViewModifier {
     @Binding var isPresented: Bool
     let onAccept: () -> Void
     let onLater: () -> Void
+    let onConfigure: () -> Void
 
     func body(content: Content) -> some View {
         content.alert(
@@ -28,6 +31,10 @@ struct ConversationVoiceConsentAlert: ViewModifier {
             Button(String(localized: "conversation.voiceConsent.accept",
                           defaultValue: "Activer", bundle: .main)) {
                 onAccept()
+            }
+            Button(String(localized: "conversation.voiceConsent.configure",
+                          defaultValue: "Configurer", bundle: .main)) {
+                onConfigure()
             }
             Button(String(localized: "conversation.voiceConsent.later",
                           defaultValue: "Plus tard", bundle: .main), role: .cancel) {

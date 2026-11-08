@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.audio",
+          "androidName": "focal_call_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.audio.failed",
+          "androidName": "focal_call_audio_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.audio.missed",
+          "androidName": "focal_call_audio_missed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.audio.ongoing",
+          "androidName": "focal_call_audio_ongoing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.callback.action",
+          "androidName": "focal_call_callback_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.callback.hint.doubleTap",
+          "androidName": "focal_call_callback_hint_double_tap",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.cancelled",
+          "androidName": "focal_call_cancelled",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.details.action",
+          "androidName": "focal_call_details_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.incoming",
+          "androidName": "focal_call_incoming",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.outgoing",
+          "androidName": "focal_call_outgoing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.incoming.suffix",
+          "androidName": "focal_call_incoming_suffix",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.outgoing.suffix",
+          "androidName": "focal_call_outgoing_suffix",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.join.a11y.hint.doubleTap",
+          "androidName": "focal_call_join_a11y_hint_double_tap",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.join.action",
+          "androidName": "focal_call_join_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.join.hint",
+          "androidName": "focal_call_join_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.rejected.received",
+          "androidName": "focal_call_rejected_received",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.rejected.sent",
+          "androidName": "focal_call_rejected_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.video",
+          "androidName": "focal_call_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.video.failed",
+          "androidName": "focal_call_video_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.video.missed",
+          "androidName": "focal_call_video_missed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.call.video.ongoing",
+          "androidName": "focal_call_video_ongoing",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

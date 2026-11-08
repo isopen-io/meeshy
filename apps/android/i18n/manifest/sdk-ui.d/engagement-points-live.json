@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.engagement.a11y.total.one",
+          "androidName": "engagement_pill_a11y_total_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.engagement.a11y.total.other",
+          "androidName": "engagement_pill_a11y_total_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.engagement.a11y.streak",
+          "androidName": "engagement_pill_a11y_streak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.engagement.a11y.streak_days.one",
+          "androidName": "engagement_pill_a11y_streak_days_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.engagement.a11y.streak_days.other",
+          "androidName": "engagement_pill_a11y_streak_days_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.points.a11y.one",
+          "androidName": "post_points_a11y_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.points.a11y.other",
+          "androidName": "post_points_a11y_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.reactions",
+          "androidName": "viewer_engagement_reactions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.comments.one",
+          "androidName": "viewer_engagement_comments_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.comments.other",
+          "androidName": "viewer_engagement_comments_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.replies.one",
+          "androidName": "viewer_engagement_replies_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.replies.other",
+          "androidName": "viewer_engagement_replies_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.reposts.one",
+          "androidName": "viewer_engagement_reposts_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.reposts.other",
+          "androidName": "viewer_engagement_reposts_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.shares.one",
+          "androidName": "viewer_engagement_shares_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.shares.other",
+          "androidName": "viewer_engagement_shares_other",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

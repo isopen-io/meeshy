@@ -142,6 +142,8 @@ export default function ThreadMediaViewer({
           const quoted = openedIsQuote && entry.message.id === opened.id;
           const actions = thread?.actionScope === undefined ? null : messageActionsOf(entry.message, thread.actionScope, { now });
           const offers = mediaOffersWithin(mediaPageOffers({ attachment: entry.attachment, message: entry.message, capabilities, now, quoted }), actions);
+          /* La baguette (#16333) image le MESSAGE regardé, jamais une citation : la carte est celle du fil. */
+          const imageMessage = quoted ? null : (thread?.imagerOf?.(entry.message) ?? null);
           return {
             attachment: entry.attachment,
             messageId: entry.message.id,
@@ -155,6 +157,14 @@ export default function ThreadMediaViewer({
               onClose();
               onReplyToMedia(entry.message.id, entry.attachment.id);
             },
+            ...(imageMessage === null
+              ? {}
+              : {
+                  imager: () => {
+                    onClose();
+                    imageMessage();
+                  },
+                }),
           };
         }}
         {...(deps !== undefined ? { deps } : {})}

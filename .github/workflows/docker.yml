@@ -102,9 +102,14 @@ env:
   PNPM_VERSION: '9'
   PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
+# #14878 — un build lancé VA AU BOUT, déploiement du staging compris. GitHub
+# ne garde qu'UN run en attente par groupe (le plus récent remplace les autres) :
+# la poussée suivante part juste après. Avec l'annulation, au rythme des
+# poussées sur `dev`, aucun run n'atteignait le staging (22/40 annulés).
+# `scripts/check-docker-build-never-cancelled.mjs` (job `quality`) le garde.
 concurrency:
   group: docker-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # ===========================================================================
@@ -714,16 +719,25 @@ jobs:
             echo "tag=${SLUG}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Checkout (action locale)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+
+      - name: Install Trivy
+        uses: ./.github/actions/installer-trivy
+
       - name: Security scan
         uses: aquasecurity/trivy-action@master
         with:
+          skip-setup-trivy: true
           image-ref: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}:${{ steps.scan-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-${{ matrix.service }}.sarif'
           severity: 'CRITICAL,HIGH'
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@v4.39.1
+        uses: github/codeql-action/upload-sarif@v4.39.3
         continue-on-error: true
         with:
           sarif_file: 'trivy-${{ matrix.service }}.sarif'

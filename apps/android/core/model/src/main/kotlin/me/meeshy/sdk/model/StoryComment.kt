@@ -34,7 +34,37 @@ data class StoryComment(
     val status: StoryCommentStatus,
     /** Le compte de l'auteur, d'où se lit son point de présence ; `null` pour un envoi encore optimiste. */
     val authorId: String? = null,
+    /** Le commentaire racine auquel celui-ci répond ; `null` pour une racine. */
+    val parentId: String? = null,
+    /** Le nombre de réponses servi pour une racine (le fil dépend de lui, pas de ce qui est chargé). */
+    val replyCount: Int = 0,
+    val likeCount: Int = 0,
+    /** Le cœur du lecteur sur ce commentaire (`currentUserReactions` contient ❤️). */
+    val likedByMe: Boolean = false,
+    val originalLanguage: String? = null,
+    /** Le texte tel qu'écrit : la bascule original/traduit le rend sans nouvel appel. */
+    val originalContent: String = content,
+    /** Les traductions servies, gardées pour que la prochaine arrivée par socket se re-résolve par le Prisme. */
+    val translations: Map<String, ApiPostTranslationEntry>? = null,
+    val media: List<ApiPostMedia> = emptyList(),
+    val location: SharedPlace? = null,
+    val effectFlags: Int? = null,
 )
+
+/** Le cœur d'un commentaire de story : le seul emoji que la rangée sait poser (parité iOS `heartEmoji`). */
+const val STORY_COMMENT_HEART: String = "❤️"
+
+/** Vrai quand une traduction a été appliquée : la bascule « voir l'original » a quelque chose à montrer. */
+val StoryComment.canShowOriginal: Boolean get() = isTranslated && originalContent != content
+
+/** Le texte à afficher : l'original quand le lecteur l'a demandé, le texte servi par le Prisme sinon. */
+fun StoryComment.displayedText(showOriginal: Boolean): String = if (showOriginal) originalContent else content
+
+/** Re-résout le texte par le Prisme du lecteur, depuis les traductions gardées. */
+fun StoryComment.resolved(prefs: ContentLanguagePreferences): StoryComment {
+    val match = translations.preferredEntry(prefs, originalLanguage)
+    return copy(content = match?.text ?: originalContent, isTranslated = match != null)
+}
 
 /**
  * Maps a wire comment to its domain value, resolving the body through the Prisme
@@ -59,6 +89,16 @@ fun ApiPostComment.toStoryComment(prefs: ContentLanguagePreferences): StoryComme
         createdAt = createdAt,
         status = StoryCommentStatus.Sent,
         authorId = author?.id?.takeIf { it.isNotBlank() },
+        parentId = parentId?.takeIf { it.isNotBlank() },
+        replyCount = replyCount ?: 0,
+        likeCount = likeCount ?: 0,
+        likedByMe = currentUserReactions?.contains(STORY_COMMENT_HEART) == true,
+        originalLanguage = originalLanguage,
+        originalContent = content,
+        translations = translations,
+        media = media.orEmpty(),
+        location = location,
+        effectFlags = effectFlags,
     )
 }
 

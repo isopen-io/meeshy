@@ -59,6 +59,8 @@
 	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>MeeshySourceCommit</key>
+	<string>$(MEESHY_SOURCE_COMMIT)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -72,6 +74,8 @@
 	<string>Meeshy uses Face ID to provide secure and convenient authentication.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Meeshy uses your location to share your current location with contacts and find nearby friends.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Meeshy reads the song playing in Apple Music to share it with the Close friends you granted it to, and only with them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Meeshy needs access to your microphone for voice messages, video calls, and audio recording.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

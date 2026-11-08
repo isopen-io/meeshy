@@ -8,6 +8,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import me.meeshy.app.game.AchievementCopy
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.AchievementRarity
 import me.meeshy.sdk.model.game.engagement.AchievementFamily
@@ -28,7 +29,7 @@ internal object RevealCopy {
 
     fun title(res: Resources, locale: Locale, title: RevealTitle): String = when (title) {
         is RevealTitle.Legacy -> res.getString(legacyTitle(title.key))
-        is RevealTitle.Composed -> familyLabel(res, locale, title.family, title.tier) ?: sectionTitle(res, title.family.section)
+        is RevealTitle.Composed -> AchievementCopy.label(res, locale, title.family, title.tier) ?: sectionTitle(res, title.family.section)
         is RevealTitle.BadgeTier -> "${title.threshold} ${axisInSentence(res.getString(axisName(title.axis)), locale)}"
         is RevealTitle.UnknownBadgeTier -> res.getString(R.string.reveal_badge_tier, title.threshold)
         is RevealTitle.Streak -> res.getQuantityString(R.plurals.progression_streak_days, title.days, title.days)
@@ -109,20 +110,12 @@ internal object RevealCopy {
     fun longDate(locale: Locale, reachedAt: String): String? = obtainedOn(reachedAt, locale)
 
     /** La famille de défis a-t-elle son gabarit ? Sans lui, iOS ne l'ouvre pas : on ne montre pas une clé technique. */
-    fun knowsFamily(family: AchievementFamily): Boolean = FAMILY_LABELS.containsKey(family.id)
+    fun knowsFamily(family: AchievementFamily): Boolean = AchievementCopy.knows(family)
 
     private fun obtainedOn(reachedAt: String, locale: Locale): String? = runCatching {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)
             .format(Instant.parse(reachedAt).atZone(ZoneId.systemDefault()))
     }.getOrNull()
-
-    /** Le nombre est formaté selon la locale du LECTEUR : « 1 000 » en français, « 1,000 » en anglais. */
-    private fun familyLabel(res: Resources, locale: Locale, family: AchievementFamily, tier: Int): String? {
-        val labels = FAMILY_LABELS[family.id] ?: return null
-        val number = NumberFormat.getIntegerInstance(locale).format(tier)
-        val one = labels.second
-        return res.getString(if (tier == 1 && one != null) one else labels.first, number)
-    }
 
     private fun sectionTitle(res: Resources, section: String): String =
         SECTIONS[section]?.let(res::getString) ?: section
@@ -191,31 +184,5 @@ internal object RevealCopy {
         "constance" to R.string.achievement_section_constance,
         "monnaie" to R.string.achievement_section_monnaie,
         "decouverte" to R.string.achievement_section_decouverte,
-    )
-
-    /** Famille → (gabarit pluriel, gabarit du palier 1 pour les familles de VOLUME). */
-    private val FAMILY_LABELS: Map<String, Pair<Int, Int?>> = mapOf(
-        "conversation.join.size" to (R.string.achievement_conversation_join_size to null),
-        "conversation.join.count" to (R.string.achievement_conversation_join_count to R.string.achievement_conversation_join_count_one),
-        "conversation.leave.count" to (R.string.achievement_conversation_leave_count to R.string.achievement_conversation_leave_count_one),
-        "conversation.create.count" to (R.string.achievement_conversation_create_count to R.string.achievement_conversation_create_count_one),
-        "community.join.size" to (R.string.achievement_community_join_size to null),
-        "community.join.count" to (R.string.achievement_community_join_count to R.string.achievement_community_join_count_one),
-        "community.create.size" to (R.string.achievement_community_create_size to null),
-        "community.create.count" to (R.string.achievement_community_create_count to R.string.achievement_community_create_count_one),
-        "message.send.count" to (R.string.achievement_message_send_count to R.string.achievement_message_send_count_one),
-        "voice.send.count" to (R.string.achievement_voice_send_count to R.string.achievement_voice_send_count_one),
-        "image.send.count" to (R.string.achievement_image_send_count to R.string.achievement_image_send_count_one),
-        "video.send.count" to (R.string.achievement_video_send_count to R.string.achievement_video_send_count_one),
-        "message.edit.count" to (R.string.achievement_message_edit_count to R.string.achievement_message_edit_count_one),
-        "message.delete.count" to (R.string.achievement_message_delete_count to R.string.achievement_message_delete_count_one),
-        "message.react.count" to (R.string.achievement_message_react_count to R.string.achievement_message_react_count_one),
-        "call.join.count" to (R.string.achievement_call_join_count to R.string.achievement_call_join_count_one),
-        "call.start.count" to (R.string.achievement_call_start_count to R.string.achievement_call_start_count_one),
-        "call.start.size" to (R.string.achievement_call_start_size to null),
-        "referral.complete.count" to (R.string.achievement_referral_complete_count to R.string.achievement_referral_complete_count_one),
-        "link.click.count" to (R.string.achievement_link_click_count to R.string.achievement_link_click_count_one),
-        "streak.hold.count" to (R.string.achievement_streak_hold_count to R.string.achievement_streak_hold_count_one),
-        "meesh.mint.count" to (R.string.achievement_meesh_mint_count to R.string.achievement_meesh_mint_count_one),
     )
 }

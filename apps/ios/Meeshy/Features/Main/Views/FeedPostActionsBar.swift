@@ -33,12 +33,70 @@ struct FeedPostActionsBar: View, Equatable {
     let onQuote: ((String) -> Void)?
     let onBookmark: ((String) -> Void)?
     let sendSubject: ShareSubject
+    let onImager: (() -> Void)?
+    let onImagerQuick: (() -> Void)?
+    private let offersImager: Bool
+    private let offersImagerQuick: Bool
 
     // Lecture directe sans @ObservedObject — même règle que la carte hôte.
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var showRepostOptions = false
     @State private var likeAnimating = false
     @State private var sent: SharedContentWrapper?
+
+    init(
+        postId: String,
+        accentColor: String,
+        isDark: Bool,
+        isLikedByMe: Bool,
+        likeCount: Int,
+        isHeartInFlight: Bool,
+        commentCount: Int,
+        isCommentsSheetPresented: Bool,
+        repostCount: Int,
+        isReposted: Bool,
+        isRepostInFlight: Bool,
+        bookmarkCount: Int,
+        isBookmarked: Bool,
+        isBookmarkInFlight: Bool,
+        shareCount: Int,
+        isShareInFlight: Bool,
+        onLike: ((String) -> Void)?,
+        onOpenCommentsTap: @escaping () -> Void,
+        onRepost: ((String) -> Void)?,
+        onQuote: ((String) -> Void)?,
+        onBookmark: ((String) -> Void)?,
+        sendSubject: ShareSubject,
+        onImager: (() -> Void)? = nil,
+        onImagerQuick: (() -> Void)? = nil
+    ) {
+        self.postId = postId
+        self.accentColor = accentColor
+        self.isDark = isDark
+        self.isLikedByMe = isLikedByMe
+        self.likeCount = likeCount
+        self.isHeartInFlight = isHeartInFlight
+        self.commentCount = commentCount
+        self.isCommentsSheetPresented = isCommentsSheetPresented
+        self.repostCount = repostCount
+        self.isReposted = isReposted
+        self.isRepostInFlight = isRepostInFlight
+        self.bookmarkCount = bookmarkCount
+        self.isBookmarked = isBookmarked
+        self.isBookmarkInFlight = isBookmarkInFlight
+        self.shareCount = shareCount
+        self.isShareInFlight = isShareInFlight
+        self.onLike = onLike
+        self.onOpenCommentsTap = onOpenCommentsTap
+        self.onRepost = onRepost
+        self.onQuote = onQuote
+        self.onBookmark = onBookmark
+        self.sendSubject = sendSubject
+        self.onImager = onImager
+        self.onImagerQuick = onImagerQuick
+        self.offersImager = onImager != nil
+        self.offersImagerQuick = onImagerQuick != nil
+    }
 
     nonisolated static func == (lhs: FeedPostActionsBar, rhs: FeedPostActionsBar) -> Bool {
         lhs.postId == rhs.postId
@@ -57,10 +115,12 @@ struct FeedPostActionsBar: View, Equatable {
             && lhs.isBookmarkInFlight == rhs.isBookmarkInFlight
             && lhs.shareCount == rhs.shareCount
             && lhs.isShareInFlight == rhs.isShareInFlight
+            && lhs.offersImager == rhs.offersImager
+            && lhs.offersImagerQuick == rhs.offersImagerQuick
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        PublishedPostActionsRow(postId: postId) {
             // Like with heart burst animation (socket-driven — see FeedView.postLikedIds)
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
@@ -105,8 +165,6 @@ struct FeedPostActionsBar: View, Equatable {
                         .contentTransition(.numericText())
                 }
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isHeartInFlight)
@@ -133,8 +191,6 @@ struct FeedPostActionsBar: View, Equatable {
                 }
                 .foregroundColor(isCommentsSheetPresented ? theme.accentText(accentColor) : theme.textSecondary)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(commentCount) commentaires", bundle: .main))
@@ -142,51 +198,12 @@ struct FeedPostActionsBar: View, Equatable {
 
             Spacer()
 
-            // Repost
-            Button {
-                showRepostOptions = true
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    // Les flèches nues dans les deux états, comme le réel : la famille `.circle` du repost n'existe pas
-                    // au catalogue SF Symbols et l'état reposté se peignait vide (#8939). Le reposté se lit à sa teinte
-                    // et au contour d'accent qu'EngagementGlyph superpose.
-                    EngagementGlyph(
-                        outline: "arrow.2.squarepath",
-                        filled: "arrow.2.squarepath",
-                        participated: isReposted,
-                        accentHex: accentColor,
-                        activeTint: MeeshyColors.success,
-                        inactiveTint: theme.textSecondary
-                    )
-                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
-                    let count = repostCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
-                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
+            // Repost — absent quand la carte n'a ni écrivain ni porte de
+            // citation : un bouton qui ouvre un choix vide ment (#15934).
+            if !RepostChoice.offered(canRepost: onRepost != nil, canQuote: onQuote != nil).isEmpty {
+                repostButton
+                Spacer()
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isRepostInFlight)
-            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), repostCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
-            .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
-                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(postId) }
-                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(postId) }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            }
-
-            Spacer()
 
             // Bookmark
             Button {
@@ -216,8 +233,6 @@ struct FeedPostActionsBar: View, Equatable {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isBookmarkInFlight)
@@ -254,14 +269,14 @@ struct FeedPostActionsBar: View, Equatable {
                 .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.send", defaultValue: "Envoyer", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), shareCount))
             .accessibilityHint(String(localized: "a11y.feed.post.send.hint", defaultValue: "Envoie cette publication dans une conversation Meeshy", bundle: .main))
+
+            imagerButton
 
             // Pas de bouton muet ici en E2 (correctif revue DoD, constat
             // majeur #2) : la carte n'embarque encore AUCUN lecteur local
@@ -274,5 +289,77 @@ struct FeedPostActionsBar: View, Equatable {
         }
         .padding(.top, MeeshySpacing.xs)
         .modifier(MeeshySendSheet(sent: $sent))
+    }
+
+    @ViewBuilder
+    private var imagerButton: some View {
+        if let onImager {
+            Spacer()
+            ImagerWandButton(
+                hint: String(localized: "feed.post.imager.hint", defaultValue: "Fait de cette publication une carte image.", bundle: .main),
+                tint: theme.textSecondary,
+                action: onImager,
+                quick: onImagerQuick
+            )
+        }
+    }
+
+    private var repostButton: some View {
+        Button {
+            showRepostOptions = true
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: MeeshySpacing.xsPlus) {
+                // Les flèches nues dans les deux états, comme le réel : la famille `.circle` du repost n'existe pas
+                // au catalogue SF Symbols et l'état reposté se peignait vide (#8939). Le reposté se lit à sa teinte
+                // et au contour d'accent qu'EngagementGlyph superpose.
+                EngagementGlyph(
+                    outline: "arrow.2.squarepath",
+                    filled: "arrow.2.squarepath",
+                    participated: isReposted,
+                    accentHex: accentColor,
+                    activeTint: MeeshyColors.success,
+                    inactiveTint: theme.textSecondary
+                )
+                .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                let count = repostCount
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.footnote.weight(.medium))
+                        .contentTransition(.numericText())
+                }
+            }
+            .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
+            .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
+        }
+        // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
+        // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .disabled(isRepostInFlight)
+        .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), repostCount))
+        .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
+        .accessibilityAddTraits(isReposted ? .isSelected : [])
+        .modifier(RepostChoiceDialog(
+            isPresented: $showRepostOptions,
+            onRepost: onRepost.map { repost in { repost(postId) } },
+            onQuote: onQuote.map { quote in { quote(postId) } }
+        ))
+    }
+}
+
+/// La rangée d'engagement d'une publication EN LIGNE. Encore dans la file
+/// d'envoi (#15123), la publication n'a qu'un cmid : la rangée est absente,
+/// et seule l'horloge à la place de l'heure dit l'attente (#14879).
+struct PublishedPostActionsRow<Content: View>: View {
+    let postId: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if !PendingPublicationMarker.isPending(postId: postId) {
+            HStack(spacing: 0, content: content)
+        }
     }
 }

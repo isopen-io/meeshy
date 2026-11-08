@@ -139,6 +139,13 @@ describe('studioEditHydration — une publication du studio redevient un brouill
     });
   });
 
+  test('une audience de cercle se reprend telle quelle ; une audience inconnue ne devient jamais un choix (#13939)', () => {
+    expect(studio(hydrate(post({ visibility: 'CLOSE' }))).draft.visibility).toBe('CLOSE');
+    const unknown = studio(hydrate(post({ visibility: 'FAMILY' as NonNullable<FeedPost['visibility']> })));
+    expect(unknown.draft.visibility).toBeNull();
+    expect(unknown.origin.visibility).toBe('FAMILY');
+  });
+
   test('une story et un réel gardent leur format', () => {
     expect(studio(hydrate(post({ type: 'STORY' }))).origin.kind).toBe('STORY');
     expect(studio(hydrate(post({ type: 'REEL' }))).origin.kind).toBe('REEL');

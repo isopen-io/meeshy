@@ -64,13 +64,14 @@ import kotlin.math.roundToInt
 @Composable
 internal fun OverlayMediaPreview(
     audio: BubbleAudio,
+    isProtected: Boolean,
     accentColor: Color,
     modifier: Modifier = Modifier,
 ) {
     val url = audio.url ?: return
     val context = LocalContext.current
     val state = remember(url) { mutableStateOf(OverlayMediaTransport.idle()) }
-    val preview = remember(url) { OverlayAudioPreview(ExoVoiceNoteEngine(context)) { state.value = it } }
+    val preview = remember(url, isProtected) { OverlayAudioPreview(ExoVoiceNoteEngine(context), isProtected) { state.value = it } }
     val transport = state.value
 
     DisposableEffect(preview) { onDispose { preview.release() } }

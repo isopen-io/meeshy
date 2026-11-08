@@ -58,7 +58,7 @@ class MessageSocketManagerChatEventsTest {
             handlers.getValue(event).forEach { it.invoke(arrayOf(JSONObject(payload))) }
     }
 
-    private class FakeEmitter(private val reply: ((Array<Any>) -> Unit) -> Unit) : SocketAckEmitter {
+    private class FakeEmitter(private val reply: ((Array<Any>) -> Unit) -> Unit) : SocketRawAckEmitter {
         val sent = mutableListOf<Pair<String, JSONObject>>()
         override fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit) {
             sent += event to data
@@ -289,6 +289,20 @@ class MessageSocketManagerChatEventsTest {
         ) as ParticipantRightsUpdatedEvent
         assertThat(rights.rights.canSendMessages).isFalse()
         assertThat(rights.rights.canViewHistory).isNull()
+    }
+
+    @Test
+    fun `rights-updated distinguishes an explicit null grant from an absent key`() = runTest {
+        val cleared = decoded(
+            "participant:rights-updated",
+            """{"conversationId":"c1","participantId":"p9","rights":{},"historyVisibleFrom":null}""",
+        ) as ParticipantRightsUpdatedEvent
+        val silent = decoded(
+            "participant:rights-updated",
+            """{"conversationId":"c1","participantId":"p9","rights":{}}""",
+        ) as ParticipantRightsUpdatedEvent
+        assertThat(cleared.carriesHistoryGrant).isTrue()
+        assertThat(silent.carriesHistoryGrant).isFalse()
     }
 
     @Test

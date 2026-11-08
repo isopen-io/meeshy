@@ -14,6 +14,7 @@ const de = {
   'rowMenu.manageMembers': 'Mitglieder verwalten',
   'rowMenu.adminOpen': 'In der Verwaltung öffnen',
   'rowMenu.leave': 'Verlassen',
+  'rowMenu.obsolete': 'Als veraltet entfernen',
   'rowMenu.search': 'Suchen',
   'rowMenu.readingMode': 'Lesemodus',
   'rowMenu.peek': 'Vorschau der Unterhaltung',

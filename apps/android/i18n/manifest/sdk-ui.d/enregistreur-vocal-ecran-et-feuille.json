@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "audio.recorder.micDenied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.recorder.micDeniedSettings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.recorder.record",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.recorder.recording",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.recorder.tapToRecord",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.voiceRecorder.fromFiles",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.voiceRecorder.fromLibrary",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.voiceRecorder.start",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.voiceRecorder.stop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.voiceRecorder.title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

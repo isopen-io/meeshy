@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.piece-of",
+          "androidName": "share_content_piece_of",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.whole-message",
+          "androidName": "share_content_whole_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.remove-last",
+          "androidName": "share_content_remove_last",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.piece-number",
+          "androidName": "share_content_piece_number",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.move-forward",
+          "androidName": "share_content_move_forward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.move-backward",
+          "androidName": "share_content_move_backward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.over-limit",
+          "androidName": "share_content_over_limit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.content.remove",
+          "androidName": "share_content_remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.withdrawn.others-leave",
+          "androidName": "share_withdrawn_others_leave",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.preview.image",
+          "androidName": "forward_preview_image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.preview.video",
+          "androidName": "forward_preview_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.preview.audio",
+          "androidName": "forward_preview_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.preview.file",
+          "androidName": "forward_preview_file",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.sticker",
+          "androidName": "attachment_sticker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "forward.media-placeholder",
+          "androidName": "forward_media_placeholder",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

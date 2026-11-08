@@ -57,22 +57,28 @@ struct CommentRowView: View, Equatable {
     var post: FeedPost? = nil
 
     /// Le menu « … » — le MÊME que celui d'un commentaire de story (#8709) :
-    /// Copier, Imager (l'arbre de réponses compris), Modifier, Signaler,
-    /// Supprimer, Retirer (#11151), selon `CommentMenuPolicy`.
+    /// Copier, Modifier, Signaler, Supprimer, Retirer (#11151), selon
+    /// `CommentMenuPolicy`. « Imager » est l'icône de la rangée (#16541).
     private var moreMenu: some View {
         CommentMoreMenu(
             comment: comment,
             servedText: effectiveCommentContent,
             showOriginal: showOriginal,
             accentColor: accentColor,
-            root: threadRoot,
-            loadedReplies: threadReplies,
-            post: post,
             onEdit: onEditComment,
             onDelete: onDeleteComment,
             onRemove: onRemoveComment,
             glyphSize: isReply ? 12 : 14,
             glyphColor: theme.textMuted
+        )
+    }
+
+    private var imagerButton: CommentImagerButton {
+        CommentImagerButton(
+            target: CommentImagerTarget(comment: comment, showOriginal: showOriginal, accentColor: accentColor,
+                                        root: threadRoot, loadedReplies: threadReplies, post: post),
+            glyphSize: isReply ? 12 : 14,
+            tint: theme.textMuted
         )
     }
 
@@ -274,9 +280,6 @@ struct CommentRowView: View, Equatable {
                 }
 
                 HStack(spacing: MeeshySpacing.xl) {
-                    // Le contour d'accent — « c'est MOI qui ai liké » ;
-                    // `filledWhenInactive` garde le cœur plein dès qu'il existe
-                    // des likes, sans revendiquer les miens.
                     CommentLikeButton(isLiked: isLiked, likeCount: likeCount, isInFlight: isInFlight, look: likeLook) {
                         onLikeComment?()
                         HapticFeedback.light()
@@ -333,6 +336,7 @@ struct CommentRowView: View, Equatable {
 
                     Spacer()
 
+                    imagerButton
                     moreMenu
                 }
                 .padding(.top, isReply ? 2 : 4)
@@ -359,11 +363,7 @@ struct CommentRowView: View, Equatable {
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
                 onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)

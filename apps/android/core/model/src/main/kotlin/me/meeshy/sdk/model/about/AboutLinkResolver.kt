@@ -9,6 +9,15 @@ public object AboutLinkResolver {
     public fun resolvable(links: List<AboutLink>): List<AboutLink> =
         links.filter { isLaunchable(it.url) }
 
+    /**
+     * Ouvre [link] par [launch] s'il est lançable ; `false` (jamais d'exception) quand le lien est
+     * refusé ou que l'appareil n'a aucun navigateur : l'écran reste debout, comme `Link` sur iOS.
+     */
+    public fun launchOrFallback(link: AboutLink, launch: (String) -> Unit): Boolean {
+        if (!isLaunchable(link.url)) return false
+        return runCatching { launch(link.url) }.isSuccess
+    }
+
     private fun isLaunchable(url: String): Boolean {
         val lower = url.trim().lowercase()
         return lower.startsWith("http://") || lower.startsWith("https://")

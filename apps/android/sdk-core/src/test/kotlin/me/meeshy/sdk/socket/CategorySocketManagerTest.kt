@@ -40,7 +40,7 @@ class CategorySocketManagerTest {
     }
 
     @Test
-    fun `a created broadcast emits an Upserted event with the narrowed option`() = runTest {
+    fun `a created broadcast emits an Upserted event with the option and its render attributes`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.categoryEvents.test {
             handlers.getValue("category:created").invoke(
@@ -52,7 +52,11 @@ class CategorySocketManagerTest {
                 ),
             )
             assertThat(awaitItem())
-                .isEqualTo(CategoryEvent.Upserted(CategoryOption(id = "work", name = "Work", order = 2)))
+                .isEqualTo(
+                    CategoryEvent.Upserted(
+                        CategoryOption(id = "work", name = "Work", order = 2, color = "#FF0000", icon = "briefcase", isExpanded = true),
+                    ),
+                )
             cancelAndIgnoreRemainingEvents()
         }
     }

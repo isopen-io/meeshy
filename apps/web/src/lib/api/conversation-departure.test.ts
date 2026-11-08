@@ -160,3 +160,58 @@ describe('performDeparture — quitter', () => {
     expect(listedIds(queryClient)).toEqual([['a']]);
   });
 });
+
+describe('performDeparture — rendre obsolète (#14645)', () => {
+  test('la rangée part AU GESTE et la passerelle reçoit DELETE …/obsolete ; le détail et les messages en cache partent aussi', async () => {
+    const queryClient = clientWith([['a', 'b', 'c']]);
+    queryClient.setQueryData(conversationQueryKey('b'), conversation('b'));
+    queryClient.setQueryData(['conversations', 'b', 'messages'], { pages: [] });
+    const { transport, calls, release } = transportReplying({
+      ok: true,
+      data: { conversationId: 'b', obsoletedAt: '2026-11-02T10:00:00.000Z', purgeAfter: '2026-11-04T10:00:00.000Z' },
+    });
+
+    const outcome = performDeparture({ conversationId: 'b', kind: 'obsolete', online: true, deps: { source: 'gateway', transport, queryClient } });
+
+    expect(listedIds(queryClient)).toEqual([['a', 'c']]);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['DELETE /api/v1/conversations/b/obsolete']);
+    release();
+    expect(await outcome).toBe('departed');
+    expect(queryClient.getQueryData(conversationQueryKey('b'))).toBeUndefined();
+    expect(queryClient.getQueryData(['conversations', 'b', 'messages'])).toBeUndefined();
+  });
+
+  test('un refus de la passerelle (403) RAMÈNE la rangée à sa place et se dit REFUS, pas panne (#14690)', async () => {
+    const queryClient = clientWith([['a', 'b', 'c']]);
+    const { transport, release } = transportReplying({ ok: false, status: 403, error: 'forbidden' });
+
+    const outcome = performDeparture({ conversationId: 'b', kind: 'obsolete', online: true, deps: { source: 'gateway', transport, queryClient } });
+    expect(listedIds(queryClient)).toEqual([['a', 'c']]);
+    release();
+
+    expect(await outcome).toBe('refused');
+    expect(listedIds(queryClient)).toEqual([['a', 'b', 'c']]);
+  });
+
+  test('une panne (500) reste une panne : la rangée revient, rien ne se dit refusé', async () => {
+    const queryClient = clientWith([['a', 'b']]);
+    const { transport, release } = transportReplying({ ok: false, status: 500, error: 'Erreur 500' });
+
+    const outcome = performDeparture({ conversationId: 'b', kind: 'obsolete', online: true, deps: { source: 'gateway', transport, queryClient } });
+    release();
+
+    expect(await outcome).toBe('failed');
+    expect(listedIds(queryClient)).toEqual([['a', 'b']]);
+  });
+
+  test('un 404 ne vaut PAS succès pour obsolète : la rangée revient', async () => {
+    const queryClient = clientWith([['a', 'b']]);
+    const { transport, release } = transportReplying({ ok: false, status: 404, error: 'not found' });
+
+    const outcome = performDeparture({ conversationId: 'b', kind: 'obsolete', online: true, deps: { source: 'gateway', transport, queryClient } });
+    release();
+
+    expect(await outcome).toBe('failed');
+    expect(listedIds(queryClient)).toEqual([['a', 'b']]);
+  });
+});

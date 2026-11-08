@@ -39,6 +39,7 @@ import me.meeshy.sdk.model.MessageRestoredForMeEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.MessageViewOncePurgedEvent
 import me.meeshy.sdk.model.ParticipantRightsUpdatedEvent
+import me.meeshy.sdk.model.ParticipantRightsUpdatedEventSerializer
 import me.meeshy.sdk.model.SharedTranslationArrived
 import me.meeshy.sdk.model.PendingMessagesDeliveredEvent
 import me.meeshy.sdk.model.TranscriptionFailedEvent
@@ -49,7 +50,7 @@ import org.json.JSONObject
 import timber.log.Timber
 
 /** Ce dont la famille a besoin pour émettre : un événement, sa charge et l'accusé de la passerelle. */
-fun interface SocketAckEmitter {
+fun interface SocketRawAckEmitter {
     fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit)
 }
 
@@ -71,7 +72,7 @@ fun interface SocketAckEmitter {
 class ConversationSocketEventsManager internal constructor(
     private val router: SocketEventRouter,
     private val json: Json,
-    private val emitter: SocketAckEmitter,
+    private val emitter: SocketRawAckEmitter,
 ) : RealtimeBinding {
 
     @Inject
@@ -79,7 +80,7 @@ class ConversationSocketEventsManager internal constructor(
         socketManager: SocketManager,
         json: Json,
         router: SocketEventRouter,
-    ) : this(router, json, SocketAckEmitter { event, data, ack -> socketManager.emit(event, data, ack) })
+    ) : this(router, json, SocketRawAckEmitter { event, data, ack -> socketManager.emit(event, data, ack) })
 
     private val installed = AtomicBoolean(false)
     private val _events = SocketInboundRoute.subject<ConversationSocketEvent>()
@@ -168,7 +169,7 @@ class ConversationSocketEventsManager internal constructor(
         route<ConversationJoinErrorEvent>(SocketEventNames.CONVERSATION_JOIN_ERROR) { it },
         route<ConversationStatsEvent>(SocketEventNames.CONVERSATION_STATS) { it },
         route<ConversationEngagementSnapshot>(SocketEventNames.ENGAGEMENT_CONVERSATION_UPDATED) { it },
-        route<ParticipantRightsUpdatedEvent>(SocketEventNames.PARTICIPANT_RIGHTS_UPDATED) { it },
+        decode(SocketEventNames.PARTICIPANT_RIGHTS_UPDATED, ParticipantRightsUpdatedEventSerializer) { it },
     )
 
     private inline fun <reified T> route(

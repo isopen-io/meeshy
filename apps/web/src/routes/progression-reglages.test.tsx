@@ -258,6 +258,7 @@ describe('les notifications du jeu : ce que la bascule envoie à la passerelle',
     contactActivityEnabled: true,
     gameEnabled: true,
     gamePhotoEnabled: true,
+    saveMediaToGallery: false,
   };
 
   /** La passerelle sert la catégorie `notification` ENTIÈRE, telle qu'elle l'a retenue. */

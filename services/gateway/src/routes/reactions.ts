@@ -27,6 +27,7 @@ import { notifyReactionAdded, notifyReactionRemoved } from '../services/notifica
 import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation.js';
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility.js';
 import { historyReaderFromAuthContext } from '../services/historyFloor.js';
+import { ADMITTED_FILE_READER_WHERE } from '../services/attachments/fileReaderAdmission.js';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
@@ -506,7 +507,21 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              participants: true
+              // #16561 — la LECTURE n'admet que des participations ADMISES, comme
+              // les deux ÉCRITURES de ce fichier (`isActive: true`, l. 158 et 354).
+              // Elle décidait sur la liste NON filtrée : quitter, être retiré,
+              // être banni et la suppression pour soi posent tous
+              // `isActive: false` et GARDENT la ligne, si bien qu'un membre banni
+              // gardait l'accès au trombinoscope des réactions — compte,
+              // `participantIds`, et le `displayName`/`avatar`/`userId` de chaque
+              // réacteur — et apprenait que le message existe toujours.
+              //
+              // La loi est PARTAGÉE (actif ET jamais banni) et son doc-comment la
+              // destine à cet usage : « À répandre dans le `where` d'une lecture
+              // `Participant` ». Filtrer ici plutôt que de rejouer le prédicat en
+              // mémoire évite la jumelle divergente ; la liste ne sert qu'aux deux
+              // contrôles d'admission ci-dessous.
+              participants: { where: ADMITTED_FILE_READER_WHERE }
             }
           }
         }

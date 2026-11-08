@@ -15,19 +15,19 @@ public enum SceneWindowSize {
 }
 
 public extension SceneWindowSize {
-    /// Les marges mesurées, ou — tant qu'aucune mesure n'existe — le repli (la fenêtre active). Une marge nulle EST
-    /// une mesure (appareil sans encoche) : seul `nil` se replie.
-    static func resolveInsets(_ measured: EdgeInsets?, fallback: @autoclosure () -> EdgeInsets) -> EdgeInsets {
-        measured ?? fallback()
+    /// Les marges publiées, sinon celles que la racine a déjà mesurées, sinon zéro le temps d'une passe. Une marge
+    /// nulle EST une mesure (appareil sans encoche) : seul `nil` se replie. **Jamais la fenêtre** (#12470) : un
+    /// `fullScreenCover` ne reçoit pas la publication, et lire `UIWindow.safeAreaInsets` pendant son `body` rappelle le
+    /// contrôleur hôte (`statusBarHidden`) — cycle du graphe, puis gel jusqu'au chien de garde.
+    static func resolveInsets(_ published: EdgeInsets?, remembered: EdgeInsets? = RememberedSceneInsets.last) -> EdgeInsets {
+        published ?? remembered ?? EdgeInsets()
     }
 }
 
-extension WindowMetrics {
-    /// Repli des marges en `EdgeInsets` : la fenêtre clé, avant que la racine n'ait mesuré la sienne.
-    static var safeAreaEdgeInsets: EdgeInsets {
-        let insets = safeAreaInsets
-        return EdgeInsets(top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
-    }
+/// Les dernières marges qu'une racine publiante a mesurées, hors de `body` (#12470). C'est le repli des écrans qui ne
+/// reçoivent pas `\.sceneSafeAreaInsets` — `fullScreenCover`, présentés dans la même fenêtre, donc aux mêmes marges.
+public enum RememberedSceneInsets {
+    public internal(set) static var last: EdgeInsets?
 }
 
 private struct SceneSafeAreaInsetsKey: EnvironmentKey {
@@ -75,6 +75,7 @@ private struct SceneWindowSizePublisher: ViewModifier {
                 Color.clear
                     .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { measuredInsets in
                         if insets != measuredInsets { insets = measuredInsets }
+                        if RememberedSceneInsets.last != measuredInsets { RememberedSceneInsets.last = measuredInsets }
                     }
                     .ignoresSafeArea(.keyboard)
             )

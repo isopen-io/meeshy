@@ -1,10 +1,16 @@
 package me.meeshy.app.notifications
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.BannerHeadline
+import me.meeshy.sdk.model.GameSurfaceTitle
 import me.meeshy.sdk.model.MediaSummary
+import me.meeshy.sdk.model.NotificationMessageDetail
+import me.meeshy.sdk.model.NotificationMilestone
+import me.meeshy.sdk.model.NotificationRowCopy
 import me.meeshy.sdk.model.NotificationBannerPresentation
 
 /**
@@ -27,10 +33,25 @@ internal fun headlineText(headline: BannerHeadline): String = when (headline) {
     is BannerHeadline.Plain -> headline.text.ifBlank { stringResource(R.string.notifications_system_sender) }
     is BannerHeadline.InConversation -> stringResource(
         R.string.notification_banner_in_conversation,
-        headline.actor,
+        headline.actor.ifBlank { stringResource(R.string.notification_banner_someone) },
         headline.groupName,
     )
+    is BannerHeadline.Someone -> withAction(stringResource(R.string.notification_banner_someone), headline.action)
+    is BannerHeadline.GameSurface -> withAction(
+        stringResource(
+            when (headline.surface) {
+                GameSurfaceTitle.LEAGUE_RESULT -> R.string.notification_game_league_result_title
+                GameSurfaceTitle.SEASON_STEP -> R.string.notification_game_season_step_title
+                GameSurfaceTitle.MISSION_WINDOW -> R.string.notification_game_mission_window_title
+            },
+        ),
+        headline.action,
+    )
 }
+
+/** Le titre suivi de la phrase d'action servie, sauf si le titre la porte déjà. */
+private fun withAction(head: String, action: String?): String =
+    if (action == null || head.endsWith(action)) head else "$head $action"
 
 /**
  * What [NotificationBannerHost] shows once the recipient's own preview toggle
@@ -51,7 +72,7 @@ internal fun NotificationBannerPresentation.appliedPreviewSetting(
 ): NotificationBannerPresentation = if (showPreview) {
     this
 } else {
-    copy(body = null, mediaSummary = null, reactionBadge = null, thumbnailUrl = null)
+    copy(body = null, mediaSummary = null, reactionBadge = null, thumbnailUrl = null, detail = null)
 }
 
 /**
@@ -65,6 +86,14 @@ internal fun presentationBodyText(presentation: NotificationBannerPresentation):
         return if (badge != null) "$badge $body" else body
     }
     presentation.reactionBadge?.let { return it }
+    presentation.detail?.let { detail ->
+        return detail.summary(
+            NotificationMessageDetail.Labels(
+                sharedLocation = stringResource(R.string.notification_detail_shared_location),
+                invitation = stringResource(R.string.notification_detail_invitation),
+            ),
+        )
+    }
     return presentation.mediaSummary?.let { summary ->
         stringResource(
             when (summary) {
@@ -75,3 +104,31 @@ internal fun presentationBodyText(presentation: NotificationBannerPresentation):
         )
     }
 }
+
+/**
+ * Les mots de repli d'un palier dont le titre n'est pas servi (ligne d'avant `tierRank`), dans la langue
+ * de l'application. Sans palier lisible (axe ou exploit inconnu de ce module), on retombe sur la headline.
+ */
+@Composable
+internal fun rememberNotificationRowCopy(): NotificationRowCopy {
+    val resources = LocalContext.current.resources
+    return remember(resources) {
+        object : NotificationRowCopy {
+            override fun milestoneName(milestone: NotificationMilestone): String? = when (milestone) {
+                is NotificationMilestone.Level -> milestone.level?.let { resources.getString(R.string.notification_milestone_level_name, it) }
+                is NotificationMilestone.Streak -> milestone.days?.let { resources.getString(R.string.notification_milestone_streak_name, it) }
+                else -> null
+            }
+
+            override fun milestoneReason(milestone: NotificationMilestone, inviteeName: String?): String? {
+                if (milestone !is NotificationMilestone.Badge) return null
+                if (milestone.axis == INVITE_JOINED_AXIS && inviteeName != null) {
+                    return resources.getString(R.string.notification_milestone_invite_joined_reason, inviteeName)
+                }
+                return milestone.threshold?.let { resources.getString(R.string.notification_milestone_badge_reason, it) }
+            }
+        }
+    }
+}
+
+private const val INVITE_JOINED_AXIS = "inviteJoined"

@@ -12,6 +12,7 @@ export const openCallRingTables = () => ({
   userPreference: { findMany: jest.fn(async () => []) },
   friendRequest: { findMany: jest.fn(async () => []) },
   userRelation: { findMany: jest.fn(async () => []) },
+  user: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => null) },
 });
 
 export const closedCallRingTables = (friendsOfCaller: ReadonlyArray<{ senderId: string; receiverId: string }> = []) => ({
@@ -19,4 +20,5 @@ export const closedCallRingTables = (friendsOfCaller: ReadonlyArray<{ senderId: 
   userPreference: { findMany: jest.fn(async () => []) },
   friendRequest: { findMany: jest.fn(async () => friendsOfCaller) },
   userRelation: { findMany: jest.fn(async () => []) },
+  user: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => null) },
 });

@@ -18,6 +18,10 @@ interface RealtimeSocket {
     fun removeAllListeners()
     fun connect()
     fun disconnect()
+
+    /** Coupe la boucle de reconnexion propre au transport (une socket retirée ne réessaie plus). */
+    fun stopReconnecting() = Unit
+
     fun emit(event: String, data: JSONObject)
     fun emit(event: String, data: JSONObject, ack: (Array<Any>) -> Unit)
 }
@@ -74,6 +78,10 @@ internal class IoRealtimeSocket(private val socket: Socket) : RealtimeSocket {
 
     override fun disconnect() {
         socket.disconnect()
+    }
+
+    override fun stopReconnecting() {
+        socket.io().reconnection(false)
     }
 
     override fun emit(event: String, data: JSONObject) {

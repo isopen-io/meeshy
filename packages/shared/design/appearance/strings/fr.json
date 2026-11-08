@@ -131,6 +131,146 @@
     "cadres-australs": {
       "name": "Cadres australs",
       "description": "Trois cadres inspirés de la peinture de points et du ciel austral : des cercles de points qui scintillent, une tortue marine qui nage autour de l’avatar, la Croix du Sud qui brille."
+    },
+    "meeshy-signature": {
+      "name": "Signature Meeshy",
+      "description": "Six contours par Meeshy, sobres et lisibles à toute taille : fil d’or, perles de nacre, éclipse, rosace, nuit étoilée et facettes."
+    },
+    "meeshy-vivants": {
+      "name": "Vivants par Meeshy",
+      "description": "Six contours animés par Meeshy, qui débordent à peine de l’avatar : une orbite, un halo d’aurore, une pulsation, des étincelles, une comète et une houle."
+    },
+    "meeshy-fonds": {
+      "name": "Fonds signature",
+      "description": "Six fonds par Meeshy, discrets sous les bulles, en clair comme en sombre : soie, pointillé, vagues fines, cannage, terrazzo et crépuscule."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Fonds vivants",
+      "description": "Quatre fonds animés par Meeshy, tout en douceur derrière vos messages : lucioles, voile d’aurore, neige douce et ondes."
+    },
+    "meeshy-bordures": {
+      "name": "Encadrements signature",
+      "description": "Six cadres de bannière par Meeshy, posés à la lisière pour laisser voir votre niveau et vos compteurs : liseré d’or, volutes, rang de perles, onyx, marqueterie et minuit."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Encadrements vivants",
+      "description": "Quatre cadres de bannière animés par Meeshy : un reflet qui glisse sur l’or, des perles qui brillent, une nuit qui scintille et un néon."
+    },
+    "noel-enneige": {
+      "name": "Noël enneigé",
+      "description": "Deux contours animés pour l’hiver : des flocons qui tombent doucement autour de l’avatar, et une couronne de houx aux baies qui brillent."
+    },
+    "lumieres-de-noel": {
+      "name": "Lumières de Noël",
+      "description": "Deux contours animés qui s’allument pour les fêtes : une guirlande d’ampoules qui clignotent tour à tour, et l’étoile du sapin qui rayonne."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Atelier du Père Noël",
+      "description": "Deux contours animés tout droit sortis de l’atelier : un bonnet rouge dont le pompon se balance, et un sucre d’orge qui tourne, noué d’un ruban vert."
+    },
+    "fonds-noel": {
+      "name": "Fonds de Noël",
+      "description": "Trois fonds de conversation assortis aux packs de Noël : flocons de cristal, guirlande étoilée et rayures de sucre d’orge, assez discrets pour laisser lire chaque bulle."
+    },
+    "fonds-noel-vivants": {
+      "name": "Noël vivant",
+      "description": "Trois fonds animés assortis aux packs de Noël : une neige de cristaux, une guirlande dont les ampoules s’allument tour à tour et les étincelles de l’atelier. Animations réduites : un dégradé fixe."
+    },
+    "bannieres-illustrees": {
+      "name": "Cadres illustrés",
+      "description": "Les cadres de bannière assortis à « Cadres illustrés » : Masque félin, Toile d’araignée, Ailes d’ange, Cercle runique, Griffes d’os et Ailes de démon, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-asiatiques": {
+      "name": "Cadres d’Asie",
+      "description": "Les cadres de bannière assortis à « Cadres d’Asie » : Dragon de jade, Nuages de soie et Lanternes de papier, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-africaines": {
+      "name": "Cadres d’Afrique",
+      "description": "Les cadres de bannière assortis à « Cadres d’Afrique » : Masque d’ébène, Bandes tissées et Collier de perles, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-celtes": {
+      "name": "Cadres celtes",
+      "description": "Les cadres de bannière assortis à « Cadres celtes » : Nœud entrelacé, Spirale triple et Lierre d’émeraude, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-nordiques": {
+      "name": "Cadres nordiques",
+      "description": "Les cadres de bannière assortis à « Cadres nordiques » : Corbeaux tournoyants, Aurore boréale, Anneau de pierre gravée et Proue sculptée, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Cadres égyptiens",
+      "description": "Les cadres de bannière assortis à « Cadres égyptiens » : Cobra d’or, Scarabée ailé, Soleil du désert et Lotus du Nil, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-mayas": {
+      "name": "Cadres mayas",
+      "description": "Les cadres de bannière assortis à « Cadres mayas » : Serpent de jade, Cartouches de glyphes, Frise à gradins et Jaguar de la jungle, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-indiennes": {
+      "name": "Cadres indiens",
+      "description": "Les cadres de bannière assortis à « Cadres indiens » : Mandala floral, Paon qui fait la roue et Guirlande de soucis, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Cadres amérindiens",
+      "description": "Les cadres de bannière assortis à « Cadres amérindiens » : Cercle tissé aux plumes, Perlage en losanges et Soleil sur les montagnes, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-australes": {
+      "name": "Cadres australs",
+      "description": "Les cadres de bannière assortis à « Cadres australs » : Cercles de points, Tortue marine et Croix du Sud, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Noël enneigé",
+      "description": "Les cadres de bannière assortis à « Noël enneigé » : Flocons qui tombent et Couronne de houx, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Lumières de Noël",
+      "description": "Les cadres de bannière assortis à « Lumières de Noël » : Guirlande lumineuse et Étoile du sapin, posés en bordure pour laisser voir votre photo."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Atelier du Père Noël",
+      "description": "Les cadres de bannière assortis à « Atelier du Père Noël » : Bonnet du Père Noël et Sucre d’orge, posés en bordure pour laisser voir votre photo."
+    },
+    "noel-bannieres": {
+      "name": "Bannières de Noël",
+      "description": "Six images de bannière assorties aux packs de Noël : givre, guirlande et papier cadeau, puis une tempête de neige, des lumières qui scintillent et les étincelles de l’atelier."
+    },
+    "noel-contours-fixes": {
+      "name": "Noël · contours fixes",
+      "description": "Les six contours de Noël sans animation : flocons, houx, guirlande, étoile, bonnet et sucre d’orge, pour qui préfère un avatar immobile."
+    },
+    "noel-cadres-fixes": {
+      "name": "Noël · cadres fixes",
+      "description": "Les six cadres de bannière de Noël sans animation, assortis aux contours fixes : flocons, houx, guirlande, étoile, bonnet et sucre d’orge."
+    },
+    "nouvel-an-contours": {
+      "name": "Nouvel An",
+      "description": "Quatre contours pour fêter la nouvelle année : feux d’artifice, pluie de confettis, cadran de minuit et coupe de champagne doré."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Nouvel An vivant",
+      "description": "Quatre contours animés pour le passage à la nouvelle année : un bouquet final, un envol de confettis, l’horloge qui sonne minuit et des bulles de champagne."
+    },
+    "nouvel-an-images": {
+      "name": "Bannières du Nouvel An",
+      "description": "Quatre images de bannière pour la nouvelle année : une nuit d’artifice, une fête de confettis, les douze coups de minuit et un champagne doré."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Bannières du Nouvel An animées",
+      "description": "Quatre images de bannière animées : des gerbes qui éclatent, une averse de confettis, le compte à rebours de minuit et des bulles de champagne. Animations réduites : une image fixe."
+    },
+    "nouvel-an-cadres": {
+      "name": "Cadres du Nouvel An",
+      "description": "Quatre cadres de bannière assortis aux contours du Nouvel An : feux d’artifice, confettis, cadran de minuit et coupes de champagne."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Cadres du Nouvel An animés",
+      "description": "Quatre cadres de bannière animés, assortis aux contours vivants : un bouquet qui éclate, des confettis qui volent, l’aiguille de minuit qui tourne et des coupes qui trinquent."
+    },
+    "nouvel-an-fonds": {
+      "name": "Fonds du Nouvel An",
+      "description": "Quatre fonds de conversation pour la nouvelle année : ciel d’artifice, confettis, heure de minuit et bulles dorées, assez discrets pour laisser lire chaque bulle."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Nouvel An vivant · fonds",
+      "description": "Quatre fonds animés pour la nouvelle année : des gerbes lointaines, des confettis qui tombent, une nuit étoilée et des bulles qui montent. Animations réduites : un dégradé fixe."
     }
   },
   "designs": {
@@ -153,7 +293,45 @@
     "bulles-legeres": "Bulles légères",
     "pluie-de-petales": "Pluie de pétales",
     "maree": "Marée",
-    "braises": "Braises"
+    "braises": "Braises",
+    "soie": "Soie",
+    "pointille": "Pointillé",
+    "vagues-fines": "Vagues fines",
+    "cannage": "Cannage",
+    "terrazzo": "Terrazzo",
+    "crepuscule": "Crépuscule",
+    "lucioles": "Lucioles",
+    "voile-aurore": "Voile d’aurore",
+    "neige-douce": "Neige douce",
+    "ondes": "Ondes",
+    "flocons-cristal": "Flocons de cristal",
+    "guirlande-etoilee": "Guirlande étoilée",
+    "sucre-d-orge-raye": "Rayures sucre d’orge",
+    "neige-de-noel": "Neige de Noël",
+    "ampoules-de-noel": "Ampoules de Noël",
+    "etincelles-atelier": "Étincelles de l’atelier",
+    "banniere-noel-givre": "Givre",
+    "banniere-noel-guirlande": "Guirlande",
+    "banniere-noel-cadeau": "Papier cadeau",
+    "banniere-noel-neige": "Tempête de neige",
+    "banniere-noel-lumieres": "Lumières scintillantes",
+    "banniere-noel-etincelles": "Étincelles de Noël",
+    "banniere-artifice": "Nuit d’artifice",
+    "banniere-confettis": "Fête des confettis",
+    "banniere-minuit": "Douze coups",
+    "banniere-champagne": "Champagne doré",
+    "banniere-artifice-vive": "Feu d’artifice vivant",
+    "banniere-confettis-vive": "Averse de confettis",
+    "banniere-minuit-vive": "Compte à rebours",
+    "banniere-champagne-vive": "Bulles de champagne",
+    "fond-artifice": "Ciel d’artifice",
+    "fond-confettis": "Confettis",
+    "fond-minuit": "Heure de minuit",
+    "fond-champagne": "Bulles dorées",
+    "fond-artifice-vif": "Gerbes lointaines",
+    "fond-confettis-vif": "Confettis qui tombent",
+    "fond-minuit-vif": "Nuit étoilée de minuit",
+    "fond-champagne-vif": "Bulles qui montent"
   },
   "rings": {
     "filet": "Filet",
@@ -214,7 +392,39 @@
     "soleil-montagnes": "Soleil sur les montagnes",
     "cercles-points": "Cercles de points",
     "tortue-marine": "Tortue marine",
-    "croix-du-sud": "Croix du Sud"
+    "croix-du-sud": "Croix du Sud",
+    "fil-d-or": "Fil d’or",
+    "perles-de-nacre": "Perles de nacre",
+    "eclipse": "Éclipse",
+    "rosace": "Rosace",
+    "nuit-etoilee": "Nuit étoilée",
+    "facettes": "Facettes",
+    "orbite": "Orbite",
+    "halo-aurore": "Halo d’aurore",
+    "pulsation": "Pulsation",
+    "scintillement": "Scintillement",
+    "comete": "Comète",
+    "houle": "Houle",
+    "flocons-tombants": "Flocons qui tombent",
+    "couronne-de-houx": "Couronne de houx",
+    "guirlande-lumineuse": "Guirlande lumineuse",
+    "etoile-du-sapin": "Étoile du sapin",
+    "bonnet-du-pere-noel": "Bonnet du Père Noël",
+    "sucre-d-orge": "Sucre d’orge",
+    "flocons-tombants-fixe": "Flocons qui tombent · fixe",
+    "couronne-de-houx-fixe": "Couronne de houx · fixe",
+    "guirlande-lumineuse-fixe": "Guirlande lumineuse · fixe",
+    "etoile-du-sapin-fixe": "Étoile du sapin · fixe",
+    "bonnet-du-pere-noel-fixe": "Bonnet du Père Noël · fixe",
+    "sucre-d-orge-fixe": "Sucre d’orge · fixe",
+    "feux-d-artifice": "Feux d’artifice",
+    "pluie-de-confettis": "Pluie de confettis",
+    "cadran-de-minuit": "Cadran de minuit",
+    "coupe-de-champagne": "Coupe de champagne",
+    "bouquet-final": "Bouquet final",
+    "envol-de-confettis": "Envol de confettis",
+    "minuit-sonne": "Minuit sonne",
+    "champagne-petillant": "Champagne pétillant"
   },
   "gamut": {
     "indigo": "Indigo Meeshy",
@@ -254,6 +464,72 @@
     "rituel": "Africain rituel",
     "rituel-anime": "Africain rituel animé",
     "celte": "Celte",
-    "celte-anime": "Celte animé"
+    "celte-anime": "Celte animé",
+    "liseret-or": "Liseré d’or",
+    "volutes": "Volutes",
+    "rang-de-perles": "Rang de perles",
+    "onyx": "Onyx",
+    "marqueterie": "Marqueterie",
+    "minuit": "Minuit",
+    "liseret-lumiere": "Liseré de lumière",
+    "perles-vives": "Perles vives",
+    "nuit-vive": "Nuit scintillante",
+    "neon": "Néon",
+    "masque-felin": "Masque félin",
+    "toile-araignee": "Toile d’araignée",
+    "ailes-ange": "Ailes d’ange",
+    "cercle-runique": "Cercle runique",
+    "griffes-os": "Griffes d’os",
+    "ailes-demon": "Ailes de démon",
+    "dragon-jade": "Dragon de jade",
+    "nuages-soie": "Nuages de soie",
+    "lanternes-papier": "Lanternes de papier",
+    "masque-ebene": "Masque d’ébène",
+    "bandes-tissees": "Bandes tissées",
+    "collier-perles": "Collier de perles",
+    "noeud-entrelace": "Nœud entrelacé",
+    "spirale-triple": "Spirale triple",
+    "lierre-emeraude": "Lierre d’émeraude",
+    "corbeaux-tournoyants": "Corbeaux tournoyants",
+    "aurore-boreale": "Aurore boréale",
+    "anneau-pierre-gravee": "Anneau de pierre gravée",
+    "proue-sculptee": "Proue sculptée",
+    "cobra-dore": "Cobra d’or",
+    "scarabee-aile": "Scarabée ailé",
+    "soleil-du-desert": "Soleil du désert",
+    "lotus-du-nil": "Lotus du Nil",
+    "serpent-de-jade": "Serpent de jade",
+    "cartouches-de-glyphes": "Cartouches de glyphes",
+    "frise-a-gradins": "Frise à gradins",
+    "jaguar-de-jungle": "Jaguar de la jungle",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Paon qui fait la roue",
+    "guirlande-soucis": "Guirlande de soucis",
+    "cercle-tisse": "Cercle tissé aux plumes",
+    "perlage-losanges": "Perlage en losanges",
+    "soleil-montagnes": "Soleil sur les montagnes",
+    "cercles-points": "Cercles de points",
+    "tortue-marine": "Tortue marine",
+    "croix-du-sud": "Croix du Sud",
+    "flocons-tombants": "Flocons qui tombent",
+    "couronne-de-houx": "Couronne de houx",
+    "guirlande-lumineuse": "Guirlande lumineuse",
+    "etoile-du-sapin": "Étoile du sapin",
+    "bonnet-du-pere-noel": "Bonnet du Père Noël",
+    "sucre-d-orge": "Sucre d’orge",
+    "flocons-tombants-fixe": "Flocons qui tombent · fixe",
+    "couronne-de-houx-fixe": "Couronne de houx · fixe",
+    "guirlande-lumineuse-fixe": "Guirlande lumineuse · fixe",
+    "etoile-du-sapin-fixe": "Étoile du sapin · fixe",
+    "bonnet-du-pere-noel-fixe": "Bonnet du Père Noël · fixe",
+    "sucre-d-orge-fixe": "Sucre d’orge · fixe",
+    "feux-d-artifice": "Feux d’artifice",
+    "pluie-de-confettis": "Pluie de confettis",
+    "cadran-de-minuit": "Cadran de minuit",
+    "coupe-de-champagne": "Coupe de champagne",
+    "bouquet-final": "Bouquet final",
+    "envol-de-confettis": "Envol de confettis",
+    "minuit-sonne": "Minuit sonne",
+    "champagne-petillant": "Champagne pétillant"
   }
 }

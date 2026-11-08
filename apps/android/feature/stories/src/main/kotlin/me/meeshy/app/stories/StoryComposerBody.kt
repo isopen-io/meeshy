@@ -1,16 +1,19 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
+import me.meeshy.ui.component.retouch.rememberComposerLookAuthor
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import me.meeshy.app.stories.composer.scene.ComposerSceneInvite
+import me.meeshy.app.stories.composer.scene.sceneInviteShown
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
 import me.meeshy.sdk.model.composer.ComposerHistoryPlace
 import me.meeshy.sdk.model.composer.ComposerMediaSource
@@ -25,7 +28,6 @@ import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
 import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * Ce que l'écran ouvre pour le compositeur : les sélecteurs du système et les feuilles qu'il tient. [onPickFiles] : l'appui
@@ -52,7 +54,8 @@ internal class StoryComposerDoors(
  * l'audience et Publier se retirent, et la colonne des outils porte, à la même place, ses options ; le pinceau en main n'a
  * que sa barre de dessin. [formatChevron] est le menu « Publier comme » de
  * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience, ou celles de l'élément
- * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
+ * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838) ; le panneau du geste et la bande d'un réglage
+ * se posent par-dessus la scène, qui garde sa taille (#15192). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
  * scène réduite au-dessus d'une barre collée au clavier, et rien d'autre. Quand la fenêtre a la place de deux rails
  * (#13837), les outils et le « ⋯ » vont dans un rail gauche libellé, la sélection et ↶↷ dans un rail droit, et Publier
  * sous la scène.
@@ -91,6 +94,7 @@ private fun SceneFirstFrame(
     capture: StorySceneCapture?,
 ) {
     val comparison = remember { LookComparison() }
+    val zoom = rememberComposerViewportZoom()
     val armed = capture?.armed == true
     val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
@@ -102,8 +106,8 @@ private fun SceneFirstFrame(
     val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), besideScene.editing && openSheet == null, selection,
         quiet = panel != null || typing != null || armed)
     val raised = panel?.takeIf { it.raisedAtBottom }
-    val reduced = typing == null && (raised != null || edition.anyBand)
-    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced)
+    val bottomPanelOpen = typing == null && (raised != null || edition.anyBand)
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, bottomPanelOpen = bottomPanelOpen)
     val chrome = editing.sceneControls
     val levels = edition.levels
     val edited = edition.edited
@@ -116,18 +120,23 @@ private fun SceneFirstFrame(
     Box(Modifier.fillMaxSize()) {
         StorySceneFirstLayout(
             onDismiss = doors.onClose,
-            reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
-                    StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered)
+                    Box(modifier) {
+                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered, zoom)
+                        ComposerSceneInvite(
+                            shown = sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null),
+                            hint = capture?.offer?.takeIf { captureOffered },
+                        )
+                    }
                 }
             },
-            top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
+            top = { if (!zoom.zoomed) StorySceneTop(state, viewModel, doors.onClose, editing) },
             strip = { if (chrome) StorySlideStrip(state, viewModel) },
             trailing = {
                 SceneRail(
                     content = editing.rail,
-                    tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
+                    tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column(state.writesPostText)) },
                     options = { SceneEditingOptions(edited, levels) },
                     background = { SceneEditingBackground(edited, levels) },
                 )
@@ -143,21 +152,21 @@ private fun SceneFirstFrame(
                             StoryComposerPanel(state, viewModel, onPickMedia = doors.onPickMedia, onOpenSoundShelf = doors.onOpenSoundShelf)
                         },
                         onCloseLocal = { onMorePanel(null) },
+                        zoom = zoom,
                     )
                 } ?: SceneEditingBand(edition, state, viewModel, comparison)
             },
             socle = {
-                if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen, editing.publication) { onMorePanel(StoryMorePanel.POST_TEXT) }
+                if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen, editing.publication)
             },
             sheet = openSheet,
             onSheetDismiss = sheet.onDismiss,
             sheetContent = { open -> SceneSheetContent(open, state, viewModel, comparison, sheet, edited.background) },
             typing = typing,
             rails = rails,
-            incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
-            clearsTrailingLane = editing.cedesLane && openSheet == null,
+            incoming = incomingLayer(state, viewModel),
         )
-        EditingAnnouncer(editing = editedWord(state, editing.editing))
+        EditingAnnouncer(selected = selectedAnnouncement(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
     }
 }
@@ -273,10 +282,12 @@ private fun rememberSceneBackground(
 
 /** Le mot de ce qui est en édition, pour TalkBack : la famille de l'objet, ou « Fond » pour le fond média (#13973). */
 @Composable
-private fun editedWord(state: StoryComposerUiState, editing: Boolean): String? {
+private fun selectedAnnouncement(state: StoryComposerUiState, editing: Boolean): String? {
     val ref = state.selectedSceneObject?.takeIf { editing } ?: return null
-    return if (state.selectionSubject == ComposerSelectionSubject.BACKGROUND) stringResource(R.string.stories_composer_background)
-    else familyWord(state.familyOf(ref))
+    return stringResource(
+        if (state.selectionSubject == ComposerSelectionSubject.BACKGROUND) BACKGROUND_SELECTED_ANNOUNCEMENT
+        else state.familyOf(ref).selectedAnnouncementRes(),
+    )
 }
 
 /**
@@ -340,6 +351,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
     val placedMedia = remember(state.deck.slides, state.attachments, state.pendingUploads) {
         state.deck.slides.associate { it.id to state.thumbnailPlacedOf(it, viewModel.mediaBaseUrl) }
     }
+    CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     ComposerSlideRail(
         deck = state.deck,
         backgrounds = backgrounds,
@@ -354,6 +366,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
         onEditBackground = viewModel::onEditSlideBackground,
         placedMedia = placedMedia,
     )
+    }
 }
 
 /** Ce que les outils et le « ⋯ » atteignent hors du view model : l'export, les portes de l'écran, l'aperçu et l'effacement. */
@@ -393,6 +406,7 @@ private fun StorySceneTools(
         },
         onMediaSource = rememberMediaSourceAction(state, more.doors, more.onMorePanel, more.capture),
         cameraServed = more.cameraServed,
+        postText = state.postText,
     )
 }
 
@@ -430,6 +444,8 @@ private fun storySceneRails(
         animated = state.sceneIsAnimated,
         exportEnabled = !sceneExport.isExporting && !state.isPublishing,
         cameraServed = more.cameraServed,
+        writesPostText = state.writesPostText,
+        postText = state.postText,
     )
     return StorySceneRails(
         leading = {
@@ -451,8 +467,8 @@ private fun storySceneRails(
                 onRedo = viewModel::onRedo,
             )
         },
-        socle = { if (chrome) StorySocleNotice(state, viewModel::onRetryMediaPick) },
-        below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) { more.onMorePanel(StoryMorePanel.POST_TEXT) } },
+        socle = { if (chrome) StorySocleNotice(state, viewModel) },
+        below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) },
     )
 }
 
@@ -472,7 +488,7 @@ private fun StoryComposerUiState.activeSceneTool(): ComposerSceneTool? = when (b
 
 /**
  * Texte pose un texte, Média et Son ouvrent leur sélecteur (ou leur panneau s'il y a déjà de quoi), Dessin prend le pinceau,
- * Fond ouvre son panneau, Mention et Lieu leur feuille (#14049).
+ * Fond sélectionne le fond média peint, sinon ouvre son panneau (#15863), Mention et Lieu leur feuille (#14049), « Texte du post » son champ collé au clavier (#14457).
  */
 @Composable
 private fun rememberSceneToolAction(
@@ -484,7 +500,7 @@ private fun rememberSceneToolAction(
     val addText = rememberGuardedAddition(state.deck.selectedCanAddTextElement, R.string.composer_scene_cap_text, viewModel::onAddTextElement)
     val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, doors.onOpenStickers)
     val pickMedia = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
-    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isUploadingMedia
+    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isPreparingMedia
     return { tool ->
         more.onMorePanel(null)
         when (tool) {
@@ -493,9 +509,10 @@ private fun rememberSceneToolAction(
             ComposerSceneTool.STICKER -> openStickers()
             ComposerSceneTool.SOUND -> doors.onOpenSoundShelf()
             ComposerSceneTool.DRAWING -> viewModel.onEnterDrawingMode()
-            ComposerSceneTool.BACKGROUND -> viewModel.onBandToolSwipeUp(StoryToolMode.TEXTURE)
+            ComposerSceneTool.BACKGROUND -> viewModel.onBackgroundTool()
             ComposerSceneTool.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
             ComposerSceneTool.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
+            ComposerSceneTool.POST_TEXT -> more.onMorePanel(StoryMorePanel.POST_TEXT)
             ComposerSceneTool.MORE -> Unit
         }
     }
@@ -580,7 +597,6 @@ private fun StorySocle(
     formatChevron: (@Composable () -> Unit)?,
     onOpenSheet: (StoryComposerSheet) -> Unit,
     publication: Boolean,
-    onPostText: () -> Unit,
 ) {
     if (ComposerSceneReferences.isServed(state.hashtags, state.draft.mentions)) EditingChromeVisibility(publication) {
         ComposerSceneReferenceFooter(
@@ -590,30 +606,40 @@ private fun StorySocle(
             onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
         )
     }
-    StorySocleNotice(state, viewModel::onRetryMediaPick)
+    StorySocleNotice(state, viewModel)
     EditingChromeVisibility(publication) {
-        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) { StoryPublish(state, viewModel, doors, formatChevron, onPostText) }
+        StoryPublish(state, viewModel, doors, formatChevron)
     }
 }
 
 @Composable
-private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Unit) {
+private fun StorySocleNotice(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    val audienceEmpty = !ComposerAudienceSelection.isPublishable(state.draft.visibility, state.draft.visibilityUserIds)
     val block = state.publishBlock?.let { stringResource(it.messageRes()) }
+        ?: if (audienceEmpty) stringResource(R.string.composer_socle_blocked_audience) else null
     val notice = block ?: sceneNotice(state) ?: return
-    val retries = block == null && state.canRetryMedia && state.errorMessage == StoryComposerViewModel.MEDIA_FAILED
-    SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })
+    SceneNoticeLine(notice, onRetry = noticeRetry(state, viewModel).takeIf { block == null })
 }
 
-/** « Texte du post » en post et en réel, puis la pastille d'audience et « Publier … ▾ » : posés sur la scène au petit écran, sous elle au grand. */
+/** Ce que « Réessayer » relance sous la ligne d'erreur : le média, le sticker (#15597) ou le son (#15598) qui a échoué. */
+private fun noticeRetry(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (() -> Unit)? = when (state.errorMessage) {
+    StoryComposerViewModel.MEDIA_FAILED -> if (state.canRetryMedia) viewModel::onRetryMediaPick else null
+    StoryComposerViewModel.STICKER_IMAGE_FAILED -> if (state.canRetrySticker) viewModel::onRetryStickerIntake else null
+    StoryComposerViewModel.SOUND_FAILED -> if (state.failedSounds.isNotEmpty()) viewModel::onRetrySoundUploads else null
+    else -> null
+}
+
+/**
+ * La pastille d'audience et « Publier … ▾ » : posés sur la scène au petit écran, sous elle au grand. Le même socle pour la
+ * story, le post et le réel (#14457) — « Texte du post » est une option du rail, jamais une rangée de plus ici.
+ */
 @Composable
 private fun StoryPublish(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
     doors: StoryComposerDoors,
     formatChevron: (@Composable () -> Unit)?,
-    onPostText: () -> Unit,
 ) {
-    if (state.writesPostText) PostTextPill(state.postText, onPostText)
     val visibility = state.draft.visibility
     val count = state.draft.visibilityUserIds.size
     val label = stringResource(visibility.labelRes())
@@ -647,4 +673,11 @@ private fun StoryPublishBlock.messageRes(): Int = when (this) {
 @Composable
 private fun StaleSheetReleased(stale: Boolean, onRelease: () -> Unit) {
     if (stale) LaunchedEffect(Unit) { onRelease() }
+}
+
+/** Ce qui entre dans la scène et voile le reste (R5 de #13863) : un média qui se prépare, ou un sticker image qui arrive (#15597). */
+private fun incomingLayer(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (@Composable () -> Unit)? {
+    state.incomingPlaceholder()?.let { placeholder -> return { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } }
+    val sticker = state.incomingSticker() ?: return null
+    return { IncomingStickerPlaceholderLayer(sticker, viewModel::onCancelStickerIntake) }
 }

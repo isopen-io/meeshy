@@ -5,6 +5,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState
 
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import { MediaUnavailable } from './media-unavailable';
 import { PlaybackStallIndicator } from './playback-stall-indicator';
@@ -21,6 +22,7 @@ import { documentAnnouncesSound } from '@/lib/canvas/document';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import { publicationImageable } from '@/lib/feed/publication-imageable';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
@@ -88,6 +90,11 @@ export type ReelPageProps = {
   /** Repartage SIMPLE, optimiste, append-only (#6484, miroir
    * `ReelsViewModel.repost`). Même garde d'absence que `onComment`. */
   readonly onRepost?: (postId: string) => void;
+  /** « Imager » le réel (#16333, #16393) — la baguette du rail, le même geste
+   * que l'entrée du menu « … » : l'atelier de carte. Absent, ou réel qui ne
+   * s'image pas (`publicationImageable`) ⇒ pas de baguette (loi 4). Stable
+   * chez l'hôte : la page reste mémoïsée. */
+  readonly onImager?: (model: FeedCardModel) => unknown;
   /** Un `play()` SONORE de la SCÈNE refusé par la politique de lecture
    * automatique (#6903) — même politique que le réel vidéo (`soundOn =
    * false`), câblée par l'écran (`routes/reels.tsx`). */
@@ -322,7 +329,7 @@ const railGlyph = (name: RailGlyph) => (
 
 /**
  * **LE RAIL DU RÉEL** — les actions, dans l'ordre d'iOS (`ReelActionRail` :
- * aimer · commenter · enregistrer · repartager · partager · son), rendues par
+ * aimer · commenter · enregistrer · repartager · partager · imager (#16333) · son), rendues par
  * `ViewerActionRail` : le MÊME disque, le même compteur, le même pas que le
  * rail des stories et celui de la visionneuse de médias (#8879). Ce qui reste
  * ici est ce que le réel SAIT FAIRE : un rappel absent ⇒ l'action n'existe pas
@@ -341,8 +348,9 @@ function reelActions({
   onShare,
   onComment,
   onRepost,
+  onImager,
   commented,
-}: Pick<ReelPageProps, 'model' | 'soundOn' | 'language' | 'onToggleSound' | 'onGesture' | 'onShare' | 'onComment' | 'onRepost'> & {
+}: Pick<ReelPageProps, 'model' | 'soundOn' | 'language' | 'onToggleSound' | 'onGesture' | 'onShare' | 'onComment' | 'onRepost' | 'onImager'> & {
   readonly playable: boolean;
   /** Le lecteur a commenté ce réel pendant la session (`usePublicationParticipation`). */
   readonly commented: boolean;
@@ -404,6 +412,14 @@ function reelActions({
       count: model.stats.shareCount,
       onPress: () => onShare(model.id),
       probe: { 'data-reel-gesture': 'share' },
+    },
+    /* LA BAGUETTE IMAGE LE RÉEL (#16333, #16166) — là où le menu « … » l'offre : tout réel qui s'image. */
+    {
+      action: 'imager',
+      label: translate(language, 'media.viewer.imager'),
+      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={GLYPH_SIZE.lg} />,
+      onPress: onImager === undefined || !publicationImageable(model) ? undefined : () => void onImager(model),
+      probe: { 'data-reel-gesture': 'imager' },
     },
     {
       action: 'sound',
@@ -573,6 +589,7 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
                 onShare: props.onShare,
                 ...(props.onComment !== undefined ? { onComment: props.onComment } : {}),
                 ...(props.onRepost !== undefined ? { onRepost: props.onRepost } : {}),
+                ...(props.onImager !== undefined ? { onImager: props.onImager } : {}),
                 commented: participation.has('commented'),
               })}
             />

@@ -153,8 +153,12 @@ describe('elireSuccesseur — la loi, sans base de données', () => {
 const prismaDouble = (
   candidats: any[],
   notifications: unknown[],
-  options: { directJamaisUtilise?: boolean } = {}
+  options: { directJamaisUtilise?: boolean; silencieuse?: 'direct' | 'group' } = {}
 ) => {
+  const silencieuse = options.silencieuse ?? (options.directJamaisUtilise ? 'direct' : undefined);
+  const typeApparie = (type: unknown): boolean =>
+    silencieuse !== undefined &&
+    (type === silencieuse || (typeof type === 'object' && type !== null && ((type as { in?: unknown[] }).in ?? []).includes(silencieuse)));
   const eligibles = candidats.filter(
     (c) => typeof c.userId === 'string' && c.userId.length > 0
   );
@@ -162,7 +166,9 @@ const prismaDouble = (
     // La loi écarte d'abord le DM JAMAIS UTILISÉ, qui se ferme au lieu de se
     // transmettre — règle qui vivait dans `delete-for-me.ts` seul.
     conversation: {
-      count: jest.fn<any>().mockResolvedValue(options.directJamaisUtilise ? 1 : 0),
+      count: jest.fn<any>((args: any) =>
+        Promise.resolve(args?.where?.firstMessageSentAt === null && typeApparie(args?.where?.type) ? 1 : 0)
+      ),
     },
     participant: {
       findMany: jest.fn<any>((args: any) => {
@@ -380,8 +386,34 @@ describe('resoudreSuccessionDuCreateur — ce qui ne se transmet pas, et ce qui 
     });
 
     expect(prisma.conversation.count).toHaveBeenCalledWith({
-      where: { id: 'c-1', type: 'direct', firstMessageSentAt: null },
+      where: { id: 'c-1', type: { in: ['direct', 'group'] }, firstMessageSentAt: null },
     });
+  });
+
+  it("#14644 — ferme un GROUPE encore silencieux (aucun message) plutôt que de le transmettre", async () => {
+    // Ses invités ne l'ont jamais vu : aucun conversation:new, aucune
+    // invitation. Le transmettre ferait d'un invité le créateur d'un groupe
+    // qu'il n'a ni demandé ni vu — et la liste le lui montrerait sans annonce.
+    const prisma = prismaDouble([membre({ userId: 'u-b', role: 'admin' })], [], { silencieuse: 'group' });
+
+    const issue = await resoudreSuccessionDuCreateur(prisma as any, {
+      conversationId: 'c-1',
+      sortantUserId: 'u-a',
+    });
+
+    expect(issue).toEqual({ kind: 'close' });
+    expect(prisma.participant.findMany).not.toHaveBeenCalled();
+  });
+
+  it("#14644 — un groupe déjà démarré se transmet toujours", async () => {
+    const prisma = prismaDouble([membre({ userId: 'u-b', role: 'admin' })], []);
+
+    const issue = await resoudreSuccessionDuCreateur(prisma as any, {
+      conversationId: 'c-1',
+      sortantUserId: 'u-a',
+    });
+
+    expect(issue).not.toEqual({ kind: 'close' });
   });
 
   it('BORNE ses lectures, et cadre la trace sur CETTE conversation', async () => {

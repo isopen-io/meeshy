@@ -217,6 +217,18 @@ try {
         const capturing = await page.$eval('[data-call-alert="capturing"]', (el) => el.textContent ?? '').catch(() => '');
         check(capturing === `${PEER_NAME} capture l’écran de l’appel`, `${label} : l'alerte de capture nomme le pair (« ${capturing} »)`);
         await capture(page, 'alertes');
+        const overlaps = await page.evaluate(() => {
+          const capsule = document.querySelector('[data-call-alert="capturing"]')?.getBoundingClientRect();
+          const holders = [...document.querySelectorAll('[data-call-self-controls-holder]')].map((el) => el.getBoundingClientRect()).filter((box) => box.width > 0 && box.height > 0);
+          return capsule === undefined ? [] : holders.filter((box) => box.left < capsule.right && capsule.left < box.right && box.top < capsule.bottom && capsule.top < box.bottom).length;
+        });
+        check(overlaps === 0, `${label} : R1 — la capsule de capture n'est recouverte par aucune commande de ma vignette (${overlaps} chevauchement(s))`);
+        const { width: stageWidth, height: stageHeight } = page.viewportSize();
+        await page.mouse.click(stageWidth * 0.3, stageHeight * 0.55);
+        check(await appears(page, '[data-call-chrome="hidden"]', 2000), `${label} : un toucher sur la scène range le chrome`);
+        check(await appears(page, '[data-call-alert="capturing"]', 2000), `${label} : R1 — le chrome rangé, la capsule de capture reste visible`);
+        await page.mouse.click(stageWidth * 0.3, stageHeight * 0.55);
+        check(await appears(page, '[data-call-chrome="shown"]', 2000), `${label} : un second toucher rend le chrome`);
         await page.evaluate(() => window.__meeshyFixtureCallPeer?.capture(false));
         check(await vanishes(page, '[data-call-alert="capturing"]'), `${label} : la capture cessée, l'alerte s'efface`);
 

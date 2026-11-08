@@ -18,6 +18,8 @@ export type LandingCopy = {
   readonly navHow: string;
   readonly navWorld: string;
   readonly navFaq: string;
+  /** Le lien de l'en-tête vers `/download` (#16407) — court : il partage la rangée de « Mes conversations » sur téléphone. */
+  readonly navDownload: string;
   readonly languageLabel: string;
   readonly myConversations: string;
   readonly presence: string;
@@ -58,6 +60,14 @@ export type LandingCopy = {
   readonly partners: string;
   readonly unavailable: string;
   readonly returnToWorld: string;
+  /** Le nom du groupe des deux badges de boutique (#15120). */
+  readonly storesLabel: string;
+  readonly appStoreCaption: string;
+  /** Ce que lit un lecteur d'écran sur le badge App Store. */
+  readonly appStoreLabel: string;
+  readonly googlePlayCaption: string;
+  /** Ce que lit un lecteur d'écran sur le badge Google Play. */
+  readonly googlePlayLabel: string;
 };
 
 const fr: LandingCopy = {
@@ -69,6 +79,7 @@ const fr: LandingCopy = {
   navHow: 'Comment ça marche',
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Télécharger',
   languageLabel: "Langue de l'interface",
   myConversations: 'Mes conversations',
   presence: '{count} personnes dans World Wide',
@@ -115,6 +126,11 @@ const fr: LandingCopy = {
   partners: 'Partenaires',
   unavailable: 'World Wide est momentanément fermée. Connectez-vous pour retrouver vos conversations.',
   returnToWorld: 'Revenir dans World Wide',
+  storesLabel: 'Télécharger l’application',
+  appStoreCaption: 'Télécharger dans',
+  appStoreLabel: 'Télécharger dans l’App Store',
+  googlePlayCaption: 'Disponible sur',
+  googlePlayLabel: 'Disponible sur Google Play',
 };
 
 const en: LandingCopy = {
@@ -126,6 +142,7 @@ const en: LandingCopy = {
   navHow: 'How it works',
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Download',
   languageLabel: 'Interface language',
   myConversations: 'My conversations',
   presence: '{count} people in World Wide',
@@ -172,6 +189,11 @@ const en: LandingCopy = {
   partners: 'Partners',
   unavailable: 'World Wide is closed for now. Sign in to find your conversations.',
   returnToWorld: 'Back to World Wide',
+  storesLabel: 'Get the app',
+  appStoreCaption: 'Download on the',
+  appStoreLabel: 'Download on the App Store',
+  googlePlayCaption: 'Get it on',
+  googlePlayLabel: 'Get it on Google Play',
 };
 
 const es: LandingCopy = {
@@ -183,6 +205,7 @@ const es: LandingCopy = {
   navHow: 'Cómo funciona',
   navWorld: 'World Wide',
   navFaq: 'Preguntas frecuentes',
+  navDownload: 'Descargar',
   languageLabel: 'Idioma de la interfaz',
   myConversations: 'Mis conversaciones',
   presence: '{count} personas en World Wide',
@@ -229,6 +252,11 @@ const es: LandingCopy = {
   partners: 'Socios',
   unavailable: 'World Wide está cerrada por ahora. Inicia sesión para encontrar tus conversaciones.',
   returnToWorld: 'Volver a World Wide',
+  storesLabel: 'Descarga la app',
+  appStoreCaption: 'Descárgalo en el',
+  appStoreLabel: 'Descargar en el App Store',
+  googlePlayCaption: 'Disponible en',
+  googlePlayLabel: 'Disponible en Google Play',
 };
 
 const pt: LandingCopy = {
@@ -240,6 +268,7 @@ const pt: LandingCopy = {
   navHow: 'Como funciona',
   navWorld: 'World Wide',
   navFaq: 'Perguntas frequentes',
+  navDownload: 'Baixar',
   languageLabel: 'Idioma da interface',
   myConversations: 'Minhas conversas',
   presence: '{count} pessoas no World Wide',
@@ -286,6 +315,11 @@ const pt: LandingCopy = {
   partners: 'Parceiros',
   unavailable: 'O World Wide está fechado no momento. Entre para encontrar suas conversas.',
   returnToWorld: 'Voltar ao World Wide',
+  storesLabel: 'Baixe o app',
+  appStoreCaption: 'Baixar na',
+  appStoreLabel: 'Baixar na App Store',
+  googlePlayCaption: 'Disponível no',
+  googlePlayLabel: 'Disponível no Google Play',
 };
 
 const de: LandingCopy = {
@@ -297,6 +331,7 @@ const de: LandingCopy = {
   navHow: "So funktioniert's",
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Download',
   languageLabel: 'Sprache der Oberfläche',
   myConversations: 'Meine Unterhaltungen',
   presence: '{count} Personen in World Wide',
@@ -343,6 +378,11 @@ const de: LandingCopy = {
   partners: 'Partner',
   unavailable: 'World Wide ist gerade geschlossen. Melde dich an, um deine Unterhaltungen zu finden.',
   returnToWorld: 'Zurück zu World Wide',
+  storesLabel: 'Hol dir die App',
+  appStoreCaption: 'Laden im',
+  appStoreLabel: 'Laden im App Store',
+  googlePlayCaption: 'Jetzt bei',
+  googlePlayLabel: 'Jetzt bei Google Play',
 };
 
 const it: LandingCopy = {
@@ -354,6 +394,7 @@ const it: LandingCopy = {
   navHow: 'Come funziona',
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Scarica',
   languageLabel: "Lingua dell'interfaccia",
   myConversations: 'Le mie conversazioni',
   presence: '{count} persone in World Wide',
@@ -400,6 +441,11 @@ const it: LandingCopy = {
   partners: 'Partner',
   unavailable: 'World Wide è chiusa per ora. Accedi per ritrovare le tue conversazioni.',
   returnToWorld: 'Torna in World Wide',
+  storesLabel: 'Scarica l’app',
+  appStoreCaption: 'Scarica su',
+  appStoreLabel: 'Scarica su App Store',
+  googlePlayCaption: 'Disponibile su',
+  googlePlayLabel: 'Disponibile su Google Play',
 };
 
 const ar: LandingCopy = {
@@ -411,6 +457,7 @@ const ar: LandingCopy = {
   navHow: 'كيف يعمل',
   navWorld: 'World Wide',
   navFaq: 'الأسئلة الشائعة',
+  navDownload: 'تنزيل',
   languageLabel: 'لغة الواجهة',
   myConversations: 'محادثاتي',
   presence: '{count} شخصًا في World Wide',
@@ -457,6 +504,11 @@ const ar: LandingCopy = {
   partners: 'الشركاء',
   unavailable: 'World Wide مغلقة حاليًا. سجّل الدخول للعثور على محادثاتك.',
   returnToWorld: 'العودة إلى World Wide',
+  storesLabel: 'نزّل التطبيق',
+  appStoreCaption: 'حمّله من',
+  appStoreLabel: 'التنزيل من App Store',
+  googlePlayCaption: 'احصل عليه من',
+  googlePlayLabel: 'احصل عليه من Google Play',
 };
 
 export const LANDING_COPY: Readonly<Record<LandingLanguage, LandingCopy>> = { fr, en, es, pt, de, it, ar };

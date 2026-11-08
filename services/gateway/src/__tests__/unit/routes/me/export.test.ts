@@ -105,6 +105,12 @@ async function buildApp(opts: {
     ),
     // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
     callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
+    ...Object.fromEntries(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
   } as any);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -157,6 +163,7 @@ describe('GET /export — default JSON (all types)', () => {
       'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
       'readingActivity',
       'calls',
+      'relations',
     ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);

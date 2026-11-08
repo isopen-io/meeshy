@@ -219,7 +219,7 @@ struct GlobalSearchView: View {
     private func tabCount(for tab: SearchTab) -> Int {
         switch tab {
         case .messages: return viewModel.messageCount
-        case .conversations: return viewModel.conversationCount
+        case .posts: return viewModel.postCount
         case .users: return viewModel.userCount
         }
     }
@@ -238,8 +238,8 @@ struct GlobalSearchView: View {
                     switch viewModel.selectedTab {
                     case .messages:
                         messagesResultsList
-                    case .conversations:
-                        conversationsResultsList
+                    case .posts:
+                        postsResultsList
                     case .users:
                         usersResultsList
                     }
@@ -428,11 +428,11 @@ struct GlobalSearchView: View {
                 EmptyStateView(
                     icon: "magnifyingglass",
                     title: String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy"),
-                    subtitle: String(localized: "search.global.subtitle", defaultValue: "Messages, conversations, utilisateurs")
+                    subtitle: String(localized: "search.global.subtitle", defaultValue: "Messages, posts, utilisateurs")
                 )
                 .padding(.top, 60)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy") + ". " + String(localized: "search.global.subtitle", defaultValue: "Messages, conversations, utilisateurs"))
+                .accessibilityLabel(String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy") + ". " + String(localized: "search.global.subtitle", defaultValue: "Messages, posts, utilisateurs"))
             }
         }
     }
@@ -499,197 +499,26 @@ struct GlobalSearchView: View {
             Button {
                 handleMessageTap(result)
             } label: {
-                messageResultRow(result)
+                MessageSearchResultRow(result: result, highlightedQuery: viewModel.resultsQuery, isDark: theme.mode.isDark)
+                    .equatable()
             }
             .buttonStyle(MeeshyPointerButtonStyle())
             .staggeredAppear(index: index, baseDelay: 0.03)
         }
     }
 
-    private func messageResultRow(_ result: GlobalSearchMessageResult) -> some View {
-        let label = messageResultAccessibilityLabel(result)
-        return HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
-                name: result.conversationName,
-                context: .conversationList,
-                avatarURL: result.conversationAvatar
-            )
+    // MARK: - Posts Results
 
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                HStack {
-                    Text(result.conversationName)
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    Text(RelativeTimeFormatter.shortString(for: result.createdAt))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                Text(result.senderName)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo300)
-                    .lineLimit(1)
-
-                Text(highlightedText(result.content, query: viewModel.resultsQuery))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(MeeshySpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.inputBorder, lineWidth: MeeshyBorder.hairline)
-                )
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(label)
-        .accessibilityHint(String(localized: "accessibility.opens_conversation", defaultValue: "Ouvre la conversation"))
-        .accessibilityAddTraits(.isButton)
-    }
-
-    // MARK: - Conversations Results
-
-    private var conversationsResultsList: some View {
-        ForEach(Array(viewModel.conversationResults.enumerated()), id: \.element.id) { index, result in
+    private var postsResultsList: some View {
+        ForEach(Array(viewModel.postResults.enumerated()), id: \.element.id) { index, result in
             Button {
-                handleConversationTap(result)
+                handlePostTap(result)
             } label: {
-                conversationResultRow(result)
+                PostSearchResultRow(result: result, highlightedQuery: viewModel.resultsQuery, isDark: theme.mode.isDark)
+                    .equatable()
             }
             .buttonStyle(MeeshyPointerButtonStyle())
             .staggeredAppear(index: index, baseDelay: 0.03)
-        }
-    }
-
-    private func conversationResultRow(_ result: GlobalSearchConversationResult) -> some View {
-        let label = conversationResultAccessibilityLabel(result)
-        return HStack(spacing: MeeshySpacing.md) {
-            LivePresence { MeeshyAvatar(
-                name: result.name,
-                context: .conversationList,
-                avatarURL: result.avatar,
-                presenceState: result.type == .direct ? result.conversation.participantUserId.map { PresenceManager.shared.presenceState(for: $0) } : nil,
-                ring: result.type == .direct ? result.conversation.participantRing : nil
-            ) }
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                HStack {
-                    ConversationTitleLabel(
-                        name: result.name,
-                        favoriteEmoji: result.conversation.userState.reaction,
-                        font: MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold),
-                        color: theme.textPrimary
-                    )
-
-                    Spacer()
-
-                    if result.unreadCount > 0 {
-                        Text("\(result.unreadCount)")
-                            // Fixed: compact numeric unread badge (iOS convention) —
-                            // kept off Dynamic Type so the capsule stays pill-tight.
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, MeeshySpacing.xsPlus)
-                            .padding(.vertical, MeeshySpacing.xxs)
-                            .background(
-                                Capsule()
-                                    .fill(MeeshyColors.error)
-                            )
-                    }
-                }
-
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    conversationTypeIcon(result.type)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
-
-                    Text(result.type.displayName)
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(theme.textMuted)
-
-                    if result.memberCount > 2 {
-                        Text(MembersCountLabel.text(result.memberCount))
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(theme.textMuted)
-                    }
-                }
-
-                conversationLastMessageLabel(result)
-            }
-        }
-        .padding(MeeshySpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.inputBorder, lineWidth: MeeshyBorder.hairline)
-                )
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(label)
-        .accessibilityHint(String(localized: "accessibility.opens_conversation", defaultValue: "Ouvre la conversation"))
-        .accessibilityAddTraits(.isButton)
-    }
-
-    @ViewBuilder
-    private func conversationLastMessageLabel(_ result: GlobalSearchConversationResult) -> some View {
-        switch result.conversation.lastMessageSummaryKind() {
-        case .hidden:
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: "eye.slash")
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                Text(String(localized: "conversation.summary.hidden", defaultValue: "1 message caché"))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
-            }
-            .foregroundColor(theme.textSecondary)
-            .lineLimit(1)
-
-        case .viewOnce:
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: MessageProtectionSymbols.viewOnce)
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                Text(String(localized: "conversation.summary.view_once", defaultValue: "1 message vue unique"))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
-            }
-            .foregroundColor(theme.textSecondary)
-            .lineLimit(1)
-
-        case .expired:
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: MessageProtectionSymbols.expired)
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                Text(String(localized: "message.expired", defaultValue: "Message expiré"))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
-            }
-            .foregroundColor(theme.textSecondary)
-            .lineLimit(1)
-
-        case .afterRead:
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: "flame.fill")
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                Text(String(localized: "protection.afterRead", defaultValue: "Disparaît après lecture"))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
-            }
-            .foregroundColor(theme.textSecondary)
-            .lineLimit(1)
-
-        case .ephemeralActive, .standard:
-            if let preview = result.lastMessagePreview, !preview.isEmpty {
-                Text(preview)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-            }
         }
     }
 
@@ -771,39 +600,6 @@ struct GlobalSearchView: View {
 
     // MARK: - Accessibility Label Helpers
 
-    private func messageResultAccessibilityLabel(_ result: GlobalSearchMessageResult) -> String {
-        let messageFrom = String(localized: "accessibility.message_from", defaultValue: "Message de")
-        let inConversation = String(localized: "accessibility.in_conversation", defaultValue: "dans")
-        return "\(messageFrom) \(result.senderName) \(inConversation) \(result.conversationName), \(result.content), \(RelativeTimeFormatter.shortString(for: result.createdAt))"
-    }
-
-    private func conversationResultAccessibilityLabel(_ result: GlobalSearchConversationResult) -> String {
-        let lastMessageLabel = String(localized: "accessibility.last_message", defaultValue: "dernier message")
-
-        var parts = [result.name, result.type.displayName]
-        if result.memberCount > 2 {
-            parts.append(MembersCountLabel.text(result.memberCount))
-        }
-        if result.unreadCount > 0 {
-            parts.append(UnreadCountLabel.messages(result.unreadCount))
-        }
-        switch result.conversation.lastMessageSummaryKind() {
-        case .hidden:
-            parts.append("\(lastMessageLabel): masqué")
-        case .viewOnce:
-            parts.append("\(lastMessageLabel): vue unique")
-        case .expired:
-            parts.append("\(lastMessageLabel): expiré")
-        case .afterRead:
-            parts.append("\(lastMessageLabel): " + String(localized: "protection.afterRead", defaultValue: "Disparaît après lecture"))
-        case .ephemeralActive, .standard:
-            if let preview = result.lastMessagePreview, !preview.isEmpty {
-                parts.append("\(lastMessageLabel): \(preview)")
-            }
-        }
-        return parts.joined(separator: ", ")
-    }
-
     private func userResultAccessibilityLabel(_ result: GlobalSearchUserResult, presence: PresenceState) -> String {
         let displayName = result.displayName ?? result.username
         var label = "\(displayName), @\(result.username)"
@@ -820,17 +616,30 @@ struct GlobalSearchView: View {
         HapticFeedback.light()
         dismiss()
 
-        // Find the conversation in the list or create a minimal one for navigation
-        if let conv = conversationListViewModel?.conversations.first(where: { $0.id == result.conversationId }) {
-            router.push(.conversation(conv))
+        // Le toucher ouvre la conversation SUR le message (#14619).
+        let conversations = conversationListViewModel?.conversations ?? []
+        Task { @MainActor in
+            await MessageSearchResultOpener.open(result, among: conversations, router: router)
         }
     }
 
-    private func handleConversationTap(_ result: GlobalSearchConversationResult) {
+    /// Un toucher ouvre le contenu par SA porte (#14620) : le détail d'un
+    /// post, le lecteur de réels sur la suite des réels trouvés, le lecteur de
+    /// story par la porte unique des stories nommées.
+    private func handlePostTap(_ result: GlobalSearchPostResult) {
         viewModel.addToRecentSearches(viewModel.searchText)
         HapticFeedback.light()
-        dismiss()
-        router.push(.conversation(result.conversation))
+        switch result.kind {
+        case .reel:
+            let reels = viewModel.postResults.filter { $0.kind == .reel }.map(\.post)
+            ProfilePostsOpener.openReel(result.post, in: reels) { dismiss() }
+        case .story:
+            dismiss()
+            DeepLinkRouter.shared.pendingDeepLink = .storyDetail(postId: result.id)
+        case .post, .status:
+            dismiss()
+            router.push(.postDetail(result.id, result.post))
+        }
     }
 
     private func handleUserTap(_ result: GlobalSearchUserResult) {
@@ -842,27 +651,5 @@ struct GlobalSearchView: View {
             displayName: result.displayName,
             avatarURL: result.avatar
         )
-    }
-
-    // MARK: - Helpers
-
-    private func highlightedText(_ text: String, query: String) -> AttributedString {
-        var attributed = AttributedString(text)
-        if let range = attributed.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
-            attributed[range].foregroundColor = MeeshyColors.error
-            attributed[range].font = MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold)
-        }
-        return attributed
-    }
-
-    private func conversationTypeIcon(_ type: MeeshyConversation.ConversationType) -> Image {
-        switch type {
-        case .direct: return Image(systemName: "person.fill")
-        case .group: return Image(systemName: "person.2.fill")
-        case .public, .global: return Image(systemName: "globe")
-        case .broadcast, .channel: return Image(systemName: "megaphone.fill")
-        case .community: return Image(systemName: "person.3.fill")
-        case .bot: return Image(systemName: "cpu.fill")
-        }
     }
 }

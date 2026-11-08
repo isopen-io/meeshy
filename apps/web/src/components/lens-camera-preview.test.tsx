@@ -74,6 +74,7 @@ const harness = (acquire: () => Promise<MediaStreamTrack> = async () => fakeTrac
         },
         release: (track) => void log.released.push(track),
         used: () => [],
+        onFailure: () => undefined,
       };
     },
     attach: (_video, track) => void log.attached.push(track),

@@ -24,5 +24,5 @@ object ProfileSnapshot {
     }
 
     fun resolveServerUserWithOptimistic(server: MeeshyUser, pending: List<UpdateProfileRequest>): MeeshyUser =
-        pending.fold(server, ProfileEditApply::apply)
+        ProfileGuard.fold(server, pending)
 }

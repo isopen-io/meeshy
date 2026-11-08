@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cache_purge_freed">%1$s libérés</string>
+    <string name="cache_purge_failed">Impossible de vider le cache. Réessayez.</string>
+    <string name="cache_purge_cell_selected">Cochée</string>
+    <string name="cache_purge_cell_unselected">Non cochée</string>
+</resources>

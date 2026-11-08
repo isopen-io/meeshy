@@ -12,6 +12,7 @@ import javax.inject.Inject
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.contacts.ContactsTab
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 
 /**
  * L'onglet « Demandes » des contacts, ouvert directement (iOS `router.push(.peopleDiscovery(.requests))`) :
@@ -23,7 +24,7 @@ class FriendRequestsDestinations @Inject constructor() : NavGraphContributor {
             ContactsScreen(
                 onBack = { navController.popBackStack() },
                 initialTab = ContactsTab.Requests,
-                onOpenProfile = { userId -> if (userId.isNotBlank()) navController.navigate(Routes.profile(userId)) },
+                onOpenProfile = rememberProfileOpenerOverSheet(navController),
             )
         }
     }

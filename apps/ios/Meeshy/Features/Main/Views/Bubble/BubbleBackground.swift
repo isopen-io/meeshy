@@ -32,6 +32,5 @@ struct BubbleBackground: View, Equatable {
                         lineWidth: isMe ? 0 : 1
                     )
             )
-            .anchorPreference(key: LongMessageBubbleBoundsKey.self, value: .bounds) { $0 }
     }
 }

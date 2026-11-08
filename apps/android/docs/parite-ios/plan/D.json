@@ -1567,7 +1567,8 @@
    "chat-bulle-pied-heure-et-coches",
    "chat-translation-requests-and-admission",
    "composer-glass-shell",
-   "chat-viewmodel-state-split"
+   "chat-viewmodel-state-split",
+   "lecture-moteur-partage-carte-systeme-et-caches"
   ],
   "goal": "Relier le lecteur de bulle au moteur et à la file : remplacer l'ouverture externe par la lecture sur place, router la bulle active vers le coordinateur, désengager le balayage répondre pendant le scrub, empiler les messages à plusieurs vocaux avec un pied unique, et résoudre disponibilité et posture côté application.",
   "acceptance": [
@@ -1586,7 +1587,9 @@
    "Libellés TalkBack : lecture/pause, position, vitesse",
    "Lecture dans la bulle (play, progression, vitesse, onde) ; téléchargement avec progression ; hauteur stable au premier rendu ; auto-DL selon le réseau",
    "Drapeaux de pistes traduites partagés avec le texte ; demande de traduction audio ; V.O. explicite",
-   "Transcription karaoké (révélée pour ses messages), légende intégrée, avis de consentement cliquable"
+   "Transcription karaoké (révélée pour ses messages), légende intégrée, avis de consentement cliquable",
+   "Un seul moteur : ChatAudioPlayer / ExoVoiceNoteEngine (fil et hub média) sont retirés, la bulle joue par le moteur partagé ; quitter le fil ne coupe plus la lecture (#15462)",
+   "La bulle dessine la vraie forme d'onde, servie par WaveformRepository.bubbleLevels (calculée une seule fois, cache mémoire et disque), et un repli procédural déterministe tant qu'elle n'est pas prête"
   ],
   "tests": [
    "ChatAudioBinderTest (feature:chat, Turbine) : seul le flux de la pièce active change, une pièce inactive ne reçoit aucune émission",
@@ -5469,9 +5472,9 @@
   "deps": [
    "lecture-file-vocaux-et-enchainement",
    "chat-preparer-extractions-media",
-   "racine-couches-globales",
    "socle-points-d-extension-de-l-app",
-   "dependances-gradle-scene-medias"
+   "dependances-gradle-scene-medias",
+   "lecture-moteur-partage-carte-systeme-et-caches"
   ],
   "goal": "Créer le bandeau global de lecture : loi pure de visibilité, composable plat indigo avec progression et trois contrôles, monté au-dessus de la navigation par le point d'ancrage de :app, s'empilant avec la barre d'appel et menant à la conversation source.",
   "acceptance": [
@@ -5487,7 +5490,8 @@
    "Une seule session de lecture à la fois: lancer une piste en met une autre en pause; l'état (conversation, message, position) survit à la navigation entre écrans.",
    "Le mini-lecteur est masqué quand l'écran courant est la conversation qui joue; sinon un tap navigue vers cette conversation et le message audio en cours (garde isKnownConversation).",
    "Lecture/pause depuis le mini-lecteur et depuis la notification média (MediaSession); aucune fuite de lecture après déconnexion.",
-   "Capsule au-dessus de la barre système, sous la bannière d'appel dans l'ordre z; libellé TalkBack avec titre et état."
+   "Capsule au-dessus de la barre système, sous la bannière d'appel dans l'ordre z; libellé TalkBack avec titre et état.",
+   "Monté par MediaOverlayHost (point d'ancrage :app existant, MeeshyApp.kt), sous la bannière d'appel ; racine-couches-globales le reprendra dans son ordre z sans en changer le rendu (dépendance coupée le 2026-11-03, #15462)"
   ],
   "tests": [
    "MiniPlayerVisibilityTest (core:model) : masquage dans la conversation active, grâce 5 s, fermeture immédiate, empilement",
@@ -5511,7 +5515,6 @@
    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/audio/MiniAudioPlayerBar.kt",
    "apps/android/sdk-ui/src/main/res/values/strings_mini_player.xml",
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MediaOverlayHost.kt",
-   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt",
    "apps/android/gradle/libs.versions.toml",
    "apps/android/app/build.gradle.kts",
    "apps/android/app/src/main/AndroidManifest.xml",
@@ -5940,7 +5943,7 @@
  },
  {
   "key": "audio-plein-ecran-paroles-langues-telechargement",
-  "title": "En plein écran, les paroles du vocal défilent, se traduisent et se téléchargent",
+  "title": "En plein écran, les paroles du vocal défilent au rythme de la voix, se traduisent et changent la piste jouée",
   "domain": "media-audio-video",
   "track": "D",
   "priority": "P1",
@@ -5949,8 +5952,7 @@
   "deps": [
    "audio-plein-ecran-pager-et-transport",
    "transcription-karaoke-dans-la-bulle",
-   "vocal-langue-de-piste-et-traduction-a-la-demande",
-   "enregistrement-media-galerie-sans-doublon"
+   "vocal-langue-de-piste-et-traduction-a-la-demande"
   ],
   "goal": "Compléter le plein écran audio : paroles en mode karaoké défilant ou mode lecture, états vide/en cours/résultat avec transcription sur l'appareil ou serveur, bandeau de drapeaux « Original » + traductions, feuille de langues qui change la piste jouée, bouton télécharger gardé par le portillon de sortie.",
   "acceptance": [
@@ -5958,7 +5960,7 @@
    "Mode paroles : grand corps (×2,4 du corps de base), mot courant ancré au premier tiers de la bande libre, défilement animé sous un voile flou ; mode lecture ; tap sur un segment cherche",
    "États : vide « Aucune transcription » avec action « Transcrire » (menu « Transcrire sur l'appareil » / « Transcrire via le serveur »), en cours, résultat ; la transcription serveur revient par socket (transcription-ready)",
    "Bandeau de drapeaux « Original » + traductions (drapeau + code, actif cerclé accent) et feuille « Langues » / « Traduire l'audio » ; choisir une langue change la piste jouée sans perdre contexte ni file",
-   "Bouton Télécharger gardé par le portillon de sortie (rien pour un contenu protégé) ; feuille de profil de l'auteur ; haptique succès/erreur"
+   "Haptique succès/erreur sur la transcription et le changement de langue ; le bouton Télécharger relève du lot audio-plein-ecran-telecharger (sorti le 2026-11-03, #15462)"
   ],
   "tests": [
    "AudioFullscreenLyricsTest (sdk-ui, Robolectric) : ancre au premier tiers, défilement vers le segment courant",
@@ -11711,5 +11713,247 @@
    "nearby-discovery"
   ],
   "rank": 905
+ },
+ {
+  "domain": "media-audio-video",
+  "track": "D",
+  "absorbed": [],
+  "feature_keys": [],
+  "key": "lecture-moteur-partage-carte-systeme-et-caches",
+  "title": "Un vocal continue quand on quitte la conversation ou l'app, se pilote depuis la carte média avec suivant et précédent, et ne laisse aucun son en cache après déconnexion",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 650,
+  "rank": 210,
+  "deps": [
+   "lecture-moteur-audio-media3",
+   "lecture-file-vocaux-et-enchainement",
+   "lecture-focus-audio-et-coordination-des-lecteurs",
+   "lecture-vocal-arriere-plan-et-ecran-verrouille",
+   "retour-depuis-le-lecteur-audio-systeme",
+   "media-disponibilite-et-telechargement-auto"
+  ],
+  "goal": "Faire du moteur partagé (Media3AudioPlaybackEngine + ConversationAudioCoordinator de :sdk-core) le propriétaire de toute lecture qui survit à l'écran, comme ConversationAudioCoordinator.shared sur iOS : il publie sa carte système (VoicePlaybackSessionBridge → VoicePlaybackSessionController / VoicePlaybackService) avec expéditeur, conversation, artwork, ±15 s, suivant et précédent de sa file ; il lit par le cache AUDIO du compte (MeeshyMediaCache : clôture d'époque, baux, médias protégés jamais sur disque) au lieu de son AudioDiskCache séparé ; le cache des formes d'onde rejoint l'effacement de fin de session (ADR-027). Relevé du 2026-11-03 (#15462) : le service ne possède aucun lecteur, le coordinateur n'a aucun consommateur dans le fil, ExoAudioPlayerPort écrit dans cacheDir/audio-playback (64 Mo, sans clôture de compte).",
+  "acceptance": [
+   "Une lecture du moteur partagé continue quand l'écran qui l'a lancée est quitté (navigation, retour) et quand l'app passe en arrière-plan ou que l'écran s'éteint ; balayer l'app hors des récentes l'arrête, comme iOS ; une pause garde la carte (lecture d'un toucher depuis l'écran verrouillé)",
+   "La carte média (notification MediaStyle, écran verrouillé, réglages rapides) montre l'expéditeur, « conversation — date », l'artwork (avatar de l'expéditeur, sinon de la conversation, sinon l'icône, badge de l'app en bas à gauche) et propose lecture/pause, −15 s, +15 s, suivant et précédent ; précédent après 3 s relance la piste ; un vocal protégé (éphémère, vue unique, flouté, chiffré) n'expose aucune métadonnée",
+   "Les commandes de la carte, du bouton média du casque et du Bluetooth pilotent le moteur partagé ; débrancher le casque met en pause sans reprise automatique ; un appel Meeshy actif bloque démarrage et reprise mais jamais pause ni stop, et la carte se retire pendant l'appel",
+   "Toucher la carte ouvre la conversation sur le message en cours, surligné (NowPlayingReturnPolicy.notificationTarget), à froid comme à chaud",
+   "Le moteur partagé lit par MeeshyMediaCache AUDIO (budget 200 Mo, clôture d'époque de compte, bail contre l'éviction) ; un vocal protégé ne touche jamais le disque ; l'AudioDiskCache séparé (cacheDir/audio-playback) disparaît et ses fichiers sont purgés une fois",
+   "Le cache des formes d'onde (mémoire et disque com.meeshy.waveforms.v2) et la mémoire des positions de lecture sont effacés à la déconnexion comme les caches médias (PerAccountCache) ; ADR-027 de apps/android/decisions.md le dit",
+   "Une seule carte publiée à la fois : le moteur d'écran du fil (tant qu'il existe) et le moteur partagé ne publient jamais deux sessions ; celui qui démarre fait taire l'autre (PlaybackCoordinator)"
+  ],
+  "tests": [
+   "core/model VoicePlaybackCardTest étendu : suivant/précédent selon la file, seuil de 3 s, carte neutre d'un vocal protégé",
+   "app SharedAudioSessionPublisherTest (coroutines-test, faux coordinateur) : la carte suit le coordinateur, commandes routées vers lui, fin de file, appel actif",
+   "sdk-core ExoAudioPlayerPortCacheTest (Robolectric) : lecture par le cache AUDIO, vocal protégé jamais écrit sur disque, ancien dossier purgé",
+   "sdk-core WaveformCacheAccountWipeTest : effacé par l'effacement de compte",
+   "app VoicePlaybackSessionControllerTest étendu : actions suivant/précédent, tap → conversation + message"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-core",
+   ":sdk-ui",
+   ":app"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/playback/VoicePlaybackCard.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/playback/ExoAudioPlayerPort.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/playback/PlaybackModule.kt",
+   "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/waveform/WaveformModule.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/audio/SharedAudioSessionPublisher.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/audio/VoicePlaybackSessionController.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/audio/VoicePlaybackSessionBridge.kt",
+   "apps/android/app/src/main/kotlin/me/meeshy/app/audio/VoicePlaybackService.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/media/AccountMediaWipe.kt"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator.swift",
+   "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator+NowPlaying.swift",
+   "apps/ios/Meeshy/Features/Main/Services/NowPlayingArtwork.swift",
+   "apps/ios/Meeshy/Features/Main/Services/MediaBackgroundPolicy.swift",
+   "apps/ios/Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift",
+   "apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheCoordinator.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Cache/CachePolicy.swift",
+   "packages/MeeshySDK/Sources/MeeshySDK/Audio/WaveformCache.swift"
+  ]
+ },
+ {
+  "domain": "media-audio-video",
+  "track": "D",
+  "absorbed": [],
+  "feature_keys": [],
+  "key": "vocal-file-du-fil-non-lus-et-arrivees",
+  "title": "À la fin d'un vocal, le suivant non écouté de la conversation démarre seul dans l'ordre d'arrivée, et les vocaux reçus pendant l'écoute rejoignent la file",
+  "priority": "P0",
+  "effort": "M",
+  "est_kotlin_lines": 550,
+  "rank": 212,
+  "deps": [
+   "vocal-bulle-branchement-fil"
+  ],
+  "goal": "Brancher la file du fil sur le coordinateur partagé comme iOS (ConversationViewModel+AudioQueue, ConversationAudioQueueFeed, AudioQueueAppendTracker, ConversationViewModel+QuotedAudio) : file des vocaux non écoutés après le curseur, semée par la consommation servie et par la session, ajouts en direct, retraits à la suppression, vocal cité joué seul, et lecture du dernier vocal non lu depuis la pastille de défilement.",
+  "acceptance": [
+   "Toucher un vocal construit la file des vocaux NON écoutés strictement après lui dans la même conversation, par date de réception puis ordre des pièces ; ses propres vocaux sont exclus, sauf les pistes suivantes du message touché ; chaque entrée porte la piste élue par le Prisme (rangs 1 à 4, original sinon, jamais translations.first)",
+   "Un vocal est « écouté » s'il l'a été pendant la session ou si la consommation servie le dit (currentUserConsumption.listenedComplete) ; un vocal qui échoue au chargement fait avancer la file",
+   "Un nouveau vocal d'un autre auteur reçu dans la conversation qui joue rejoint la fin de la file, jamais l'arriéré ; un vocal déjà consommé n'y revient pas",
+   "Supprimer le message qui joue ferme la lecture ; supprimer un message de la file en retire ses pièces ; supprimer la conversation qui joue, ou se déconnecter, ferme la lecture",
+   "L'aperçu audio de l'appui long et un vocal cité jouent seuls, sans file",
+   "La pastille de retour en bas du fil propose ▶ le dernier vocal non lu quand il y en a un",
+   "Fin, pause ou changement de piste : rapport « listened » (position, durée, complet, plages, langue entendue) par l'outbox, sauté sous 3 s d'écoute non complète ; au repos, la bulle garde la progression consommée"
+  ],
+  "tests": [
+   "core/model AudioQueueBuilderTest étendu : semis par la consommation servie, pistes suivantes du message touché, piste élue par le Prisme au rang 2",
+   "feature/chat ConversationAudioQueueFeedTest (coroutines-test) : ajout en direct, pas d'arriéré, consommé ignoré, suppressions",
+   "feature/chat QuotedAudioPlaybackTest : vocal cité joué seul",
+   "feature/chat ScrollPillUnreadAudioTest : ▶ du dernier vocal non lu"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":feature:chat"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/AudioQueue.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/audio/ConversationAudioQueueFeed.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/audio/ChatAudioQueue.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/audio/QuotedAudioPlayback.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatScrollPill.kt"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Services/AudioQueueBuilder.swift",
+   "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+AudioQueue.swift",
+   "apps/ios/Meeshy/Features/Main/ViewModels/Conversation/ConversationAudioQueueFeed.swift",
+   "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+QuotedAudio.swift",
+   "apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlaybackManager.swift"
+  ]
+ },
+ {
+  "domain": "media-audio-video",
+  "track": "D",
+  "absorbed": [],
+  "feature_keys": [],
+  "key": "audio-plein-ecran-portrait-decore-et-anneau",
+  "title": "En plein écran, le portrait de l'auteur porte sa décoration de profil au cœur de l'anneau de lecture, qui avance et se règle du doigt",
+  "priority": "P1",
+  "effort": "M",
+  "est_kotlin_lines": 500,
+  "rank": 512,
+  "deps": [
+   "audio-plein-ecran-pager-et-transport"
+  ],
+  "goal": "Composer le héros du plein écran audio : l'avatar de l'auteur avec sa décoration équipée (anneau de profil servi, animé, figé sous mouvement réduit) dans l'anneau de 72 barres (AudioFullscreenDial, déjà écrit, sans appelant) qui montre la progression et se règle du doigt. Une loi pure de géométrie garantit que la décoration ne chevauche jamais la bande de l'anneau. Va au-delà d'iOS, qui ne passe pas la décoration (#15464).",
+  "acceptance": [
+   "Le portrait est l'avatar de l'auteur (photo sinon initiales ; couleur de l'auteur sinon accent de la conversation) avec sa décoration de profil équipée quand elle existe (ServedProfileDecor.avatarRing résolu par ProfileDecorResolver / AppearanceCatalog, comme CallPeerVisualResolver) ; sans décoration, l'avatar seul ; aucun point de présence hors ligne",
+   "Autour, l'anneau de 72 barres radiales (bande 40 dp, écart 6 dp, barres de 24 dp) tiré de la forme d'onde du vocal : les barres jouées prennent l'accent, respirent pendant la lecture et se figent au repos comme sous mouvement réduit ; un curseur (rayon 8 dp, 11 dp en glissé) orbite",
+   "Glisser sur l'anneau, et seulement sur l'anneau, cherche la position (sens horaire depuis midi, jamais de saut par-dessus midi) ; TalkBack règle par pas de 5 %",
+   "Loi pure AudioFullscreenHeroGeometry : diamètre de l'avatar borné 72–168 dp selon la place, rayon extérieur de la décoration ≤ rayon intérieur de l'anneau − écart, en portrait comme en paysage",
+   "Toucher le portrait ou le nom ouvre la fiche de profil de l'auteur ; la décoration animée et l'anneau ne tournent que sur la page visible et sont libérés quand elle quitte l'écran"
+  ],
+  "tests": [
+   "core/model AudioFullscreenHeroGeometryTest : bornes 72–168, décoration sous l'anneau, paysage",
+   "core/model AudioDialGeometryTest étendu : curseur sans saut par-dessus midi, pas TalkBack de 5 %",
+   "sdk-ui AudioFullscreenHeroTest (Compose, Robolectric) : avec et sans décoration, sémantique, tap vers le profil"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-ui",
+   ":feature:chat"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/fullscreen/AudioFullscreenHeroGeometry.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/audio/AudioFullscreenHero.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/audio/AudioFullscreenDial.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/audio/AudioFullscreenAuthorVisual.kt"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
+   "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenDial.swift",
+   "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenRules.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift",
+   "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileSheetUser.swift"
+  ]
+ },
+ {
+  "domain": "media-audio-video",
+  "track": "D",
+  "absorbed": [],
+  "feature_keys": [],
+  "key": "audio-plein-ecran-actions-reagir-repondre-transferer",
+  "title": "Depuis le plein écran audio, je réagis, je réponds sur place et je transfère le vocal, sans que la lecture s'arrête",
+  "priority": "P1",
+  "effort": "M",
+  "est_kotlin_lines": 700,
+  "rank": 513,
+  "deps": [
+   "audio-plein-ecran-pager-et-transport"
+  ],
+  "goal": "Rail d'actions du plein écran audio gouverné par une loi pure d'offre (AudioFullscreenOffer, fail-closed pour les contenus protégés) : Réagir (bande de réactions rapides + sélecteur complet, sur le message porteur, optimiste), Répondre (barre de réponse sur place avec la citation de la pièce et un brouillon par pièce, envoi en réponse à la pièce), Transférer (feuille de transfert de la pièce), Créer avec ce média (ferme et ouvre le composeur avec ce son). La lecture continue pendant chaque action. Transférer va au-delà d'iOS (#15465).",
+  "acceptance": [
+   "Le rail n'offre que ce que permet AudioFullscreenOffer : aucune action pour un vocal éphémère, à vue unique, flouté ou chiffré ; pas de réaction pour un message hors de la fenêtre chargée ; ordre Réagir, Répondre, Transférer, Créer",
+   "Réagir ouvre la bande des 15 réactions rapides sur un disque de verre ; « + » ouvre le sélecteur complet ; la réaction s'applique au message porteur immédiatement (optimiste, annulée en cas d'échec) avec haptique",
+   "Répondre ouvre, sans quitter le plein écran, une barre de réponse ancrée en bas avec la citation du vocal (auteur, « Vocal · durée ») ; le brouillon est gardé par pièce ; envoyer répond à la pièce et referme la barre ; la lecture continue",
+   "Transférer ouvre la feuille de transfert de la pièce (ShareSubject.Piece) ; la refermer rend le plein écran dans son état ; un vocal protégé n'est jamais transférable (portillon de sortie fail-closed)",
+   "Créer avec ce média ferme le plein écran et ouvre le composeur avec ce son",
+   "Chaque bouton a une cible de 48 dp, un libellé TalkBack et une haptique ; le rail s'efface avec le chrome après 3 s de lecture et revient au toucher, à la pause et à la fin"
+  ],
+  "tests": [
+   "core/model AudioFullscreenOfferTest : protégés sans action, message hors fenêtre sans réaction, ordre",
+   "feature/chat AudioFullscreenActionsTest (Robolectric) : réaction optimiste et retour arrière, réponse à la pièce, brouillon par pièce, transfert",
+   "sdk-ui FullscreenActionRailSemanticsTest : cibles de 48 dp et libellés"
+  ],
+  "android_modules": [
+   ":core:model",
+   ":sdk-ui",
+   ":feature:chat"
+  ],
+  "android_files_touched": [
+   "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/fullscreen/AudioFullscreenOffer.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/audio/AudioFullscreenActions.kt",
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/audio/MediaReplyComposerBar.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/fullscreen/FullscreenActionRail.kt",
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/fullscreen/FullscreenReactionStrip.kt"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenRules.swift",
+   "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",
+   "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
+   "apps/ios/Meeshy/Features/Main/Views/ConversationView+MediaGallery.swift",
+   "apps/ios/Meeshy/Features/Main/Views/ConversationView+AudioFullscreen.swift"
+  ]
+ },
+ {
+  "domain": "media-audio-video",
+  "track": "D",
+  "absorbed": [],
+  "feature_keys": [],
+  "key": "audio-plein-ecran-telecharger",
+  "title": "Le plein écran audio enregistre le vocal dans Téléchargements/Meeshy, jamais un contenu protégé",
+  "priority": "P2",
+  "effort": "S",
+  "est_kotlin_lines": 200,
+  "rank": 551,
+  "deps": [
+   "audio-plein-ecran-pager-et-transport",
+   "enregistrement-media-galerie-sans-doublon"
+  ],
+  "goal": "Sorti de audio-plein-ecran-paroles-langues-telechargement le 2026-11-03 (#15462) : le bouton Télécharger du plein écran audio passe par le coordinateur unique d'enregistrement et son portillon de sortie.",
+  "acceptance": [
+   "Le disque Télécharger du haut du plein écran enregistre le vocal par le coordinateur d'enregistrement (Téléchargements/Meeshy, sans écrasement), depuis le cache, avec idle → spinner → coche et toast d'issue",
+   "Rien pour un contenu éphémère, à vue unique, flouté ou chiffré (portillon de sortie fail-closed)"
+  ],
+  "tests": [
+   "feature/chat AudioFullscreenSaveTest : enregistrement par le coordinateur, portillon fermé pour un protégé"
+  ],
+  "android_modules": [
+   ":feature:chat"
+  ],
+  "android_files_touched": [
+   "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/audio/AudioFullscreenSave.kt"
+  ],
+  "ios_reference_files": [
+   "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage+Transcription.swift"
+  ]
  }
 ]

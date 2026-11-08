@@ -6,6 +6,7 @@ import { memberSignature } from '../engagement/memberSignature';
 import { sharedPlaceFromMetadata } from '../location/sharedPlace';
 import { conversationStatsService } from '../ConversationStatsService';
 import { isEndToEndMode } from './e2eePlaintextAdmission';
+import type { StartedGroupAnnouncer } from '../conversations/announceStartedGroup';
 import {
   conversationMessageStatsService,
   resolveAttachmentType,
@@ -122,6 +123,7 @@ export interface PostSaveTranslationQueue {
 export type PostSaveEffect =
   | 'lastMessageAt'
   | 'firstMessageSentAt'
+  | 'startedGroup'
   | 'translation'
   | 'stats'
   | 'messageStats'
@@ -313,11 +315,17 @@ export function runMessagePostSaveEffects(params: {
    * n'a rien à fournir quand il ne teste pas cet effet.
    */
   engagementService?: PostSaveEngagementService | null;
+  /**
+   * #14644 — un groupe créé silencieux s'annonce à ses invités quand ce message
+   * le démarre. `undefined`/`null` désactive l'effet (même discipline que
+   * `translationService`).
+   */
+  startedGroupAnnouncer?: StartedGroupAnnouncer | null;
   message: PostSaveMessage;
   originalLanguage: string;
   onError?: (effect: PostSaveEffect, error: unknown) => void;
 }): void {
-  const { prisma, translationService, engagementService, message, originalLanguage, onError } = params;
+  const { prisma, translationService, engagementService, startedGroupAnnouncer, message, originalLanguage, onError } = params;
 
   const report = (effect: PostSaveEffect) => (error: unknown) => onError?.(effect, error);
 
@@ -349,7 +357,13 @@ export function runMessagePostSaveEffects(params: {
         where: { id: message.conversationId, firstMessageSentAt: null },
         data: { firstMessageSentAt: new Date() },
       });
-      if (flipped.count !== 1 || !message.senderUserId || !engagementService?.recordConversationStarted) return;
+      if (flipped.count !== 1) return;
+      // #14644 — un groupe créé silencieux s'annonce à ses invités ; l'unité
+      // ne fait rien d'un tête-à-tête. Indépendante du crédit de jeu ci-dessous.
+      if (startedGroupAnnouncer) {
+        void startedGroupAnnouncer.announceStartedGroup(message.conversationId).catch(report('startedGroup'));
+      }
+      if (!message.senderUserId || !engagementService?.recordConversationStarted) return;
       // Comme les autres signaux du jeu : seulement si le crédit de ce message a eu lieu.
       if (!(await contentCredited)) return;
       await engagementService.recordConversationStarted({ senderUserId: message.senderUserId, conversationId: message.conversationId });

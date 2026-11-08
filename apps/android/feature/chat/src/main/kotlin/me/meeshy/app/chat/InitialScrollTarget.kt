@@ -34,8 +34,20 @@ object InitialScrollTarget {
      * only the "no separator, land on the newest message" fallback needs
      * [orientation] — it delegates to [ChatScrollGeometry.bottomIndex].
      */
-    fun of(items: List<ChatListItem>, orientation: ChatListOrientation): Int? {
+    fun of(items: List<ChatListItem>, orientation: ChatListOrientation): Int? = of(items, orientation, landingMessageId = null)
+
+    /**
+     * Landing form: when the conversation was opened ON a message (notification, link, "go to message",
+     * [landingMessageId]) and that message is among the rendered rows, the open-scroll lands on it — ahead of the
+     * unread boundary and the bottom. A target that is not loaded (paged out, deleted, never existed) is inert: the
+     * ordinary open-scroll applies, never a crash on an absent index.
+     */
+    fun of(items: List<ChatListItem>, orientation: ChatListOrientation, landingMessageId: String?): Int? {
         if (items.isEmpty()) return null
+        landingMessageId?.let { id ->
+            val landing = items.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == id }
+            if (landing >= 0) return landing
+        }
         val separator = items.indexOfFirst { it is ChatListItem.UnreadSeparator }
         return if (separator >= 0) separator else ChatScrollGeometry.bottomIndex(items.lastIndex, orientation)
     }

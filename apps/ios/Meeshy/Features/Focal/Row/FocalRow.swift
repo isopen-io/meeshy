@@ -110,10 +110,12 @@ struct FocalRow: View {
         return input.isExpanded ? BubbleExpandableText.expandedValue : BubbleExpandableText.collapsedValue
     }
 
+    /// Seul un message replié offre une action : déplié, il ne se replie
+    /// plus (#16463).
     @ViewBuilder
     private var expansionAccessibilityActions: some View {
-        if isLongText, let toggle = actions.onToggleExpanded {
-            Button(input.isExpanded ? BubbleExpandableText.collapseTitle : BubbleExpandableText.readMoreTitle) { toggle() }
+        if isLongText, !input.isExpanded, let expand = actions.onToggleExpanded {
+            Button(BubbleExpandableText.readMoreTitle) { expand() }
         }
     }
 
@@ -141,7 +143,8 @@ struct FocalRow: View {
             isDark: input.isDark,
             onCallBack: { _ in actions.onCallBack?(input.localId) },
             onLongPress: { actions.onLongPressCallDetail?(input.localId) },
-            onOpenParticipantProfile: actions.onOpenParticipantProfile
+            onOpenParticipantProfile: actions.onOpenParticipantProfile,
+            onGreetArrivals: actions.onGreetArrivals
         )
     }
 
@@ -200,18 +203,15 @@ struct FocalRow: View {
                 editedByModerator: content.editedByModerator,
                 isEditSaving: content.isEditSaving,
                 hasEditHistory: content.hasEditHistory,
-                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } }
+                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } },
+                pinsPendingDelivery: content.pinsPendingDelivery,
+                sendStartedAt: content.meta.sendStartedAt
             )
             .equatable()
             .opacity(input.isFocused ? 0 : 1)
         }
         // Une SUITE magnifiée descend sous sa pastille, en rendu seul.
         .offset(y: focusLift)
-        // Le message long DÉPLIÉ (hors élection) garde le bloc de
-        // verre de la rangée entière, à ses marges d'origine.
-        .background {
-            if input.isExpanded && !input.isFocused { focusChrome.focusCardBackground }
-        }
         // L'effet épouse le bloc CONTENU, pas la rangée : le chemin bulle pose
         // l'effet sur la bulle elle-même parce qu'« il encadrait du vide », et
         // Focal suit le même périmètre. Sur la rangée entière, le liseré
@@ -718,10 +718,10 @@ struct FocalRow: View {
         .animation(.easeInOut(duration: 0.15), value: effectiveText)
     }
 
-    /// Le dépliage EN PLACE, tenu par l'hôte : un seul message
-    /// déplié à la fois. Sans hôte, le texte garde son état local.
+    /// Le dépliage EN PLACE, tenu par l'hôte, qui garde le message
+    /// déplié tant que le fil vit. Sans hôte, le texte garde son état local.
     private var expansion: LongMessageExpansion? {
-        actions.onToggleExpanded.map { LongMessageExpansion(messageId: input.localId, isExpanded: input.isExpanded, toggle: $0) }
+        actions.onToggleExpanded.map { LongMessageExpansion(messageId: input.localId, isExpanded: input.isExpanded, expand: $0) }
     }
 
     // La production du drapeau passe par `LanguageFlagChip.flag(for:)`, source

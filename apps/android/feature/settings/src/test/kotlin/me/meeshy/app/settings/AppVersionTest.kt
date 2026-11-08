@@ -20,4 +20,16 @@ class AppVersionTest {
         assertThat(AppVersion.display(null)).isEqualTo(AppVersion.UNKNOWN)
         assertThat(AppVersion.display("   ")).isEqualTo(AppVersion.UNKNOWN)
     }
+
+    @Test
+    fun `the build number follows the version in parentheses`() {
+        assertThat(AppVersion.display("3.0.0", 12L)).isEqualTo("3.0.0 (12)")
+    }
+
+    @Test
+    fun `an unknown or non positive build number is left out and a missing version stays a dash`() {
+        assertThat(AppVersion.display("3.0.0", null)).isEqualTo("3.0.0")
+        assertThat(AppVersion.display("3.0.0", 0L)).isEqualTo("3.0.0")
+        assertThat(AppVersion.display(null, 12L)).isEqualTo(AppVersion.UNKNOWN)
+    }
 }

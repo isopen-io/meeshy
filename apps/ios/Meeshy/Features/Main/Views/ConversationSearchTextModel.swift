@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import MeeshySDK
 
 // MARK: - Isolement du texte de recherche (#7158)
 //
@@ -33,4 +34,15 @@ final class ConversationSearchTextModel: ObservableObject {
     nonisolated deinit {}
 
     @Published var text: String = ""
+
+    /// Les MESSAGES que ce texte trouve (#14619) — né au premier usage et
+    /// porté ici, hors de l'arbre de la racine : la section Messages et l'état
+    /// « aucun résultat » en sont les seuls observateurs.
+    private(set) lazy var messageSearch = ConversationListMessageSearchModel(
+        text: $text.eraseToAnyPublisher(),
+        search: ConversationMessageSearchService(
+            api: APIClient.shared,
+            searchService: MessageSearchService(reader: DependencyContainer.shared.database.pool)
+        )
+    )
 }

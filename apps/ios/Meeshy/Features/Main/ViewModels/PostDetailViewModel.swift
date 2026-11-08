@@ -51,6 +51,9 @@ class PostDetailViewModel: ObservableObject {
     /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
     /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
     @Published var editingComment: FeedComment?
+    /// Un envoi refusé par `COMMENTS_DISABLED` (#16541) ferme le composeur sans
+    /// attendre l'écho `post:updated`.
+    @Published var commentsRefusedLocally = false
 
     let postService: PostServiceProviding
     private let socialSocket: any SocialSocketProviding
@@ -144,14 +147,20 @@ class PostDetailViewModel: ObservableObject {
         // `ConversationViewModel.loadMessages` draining NSEPendingMessageConsumer).
         await NSEPendingPostConsumer.shared.consumeAll()
         let cacheResult = await CacheCoordinator.shared.feed.load(for: postId)
+        // Une publication encore dans la file (#14929) n'existe pas côté
+        // serveur : sa carte optimiste est servie par l'hôte, et un GET sur son
+        // cmid ne rendrait qu'une absence.
+        let mayAskServer = !ClientMutationId.isValid(postId)
         switch cacheResult {
         case .fresh(let cached, _):
             post = cached.first
             return
         case .stale(let cached, _):
             post = cached.first
+            guard mayAskServer else { return }
             await refreshPost(postId)
         case .expired, .empty:
+            guard mayAskServer else { return }
             isLoading = post == nil
             await refreshPost(postId)
         }
@@ -170,7 +179,7 @@ class PostDetailViewModel: ObservableObject {
     /// porte qui l'a amenée : tap d'un listing, notification, lien) donne la
     /// source de l'impression et la provenance de la vue ; sans marque, `direct`.
     func registerDetailOpen(_ postId: String) async {
-        guard countedOpenPostIds.insert(postId).inserted else { return }
+        guard !ClientMutationId.isValid(postId), countedOpenPostIds.insert(postId).inserted else { return }
         if post != nil {
             post?.impressionCount += 1
             post?.postOpenCount += 1
@@ -212,6 +221,7 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadComments(_ postId: String) async {
+        guard !ClientMutationId.isValid(postId) else { return }
         let outcome = await onThread(postId).loadRoots()
         guard outcome != .skipped else { return }
         if outcome == .failed { warnIfNoComments() }
@@ -404,7 +414,7 @@ class PostDetailViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil, additions: PostEditAdditions = PostEditAdditions()
     ) async {
         guard let snapshot = post else { return }
         var optimistic = snapshot
@@ -428,11 +438,11 @@ class PostDetailViewModel: ObservableObject {
             // Le corps ne se construit plus ici : `known` dit ce que la
             // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
             // champ non déclaré est OMIS, et le serveur préserve le sien.
-            let updated = try await postService.update(postId: snapshot.id, known: known, draft: PostEditDraft(
+            let updated = try await postService.update(postId: snapshot.id, known: known, draft: additions.completing(PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
                 originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
-            ))
+            )))
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
             FeedbackToastManager.shared.showSuccess(String(localized: "post.detail.edit.success", defaultValue: "Post modifié"))
         } catch {
@@ -725,6 +735,18 @@ class PostDetailViewModel: ObservableObject {
                     actorUserId: event.userId
                 )
             }
+            .store(in: &socketCancellables)
+
+        subscribeToPostUpdates(postId)
+    }
+
+    /// Le post lui-même : ses commentaires fermés ou rouverts (#16541) et ses
+    /// traductions.
+    private func subscribeToPostUpdates(_ postId: String) {
+        socialSocket.postUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.id == postId }
+            .sink { [weak self] served in self?.applyServedCommentClosure(served) }
             .store(in: &socketCancellables)
 
         socialSocket.postTranslationUpdated

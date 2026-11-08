@@ -139,9 +139,117 @@ final class MediaSaveDeduplicationTests: XCTestCase {
         let expected = try await PhotoLibraryMediaSignature.of(fileAt: file)
         XCTAssertEqual(photos.signatures, [expected])
     }
+
+    // MARK: - #14640 — à la main puis automatiquement (ou deux fois) : un seul asset
+
+    /// Le coordinateur et l'enregistrement automatique passent par le MÊME
+    /// dédoublonneur que `PhotoLibraryManager` (empreinte du fichier source, alias
+    /// = identifiant de la pièce) ; seule la photothèque est remplacée.
+    private func sharedAlbum() -> (album: LiveDedupAlbum, coordinator: MediaSaveCoordinator, file: URL) {
+        let album = LiveDedupAlbum()
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("dedup-\(UUID().uuidString).jpg")
+        try? Data("la même photo reçue".utf8).write(to: file)
+        let coordinator = MediaSaveCoordinator(exitGate: .open, resolver: FixedFileResolver(file: file), photoSaver: album,
+                                               downloadReporter: SilentDownloadReporter(), branding: PassThroughBranding())
+        return (album, coordinator, file)
+    }
+
+    func test_manuelPuisAutomatique_unSeulAsset() async throws {
+        let (album, coordinator, file) = sharedAlbum()
+
+        await coordinator.pick(.photoLibrary, request: request())
+        let auto = await album.autoSave(file, attachmentId: "p1")
+
+        XCTAssertEqual(coordinator.lastOutcome, .saved(.photoLibrary))
+        XCTAssertEqual(auto, .alreadyPresent)
+        XCTAssertEqual(album.assetCount, 1)
+    }
+
+    func test_automatiquePuisManuel_unSeulAsset_etLeCoordinateurDitDéjàEnregistré() async throws {
+        let (album, coordinator, file) = sharedAlbum()
+
+        let auto = await album.autoSave(file, attachmentId: "p1")
+        await coordinator.pick(.photoLibrary, request: request())
+
+        XCTAssertEqual(auto, .saved)
+        XCTAssertEqual(coordinator.lastOutcome, .alreadyInPhotoLibrary)
+        XCTAssertEqual(album.assetCount, 1)
+    }
+
+    func test_manuelDeuxFoisDeSuite_unSeulAsset_leSecondDitDéjàEnregistré() async {
+        let (album, coordinator, _) = sharedAlbum()
+
+        await coordinator.pick(.photoLibrary, request: request())
+        await coordinator.pick(.photoLibrary, request: request())
+
+        XCTAssertEqual(coordinator.lastOutcome, .alreadyInPhotoLibrary)
+        XCTAssertEqual(album.assetCount, 1)
+    }
+
+    func test_automatiqueDeuxFoisDeSuite_unSeulAsset() async {
+        let (album, _, file) = sharedAlbum()
+
+        let first = await album.autoSave(file, attachmentId: "p1")
+        let second = await album.autoSave(file, attachmentId: "p1")
+
+        XCTAssertEqual([first, second], [.saved, .alreadyPresent])
+        XCTAssertEqual(album.assetCount, 1)
+    }
 }
 
 // MARK: - Doubles
+
+/// Une photothèque en mémoire derrière le VRAI `PhotoLibraryDeduplicator`.
+nonisolated private final class LiveDedupAlbum: PhotoLibrarySaving, PhotoLibraryAssetProbing, PhotoLibraryAssetCreating,
+                                    @unchecked Sendable {
+    private let lock = NSLock()
+    private var assets: [String] = []
+    private var deduplicator: PhotoLibraryDeduplicator {
+        PhotoLibraryDeduplicator(registry: registry, probe: self, creator: self)
+    }
+    private let registry = PhotoLibraryMediaRegistry(defaults: UserDefaults(suiteName: "live-dedup-\(UUID().uuidString)")!)
+
+    var assetCount: Int { lock.withLock { assets.count } }
+
+    /// Ce que fait `PhotoAlbumReceivedMediaWriter` : `addImageFile(at:alias:)`, empreinte du fichier.
+    func autoSave(_ file: URL, attachmentId: String) async -> PhotoLibrarySaveOutcome {
+        guard let signature = try? await PhotoLibraryMediaSignature.of(fileAt: file) else { return .failed }
+        return await deduplicator.save(request(file), signature: signature, alias: attachmentId)
+    }
+
+    private func request(_ file: URL) -> PhotoLibraryAssetRequest {
+        PhotoLibraryAssetRequest(kind: .photo, source: .file(file, move: false), originalFileName: file.lastPathComponent)
+    }
+
+    func saveImage(_ data: Data) async throws {}
+    func saveVideo(at url: URL) async throws {}
+
+    func albumContains(_ signature: PhotoLibraryMediaSignature, alias: String?) async -> Bool {
+        await deduplicator.isAlreadyInAlbum(signature)
+    }
+
+    func addToAlbum(_ file: URL, kind: AttachmentKind, moveFile: Bool,
+                    signature: PhotoLibraryMediaSignature?, alias: String?) async throws -> PhotoLibrarySaveOutcome {
+        let resolved: PhotoLibraryMediaSignature?
+        if let signature { resolved = signature } else { resolved = try? await PhotoLibraryMediaSignature.of(fileAt: file) }
+        guard let resolved else { return .failed }
+        return await deduplicator.save(request(file), signature: resolved, alias: alias)
+    }
+
+    func presence(ofAsset localIdentifier: String) -> PhotoLibraryAssetPresence {
+        lock.withLock { assets.contains(localIdentifier) ? .present : .absent }
+    }
+
+    func albumMarks() -> [PhotoLibraryMediaSignature: String]? { nil }
+
+    func create(_ request: PhotoLibraryAssetRequest) async -> String? {
+        lock.withLock {
+            let id = "asset-\(assets.count + 1)"
+            assets.append(id)
+            return id
+        }
+    }
+}
 
 private final class AlwaysOnAutoSave: ReceivedMediaAutoSaveSetting {
     var isEnabled: Bool { true }

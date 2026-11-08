@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.DirectConversationResolution
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.feedback.FeedbackToastCenter
+import me.meeshy.sdk.model.feedback.FeedbackToastKind
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
@@ -76,6 +78,8 @@ class MoodSpotlightViewModel internal constructor(
     savedStateHandle: SavedStateHandle,
     mentionSearch: MentionSearch = MentionSearch.None,
     mentionContacts: MentionContacts = MentionContacts.None,
+    private val statusCache: MoodStatusCache = MoodStatusCache.None,
+    private val toasts: FeedbackToastCenter? = null,
 ) : ViewModel() {
 
     @Inject
@@ -90,10 +94,12 @@ class MoodSpotlightViewModel internal constructor(
         savedStateHandle: SavedStateHandle,
         mentionSearch: MentionSearch,
         mentionContacts: MentionContacts,
+        statusCache: StatusBarMoodCache,
+        toasts: FeedbackToastCenter,
     ) : this(
         postRepository, userRepository, conversationRepository, messageRepository,
         sessionRepository, workManager, outOfThread, System::currentTimeMillis, savedStateHandle,
-        mentionSearch, mentionContacts,
+        mentionSearch, mentionContacts, statusCache, toasts,
     )
 
     private val statusId: String = savedStateHandle[STATUS_ID_ARG] ?: ""
@@ -125,6 +131,11 @@ class MoodSpotlightViewModel internal constructor(
         _state.update { it.copy(replyText = text) }
     }
 
+    /** Le retour de la réponse : un toast global (iOS `FeedbackToastManager`), dans la langue du lecteur. */
+    fun showToast(message: String, kind: FeedbackToastKind) {
+        toasts?.show(message, kind)
+    }
+
     fun consumeReplyOutcome() = _state.update { it.copy(replyState = MoodReplyState.IDLE) }
 
     private suspend fun load() {
@@ -132,7 +143,8 @@ class MoodSpotlightViewModel internal constructor(
             _state.update { it.copy(content = MoodSpotlightContent.Unavailable) }
             return
         }
-        postRepository.cachedPost(statusId)?.toStatusEntry()?.takeIf { MoodSpotlightRules.isLive(it, now()) }?.let { present(it) }
+        val cached = statusCache.cachedEntry(statusId) ?: postRepository.cachedPost(statusId)?.toStatusEntry()
+        cached?.takeIf { MoodSpotlightRules.isLive(it, now()) }?.let { present(it) }
         when (val result = postRepository.getPost(statusId)) {
             is NetworkResult.Success -> {
                 val fresh = result.data.toStatusEntry()?.takeIf { MoodSpotlightRules.isLive(it, now()) }

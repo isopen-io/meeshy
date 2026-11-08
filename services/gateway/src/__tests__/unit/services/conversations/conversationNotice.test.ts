@@ -18,11 +18,13 @@ const CREATED_AT = new Date('2026-09-23T10:00:00.000Z');
 const demo = { participantId: '507f1f77bcf86cd799439033', displayName: 'Demo' };
 const bob = { participantId: '507f1f77bcf86cd799439044', displayName: 'Bob' };
 
-function harness(overrides: { create?: jest.Mock; broadcast?: jest.Mock } = {}) {
+function harness(overrides: { create?: jest.Mock; broadcast?: jest.Mock; deletedAt?: Date } = {}) {
   const create = overrides.create ?? jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'msg-1', createdAt: CREATED_AT, ...data }));
   const update = jest.fn<any>().mockResolvedValue(undefined);
+  const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+  const findUnique = jest.fn<any>().mockResolvedValue({ deletedAt: overrides.deletedAt ?? null });
   const broadcast = overrides.broadcast ?? jest.fn<any>().mockResolvedValue(undefined);
-  return { deps: { prisma: { message: { create }, conversation: { update } }, broadcast }, create, update, broadcast };
+  return { deps: { prisma: { message: { create, updateMany }, conversation: { update, findUnique } }, broadcast }, create, update, updateMany, broadcast };
 }
 
 const NOTICES = [
@@ -64,6 +66,20 @@ describe('postConversationNotice', () => {
     await expect(
       postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: { kind: 'member-left', actor: bob } }),
     ).resolves.toBeNull();
+    expect(h.broadcast).not.toHaveBeenCalled();
+  });
+
+  it('#14643 — un avis écrit pendant l’obsolescence de sa conversation naît effacé et ne part pas', async () => {
+    const obsoletedAt = new Date('2026-11-02T10:00:00.000Z');
+    const h = harness({ deletedAt: obsoletedAt });
+    const message = await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: { kind: 'member-left', actor: bob } });
+
+    expect(message).toBeNull();
+    expect(h.updateMany).toHaveBeenCalledWith({
+      where: { id: 'msg-1', OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+      data: { deletedAt: obsoletedAt },
+    });
+    expect(h.update).not.toHaveBeenCalled();
     expect(h.broadcast).not.toHaveBeenCalled();
   });
 

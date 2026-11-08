@@ -54,7 +54,7 @@ internal class ConversationOptionsSlots(
     val body: @Composable () -> Unit,
 )
 
-private enum class OptionsDialog { FAVORITE, ARCHIVE, LEAVE_GROUP, DELETE, LEAVE, BLOCK }
+private enum class OptionsDialog { FAVORITE, ARCHIVE, LEAVE_GROUP, DELETE, OBSOLETE, LEAVE, BLOCK }
 
 /**
  * Les Options de la fiche Conversation (#13777) : « Bloquer cet utilisateur », « Partager » et
@@ -232,7 +232,7 @@ private fun OptionsSections(
 @Composable
 private fun OptionsActionsSection(ui: ConversationOptionsUiState, onAsk: (OptionsDialog) -> Unit) {
     val plan = ui.plan ?: return
-    if (!plan.toggleArchive && !plan.leaveGroup && !plan.deleteForMe) return
+    if (!plan.toggleArchive && !plan.leaveGroup && !plan.deleteForMe && !plan.obsolete) return
     val rows = buildList<@Composable () -> Unit> {
         if (plan.toggleArchive) {
             add {
@@ -262,6 +262,16 @@ private fun OptionsActionsSection(ui: ConversationOptionsUiState, onAsk: (Option
                     title = stringResource(R.string.conversation_options_delete_for_me),
                     color = MeeshyPalette.Error,
                     modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.DELETE) },
+                )
+            }
+        }
+        if (plan.obsolete) {
+            add {
+                SettingsRow(
+                    icon = MeeshyIcons.DeleteFilled,
+                    title = stringResource(R.string.conversation_options_obsolete),
+                    color = MeeshyPalette.Error,
+                    modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.OBSOLETE) },
                 )
             }
         }
@@ -350,6 +360,13 @@ private fun OptionsDialogHost(
             onConfirm = viewModel::deleteForMe,
             onDismiss = onDismiss,
         )
+        OptionsDialog.OBSOLETE -> ConfirmDialog(
+            title = stringResource(R.string.conversation_options_obsolete_title),
+            message = stringResource(R.string.conversation_options_obsolete_message),
+            confirm = stringResource(R.string.conversation_options_obsolete),
+            onConfirm = viewModel::makeObsolete,
+            onDismiss = onDismiss,
+        )
         OptionsDialog.BLOCK -> ConfirmDialog(
             title = stringResource(R.string.conversation_options_block_title),
             message = stringResource(R.string.conversation_options_block_message, title),
@@ -389,4 +406,5 @@ private fun ConversationOptionsError.messageRes(): Int = when (this) {
     ConversationOptionsError.CREATE_CATEGORY -> R.string.conversation_options_error_create_category
     ConversationOptionsError.LEAVE -> R.string.conversation_options_error_leave
     ConversationOptionsError.DELETE -> R.string.conversation_options_error_delete
+    ConversationOptionsError.OBSOLETE -> R.string.conversation_options_error_obsolete
 }

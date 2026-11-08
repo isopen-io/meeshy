@@ -32,6 +32,7 @@ struct RelationAccessCasesTests {
         let viewerMinor: String
         let targetMinor: String
         let viewerRole: String?
+        let targetRole: String?
         let feature: String
         let consent: String?
 
@@ -47,6 +48,7 @@ struct RelationAccessCasesTests {
                 viewerMinor: RelationAgeClass(wire: viewerMinor),
                 targetMinor: RelationAgeClass(wire: targetMinor),
                 viewerRole: PlatformRole(caseFolding: viewerRole),
+                targetRole: PlatformRole(caseFolding: targetRole),
                 feature: lawFeature,
                 consent: consent.map { RelationConsent(wire: $0) }
             )
@@ -137,6 +139,17 @@ struct RelationAccessCasesTests {
         }
     }
 
+    @Test func theMinorShieldIsTheOneOfTheTypeScriptTable() throws {
+        let table = try block(after: "export const RELATION_MINOR_TARGET_MIN_LEVEL", until: "};", in: try levelsSource())
+        let rows = try matches("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'", in: table)
+        let declared = Dictionary(uniqueKeysWithValues: rows.map { row in (row.first ?? "", row.last ?? "") })
+        let mirrored = Dictionary(uniqueKeysWithValues: RelationFeature.allCases.compactMap { feature in
+            feature.minorTargetMinimum.map { (feature.rawValue, $0.rawValue) }
+        })
+        #expect(!declared.isEmpty)
+        #expect(declared == mirrored)
+    }
+
     @Test func theConsentDirectedAndPresenceSetsAreTheOnesOfTheTypeScriptTable() throws {
         let consent = try featureSet(named: "RELATION_CONSENT_FEATURES")
         let directed = try featureSet(named: "RELATION_DIRECTED_FEATURES")
@@ -144,6 +157,16 @@ struct RelationAccessCasesTests {
         #expect(Set(RelationFeature.allCases.filter(\.requiresConsent).map(\.rawValue)) == consent)
         #expect(Set(RelationFeature.allCases.filter(\.isDirected).map(\.rawValue)) == directed)
         #expect(Set(RelationFeature.allCases.filter(\.isPresence).map(\.rawValue)) == presence)
+    }
+
+    @Test func theTeamClosedSetIsTheOneOfTheTypeScriptTable() throws {
+        let closed = try featureSet(named: "RELATION_TEAM_CLOSED_FEATURES")
+        #expect(!closed.isEmpty)
+        #expect(Set(RelationFeature.allCases.filter(\.isClosedToTeam).map(\.rawValue)) == closed)
+    }
+
+    @Test func theTeamIsModeratorAdminAndBigboss_neverAuditNorAnalyst() {
+        #expect(Set(PlatformRole.allCases.filter(\.isTeam)) == [.moderator, .admin, .bigboss])
     }
 
     @Test func theLevelsAreOrderedAsInTheTypeScriptScale() throws {

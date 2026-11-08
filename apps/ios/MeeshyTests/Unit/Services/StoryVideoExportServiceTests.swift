@@ -227,6 +227,27 @@ final class StoryVideoExportServiceTests: XCTestCase {
         }
     }
 
+    /// Un emballage de marque qui lève livre la story NUE, et l'échec est
+    /// RAPPORTÉ (#14488) — ce repli muet a caché la régression -11800. Le MP4
+    /// vide du double d'exporteur fait lever le vrai `StoryExportBranding.wrap`.
+    func test_prepareExport_brandingWrapFails_deliversTheBareStory_andReportsIt() async {
+        final class Reported { var failures: [StoryExportBrandingFailure] = [] }
+        let reported = Reported()
+        let previous = StoryExportBrandingFallback.reporter
+        StoryExportBrandingFallback.reporter = { reported.failures.append($0) }
+        defer { StoryExportBrandingFallback.reporter = previous }
+        let (sut, exporter) = makeSUT(exporterBehavior: .success)
+        let slide = makeVideoSlide()
+
+        let result = await sut.prepareExport(slide: slide, languages: [], onProgress: nil, onPhaseChange: nil)
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result, exporter.lastOutputURL, "la story part entière, sans sa marque")
+        XCTAssertEqual(reported.failures.map(\.path), [.shareOrSave], "et l'échec ne passe plus en silence")
+        XCTAssertEqual(reported.failures.first?.slideId, slide.id)
+        if let result { sut.cleanupExport(at: result) }
+    }
+
     func test_prepareExport_exportFailure_stillEmitsExportingPhase() async {
         let (sut, _) = makeSUT(
             exporterBehavior: .failure(StoryExporterError.sessionCreationFailed)

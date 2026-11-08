@@ -564,6 +564,42 @@ describe('MessagingService.handleMessage — on ne transfère que ce qu’on a l
       expect(copiedFromSource()).toBe(false);
     });
 
+    describe('#12979 — un message e2ee ne fait voyager ni son clair ni son chiffré vers la destination', () => {
+      const DEVICE_ENVELOPE = 'ZW52ZWxvcHBlLWRlLWwtYXBwYXJlaWw=';
+      const e2eeSource = (mode: string, overrides: Row = {}) =>
+        threePieces({
+          content: '',
+          encryptedContent: DEVICE_ENVELOPE,
+          isEncrypted: true,
+          encryptionMode: mode,
+          conversation: { encryptionEnabledAt: new Date('2026-01-01T00:00:00Z'), encryptionMode: mode },
+          ...overrides,
+        });
+
+      it.each(['e2ee', 'E2EE'])('source %s transférée sans contenu propre : refusée, rien d’écrit', async (mode) => {
+        mountWithPieces(e2eeSource(mode));
+
+        const response = await send({ content: '', forwardedFromId: SOURCE_MESSAGE });
+
+        expect(response).toMatchObject({ success: false, code: 'encrypted-source-not-server-copyable' });
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+        expect(copiedPieces()).toEqual([]);
+      });
+
+      it('source e2ee dont l’appareil renvoie le contenu : la ligne écrite ne porte que ce contenu, jamais l’enveloppe ni le texte de la source', async () => {
+        mountWithPieces(e2eeSource('e2ee', { content: SOURCE_SECRET, attachments: [], _count: { attachments: 0 } }));
+
+        const response = await send({ forwardedFromId: SOURCE_MESSAGE, forwardedFromConversationId: SOURCE_CONVERSATION });
+
+        expect(response.success).toBe(true);
+        expect(written()?.content).toBe(OWN_TEXT);
+        expect(JSON.stringify(written())).not.toContain(DEVICE_ENVELOPE);
+        expect(JSON.stringify(written())).not.toContain(SOURCE_SECRET);
+        expect(written()?.encryptedContent ?? null).toBeNull();
+        expect(copiedFromSource()).toBe(false);
+      });
+    });
+
     it('un refus de nature porte son code stable (#9598)', async () => {
       mount(readableStore({ messages: [viewOnceSource()] }));
 

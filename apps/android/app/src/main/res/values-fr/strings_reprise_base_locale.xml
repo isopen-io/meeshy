@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="degraded_mode_title">Mode dégradé</string>
+    <string name="degraded_mode_body">Meeshy n\'a pas pu ouvrir normalement son stockage local. Vos données sont en sécurité sur le serveur ; certaines données locales peuvent manquer.</string>
+    <string name="degraded_mode_retry">Réessayer</string>
+    <string name="degraded_mode_export">Exporter le rapport</string>
+</resources>

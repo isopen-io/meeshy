@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.media3.common.MimeTypes
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
-import androidx.media3.transformer.DefaultMuxer
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
@@ -18,6 +17,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.audioedit.MetadataFreeMuxerFactory
+import me.meeshy.sdk.audioedit.writingContainer
+import me.meeshy.sdk.model.media.ExportContainerPolicy
 
 /**
  * **Le rendu d'un export par Media3 Transformer** (#13431, #13872) : les slides bout à bout dans UNE séquence vidéo (vidéo de
@@ -26,8 +27,10 @@ import me.meeshy.sdk.audioedit.MetadataFreeMuxerFactory
  * mixés par le Composition — la piste son qui JOUE dans le lecteur.
  *
  * **Aucune métadonnée de la source n'est écrite** ([MetadataFreeMuxerFactory], #13462) : le lieu d'une vidéo de fond
- * ne survit pas au rendu — un fichier d'export part hors de Meeshy. Transformer vit sur le fil principal, d'où le
- * dispatcher injecté ; l'annulation de la coroutine arrête l'encodeur ([Transformer.cancel]) et libère les codecs.
+ * ne survit pas au rendu — un fichier d'export part hors de Meeshy. Il commence sur une image (le lecteur d'iOS ne
+ * montre pas de noir d'ouverture), porte son index en tête et ne rapporte rien à la plateforme ([ExportContainerPolicy]).
+ * Transformer vit sur le fil principal, d'où le dispatcher injecté ; l'annulation de la coroutine arrête l'encodeur
+ * ([Transformer.cancel]) et libère les codecs.
  */
 internal class Media3SceneTransformRunner(
     private val context: Context,
@@ -68,7 +71,7 @@ internal class Media3SceneTransformRunner(
         Transformer.Builder(context)
             .setVideoMimeType(MimeTypes.VIDEO_H264)
             .setAudioMimeType(MimeTypes.AUDIO_AAC)
-            .setMuxerFactory(MetadataFreeMuxerFactory(DefaultMuxer.Factory()))
+            .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true))
             .setEncoderFactory(
                 DefaultEncoderFactory.Builder(context)
                     .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(job.format.bitRate).build())
@@ -78,7 +81,7 @@ internal class Media3SceneTransformRunner(
                 object : Transformer.Listener {
                     override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                         SceneExportLog.info(
-                            "rendu de ${exportResult.durationMs} ms : ${exportResult.videoFrameCount} images, ${exportResult.fileSizeBytes} octets, " +
+                            "rendu de ${exportResult.approximateDurationMs} ms : ${exportResult.videoFrameCount} images, ${exportResult.fileSizeBytes} octets, " +
                                 "vidéo ${exportResult.videoEncoderName}, son ${exportResult.audioEncoderName ?: "absent"}",
                         )
                         finished.complete(Unit)

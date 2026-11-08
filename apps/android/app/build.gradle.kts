@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 if (file("google-services.json").exists()) {
@@ -46,9 +47,13 @@ android {
         // Numéro de build LU à la construction : `-PmeeshyBuildNumber=<n>`, au-dessus de tout code déjà envoyé sur la
         // fiche (la coque y a monté jusqu'à 34085). Sans lui, 1 — la marque d'un build fait hors publication.
         versionCode = (findProperty("meeshyBuildNumber") ?: "1").toString().toInt()
-        // 3.x : la native succède sur la fiche aux 2.x de la coque, sans recouvrement de numéros.
-        versionName = "3.0.0"
+        // 3.x : la native succède sur la fiche aux 2.x de la coque, sans recouvrement de numéros. 3.1.0 : la version qui
+        // arrête un Bring (#13936) — plancher Android de `bring_stopped` dans `services/gateway/src/services/push-type-routing.ts`.
+        versionName = "3.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // #14628 — le commit EXACT du build, servi par l'offre de source de l'écran Licences (AGPL-3.0 de libsignal).
+        // GitHub Actions pose `GITHUB_SHA` ; un build local n'en a aucun et l'écran renvoie au dépôt.
+        buildConfigField("String", "SOURCE_COMMIT", "\"${providers.environmentVariable("GITHUB_SHA").orElse("").get()}\"")
     }
 
     signingConfigs {
@@ -103,6 +108,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // libsignal-android 0.105 le déclare dans son aar-metadata (`coreLibraryDesugaringEnabled=true`, #14591) :
+        // sans lui, `checkDebugAarMetadata` refuse la construction.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -111,15 +119,28 @@ android {
         compose = true
         buildConfig = true
     }
+    // libsignal (#14591, ADR-030) : seule `libsignal_jni.so` part dans l'APK. La bibliothèque de TEST de Signal et les
+    // natifs de bureau que `libsignal-client` porte en ressources Java (Linux, macOS, Windows) n'y ont rien à faire.
+    packaging {
+        jniLibs { excludes += setOf("**/libsignal_jni_testing.so") }
+        resources { excludes += setOf("libsignal_jni_*.so", "libsignal_jni_*.dylib", "signal_jni_*.dll") }
+    }
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
     }
+    sourceSets {
+        getByName("test") {
+            java.srcDir(rootProject.file("test-support/compose-robolectric/kotlin"))
+            resources.srcDir(rootProject.file("test-support/compose-robolectric/resources"))
+        }
+    }
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":sdk-core"))
     implementation(project(":core:datastore"))
     implementation(project(":sdk-ui"))
@@ -156,9 +177,13 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.firebase.messaging)
     implementation(libs.timber)
+    implementation(libs.androidx.metrics.performance)
+    implementation(libs.androidx.tracing.ktx)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.coil.compose)
     implementation(libs.okhttp)
+    // lot: lecture-moteur-partage-carte-systeme-et-caches — la couture AudioPlaybackSources (MediaSource) se lie ici, au cache AUDIO du compte.
+    implementation(libs.androidx.media3.exoplayer)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
@@ -169,6 +194,7 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    testImplementation(libs.work.testing)
     // #13792 — la réponse d'une bannière jugée contre un vrai cache Room (graine FCM, garde de l'outbox).
     testImplementation(project(":core:database"))
     testImplementation(libs.room.runtime)

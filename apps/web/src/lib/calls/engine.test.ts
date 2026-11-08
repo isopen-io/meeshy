@@ -437,6 +437,7 @@ describe('partage d’écran (#8063)', () => {
     expect(display).toBeDefined();
     expect(h.links[0]?.sent.at(-1)).toBe(display);
     expect(h.call()?.screenSharing).toBe(true);
+    expect(h.call()?.display).toBe('pill');
     expect(h.call()?.cameraOn).toBe(false);
     expect(h.call()?.localStream?.getVideoTracks()).toEqual([display] as unknown as MediaStreamTrack[]);
     expect(h.emitted.at(-1)).toEqual([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }]);
@@ -626,6 +627,46 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
     expect(h.call()?.members[PEER]?.capturing).toBe(false);
   });
 
+  test('#16665 — une capture ponctuelle entre au journal, et sa puce s’éteint seule sans éteindre l’alerte de lien', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_QUALITY_ALERT, { callId: 'call-1', userId: PEER, metric: 'rtt', value: 400, threshold: 300 });
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'screenshot' });
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+    expect(h.call()?.journalNotes?.map((note) => [note.kind, note.userId])).toEqual([['screenshot', PEER]]);
+    h.advance(5_000);
+    expect(h.call()?.members[PEER]?.capturing).toBe(false);
+    expect(h.call()?.members[PEER]?.weakNetwork).toBe(true);
+  });
+
+  test('#16665 — une capture ponctuelle pendant un enregistrement d’écran n’éteint pas la puce', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'recording' });
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'screenshot' });
+    h.advance(5_000);
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: false, kind: 'screenshot' });
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: false, kind: 'recording' });
+    expect(h.call()?.members[PEER]?.capturing).toBe(false);
+  });
+
+  test('#16665 — un enregistrement qui commence après une capture ponctuelle annule l’extinction de la puce', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'screenshot' });
+    h.advance(2_000);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'recording' });
+    h.advance(5_000);
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+  });
+
+  test('#16665 — l’enregistrement consenti note son début et sa fin au journal', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_RECORDING_STARTED, { callId: 'call-1', recordingId: 'r1', recorderId: PEER, startedAt: 'x', kind: 'audio' });
+    h.engine.handle(SERVER_EVENTS.CALL_RECORDING_STOPPED, { callId: 'call-1', recordingId: 'r1', reason: 'stopped', byUserId: PEER, wasRecording: true });
+    h.engine.handle(SERVER_EVENTS.CALL_RECORDING_STARTED, { callId: 'autre', recordingId: 'r2', recorderId: PEER });
+    expect(h.call()?.journalNotes?.map((note) => note.kind)).toEqual(['call-recording-started', 'call-recording-stopped']);
+  });
+
   test('au raccroché, `call:analytics` part UNE fois, avec le codec lu, les reprises, les transitions réseau et la qualité', async () => {
     const h = await connected([{ total: total({ level: 'excellent', rtt: 60, packetLoss: 0 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }, { total: total({ level: 'poor', rtt: 500, packetLoss: 10 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     await h.sampleQuality();
@@ -764,6 +805,7 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
     const released: FakeTrack[] = [];
     const wrapped: FakeTrack[] = [];
     let used: readonly string[] = [];
+    let failureHandler: ((camera: MediaStreamTrack) => void) | null = null;
     const port: CameraEffectsPort = {
       wrap: async (camera) => {
         wrapped.push(camera as unknown as FakeTrack);
@@ -772,8 +814,9 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
       refresh: async () => track('video') as unknown as MediaStreamTrack,
       release: (sent) => void released.push(sent as unknown as FakeTrack),
       used: () => used,
+      onFailure: (handler) => void (failureHandler = handler),
     };
-    return { port, released, wrapped, use: (names: readonly string[]) => void (used = names) };
+    return { port, released, wrapped, use: (names: readonly string[]) => void (used = names), fail: (camera: MediaStreamTrack) => failureHandler?.(camera) };
   }
 
   const inVideoCall = async (fx: ReturnType<typeof effectsPort>) => {
@@ -802,6 +845,19 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
     expect(after).not.toBe(before as MediaStreamTrack);
     expect(h.links[0]?.sent.at(-1)).toBe(after);
     expect(fx.released).toEqual([]);
+  });
+
+  test('un traitement d’effets qui meurt remplace la piste sur chaque lien, sans renégociation (#9187)', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    const before = h.call()?.localStream?.getVideoTracks()[0];
+    const raw = track('video') as unknown as MediaStreamTrack;
+    fx.fail(raw);
+    await flush();
+    const after = h.call()?.localStream?.getVideoTracks()[0];
+    expect(after).toBe(raw);
+    expect(after).not.toBe(before as MediaStreamTrack);
+    expect(h.links[0]?.sent.at(-1)).toBe(raw);
   });
 
   test('éteindre la caméra relâche la piste traitée par les effets', async () => {

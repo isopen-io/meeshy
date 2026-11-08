@@ -74,6 +74,7 @@ class RelationAccessCasesTest {
         viewerRole = PlatformRole.caseFolding(case.input.text("viewerRole")),
         feature = featureOf(case),
         consent = case.input.text("consent")?.let { RelationConsent.of(it) },
+        targetRole = PlatformRole.caseFolding(case.input.text("targetRole")),
     )
 
     private fun input(
@@ -156,6 +157,18 @@ class RelationAccessCasesTest {
     }
 
     @Test
+    fun `the minor shield is the one of the TypeScript table`() {
+        val table = blockAfter("export const RELATION_MINOR_TARGET_MIN_LEVEL", "};", levelsSource)
+        val declared = Regex("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'").findAll(table)
+            .associate { row -> (row.groupValues[1].ifEmpty { row.groupValues[2] }) to row.groupValues[3] }
+        val mirrored = RelationFeature.entries
+            .mapNotNull { feature -> feature.minorTargetMinimum?.let { feature.wire to it.wire } }
+            .toMap()
+        assertThat(declared).isNotEmpty()
+        assertThat(mirrored).isEqualTo(declared)
+    }
+
+    @Test
     fun `the consent, directed and presence sets are the ones of the TypeScript table`() {
         assertThat(RelationFeature.entries.filter { it.requiresConsent }.map { it.wire }.toSet())
             .isEqualTo(featureSet("RELATION_CONSENT_FEATURES"))
@@ -163,6 +176,19 @@ class RelationAccessCasesTest {
             .isEqualTo(featureSet("RELATION_DIRECTED_FEATURES"))
         assertThat(RelationFeature.entries.filter { it.isPresence }.map { it.wire }.toSet())
             .isEqualTo(featureSet("RELATION_PRESENCE_FEATURES"))
+    }
+
+    @Test
+    fun `the team closed set is the one of the TypeScript table`() {
+        val closed = featureSet("RELATION_TEAM_CLOSED_FEATURES")
+        assertThat(closed).isNotEmpty()
+        assertThat(RelationFeature.entries.filter { it.isClosedToTeam }.map { it.wire }.toSet()).isEqualTo(closed)
+    }
+
+    @Test
+    fun `the team is moderator, admin and bigboss, never audit nor analyst`() {
+        assertThat(PlatformRole.entries.filter { it.isTeam })
+            .containsExactly(PlatformRole.BIGBOSS, PlatformRole.ADMIN, PlatformRole.MODERATOR)
     }
 
     @Test

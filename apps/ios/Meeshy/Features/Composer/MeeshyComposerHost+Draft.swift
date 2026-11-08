@@ -50,7 +50,7 @@ extension MeeshyComposerHost {
                 repostOfId: intent.origin.repostedPostId,
                 audioUrl: moodSeed?.audioUrl
             )
-        case .scene, .document:
+        case .document:
             let emportes = carriedSceneAssets
             // L'audience est celle du SOCLE, jamais la graine de la porte.
             // `initialVisibility` la fournissait tant qu'`audienceChip` était un
@@ -172,16 +172,10 @@ extension MeeshyComposerHost {
                 // l'ORDRE des fichiers existe.
                 mediaObjectIds: documentMediaObjectIdBySource
                     .merging(emportes.objectIdBySource) { courant, _ in courant },
-                // **`nil`, honnêtement** (#3996). La surface `.document` (sans
-                // scène) ne monte aucun `SoundExtractionToggle` — il ne vit
-                // que dans l'atelier (`ComposerToolPanelHost` →
-                // `ComposerBottomBand`), monté seulement sous `.scene`. Poser
-                // autre chose que `nil` ici affirmerait une décision que
-                // l'auteur n'a jamais pu exprimer sur cette surface. Le champ
-                // voyage désormais de bout en bout (#3996) ; le jour où cette
-                // surface gagne son propre contrôle, c'est cette ligne qui le
-                // relaiera.
-                allowSoundExtraction: nil
+                // Le choix de ⋯ « Autoriser la reprise du son » (#4756) ;
+                // `nil` tant que l'auteur n'y a pas touché — l'absence vaut
+                // accord côté passerelle (#8012).
+                allowSoundExtraction: soundExtractionChoice
             )
         }
     }

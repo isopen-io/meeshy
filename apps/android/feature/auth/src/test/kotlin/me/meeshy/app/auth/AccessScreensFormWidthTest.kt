@@ -18,7 +18,14 @@ import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertWithMessage
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import me.meeshy.sdk.auth.ArrivalCelebrating
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.auth.LoginHandoffs
+import me.meeshy.sdk.auth.ProvenSessionOpener
+import me.meeshy.sdk.auth.ProvenSessionPort
+import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.auth.InMemorySavedAccountsStore
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.locale.DeviceLocaleProvider
@@ -100,7 +107,7 @@ class AccessScreensFormWidthTest {
         val viewModel = signupViewModel()
         show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = viewModel) }
 
-        compose.assertInCenteredFormColumn(hasSetTextAction())
+        compose.assertInCenteredFormColumn(hasSetTextAction().or(hasTestTag(SIGNUP_PRIMARY_TAG)))
     }
 
     @Test
@@ -109,7 +116,7 @@ class AccessScreensFormWidthTest {
         val viewModel = signupViewModel()
         show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = viewModel) }
 
-        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)
+        compose.assertSpansPhoneWidth(hasTestTag(SIGNUP_PRIMARY_TAG), horizontalPadding = MeeshySpacing.lg)
     }
 
     @Test
@@ -133,8 +140,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `email sign-in field sits in the centered form column on a tablet`() {
-        val viewModel = MagicLinkViewModel(authRepository())
-        show { MagicLinkScreen(onBack = {}, viewModel = viewModel) }
+        val viewModel = magicLinkViewModel()
+        show { MagicLinkSheet(onBack = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(authFieldFrameOrInput())
     }
@@ -142,8 +149,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `email sign-in field keeps its phone geometry`() {
-        val viewModel = MagicLinkViewModel(authRepository())
-        show { MagicLinkScreen(onBack = {}, viewModel = viewModel) }
+        val viewModel = magicLinkViewModel()
+        show { MagicLinkSheet(onBack = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(authFieldFrameOrInput(), horizontalPadding = MeeshySpacing.xl)
     }
@@ -229,6 +236,17 @@ class AccessScreensFormWidthTest {
             override fun languageTag(): String = "en"
             override fun regionTag(): String = "US"
         },
+        me.meeshy.sdk.notification.InMemoryPushPermissionDeferralStore(),
+        provenSessions = provenOpener(),
+        celebration = arrivalCelebration(),
+    )
+
+    private fun magicLinkViewModel() = MagicLinkViewModel(
+        authRepository(),
+        LoginHandoffs(),
+        ProvenSessionOpener(mockk<ProvenSessionPort>(relaxed = true), SessionTransitionFlags(), CoroutineScope(Job()), System::currentTimeMillis),
+        SessionOpeningGate(),
+        mockk<ArrivalCelebrating>(relaxed = true),
     )
 
     private fun refusedLinkViewModel(): MagicLinkValidateViewModel {
@@ -239,6 +257,7 @@ class AccessScreensFormWidthTest {
             repository,
             mockk(relaxed = true),
             SessionOpeningGate(),
+            mockk(relaxed = true),
             mockk(relaxed = true),
             SavedStateHandle(mapOf(MagicLinkValidateViewModel.TOKEN_ARG to "expired-token")),
         )

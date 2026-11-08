@@ -185,6 +185,15 @@ class CaptureSessionReducerTest {
     }
 
     @Test
+    fun `a refused lens keeps the displayed position and re-enables the flip`() {
+        val refused = run(events = arrayOf(CaptureEvent.ZoomChanged(2f), CaptureEvent.FlipTapped, CaptureEvent.FlipRefused))
+        assertThat(refused.state.facing).isEqualTo(CaptureLensFacing.BACK)
+        assertThat(refused.state.switching).isFalse()
+        assertThat(refused.state.zoom).isEqualTo(2f)
+        assertThat(run(events = arrayOf(CaptureEvent.FlipRefused)).state.switching).isFalse()
+    }
+
+    @Test
     fun `a cancelled take is neither delivered nor lost and raises no warning`() {
         val step = run(events = arrayOf(CaptureEvent.HoldBegan, CaptureEvent.HoldReleased, CaptureEvent.RecordingCancelled("video-1")))
         assertThat(step.state.ledger.pending).isEmpty()

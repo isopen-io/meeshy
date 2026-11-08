@@ -5,16 +5,24 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.media.MediaAdoption
+import me.meeshy.sdk.media.PendingMediaPreviewing
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.socket.SendMessageAck
+import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.TranscriptionSegment
+import me.meeshy.sdk.model.search.ConversationSearchResults
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -39,7 +47,9 @@ class MessageRepository internal constructor(
     private val mutations: MessageMutationWriter,
     private val enrichment: MessageEnrichmentWriter,
     private val receipts: MessageReceiptWriter,
-) {
+    private val erasures: PlaintextErasureLedger? = null,
+    private val searches: MessageSearchReader? = null,
+) : OrphanedUploadResumer {
     @Inject
     constructor(
         messageApi: MessageApi,
@@ -52,17 +62,36 @@ class MessageRepository internal constructor(
         /** #13792 — chaque message servi (REST, accusé d'envoi) nourrit le registre des régimes : jamais absent. */
         regime: EndToEndRegimeKeeper,
         fence: AccountFence? = null,
+        /** Les événements arrivés avant leur message : gardés par les écrivains, rejoués par l'ingestion. */
+        events: MessageEventBuffer? = null,
+        /** #14655 — la file durable des clairs E2EE à retirer du coffre. */
+        erasures: PlaintextErasureLedger? = null,
+        /** #14890 — le fichier local d'un média envoyé rejoint le cache typé à l'accusé. */
+        adoption: MediaAdoption? = null,
+        /** #15104 — l'aperçu local d'un média en attente part avec sa bulle. */
+        previews: PendingMediaPreviewing? = null,
+        /** L'aperçu de la liste de conversations suit mon envoi optimiste et son retrait. */
+        listPreviews: SendPreviewSink? = null,
+        /** L'index des médias de la conversation suit les messages supprimés. */
+        mediaIndex: ConversationMediaHubIndex? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime),
-        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
+        history = MessageHistoryReader(
+            messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database),
+            media = AcknowledgedBubbleMedia(adoption, previews, AcknowledgedBubbleMedia.ORIGIN_PAGE),
+        ),
+        sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,
             clock,
             EditRevisionLedger(database.editRevisionDao(), clock, fence),
+            events,
+            mediaIndex = mediaIndex,
         ),
-        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
+        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi, TranslationLayer.of(database), clock),
         receipts = MessageReceiptWriter(database, messageDao, fence),
+        erasures = erasures,
+        searches = MessageSearchReader(messageApi, database, clock, fence, regime, events, erasures),
     )
 
     /**
@@ -86,6 +115,10 @@ class MessageRepository internal constructor(
     suspend fun refreshMessage(conversationId: String, messageId: String): Boolean =
         history.refreshMessage(conversationId, messageId)
 
+    /** [refreshMessage] over the [limit] messages around [messageId] (the single transcription refetch). */
+    suspend fun refreshAround(conversationId: String, messageId: String, limit: Int): Boolean =
+        history.refreshMessage(conversationId, messageId, limit)
+
     /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest first — a "peek"
      * surface that renders instantly, without a network round-trip or a background revalidate.
@@ -95,6 +128,15 @@ class MessageRepository internal constructor(
         limit: Int = MessageHistoryReader.PREVIEW_LIMIT,
     ): List<LocalMessage> = history.recentMessages(conversationId, limit)
 
+    /** Whether the conversation's cached window is still within the messages freshness policy. */
+    suspend fun isCacheFresh(conversationId: String): Boolean = history.isCacheFresh(conversationId)
+
+    /** The aperçu's bounded network read (newest [limit], oldest first, not persisted); `null` on failure. */
+    suspend fun recentMessagesFromNetwork(
+        conversationId: String,
+        limit: Int = MessageHistoryReader.PREVIEW_LIMIT,
+    ): List<ApiMessage>? = history.recentMessagesFromNetwork(conversationId, limit)
+
     /**
      * Backwards pagination: appends the page of messages older than the oldest cached server row
      * to the Room cache. Returns whether more history remains.
@@ -103,6 +145,33 @@ class MessageRepository internal constructor(
         conversationId: String,
         pageSize: Int = MessageHistoryReader.OLDER_PAGE_SIZE,
     ): Boolean = history.loadOlder(conversationId, pageSize)
+
+    /**
+     * #14670 — opens the thread ON [messageId]: the window centred on it, when it is not already
+     * observed. See [MessageHistoryReader.loadAround]. Throws on a network failure.
+     */
+    suspend fun loadAround(conversationId: String, messageId: String): MessageLanding =
+        history.loadAround(conversationId, messageId)
+
+    /**
+     * Server search of one conversation: a page of [limit] hits for [query] after [cursor], merged into Room so
+     * the thread can jump to any of them. Throws [MessageSearchException]; a 404 is an empty page.
+     */
+    suspend fun searchMessages(
+        conversationId: String,
+        query: String,
+        cursor: String? = null,
+        limit: Int = ConversationSearchResults.PAGE_SIZE,
+    ): MessageSearchPage = searches?.search(conversationId, query, cursor, limit) ?: MessageSearchPage.EMPTY
+
+    /** #14670 — the page after an anchored window; returns whether newer messages remain. */
+    suspend fun loadNewer(conversationId: String): Boolean = history.loadNewer(conversationId)
+
+    /** #14670 — leaves an anchored window for the recent one (« back to the present »). */
+    fun returnToPresent(conversationId: String) = history.returnToPresent(conversationId)
+
+    /** #14670 — leaves an anchored window AND reads the recent page: the thread lands on today. Throws on failure. */
+    suspend fun jumpToPresent(conversationId: String) = history.jumpToPresent(conversationId)
 
     /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble and a `SEND_MESSAGE`
@@ -125,7 +194,10 @@ class MessageRepository internal constructor(
         location: SharedPlace? = null,
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
-    ): String = sends.sendOptimistic(
+        clientMessageId: String? = null,
+        attachmentReplyToId: String? = null,
+        copyAttachmentsFromMessageId: String? = null,
+    ): String = history.returnToPresent(conversationId).let { sends.sendOptimistic(
         conversationId = conversationId,
         content = content,
         originalLanguage = originalLanguage,
@@ -141,7 +213,10 @@ class MessageRepository internal constructor(
         attachments = attachments,
         location = location,
         sticker = sticker,
-    )
+        clientMessageId = clientMessageId,
+        attachmentReplyToId = attachmentReplyToId,
+        copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
+    ) }
 
     /**
      * Server ACK for an optimistic send: atomically replaces the local `cmid`
@@ -150,11 +225,23 @@ class MessageRepository internal constructor(
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) =
         sends.reconcileSent(cmid, serverMessage)
 
+    /** Server ACK of the socket fallback: the optimistic bubble becomes the acknowledged message. */
+    suspend fun reconcileAcknowledged(cmid: String, ack: SendMessageAck) = sends.reconcileAcknowledged(cmid, ack)
+
+    /** L'id serveur d'un message envoyé sous [localId] (`cid_`), une fois acquitté ; `null` sinon. */
+    suspend fun serverIdOf(localId: String): String? = sends.serverIdOf(localId)
+
     /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
     suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
 
+    /** Envoie la bulle déjà posée au tap [cid] avec les pièces montées (ou leurs téléversements durables), sans bulle de plus. */
+    suspend fun sendPostedBubble(cid: String, attachmentIds: List<String> = emptyList(), dependsOn: Set<String> = emptySet()): Boolean =
+        sends.sendPostedBubble(cid, attachmentIds, dependsOn)
+
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)
+
+    override suspend fun resume(cid: String): Boolean = sends.resumeOrphanedUploads(cid)
 
     /**
      * Optimistic reaction toggle on a server-acked message: the cached `reactionSummary` moves
@@ -189,7 +276,9 @@ class MessageRepository internal constructor(
         language: String?,
         confidence: Double?,
         durationMs: Long?,
-    ) = enrichment.applyTranscription(messageId, attachmentId, text, language, confidence, durationMs)
+        segments: List<TranscriptionSegment>? = null,
+        speakerCount: Int? = null,
+    ) = enrichment.applyTranscription(messageId, attachmentId, text, language, confidence, durationMs, segments, speakerCount)
 
     /**
      * Applies an `audio:translation-ready` socket update (the cloned-voice translation) to the
@@ -207,6 +296,7 @@ class MessageRepository internal constructor(
         quality: Double?,
         voiceModelId: String?,
         ttsModel: String?,
+        segments: List<TranscriptionSegment>? = null,
     ) = enrichment.applyAudioTranslation(
         messageId,
         attachmentId,
@@ -219,6 +309,7 @@ class MessageRepository internal constructor(
         quality,
         voiceModelId,
         ttsModel,
+        segments,
     )
 
     /**
@@ -243,6 +334,24 @@ class MessageRepository internal constructor(
      */
     suspend fun deleteOptimistic(messageId: String): Boolean = mutations.deleteOptimistic(messageId)
 
+    /** Server-announced deletion (`message:deleted`): tombstone, sealed quotes; held until the row arrives if unknown. */
+    suspend fun markDeleted(messageId: String, deletedAtIso: String, sparingOpenedViewOnce: Boolean = false, expired: Boolean = false) =
+        mutations.markDeleted(messageId, deletedAtIso, sparingOpenedViewOnce, expired)
+
+    /** Rollback of a refused deletion: the tombstone falls, the [snapshot] taken before it gives the content back. */
+    suspend fun markUndeleted(messageId: String, snapshot: ApiMessage? = null) = mutations.markUndeleted(messageId, snapshot)
+
+    /**
+     * #14656 — the server ACCEPTED the deletion of [messageId]: only now may its end-to-end plaintext leave the vault
+     * (iOS `confirmDeletion`). An optimistic tombstone erases nothing, so a refused deletion comes back readable.
+     */
+    suspend fun confirmDeletion(messageId: String) {
+        erasures?.recordNamed(listOf(messageId))
+    }
+
+    /** Removes the named rows (either of their two ids) and their edit history. */
+    suspend fun purgeMessages(messageIds: Collection<String>) = mutations.purgeMessages(messageIds)
+
     /**
      * Optimistic pin/unpin of a server-acked message: the cached `pinnedAt` flips instantly and a
      * `PIN_MESSAGE`/`UNPIN_MESSAGE` mutation is queued on the shared pin lane.
@@ -261,4 +370,8 @@ class MessageRepository internal constructor(
         readCount: Int,
         frontierIso: String?,
     ) = receipts.applyReadReceipt(conversationId, ownSenderId, deliveredCount, readCount, frontierIso)
+
+    /** `read-status:updated` : le résumé ne touche que le message qu'il décrit ; `true` si la ligne a changé. */
+    suspend fun applyReadStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String): Boolean =
+        receipts.applyReadStatusSummary(conversationId, summary, currentUserId)
 }

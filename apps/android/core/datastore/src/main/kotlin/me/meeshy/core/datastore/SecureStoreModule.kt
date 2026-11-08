@@ -25,6 +25,14 @@ annotation class ConversationLockVault
 @Retention(AnnotationRetention.BINARY)
 annotation class SecretVault
 
+/**
+ * Vault of the `meeshy.db` SQLCipher key (`meeshy_database_key`). Its own file, recreated only after a durable failure
+ * proven over several launches ([DurableFailureGate]): a transient Keystore failure must never cost the database.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class DatabaseKeyVault
+
 @Module
 @InstallIn(SingletonComponent::class)
 object SecureStoreModule {
@@ -46,4 +54,14 @@ object SecureStoreModule {
     @SecretVault
     fun providesSecretVault(@ApplicationContext context: Context): SecureStore =
         KeystoreSecureStore.create(context, "meeshy_secure_vault")
+
+    @Provides
+    @Singleton
+    @DatabaseKeyVault
+    fun providesDatabaseKeyVault(@ApplicationContext context: Context): SecureStore =
+        KeystoreSecureStore.create(context, DATABASE_KEY_VAULT) { app ->
+            DurableFailureGate(ledger = { app.getSharedPreferences("$DATABASE_KEY_VAULT.failures", Context.MODE_PRIVATE) })
+        }
+
+    private const val DATABASE_KEY_VAULT = "meeshy_database_key"
 }

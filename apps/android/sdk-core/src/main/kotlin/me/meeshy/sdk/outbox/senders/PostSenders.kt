@@ -10,7 +10,6 @@ import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.model.net.OnlyUnlinkedRefusal
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.apiCall
@@ -23,10 +22,13 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.UnsentCommentNotice
 import me.meeshy.sdk.outbox.withPayload
+import me.meeshy.sdk.post.CommentSendSender
 import me.meeshy.sdk.post.PostComposerDraftStore
 import me.meeshy.sdk.post.PostPublishMediaWriteBack
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.UnsentCommentStore
+import me.meeshy.sdk.post.toCommentSendResult
+import me.meeshy.sdk.post.toRequest
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.commitOrWrite
 import kotlinx.coroutines.CancellationException
@@ -54,7 +56,24 @@ public class CreatePostHandler @Inject constructor(
 
     override val payloadGraft: OutboxPayloadGraft = PostPublishMediaWriteBack::graft
 
-    override suspend fun send(row: OutboxEntity): SendResult =
+    /**
+     * La marque d'annulation est relue EN BASE juste avant le POST : la copie [row] est celle que le drainer a lue avant sa
+     * réservation, et une suppression posée depuis n'y figure pas. Une marque posée APRÈS cette relecture n'arrête plus la
+     * requête déjà partie — `CANCEL_REQUESTED` peut donc aboutir à une publication, comme sur iOS.
+     */
+    override suspend fun send(row: OutboxEntity): SendResult {
+        if (row.cancelRequestedAt != null || outboxRepository.isCancelRequested(row.cmid)) return cancelled(row)
+        return deliver(row)
+    }
+
+    /** L'auteur a supprimé la publication pendant qu'elle partait : rien n'est envoyé, ses traces locales partent. */
+    private suspend fun cancelled(row: OutboxEntity): SendResult {
+        runCatching { outboxRepository.cancelHeldFor(row.targetId) }
+        runCatching { draftStore.release(row.cmid) }
+        return SendResult.Cancelled
+    }
+
+    private suspend fun deliver(row: OutboxEntity): SendResult =
         json.withPayload<CreatePostRequest>(row) { request ->
             when (val result = apiCall { postApi.create(request, row.cmid) }) {
                 is NetworkResult.Success -> {
@@ -113,21 +132,26 @@ public class CreateCommentHandler @Inject constructor(
     private val unsent: UnsentCommentStore,
     private val notice: UnsentCommentNotice,
     private val fence: AccountFence? = null,
+    private val mediaSender: CommentSendSender? = null,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<CommentPayload>(row) { comment ->
-            val request = CreateCommentRequest(
-                content = comment.content,
-                parentId = comment.parentId,
-                originalLanguage = comment.originalLanguage,
-            )
-            val result = apiCall { postApi.addComment(row.targetId, request, row.cmid) }
-            when (result) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> result.error.toCommentFailure()
+            val pieces = comment.media?.takeIf { it.paths.isNotEmpty() }
+            when {
+                pieces == null -> sendText(row, comment)
+                mediaSender == null -> SendResult.PermanentFailure("Comment media sender unavailable")
+                else -> mediaSender.send(row, comment, pieces)
             }
         }
+
+    private suspend fun sendText(row: OutboxEntity, comment: CommentPayload): SendResult {
+        val request = comment.toRequest(comment.attachmentIds)
+        return when (val result = apiCall { postApi.addComment(row.targetId, request, row.cmid) }) {
+            is NetworkResult.Success -> SendResult.Success
+            is NetworkResult.Failure -> result.error.toCommentSendResult()
+        }
+    }
 
     override suspend fun onExhausted(row: OutboxEntity) {
         postRepository.rollbackQueuedComment(row.targetId)
@@ -141,18 +165,6 @@ public class CreateCommentHandler @Inject constructor(
             fence.commitOrWrite(ticket) { unsent.keep(row.targetId, text) } ?: return@runCatching
             notice.commentNotSent(author, row.targetId, text)
         }.onFailure { if (it is CancellationException) throw it }
-    }
-
-    private fun ApiError.toCommentFailure(): SendResult = when {
-        httpStatus == HTTP_GONE && code == MUTATION_RESULT_GONE -> SendResult.Success
-        httpStatus in DEFINITIVE_REFUSALS && code != "HTTP_$httpStatus" -> SendResult.PermanentFailure("Comment refused: HTTP $httpStatus $code")
-        else -> SendResult.TransientFailure
-    }
-
-    private companion object {
-        const val HTTP_GONE = 410
-        const val MUTATION_RESULT_GONE = "MUTATION_RESULT_GONE"
-        val DEFINITIVE_REFUSALS = setOf(400, 403, 404, 422)
     }
 }
 

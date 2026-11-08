@@ -316,36 +316,7 @@ final class ComposerEditToolsTests: XCTestCase {
         }
     }
 
-    // MARK: - #11170 — la feuille du fil retouche dans la même retouche
-
-    /// **La feuille de création d'un post retouche ses images et ses vidéos
-    /// dans la retouche de la caméra** (#11170, « un seul éditeur ») : une
-    /// pièce en attente, et une vidéo juste choisie avant qu'elle rejoigne la
-    /// publication. Plus aucune scène du composer n'y est montée.
-    func test_11170_theFeedSheet_retouchesItsMedia_inTheCaptureRetouch() throws {
-        let feuille = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
-        XCTAssertFalse(feuille.contains("ConversationImageSceneEditor("), "plus de scène pour une image en attente")
-        XCTAssertFalse(feuille.contains("ConversationVideoSceneEditor("), "plus de scène pour une vidéo")
-        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(piece: piece"), "une pièce en attente se retouche")
-        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(source: .video(url)"),
-                      "une vidéo juste choisie se retouche avant de rejoindre la publication")
-        XCTAssertTrue(feuille.contains("ComposerRetouchSeries.candidates(attachments: pendingAttachments"),
-                      "les mêmes pièces que la conversation : une image fixe ou une vidéo, jamais un GIF")
-        XCTAssertTrue(feuille.contains("removeSheetAttachment(id: piece.attachmentId)"),
-                      "« Abandonner » retire la pièce en attente")
-    }
-
-    /// **« Terminé » rend la pièce À SA PLACE** : une image retouchée remplace
-    /// la pièce, une vidéo retouchée remplace la vidéo ; seule une image
-    /// devenue vidéo repasse par la préparation d'une vidéo.
-    func test_11170_aRetouchedPiece_landsInItsPlace() throws {
-        let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40))
-        let rendu = URL(fileURLWithPath: "/tmp/rendu.mp4")
-        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .image), .replaceImage(image))
-        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .video), .replaceImage(image))
-        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .video), .replaceVideo(rendu))
-        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .image), .swapForVideo(rendu))
-    }
+    // MARK: - #11170 — une vidéo choisie se retouche sur une copie
 
     /// **Une vidéo juste choisie s'ouvre par une COPIE** : « Abandonner »
     /// efface la copie, jamais le fichier choisi, et rien n'est ajouté.
@@ -393,8 +364,8 @@ final class ComposerEditToolsTests: XCTestCase {
                       "lecture et volume ne dépendent ni du chrome ni d'un outil")
     }
 
-    /// **#10930 — seul le recadrage réduit le média**, et seulement quand le
-    /// chrome est montré.
+    /// **#10930 — seul le recadrage pose le média dans un cadre**, et seulement
+    /// quand le chrome est montré.
     func test_onlyTheCrop_framesTheScene() {
         XCTAssertTrue(ComposerEditTools.framesScene(active: [.crop], chromeShown: true))
         XCTAssertTrue(ComposerEditTools.framesScene(active: [.crop, .trim], chromeShown: true))
@@ -409,7 +380,63 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertEqual(ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [.trim], framed: false),
                        CGRect(origin: .zero, size: ecran))
         let cadre = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [.trim], framed: true)
-        XCTAssertLessThan(cadre.height, ecran.height, "le recadrage réduit la scène pour libérer ses bords")
+        XCTAssertLessThan(cadre.height, ecran.height, "le cadre du recadrage laisse ses angles hors des marges système")
+    }
+
+    /// **#15193 — le recadrage garde le grand écran** : ni la rangée haute,
+    /// effacée pendant le recadrage, ni les formats, qui flottent sur le cadre,
+    /// ne lui retiennent de place. La prise plein écran garde au moins les trois
+    /// quarts de la hauteur, du SE au plus grand iPhone.
+    func test_area_cropping_keepsTheLargeScreen_withoutTopBandOrPresetsReserve() {
+        let ecran = CGSize(width: 402, height: 874)
+        let cadre = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [.presets], framed: true)
+        XCTAssertEqual(cadre, ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [], framed: true),
+                       "les formats ne retiennent aucune place")
+        XCTAssertEqual(cadre.minY, 62 + ComposerEditScene.gap, "le cadre commence sous la marge système")
+        XCTAssertEqual(cadre.maxY, 874 - 34 - ComposerEditScene.bottomReserve([]), "et s'arrête au-dessus des outils")
+        let ecrans: [(CGSize, CGFloat, CGFloat)] = [(CGSize(width: 375, height: 667), 20, 0),
+                                                    (ecran, 62, 34), (CGSize(width: 440, height: 956), 62, 34)]
+        for (taille, haut, bas) in ecrans {
+            let zone = ComposerEditScene.area(container: taille, top: haut, bottom: bas, panels: [.presets], framed: true)
+            let scene = ComposerEditScene.rect(aspect: ComposerEditScene.clampedAspect(taille.width / taille.height),
+                                               in: zone)
+            XCTAssertGreaterThanOrEqual(scene.height, taille.height * 0.75, "\(taille) : la prise reste en grand")
+        }
+    }
+
+    /// **L'image de la retouche et les crochets lisent le MÊME cadre** : la
+    /// couche de l'image ignore les marges système et les reçoit, celle des
+    /// commandes les respecte. Ce que le cadre montre est donc ce qui part.
+    func test_area_cropping_theImageLayerAndTheBracketsShareOneFrame() {
+        let ecran = CGSize(width: 402, height: 874)
+        for (panneaux, lecture) in [([ComposerEditPanel.presets], false), ([.presets, .trim], true)] {
+            let image = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: panneaux,
+                                               framed: true, playback: lecture)
+            let commandes = ComposerEditScene.area(container: CGSize(width: 402, height: 874 - 62 - 34), top: 0,
+                                                   bottom: 0, panels: panneaux, framed: true, playback: lecture)
+            XCTAssertEqual(image.offsetBy(dx: 0, dy: -62), commandes)
+        }
+    }
+
+    /// **Pincer et glisser placent l'image sous un cadre FIXE** (#15193) : ni
+    /// l'un ni l'autre ne touche aux proportions du cadre, et un glissé
+    /// vertical déplace l'image au lieu de replier les outils.
+    func test_crop_pinchAndDrag_moveTheImage_underAFixedFrame() {
+        let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        photo.toggleEditTool(.crop)
+        ComposerCropFlow.apply(.square, to: photo)
+        let cadre = photo.editAspect
+        photo.rezoom(from: photo.framing, scale: 2)
+        XCTAssertEqual(photo.framing.scale, 2, accuracy: 0.001, "le pincement zoome l'image")
+        let centre = photo.framing.center
+        photo.reframe(from: photo.framing, translation: CGSize(width: 40, height: 60), viewSize: CGSize(width: 300, height: 300))
+        XCTAssertNotEqual(photo.framing.center, centre, "le glissé la déplace")
+        photo.rezoom(from: photo.framing, scale: 0.25)
+        XCTAssertEqual(photo.framing.scale, 1, accuracy: 0.001, "le dézoom revient au remplissage du cadre")
+        XCTAssertEqual(photo.editAspect, cadre, "le cadre reste fixe")
+        XCTAssertEqual(ComposerEditSwipe.mode(translation: CGSize(width: 0, height: 80), zoomed: false, cropping: true),
+                       .reframe, "en recadrage, glisser vers le bas place l'image")
     }
 
     func test_toggled_onlyTheTouchedTool_neverTheOthers() {
@@ -466,12 +493,12 @@ final class ComposerEditToolsTests: XCTestCase {
         photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
         XCTAssertTrue(photo.editChromeShown, "#10930 : les outils se posent sur la photo dès l'entrée")
         XCTAssertFalse(photo.showsCropBrackets)
-        XCTAssertFalse(photo.editFramesScene, "montrer les outils ne réduit pas la photo")
+        XCTAssertFalse(photo.editFramesScene, "montrer les outils ne pose pas la photo dans un cadre")
         XCTAssertEqual(photo.editPanels, [])
         photo.toggleEditTool(.crop)
         XCTAssertTrue(photo.showsCropBrackets)
-        XCTAssertTrue(photo.editFramesScene, "recadrer réduit la photo pour libérer ses bords")
-        XCTAssertEqual(photo.editPanels, [.presets], "les proportions retiennent leur bande sous la scène")
+        XCTAssertTrue(photo.editFramesScene, "recadrer pose la photo dans son cadre fixe")
+        XCTAssertEqual(photo.editPanels, [.presets], "les proportions flottent sur le cadre")
         photo.hideEditChrome()
         XCTAssertFalse(photo.showsCropBrackets)
         XCTAssertFalse(photo.editFramesScene, "le chrome caché, la photo reprend l'écran")
@@ -597,11 +624,11 @@ final class ComposerEditToolsTests: XCTestCase {
                       "le toucher de la nappe consulte la table avant de viser")
     }
 
-    /// **Les formats : une bande pleine largeur SOUS la scène** (porteur
-    /// 2026-10-20 : « le moins coupés possible […] hors viewport ou hors cadre
-    /// de la scène »). D'un bord de l'écran à l'autre, sous le cadre — aucun
-    /// crochet ne la coupe —, au-dessus du rail des outils, à 375 et 440 pt.
-    func test_thePresetsBand_spansTheScreen_underTheScene_clearOfBracketsAndRail() {
+    /// **Les formats FLOTTENT sur le cadre** (#15193) : posés par-dessus
+    /// l'image, au-dessus de ses deux crochets du bas, ils vont d'un bord de
+    /// l'écran à l'autre (« le moins coupés possible ») ; aucun des quatre
+    /// crochets ne les coupe, et le rail des outils reste dessous, à 375 et 440 pt.
+    func test_thePresetsRow_floatsOnTheFrame_acrossTheScreen_clearOfTheFourBrackets() {
         let ecrans = [CGSize(width: 375, height: 812 - 47 - 34), CGSize(width: 440, height: 956 - 62 - 34)]
         let cible = MeeshyControlSize.tapTarget
         for ecran in ecrans {
@@ -610,19 +637,29 @@ final class ComposerEditToolsTests: XCTestCase {
                     let zone = ComposerEditScene.area(container: ecran, top: 0, bottom: 0, panels: panneaux,
                                                       framed: true, playback: lecture)
                     let scene = ComposerEditScene.rect(aspect: aspect, in: zone)
-                    let bande = ComposerEditPresetsLayout.frame(scene: scene)
-                    XCTAssertEqual(bande.minX, 0, accuracy: 0.001, "\(ecran) : la bande part du bord gauche de l'écran")
-                    XCTAssertEqual(bande.maxX, ecran.width, accuracy: 0.001, "\(ecran) : jusqu'au bord droit")
-                    XCTAssertGreaterThanOrEqual(bande.minY, scene.maxY, "\(ecran) \(aspect) : sous le cadre")
-                    let crochetsBas = [CGRect(x: scene.minX, y: scene.maxY - cible, width: cible, height: cible),
-                                       CGRect(x: scene.maxX - cible, y: scene.maxY - cible, width: cible, height: cible)]
-                    XCTAssertFalse(crochetsBas.contains { $0.intersects(bande) }, "\(ecran) \(aspect) : aucun crochet ne la coupe")
-                    let haut = ecran.height - ComposerEditScene.bottomReserve(panneaux.filter { $0 != .presets })
-                    XCTAssertLessThanOrEqual(bande.maxY, haut + 0.001,
+                    let rangee = ComposerEditPresetsLayout.frame(scene: scene)
+                    XCTAssertEqual(rangee.minX, 0, accuracy: 0.001, "\(ecran) : la rangée part du bord gauche de l'écran")
+                    XCTAssertEqual(rangee.maxX, ecran.width, accuracy: 0.001, "\(ecran) : jusqu'au bord droit")
+                    XCTAssertGreaterThanOrEqual(rangee.minY, scene.minY, "\(ecran) \(aspect) : sur le cadre")
+                    XCTAssertLessThanOrEqual(rangee.maxY, scene.maxY, "\(ecran) \(aspect) : sur le cadre")
+                    let crochets = ComposerCropCorner.allCases.map { angle in
+                        CGRect(x: angle.isLeading ? scene.minX : scene.maxX - cible,
+                               y: angle.isTop ? scene.minY : scene.maxY - cible, width: cible, height: cible)
+                    }
+                    XCTAssertFalse(crochets.contains { $0.intersects(rangee) }, "\(ecran) \(aspect) : aucun crochet ne la coupe")
+                    XCTAssertLessThanOrEqual(rangee.maxY, ecran.height - ComposerEditScene.bottomReserve(panneaux) + 0.001,
                                              "\(ecran) \(panneaux) \(aspect) : au-dessus de la coupe et du rail")
                 }
             }
         }
+    }
+
+    /// Un cadre trop bas pour porter les formats entre ses crochets les pose
+    /// juste sous lui : jamais sur un crochet.
+    func test_thePresetsRow_underAFrameTooLowToCarryIt() {
+        let scene = CGRect(x: 16, y: 300, width: 370, height: 130)
+        let rangee = ComposerEditPresetsLayout.frame(scene: scene)
+        XCTAssertEqual(rangee.minY, scene.maxY + ComposerEditScene.gap)
     }
 
     /// **Aucun libellé du rail n'est coupé** (porteur 2026-10-20) : à 375 comme
@@ -657,7 +694,9 @@ final class ComposerEditToolsTests: XCTestCase {
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertFalse(bas.contains("ComposerCropPresetBar("), "plus de rangée de formats sous la scène")
         let montage = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureMount.swift")
-        XCTAssertTrue(montage.contains("framed: session.editFramesScene"), "l'image ne se réduit qu'au recadrage")
+        XCTAssertTrue(montage.contains("framed: session.editFramesScene"), "l'image ne se cadre qu'au recadrage")
+        XCTAssertTrue(montage.contains(".animation(Self.growth, value: session.editAspect)"),
+                      "choisir un format anime le cadre et l'image jusqu'à leurs nouvelles proportions")
     }
 
     // MARK: - (2) Son : spectre, ligne de volume, bouton muet

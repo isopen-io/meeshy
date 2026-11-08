@@ -83,6 +83,15 @@ export interface EndpointLiteralSite {
 const CALL_SITE = /endpoint: "([^"]*)"/g;
 const ANY_PATH = /"(\/[a-zA-Z0-9][A-Za-z0-9._~\-/]*(?:\\\([^)]*\)[A-Za-z0-9._~\-/]*)*)"/g;
 
+/**
+ * Toute route du serveur commence par un segment en minuscules ; les segments
+ * de conteneur iOS (`/Data/Application/`, `/Library/`, `/Users/`, `/Documents/`)
+ * commencent par une majuscule. Un littéral à première lettre majuscule est un
+ * chemin de FICHIER, pas un endpoint — règle générale, gardée par un témoin
+ * qui vérifie qu'aucune route du manifeste ne la contredit.
+ */
+const FILE_SYSTEM_PATH = /^\/[A-Z]/;
+
 /** Le dossier des énumérations générées — il écrit des chemins par construction. */
 export const GENERATED_ENDPOINTS_DIR = 'Networking/Endpoints';
 
@@ -98,6 +107,7 @@ export function endpointLiteralsIn(file: string, source: string): readonly Endpo
       for (const match of line.matchAll(pattern)) {
         const literal = match[1] ?? '';
         if (!literal.startsWith('/') || literal.includes(' ') || !literal.includes('/', 1)) continue;
+        if (FILE_SYSTEM_PATH.test(literal)) continue;
         if (seen.has(literal)) continue;
         seen.add(literal);
         sites.push({ file, line: index + 1, literal });

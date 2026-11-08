@@ -158,6 +158,19 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// visite, jamais au cache. L'hôte la pose depuis son état de visite.
     public var isViewOnceRevealed: Bool = false
 
+    /// **Ce que la couche appareil d'un message hybride dit du texte servi**
+    /// (#14369), `nil` tant qu'aucune enveloppe n'a été ouverte pour lui sur
+    /// cet appareil. Hors du `Codable`, comme `isBurning` : le verdict se
+    /// recalcule à chaque visite depuis le coffre libsignal, jamais du cache.
+    public var deviceLayerIntegrity: HybridDeviceLayerIntegrity? = nil
+
+    /// **L'identifiant client que la passerelle a servi pour ce message**
+    /// (#14369), restitué de la colonne GRDB du même nom : une ligne du magasin
+    /// ne porte pas `clientMessageId`, que l'envoi et la réconciliation lisent
+    /// à d'autres fins. Hors du `Codable`. La couche appareil d'un hybride s'y
+    /// rattache (`servedClientMessageId ?? clientMessageId`).
+    public var servedClientMessageId: String? = nil
+
     /// **Quand CE lecteur a ouvert cette vue unique** (#7579), `nil` sinon.
     /// Restitué de la colonne GRDB du même nom, ou posé par le serveur
     /// (`APIMessage.consumedByMe`). Non nul, il est permanent : la bulle dit

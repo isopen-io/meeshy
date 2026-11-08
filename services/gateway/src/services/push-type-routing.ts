@@ -27,7 +27,25 @@ export type RoutableToken = {
   readonly bundleId: string | null;
 };
 
+/** Un plancher qui n'exige AUCUNE version lisible : tout jeton du client reçoit le type (`bring_stopped` iOS). */
+export const ANY_VERSION = '*';
+
 export type PushTypeRoutingFloors = ReadonlyMap<string, Readonly<Record<PushRoutingClient, string | null>>>;
+
+/**
+ * `bring` (#13936) n'a PAS de plancher, et c'est voulu : la sonnerie est une ALERTE dont le titre et le corps disent
+ * tout (« X fait sonner votre téléphone ») — un ancien iOS la rend avec la sonnerie d'appel, un ancien Android natif
+ * en fait une bannière ordinaire. Pour une urgence, une bannière vaut mieux que rien.
+ *
+ * `bring_stopped` remplace sur iOS la bannière de la sonnerie (alerte passive, même `collapse-id`) : TOUT jeton iOS
+ * la reçoit, version lisible ou non (`ANY_VERSION`). Sur Android c'est un data-only sans titre, qu'un ancien
+ * Android natif rendrait en bannière VIDE. Il ne part donc vers l'Android natif qu'à partir de la 3.1.0, la
+ * version qui l'arrête (`proche-bring@android`) et qui déclare enfin `appVersion` + `bundleId` sur son jeton.
+ * La coque et le navigateur ne sonnent que par la socket : rien à arrêter par push.
+ */
+const BRING_STOPPED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
+  ios: ANY_VERSION, 'android-native': '3.1.0', 'android-shell': null, web: null,
+};
 
 /**
  * `game_photo_moment` : la coque et le navigateur le routent (vers `/me/progression/carnet`) depuis la première
@@ -36,6 +54,7 @@ export type PushTypeRoutingFloors = ReadonlyMap<string, Readonly<Record<PushRout
  */
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
+  ['bring_stopped', BRING_STOPPED_FLOORS],
 ]);
 
 const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;
@@ -63,6 +82,7 @@ export function tokenRoutesPushType(
   if (byClient === undefined) return true;
   const client = pushRoutingClientOf(token);
   const floor = client === null ? null : byClient[client];
+  if (floor === ANY_VERSION) return true;
   const version = readableVersion(token.appVersion);
   if (floor === null || version === null) return false;
   return compareAppVersions(version, floor) >= 0;

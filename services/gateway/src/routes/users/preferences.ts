@@ -4,6 +4,10 @@ import { logError } from '../../utils/logger';
 import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import {
+  CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY,
+  resolveDashboardPreviews,
+} from './dashboardRecentPreview';
+import {
   userMinimalSchema,
   errorResponseSchema,
   participantProfileDecorSchema
@@ -23,6 +27,7 @@ import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
 import { keepDiscoverable } from '../../services/profile-discoverability';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
+import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS } from '../communities/serialization';
 
 
 /**
@@ -65,17 +70,63 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                       type: { type: 'string', enum: ['direct', 'group'] },
                       avatar: { type: 'string', nullable: true },
                       isActive: { type: 'boolean' },
+                      /**
+                       * #16590 — l'aperçu DÉCLARE ce que la loi de la ligne de
+                       * liste lui remet.
+                       *
+                       * Il ne déclarait que `content`, `createdAt` et deux
+                       * champs d'expéditeur, et le gestionnaire servait la
+                       * colonne BRUTE : le texte d'une vue unique, d'un flouté,
+                       * d'un chiffré ou d'un éphémère expiré partait en clair.
+                       * La retenue est SERVEUR (`projectListLastMessageBody`
+                       * rend `content: ''`), et ce qui part avec elle sont les
+                       * drapeaux qui QUALIFIENT le placeholder — sans eux,
+                       * fast-json-stringify les retire en silence et le client
+                       * ne peut pas le composer (#6111).
+                       *
+                       * `expiresAt` est l'échéance SERVIE À CE LECTEUR (#7451),
+                       * rapprochée par ce que l'aperçu cite (#8630) — jamais la
+                       * colonne interne de destruction.
+                       *
+                       * `sender` est déclaré LOCALEMENT et SANS `isOnline` :
+                       * `userMinimalSchema` le déclare, et cette route ne passe
+                       * par aucun gate de présence. C'est fail-closed — si la
+                       * colonne apparaît un jour dans l'objet, le sérialiseur
+                       * la retire (précédent du cycle 93).
+                       */
                       lastMessage: {
                         type: 'object',
                         nullable: true,
                         properties: {
+                          id: { type: 'string' },
                           content: { type: 'string' },
                           createdAt: { type: 'string', format: 'date-time' },
+                          messageType: { type: 'string' },
+                          // Les drapeaux qui qualifient le placeholder.
+                          isViewOnce: { type: 'boolean', nullable: true },
+                          isBlurred: { type: 'boolean', nullable: true },
+                          effectFlags: { type: 'number', nullable: true },
+                          expiresAt: { type: 'string', format: 'date-time', nullable: true },
+                          ephemeralDuration: { type: 'integer', nullable: true },
+                          // #11381 — une ligne SCELLÉE le dit, au lieu de sortir vide.
+                          isEncrypted: { type: 'boolean', nullable: true },
+                          encryptionMode: { type: 'string', nullable: true },
+                          // #7594 — par LECTEUR ; `false` hors vue unique.
+                          viewOnceConsumed: { type: 'boolean', nullable: true },
                           sender: {
                             type: 'object',
+                            nullable: true,
                             properties: {
-                              username: { type: 'string' },
-                              displayName: { type: 'string' }
+                              userId: { type: 'string', nullable: true },
+                              displayName: { type: 'string', nullable: true },
+                              user: {
+                                type: 'object',
+                                nullable: true,
+                                properties: {
+                                  username: { type: 'string' },
+                                  displayName: { type: 'string', nullable: true }
+                                }
+                              }
                             }
                           }
                         }
@@ -164,25 +215,11 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             type: true,
             avatar: true,
             updatedAt: true,
-            messages: {
-              where: {
-                deletedAt: null
-              },
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: {
-                id: true,
-                content: true,
-                createdAt: true,
-                sender: {
-                  select: {
-                    userId: true,
-                    displayName: true,
-                    user: { select: { username: true } }
-                  }
-                }
-              }
-            },
+            // #16590 — l'aperçu est LU par le bloc PARTAGÉ de la ligne de
+            // liste, jamais par une projection de quatre champs écrite ici :
+            // c'était la troisième copie, et elle avait perdu le bloc de
+            // protection, l'exclusion des avis de capture et le Prisme.
+            messages: CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY,
             participants: {
               where: { isActive: true },
               take: 5,
@@ -202,17 +239,11 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           take: 5
         }),
         fastify.prisma.communityMember.count({
-          where: {
-            userId
-          }
+          where: activeMembershipOf(userId)
         }),
         fastify.prisma.community.findMany({
           where: {
-            members: {
-              some: {
-                userId
-              }
-            }
+            members: { some: activeMembershipOf(userId) }
           },
           select: {
             id: true,
@@ -221,10 +252,9 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             avatar: true,
             isPrivate: true,
             updatedAt: true,
-            _count: {
-              select: { members: true, Conversation: true }
-            },
+            _count: { select: COMMUNITY_ACTIVE_COUNTS },
             members: {
+              where: { isActive: true },
               take: 5,
               select: {
                 user: {
@@ -276,6 +306,15 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         lastUpdated: new Date()
       };
 
+      // #16590 — plancher d'historique (fail-closed), masquage personnel avec
+      // repli sur le message visible précédent, ouverture au repos : les lois
+      // que `GET /conversations` applique à sa ligne, appliquées ici par la
+      // MÊME unité. Trois lectures bornées par la page de cinq.
+      const dashboardPreviews = await resolveDashboardPreviews(fastify.prisma, {
+        userId,
+        conversations: recentConversations as unknown as Parameters<typeof resolveDashboardPreviews>[1]['conversations'],
+      });
+
       const transformedConversations = recentConversations.map(conv => {
         let displayTitle = conv.title;
         if (!displayTitle || displayTitle.trim() === '') {
@@ -303,11 +342,10 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           type: conv.type,
           avatar: resolveParticipantAvatar({ avatar: conv.avatar, user: otherUser }),
           isActive: activeConversations > 0,
-          lastMessage: conv.messages && conv.messages.length > 0 ? {
-            content: conv.messages[0].content,
-            createdAt: conv.messages[0].createdAt,
-            sender: conv.messages[0].sender
-          } : null,
+          // #16590 — l'aperçu SERVI, celui que la résolution par lecteur a
+          // retenu : jamais la ligne brute de la requête, qui ignore le
+          // plancher et le masquage.
+          lastMessage: dashboardPreviews.get(conv.id) ?? null,
           members: conv.participants.map((member: any) => member.user)
         };
       });

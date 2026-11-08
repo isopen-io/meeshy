@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_header_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_header_remove_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_header_remove_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_header_remove_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_header_report_details",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_header_report_send",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_rail_saving",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_rail_state_active",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_repost_open_fullscreen",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

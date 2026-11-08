@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.before",
+          "androidName": "image_editor_before",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.cancel",
+          "androidName": "image_editor_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.done",
+          "androidName": "image_editor_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.history",
+          "androidName": "image_editor_history",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.redo",
+          "androidName": "image_editor_redo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.undo",
+          "androidName": "image_editor_undo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.reset",
+          "androidName": "image_editor_reset",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.resetAdjust",
+          "androidName": "image_editor_reset_adjust",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.rotateLeft",
+          "androidName": "image_editor_rotate_left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.rotateRight",
+          "androidName": "image_editor_rotate_right",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.rotation",
+          "androidName": "image_editor_rotation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.flipH",
+          "androidName": "image_editor_flip_h",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.flipV",
+          "androidName": "image_editor_flip_v",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.flip",
+          "androidName": "image_editor_flip",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.crop.applied",
+          "androidName": "image_editor_crop_applied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.cropHint",
+          "androidName": "image_editor_crop_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.tool.crop",
+          "androidName": "image_editor_tool_crop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.tool.filters",
+          "androidName": "image_editor_tool_filters",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.tool.adjust",
+          "androidName": "image_editor_tool_adjust",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.editor.tool.effects",
+          "androidName": "image_editor_tool_effects",
+          "status": "adopted"
+        },
+        {
+          "androidName": "image_editor_mode_simple",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_mode_pro",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_mode_group",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_ratio_free",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_exposure",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_vibrance",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_temperature",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_blur",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_effect_none",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_effect_blur",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_effect_vignette",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_effect_sharpen",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_effect_bloom",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_effect_grain",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_original",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_vivid",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_dramatic",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_mono",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_noir",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_sepia",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_warm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_cool",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_fade",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_chrome",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_process",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_filter_instant",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_brightness",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_contrast",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_saturation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_sharpness",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_editor_adjust_vignette",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -66,3 +66,23 @@ class PostReachFormatterTest {
         ).isNull()
     }
 }
+
+class PostReachUniqueViewsTest {
+    @Test
+    fun `the author sees the distinct people next to the views`() {
+        val c = PostReachFormatter.components("marie", true, 2_300_000, 5, uniqueViewCount = 1_200, locale = Locale.ENGLISH)
+        assertThat(c.views).isEqualTo("2.3M")
+        assertThat(c.uniqueViews).isEqualTo("1.2K")
+    }
+
+    @Test
+    fun `a reader who is not the author never sees them`() {
+        val c = PostReachFormatter.components("marie", false, 10, 5, uniqueViewCount = 4)
+        assertThat(c.uniqueViews).isNull()
+    }
+
+    @Test
+    fun `a gateway that does not serve them leaves the line as it was`() {
+        assertThat(PostReachFormatter.components("marie", true, 10, 5).uniqueViews).isNull()
+    }
+}

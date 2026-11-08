@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Ce que devient une demande d'ouverture depuis la liste** (#11213, revue
 /// adversariale).
@@ -67,5 +68,48 @@ enum ConversationOpenRoute: Equatable {
     var searchesAfterUnlock: Bool {
         guard case .unlockFirst(let searching) = self else { return false }
         return searching
+    }
+}
+
+// MARK: - Le toucher de l'avatar d'une ligne (#15887)
+
+/// Ce qu'ouvre le toucher de l'avatar d'une ligne : le profil du pair, les
+/// détails de la conversation, ou — verrouillée par PIN, quel que soit son
+/// type — la porte du verrou PUIS les détails. Jamais le fil, que le toucher
+/// d'un avatar ne demande pas ; jamais rien.
+nonisolated enum ConversationAvatarRoute: Equatable, Sendable {
+    case profile(userId: String)
+    case info
+    case unlockThenInfo
+
+    var opensProfile: Bool {
+        guard case .profile = self else { return false }
+        return true
+    }
+}
+
+extension ConversationOpenRoute {
+    /// La cible vient de la loi du SDK (`ConversationAvatarTarget`) ; la liste
+    /// y ajoute la porte du verrou, qu'un profil ne contourne pas.
+    nonisolated static func avatarRoute(target: ConversationAvatarTarget, isLocked: Bool) -> ConversationAvatarRoute {
+        guard !isLocked else { return .unlockThenInfo }
+        switch target {
+        case .profile(let userId): return .profile(userId: userId)
+        case .conversationInfo: return .info
+        }
+    }
+
+    /// Le verrou et le blocage relus MAINTENANT : la ligne s'en sert à son
+    /// rendu, la liste au toucher.
+    static func avatarRoute(
+        for conversation: Conversation,
+        locks: ConversationLockManager = .shared,
+        blocks: BlockServiceProviding = BlockService.shared
+    ) -> ConversationAvatarRoute {
+        let isPeerBlocked = conversation.participantUserId.map { blocks.isBlocked(userId: $0) } ?? false
+        return avatarRoute(
+            target: conversation.avatarTarget(isPeerBlocked: isPeerBlocked),
+            isLocked: locks.isLocked(conversation.id)
+        )
     }
 }

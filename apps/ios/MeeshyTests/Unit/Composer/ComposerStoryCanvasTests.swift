@@ -47,12 +47,12 @@ final class ComposerStoryCanvasTests: XCTestCase {
     ///
     /// > Une exemption qui couvre quatre cas d'un seul argument doit être
     /// > vérifiée sur les quatre.
-    func test_lesOuverturesQuiPORTENTDeLaMatière_gardentLaScène() {
+    func test_lesOuverturesQuiPORTENTDeLaMatière_seComposentAussiDansLeMeuble() {
         for ouverture in [ComposerOpening.videoCameraReady, .resume] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: ouverture, format: .story),
-                .scene,
-                "\(ouverture) arrive avec du contenu : le lui retirer le ferait perdre"
+                .document,
+                "\(ouverture) : le meuble reprend sa matière sur sa propre scène (#15629)"
             )
         }
     }

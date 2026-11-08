@@ -132,12 +132,12 @@ class ConversationEncryptionViewModelTest {
     }
 
     @Test
-    fun `end to end cannot be selected from this phone`() = runTest {
+    fun `end to end cannot be selected for a group from this phone`() = runTest {
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returns ok(null)
         coEvery { provider.enable("c1", ConversationEncryptionModeChoice.SERVER) } returns ok("server")
         val vm = viewModel(provider)
-        vm.load("c1", isDirect = true)
+        vm.load("c1", isDirect = false)
         advanceUntilIdle()
 
         vm.select(ConversationEncryptionModeChoice.E2EE)
@@ -269,13 +269,13 @@ class ConversationEncryptionViewModelTest {
     }
 
     @Test
-    fun `end to end is never a switch target from this phone`() = runTest {
+    fun `end to end is never a switch target for a group from this phone`() = runTest {
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returns ok("hybrid")
         // Le choix refusé laisse le mode valide d'avant, que le changement peut viser.
         coEvery { provider.enable("c1", any()) } returns ok("server")
         val vm = viewModel(provider)
-        vm.load("c1", isDirect = true)
+        vm.load("c1", isDirect = false)
         advanceUntilIdle()
 
         vm.select(ConversationEncryptionModeChoice.E2EE)
@@ -358,5 +358,298 @@ class ConversationEncryptionViewModelTest {
         advanceUntilIdle()
         assertThat(vm.state.value.canSwitchMode).isFalse()
         coVerify(exactly = 0) { provider.enable(any(), any()) }
+    }
+
+    @Test
+    fun `a group moderator turns on server encryption (#16044)`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returns ok(null)
+        coEvery { provider.enable("g1", ConversationEncryptionModeChoice.SERVER) } returns ok("server")
+        val vm = viewModel(provider)
+        vm.load("g1", isDirect = false)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Activation)
+        vm.activate()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.SERVER)
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
+    }
+
+    @Test
+    fun `a group member the gateway does not name turns on nothing`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returns ok(null, canToggle = false)
+        val vm = viewModel(provider)
+        vm.load("g1", isDirect = false)
+        advanceUntilIdle()
+
+        vm.activate()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.InactiveReadOnly)
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
+    }
+
+    @Test
+    fun `a server group climbs to hybrid`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returns ok("server")
+        coEvery { provider.enable("g1", ConversationEncryptionModeChoice.HYBRID) } returns ok("hybrid")
+        val vm = viewModel(provider)
+        vm.load("g1", isDirect = false)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.HYBRID)
+        assertThat(vm.state.value.canSwitchMode).isTrue()
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.HYBRID)
+    }
+
+    @Test
+    fun `a hybrid group returns to server (#14663)`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returns ok("hybrid")
+        coEvery { provider.enable("g1", ConversationEncryptionModeChoice.SERVER) } returns ok("server")
+        val vm = viewModel(provider)
+        vm.load("g1", isDirect = false)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.SERVER)
+        assertThat(vm.state.value.canSwitchMode).isTrue()
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.SERVER)
+        coVerify(exactly = 0) { provider.disable(any()) }
+    }
+
+    @Test
+    fun `switching a direct conversation to end to end waits for a confirmation`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        coEvery { provider.enable("c1", ConversationEncryptionModeChoice.E2EE) } returns ok("e2ee", canToggle = false)
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.confirmsEndToEnd).isTrue()
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
+
+        vm.confirmEndToEnd()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.confirmsEndToEnd).isFalse()
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
+        coVerify(exactly = 1) { provider.enable("c1", ConversationEncryptionModeChoice.E2EE) }
+    }
+
+    @Test
+    fun `turning a clear direct conversation end to end also waits for a confirmation, and cancelling sends nothing`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok(null)
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.activate()
+        advanceUntilIdle()
+        assertThat(vm.state.value.confirmsEndToEnd).isTrue()
+
+        vm.cancelEndToEnd()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.confirmsEndToEnd).isFalse()
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
+    }
+
+    @Test
+    fun `a confirmation that outlived the right sends nothing`() = runTest {
+        val ledger = InMemoryEndToEndRegimeLedger()
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        val vm = viewModel(provider, ledger)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+
+        ledger.learn("c1")
+        vm.load("c1", isDirect = true)
+        vm.confirmEndToEnd()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
+    }
+
+    @Test
+    fun `confirming without having asked sends nothing`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+
+        vm.confirmEndToEnd()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
+    }
+
+    private fun refusalOf(
+        error: NetworkResult.Failure,
+        isDirect: Boolean = false,
+        afterwards: NetworkResult<ConversationEncryptionStatus> = ok("server"),
+    ): ConversationEncryptionViewModel {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returnsMany listOf(ok("server"), afterwards)
+        coEvery { provider.enable("g1", ConversationEncryptionModeChoice.HYBRID) } returns error
+        return viewModel(provider).also {
+            it.load("g1", isDirect = isDirect)
+            it.select(ConversationEncryptionModeChoice.HYBRID)
+        }
+    }
+
+    @Test
+    fun `the platform-role restriction has its own words`() = runTest {
+        val vm = refusalOf(failure("ENCRYPTION_ACTIVATION_RESTRICTED", 403), afterwards = ok("server", canToggle = false))
+        advanceUntilIdle()
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.RESTRICTED)
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+    }
+
+    @Test
+    fun `a member who is not a moderator is told the group needs one, and the right is read again`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returnsMany listOf(ok("server"), ok("server", canToggle = false))
+        coEvery { provider.enable("g1", ConversationEncryptionModeChoice.HYBRID) } returns
+            NetworkResult.Failure(ApiError("Only moderators", null, 403))
+        val vm = viewModel(provider)
+        vm.load("g1", isDirect = false)
+        advanceUntilIdle()
+        vm.select(ConversationEncryptionModeChoice.HYBRID)
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.FORBIDDEN)
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+    }
+
+    @Test
+    fun `a mode already in place on the server is said, and the state is read again`() = runTest {
+        val vm = refusalOf(failure("ENCRYPTION_ALREADY_ENABLED", 400), afterwards = ok("hybrid"))
+        advanceUntilIdle()
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.ALREADY_ENABLED)
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.HYBRID)
+    }
+
+    @Test
+    fun `a pair that already has its end to end conversation is told so`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        coEvery { provider.enable("c1", ConversationEncryptionModeChoice.E2EE) } returns
+            failure(ConversationEncryptionRepository.DIRECT_ALREADY_END_TO_END, 409)
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+        vm.confirmEndToEnd()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.DIRECT_ALREADY_END_TO_END)
+        coVerify(exactly = 2) { provider.status("c1") }
+    }
+
+    @Test
+    fun `a direct conversation that is not a pair is told so`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        coEvery { provider.enable("c1", ConversationEncryptionModeChoice.E2EE) } returns failure("E2EE_DIRECT_NOT_A_PAIR", 409)
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+        vm.confirmEndToEnd()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.DIRECT_NOT_A_PAIR)
+    }
+
+    @Test
+    fun `every refusal of the gateway has its own words, and never the generic failure`() {
+        val notices = listOf(
+            ConversationEncryptionNotice.RESTRICTED,
+            ConversationEncryptionNotice.FORBIDDEN,
+            ConversationEncryptionNotice.ALREADY_ENABLED,
+            ConversationEncryptionNotice.DIRECT_ALREADY_END_TO_END,
+            ConversationEncryptionNotice.DIRECT_NOT_A_PAIR,
+            ConversationEncryptionNotice.IRREVERSIBLE,
+            ConversationEncryptionNotice.REGIME_CHANGED,
+        ).map { it.textRes() }
+
+        assertThat(notices.toSet()).hasSize(notices.size)
+        assertThat(notices).doesNotContain(ConversationEncryptionNotice.FAILED.textRes())
+    }
+
+    @Test
+    fun `a conversation first opened as direct and then known as a group never sends end to end`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returns ok("server")
+        val vm = viewModel(provider)
+        vm.load("g1", isDirect = true)
+        advanceUntilIdle()
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+        assertThat(vm.state.value.confirmsEndToEnd).isTrue()
+
+        vm.load("g1", isDirect = false)
+        vm.confirmEndToEnd()
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.confirmsEndToEnd).isFalse()
+        assertThat(vm.state.value.selected).isNotEqualTo(ConversationEncryptionModeChoice.E2EE)
+        coVerify(exactly = 0) { provider.enable(any(), ConversationEncryptionModeChoice.E2EE) }
+    }
+
+    @Test
+    fun `a server group never reaches end to end, even through the confirmation`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("g1") } returns ok("server")
+        val vm = viewModel(provider)
+        vm.load("g1", isDirect = false)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+        vm.confirmEndToEnd()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.confirmsEndToEnd).isFalse()
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
+    }
+
+    @Test
+    fun `the chat says direct only once the conversation proves it`() {
+        assertThat(ChatUiState(conversationId = "c1").isKnownDirect).isFalse()
+        assertThat(ChatUiState(conversationId = "c1", isGroup = false, directPeerUserId = "u2").isKnownDirect).isTrue()
+        assertThat(ChatUiState(conversationId = "c1", isGroup = true, directPeerUserId = "u2").isKnownDirect).isFalse()
     }
 }

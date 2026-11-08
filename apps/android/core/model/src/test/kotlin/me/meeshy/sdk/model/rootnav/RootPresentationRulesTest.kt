@@ -85,4 +85,27 @@ class RootPresentationRulesTest {
         assertThat(RootPresentationRules.contentAlpha(SplashPhase.REVEALING)).isEqualTo(1f)
         assertThat(RootPresentationRules.contentAlpha(SplashPhase.GONE)).isEqualTo(1f)
     }
+
+    private fun welcome(
+        seen: Boolean = false,
+        authenticated: Boolean = false,
+        phase: SplashPhase = SplashPhase.GONE,
+        guest: Boolean = false,
+        visitor: Boolean = false,
+    ) = RootPresentationRules.showsWelcome(seen, authenticated, phase, guest, visitor)
+
+    @Test
+    fun `l'accueil n'est eligible que sur un appareil neuf sans session, sans lien et sans rideau`() {
+        assertThat(welcome()).isTrue()
+        assertThat(welcome(phase = SplashPhase.REVEALING)).isTrue()
+    }
+
+    @Test
+    fun `l'accueil n'apparait jamais quand quelque chose le preempte`() {
+        assertThat(welcome(seen = true)).isFalse()
+        assertThat(welcome(authenticated = true)).isFalse()
+        assertThat(welcome(phase = SplashPhase.COVERING)).isFalse()
+        assertThat(welcome(guest = true)).isFalse()
+        assertThat(welcome(visitor = true)).isFalse()
+    }
 }

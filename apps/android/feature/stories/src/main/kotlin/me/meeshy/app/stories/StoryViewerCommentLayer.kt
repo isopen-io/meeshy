@@ -1,13 +1,26 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import me.meeshy.sdk.model.story.StoryComposerFold
+import me.meeshy.sdk.model.story.StoryComposerGesture
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,31 +51,153 @@ internal fun rememberStoryCommentThread(storyId: String?): PostCommentsViewModel
 
 /**
  * Un commentaire en cours d'écriture retient la story (iOS `StoryComposerHold`) : le clavier ouvert, un texte posé,
- * une pièce jointe ou un envoi en vol.
+ * une pièce jointe ou un lieu en attente, un envoi en vol, ou un panneau du composeur ouvert (pièces, emojis, effets,
+ * caméra, stickers, lieu, vocal) — que [StoryComposerPanels] reçoit du composeur épinglé.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun storyCommentHolds(thread: PostCommentsViewModel?): Boolean {
+internal fun storyCommentHolds(thread: PostCommentsViewModel?, panels: StoryComposerPanels): Boolean {
     if (thread == null) return false
     val state by thread.state.collectAsStateWithLifecycle()
-    return WindowInsets.isImeVisible || StoryCommentHold.holds(state.draft, state.attachments.hasMedia, state.isSubmitting)
+    return WindowInsets.isImeVisible || StoryCommentHold.holds(
+        draft = state.draft,
+        hasMedia = state.attachments.hasMedia,
+        isSubmitting = state.isSubmitting,
+        hasPlace = state.place != null,
+        panelOpen = panels.open,
+    )
 }
 
-/** La règle de [storyCommentHolds] hors clavier : ce que le composeur garde retient la lecture. */
+/** La règle de [storyCommentHolds] hors clavier : ce que le composeur garde ou montre retient la lecture. */
 internal object StoryCommentHold {
-    fun holds(draft: String, hasMedia: Boolean, isSubmitting: Boolean): Boolean = draft.isNotBlank() || hasMedia || isSubmitting
+    fun holds(
+        draft: String,
+        hasMedia: Boolean,
+        isSubmitting: Boolean,
+        hasPlace: Boolean = false,
+        panelOpen: Boolean = false,
+    ): Boolean = draft.isNotBlank() || hasMedia || isSubmitting || hasPlace || panelOpen
 }
 
 /**
- * Le composeur universel épinglé sous la story d'autrui (iOS `composerLayer`). Un toucher sur la plaque, hors de ses
- * contrôles, ne fait ni avancer ni reculer la story.
+ * #14661 — un panneau du composeur épinglé est ouvert ET visible : la story ouverte le lit, le composeur l'écrit. La
+ * plaque repliée garde le panneau monté à hauteur nulle : caché, il ne retient pas la story.
  */
-@Composable
-internal fun StoryPinnedCommentComposer(thread: PostCommentsViewModel, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }) {
-        PostCommentsComposerBar(viewModel = thread)
+@Stable
+internal class StoryComposerPanels {
+    private var reported: Boolean by mutableStateOf(false)
+    private var folded: Boolean by mutableStateOf(false)
+
+    val open: Boolean get() = reported && !folded
+
+    fun report(open: Boolean) {
+        reported = open
+    }
+
+    fun fold(folded: Boolean) {
+        this.folded = folded
     }
 }
+
+internal val LocalStoryComposerPanels = compositionLocalOf { StoryComposerPanels() }
+
+/**
+ * Le composeur universel épinglé sous la story d'autrui (iOS `composerLayer` + `StoryComposerFold`). Un toucher sur la
+ * plaque, hors de ses contrôles, ne fait ni avancer ni reculer la story. Un glissé VERTICAL né sur elle lui appartient
+ * (dès 8 dp) et la replie à 40 dp vers le bas, sans refermer la story. Replié, il ne reste que la bulle ; la plaque
+ * reste MONTÉE à hauteur nulle et invisible, pour que le brouillon et la bannière de réponse l'attendent.
+ */
+@Composable
+internal fun StoryPinnedCommentComposer(
+    thread: PostCommentsViewModel,
+    folded: Boolean,
+    onFoldChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val state by thread.state.collectAsStateWithLifecycle()
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val haptics = rememberMeeshyHaptics()
+    val panels = LocalStoryComposerPanels.current
+    LaunchedEffect(panels, folded) { panels.fold(folded) }
+    val apply: (StoryComposerFold.Tap) -> Unit = { tap ->
+        if (tap.resignsKeyboard) {
+            keyboard?.hide()
+            focus.clearFocus()
+        }
+        haptics.light()
+        onFoldChange(tap.userFolded)
+    }
+    Column(modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }) {
+        if (folded) {
+            StoryComposerUnfoldBubble(
+                badge = StoryComposerFold.bubbleBadge(isRecording = false, isReplying = state.replyTarget != null),
+                onUnfold = { apply(StoryComposerFold.BUBBLE_TAPPED) },
+            )
+        }
+        Box(
+            Modifier
+                .foldedToNothing(folded)
+                .storyComposerFoldDrag(enabled = !folded) { apply(StoryComposerFold.CHEVRON_TAPPED) },
+        ) {
+            Column {
+                if (!folded) {
+                    StoryComposerFoldChevron(
+                        onFold = { apply(StoryComposerFold.CHEVRON_TAPPED) },
+                        modifier = Modifier.align(Alignment.End),
+                    )
+                }
+                PostCommentsComposerBar(viewModel = thread, onPanelOpenChange = panels::report)
+            }
+        }
+    }
+}
+
+/** Replié : mesuré, mais posé à hauteur nulle, invisible, muet pour TalkBack et sans prise — le brouillon survit. */
+private fun Modifier.foldedToNothing(folded: Boolean): Modifier =
+    if (!folded) {
+        this
+    } else {
+        this
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, 0) { placeable.place(0, 0) }
+            }
+            .clipToBounds()
+            .graphicsLayer { alpha = 0f }
+            .clearAndSetSemantics { }
+    }
+
+/**
+ * Le glissé vertical né sur le composeur lui appartient (iOS `composerDragGesture`) : dès que le vertical domine à 8 dp
+ * il consomme le geste — le lecteur, qui lit les changements non consommés, cède — et un glissé bas d'au moins 40 dp
+ * replie. L'horizontal n'est jamais consommé : on change encore de story depuis la bande basse.
+ */
+private fun Modifier.storyComposerFoldDrag(enabled: Boolean, onFold: () -> Unit): Modifier =
+    if (!enabled) {
+        this
+    } else {
+        pointerInput(Unit) {
+            val toDp = 1f / density
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var dx = 0f
+                var dy = 0f
+                var claimed = false
+                do {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (change.isConsumed && !claimed) break
+                    val delta = change.positionChange()
+                    dx += delta.x * toDp
+                    dy += delta.y * toDp
+                    if (!claimed && StoryComposerGesture.owner(dx, dy) == StoryComposerGesture.Owner.COMPOSER) claimed = true
+                    if (claimed) change.consume()
+                } while (event.changes.any { it.pressed })
+                if (claimed && StoryComposerGesture.folds(dx, dy)) onFold()
+            }
+        }
+    }
 
 /** La liste des commentaires de la story, ouverte par le rail ; son composeur est le même que celui épinglé. */
 @Composable

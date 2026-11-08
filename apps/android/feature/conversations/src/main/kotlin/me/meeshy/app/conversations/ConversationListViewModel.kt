@@ -18,12 +18,23 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
+import me.meeshy.sdk.conversation.ConversationLivePatcher
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.conversationlist.ChipDropAction
+import me.meeshy.sdk.model.conversationlist.ChipDropResolver
+import me.meeshy.sdk.model.conversationlist.ConversationAvatarRoute
+import me.meeshy.sdk.model.conversationlist.ConversationAvatarTarget
+import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
+import me.meeshy.sdk.model.conversationlist.avatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
+import me.meeshy.sdk.model.search.ListMessageSearchState
+import me.meeshy.sdk.search.ListMessageSearchSource
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
@@ -33,7 +44,9 @@ import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusRepository
+import me.meeshy.sdk.link.ConversationListEntryRequests
 import me.meeshy.sdk.story.StoryRepository
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -55,14 +68,19 @@ class ConversationListViewModel @Inject constructor(
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
     lockStore: ConversationLockStore,
+    unlockSession: ConversationUnlockSessionStore,
     storyRepository: StoryRepository,
     statusBarCache: StatusBarCache,
     messagePrefetch: ConversationListMessagePrefetchTriggers,
     networkMonitor: NetworkMonitor,
     statusRepository: StatusRepository,
     rowSignalsSource: ConversationListRowSignals,
+    livePatcher: ConversationLivePatcher,
     private val loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
+    messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
+    entryRequests: ConversationListEntryRequests = ConversationListEntryRequests(),
+    private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -84,6 +102,10 @@ class ConversationListViewModel @Inject constructor(
     private val openConversationRequests = Channel<String>(Channel.BUFFERED)
     val openConversation: Flow<String> = openConversationRequests.receiveAsFlow()
 
+    /** Le toucher d'avatar d'une ligne (#15989) : profil du pair ou détails, à usage unique. */
+    private val avatarEffectRequests = Channel<ConversationAvatarEffect>(Channel.BUFFERED)
+    val avatarEffects: Flow<ConversationAvatarEffect> = avatarEffectRequests.receiveAsFlow()
+
     /** Liste brute faisant autorite ; [ConversationListUiState.conversations] en est la vue filtree. */
     private var rawConversations: List<ApiConversation> = emptyList()
 
@@ -91,6 +113,8 @@ class ConversationListViewModel @Inject constructor(
         state = _state,
         lockStore = lockStore,
         openConversation = { dialogs.onConversationOpened(it); openConversationRequests.trySend(it) },
+        unlockSession = unlockSession,
+        openInfo = { avatarEffectRequests.trySend(ConversationAvatarEffect.OpenInfo(it)) },
     )
     private val actions = ConversationListRowActions(
         scope = viewModelScope,
@@ -102,6 +126,8 @@ class ConversationListViewModel @Inject constructor(
         draftStore = draftStore,
         workManager = workManager,
         activeConversationId = { loadingDeps.activeConversation.conversationId.value },
+        obsoleter = dialogDeps.obsoleter,
+        remover = dialogDeps.remover,
     )
     /** Les dialogues confirmés de la liste (bloquer, masquer, quitter, renommer, signaler, verrou). */
     internal val dialogs: ConversationListDialogController = ConversationListDialogController(
@@ -114,6 +140,8 @@ class ConversationListViewModel @Inject constructor(
         preferencesSocketManager = preferencesSocketManager,
         starredStore = starredStore,
         currentUserId = { _state.value.currentUserId },
+        patcher = livePatcher,
+        connectionState = socketManager.connectionState,
     )
     private val pullRefresh = ConversationListPullRefresh(
         storyRepository = storyRepository,
@@ -129,7 +157,48 @@ class ConversationListViewModel @Inject constructor(
         categorySocketManager = categorySocketManager,
         storyRepository = storyRepository,
         statusBarCache = statusBarCache,
+        sectionExpansion = sectionExpansion,
     )
+    private val sectionController = ConversationSectionController(
+        viewModelScope, sectionExpansion, categoryRepository,
+    ) { _state.value.categories }
+
+    /** Les sections dépliées gardées pour la session (`null` = défauts de première ouverture). */
+    val rememberedSections: StateFlow<Set<String>?> = sectionExpansion.rememberedSections
+
+    /** Replie ou déplie [section] : mémoire de session à l'instant, serveur en silence pour une catégorie. */
+    fun onSectionToggled(section: ConversationSection, expanded: Boolean) =
+        sectionController.onToggled(section, expanded)
+
+    /** Déplie [sectionId] en mémoire de session seulement (la cible d'un dépôt), sans écriture serveur. */
+    fun revealSection(sectionId: String) = sectionController.reveal(sectionId)
+
+    /**
+     * Le dépôt d'une conversation sur un en-tête (iOS `ConversationSectionDropHandler`) : « Épinglées » épingle,
+     * une catégorie déplace, « Mes conversations » efface la catégorie. Rend la décision pour l'haptique.
+     */
+    fun onConversationDropped(conversationId: String, sectionId: String, isAutoScrolling: Boolean): ChipDropAction {
+        val prefs = _state.value.conversations.firstOrNull { it.id == conversationId }?.resolvedPreferences
+        val action = ChipDropResolver.action(sectionId, prefs?.isPinned == true, prefs?.categoryId.orEmpty(), isAutoScrolling)
+        when (action) {
+            ChipDropAction.Pin -> actions.togglePin(conversationId)
+            is ChipDropAction.Move ->
+                if (action.sectionId.isEmpty()) actions.removeCategory(conversationId) else actions.reassignCategory(conversationId, action.sectionId)
+            ChipDropAction.None -> Unit
+        }
+        return action
+    }
+
+    private val messageSearcher = ConversationListMessageSearcher(
+        scope = viewModelScope,
+        source = messageSearchSource,
+        readerPrism = { _state.value.currentUser?.let { ReaderPrism.resolve(it, Locale.getDefault()) }.orEmpty() },
+        conversations = { rawConversations },
+        isConcealed = { _state.value.isLocked(it) },
+    )
+
+    /** La section « Messages » de la recherche (#14619) : un flux à part, la liste ne se recompose pas à chaque frappe. */
+    val messageSearch: StateFlow<ListMessageSearchState> = messageSearcher.state
 
     private val loader = ConversationListLoader(viewModelScope, repository, loadingDeps) { rawConversations.isNotEmpty() }
 
@@ -177,6 +246,7 @@ class ConversationListViewModel @Inject constructor(
             }
         }
 
+        viewModelScope.launch { entryRequests.requested.collect { filter -> if (filter != null) selectFilter(filter).also { entryRequests.consume() } } }
         loader.start(networkMonitor.isOnline, socketManager.connectionState.map { it == SocketConnectionState.CONNECTED })
         viewModelScope.launch { lock.observe() }
         observers.startCategories()
@@ -185,14 +255,25 @@ class ConversationListViewModel @Inject constructor(
         messagePrefetch.start(viewModelScope, sessionRepository, socketManager) { rawConversations }
     }
 
-    /** Selects a filter tab and re-derives the visible list from the cached conversations (no network). */
+    /** La conversation brute de [id], même hors du filtre courant : la ligne d'un message trouvé la nomme. */
+    fun conversationFor(id: String): ApiConversation? = rawConversations.firstOrNull { it.id == id }
+
+    /** Remplace la sélection par le seul [filter] (entrée par lien profond) et re-dérive la liste, sans réseau. */
     fun selectFilter(filter: ConversationFilter) {
-        _state.update { it.copy(selectedFilter = filter).withVisible(rawConversations) }
+        _state.update { it.copy(selectedFilters = setOf(filter)).withVisible(rawConversations) }
+    }
+
+    /** Un appui pose le [filter], un second le retire ; vider la sélection ramène à Tous (iOS `ConversationFilterComposition`). */
+    fun toggleFilter(filter: ConversationFilter) {
+        _state.update {
+            it.copy(selectedFilters = ConversationFilterComposition.toggling(filter, it.selectedFilters)).withVisible(rawConversations)
+        }
     }
 
     /** Updates the free-text search query and re-derives the visible list (no network). */
     fun setSearch(query: String) {
         _state.update { it.copy(searchText = query).withVisible(rawConversations) }
+        messageSearcher.onQueryChanged(query)
     }
 
     /** Opens or closes the search field; closing clears the query and restores the full list. */
@@ -201,6 +282,7 @@ class ConversationListViewModel @Inject constructor(
             val next = if (active) it else it.copy(searchText = "")
             next.copy(isSearchActive = active).withVisible(rawConversations)
         }
+        if (!active) messageSearcher.onQueryChanged("")
     }
 
     fun togglePin(id: String) = actions.togglePin(id)
@@ -232,12 +314,26 @@ class ConversationListViewModel @Inject constructor(
 
     /** Loads (once, cache-only) the hard-press preview card's recent messages. */
     fun loadPreviewMessages(conversationId: String) = actions.loadPreviewMessages(conversationId)
+    fun openPreview(conversationId: String) = actions.openPreview(conversationId)
 
     /** Row tap: opens straight through, or gates behind the lock code when locked. */
     fun onConversationTap(id: String) {
         loadingDeps.explicitUnreadMarks.clear(id)
         lock.onConversationTap(id)
     }
+    /** Toucher d'avatar : la loi relue AU TOUCHER — un verrou ou un blocage posés depuis le rendu comptent. */
+    fun onAvatarTap(id: String) {
+        val target = conversationFor(id)
+            ?.avatarTarget(_state.value.currentUserId, isPeerBlocked = dialogs.isPeerBlocked(id) == true)
+            ?: ConversationAvatarTarget.ConversationInfo
+        when (val route = ConversationAvatarRoute.route(target, lock.isLocked(id))) {
+            is ConversationAvatarRoute.Profile ->
+                avatarEffectRequests.trySend(ConversationAvatarEffect.OpenProfile(route.userId))
+            ConversationAvatarRoute.Info, ConversationAvatarRoute.UnlockThenInfo -> lock.onAvatarInfo(id)
+        }
+    }
+    /** « Infos de la conversation » du menu d'avatar : les détails, derrière le code si verrouillée. */
+    fun onAvatarInfo(id: String) = lock.onAvatarInfo(id)
     fun onLockToggle(id: String) = lock.onLockToggle(id)
     fun onUnlockAll() = lock.onUnlockAll()
     fun onChangeMasterPin() = lock.onChangeMasterPin()

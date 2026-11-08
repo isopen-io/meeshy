@@ -102,8 +102,6 @@ extension MessageListViewController {
         let finish = { [weak self] in
             guard let self, !self.focalSceneActive else { return }
             self.syncFocalFocusDetails()
-            // #8147 — un message long déplié garde son effet Focal au repos.
-            self.applyLongMessageExpansionPresentation(animated: true)
         }
         if animated {
             UIView.animate(
@@ -133,8 +131,6 @@ extension MessageListViewController {
     /// anime depuis la valeur présentée (pas de saut) ; ensuite, sec.
     func applyFocalPerspectiveToVisibleCells() {
         guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }
-        // #8147 : un message long déplié ET visible est LA mise en avant ; la scène lui cède les layers.
-        guard !isLongMessageExpansionVisible else { return applyLongMessageExpansionPresentation(animated: false) }
         let focusY = focalFocusY
         let cells = collectionView.visibleCells
         // Tant que la magnificence n'est pas armée, le fil défile comme en Script (directive 2026-08-24) : la réduction et la compaction sont des fonctions du mode, pas un décor neutre.

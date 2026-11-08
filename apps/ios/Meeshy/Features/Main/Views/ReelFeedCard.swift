@@ -27,6 +27,8 @@ struct ReelFeedCardContainer: View {
     let onLike: (String) -> Void
     let onComment: (String) -> Void
     let onRepost: (String) -> Void
+    /// « Citer » du choix Repost (#15869), comme `FeedPostCard` — `nil` = absent.
+    var onQuote: ((String) -> Void)? = nil
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
@@ -37,6 +39,8 @@ struct ReelFeedCardContainer: View {
     var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
+    /// « Désactiver / Réactiver les commentaires » (#16541) — `nil` = absente.
+    var onToggleComments: ((String) -> Void)? = nil
 
     var body: some View {
         ReelFeedCard(
@@ -55,6 +59,7 @@ struct ReelFeedCardContainer: View {
             onLike: onLike,
             onComment: onComment,
             onRepost: onRepost,
+            onQuote: onQuote,
             onBookmark: onBookmark,
             onShare: onShare,
             onTapAuthor: onTapAuthor,
@@ -62,7 +67,8 @@ struct ReelFeedCardContainer: View {
             onDelete: onDelete,
             onRemove: onRemove,
             onReport: onReport,
-            onPin: onPin
+            onPin: onPin,
+            onToggleComments: onToggleComments
         )
         .equatable()
         // **Le préchauffage du voisin vit ICI** (#7009), et pas dans le
@@ -104,6 +110,7 @@ struct ReelFeedCard: View, Equatable {
     let onLike: (String) -> Void
     let onComment: (String) -> Void
     let onRepost: (String) -> Void
+    var onQuote: ((String) -> Void)? = nil
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
@@ -113,6 +120,7 @@ struct ReelFeedCard: View, Equatable {
     var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
+    var onToggleComments: ((String) -> Void)? = nil
 
     static func == (lhs: ReelFeedCard, rhs: ReelFeedCard) -> Bool {
         lhs.post.id == rhs.post.id
@@ -129,6 +137,8 @@ struct ReelFeedCard: View, Equatable {
             && lhs.post.content == rhs.post.content
             && lhs.post.trackedLinkMap == rhs.post.trackedLinkMap
             && lhs.post.translatedContent == rhs.post.translatedContent
+            && lhs.post.commentsDisabled == rhs.post.commentsDisabled
+            && (lhs.onToggleComments == nil) == (rhs.onToggleComments == nil)
     }
 
     // Repost-aware: a republished reel has no media on the outer post — resolve
@@ -143,6 +153,7 @@ struct ReelFeedCard: View, Equatable {
     @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
     /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
     @State private var showViewersSheet = false
+    @State private var showRepostOptions = false
     /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
     /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
     /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
@@ -519,7 +530,7 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private var actionsRow: some View {
-        HStack(spacing: 0) {
+        PublishedPostActionsRow(postId: post.id) {
             likeButton
             Spacer()
             reelButton(outline: "bubble.right", filled: "bubble.right.fill",
@@ -533,7 +544,12 @@ struct ReelFeedCard: View, Equatable {
                        count: displayRepostCount,
                        label: String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main),
                        hint: String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main),
-                       participated: isReposted) { onRepost(post.id) }
+                       participated: isReposted) { showRepostOptions = true }
+                .modifier(RepostChoiceDialog(
+                    isPresented: $showRepostOptions,
+                    onRepost: { onRepost(post.id) },
+                    onQuote: onQuote.map { quote in { quote(post.id) } }
+                ))
             Spacer()
             reelButton(outline: "bookmark", filled: "bookmark.fill",
                        tint: isBookmarked ? MeeshyColors.warning : .white,
@@ -541,9 +557,34 @@ struct ReelFeedCard: View, Equatable {
                        label: String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
                        hint: String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main),
                        participated: isBookmarked) { onBookmark(post.id) }
+            // « Imager » en accès direct (#16676), dernière action de la rangée
+            // comme sur la carte d'un post : la même action que l'entrée du menu.
+            if let imagerAction {
+                Spacer()
+                ImagerWandButton(
+                    hint: String(localized: "feed.post.imager.hint", defaultValue: "Fait de cette publication une carte image.", bundle: .main),
+                    glyphSize: 18,
+                    tint: .white,
+                    action: imagerAction,
+                    quick: imagerQuickAction
+                )
+                .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+            }
             // Partager et le menu « … » restent disponibles via `reelGlyph`
             // (coin haut-droit) — un seul trigger, pas de doublon en bas.
         }
+    }
+
+    private var imagerAction: (() -> Void)? {
+        PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator)
+    }
+
+    /// L'appui long de la baguette offre « Export rapide » quand un format par
+    /// défaut est choisi, comme sur la carte d'un post.
+    private var imagerQuickAction: (() -> Void)? {
+        MessageCardExportMenu.hasDefaultFormat
+            ? PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator, quick: true)
+            : nil
     }
 
     /// Contenu partagé du menu « … » — déclenché uniquement par `reelGlyph`
@@ -562,38 +603,45 @@ struct ReelFeedCard: View, Equatable {
         } label: {
             Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
         }
-        Button {
-            onShare(post.id)
-            HapticFeedback.light()
-        } label: {
-            Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-        }
-        if canSaveMedia {
+        // Encore dans la file (#15123) : rien de ce qui suit n'existe côté
+        // serveur — même règle que `FeedPostOnlineMenuItems`.
+        if !PendingPublicationMarker.isPending(postId: post.id) {
             Button {
-                requestSaveMedia()
-            } label: {
-                Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
-            }
-        }
-        ImagerMenuButton(action: PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator))
-        if PublicationViewersAccess.mayList(postType: post.type, isAuthor: isAuthor, viewerRole: AuthManager.shared.currentUser?.role) {
-            PublicationViewersMenuButton { showViewersSheet = true }
-        }
-        if let onPin {
-            Button {
-                onPin(post.id)
+                onShare(post.id)
                 HapticFeedback.light()
             } label: {
-                Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
+                Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+            }
+            if canSaveMedia {
+                Button {
+                    requestSaveMedia()
+                } label: {
+                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
+                }
+            }
+            ImagerMenuButton(action: PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator))
+            if PublicationViewersAccess.mayList(postType: post.type, isAuthor: isAuthor, viewerRole: AuthManager.shared.currentUser?.role) {
+                PublicationViewersMenuButton { showViewersSheet = true }
+            }
+            if let onPin {
+                Button {
+                    onPin(post.id)
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
+                }
+            }
+            if let onEdit {
+                Button {
+                    onEdit(post)
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                }
             }
         }
-        if let onEdit {
-            Button {
-                onEdit(post)
-                HapticFeedback.light()
-            } label: {
-                Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-            }
+        if let onToggleComments {
+            CommentSettingsMenuItem(commentsDisabled: post.commentsDisabled) { onToggleComments(post.id) }
         }
         PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)
         if let onReport {

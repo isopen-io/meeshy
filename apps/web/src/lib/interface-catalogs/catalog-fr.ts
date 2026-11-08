@@ -48,6 +48,7 @@ import frQuote from './catalog-fr-quote';
 import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
+import frAuthFooter from './catalog-fr-auth-footer';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
 import frContentRefused from './catalog-fr-content-refused';
@@ -501,6 +502,7 @@ const fr = {
 
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
+  'media.video.paused': 'En pause',
   'media.video.position': 'Position de lecture',
   'media.audio.position': 'Position de lecture',
   'media.audio.speed': 'Vitesse de lecture',
@@ -591,6 +593,7 @@ const fr = {
   'discover.tab.discover': 'Découvrir',
   'discover.tab.requests': 'Demandes',
   'discover.tab.blocked': 'Bloqués',
+  'discover.tab.circles': 'Cercles',
   'discover.tab.requests.count.one': 'Demandes, {count} reçue',
   'discover.tab.requests.count.other': 'Demandes, {count} reçues',
   'discover.invite.title': 'Inviter par e-mail',
@@ -874,13 +877,20 @@ const fr = {
   'story.studio.audience.title': 'Audience',
   'story.studio.audience.public': 'Public',
   'story.studio.audience.community': 'Communautés',
-  'story.studio.audience.friends': 'Contacts',
+  'story.studio.audience.acquaintances': 'Connaissances',
+  'story.studio.audience.friends': 'Amis',
+  'story.studio.audience.close': 'Proches',
+  'story.studio.audience.blood': 'Sang',
   'story.studio.audience.except': 'Sauf…',
   'story.studio.audience.only': 'Seulement…',
   'story.studio.audience.private': 'Privé',
+  'story.studio.audience.restricted': 'Restreinte',
   'story.studio.audience.subtitle.public': 'Tout le monde, y compris hors abonnés',
   'story.studio.audience.subtitle.community': 'Les membres de vos communautés',
+  'story.studio.audience.subtitle.acquaintances': 'Vos Connaissances, Amis, Proches et Sangs',
   'story.studio.audience.subtitle.friends': 'Vos contacts acceptés',
+  'story.studio.audience.subtitle.close': 'Vos Proches et vos Sangs',
+  'story.studio.audience.subtitle.blood': 'Vos Sangs seulement — jamais repartagé',
   'story.studio.audience.subtitle.private': 'Vous seul — rien n’est publié',
   'story.studio.audience.refusal.people': 'Le choix de personnes n’est pas encore disponible sur le web.',
   'story.studio.audience.scope': 'L’audience choisie appartient à la publication, jamais à un format : changer de format la conserve.',
@@ -970,6 +980,13 @@ const fr = {
   'comments.send': 'Envoyer le commentaire',
   'comments.row.pending': 'Envoi en cours',
   'comments.signin': 'Connectez-vous pour commenter.',
+  'comments.closed': 'Les commentaires sont désactivés.',
+  'feed.post.menu.comments_off': 'Désactiver les commentaires',
+  'feed.post.menu.comments_on': 'Réactiver les commentaires',
+  'feed.post.comments_off.done': 'Commentaires désactivés',
+  'feed.post.comments_on.done': 'Commentaires réactivés',
+  'feed.post.comments_toggle.failed': 'Le réglage des commentaires n’a pas été enregistré.',
+  'story.studio.comments_off.hint': 'Personne ne pourra commenter cette publication.',
   'comment.send.error': 'Le commentaire n’a pas pu être publié.',
   'comment.send.pending': 'Commentaire non confirmé — hors ligne',
   'comment.send.empty': 'Écrivez quelque chose avant d’envoyer.',
@@ -987,7 +1004,6 @@ const fr = {
   'thread.unread-separator.one': '{count} message non lu',
   'thread.unread-separator.other': '{count} messages non lus',
   'thread.long-message.read-more': 'Lire la suite',
-  'thread.long-message.collapse': 'Réduire',
   'message-detail.info.title': 'Infos du message',
   'message-detail.received-by': 'Reçu par',
   'message-detail.read-by': 'Vu par',
@@ -1016,6 +1032,7 @@ const fr = {
      que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
      coque Android n'est pas publiée. */
   ...frDownload,
+  ...frAuthFooter,
   ...frPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
@@ -1034,6 +1051,8 @@ const fr = {
   'composer.viewOnce.activate': 'Activer le mode vue unique',
   'composer.viewOnce.active': 'Mode vue unique actif',
   'composer.viewOnce.label': 'Vue unique',
+  'conversation.composer.fold': 'Réduire la barre de message',
+  'conversation.composer.unfold': 'Afficher la barre de message',
   'composer.protection.ephemeral.state': 'Mode éphémère actif',
   'composer.protection.blur.state': 'Mode flou actif',
 

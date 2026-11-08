@@ -21,19 +21,16 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,6 +49,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -60,14 +58,27 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import me.meeshy.ui.component.focal.ElectedMetrics
+import me.meeshy.ui.component.focal.FocalElectedFrame
+import me.meeshy.ui.component.focal.FocalGlassBlock
+import me.meeshy.ui.component.focal.FocalIdentityChip
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
-import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.rememberConversationHere
-import me.meeshy.ui.component.rememberPresence
-import me.meeshy.ui.format.bubbleClockLabel
-import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.component.focal.FocalAttachmentBlock
+import me.meeshy.ui.component.focal.FocalIdentityHeader
+import me.meeshy.ui.component.focal.FocalLongMessage
+import me.meeshy.ui.component.focal.FocalProtectedContent
+import me.meeshy.ui.component.focal.FocalSpecialRowView
+import me.meeshy.ui.component.focal.focalSpecialRow
+import me.meeshy.sdk.model.reading.focal.FocalSpecialRow
+import me.meeshy.ui.component.focal.LocalFlatRowExpansion
+import me.meeshy.ui.component.focal.FocalMetaColumn
+import me.meeshy.ui.component.focal.FocalQuotedReply
+import me.meeshy.ui.component.focal.FocalQuotedReplyView
+import me.meeshy.ui.component.focal.FocalRowInput
+import me.meeshy.ui.component.focal.FocalStoryCitationQuote
+import me.meeshy.ui.sticker.MessageStickerArtwork
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -119,9 +130,9 @@ public fun FocalFlatRow(
                 // Envoi optimiste : 0,7 tant que le gateway n'a pas accusé (iOS `isOptimistic`).
                 .alpha(if (content.isPending) 0.7f else 1f),
         ) {
+            val special = remember(content.isDeleted, content.isSystem, content.callSummary, content.joinNotice, content.text) { content.focalSpecialRow() }
             when {
-                renderKind.isSystem -> FlatSystemNotice(content)
-                content.isDeleted -> FlatMutedLine(stringResource(R.string.bubble_message_deleted), callbacks.onLongPress)
+                special != FocalSpecialRow.None -> FocalSpecialRowView(special, content, accentColor, callbacks)
                 renderKind.isBurned -> FlatMutedLine(stringResource(R.string.bubble_burned), callbacks.onLongPress)
                 else -> FlatStandardBody(
                     content = content,
@@ -150,6 +161,7 @@ internal object FlatRowMetrics {
     val quoteRail = FocalMetrics.Quote.RAIL_WIDTH.toFloat().dp
     val mediaRadius = FocalMetrics.Media.RADIUS.toFloat().dp
     val mediaMaxWidth = 300.dp
+    val stickerSide = FocalMetrics.Sticker.SIDE.toFloat().dp
     const val TEXT_SIZE_SP = 15f
     val lineHeightSp = (TEXT_SIZE_SP * FocalMetrics.Text.LINE_HEIGHT_RATIO.toFloat())
     const val TIME_SIZE_SP = 10.5f
@@ -159,15 +171,6 @@ private val FlatTextStyle = TextStyle(
     fontSize = FlatRowMetrics.TEXT_SIZE_SP.sp,
     lineHeight = FlatRowMetrics.lineHeightSp.sp,
 )
-
-/** Teinte méta : noir / blanc à 55 % (iOS `FocalMetrics.MetaText`). */
-@Composable
-private fun flatMetaTint(): Color =
-    if (MeeshyTheme.isDark) {
-        Color.White.copy(alpha = FocalMetrics.MetaText.DARK_OPACITY.toFloat())
-    } else {
-        Color.Black.copy(alpha = FocalMetrics.MetaText.LIGHT_OPACITY.toFloat())
-    }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -195,6 +198,17 @@ private fun FlatStandardBody(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val namedActions = callbacks.accessibilityActions
     val ink = MeeshyTheme.tokens.textPrimary
+    val rowInput = remember(content) { FocalRowInput.of(content) }
+    val expansion = LocalFlatRowExpansion.current
+    val isLong = remember(content.text, content.isEndToEndSealed) {
+        !content.isEndToEndSealed && LongMessageExcerpt.isLong(content.text)
+    }
+    val expansionLabel = expansion?.takeIf { isLong }?.let {
+        stringResource(if (it.isExpanded) R.string.focal_long_message_expanded else R.string.focal_long_message_collapsed)
+    }
+    val expansionAction = expansion?.takeIf { isLong && !it.isExpanded }?.let {
+        CustomAccessibilityAction(stringResource(R.string.message_long_read_more)) { it.onToggle(); true }
+    }
     Row(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(FlatRowMetrics.metaSpacing),
@@ -212,10 +226,11 @@ private fun FlatStandardBody(
                 )
             }
             .semantics(mergeDescendants = true) {
-                if (namedActions.isNotEmpty()) {
+                if (expansionLabel != null) stateDescription = expansionLabel
+                if (namedActions.isNotEmpty() || expansionAction != null) {
                     customActions = namedActions.map { named ->
                         CustomAccessibilityAction(named.label) { named.onAction(); true }
-                    }
+                    } + listOfNotNull(expansionAction)
                 }
             },
     ) {
@@ -226,7 +241,7 @@ private fun FlatStandardBody(
             if (content.isFirstInGroup) {
                 // En focus l'identité passe sur la chip du cadre : l'en-tête garde sa place, s'efface.
                 Box(Modifier.graphicsLayer { alpha = if (focused) 0f else 1f }) {
-                    FlatIdentityHeader(content = content, onSenderTap = callbacks.onSenderTap)
+                    FocalIdentityHeader(input = rowInput, onSenderTap = callbacks.onSenderTap)
                 }
             }
             Box(
@@ -246,16 +261,11 @@ private fun FlatStandardBody(
                 val sections: @Composable () -> Unit = {
                     FlatContentSections(content, accentColor, ink, callbacks, audioPlayback, decor, bodyAccessory)
                 }
-                val spec = content.blurReveal
-                if (spec == null) {
-                    sections()
-                } else {
-                    BubbleBlurReveal(
-                        messageId = content.messageId,
-                        spec = spec,
-                        shape = RoundedCornerShape(MeeshyRadius.md),
-                    ) { sections() }
-                }
+                FocalProtectedContent(
+                    messageId = content.messageId,
+                    spec = content.blurReveal,
+                    shape = RoundedCornerShape(MeeshyRadius.md),
+                ) { sections() }
             }
             if (content.isOutgoing && content.deliveryStatus == DeliveryStatus.Failed) {
                 FlatFailedRetry(failure = BubbleFailure.of(content), onRetry = callbacks.onRetry)
@@ -266,16 +276,16 @@ private fun FlatStandardBody(
             }
         } }
         if (focus == null) {
-            Box(Modifier.weight(1f), propagateMinConstraints = true) { column() }
+            Box(Modifier.weight(1f)) { column() }
         } else {
             FocalElectedFrame(
-                focus = focus,
+                contentScale = focus.contentScale,
                 lift = lift,
                 contentRect = { contentRect },
-                card = { ElectedGlassCard() },
+                card = { FocalGlassBlock() },
                 identityChip = {
                     Box(Modifier.offset(x = -ElectedMetrics.chipInset)) {
-                        ElectedIdentityChip(content, accentColor, callbacks.onSenderTap)
+                        FocalIdentityChip(content, accentColor, callbacks.onSenderTap)
                     }
                 },
                 strip = { ElectedStrip(content, focus, accentColor, callbacks) },
@@ -284,7 +294,11 @@ private fun FlatStandardBody(
             )
         }
         // En focus, la chip de date dit la même chose : la colonne s'efface sans céder sa place.
-        FlatMetaColumn(content = content, metaAlpha = { if (focused) 0f else metaAlpha() })
+        FocalMetaColumn(
+            input = rowInput,
+            metaAlpha = { if (focused) 0f else metaAlpha() },
+            onShowReadStatus = callbacks.onShowReadStatus,
+        )
     }
 }
 
@@ -300,58 +314,9 @@ private fun FlatBadges(content: BubbleContent) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = Modifier.padding(start = FlatRowMetrics.indent),
     ) {
-        if (showsPin) BubblePinnedIndicator()
-        if (showsForward) BubbleForwardedBadge(content.forwardedFromName, MeeshyTheme.tokens.textMuted)
+        if (showsPin) BubblePinBadge()
+        if (showsForward) BubbleForwardBadge(content.forwardAttribution)
         if (showsEphemeral) EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
-    }
-}
-
-/**
- * L'en-tête d'identité de la tête de groupe (iOS `FocalIdentityHeader`) : pastille 22, nom en
- * sous-titre très gras — « Toi » en indigo pour mes messages. Hauteur minimale 34, celle de la
- * pastille de focus, pour que la rangée ne change jamais de hauteur. Tap → fiche de l'auteur.
- */
-@Composable
-private fun FlatIdentityHeader(content: BubbleContent, onSenderTap: (() -> Unit)?) {
-    val you = stringResource(R.string.focal_row_you)
-    val senderName = content.senderName?.takeIf { it.isNotBlank() }
-    val displayName = if (content.isOutgoing) you else senderName ?: ""
-    val senderColor = remember(content.senderColorHex, senderName) {
-        val hex = content.senderColorHex ?: senderName?.let(DynamicColorGenerator::colorForName)
-        hex?.let { hexColor(it, MeeshyPalette.Indigo500) } ?: MeeshyPalette.Indigo500
-    }
-    val nameColor = when {
-        content.isOutgoing -> MeeshyPalette.Indigo500
-        MeeshyTheme.isDark -> Color.White.copy(alpha = 0.92f)
-        else -> Color.Black.copy(alpha = 0.88f)
-    }
-    val profileLabel = stringResource(R.string.bubble_view_profile)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
-        modifier = Modifier
-            .heightIn(min = FocalMetrics.Focus.AVATAR_SIZE.toFloat().dp)
-            .let { base ->
-                if (onSenderTap == null) base
-                else base.clip(RoundedCornerShape(MeeshyRadius.sm)).clickable(onClickLabel = profileLabel, onClick = onSenderTap)
-            },
-    ) {
-        MeeshyAvatar(
-            name = senderName ?: you,
-            size = FlatRowMetrics.avatar,
-            containerColor = senderColor,
-            imageUrl = content.senderAvatarUrl,
-            presence = rememberPresence(content.senderProfile?.userId),
-            here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
-        )
-        Text(
-            text = displayName,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = nameColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -374,82 +339,61 @@ private fun FlatContentSections(
             appearanceSeed = content.messageId.hashCode().toLong(),
         ),
     ) {
-        FlatQuote(content, accentColor, callbacks.onReplyPreviewClick)
+        FlatQuote(content, accentColor, callbacks, decor.mentionDisplayNames)
         content.storyReply?.let { story ->
             if (story.isMood) {
                 StoryReplyPreview(story = story, accentColor = accentColor)
             } else {
-                StoryCitationCard(story = story, accentColor = accentColor, onOpen = callbacks.onStoryCitationClick)
+                FocalStoryCitationQuote(
+                    story = story,
+                    railColor = accentColor,
+                    accentColor = accentColor,
+                    onOpen = callbacks.onStoryCitationClick,
+                )
             }
         }
-        if (content.hasRenderedAttachments) {
-            Column(
-                modifier = Modifier
-                    .widthIn(max = FlatRowMetrics.mediaMaxWidth)
-                    .clip(RoundedCornerShape(FlatRowMetrics.mediaRadius)),
-            ) {
-                BubbleAttachmentSections(content, ink, callbacks, audioPlayback)
-            }
+        val sticker = content.drawnSticker
+        if (sticker != null) {
+            // iOS `FocalRow.stickerBlock` : le sticker se dessine, sans carte ni fond, au côté de la rangée.
+            MessageStickerArtwork(sticker, side = FlatRowMetrics.stickerSide)
+            return@Column
         }
+        if (content.hasRenderedAttachments) FocalAttachmentBlock(content, ink, callbacks, audioPlayback, accentColor)
         FlatText(content, accentColor, ink, decor)
         if (!content.isEndToEndSealed) bodyAccessory?.invoke(ink)
     }
 }
 
-/** La citation plate : un rail de 2,5 à la couleur de l'auteur cité (l'accent si c'est moi). */
+/** La citation plate : le filet, le nom, le texte cité sur deux lignes, la miniature (iOS `FocalQuotedReplyView`). */
 @Composable
-private fun FlatQuote(content: BubbleContent, accentColor: Color, onClick: (() -> Unit)?) {
+private fun FlatQuote(content: BubbleContent, accentColor: Color, callbacks: BubbleCallbacks, mentionDisplayNames: Map<String, String>?) {
     if (content.replyToText == null && !content.replyToDeleted) return
     val mediaLabel = when (content.replyToMediaKind) {
         ReplyMediaKind.Image -> stringResource(R.string.bubble_reply_photo)
         ReplyMediaKind.File -> stringResource(R.string.bubble_reply_attachment)
         ReplyMediaKind.None -> null
     }
-    val text = content.replyToText?.takeIf { it.isNotBlank() && !content.replyToDeleted }
-        ?: mediaLabel
-        ?: stringResource(R.string.bubble_message_deleted)
-    val railColor = remember(content.replyToIsMe, content.replyToSenderName, accentColor) {
-        if (content.replyToIsMe) {
-            accentColor
-        } else {
-            content.replyToSenderName?.let { hexColor(DynamicColorGenerator.colorForName(it), accentColor) } ?: accentColor
-        }
-    }
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .height(IntrinsicSize.Min)
-            .let { base ->
-                if (onClick == null || content.replyToId == null) base else base.clickable(onClick = onClick)
-            },
-    ) {
-        Box(
-            modifier = Modifier
-                .width(FlatRowMetrics.quoteRail)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(FlatRowMetrics.quoteRail / 2))
-                .background(railColor),
+    val deletedLabel = stringResource(R.string.bubble_message_deleted)
+    val reply = remember(content.replyToText, content.replyToDeleted, content.replyToSenderName, content.replyToIsMe, content.replyToThumbnailUrl, mediaLabel, deletedLabel) {
+        FocalQuotedReply(
+            authorName = content.replyToSenderName,
+            isMe = content.replyToIsMe,
+            isMood = false,
+            previewText = content.replyToText?.takeIf { it.isNotBlank() && !content.replyToDeleted }
+                ?: if (content.replyToDeleted) deletedLabel else "",
+            mediaLabel = mediaLabel,
+            thumbnailUrl = content.replyToThumbnailUrl.takeUnless { content.replyToDeleted },
         )
-        Column(modifier = Modifier.padding(vertical = 1.dp)) {
-            content.replyToSenderName?.let { name ->
-                Text(
-                    text = name,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = railColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                text = text,
-                fontSize = 13.sp,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
     }
+    val jump = callbacks.onReplyPreviewClick.takeIf { content.replyToId != null }
+    FocalQuotedReplyView(
+        reply = reply,
+        accentColor = accentColor,
+        mentionDisplayNames = mentionDisplayNames,
+        onJump = jump,
+        onAuthorTap = callbacks.onQuotedAuthorTap.takeIf { content.replyToAuthor != null },
+        onMediaTap = callbacks.onQuotedMediaTap ?: jump,
+    )
 }
 
 /** Texte 15 / 1,42, emoji seul agrandi, ou mention de chiffrement ; un message long s'ouvre sur un extrait. */
@@ -467,31 +411,19 @@ private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, dec
     if (content.text.isBlank()) return
     val emojiFontSize = if (content.replyToText == null) EmojiDetector.fontSizeSp(content.emojiOnlyCount) else null
     if (emojiFontSize != null) {
-        Text(text = content.text.trim(), fontSize = emojiFontSize.sp, lineHeight = (emojiFontSize * 1.15f).sp)
+        Text(text = content.text.trim(), style = largeEmojiTextStyle(emojiFontSize.sp))
         return
     }
-    val excerpt = remember(content.text) { LongMessageExcerpt.of(content.text) }
-    var expanded by rememberSaveable(content.messageId) { mutableStateOf(false) }
-    RichMessageText(
-        text = if (excerpt.truncated && !expanded) excerpt.excerpt + "…" else content.text,
-        color = ink,
-        style = FlatTextStyle,
-        linkColor = accentColor,
-        highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
-        mentionDisplayNames = decor.mentionDisplayNames,
-        highlightTerm = decor.highlightTerm,
-        trackedLinks = decor.trackedLinks,
-    )
-    if (excerpt.truncated) {
-        Text(
-            text = stringResource(if (expanded) R.string.message_long_collapse else R.string.message_long_read_more),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = accentColor,
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { expanded = !expanded }
-                .padding(vertical = MeeshySpacing.xxs),
+    FocalLongMessage(messageId = content.messageId, text = content.text, accentColor = accentColor, inkColor = ink) { shown ->
+        RichMessageText(
+            text = shown,
+            color = ink,
+            style = FlatTextStyle,
+            linkColor = accentColor,
+            highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
+            mentionDisplayNames = decor.mentionDisplayNames,
+            highlightTerm = decor.highlightTerm,
+            trackedLinks = decor.trackedLinks,
         )
     }
 }
@@ -546,78 +478,10 @@ private fun FlatBottomLine(content: BubbleContent, accentColor: Color, callbacks
                 onReactionClick = callbacks.onReactionClick,
                 onReactionLongPress = callbacks.onReactionLongPress,
                 onAddReaction = callbacks.onAddReaction,
+                messageId = content.messageId,
+                onOpenReactPicker = callbacks.onOpenReactPicker,
             )
         }
-    }
-}
-
-/**
- * La colonne méta (iOS `FocalMetaColumn`) : « modifié » toujours lisible, l'heure et les coches
- * masquées par opacité au repos — leur place reste réservée, rien ne bouge quand elles paraissent.
- */
-@Composable
-private fun FlatMetaColumn(content: BubbleContent, metaAlpha: () -> Float) {
-    val tint = flatMetaTint()
-    val readTint = if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo600
-    val clock = remember(content.createdAtIso) { bubbleClockLabel(content.createdAtIso) }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-        modifier = Modifier
-            .widthIn(min = FlatRowMetrics.metaWidth)
-            .padding(bottom = 2.dp),
-    ) {
-        if (content.isEdited) {
-            Icon(
-                imageVector = MeeshyIcons.Edit,
-                contentDescription = stringResource(R.string.bubble_edited),
-                tint = tint,
-                modifier = Modifier.size(10.dp),
-            )
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.graphicsLayer { alpha = metaAlpha() },
-        ) {
-            if (clock != null) {
-                Text(
-                    text = clock,
-                    fontSize = FlatRowMetrics.TIME_SIZE_SP.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = tint,
-                    maxLines = 1,
-                )
-            }
-            if (content.isOutgoing && content.deliveryStatus != DeliveryStatus.Failed) {
-                DeliveryStatusIcon(
-                    status = content.deliveryStatus,
-                    metaColor = tint,
-                    isSlow = content.isSlowSend,
-                    readTintOverride = readTint,
-                )
-            }
-        }
-    }
-}
-
-/** Avis de conversation : l'heure en petit au-dessus, le texte centré, atténué (iOS `FocalSystemNoticeRow`). */
-@Composable
-private fun FlatSystemNotice(content: BubbleContent) {
-    if (content.text.isBlank()) return
-    val muted = MeeshyTheme.tokens.textMuted
-    val clock = remember(content.createdAtIso) { bubbleClockLabel(content.createdAtIso) }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) { contentDescription = content.text },
-    ) {
-        if (clock != null) {
-            Text(text = clock, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = muted.copy(alpha = muted.alpha * 0.7f))
-        }
-        Text(text = content.text, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = muted, textAlign = TextAlign.Center)
     }
 }
 

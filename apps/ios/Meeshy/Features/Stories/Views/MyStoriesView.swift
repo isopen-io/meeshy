@@ -27,8 +27,8 @@ struct MyStoriesView: View {
     let onCreateStory: () -> Void
     /// Édition d'une story publiée, gérée par le tray (même raison : le
     /// composer se présente en fullScreenCover APRÈS fermeture de la sheet).
-    /// L'édition remet vues/réactions à zéro côté serveur — la story
-    /// « recommence » pour tous, seule la date de publication ne bouge pas.
+    /// L'édition met l'existant à jour et GARDE vues, réactions et
+    /// impressions (#16386) ; la date de publication ne bouge pas.
     let onEditStory: (StoryItem) -> Void
     /// Reprise d'un brouillon dans le composer, gérée par le tray — même
     /// raison que `onCreateStory` : un `fullScreenCover` posé sur une sheet
@@ -117,7 +117,7 @@ struct MyStoriesView: View {
     /// expirées confondues (l'archive drainée par `loadMyStoriesArchive`
     /// rejoint le même groupe, cf. `StoryViewModel.loadMyStoriesArchive`).
     private var stories: [StoryItem] {
-        (viewModel.storyGroupForUser(userId: userId)?.stories ?? [])
+        MyStoriesTabResolver.sentStories(viewModel.storyGroupForUser(userId: userId)?.stories ?? [])
             .sorted { $0.createdAt > $1.createdAt }
     }
 
@@ -134,7 +134,13 @@ struct MyStoriesView: View {
     }
 
     private var hasQueueWork: Bool {
-        !viewModel.activeUploads.isEmpty || !publishService.failedItems.isEmpty
+        !viewModel.activeUploads.isEmpty || !publishService.failedItems.isEmpty || !waitingStories.isEmpty
+    }
+
+    /// Les stories en attente d'envoi que l'UI ne téléverse pas déjà (#10331).
+    private var waitingStories: [StoryPublishQueueItem] {
+        let suivies = Set(viewModel.activeUploads.compactMap(\.queueId))
+        return publishService.waitingItems.filter { !suivies.contains($0.id) }
     }
 
     private var visibleTabs: [MyStoriesTab] {
@@ -162,7 +168,7 @@ struct MyStoriesView: View {
                 }
             }
             .task {
-                draftsViewModel.reload()
+                await reloadLocalQueues()
                 // Archive complète (stories en cours ET passées) : les stories
                 // ne sont plus jamais détruites — cette page liste l'historique
                 // au-delà de la fenêtre de 7 j que la page du tray borne.
@@ -239,14 +245,11 @@ struct MyStoriesView: View {
                 }
             }
         }
-        .sheet(item: $viewersStory) { story in
-            StoryViewersSheet(
-                story: story,
-                accentColor: accentColor,
-                statusViewModel: statusViewModel,
-                onOpenProfile: { _ in }
-            )
-        }
+        .modifier(MyStoriesViewersPresentation(
+            story: $viewersStory,
+            accentColor: accentColor,
+            statusViewModel: statusViewModel
+        ))
         // `onDismiss` aligné sur le lecteur (`StoryViewerView`, sheet
         // « Partager ») : sans lui, swiper la sheet depuis la liste laissait le
         // bake tourner jusqu'au bout et orphelinait le MP4 temporaire. Pas de
@@ -379,9 +382,9 @@ struct MyStoriesView: View {
 
     private func handlePublishedGlyph(_ glyph: MyStoryGlyph, for story: StoryItem) {
         switch glyph {
-        case .viewsAndReactions: viewersStory = story
-        case .comments:          openComments(for: story)
-        case .reactions, .more, .publish: break
+        case .viewsAndReactions, .reactions: viewersStory = story
+        case .comments:                      openComments(for: story)
+        case .more, .publish:                break
         }
     }
 
@@ -396,7 +399,7 @@ struct MyStoriesView: View {
             tab: .queue,
             hasPublishedStories: !activeStories.isEmpty,
             hasDrafts: !draftsViewModel.drafts.isEmpty,
-            hasActiveUpload: !viewModel.activeUploads.isEmpty,
+            hasActiveUpload: !viewModel.activeUploads.isEmpty || !waitingStories.isEmpty,
             hasFailedItems: !publishService.failedItems.isEmpty,
             hasArchivedStories: !archivedStories.isEmpty
         ) {
@@ -425,6 +428,10 @@ struct MyStoriesView: View {
                         onCancel: { viewModel.cancelUpload(id: upload.id) }
                     )
                     .padding(.horizontal, MeeshySpacing.lg)
+                }
+                ForEach(waitingStories) { item in
+                    WaitingStoryRow(item: item, onCancel: { cancelWaitingStory(item) })
+                        .padding(.horizontal, MeeshySpacing.lg)
                 }
                 if !publishService.failedItems.isEmpty {
                     // Les échecs vivent ici : un onglet « Publiées » ne peut
@@ -816,6 +823,15 @@ struct MyStoriesView: View {
             }
             isResumingFailedItem = false
         }
+    }
+
+    private func reloadLocalQueues() async {
+        draftsViewModel.reload()
+        await publishService.refresh()
+    }
+
+    private func cancelWaitingStory(_ item: StoryPublishQueueItem) {
+        Task { await StoryWaitingCancellation.run(item, on: viewModel) { await publishService.cancelPending($0) } }
     }
 
     private func retryFailedItem(_ item: StoryPublishQueueItem) {

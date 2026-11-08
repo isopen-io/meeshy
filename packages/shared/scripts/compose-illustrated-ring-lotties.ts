@@ -21,6 +21,7 @@ import { parseAvatarRingDesign } from '../types/avatar-ring-design.js';
 import { validateLottie } from '../utils/lottie-validate.js';
 import { REACH } from './illustrated-rings/kit.js';
 import { ILLUSTRATED_PACKS, LANGUAGES, type IllustratedPack } from './illustrated-rings/packs.js';
+import { upsertPacks } from './meeshy-collections/source-packs.js';
 
 export const MAX_FILM_BYTES = 60 * 1024;
 
@@ -59,14 +60,8 @@ const sourcePack = <R>(pack: IllustratedPack, rings: readonly R[]) => ({
   rings,
 });
 
-/** Les packs illustrés vivent À LA FIN de la source : tout ce qui précède reste à l'octet. */
-function withPacks(text: string, packs: readonly unknown[]): string {
-  const first = ILLUSTRATED_PACKS[0]!.slug;
-  const marker = text.indexOf(`{\n      "slug": "${first}"`);
-  const head = marker === -1 ? text.replace(/\n  \]\n\}\n$/, '') : text.slice(0, text.lastIndexOf(',', marker));
-  const body = packs.map((pack) => JSON.stringify(pack, null, 2).replace(/^/gm, '    ')).join(',\n');
-  return `${head},\n${body}\n  ]\n}\n`;
-}
+/** Les packs illustrés vivent après les contours : remplacés À LEUR PLACE, ils ne déplacent ni n'effacent ce qui suit (#15158). */
+const withPacks = (text: string, packs: readonly { readonly slug: string }[]): string => upsertPacks(text, packs);
 
 const isMain = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 

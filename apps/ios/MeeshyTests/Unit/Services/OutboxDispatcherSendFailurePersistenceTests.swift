@@ -128,6 +128,47 @@ final class OutboxDispatcherSendFailurePersistenceTests: XCTestCase {
         XCTAssertEqual(replayed?.state, .sent)
     }
 
+    /// Une bulle retombée dans la file est `.queued`, rendue `.slow` : cet état-là dessine une
+    /// horloge simple et n'a pas d'anneau. Sa reprise doit la rendre `.sending`, sinon le cas même
+    /// de #16275, l'échec en ligne puis le rejeu, publie une progression que personne ne voit.
+    func test_replayUploader_bubbleFallenToTheOutbox_goesBackToSendingForItsRing() async throws {
+        let store = try makeStore()
+        let cmid = ClientMessageId.generate()
+        try await store.persistence.insertOptimistic(
+            SendingRowFixture.record(localId: cmid, conversationId: conversationId)
+        )
+        _ = try await store.persistence.applyEvent(localId: cmid, event: .sendFailed(URLError(.timedOut)))
+        let fallen = try await store.record(cmid)
+        XCTAssertEqual(fallen?.toMessage(currentUserId: userId).deliveryStatus, .slow)
+        let baseURL = try XCTUnwrap(URL(string: "https://staging.meeshy.me"))
+
+        _ = await makeDispatcher(store: store, service: MockMessageService())
+            .replayUploader(baseURL: baseURL, for: cmid, stored: [])
+
+        let replaying = try await store.record(cmid)
+        XCTAssertEqual(replaying?.toMessage(currentUserId: userId).deliveryStatus, .sending)
+        ReplayUploadProgressRelay.shared.stop(cmid)
+    }
+
+    /// La file durable tient le budget : une reprise qui échoue rend la bulle à `.queued`, jamais
+    /// à `.failed` tant que la ligne a encore des essais devant elle.
+    func test_replayFailures_beyondTheBubbleBudget_staySlowWhileTheOutboxRetries() async throws {
+        let store = try makeStore()
+        let item = OfflineQueueItem(conversationId: conversationId, content: "Bonjour", clientMessageId: "cid_budget")
+        try await store.persistence.insertOptimistic(
+            SendingRowFixture.record(localId: "cid_budget", conversationId: conversationId)
+        )
+        let dispatcher = makeDispatcher(store: store, service: failingService())
+
+        for _ in 0...MessageStateMachine.maxRetries {
+            _ = try await store.persistence.applyEvent(localId: "cid_budget", event: .startSending)
+            try? await dispatcher.dispatch(outboxRecord(for: item))
+            let row = try await store.record("cid_budget")
+            XCTAssertEqual(row?.state, .queued)
+            XCTAssertNotNil(row?.lastError)
+        }
+    }
+
     func test_fanoutDeferral_doesNotTouchTheRow() async throws {
         let store = try makeStore()
         try await store.persistence.insertOptimistic(

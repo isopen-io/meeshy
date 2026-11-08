@@ -75,14 +75,18 @@ export function createMockPrisma() {
       deleteMany: jest.fn(),
     },
     friendRequest: {
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     user: {
       // Consulté UNIQUEMENT quand `discoverabilityPrecision === 'EXACT'`
       // (#3637) — `null` par défaut : « date de naissance inconnue » est le
       // repli fail-closed de `isAdult()`, jamais une supposition de majorité.
       findUnique: jest.fn().mockResolvedValue(null),
+      // #14108 — la loi des cercles lit blocages et âge des personnes jugées.
+      findMany: jest.fn().mockResolvedValue([]),
     },
+    userRelation: { findMany: jest.fn().mockResolvedValue([]) },
+    communityMember: { findMany: jest.fn().mockResolvedValue([]) },
   };
   prisma.$transaction = jest.fn(async (arg: any) =>
     typeof arg === 'function' ? arg(prisma) : Promise.all(arg),

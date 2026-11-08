@@ -88,6 +88,7 @@ class CallViewModelGroupTitleAndTurnTest {
         every { signalManager.incomingOffers } returns MutableSharedFlow()
         every { signalManager.endedCalls } returns MutableSharedFlow<CallEndedSignal>()
         every { signalManager.iceServersRefreshed } returns refreshes
+        every { signalManager.callErrors } returns MutableSharedFlow<me.meeshy.sdk.model.call.CallErrorSignal>()
         every { signalManager.qualityAlerts } returns MutableSharedFlow()
         every { signalManager.screenCaptureAlerts } returns MutableSharedFlow()
         every { signalManager.translatedSegments } returns MutableSharedFlow()
@@ -122,7 +123,7 @@ class CallViewModelGroupTitleAndTurnTest {
         }),
         CallWaitingController(signalManager, silentTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, object : CallHeartbeatTicker { override val beats: Flow<Unit> = emptyFlow() }, silentTimer, silentTimer),
-        CallAnalyticsController(signalManager, clock),
+        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
         CallExtensionPoints(
             controllers = CallFeatureControllerRegistry(emptySet()),
             overlays = CallOverlayRegistry(emptySet()),
@@ -135,6 +136,8 @@ class CallViewModelGroupTitleAndTurnTest {
         recordingCallPreview(),
         CallTurnCredentialsController(signalManager, timer),
         testGroupTitleWording,
+        CallEndReconciler(signalManager),
+        CallTeardownController(emptySet()),
     )
 
     private fun connected(): CallViewModel = vm().apply {

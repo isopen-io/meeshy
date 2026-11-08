@@ -131,6 +131,146 @@
     "cadres-australs": {
       "name": "Marcos australes",
       "description": "Tres marcos inspirados en la pintura de puntos y el cielo austral: círculos de puntos que centellean, una tortuga marina que nada alrededor del avatar y la Cruz del Sur que brilla."
+    },
+    "meeshy-signature": {
+      "name": "Firma Meeshy",
+      "description": "Seis contornos de Meeshy, sobrios y legibles a cualquier tamaño: hilo de oro, perlas de nácar, eclipse, rosetón, noche estrellada y facetas."
+    },
+    "meeshy-vivants": {
+      "name": "Vivos de Meeshy",
+      "description": "Seis contornos animados de Meeshy que apenas desbordan tu avatar: una órbita, un halo de aurora, un pulso, destellos, un cometa y un oleaje."
+    },
+    "meeshy-fonds": {
+      "name": "Fondos de firma",
+      "description": "Seis fondos de Meeshy, discretos bajo las burbujas, en claro y en oscuro: seda, punteado, olas finas, rejilla, terrazo y crepúsculo."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Fondos vivos",
+      "description": "Cuatro fondos animados de Meeshy, que se mueven suavemente detrás de tus mensajes: luciérnagas, velo de aurora, nieve suave y ondas."
+    },
+    "meeshy-bordures": {
+      "name": "Marcos de firma",
+      "description": "Seis marcos de portada de Meeshy, en el borde para que tu nivel y tus contadores sigan a la vista: ribete de oro, volutas, hilera de perlas, ónix, marquetería y medianoche."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Marcos vivos",
+      "description": "Cuatro marcos de portada animados de Meeshy: un reflejo que se desliza sobre el oro, perlas que brillan, una noche que centellea y un neón."
+    },
+    "noel-enneige": {
+      "name": "Navidad nevada",
+      "description": "Dos contornos animados para el invierno: copos que caen suavemente alrededor del avatar y una corona de acebo con bayas que brillan."
+    },
+    "lumieres-de-noel": {
+      "name": "Luces de Navidad",
+      "description": "Dos contornos animados que se encienden en las fiestas: una guirnalda de bombillas que parpadean por turnos y la estrella del árbol que resplandece."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Taller de Papá Noel",
+      "description": "Dos contornos animados recién salidos del taller: un gorro rojo con un pompón que se balancea y un bastón de caramelo que gira, atado con una cinta verde."
+    },
+    "fonds-noel": {
+      "name": "Fondos de Navidad",
+      "description": "Tres fondos de conversación a juego con los packs de Navidad: copos de cristal, guirnalda estrellada y rayas de bastón de caramelo, discretos para que cada burbuja se lea bien."
+    },
+    "fonds-noel-vivants": {
+      "name": "Navidad viva",
+      "description": "Tres fondos animados a juego con los packs de Navidad: nieve de cristales, una guirnalda cuyas bombillas se encienden por turnos y las chispas del taller. Con movimiento reducido: un degradado fijo."
+    },
+    "bannieres-illustrees": {
+      "name": "Marcos ilustrados",
+      "description": "Los marcos de portada a juego con «Marcos ilustrados»: Máscara felina, Telaraña, Alas de ángel, Círculo rúnico, Garras de hueso y Alas de demonio, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-asiatiques": {
+      "name": "Marcos de Asia",
+      "description": "Los marcos de portada a juego con «Marcos de Asia»: Dragón de jade, Nubes de seda y Farolillos de papel, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-africaines": {
+      "name": "Marcos de África",
+      "description": "Los marcos de portada a juego con «Marcos de África»: Máscara de ébano, Bandas tejidas y Collar de cuentas, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-celtes": {
+      "name": "Marcos celtas",
+      "description": "Los marcos de portada a juego con «Marcos celtas»: Nudo entrelazado, Espiral triple y Hiedra esmeralda, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-nordiques": {
+      "name": "Marcos nórdicos",
+      "description": "Los marcos de portada a juego con «Marcos nórdicos»: Cuervos en círculo, Aurora boreal, Anillo de piedra grabada y Proa tallada, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Marcos egipcios",
+      "description": "Los marcos de portada a juego con «Marcos egipcios»: Cobra dorada, Escarabajo alado, Sol del desierto y Loto del Nilo, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-mayas": {
+      "name": "Marcos mayas",
+      "description": "Los marcos de portada a juego con «Marcos mayas»: Serpiente de jade, Cartuchos de glifos, Friso escalonado y Jaguar de la selva, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-indiennes": {
+      "name": "Marcos indios",
+      "description": "Los marcos de portada a juego con «Marcos indios»: Mandala floral, Pavo real en abanico y Guirnalda de caléndulas, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Marcos amerindios",
+      "description": "Los marcos de portada a juego con «Marcos amerindios»: Aro tejido con plumas, Rombos de cuentas y Sol sobre las montañas, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-australes": {
+      "name": "Marcos australes",
+      "description": "Los marcos de portada a juego con «Marcos australes»: Círculos de puntos, Tortuga marina y Cruz del Sur, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Navidad nevada",
+      "description": "Los marcos de portada a juego con «Navidad nevada»: Copos que caen y Corona de acebo, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Luces de Navidad",
+      "description": "Los marcos de portada a juego con «Luces de Navidad»: Guirnalda de luces y Estrella del árbol, en el borde para que tu foto siga a la vista."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Taller de Papá Noel",
+      "description": "Los marcos de portada a juego con «Taller de Papá Noel»: Gorro de Papá Noel y Bastón de caramelo, en el borde para que tu foto siga a la vista."
+    },
+    "noel-bannieres": {
+      "name": "Banners de Navidad",
+      "description": "Seis imágenes de banner a juego con los packs de Navidad: escarcha, guirnalda y papel de regalo, luego una nevada, luces que titilan y las chispas del taller."
+    },
+    "noel-contours-fixes": {
+      "name": "Navidad · contornos fijos",
+      "description": "Los seis contornos de Navidad sin animación: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo, para un avatar tranquilo."
+    },
+    "noel-cadres-fixes": {
+      "name": "Navidad · marcos fijos",
+      "description": "Los seis marcos de banner de Navidad sin animación, a juego con los contornos fijos: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo."
+    },
+    "nouvel-an-contours": {
+      "name": "Año Nuevo",
+      "description": "Cuatro contornos para celebrar el año nuevo: fuegos artificiales, lluvia de confeti, esfera de medianoche y copa de champán dorado."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Año Nuevo vivo",
+      "description": "Cuatro contornos animados para el cambio de año: un gran final, un vuelo de confeti, el reloj que da las doce y burbujas de champán."
+    },
+    "nouvel-an-images": {
+      "name": "Banners de Año Nuevo",
+      "description": "Cuatro imágenes de banner para el año nuevo: una noche de fuegos, una fiesta de confeti, las doce campanadas y un champán dorado."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Banners animados de Año Nuevo",
+      "description": "Cuatro imágenes de banner animadas: fuegos que estallan, un chaparrón de confeti, la cuenta atrás de medianoche y burbujas de champán. Con movimiento reducido: una imagen fija."
+    },
+    "nouvel-an-cadres": {
+      "name": "Marcos de Año Nuevo",
+      "description": "Cuatro marcos de banner a juego con los contornos de Año Nuevo: fuegos artificiales, confeti, esfera de medianoche y copas de champán."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Marcos animados de Año Nuevo",
+      "description": "Cuatro marcos de banner animados, a juego con los contornos vivos: un ramillete que estalla, confeti que vuela, la aguja de medianoche que gira y copas que brindan."
+    },
+    "nouvel-an-fonds": {
+      "name": "Fondos de Año Nuevo",
+      "description": "Cuatro fondos de conversación para el año nuevo: cielo de fuegos, confeti, hora de medianoche y burbujas doradas, discretos para que cada burbuja se lea bien."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Año Nuevo vivo · fondos",
+      "description": "Cuatro fondos animados para el año nuevo: destellos lejanos, confeti que cae, una noche estrellada y burbujas que suben. Con movimiento reducido: un degradado fijo."
     }
   },
   "designs": {
@@ -153,7 +293,45 @@
     "bulles-legeres": "Burbujas ligeras",
     "pluie-de-petales": "Lluvia de pétalos",
     "maree": "Marea",
-    "braises": "Brasas"
+    "braises": "Brasas",
+    "soie": "Seda",
+    "pointille": "Punteado",
+    "vagues-fines": "Olas finas",
+    "cannage": "Rejilla",
+    "terrazzo": "Terrazo",
+    "crepuscule": "Crepúsculo",
+    "lucioles": "Luciérnagas",
+    "voile-aurore": "Velo de aurora",
+    "neige-douce": "Nieve suave",
+    "ondes": "Ondas",
+    "flocons-cristal": "Copos de cristal",
+    "guirlande-etoilee": "Guirnalda estrellada",
+    "sucre-d-orge-raye": "Rayas de caramelo",
+    "neige-de-noel": "Nieve de Navidad",
+    "ampoules-de-noel": "Bombillas de Navidad",
+    "etincelles-atelier": "Chispas del taller",
+    "banniere-noel-givre": "Escarcha",
+    "banniere-noel-guirlande": "Guirnalda",
+    "banniere-noel-cadeau": "Papel de regalo",
+    "banniere-noel-neige": "Nevada",
+    "banniere-noel-lumieres": "Luces que titilan",
+    "banniere-noel-etincelles": "Chispas de Navidad",
+    "banniere-artifice": "Noche de fuegos",
+    "banniere-confettis": "Fiesta de confeti",
+    "banniere-minuit": "Doce campanadas",
+    "banniere-champagne": "Champán dorado",
+    "banniere-artifice-vive": "Fuegos en vivo",
+    "banniere-confettis-vive": "Chaparrón de confeti",
+    "banniere-minuit-vive": "Cuenta atrás",
+    "banniere-champagne-vive": "Burbujas de champán",
+    "fond-artifice": "Cielo de fuegos",
+    "fond-confettis": "Confeti",
+    "fond-minuit": "Hora de medianoche",
+    "fond-champagne": "Burbujas doradas",
+    "fond-artifice-vif": "Destellos lejanos",
+    "fond-confettis-vif": "Confeti que cae",
+    "fond-minuit-vif": "Medianoche estrellada",
+    "fond-champagne-vif": "Burbujas que suben"
   },
   "rings": {
     "filet": "Filete",
@@ -214,7 +392,39 @@
     "soleil-montagnes": "Sol sobre las montañas",
     "cercles-points": "Círculos de puntos",
     "tortue-marine": "Tortuga marina",
-    "croix-du-sud": "Cruz del Sur"
+    "croix-du-sud": "Cruz del Sur",
+    "fil-d-or": "Hilo de oro",
+    "perles-de-nacre": "Perlas de nácar",
+    "eclipse": "Eclipse",
+    "rosace": "Rosetón",
+    "nuit-etoilee": "Noche estrellada",
+    "facettes": "Facetas",
+    "orbite": "Órbita",
+    "halo-aurore": "Halo de aurora",
+    "pulsation": "Pulso",
+    "scintillement": "Destello",
+    "comete": "Cometa",
+    "houle": "Oleaje",
+    "flocons-tombants": "Copos que caen",
+    "couronne-de-houx": "Corona de acebo",
+    "guirlande-lumineuse": "Guirnalda de luces",
+    "etoile-du-sapin": "Estrella del árbol",
+    "bonnet-du-pere-noel": "Gorro de Papá Noel",
+    "sucre-d-orge": "Bastón de caramelo",
+    "flocons-tombants-fixe": "Copos que caen · fijo",
+    "couronne-de-houx-fixe": "Corona de acebo · fijo",
+    "guirlande-lumineuse-fixe": "Guirnalda de luces · fijo",
+    "etoile-du-sapin-fixe": "Estrella del árbol · fijo",
+    "bonnet-du-pere-noel-fixe": "Gorro de Papá Noel · fijo",
+    "sucre-d-orge-fixe": "Bastón de caramelo · fijo",
+    "feux-d-artifice": "Fuegos artificiales",
+    "pluie-de-confettis": "Lluvia de confeti",
+    "cadran-de-minuit": "Esfera de medianoche",
+    "coupe-de-champagne": "Copa de champán",
+    "bouquet-final": "Gran final",
+    "envol-de-confettis": "Vuelo de confeti",
+    "minuit-sonne": "Suenan las doce",
+    "champagne-petillant": "Champán burbujeante"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -254,6 +464,72 @@
     "rituel": "Africano ritual",
     "rituel-anime": "Africano ritual animado",
     "celte": "Celta",
-    "celte-anime": "Celta animado"
+    "celte-anime": "Celta animado",
+    "liseret-or": "Ribete de oro",
+    "volutes": "Volutas",
+    "rang-de-perles": "Hilera de perlas",
+    "onyx": "Ónix",
+    "marqueterie": "Marquetería",
+    "minuit": "Medianoche",
+    "liseret-lumiere": "Ribete de luz",
+    "perles-vives": "Perlas vivas",
+    "nuit-vive": "Noche centelleante",
+    "neon": "Neón",
+    "masque-felin": "Máscara felina",
+    "toile-araignee": "Telaraña",
+    "ailes-ange": "Alas de ángel",
+    "cercle-runique": "Círculo rúnico",
+    "griffes-os": "Garras de hueso",
+    "ailes-demon": "Alas de demonio",
+    "dragon-jade": "Dragón de jade",
+    "nuages-soie": "Nubes de seda",
+    "lanternes-papier": "Farolillos de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Bandas tejidas",
+    "collier-perles": "Collar de cuentas",
+    "noeud-entrelace": "Nudo entrelazado",
+    "spirale-triple": "Espiral triple",
+    "lierre-emeraude": "Hiedra esmeralda",
+    "corbeaux-tournoyants": "Cuervos en círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anillo de piedra grabada",
+    "proue-sculptee": "Proa tallada",
+    "cobra-dore": "Cobra dorada",
+    "scarabee-aile": "Escarabajo alado",
+    "soleil-du-desert": "Sol del desierto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpiente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso escalonado",
+    "jaguar-de-jungle": "Jaguar de la selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavo real en abanico",
+    "guirlande-soucis": "Guirnalda de caléndulas",
+    "cercle-tisse": "Aro tejido con plumas",
+    "perlage-losanges": "Rombos de cuentas",
+    "soleil-montagnes": "Sol sobre las montañas",
+    "cercles-points": "Círculos de puntos",
+    "tortue-marine": "Tortuga marina",
+    "croix-du-sud": "Cruz del Sur",
+    "flocons-tombants": "Copos que caen",
+    "couronne-de-houx": "Corona de acebo",
+    "guirlande-lumineuse": "Guirnalda de luces",
+    "etoile-du-sapin": "Estrella del árbol",
+    "bonnet-du-pere-noel": "Gorro de Papá Noel",
+    "sucre-d-orge": "Bastón de caramelo",
+    "flocons-tombants-fixe": "Copos que caen · fijo",
+    "couronne-de-houx-fixe": "Corona de acebo · fijo",
+    "guirlande-lumineuse-fixe": "Guirnalda de luces · fijo",
+    "etoile-du-sapin-fixe": "Estrella del árbol · fijo",
+    "bonnet-du-pere-noel-fixe": "Gorro de Papá Noel · fijo",
+    "sucre-d-orge-fixe": "Bastón de caramelo · fijo",
+    "feux-d-artifice": "Fuegos artificiales",
+    "pluie-de-confettis": "Lluvia de confeti",
+    "cadran-de-minuit": "Esfera de medianoche",
+    "coupe-de-champagne": "Copa de champán",
+    "bouquet-final": "Gran final",
+    "envol-de-confettis": "Vuelo de confeti",
+    "minuit-sonne": "Suenan las doce",
+    "champagne-petillant": "Champán burbujeante"
   }
 }

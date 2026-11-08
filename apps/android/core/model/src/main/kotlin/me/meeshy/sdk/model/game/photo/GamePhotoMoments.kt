@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.game.GameMint
 import me.meeshy.sdk.model.game.GamePhotoCatchUpLaw
 import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.LevelTierKey
+import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.PhotoCatchUpStanding
 import me.meeshy.sdk.model.game.PhotoLawStep
 import me.meeshy.sdk.model.game.PhotoStepEmblem
@@ -78,6 +79,42 @@ public object GamePhotoMoments {
             add(GamePhotoMoment(GamePhotoCatchUpLaw.treasuryStepId(treasuryAfter), PhotoStepEmblem.Treasury(treasuryAfter)))
         }
         if (flameThresholds.any { before.flame.days < it && after.flame.days >= it }) flame(after.flame.days)?.let(::add)
+    }
+
+    /** Les deux lignes d'un moment des sept pistes (iOS `GamePhotoMoments.*`) : la clé du catalogue iOS et ses arguments. */
+    public fun lines(emblem: PhotoStepEmblem): PhotoMomentLines = when (emblem) {
+        PhotoStepEmblem.Start -> PhotoMomentLines(PhotoLine("game.photo.kicker.start"), PhotoLine("game.photo.title.start"))
+        is PhotoStepEmblem.Rank -> PhotoMomentLines(
+            PhotoLine("game.photo.kicker.rank"),
+            PhotoLine(null, listOf(PhotoLineArg.Rank(emblem.rank, emblem.division))),
+        )
+        is PhotoStepEmblem.Tier -> PhotoMomentLines(
+            PhotoLine("game.photo.kicker.tier", listOf(PhotoLineArg.Count(emblem.level))),
+            PhotoLine("game.photo.title.tier", listOf(PhotoLineArg.Tier(emblem.tier)), times = emblem.times.takeIf { it >= 2 }),
+        )
+        PhotoStepEmblem.LevelHundred -> PhotoMomentLines(PhotoLine("game.photo.kicker.summit"), PhotoLine("game.photo.title.level_100"))
+        is PhotoStepEmblem.Prestige -> PhotoMomentLines(
+            PhotoLine("game.photo.kicker.new_lap"),
+            PhotoLine("game.photo.title.prestige", listOf(PhotoLineArg.Count(emblem.number))),
+        )
+        is PhotoStepEmblem.Meesh -> PhotoMomentLines(PhotoLine("game.photo.kicker.meesh"), meeshTitle(emblem))
+        is PhotoStepEmblem.Treasury -> PhotoMomentLines(
+            PhotoLine("game.photo.kicker.treasury"),
+            PhotoLine(null, listOf(PhotoLineArg.Treasury(emblem.tier))),
+        )
+        is PhotoStepEmblem.Flame -> PhotoMomentLines(
+            PhotoLine("game.photo.kicker.flame"),
+            PhotoLine("game.photo.title.flame_days", listOf(PhotoLineArg.Count(emblem.days))),
+        )
+    }
+
+    private fun meeshTitle(emblem: PhotoStepEmblem.Meesh): PhotoLine = when {
+        emblem.number == 1 -> PhotoLine("game.photo.title.meesh_first")
+        emblem.edition == MeeshEdition.Silver -> PhotoLine("game.photo.title.meesh_number", listOf(PhotoLineArg.Count(emblem.number)))
+        else -> PhotoLine(
+            "game.photo.title.meesh_number_edition",
+            listOf(PhotoLineArg.Count(emblem.number), PhotoLineArg.Edition(emblem.edition)),
+        )
     }
 
     private fun rank(game: GameBlock): GamePhotoMoment {

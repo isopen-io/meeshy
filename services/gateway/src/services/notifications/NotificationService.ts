@@ -11,6 +11,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { boundApnsPayload } from './boundApnsPayload';
 import { ephemeralPushFields } from './ephemeralPushFields';
+import { conversationRegimeField } from './conversationRegimePushFields';
 import { callBackPushFields } from './callBackPushFields';
 import { contentActionPushFields } from './contentActionPushFields';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -65,6 +66,7 @@ import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle, p
 import { contentDetailCategory, contentDetailPushFields } from './content-detail';
 import { servedBannerBody } from './served-banner-body';
 import { reactedMessageSynthesis, reactionBody } from './reaction-body';
+import { messageLivenessOf } from '../messages/message-liveness';
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,
@@ -335,11 +337,20 @@ export class NotificationService {
   }
 
   /**
-   * Le verdict de vie d'une ligne relue — cf. {@link MessageLiveness}.
+   * Le verdict de vie d'une ligne relue, DANS LA VOIX de l'éventail.
    *
-   * Extrait de `createMessageNotification` pour qu'il n'en existe qu'un site :
-   * la parité des trois éventails est le sujet même du cycle 127, et deux copies
-   * l'auraient reperdue au premier cycle suivant.
+   * La règle elle-même a quitté cette classe au cycle 140 (#16685) pour
+   * `services/messages/message-liveness.ts` : le chemin de REJEU hors ligne
+   * remet le message ENTIER là où cet éventail-ci ne remet qu'une bannière, et
+   * il n'avait aucune garde — « une garde d'admission se pose sur CHAQUE
+   * chemin, pas sur le plus fréquenté ». Deux expressions de la même règle
+   * auraient divergé au premier cycle qui en touche une, exactement comme les
+   * trois éventails avant le cycle 127.
+   *
+   * Ce qui RESTE ici est le JOURNAL, et c'est délibéré : « skipping
+   * notification » ne veut rien dire sur un drain, et la `cause` du verdict est
+   * précisément ce qui permet à chaque consommateur de parler sa langue sans
+   * que la loi parle pour lui.
    *
    * Une ligne ABSENTE rend `unknown` : ce prédicat ne se prononce que sur ce
    * qu'une ligne PROUVE. Le lot `regular` refuse en plus les lignes absentes,
@@ -349,22 +360,16 @@ export class NotificationService {
     message: { deletedAt?: Date | null; expiresAt?: Date | null } | null,
     messageId: string
   ): MessageLiveness {
-    if (!message) return 'unknown';
-    if (message.deletedAt) {
-      notificationLogger.info('Skipping notification (soft-deleted in flight)', {
-        messageId,
-        deletedAt: message.deletedAt,
-      });
-      return 'gone';
+    const verdict = messageLivenessOf(message);
+    if (verdict.liveness === 'gone') {
+      notificationLogger.info(
+        verdict.cause === 'soft-deleted'
+          ? 'Skipping notification (soft-deleted in flight)'
+          : 'Skipping notification (already expired)',
+        { messageId, deletedAt: message?.deletedAt, expiresAt: message?.expiresAt }
+      );
     }
-    if (message.expiresAt instanceof Date && message.expiresAt.getTime() <= Date.now()) {
-      notificationLogger.info('Skipping notification (already expired)', {
-        messageId,
-        expiresAt: message.expiresAt,
-      });
-      return 'gone';
-    }
-    return 'live';
+    return verdict.liveness;
   }
 
   /**
@@ -1066,6 +1071,9 @@ export class NotificationService {
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
                 notificationLocKey: params.context.notificationLocKey || '',
+                // #14669 — le régime de la conversation, hors de `showPreview` :
+                // il ne compose aucun contenu.
+                ...conversationRegimeField(params.context.conversationEncryptionMode),
                 // GW5 — persistance NSE : timestamp serveur + type du message,
                 // clés absentes (pas de '') quand la notification ne porte pas
                 // de message.
@@ -1397,7 +1405,7 @@ export class NotificationService {
           }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true, avatar: true },
+        select: { title: true, type: true, avatar: true, encryptionMode: true },
       }),
     ]);
     const sender = resolvedSender;
@@ -1496,6 +1504,8 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
+        ...conversationRegimeField(conversation?.encryptionMode),
         // Group avatar — used by the iOS in-app toast as a fallback when the
         // sender has no personal avatar (group messages).
         conversationAvatar: conversation?.avatar ?? undefined,
@@ -1637,7 +1647,7 @@ export class NotificationService {
           }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true, avatar: true },
+        select: { title: true, type: true, avatar: true, encryptionMode: true },
       }),
       this.resolveRecipientPrism(params.mentionedUserId),
       params.prismSource
@@ -1698,6 +1708,8 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
+        ...conversationRegimeField(conversation?.encryptionMode),
         // Group avatar — fallback for the iOS in-app toast when the sender
         // has no personal avatar (group messages).
         conversationAvatar: conversation?.avatar ?? undefined,
@@ -2302,7 +2314,7 @@ export class NotificationService {
           }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true },
+        select: { title: true, type: true, encryptionMode: true },
       }),
       this.resolveRecipientPrism(params.recipientUserId),
       this.loadMessagePrismSource(params.messageId),
@@ -2359,6 +2371,8 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
+        ...conversationRegimeField(conversation?.encryptionMode),
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         originalMessageId: params.originalMessageId,

@@ -145,3 +145,37 @@ class CallAnalyticsTest {
         assertThat(CallEndReason.Failed("boom").wireValue).isEqualTo("failed")
     }
 }
+
+class CallAnalyticsSnapshotTest {
+
+    @Test
+    fun `the periodic snapshot is the full payload tagged in_progress`() {
+        val analytics = CallAnalytics(startedAtMs = 0).connected(1_000)
+            .plusSample(CallQualitySample(rttMs = 80.0, packetLoss = 0.02))
+
+        val fields = analytics.inProgressFields(durationSeconds = 61, isVideo = true, deviceModel = "Pixel 8")
+
+        assertThat(fields["endReason"]).isEqualTo("in_progress")
+        assertThat(fields["durationSeconds"]).isEqualTo(61L)
+        assertThat(fields["averageRtt"]).isEqualTo(80.0)
+        assertThat(fields.keys).containsExactlyElementsIn(
+            analytics.fields(61, true, CallEndReason.Local, "Pixel 8").keys,
+        )
+    }
+
+    @Test
+    fun `taking a snapshot does not consume the accumulator`() {
+        val analytics = CallAnalytics(startedAtMs = 0).plusSample(CallQualitySample(10.0, 0.0))
+
+        analytics.inProgressFields(1, false, "x")
+
+        assertThat(analytics.sampleCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a snapshot is due only while connected, never during a reconnection`() {
+        assertThat(CallAnalytics.snapshotDue(CallState.Connected)).isTrue()
+        assertThat(CallAnalytics.snapshotDue(CallState.Reconnecting(1))).isFalse()
+        assertThat(CallAnalytics.snapshotDue(CallState.Idle)).isFalse()
+    }
+}

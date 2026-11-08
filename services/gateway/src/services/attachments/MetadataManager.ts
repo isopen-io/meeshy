@@ -16,6 +16,7 @@ import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedTimeout } from '../../utils/guarded-timer';
 import { mediaKindOf, mediaKindOfPath, timeMediaStage } from '../metrics/mediaStageMetrics';
+import { videoDisplaySize } from './video-display-size';
 
 // Logger dédié pour MetadataManager
 const logger = enhancedLogger.child({ module: 'MetadataManager' });
@@ -33,6 +34,9 @@ async function resolveParseFile(): Promise<MusicMetadataModule['parseFile']> {
   return mm.parseFile;
 }
 
+
+/** En dessous de 1 kbit/s, aucun vocal réel : la durée annoncée est fausse. */
+const MIN_PLAUSIBLE_AUDIO_BITRATE = 1_000;
 
 export interface AudioMetadata {
   duration: number;      // En millisecondes
@@ -452,8 +456,11 @@ export class MetadataManager {
 
     const expected = expectedBitrates[mimeType] || { min: 8_000, max: 5_000_000 };
 
-    // Vérifier si le bitrate réel est cohérent
-    if (actualBitrate < expected.min * 0.5) {
+    // Un débit FAIBLE n'est pas une incohérence : la voix, le silence, un Vorbis ou un
+    // Opus de basse qualité descendent légitimement sous le débit « typique » du format,
+    // et la durée que le conteneur déclare reste exacte (#11549 : un ogg vorbis de 3,5 s
+    // servi à 1,7 s). Seul un débit physiquement impossible trahit un en-tête faux.
+    if (actualBitrate < MIN_PLAUSIBLE_AUDIO_BITRATE) {
       // Bitrate trop faible: durée probablement trop longue
       const estimatedDurationSeconds = (fileSize * 8) / expected.min;
       const estimatedDuration = Math.round(estimatedDurationSeconds * 1000); // Convertir en ms
@@ -515,12 +522,15 @@ export class MetadataManager {
       }
 
       let metadata: AudioMetadata | null = null;
+      let embeddedPictureBytes = 0;
 
       // Tenter d'extraire avec music-metadata d'abord
       try {
         const parseFile = await resolveParseFile();
         const parsedMetadata = await parseFile(fullPath);
         const format = parsedMetadata.format;
+        embeddedPictureBytes = (parsedMetadata.common?.picture ?? [])
+          .reduce((total, picture) => total + picture.data.length, 0);
 
         metadata = {
           duration: Math.round((format.duration || 0) * 1000), // Convertir secondes -> millisecondes
@@ -579,11 +589,13 @@ export class MetadataManager {
         };
       }
 
-      // Valider la cohérence durée/taille
-      if (mimeType && metadata.duration > 0 && fileSize > 0) {
+      // Valider la cohérence durée/taille : le débit se mesure sur le son, la pochette
+      // d'un morceau court le ferait passer pour un en-tête faux (#16510).
+      const audioBytes = fileSize - embeddedPictureBytes;
+      if (mimeType && metadata.duration > 0 && audioBytes > 0) {
         const validation = this.validateAudioCoherence(
           metadata.duration,
-          fileSize,
+          audioBytes,
           mimeType
         );
 
@@ -706,8 +718,7 @@ export class MetadataManager {
 
         resolve({
           duration: Math.round((metadata.format?.duration || 0) * 1000), // Convertir secondes -> millisecondes
-          width: videoStream.width || 0,
-          height: videoStream.height || 0,
+          ...videoDisplaySize(videoStream),
           fps: Math.round(fps * 100) / 100,
           videoCodec: videoStream.codec_name || 'unknown',
           bitrate: parseInt(String(metadata.format?.bit_rate || 0), 10),

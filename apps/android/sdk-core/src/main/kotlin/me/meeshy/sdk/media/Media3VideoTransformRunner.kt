@@ -23,6 +23,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.audioedit.writingContainer
+import me.meeshy.sdk.model.media.ExportContainerPolicy
 import me.meeshy.sdk.model.media.VideoTargetCodec
 import me.meeshy.sdk.model.media.VideoTranscodePlan
 
@@ -30,8 +32,9 @@ import me.meeshy.sdk.model.media.VideoTranscodePlan
  * Media3 Transformer derrière [VideoTransformRunner]. Le remux ne pose ni effet ni type
  * MIME : Transformer recopie alors les échantillons. Le ré-encodage fixe le codec (HEVC
  * ou H.264), le débit vidéo, l'AAC au débit du budget, la cadence plafonnée et la taille
- * cible ; la rotation est cuite dans les pixels. Transformer vit sur le fil principal,
- * d'où le dispatcher injecté.
+ * cible ; la rotation est cuite dans les pixels. Le fichier commence sur une image, ne
+ * garde aucune métadonnée de sa source et ne rapporte rien à la plateforme
+ * ([writingContainer]). Transformer vit sur le fil principal, d'où le dispatcher injecté.
  */
 internal class Media3VideoTransformRunner(
     private val context: Context,
@@ -67,21 +70,23 @@ internal class Media3VideoTransformRunner(
     }
 
     private fun buildTransformer(plan: VideoTranscodePlan, finished: CompletableDeferred<Unit>): Transformer {
-        val builder = Transformer.Builder(context).addListener(
-            object : Transformer.Listener {
-                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                    finished.complete(Unit)
-                }
+        val builder = Transformer.Builder(context)
+            .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true))
+            .addListener(
+                object : Transformer.Listener {
+                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                        finished.complete(Unit)
+                    }
 
-                override fun onError(
-                    composition: Composition,
-                    exportResult: ExportResult,
-                    exportException: ExportException,
-                ) {
-                    finished.completeExceptionally(exportException)
-                }
-            },
-        )
+                    override fun onError(
+                        composition: Composition,
+                        exportResult: ExportResult,
+                        exportException: ExportException,
+                    ) {
+                        finished.completeExceptionally(exportException)
+                    }
+                },
+            )
         if (plan is VideoTranscodePlan.Transcode) {
             builder
                 .setVideoMimeType(

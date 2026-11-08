@@ -146,7 +146,7 @@ class ComposerLabeledRailsTest {
         showTablet(viewModel())
 
         val scene = scene()
-        listOf("Close", "Text", "Media", "Sticker", "Sound", "Drawing", "Background").forEach { label ->
+        listOf("Close", "Text", "Media", "Sticker", "Sound", "Draw", "Background").forEach { label ->
             val item = text(label)
             assertThat(item.right).isAtMost(scene.left)
         }
@@ -168,7 +168,7 @@ class ComposerLabeledRailsTest {
         showTablet(viewModel())
 
         listOf("Close", "Text", "Background", "More").forEach { label -> compose.onNodeWithText(label).assertExists() }
-        compose.onNodeWithText("Add slide").assertDoesNotExist()
+        compose.onNodeWithText("Add a slide").assertDoesNotExist()
     }
 
     @Test
@@ -206,7 +206,7 @@ class ComposerLabeledRailsTest {
     fun `a phone held upright keeps the round tools on the scene and lays no rail`() {
         show(viewModel(), { 360.dp }, { 692.dp })
 
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
         compose.onNodeWithText("Background").assertDoesNotExist()
     }
 
@@ -248,7 +248,6 @@ class ComposerLabeledRailsTest {
                 Box(Modifier.size(width = if (wide) 1280.dp else 360.dp, height = if (wide) 752.dp else 692.dp)) {
                     StorySceneFirstLayout(
                         onDismiss = {},
-                        reduced = false,
                         scene = { modifier ->
                             var taps by remember { mutableIntStateOf(0) }
                             Box(modifier.testTag(SCENE).clickable { taps++ }) { Text("taps $taps") }
@@ -296,10 +295,10 @@ class ComposerLabeledRailsTest {
             }
         }
 
-        compose.onNodeWithText("Add slide").assertDoesNotExist()
-        compose.onNodeWithText("Slide duration").assertDoesNotExist()
+        compose.onNodeWithText("Add a slide").assertDoesNotExist()
+        compose.onNodeWithText("Duration").assertDoesNotExist()
         compose.onNodeWithText("More").performScrollTo().performClick()
-        compose.onNodeWithText("Add slide").performClick()
+        compose.onNodeWithText("Add a slide").performClick()
         assertThat(picked).isEqualTo(ComposerMoreEntry.ADD_SLIDE)
     }
 

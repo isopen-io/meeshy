@@ -4,6 +4,8 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useAutoDownload } from '@/lib/media/use-auto-download';
+import { firstFrameSrc, localAwarePreload } from '@/lib/media/local-media';
 import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { useServedVideoSrc } from '@/lib/media/served-video';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
@@ -150,14 +152,25 @@ export function VideoTile({
     [bind],
   );
   /* Vue, une vidéo de message se relit hors ligne — si la bulle la déclare standard (#12052). */
-  const videoSrc = useServedVideoSrc(attachment);
-  useRememberSeenAttachment({ element, attachmentId: attachment.id, src: videoSrc, active: true });
+  const servedSrc = useServedVideoSrc(attachment);
+  const videoSrc = firstFrameSrc(servedSrc);
+  /* Sous 100 Ko, la vidéo arrive avec la bulle, hors ligne excepté (#14639) ; au-delà, la
+     politique de l'appareil décide (#6333) ; des octets locaux (un envoi en attente, #15111)
+     chargent toujours leur première image. */
+  const preload = localAwarePreload(videoSrc, useAutoDownload('video', attachment.fileSize) ? 'auto' : 'none');
+  useRememberSeenAttachment({ element, attachmentId: attachment.id, src: servedSrc, active: true });
+  /* La durée d'une vidéo pas encore servie se lit sur l'élément (#15111). */
+  const [probedMs, setProbedMs] = useState<number | undefined>(undefined);
+  const onMetadata = useCallback((event: { readonly currentTarget: HTMLMediaElement }) => {
+    const seconds = event.currentTarget.duration;
+    if (Number.isFinite(seconds) && seconds > 0) setProbedMs(Math.round(seconds * 1000));
+  }, []);
 
   if (attachment.fileUrl === '') return <VideoFallback attachment={attachment} />;
 
   const diameter = solo ? PLAY_DIAMETER_SOLO : PLAY_DIAMETER_MULTI;
   const slot = solo ? soloVideoSlot(intrinsicRatio(attachment)) : undefined;
-  const durationLabel = durationLabelOf(attachment.duration);
+  const durationLabel = durationLabelOf(attachment.duration ?? probedMs);
   const isPlaying = status === 'playing';
   const isError = status === 'error';
   /* La lecture est PARTIE dès le premier ▶︎ : les trois contrôles restent
@@ -205,7 +218,8 @@ export function VideoTile({
       <video
         key={videoSrc}
         ref={bindElement}
-        preload="none"
+        preload={preload}
+        onLoadedMetadata={onMetadata}
         playsInline
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
         src={videoSrc}

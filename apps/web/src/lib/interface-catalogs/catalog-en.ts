@@ -37,6 +37,7 @@ import enQuote from './catalog-en-quote';
 import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
+import enAuthFooter from './catalog-en-auth-footer';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
 import enContentRefused from './catalog-en-content-refused';
@@ -504,6 +505,7 @@ const en = {
 
   'media.video.play': 'Play video',
   'media.video.pause': 'Pause',
+  'media.video.paused': 'Paused',
   'media.video.position': 'Playback position',
   'media.audio.position': 'Playback position',
   'media.audio.speed': 'Playback speed',
@@ -594,6 +596,7 @@ const en = {
   'discover.tab.discover': 'Discover',
   'discover.tab.requests': 'Requests',
   'discover.tab.blocked': 'Blocked',
+  'discover.tab.circles': 'Circles',
   'discover.tab.requests.count.one': 'Requests, {count} received',
   'discover.tab.requests.count.other': 'Requests, {count} received',
   'discover.invite.title': 'Invite by email',
@@ -860,13 +863,20 @@ const en = {
   'story.studio.audience.title': 'Audience',
   'story.studio.audience.public': 'Public',
   'story.studio.audience.community': 'Communities',
-  'story.studio.audience.friends': 'Contacts',
+  'story.studio.audience.acquaintances': 'Acquaintances',
+  'story.studio.audience.friends': 'Friends',
+  'story.studio.audience.close': 'Close',
+  'story.studio.audience.blood': 'Blood',
   'story.studio.audience.except': 'Except…',
   'story.studio.audience.only': 'Only…',
   'story.studio.audience.private': 'Private',
+  'story.studio.audience.restricted': 'Restricted',
   'story.studio.audience.subtitle.public': 'Everyone, including non-followers',
   'story.studio.audience.subtitle.community': 'Members of your communities',
+  'story.studio.audience.subtitle.acquaintances': 'Your Acquaintances, Friends, Close and Blood',
   'story.studio.audience.subtitle.friends': 'Your accepted contacts',
+  'story.studio.audience.subtitle.close': 'Your Close and Blood',
+  'story.studio.audience.subtitle.blood': 'Your Blood only — never reshared',
   'story.studio.audience.subtitle.private': 'Only you — nothing is published',
   'story.studio.audience.refusal.people': 'Choosing people isn’t available on the web yet.',
   'story.studio.audience.scope': 'A chosen audience belongs to the publication, never to a format: switching formats keeps it.',
@@ -935,6 +945,13 @@ const en = {
   'comments.send': 'Send comment',
   'comments.row.pending': 'Sending',
   'comments.signin': 'Sign in to comment.',
+  'comments.closed': 'Comments are turned off.',
+  'feed.post.menu.comments_off': 'Turn off comments',
+  'feed.post.menu.comments_on': 'Turn on comments',
+  'feed.post.comments_off.done': 'Comments turned off',
+  'feed.post.comments_on.done': 'Comments turned on',
+  'feed.post.comments_toggle.failed': 'The comment setting wasn’t saved.',
+  'story.studio.comments_off.hint': 'No one will be able to comment on this post.',
   'comment.send.error': 'Your comment couldn’t be posted.',
   'comment.send.pending': 'Comment not confirmed — offline',
   'comment.send.empty': 'Write something before sending.',
@@ -952,7 +969,6 @@ const en = {
   'thread.unread-separator.one': '{count} unread message',
   'thread.unread-separator.other': '{count} unread messages',
   'thread.long-message.read-more': 'Read more',
-  'thread.long-message.collapse': 'Show less',
   'message-detail.info.title': 'Message info',
   'message-detail.received-by': 'Received by',
   'message-detail.read-by': 'Read by',
@@ -977,6 +993,7 @@ const en = {
   'message-detail.retry': 'Retry',
 
   ...enDownload,
+  ...enAuthFooter,
   ...enPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -984,6 +1001,8 @@ const en = {
   'composer.viewOnce.activate': 'Enable view-once mode',
   'composer.viewOnce.active': 'View-once mode active',
   'composer.viewOnce.label': 'View once',
+  'conversation.composer.fold': 'Collapse the message bar',
+  'conversation.composer.unfold': 'Show the message bar',
   'composer.protection.ephemeral.state': 'Ephemeral mode active',
   'composer.protection.blur.state': 'Blur mode active',
   'message.location.shared': 'Shared location',
@@ -1039,6 +1058,8 @@ const en = {
   'media.reactions.badge.a11y': 'Reactions',
   'media.reactions.badge.mine.a11y': 'including yours',
   'message.join.noAccount': 'no account',
+  'message.join.greet.one': 'Say hi',
+  'message.join.greet.many': 'Say hi to them',
   'attachment.kind.image': 'Photo',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

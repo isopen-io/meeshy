@@ -290,7 +290,7 @@ extension ConversationViewModel {
 
     func reportMessage(messageId: String, reportType: String, reason: String?) async -> Bool {
         do {
-            try await reportService.reportMessage(messageId: serverId(for: messageId), reportType: reportType, reason: reason)
+            try await reportService.reportMessage(messageId: serverId(for: messageId), reportType: reportType, reason: startupDependencies.endToEndClear.hybrid.reportReason(reason, for: messageId, in: messages))
             return true
         } catch {
             self.error = ConversationErrorText.message(for: error)

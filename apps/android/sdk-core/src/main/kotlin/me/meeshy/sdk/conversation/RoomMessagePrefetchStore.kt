@@ -1,5 +1,6 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.commitOrWrite
 
@@ -28,6 +29,8 @@ internal class RoomMessagePrefetchStore @Inject constructor(
     /** #13792 — chaque page préchargée nourrit le registre des régimes : jamais absent. */
     private val regime: EndToEndRegimeKeeper,
     private val fence: AccountFence? = null,
+    /** #14655 — un message chiffré que la page préchargée dit parti inscrit son effacement. */
+    private val erasures: PlaintextErasureLedger? = null,
 ) : MessagePrefetchStore {
 
     override suspend fun heldWindow(conversationId: String, limit: Int): HeldMessageWindow {
@@ -45,7 +48,7 @@ internal class RoomMessagePrefetchStore @Inject constructor(
         val now = clock.nowMillis()
         return fence.commitOrWrite(ticket) {
             database.withTransaction {
-                MessageIngestPipeline(database, regime = regime).mergeInTransaction(page, now, conversationId)
+                MessageIngestPipeline(database, regime = regime, erasures = erasures).mergeInTransaction(page, now, conversationId)
             }
             true
         } ?: false

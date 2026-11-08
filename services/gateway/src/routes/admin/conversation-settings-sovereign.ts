@@ -78,7 +78,7 @@ import {
 import { announceParticipantRoleUpdated } from '../conversations/participant-role-core';
 import { participantListUserSelect } from '../conversations/utils/participant-projection';
 import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendError, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { logError } from '../../utils/logger.js';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
@@ -134,6 +134,7 @@ type CorpsDeConfiguration = ConversationMetadataBody & {
 const SELECT_ECRITURE = {
   ...CONVERSATION_METADATA_SELECT,
   closedBy: true,
+  deletedAt: true,
   participants: { select: { id: true, userId: true, isActive: true } },
 } as const;
 
@@ -222,6 +223,13 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
         });
       }
 
+      // #14643 — une conversation OBSOLÈTE ne se rouvre pas : ses messages sont
+      // effacés et ses marques de purge resteraient posées, si bien que la
+      // prochaine fermeture effacerait ce qu'on y aurait écrit entre-temps.
+      if (avant.deletedAt && (isActive === true || closed === false)) {
+        return sendError(reply, 409, 'Une conversation obsolète ne se rouvre pas : créez-en une nouvelle', { code: 'CONVERSATION_OBSOLETE' });
+      }
+
       const { updateData, changedFields } = composeConversationUpdate(metadonnees);
       const maintenant = new Date();
       const adminId = acteurId(request);
@@ -236,7 +244,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
       };
 
       if (Object.keys(data).length === 0) {
-        const { participants: _p, closedBy: _c, ...ligne } = avant;
+        const { participants: _p, closedBy: _c, deletedAt: _d, ...ligne } = avant;
         return sendSuccess(reply, serveConversationMetadata(ligne));
       }
 
@@ -284,7 +292,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
         changes,
       });
 
-      const { participants: _p, closedBy: _c, ...ligne } = apres;
+      const { participants: _p, closedBy: _c, deletedAt: _d, ...ligne } = apres;
       return sendSuccess(reply, serveConversationMetadata(ligne));
     } catch (error) {
       logError(fastify.log, 'Error configuring conversation (admin)', error);
@@ -354,6 +362,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
       const adminId = acteurId(request);
       announceParticipantRoleUpdated({
         manager: fastify.socketIOHandler?.getManager?.(),
+        prisma: fastify.prisma,
         conversationId,
         targetUserId: userId,
         newRole: role,

@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshyUI
 
 @MainActor
 final class CrashDiagnosticsManagerTests: XCTestCase {
@@ -17,6 +18,25 @@ final class CrashDiagnosticsManagerTests: XCTestCase {
         // queue so `consumePending()` is idempotent for the next test.
         _ = CrashDiagnosticsManager.shared.consumePending()
         try await super.tearDown()
+    }
+
+    // MARK: - Emballage de marque manqué (#14488)
+
+    /// Une story exportée sans sa marque se COMPTE : le crochet du SDK est
+    /// branché par `install()` sur un non-fatal, un code par chemin d'export.
+    func test_brandingFallback_reachesTheReporterAsACountedNonFatal() {
+        CrashDiagnosticsManager.shared.install()
+        let mock = MockCrashReporter()
+        CrashDiagnosticsManager.setReporterForTesting(mock)
+        let cause = NSError(domain: "AVFoundationErrorDomain", code: -11800)
+
+        StoryExportBrandingFallback.reporter?(StoryExportBrandingFailure(path: .timeline, slideId: "slide-9", error: cause))
+        StoryExportBrandingFallback.reporter?(StoryExportBrandingFailure(path: .shareOrSave, slideId: "slide-10", error: cause))
+
+        XCTAssertEqual(mock.nonFatals.map(\.domain), [CrashDiagnosticsManager.brandingFallbackDomain, CrashDiagnosticsManager.brandingFallbackDomain])
+        XCTAssertEqual(mock.nonFatals.map(\.code), [2, 1])
+        XCTAssertEqual(mock.nonFatals.first?.userInfo["slide_id"] as? String, "slide-9")
+        XCTAssertEqual(mock.nonFatals.first?.userInfo["cause_code"] as? Int, -11800)
     }
 
     // MARK: - capture(...) — MetricKit path
@@ -128,10 +148,12 @@ private nonisolated final class MockCrashReporter: CrashReporting, @unchecked Se
     private var _records: [CrashDiagnostic] = []
     private var _userIDs: [String?] = []
     private var _logs: [String] = []
+    private var _nonFatals: [NSError] = []
 
     var records: [CrashDiagnostic] { lock.withLock { _records } }
     var userIDs: [String?] { lock.withLock { _userIDs } }
     var logs: [String] { lock.withLock { _logs } }
+    var nonFatals: [NSError] { lock.withLock { _nonFatals } }
 
     func record(_ diagnostic: CrashDiagnostic) {
         lock.withLock { _records.append(diagnostic) }
@@ -143,5 +165,9 @@ private nonisolated final class MockCrashReporter: CrashReporting, @unchecked Se
 
     func log(_ message: String) {
         lock.withLock { _logs.append(message) }
+    }
+
+    func recordNonFatal(_ error: NSError) {
+        lock.withLock { _nonFatals.append(error) }
     }
 }

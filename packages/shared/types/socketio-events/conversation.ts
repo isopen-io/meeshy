@@ -12,6 +12,7 @@ import type { ConversationJoinErrorReason } from '../../utils/conversation-join-
 
 // Le pont ✦ (G-123) — payload optionnel de `conversation:unread-updated`
 import type { ConversationBridge } from '../conversation-bridge.js';
+import type { ConversationViewerCapabilities } from '../conversation-viewer-capabilities.js';
 
 // Le contrat de la ligne d'aperçu (#7545)
 import type {
@@ -81,6 +82,8 @@ export interface ConversationNewEventData {
   readonly creatorId: string;
   readonly participantIds: readonly string[]; // tous les participants y compris le créateur
   readonly createdAt: string;                 // ISO8601
+  /** #14690 — calculé pour le DESTINATAIRE de l'émission ; absent = serveur antérieur. */
+  readonly viewerCapabilities?: ConversationViewerCapabilities;
 }
 
 /**
@@ -489,6 +492,17 @@ export interface ConversationClosedEventData {
   readonly conversationId: string;
   readonly closedBy: string;
   readonly closedAt: string;
+}
+
+/**
+ * #14643 — `conversation:obsoleted`. `obsoletedAt` and `purgeAfter` are ISO
+ * 8601 strings; after `purgeAfter` the conversation no longer exists server-side.
+ */
+export interface ConversationObsoletedEventData {
+  readonly conversationId: string;
+  readonly obsoletedBy: string;
+  readonly obsoletedAt: string;
+  readonly purgeAfter: string;
 }
 
 /**

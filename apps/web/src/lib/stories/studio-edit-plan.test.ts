@@ -5,7 +5,7 @@ import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import type { FeedPost } from '@/lib/api/feed-pages';
 
 import { buildStoryCanvasEffectsPages } from './story-document';
-import { withAddedPage, withAudience, withPage, withPostText, withoutPage, type StudioDraft } from './studio';
+import { withAddedPage, withAudience, withCommentsDisabled, withPage, withPostText, withoutPage, type StudioDraft } from './studio';
 import { studioEditHydration, type StudioEditOrigin } from './studio-edit';
 import { studioEditSavePlan, type StudioEditSavePlan } from './studio-edit-plan';
 import { pageWithBackgroundCrop, pageWithText, pageWithVisual, type StudioVisualAsset } from './studio-page';
@@ -127,6 +127,17 @@ describe('studioEditSavePlan — un post se réenregistre en UN PUT (#9317)', ()
     const { draft, origin } = opened();
     expect(ready(await plan(withAudience(draft, 'FRIENDS'), origin)).update.body.visibility).toBe('FRIENDS');
     expect('visibility' in ready(await plan(withAudience(draft, 'PUBLIC'), origin)).update.body).toBe(false);
+  });
+
+  /** LES COMMENTAIRES (#16541) — le réglage relu de la publication, renvoyé seulement CHANGÉ. */
+  test('« Désactiver les commentaires » se relit, et ne part que changé', async () => {
+    const ouverts = opened();
+    expect(ouverts.draft.commentsDisabled).toBeUndefined();
+    expect(ready(await plan(withCommentsDisabled(ouverts.draft, true), ouverts.origin)).update.body.commentsDisabled).toBe(true);
+    expect('commentsDisabled' in ready(await plan(ouverts.draft, ouverts.origin)).update.body).toBe(false);
+    const fermes = opened(served({ commentsDisabled: true }));
+    expect(fermes.draft.commentsDisabled).toBe(true);
+    expect(ready(await plan(withCommentsDisabled(fermes.draft, false), fermes.origin)).update.body.commentsDisabled).toBe(false);
   });
 
   test('la disposition choisie à la publication est conservée', async () => {

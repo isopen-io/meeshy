@@ -1,0 +1,414 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.retry.failed",
+          "androidName": "sync_pill_retry_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.retry.started",
+          "androidName": "sync_pill_retry_started",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.dismiss",
+          "androidName": "common_dismiss",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "connection.connecting",
+          "androidName": "connection_connecting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "connection.online",
+          "androidName": "connection_online",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "connection.syncing",
+          "androidName": "connection_syncing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.pending_changes",
+          "androidName": "root_pending_changes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.sync_on_reconnect",
+          "androidName": "root_sync_on_reconnect",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.a11y.multiple",
+          "androidName": "sync_pill_a11y_multiple",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.a11y.openLocation.hint",
+          "androidName": "sync_pill_a11y_openLocation_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.a11y.pause",
+          "androidName": "sync_pill_a11y_pause",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.a11y.resume",
+          "androidName": "sync_pill_a11y_resume",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.a11y.retry.hint",
+          "androidName": "sync_pill_a11y_retry_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.deleting.message",
+          "androidName": "sync_pill_deleting_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.editing.message",
+          "androidName": "sync_pill_editing_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.attachmentStatus",
+          "androidName": "sync_pill_failed_attachmentStatus",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.block",
+          "androidName": "sync_pill_failed_block",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.comment",
+          "androidName": "sync_pill_failed_comment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.createConversation",
+          "androidName": "sync_pill_failed_createConversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.createPost",
+          "androidName": "sync_pill_failed_createPost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.createReel",
+          "androidName": "sync_pill_failed_createReel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.createStatus",
+          "androidName": "sync_pill_failed_createStatus",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.delete",
+          "androidName": "sync_pill_failed_delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.deleteComment",
+          "androidName": "sync_pill_failed_deleteComment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.edit",
+          "androidName": "sync_pill_failed_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.friendRequest",
+          "androidName": "sync_pill_failed_friendRequest",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.friendResponse",
+          "androidName": "sync_pill_failed_friendResponse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.generic",
+          "androidName": "sync_pill_failed_generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.markAsRead",
+          "androidName": "sync_pill_failed_markAsRead",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.markStoryViewed",
+          "androidName": "sync_pill_failed_markStoryViewed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.message",
+          "androidName": "sync_pill_failed_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.postReaction",
+          "androidName": "sync_pill_failed_postReaction",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.reaction",
+          "androidName": "sync_pill_failed_reaction",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.story",
+          "androidName": "sync_pill_failed_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.unblock",
+          "androidName": "sync_pill_failed_unblock",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.updateConversation",
+          "androidName": "sync_pill_failed_updateConversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.updateProfile",
+          "androidName": "sync_pill_failed_updateProfile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.failed.updateSettings",
+          "androidName": "sync_pill_failed_updateSettings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.attachmentStatus",
+          "androidName": "sync_pill_other_attachmentStatus",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.block",
+          "androidName": "sync_pill_other_block",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.createConversation",
+          "androidName": "sync_pill_other_createConversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.createPost",
+          "androidName": "sync_pill_other_createPost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.createReel",
+          "androidName": "sync_pill_other_createReel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.createStatus",
+          "androidName": "sync_pill_other_createStatus",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.deleteComment",
+          "androidName": "sync_pill_other_deleteComment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.friendRequest",
+          "androidName": "sync_pill_other_friendRequest",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.friendResponse",
+          "androidName": "sync_pill_other_friendResponse",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.generic",
+          "androidName": "sync_pill_other_generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.markAsRead",
+          "androidName": "sync_pill_other_markAsRead",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.markStoryViewed",
+          "androidName": "sync_pill_other_markStoryViewed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.unblock",
+          "androidName": "sync_pill_other_unblock",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.updateConversation",
+          "androidName": "sync_pill_other_updateConversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.updateProfile",
+          "androidName": "sync_pill_other_updateProfile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.other.updateSettings",
+          "androidName": "sync_pill_other_updateSettings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.publishing.story",
+          "androidName": "sync_pill_publishing_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.publishing.story.video",
+          "androidName": "sync_pill_publishing_story_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.reacting.post",
+          "androidName": "sync_pill_reacting_post",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.audio",
+          "androidName": "sync_pill_sending_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.comment",
+          "androidName": "sync_pill_sending_comment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.comment.audio",
+          "androidName": "sync_pill_sending_comment_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.file",
+          "androidName": "sync_pill_sending_file",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.image",
+          "androidName": "sync_pill_sending_image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.message",
+          "androidName": "sync_pill_sending_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.reaction",
+          "androidName": "sync_pill_sending_reaction",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.sticker",
+          "androidName": "sync_pill_sending_sticker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sync.pill.sending.video",
+          "androidName": "sync_pill_sending_video",
+          "status": "adopted"
+        },
+        {
+          "androidName": "connection_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "connection_reconnecting",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -95,7 +95,7 @@ struct GroupPeerLinkConfiguration: Sendable {
     let remoteUserId: String
     let iceServers: [IceServer]
     /// Négociation parfaite : le plus petit identifiant est poli
-    /// (`CallManager.isPolitePeer`, `peer-link.ts`).
+    /// (`CallNegotiationRules.isPolitePeer`, `peer-link.ts`).
     let isPolite: Bool
     let sendsAudio: Bool
     let sendsVideo: Bool

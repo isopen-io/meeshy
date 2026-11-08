@@ -396,9 +396,20 @@ describe('AdminPostsPanel — onglets de type, filtres, recherche, pagination da
     });
   });
 
-  test('le filtre de visibilité nomme les six audiences', async () => {
+  test('le filtre de visibilité nomme les neuf audiences, cercles compris (#13939)', async () => {
     const { host } = await ouvrir();
-    expect([...select(host, 'visibility').options].map((option) => option.textContent)).toEqual(['Tous', 'Publique', 'Amis', 'Communauté', 'Moi seul', 'Amis sauf certains', 'Certains amis']);
+    expect([...select(host, 'visibility').options].map((option) => option.textContent)).toEqual([
+      'Tous',
+      'Publique',
+      'Amis',
+      'Communauté',
+      'Moi seul',
+      'Amis sauf certains',
+      'Certains amis',
+      'Connaissances',
+      'Proches',
+      'Sang',
+    ]);
   });
 
   test('le filtre de retrait : « Non retirées » par défaut, « Retirées » sur demande', async () => {

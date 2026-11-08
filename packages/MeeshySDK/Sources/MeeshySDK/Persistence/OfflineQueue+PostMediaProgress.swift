@@ -94,11 +94,13 @@ extension CreatePostPayload {
             repostOfId: repostOfId,
             mobileTranscription: mobileTranscription,
             localMediaMimeTypes: localMediaMimeTypes,
+            localMediaOriginalNames: localMediaOriginalNames,
             storyEffects: storyEffects,
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
             mediaObjectIds: mediaObjectIds,
             allowSoundExtraction: allowSoundExtraction,
+            commentsDisabled: commentsDisabled,
             uploadedMedia: acquis
         )
     }

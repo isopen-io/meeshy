@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signup_verified_open_failed">Il tuo account è convalidato, ma questo dispositivo non ha potuto aprire la sessione. Riprova.</string>
+    <string name="signup_verified_no_session">Il tuo account è convalidato. Accedi per continuare.</string>
+</resources>

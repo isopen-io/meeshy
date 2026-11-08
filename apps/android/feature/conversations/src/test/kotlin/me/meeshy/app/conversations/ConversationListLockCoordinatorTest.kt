@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.lock.LockPinMode
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Test
@@ -125,5 +126,68 @@ class ConversationListLockCoordinatorTest {
         h.enter("123456")
 
         assertThat(h.prompt?.conversationId).isEqualTo("c2")
+    }
+
+    @Test
+    fun `un code accepte depuis la liste ouvre la conversation pour la session`() {
+        val store = InMemoryConversationLockStore().apply { setLock("c1", "1111") }
+        val session = me.meeshy.sdk.lock.ConversationUnlockSessionStore()
+        val opened = mutableListOf<String>()
+        val coordinator = ConversationListLockCoordinator(MutableStateFlow(ConversationListUiState()), store, session) { opened += it }
+
+        coordinator.onConversationTap("c1")
+        "1111".forEach { coordinator.onLockDigit(it - '0') }
+
+        assertThat(opened).containsExactly("c1")
+        assertThat(session.admits("c1", isLocked = true)).isTrue()
+        assertThat(store.isLocked("c1")).isTrue()
+    }
+
+    @Test
+    fun `un code faux n'ouvre pas la session`() {
+        val store = InMemoryConversationLockStore().apply { setLock("c1", "1111") }
+        val session = me.meeshy.sdk.lock.ConversationUnlockSessionStore()
+        val coordinator = ConversationListLockCoordinator(MutableStateFlow(ConversationListUiState()), store, session) { }
+
+        coordinator.onConversationTap("c1")
+        "9999".forEach { coordinator.onLockDigit(it - '0') }
+
+        assertThat(session.admits("c1", isLocked = true)).isFalse()
+    }
+
+    @Test
+    fun `le toucher d'avatar sous verrou ouvre les details une fois le code accepte, jamais le fil`() {
+        val store = InMemoryConversationLockStore().apply { setLock("c1", "1111") }
+        val opened = mutableListOf<String>()
+        val info = mutableListOf<String>()
+        val coordinator = ConversationListLockCoordinator(
+            state = MutableStateFlow(ConversationListUiState()),
+            lockStore = store,
+            openInfo = { info += it },
+            openConversation = { opened += it },
+        )
+
+        coordinator.onAvatarInfo("c1")
+        "1111".forEach { coordinator.onLockDigit(it - '0') }
+
+        assertThat(info).containsExactly("c1")
+        assertThat(opened).isEmpty()
+    }
+
+    @Test
+    fun `le toucher d'avatar d'une conversation ouverte montre les details sans code`() {
+        val state = MutableStateFlow(ConversationListUiState())
+        val info = mutableListOf<String>()
+        val coordinator = ConversationListLockCoordinator(
+            state = state,
+            lockStore = InMemoryConversationLockStore(),
+            openInfo = { info += it },
+            openConversation = {},
+        )
+
+        coordinator.onAvatarInfo("c1")
+
+        assertThat(info).containsExactly("c1")
+        assertThat(state.value.lockPrompt).isNull()
     }
 }

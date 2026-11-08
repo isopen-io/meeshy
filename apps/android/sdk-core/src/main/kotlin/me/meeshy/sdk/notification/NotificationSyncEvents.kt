@@ -2,6 +2,7 @@ package me.meeshy.sdk.notification
 
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationReadScope
 
 /**
  * Wire shapes + pure predicates for the notification-SYNC family of Socket.IO events —
@@ -90,3 +91,25 @@ fun notificationMatchesDeletedBulkScope(scope: NotificationDeletedBulkScope, not
         "read" -> notification.state.isRead
         else -> false
     }
+
+/**
+ * Miroir de `NotificationBulkScopeMapping.readScope(from:)` (iOS) : la forme SERVEUR du prédicat de masse vers la portée
+ * de consommation. `null` = portée non traduisible, à ignorer et à journaliser — rejouer un prédicat approximatif
+ * marquerait lues des lignes qui ne le sont pas. `friendRequestId` n'a pas de portée : la fabriquer depuis `Types`
+ * marquerait lues les lignes d'une AUTRE demande.
+ */
+fun NotificationReadBulkScope.toReadScope(): NotificationReadScope? = when (kind) {
+    "all" -> NotificationReadScope.All
+    "context" -> contextValue?.takeIf { it.isNotBlank() }?.let { value ->
+        when (contextKey) {
+            "conversationId" -> NotificationReadScope.Conversation(value)
+            "postId" -> NotificationReadScope.Post(value)
+            else -> null
+        }
+    }
+    "types" -> types?.takeIf { it.isNotEmpty() }?.let { NotificationReadScope.Types(it) }
+    else -> null
+}
+
+/** La purge en masse n'a qu'UNE forme (`{kind:'read'}`) : elle retire les lignes DÉJÀ LUES, toute autre valeur est ignorée. */
+fun NotificationDeletedBulkScope.purgesReadRows(): Boolean = kind == "read"

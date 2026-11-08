@@ -49,6 +49,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -66,6 +68,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.community.R
 import me.meeshy.sdk.model.CommunityCreateDraft
+import me.meeshy.sdk.model.CommunityCreateForm
+import me.meeshy.sdk.model.IdentifierCheck
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
@@ -75,10 +79,9 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
-
-private val PopularEmojis = listOf("🚀", "🎮", "🎵", "📚", "💻", "🎨", "❤️", "🔥", "⭐", "🌱", "🌍", "🏆", "📸", "🍿", "🎉")
 
 /**
  * La création d'une communauté (iOS `CommunityCreateScreen`) : aperçu vivant, champs, emoji, vie privée,
@@ -153,7 +156,8 @@ private fun PreviewCard(state: CommunityCreateUiState) {
         Modifier
             .fillMaxWidth()
             .height(160.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .shadow(12.dp, RoundedCornerShape(MeeshyRadius.xl), ambientColor = accent.copy(alpha = 0.35f), spotColor = accent.copy(alpha = 0.35f))
+            .clip(RoundedCornerShape(MeeshyRadius.xl))
             .background(Brush.linearGradient(listOf(animatedAccent, animatedAccent.copy(alpha = 0.6f)))),
     ) {
         androidx.compose.animation.AnimatedContent(
@@ -191,10 +195,22 @@ private fun Fields(state: CommunityCreateUiState, viewModel: CommunityCreateView
             PlainField(state.draft.name, viewModel::onName, stringResource(R.string.community_create_field_name_placeholder), ImeAction.Next)
         }
         FieldGroup(stringResource(R.string.community_create_field_identifier), required = false) {
+            Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(CommunityCreateDraft.IDENTIFIER_PREFIX, fontFamily = FontFamily.Monospace, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MeeshyTheme.tokens.textMuted)
                 Spacer(Modifier.width(4.dp))
-                PlainField(state.draft.identifier, viewModel::onIdentifier, stringResource(R.string.community_create_field_identifier_placeholder), ImeAction.Next)
+                PlainField(
+                    state.draft.identifier, viewModel::onIdentifier,
+                    stringResource(R.string.community_create_field_identifier_placeholder), ImeAction.Next,
+                    capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false,
+                )
+            }
+            if (state.identifierCheck == IdentifierCheck.Unavailable) {
+                Text(
+                    stringResource(R.string.community_create_identifier_unavailable),
+                    color = MeeshyTheme.tokens.error, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
+                )
+            }
             }
         }
         FieldGroup(stringResource(R.string.community_create_field_description), required = false) {
@@ -224,6 +240,8 @@ internal fun PlainField(
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
     minLines: Int = 1,
+    capitalization: KeyboardCapitalization = KeyboardCapitalization.Unspecified,
+    autoCorrectEnabled: Boolean = true,
 ) {
     val tokens = MeeshyTheme.tokens
     Box(modifier.fillMaxWidth()) {
@@ -235,7 +253,7 @@ internal fun PlainField(
             minLines = minLines,
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = tokens.textPrimary),
             cursorBrush = SolidColor(MeeshyPalette.Indigo500),
-            keyboardOptions = KeyboardOptions(imeAction = imeAction),
+            keyboardOptions = KeyboardOptions(imeAction = imeAction, capitalization = capitalization, autoCorrectEnabled = autoCorrectEnabled),
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -248,12 +266,12 @@ private fun EmojiPicker(selected: String, accentHex: String, onPick: (String) ->
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.community_create_field_emoji), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tokens.textSecondary)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(PopularEmojis, key = { it }) { emoji ->
+            items(CommunityCreateForm.POPULAR_EMOJIS, key = { it }) { emoji ->
                 val isSelected = emoji == selected
                 val scale by animateFloatAsState(if (isSelected) 1.1f else 1f, MeeshyMotion.springBouncy(), label = "emojiScale")
                 Box(
                     Modifier
-                        .size(48.dp)
+                        .size(44.dp)
                         .graphicsLayer { scaleX = scale; scaleY = scale }
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (isSelected) accent.copy(alpha = 0.25f) else tokens.backgroundSecondary.copy(alpha = 0.5f))

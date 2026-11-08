@@ -160,7 +160,7 @@ describe('push — les clés `data` et la catégorie de chaque contenu', () => {
     expect(p.data.thumbnailUrl).toBe('https://cdn.example/v_thumb.jpg');
   });
 
-  it('un STICKER : « Autocollant », jamais « Image » (#14309)', async () => {
+  it('un STICKER : « Sticker », le mot de l’app, jamais « Image » (#14309, #14389)', async () => {
     const p = await pushed({
       contentDetail: { sticker: { emoji: '🥳' } },
       attachments: [{ type: 'image', filename: 'sticker.png' }],
@@ -168,7 +168,7 @@ describe('push — les clés `data` et la catégorie de chaque contenu', () => {
       firstAttachmentHeight: 512,
     });
 
-    expect(p.body).toBe('Autocollant');
+    expect(p.body).toBe('Sticker');
   });
 
   it('une RÉPONSE À UNE STORY : `storyReply = "1"` et le corps le dit, à l’auteur comme aux autres', async () => {

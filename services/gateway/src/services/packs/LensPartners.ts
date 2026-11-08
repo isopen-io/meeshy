@@ -14,7 +14,11 @@
  *    modifié entre la relecture et l'écriture ⇒ ni vérification, ni VERIFY au
  *    journal ;
  *  - changer son NOM ou son LOGO retire la vérification : une identité vérifiée
- *    ne se remplace pas après coup (le site, lui, peut changer) ;
+ *    ne se remplace pas après coup (le site, lui, peut changer). Le compte
+ *    officiel Meeshy (#16274) garde son nom et sa vérification, que la
+ *    configuration lui donne ;
+ *  - le NOM passe par la loi des éditeurs (`claimPublisherName`, #16274) :
+ *    jamais un nom réservé, jamais celui d'un autre éditeur ;
  *  - **crédit** servi pour toute lens publiée (`lensCreditOf`) ; **filigrane** :
  *    Meeshy toujours, le logo du partenaire vérifié en plus.
  *
@@ -44,6 +48,8 @@ import {
 } from '@meeshy/shared/types/lens-partner';
 import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/stickerImage';
 import type { PackViewer } from './PackCatalog';
+import { officialPublisherAccountFrom } from './PackPublishers';
+import { claimPublisherName, isNameKeyViolation, lostNameRace } from './PublisherNames';
 
 export type PartnerProfileView = {
   /** L'identifiant OPAQUE du profil — celui que portent les crédits et l'adresse du logo. */
@@ -54,6 +60,8 @@ export type PartnerProfileView = {
   readonly logo: string | null;
   readonly verified: boolean;
   readonly verifiedAt: string | null;
+  /** Le choix de nommer son compte Meeshy sur sa page éditeur (#16440) — `false` par défaut. */
+  readonly showOwnerProfile: boolean;
   /** L'empreinte de l'état servi : ce que `verify` exige pour vérifier ce qui a été VU. */
   readonly version: string;
 };
@@ -61,7 +69,11 @@ export type PartnerProfileView = {
 export type SavePartnerOutcome =
   | { readonly kind: 'saved'; readonly profile: PartnerProfileView }
   | { readonly kind: 'logo-refused'; readonly reason: string }
-  | { readonly kind: 'conflict' };
+  | { readonly kind: 'conflict' }
+  | { readonly kind: 'reserved' }
+  | { readonly kind: 'name-taken' }
+  /** La disponibilité du nom n'a pas pu être établie (anciens profils pas encore rattrapés) : réessayer plus tard. */
+  | { readonly kind: 'retry-later' };
 
 export type VerifyPartnerOutcome =
   | { readonly kind: 'done'; readonly profile: PartnerProfileView }
@@ -93,20 +105,26 @@ export type LensPartnersDeps = {
   readonly dedup: LensUsageDedup;
   readonly now?: () => Date;
   readonly normalizeLogo?: (bytes: Buffer) => Promise<StickerImageOutcome>;
+  /** Le compte officiel Meeshy (`MEESHY_OFFICIAL_ACCOUNT_ID`, #16274) ; absent : lu dans l'environnement. */
+  readonly officialAccountId?: string | null;
 };
 
 const PROFILE_SELECT = {
-  id: true, userId: true, displayName: true, website: true, logoSrc: true, logoSha256: true, verifiedAt: true, updatedAt: true,
+  id: true, userId: true, displayName: true, nameKey: true, nameOffListAt: true, website: true, logoSrc: true, logoSha256: true, verifiedAt: true, ownerShownAt: true, createdAt: true, updatedAt: true,
 } as const;
 
 type ProfileRow = {
   readonly id: string;
   readonly userId: string;
   readonly displayName: string;
+  readonly nameKey: string | null;
+  readonly nameOffListAt?: Date | null;
   readonly website: string | null;
   readonly logoSrc: string | null;
   readonly logoSha256: string | null;
   readonly verifiedAt: Date | null;
+  readonly ownerShownAt?: Date | null;
+  readonly createdAt: Date | null;
   readonly updatedAt: Date;
 };
 
@@ -141,8 +159,20 @@ const viewOf = (row: ProfileRow): PartnerProfileView => ({
   logo: row.logoSrc,
   verified: row.verifiedAt !== null,
   verifiedAt: row.verifiedAt?.toISOString() ?? null,
+  showOwnerProfile: (row.ownerShownAt ?? null) !== null,
   version: profileVersion(row),
 });
+
+/**
+ * La colonne du choix #16440 : `true` pose la date si elle manquait (et garde
+ * la première), `false` la remet à `null`, absent ne l'écrit pas. Jamais lu par
+ * la vérification : nommer son compte n'est pas l'identité de l'éditeur.
+ */
+const ownerShownColumn = (choice: boolean | undefined, current: Date | null, now: Date): { readonly ownerShownAt?: Date | null } => {
+  if (choice === undefined) return {};
+  if (!choice) return { ownerShownAt: null };
+  return { ownerShownAt: current ?? now };
+};
 
 type LogoColumns = { readonly logoSrc: string | null; readonly logoSha256: string | null; readonly logoMime: string | null; readonly logoBytes: Uint8Array<ArrayBuffer> | null; readonly logoSize: number | null };
 
@@ -153,12 +183,19 @@ export class LensPartners {
   private readonly dedup: LensUsageDedup;
   private readonly now: () => Date;
   private readonly normalizeLogo: (bytes: Buffer) => Promise<StickerImageOutcome>;
+  private readonly official: string | null;
 
   constructor(deps: LensPartnersDeps) {
     this.prisma = deps.prisma;
     this.dedup = deps.dedup;
     this.now = deps.now ?? (() => new Date());
     this.normalizeLogo = deps.normalizeLogo ?? normalizeStickerImage;
+    this.official = deps.officialAccountId === undefined ? officialPublisherAccountFrom(process.env) : deps.officialAccountId;
+  }
+
+  /** Le compte officiel Meeshy : lui seul garde le nom « Meeshy » (#16274). */
+  isOfficial(userId: string): boolean {
+    return this.official !== null && userId === this.official;
   }
 
   async ownProfile(userId: string): Promise<PartnerProfileView | null> {
@@ -169,39 +206,87 @@ export class LensPartners {
   /**
    * Le partenaire écrit son profil. `logo` : `undefined` garde l'actuel, `null`
    * le retire, des octets le remplacent (ré-encodés, renommés par l'empreinte).
-   * Un nom ou un logo qui change retire la vérification.
+   * Un nom, un logo ou un site qui change retire la vérification (le site :
+   * décision porteur du 2026-11-06, #16433) ; les remettre à l'identique ne
+   * retire rien.
    *
    * L'écriture est conditionnelle sur l'état relu (`updatedAt`) : une écriture
    * concurrente — un autre appareil, ou une vérification — rend `conflict`
    * plutôt que d'être écrasée. La création est un `upsert` : deux créations
    * simultanées ne lèvent pas, et la seconde naît non vérifiée.
+   *
+   * Un NOUVEAU nom passe par `claimPublisherName` (#16274) : réservé ⇒
+   * `reserved`, porté par un autre éditeur ⇒ `name-taken` — y compris quand
+   * deux écritures se croisent (P2002 de l'index de `nameKey`, ou course perdue
+   * relue après) —, balayage inconcluant ⇒ `retry-later`. Un nom INCHANGÉ est
+   * un droit acquis : ni revendiqué de nouveau, ni réécrit, ni sa clé touchée.
    */
   async saveOwnProfile(userId: string, input: { readonly profile: PartnerProfileInput; readonly logo: Buffer | null | undefined }): Promise<SavePartnerOutcome> {
     const logo = await this.logoColumns(input.logo);
     if ('reason' in logo) return { kind: 'logo-refused', reason: logo.reason };
+    const official = this.isOfficial(userId);
     const current = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: PROFILE_SELECT });
+    const unchanged = current !== null && !official && current.displayName === input.profile.displayName;
+    const claim = unchanged
+      ? ({ kind: 'ok', displayName: current.displayName, nameKey: null } as const)
+      : await claimPublisherName(this.prisma, { userId, name: input.profile.displayName, official });
+    if (claim.kind === 'inconclusive') return { kind: 'retry-later' };
+    if (claim.kind !== 'ok') return { kind: claim.kind };
     const now = this.now();
-    if (current === null) {
-      const data = { displayName: input.profile.displayName, website: input.profile.website, ...(logo.columns ?? NO_LOGO), verifiedAt: null, verifiedBy: null, updatedAt: now };
-      await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, createdAt: now, ...data }, update: data });
-    } else {
-      const nextLogoSha = logo.columns === undefined ? current.logoSha256 : logo.columns.logoSha256;
-      const identityChanged = current.displayName !== input.profile.displayName || current.logoSha256 !== nextLogoSha;
-      const written = await this.prisma.partnerProfile.updateMany({
-        where: { userId, updatedAt: current.updatedAt },
-        data: {
-          displayName: input.profile.displayName,
+    const named = unchanged ? {} : { displayName: claim.displayName, nameKey: claim.nameKey };
+    try {
+      if (current === null) {
+        const data = {
+          displayName: claim.displayName,
+          nameKey: claim.nameKey,
           website: input.profile.website,
-          ...(logo.columns ?? {}),
-          ...(identityChanged ? { verifiedAt: null, verifiedBy: null } : {}),
+          ...(logo.columns ?? NO_LOGO),
+          verifiedAt: null,
+          verifiedBy: null,
+          ownerShownAt: input.profile.showOwnerProfile === true ? now : null,
           updatedAt: now,
-        },
-      });
-      if (written.count === 0) return { kind: 'conflict' };
+        };
+        await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, createdAt: now, ...data }, update: data });
+      } else {
+        const nextLogoSha = logo.columns === undefined ? current.logoSha256 : logo.columns.logoSha256;
+        const identityChanged =
+          !official && (current.displayName !== claim.displayName || current.logoSha256 !== nextLogoSha || current.website !== input.profile.website);
+        const written = await this.prisma.partnerProfile.updateMany({
+          where: { userId, updatedAt: current.updatedAt },
+          data: {
+            ...named,
+            website: input.profile.website,
+            ...(logo.columns ?? {}),
+            ...(identityChanged ? { verifiedAt: null, verifiedBy: null } : {}),
+            ...ownerShownColumn(input.profile.showOwnerProfile, current.ownerShownAt ?? null, now),
+            updatedAt: now,
+          },
+        });
+        if (written.count === 0) return { kind: 'conflict' };
+      }
+    } catch (error) {
+      if (isNameKeyViolation(error)) return { kind: 'name-taken' };
+      throw error;
     }
     const saved = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: PROFILE_SELECT });
     if (saved === null) throw new Error('partner profile vanished after write');
+    if (claim.nameKey !== null && (await lostNameRace(this.prisma, claim.nameKey, saved))) {
+      await this.undoLostName(saved, current, now);
+      return { kind: 'name-taken' };
+    }
     return { kind: 'saved', profile: viewOf(saved) };
+  }
+
+  /** Une course au nom perdue : le profil créé est retiré, le profil renommé reprend son nom d'avant. */
+  private async undoLostName(saved: ProfileRow, previous: ProfileRow | null, writtenAt: Date): Promise<void> {
+    if (previous === null) {
+      await this.prisma.partnerProfile.deleteMany({ where: { id: saved.id, updatedAt: writtenAt } });
+      return;
+    }
+    await this.prisma.partnerProfile.updateMany({
+      where: { id: saved.id, updatedAt: writtenAt },
+      data: { displayName: previous.displayName, nameKey: previous.nameKey, ownerShownAt: previous.ownerShownAt ?? null, updatedAt: this.now() },
+    });
   }
 
   /** La file de vérification : les profils non vérifiés, le plus ancien d'abord. */
@@ -265,7 +350,11 @@ export class LensPartners {
     const partners = submitters.length === 0 ? [] : await this.prisma.partnerProfile.findMany({ where: { userId: { in: submitters } }, select: PROFILE_SELECT });
     const bySubmitter = new Map(partners.map((partner) => [partner.userId, partner]));
     return lenses.flatMap((lens) => {
-      const credit = lensCreditOf(lens, bySubmitter.get(lens.submitterId) ?? null);
+      const partner = bySubmitter.get(lens.submitterId);
+      const credit = lensCreditOf(
+        lens,
+        partner === undefined ? null : { ...partner, official: this.isOfficial(partner.userId), grandfathered: partner.nameOffListAt instanceof Date },
+      );
       return credit === null ? [] : [credit];
     });
   }

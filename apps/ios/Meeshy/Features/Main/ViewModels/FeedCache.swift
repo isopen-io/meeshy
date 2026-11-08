@@ -14,6 +14,7 @@ protocol FeedCacheStoring: Sendable {
     func save(_ items: [FeedPost], for key: String) async throws
     func savePreservingFreshness(_ items: [FeedPost], for key: String) async throws
     func patchEverywhere(itemId: String, mutate: @Sendable (inout FeedPost) -> Void) async
+    func removeEverywhere(itemId: String) async
 }
 
 extension GRDBCacheStore: FeedCacheStoring where Key == String, Value == FeedPost {}
@@ -37,5 +38,9 @@ struct SharedFeedCache: FeedCacheStoring {
 
     func patchEverywhere(itemId: String, mutate: @Sendable (inout FeedPost) -> Void) async {
         await CacheCoordinator.shared.feed.patchEverywhere(itemId: itemId, mutate: mutate)
+    }
+
+    func removeEverywhere(itemId: String) async {
+        await CacheCoordinator.shared.feed.removeEverywhere(itemId: itemId)
     }
 }

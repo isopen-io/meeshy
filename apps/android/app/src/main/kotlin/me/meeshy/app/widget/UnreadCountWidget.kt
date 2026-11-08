@@ -1,13 +1,15 @@
 package me.meeshy.app.widget
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
-import androidx.glance.action.actionStartActivity
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -49,13 +51,15 @@ import me.meeshy.app.widget.kit.widgetSurface
 internal class UnreadCountWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val repository = EntryPointAccessors.fromApplication(
-            context,
-            WidgetEntryPoint::class.java,
-        ).conversationRepository()
-
-        val total = repository.totalUnreadCount().first()
-        val presentation = UnreadWidgetPresentation.from(total)
+        val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
+        val presentation = if (entryPoint.tokenStore().userId.isNullOrBlank()) {
+            UnreadWidgetPresentation.signedOut()
+        } else {
+            val shared = entryPoint.unreadBadgeCoordinator().state.value
+            UnreadWidgetPresentation.from(
+                if (shared.seeded) shared.total else entryPoint.conversationRepository().totalUnreadCount().first(),
+            )
+        }
 
         provideContent {
             UnreadCountWidgetContent(presentation)
@@ -73,14 +77,14 @@ private fun UnreadCountWidgetContent(presentation: UnreadWidgetPresentation) {
             .fillMaxSize()
             .widgetSurface(brand = true)
             .padding(12.dp)
-            .clickable(actionStartActivity<MainActivity>()),
+            .clickable(actionStartActivity(unreadListIntent(context))),
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         if (presentation.hasUnread) {
             Text(
                 text = presentation.count.toString(),
-                style = TextStyle(color = white, fontSize = 28.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = white, fontSize = 36.sp, fontWeight = FontWeight.Bold),
             )
             Text(
                 text = context.getString(R.string.widget_unread_label),
@@ -94,6 +98,10 @@ private fun UnreadCountWidgetContent(presentation: UnreadWidgetPresentation) {
         }
     }
 }
+
+/** Ouvre la liste sur le filtre « Non lus » (iOS `widgetURL`), pas seulement l'app. */
+private fun unreadListIntent(context: Context): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse(WidgetDeepLink.UNREAD), context, MainActivity::class.java)
 
 /** Registers [UnreadCountWidget] with the OS (AndroidManifest `<receiver>`). */
 internal class UnreadCountWidgetReceiver : GlanceAppWidgetReceiver() {

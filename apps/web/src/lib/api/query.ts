@@ -12,12 +12,14 @@ import { announceRowEvent } from '@/lib/view/row-action-notice';
 import { cachedCardSeed } from './card-caches';
 import { ApiError, currentOwnerCredential } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
+import { setCommentsDisabled, type CommentSettingOutcome } from './comment-settings';
 import { repliesInfiniteOptions } from './comment-replies';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import type { PendingAttachment } from '@/lib/send/attachments';
 
 import { apiDeps } from './deps';
+import { sendTransfer } from '@/lib/send/send-transfer-instance';
 import { feedQuery, refreshFeed } from './feed';
 import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
@@ -221,6 +223,11 @@ export function pinPostAction(postId: string): Promise<PostActionOutcome> {
   return pinPost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
+/** FERMER OU ROUVRIR LES COMMENTAIRES (#16541) — même motif : l'optimiste écrit les caisses que les écrans observent. */
+export function commentSettingAction(postId: string, disabled: boolean): Promise<CommentSettingOutcome> {
+  return setCommentsDisabled({ postId, disabled, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
 /** MODIFIER LE TEXTE (#7534) — RÉFÉRENCE DE MODULE STABLE, même motif : le
  * cache que le fil observe est celui que le geste patche, optimiste ET
  * réponse servie compris. */
@@ -307,6 +314,29 @@ function isRefusal(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 403 || error.status === 404);
 }
 
+type ThreadQueryOutcome = {
+  readonly data: unknown;
+  readonly error: unknown;
+  readonly isError: boolean;
+  readonly isPaused: boolean;
+};
+
+const unavailable = (query: ThreadQueryOutcome): boolean => query.data === undefined && (query.isError || query.isPaused);
+
+/**
+ * L'ÉTAT DU FIL (#15112) — un refus prime ; puis DES DONNÉES EN CACHE GAGNENT,
+ * même après un échec de relecture : hors ligne après un rechargement, TanStack
+ * croit le réseau présent, la relecture échoue et la requête passe en `error`
+ * en gardant ses données. L'erreur ne se montre que là où le cache est VIDE —
+ * échec, ou requête mise en pause hors ligne (`cold-state.ts`).
+ */
+export function threadDataStatusOf(conversation: ThreadQueryOutcome, messages: ThreadQueryOutcome): ThreadDataStatus {
+  if (isRefusal(conversation.error) || isRefusal(messages.error)) return 'refused';
+  if (conversation.data !== undefined && messages.data !== undefined) return 'success';
+  if (unavailable(conversation) || unavailable(messages)) return 'error';
+  return 'pending';
+}
+
 /**
  * `useThreadData` — compose les DEUX requêtes du fil. `status: 'refused'`
  * (D-6) dès que L'UNE des deux porte un `ApiError` 403/404 — un id qui
@@ -354,11 +384,7 @@ export function useThreadData(id: string) {
   });
 
   const error = conversation.error ?? messages.error ?? null;
-  const refused = isRefusal(conversation.error) || isRefusal(messages.error);
-  const failed = conversation.isError || messages.isError;
-  const ready = conversation.data !== undefined && messages.data !== undefined;
-
-  const status: ThreadDataStatus = refused ? 'refused' : failed ? 'error' : ready ? 'success' : 'pending';
+  const status = threadDataStatusOf(conversation, messages);
 
   return {
     conversationId,
@@ -444,7 +470,7 @@ export function sendAction(params: {
     draft,
     viewerId,
     ...(sender === undefined ? {} : { sender }),
-    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
   });
 }
 
@@ -457,7 +483,7 @@ export function retrySendAction(params: {
   return retrySend({
     conversationId,
     clientMessageId,
-    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
   });
 }
 

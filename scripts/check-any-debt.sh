@@ -357,7 +357,22 @@ readonly SHARED_BASELINE=0
 #
 # 497 → 496 (#11260 : le chemin TUS et le multipart partagent une fabrique de rendus) :
 # un `any` a quitté la passerelle avec la convergence des deux chemins d'upload.
-readonly GATEWAY_BASELINE=494
+#
+# 493 → 492 (#16660 : les trois portes de la traduction demandée partagent UNE loi de
+# lecture) : le contrôle d'accès écrit à la main dans `routes/translation.ts` portait
+# `(member: any) => member.userId === userId` ; il a disparu avec la bascule sur
+# `translationReadGate`, et la mesure passe de 4 à 3 usages pour ce fichier.
+#
+# INSCRIT DEUX FOIS, PAR DEUX LOTS, À LA MÊME VALEUR — et c'est le symptôme d'un
+# cliquet qu'on laisse rouge : #16660 a fusionné dans `dev` sans baisser cette ligne,
+# donc `dev` LUI-MÊME échouait ici (mesuré sur `origin/dev` nu : 492 contre une
+# baseline de 493), et TOUTE PR partant de `dev` héritait d'un rouge qui ne lui
+# appartenait pas. Deux lots ont buté dessus en parallèle et l'ont corrigé chacun de
+# son côté ; la fusion les a départagés sur une seule ligne de valeur, identique.
+# Seule l'ATTRIBUTION a survécu de ce côté-ci, et c'est elle qui manquait : la
+# convention de ce fichier veut qu'une baisse dise QUEL lot l'a gagnée, sans quoi le
+# prochain à la relire ne peut pas vérifier qu'elle était méritée.
+readonly GATEWAY_BASELINE=492
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

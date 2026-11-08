@@ -64,6 +64,8 @@ internal fun ConversationSettingsSheet(
     val context = LocalContext.current
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
+    // #15269 — une entrée interdite est absente, jamais grisée : la feuille se referme si la loi n'accorde pas l'édition.
+    LaunchedEffect(state.isLoaded, state.mayEdit) { if (state.isLoaded && !state.mayEdit) onDismiss() }
     LaunchedEffect(state.justSaved) {
         if (state.justSaved) {
             Toast.makeText(
@@ -105,6 +107,14 @@ internal fun ConversationSettingsSheet(
                 return@Column
             }
 
+            SectionLabel(stringResource(R.string.conversation_appearance_section_accent))
+            ConversationAccentPicker(
+                catalog = state.catalog,
+                selectedKey = state.appearance.accent,
+                autoColor = accentColor,
+                onSelect = viewModel::setAccent,
+            )
+
             SectionLabel(stringResource(R.string.conversation_settings_write_role))
             MemberRole.entries.forEach { role ->
                 SettingRadioRow(
@@ -137,6 +147,14 @@ internal fun ConversationSettingsSheet(
                 checked = form.autoTranslateEnabled,
                 accentColor = accentColor,
                 onCheckedChange = viewModel::setAutoTranslate,
+            )
+
+            MemberManagementSection(
+                conversationId = conversationId,
+                query = state.memberQuery,
+                onQueryChange = viewModel::setMemberQuery,
+                viewerRole = state.viewerRole,
+                accentColor = accentColor,
             )
 
             if (state.hasError) {

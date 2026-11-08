@@ -19,9 +19,25 @@ data class ArrivalsNoticeMetadata(
 ) {
     data class Arrival(val participantId: String, val displayName: String)
 
+    /** Miroir de `arrivalsLineKey` : la forme de la phrase selon le nombre d'arrivées. */
+    enum class LineKey { ONE, TWO, THREE, MANY }
+
+    /** Les DERNIERS arrivés que la phrase nomme : trois au plus, deux au-delà de trois arrivées. */
+    fun namedArrivals(): List<Arrival> {
+        val named = if (lineKey(count) == LineKey.MANY) 2 else minOf(count, 3)
+        return arrivals.take(named)
+    }
+
     companion object {
         const val KIND = "members-arrived"
         private const val MAX_COUNT = 1_000_000_000.0
+
+        fun lineKey(count: Int): LineKey = when {
+            count <= 1 -> LineKey.ONE
+            count == 2 -> LineKey.TWO
+            count == 3 -> LineKey.THREE
+            else -> LineKey.MANY
+        }
 
         /** VALIDE plutôt que caste : un arrivant malformé est écarté, une ligne sans arrivant est illisible. */
         fun parse(metadata: JsonObject?): ArrivalsNoticeMetadata? {

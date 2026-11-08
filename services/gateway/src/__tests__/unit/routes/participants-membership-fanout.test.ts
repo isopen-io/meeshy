@@ -24,6 +24,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 import { matchesMongoWhere } from '../../helpers/mongo-where';
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) }));
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
   canAccessConversation: jest.fn<any>(),
 }));

@@ -74,12 +74,44 @@ describe('« Retirer » une publication d’un autre (#11150)', () => {
 
 describe('une publication à SCÈNE s’exporte (#13873)', () => {
   test('« Sauvegarder » et « Imager » suivent « Partager », pour tout lecteur', () => {
-    expect(postMenuEntries({ ...base, canExportScene: true })).toEqual(['open', 'copyText', 'share', 'saveMedia', 'imager', 'save', 'report']);
-    expect(postMenuEntries({ ...base, viewerId: null, canExportScene: true })).toContain('saveMedia');
+    expect(postMenuEntries({ ...base, canSaveScene: true, canImage: true })).toEqual(['open', 'copyText', 'share', 'saveMedia', 'imager', 'save', 'report']);
+    expect(postMenuEntries({ ...base, viewerId: null, canSaveScene: true })).toContain('saveMedia');
   });
 
-  test('sans scène, rien à exporter', () => {
+  test('sans scène, rien à sauvegarder ni à imager', () => {
     expect(postMenuEntries(base)).not.toContain('saveMedia');
     expect(postMenuEntries(base)).not.toContain('imager');
+  });
+});
+
+describe('« Imager » ne dépend plus d’une scène (#16166)', () => {
+  test('un post simple qui s’image offre « Imager » sans « Sauvegarder »', () => {
+    expect(postMenuEntries({ ...base, canImage: true })).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'report']);
+  });
+});
+
+/**
+ * « DÉSACTIVER / RÉACTIVER LES COMMENTAIRES » (#16541) — à l'AUTEUR, et à la
+ * modération de plateforme (MODERATOR/ADMIN/BIGBOSS) sur la publication d'un
+ * autre ; jamais à un lecteur ordinaire ni à un invité. L'hôte doit savoir le
+ * FAIRE (`canToggleComments`), sinon l'entrée n'existe pas (loi 4).
+ */
+describe('postMenuEntries — les commentaires', () => {
+  test('l’auteur l’a, après « Modifier » et avant « Supprimer »', () => {
+    expect(postMenuEntries({ ...base, authorId: 'u-me', canToggleComments: true })).toEqual([
+      'open', 'copyText', 'share', 'save', 'pin', 'edit', 'comments', 'delete',
+    ]);
+  });
+
+  test('la modération l’a sur la publication d’un autre, avant « Retirer »', () => {
+    expect(postMenuEntries({ ...base, canToggleComments: true, viewerModerates: true })).toEqual([
+      'open', 'copyText', 'share', 'save', 'comments', 'remove', 'report',
+    ]);
+  });
+
+  test('un lecteur ordinaire, un invité, ou un hôte qui ne sait pas le faire : rien', () => {
+    expect(postMenuEntries({ ...base, canToggleComments: true })).not.toContain('comments');
+    expect(postMenuEntries({ ...base, viewerId: null, canToggleComments: true, viewerModerates: true })).not.toContain('comments');
+    expect(postMenuEntries({ ...base, authorId: 'u-me' })).not.toContain('comments');
   });
 });

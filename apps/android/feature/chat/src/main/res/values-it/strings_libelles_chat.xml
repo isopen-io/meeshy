@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="chat_pinned_count">
+        <item quantity="one">%1$d messaggio fissato</item>
+        <item quantity="many">%1$d di messaggi fissati</item>
+        <item quantity="other">%1$d messaggi fissati</item>
+    </plurals>
+    <plurals name="chat_typing_many">
+        <item quantity="one">%1$d persona sta scrivendo…</item>
+        <item quantity="many">%1$d di persone stanno scrivendo…</item>
+        <item quantity="other">%1$d persone stanno scrivendo…</item>
+    </plurals>
+</resources>

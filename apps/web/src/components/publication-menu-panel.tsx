@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { PostMenuEntry } from '@/lib/feed/publication-menu';
+import { openPublicationImage, type PublicationImageRequest } from '@/lib/export/publication-image-store';
 import { launchSceneExport } from '@/lib/export/scene/scene-export-launch';
 import { postExportSubject } from '@/lib/export/scene/scene-export-subject';
 import { translate } from '@/lib/i18n-catalog';
@@ -48,10 +49,14 @@ export type PostMenuPanelProps = {
   readonly originalText: string | undefined;
   readonly originalLanguage: string | undefined;
   readonly bookmarked: boolean;
+  /** Voir `FeedPostMenu` — « Désactiver » ou « Réactiver les commentaires » (#16541). */
+  readonly commentsDisabled: boolean;
   /** Voir `FeedPostMenu` — « Modifier » rouvre le studio (#9317). */
   readonly studioEditable: boolean;
-  /** Voir `FeedPostMenu` — « Sauvegarder » et « Imager » (#13873). */
+  /** Voir `FeedPostMenu` — « Sauvegarder » (#13873). */
   readonly sceneExport?: PostMenuSceneExport | undefined;
+  /** « Imager » (#16166, #16393) — la demande que l'atelier de carte reçoit ; `null` : rien ne s'image. */
+  readonly imageRequest?: PublicationImageRequest | null;
   readonly menu: PostMenuHost;
   readonly onShare?: ((postId: string) => void) | undefined;
   readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
@@ -83,8 +88,10 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     originalText,
     originalLanguage,
     bookmarked,
+    commentsDisabled,
     studioEditable,
     sceneExport,
+    imageRequest = null,
     menu,
     onShare,
     onGesture,
@@ -105,9 +112,12 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     setRemoving,
   } = props;
   const language = currentInterfaceLanguage();
-  const exportScene = (mode: 'save' | 'imager') => {
+  const saveScene = () => {
     const subject = sceneExport === undefined ? null : postExportSubject(sceneExport);
-    if (subject !== null) void launchSceneExport({ subject, mode });
+    if (subject !== null) void launchSceneExport({ subject, mode: 'save' });
+  };
+  const image = () => {
+    if (imageRequest !== null) openPublicationImage(imageRequest);
   };
 
   const items: readonly { readonly id: PostMenuEntry; readonly label: string; readonly icon: ReactNode; readonly run: () => void }[] = entries.map(
@@ -120,9 +130,9 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
         case 'share':
           return { id, label: translate(language, 'feed.post.action.share'), icon: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={16} />, run: () => onShare?.(postId) };
         case 'saveMedia':
-          return { id, label: translateSceneExport(language, 'sceneExport.menu.save'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.downloadSimple} size={16} />, run: () => exportScene('save') };
+          return { id, label: translateSceneExport(language, 'sceneExport.menu.save'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.downloadSimple} size={16} />, run: saveScene };
         case 'imager':
-          return { id, label: translateSceneExport(language, 'sceneExport.menu.imager'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />, run: () => exportScene('imager') };
+          return { id, label: translateSceneExport(language, 'sceneExport.menu.imager'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />, run: image };
         case 'save':
           return {
             id,
@@ -136,6 +146,13 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
           return { id, label: translate(language, 'feed.post.menu.pin'), icon: <Glyph name="pushPin" size={16} />, run: () => menu.onPin(postId) };
         case 'edit':
           return { id, label: translate(language, 'feed.post.edit'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />, run: () => (studioEditable ? navigate(href('postEdit', { post: postId })) : setEditing(true)) };
+        case 'comments':
+          return {
+            id,
+            label: translate(language, commentsDisabled ? 'feed.post.menu.comments_on' : 'feed.post.menu.comments_off'),
+            icon: <GlyphSvg glyph={FEED_GLYPHS.chatCircle} size={16} />,
+            run: () => menu.onToggleComments?.(postId, !commentsDisabled),
+          };
         case 'delete':
           return { id, label: translate(language, 'feed.post.menu.delete'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => menu.onDelete(postId) };
         case 'remove':

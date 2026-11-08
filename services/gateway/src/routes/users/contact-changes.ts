@@ -26,6 +26,7 @@ import {
 } from './contact-change';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 import { creditContactProof } from '../../services/auth/contact-proof-engagement';
+import { isEmailDomainRefused, sendEmailDomainNotAllowed } from '../../services/auth/email-domain-guard';
 import { emailSecretLink } from '../../utils/email-secret-link';
 
 /**
@@ -156,6 +157,9 @@ export async function initiateContactChange(fastify: FastifyInstance) {
         const newEmail = normalizeEmail(body.value);
         if (newEmail.toLowerCase() === user.email.toLowerCase()) {
           return sendBadRequest(reply, 'New email must be different from current email');
+        }
+        if (isEmailDomainRefused(newEmail)) {
+          return sendEmailDomainNotAllowed(reply);
         }
         const existing = await fastify.prisma.user.findFirst({
           where: { email: { equals: newEmail, mode: 'insensitive' }, id: { not: userId } }
@@ -341,6 +345,9 @@ export async function verifyContactChange(fastify: FastifyInstance) {
         }
         if (user.pendingEmailVerificationExpiry && user.pendingEmailVerificationExpiry < new Date()) {
           return sendBadRequest(reply, 'Verification token has expired');
+        }
+        if (isEmailDomainRefused(user.pendingEmail)) {
+          return sendEmailDomainNotAllowed(reply);
         }
         const existing = await fastify.prisma.user.findFirst({
           where: { email: { equals: user.pendingEmail, mode: 'insensitive' }, id: { not: userId } }

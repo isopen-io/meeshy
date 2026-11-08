@@ -12,7 +12,11 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import me.meeshy.core.common.DefaultDispatcher
+import kotlinx.coroutines.ensureActive
+import me.meeshy.sdk.model.media.ImageByteBudget
+import me.meeshy.sdk.model.media.ImageByteBudgetLadder
 import me.meeshy.sdk.model.media.ImageCompressionPlan
+import me.meeshy.sdk.model.media.ImageDecodeSampling
 import me.meeshy.sdk.model.media.ImageCompressionPlanner
 import me.meeshy.sdk.model.media.ImageOutputFormat
 import me.meeshy.sdk.model.media.ImageSource
@@ -52,6 +56,43 @@ public class ImageCompressor @Inject constructor(
         quality: Int = ImageCompressionPlanner.DEFAULT_QUALITY,
     ): CompressedImage = withContext(dispatcher) {
         runCatching { compressNow(bytes, context, quality) }.getOrElse { original(bytes, ImageSourceFormat.sniff(bytes)) }
+    }
+
+    /**
+     * Le chemin « photo d'entité » (avatar, bannière), miroir de `ImageCompressor.compress(maxSizeKB:)` d'iOS : tout le
+     * travail Bitmap tourne sur le dispatcher par défaut ; la source est décodée SOUS-ÉCHANTILLONNÉE (jamais plus de
+     * 12 mégapixels en mémoire), l'orientation EXIF est cuite, le plafond de dimension vient du contexte du [budget],
+     * puis [ImageByteBudgetLadder] (8 passes au plus : qualité décroissante, puis dimension) s'arrête à la première
+     * passe sous le budget. La dernière passe est rendue si aucune ne tient. Annulable entre deux passes.
+     */
+    public suspend fun compressToBudget(bytes: ByteArray, budget: ImageByteBudget): CompressedImage =
+        withContext(dispatcher) { encodeToBudget(bytes, budget) }
+
+    private fun kotlinx.coroutines.CoroutineScope.encodeToBudget(bytes: ByteArray, budget: ImageByteBudget): CompressedImage {
+        val format = ImageSourceFormat.sniff(bytes)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return original(bytes, format)
+        val orientation = readOrientation(bytes, format)
+        val swap = orientation in SWAPPING_ORIENTATIONS
+        val orientedW = if (swap) bounds.outHeight else bounds.outWidth
+        val orientedH = if (swap) bounds.outWidth else bounds.outHeight
+        val base = ImageCompressionPlanner.plan(budget.context, orientedW, orientedH, ImageByteBudgetLadder.START_QUALITY)
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = ImageDecodeSampling.sampleSize(
+                bounds.outWidth, bounds.outHeight, maxOf(base.targetWidthPx, base.targetHeightPx),
+            )
+        }
+        ensureActive()
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return original(bytes, format)
+        val oriented = orient(decoded, orientation, base)
+        try {
+            val jpeg = ImageBudgetEncoder.encode(oriented, budget, checkActive = { ensureActive() })
+            return CompressedImage(jpeg, ImageOutputFormat.JPEG.mimeType, ImageOutputFormat.JPEG.fileExtension, recompressed = true)
+        } finally {
+            if (oriented !== decoded) oriented.recycle()
+            decoded.recycle()
+        }
     }
 
     private fun compressNow(bytes: ByteArray, context: ImageUploadContext, quality: Int): CompressedImage {

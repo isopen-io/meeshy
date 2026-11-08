@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "androidName": "circles_empty_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_empty_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_empty_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_error_load",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_error_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_offline_banner",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_offline_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_requests_accept",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_requests_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_requests_decline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_requests_incoming",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_requests_outgoing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_requests_ritual",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_a11y_hold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_a11y_release",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_awaiting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_busy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_completed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_continue",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_folding_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_intro",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_listening_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_listening_title_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_listening_title_folding",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_history",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_history_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_history_folding",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_live",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_live_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_live_folding",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_proximity",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_proximity_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_proximity_folding",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_withdrawal",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_hold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_hold_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_lapsed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_open_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_other_waiting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_seal_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_synchronised",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_unavailable_generic",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_unavailable_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_waiting_other",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_section_requests",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_settings_block_bring",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_settings_listening",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_settings_location",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_sheet_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_sheet_settings_none",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_sheet_settings_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_sheet_settings_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_tab_circles",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

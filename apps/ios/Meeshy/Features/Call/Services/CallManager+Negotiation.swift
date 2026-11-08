@@ -110,7 +110,7 @@ extension CallManager {
         isUsingFrontCamera = !ProcessInfo.processInfo.isiOSAppOnMac
         let localId = AuthManager.shared.currentUser?.id ?? ""
         let remoteId = remoteUserId ?? ""
-        let polite = Self.isPolitePeer(localUserId: localId, remoteUserId: remoteId)
+        let polite = CallNegotiationRules.isPolitePeer(localUserId: localId, remoteUserId: remoteId)
         webRTCService.setNegotiationRole(isPolite: polite)
         Logger.calls.debug("negotiation role: \(polite ? "polite" : "impolite") (local=\(localId, privacy: .public) remote=\(remoteId, privacy: .public))")
     }
@@ -119,40 +119,6 @@ extension CallManager {
     /// (`CallSdpSignaler` owns the epoch).
     func acceptIncomingNegotiation(_ generation: Int, isOffer: Bool = false) -> Bool {
         sdpSignaler.acceptIncomingNegotiation(generation, isOffer: isOffer)
-    }
-
-    /// Pure, testable epoch rule (§3.5): a signal is stale when its generation
-    /// is strictly older than the highest already seen-or-sent. Equal/newer is
-    /// accepted (offer, its answer, and the matching ICE share a generation).
-    static func isStaleNegotiation(incoming: Int, highWaterMark: Int, isOffer: Bool = false) -> Bool {
-        incoming < highWaterMark && !isFreshLinkOffer(incoming: incoming, highWaterMark: highWaterMark, isOffer: isOffer)
-    }
-
-    /// Pure, testable politeness rule (W3C perfect negotiation): the
-    /// lexicographically-smaller userId is the polite peer. Symmetric — peer A
-    /// comparing (idA, idB) and peer B comparing (idB, idA) both reduce to
-    /// `min(idA, idB)` and therefore agree without any extra signaling. Returns
-    /// `false` (impolite) when an id is missing, so a misconfigured side never
-    /// yields blindly. Scales cleanly to SFU later (client always polite).
-    static func isPolitePeer(localUserId: String, remoteUserId: String) -> Bool {
-        guard !localUserId.isEmpty, !remoteUserId.isEmpty, localUserId != remoteUserId else { return false }
-        return localUserId < remoteUserId
-    }
-
-    /// Resolves the preferred transcription/call language for a participant per
-    /// Prisme Linguistique (full 5-level chain, mirroring `MeeshyUser.preferredContentLanguages`):
-    ///   1. `systemLanguage`            — primary in-app preference
-    ///   2. `regionalLanguage`          — secondary in-app preference
-    ///   3. `customDestinationLanguage` — per-conversation override
-    ///   4. `deviceLocale`              — OS-level locale (4th priority, normalised to ISO 639-1)
-    ///   5. `"fr"`                      — ultimate fallback
-    /// Pure + static — no side effects, no async, safe to unit test directly.
-    static func preferredCallLanguage(for user: MeeshyUser?) -> String {
-        user?.systemLanguage
-            ?? user?.regionalLanguage
-            ?? user?.customDestinationLanguage
-            ?? MeeshyUser.normalizeLanguageCode(user?.deviceLocale)
-            ?? "fr"
     }
 
     // MARK: - Socket Emit Helpers

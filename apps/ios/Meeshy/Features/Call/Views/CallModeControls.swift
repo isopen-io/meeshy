@@ -7,6 +7,12 @@ struct CallEffectsModeControls: View {
     @ObservedObject var capture: CallCaptureController
     let subjects: [CallCaptureSubject]
     let tracks: [String: Any]
+    /// OPUS-4 — faux avant la connexion : ni photo ni film de mon image, et
+    /// la capture ne s'arme pas.
+    var capturesMyImage = true
+    /// OPUS-4 — les réglages à l'ouverture du mode, tenus par l'écran d'appel :
+    /// le mode ouvert avant le décroché renaît dans l'appel établi sans les perdre.
+    @Binding var entryConfig: VideoFilterConfig?
     let onExit: () -> Void
 
     @State private var config = VideoFilterConfig()
@@ -55,13 +61,20 @@ struct CallEffectsModeControls: View {
             )
         }
         .onAppear {
-            original = callManager.videoFilters.config
-            config = original
+            let entry = entryConfig ?? callManager.videoFilters.config
+            entryConfig = entry
+            original = entry
+            config = callManager.videoFilters.config
         }
-        .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
+        .task(id: CallEffectsCaptureKey(source: CallCaptureSourceKey(subjects: subjects, tracks: tracks), isArmed: capturesMyImage)) {
+            guard capturesMyImage else { return }
             capture.update(subjects: subjects, tracks: tracks)
         }
         .onDisappear {
+            // Avant la connexion rien n'a été armé : rien à arrêter, et
+            // l'arrêt ne doit pas défaire la capture que le mode renaissant
+            // dans l'appel établi vient d'armer.
+            guard capturesMyImage else { return }
             hasSeenGestureHint = true
             capture.stop()
         }
@@ -73,6 +86,7 @@ struct CallEffectsModeControls: View {
     private func finish(validated: Bool) {
         let kept = CallEffectsModeRule.exiting(validated: validated, current: config, original: original)
         callManager.videoFilters.config = kept
+        entryConfig = nil
         if validated { HapticFeedback.success() }
         onExit()
     }
@@ -107,37 +121,54 @@ struct CallEffectsModeControls: View {
     @ViewBuilder
     private var carousel: some View {
         switch category {
-        case .face:
-            CallModeCarousel(
-                items: CallEffectsModeRule.faces,
-                selection: faceBinding,
-                title: CallModeCopy.categoryName(.face),
-                name: CallEffectsCopy.name,
-                isRecording: capture.isRecording,
-                hint: gestureHint,
-                onCapturePhoto: shootMyImage,
-                onStartRecording: filmMyImage
-            ) { effect, isSelected in
-                CallModeGlyph(art: CallEffectsCopy.art(effect), isSelected: isSelected)
-            }
-        case .color:
-            CallModeCarousel(
-                items: CallEffectsModeRule.colors,
-                selection: colorBinding,
-                title: CallModeCopy.categoryName(.color),
-                name: CallEffectsCopy.presetName,
-                isRecording: capture.isRecording,
-                hint: gestureHint,
-                onCapturePhoto: shootMyImage,
-                onStartRecording: filmMyImage
-            ) { preset, isSelected in
-                CallModeGlyph(art: .symbol(CallEffectsCopy.presetSymbol(preset)), isSelected: isSelected)
-            }
+        case .face: faceCarousel
+        case .color: colorCarousel
         }
     }
 
+    private var faceCarousel: some View {
+        CallModeCarousel(
+            items: CallEffectsModeRule.faces,
+            selection: faceBinding,
+            title: CallModeCopy.categoryName(.face),
+            name: CallEffectsCopy.name,
+            isRecording: capture.isRecording,
+            hint: gestureHint,
+            onCapturePhoto: photoAction,
+            onStartRecording: recordingAction
+        ) { effect, isSelected in
+            CallModeGlyph(art: CallEffectsCopy.art(effect), isSelected: isSelected)
+        }
+    }
+
+    private var colorCarousel: some View {
+        CallModeCarousel(
+            items: CallEffectsModeRule.colors,
+            selection: colorBinding,
+            title: CallModeCopy.categoryName(.color),
+            name: CallEffectsCopy.presetName,
+            isRecording: capture.isRecording,
+            hint: gestureHint,
+            onCapturePhoto: photoAction,
+            onStartRecording: recordingAction
+        ) { preset, isSelected in
+            CallModeGlyph(art: .symbol(CallEffectsCopy.presetSymbol(preset)), isSelected: isSelected)
+        }
+    }
+
+    private var photoAction: (() -> Void)? {
+        guard capturesMyImage else { return nil }
+        return shootMyImage
+    }
+
+    private var recordingAction: (() -> Void)? {
+        guard capturesMyImage else { return nil }
+        return filmMyImage
+    }
+
     private var gestureHint: String? {
-        CallModeGestureRule.showsHint(hasSeenHint: hasSeenGestureHint, isRecording: capture.isRecording) ? CallModeCopy.gestureHint : nil
+        guard capturesMyImage else { return nil }
+        return CallModeGestureRule.showsHint(hasSeenHint: hasSeenGestureHint, isRecording: capture.isRecording) ? CallModeCopy.gestureHint : nil
     }
 
     /// #8625 — en mode Effets, la photo et le film portent MON image seule,
@@ -242,6 +273,12 @@ struct CallEffectsModeControls: View {
         }
         .padding(.horizontal, MeeshySpacing.xxl)
     }
+}
+
+/// OPUS-4 — la capture de mon image se réarme quand l'appel s'établit.
+private struct CallEffectsCaptureKey: Equatable {
+    let source: CallCaptureSourceKey
+    let isArmed: Bool
 }
 
 struct CallMontageModeControls: View {

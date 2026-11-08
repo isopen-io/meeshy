@@ -38,9 +38,12 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import kotlin.math.abs
 import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import me.meeshy.sdk.model.fullscreen.FullscreenVideoGestures
+import me.meeshy.sdk.model.fullscreen.ImageViewerDismissLaw
+import me.meeshy.sdk.model.fullscreen.ImageViewerDismissOutcome
 import me.meeshy.sdk.model.fullscreen.GalleryImageLoadPhase
-import me.meeshy.sdk.model.fullscreen.SwipeDownOutcome
 import me.meeshy.ui.R
 
 /** Radius of the blurred backdrop shown behind an image that has not resolved to a sharp frame yet (#3878). */
@@ -54,8 +57,8 @@ private enum class PageGesture { Undecided, Transform, DismissDrag, Released }
  *
  * - Un toucher simple bascule le chrome ([onTap]) ; le double toucher zoome. Rien ne ferme sur
  *   un toucher : seuls la croix et le glissement vers le bas ferment.
- * - Au repos, un glissement vertical de plus de 30 dp suit le doigt et ferme au-delà de 150 dp
- *   ([FullscreenVideoGestures]) ; en deçà, l'image revient en ressort. Un média agrandi se
+ * - Au repos, un glissement vertical de plus de 30 dp suit le doigt et ferme au-delà de 200 dp ou si le geste est lancé
+ *   ([ImageViewerDismissLaw]) ; en deçà, l'image revient en ressort. Un média agrandi se
  *   déplace sous le doigt et ne se ferme pas.
  * - Une page qui n'est plus [isActive] revient au repos.
  * - Un échec de chargement est un état DESSINÉ ([GalleryImageLoadPhase]) : « Réessayer » rejoue
@@ -72,6 +75,7 @@ internal fun ZoomableImagePage(
     onDragProgress: (Float) -> Unit,
     onDismiss: () -> Unit,
     secure: Boolean = false,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -96,9 +100,9 @@ internal fun ZoomableImagePage(
     val dragY = remember { Animatable(0f) }
     val latestOnZoomChanged by rememberUpdatedState(onZoomChanged)
     val latestOnTap by rememberUpdatedState(onTap)
+    val latestOnLongPress by rememberUpdatedState(onLongPress)
     val latestOnDragProgress by rememberUpdatedState(onDragProgress)
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    val dismissDistancePx = with(density) { FullscreenVideoGestures.DISMISS_DISTANCE.dp.toPx() }
     val dragStartPx = with(density) { FullscreenVideoGestures.DRAG_START_DISTANCE.dp.toPx() }
 
     LaunchedEffect(isActive) {
@@ -109,11 +113,12 @@ internal fun ZoomableImagePage(
         dragY.snapTo(0f)
     }
 
-    fun settleDrag(travelPx: Float) {
+    fun settleDrag(travelPx: Float, velocityPxPerSecond: Float) {
         val travelDp = with(density) { travelPx.toDp().value }
-        when (FullscreenVideoGestures.swipeDownEnded(travelDp, isPlaying = false, pipActive = false)) {
-            is SwipeDownOutcome.Dismiss -> latestOnDismiss()
-            SwipeDownOutcome.SnapBack -> scope.launch {
+        val velocityDp = with(density) { velocityPxPerSecond.toDp().value }
+        when (ImageViewerDismissLaw.outcome(travelDp, velocityDp, scale)) {
+            ImageViewerDismissOutcome.Dismiss -> latestOnDismiss()
+            ImageViewerDismissOutcome.SpringBack -> scope.launch {
                 latestOnDragProgress(0f)
                 dragY.animateTo(0f, spring())
             }
@@ -126,6 +131,7 @@ internal fun ZoomableImagePage(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { latestOnTap() },
+                    onLongPress = { latestOnLongPress?.invoke() },
                     onDoubleTap = {
                         offsetX = 0f
                         offsetY = 0f
@@ -140,8 +146,10 @@ internal fun ZoomableImagePage(
                     var mode = PageGesture.Undecided
                     var travel = Offset.Zero
                     var dragPx = 0f
+                    val velocity = VelocityTracker()
                     while (true) {
                         val event = awaitPointerEvent()
+                        event.changes.forEach { velocity.addPointerInputChange(it) }
                         if (event.changes.none { it.pressed }) break
                         val pan = event.calculatePan()
                         val zoom = event.calculateZoom()
@@ -166,17 +174,17 @@ internal fun ZoomableImagePage(
                                 event.changes.forEach { it.consume() }
                             }
                             PageGesture.DismissDrag -> {
-                                dragPx = FullscreenVideoGestures.dragOffset(dragPx + pan.y)
+                                dragPx += pan.y
                                 val follow = dragPx
                                 scope.launch { dragY.snapTo(follow) }
-                                latestOnDragProgress((follow / dismissDistancePx).coerceIn(0f, 1f))
+                                latestOnDragProgress(ImageViewerDismissLaw.progress(with(density) { follow.toDp().value }))
                                 event.changes.forEach { it.consume() }
                             }
                             PageGesture.Released -> break
                             PageGesture.Undecided -> Unit
                         }
                     }
-                    if (mode == PageGesture.DismissDrag) settleDrag(dragPx)
+                    if (mode == PageGesture.DismissDrag) settleDrag(dragPx, velocity.calculateVelocity().y)
                 }
             },
         contentAlignment = Alignment.Center,

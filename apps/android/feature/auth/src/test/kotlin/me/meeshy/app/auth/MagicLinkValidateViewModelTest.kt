@@ -69,7 +69,7 @@ class MagicLinkValidateViewModelTest {
         val opener = ProvenSessionOpener(port, flags, this, System::currentTimeMillis)
         val sessionRepository = mockk<SessionRepository>(relaxed = true)
         every { sessionRepository.currentUser } returns MutableStateFlow(signedIn)
-        return MagicLinkValidateViewModel(repository, opener, gate, sessionRepository, SavedStateHandle(mapOf("token" to "tok")))
+        return MagicLinkValidateViewModel(repository, opener, gate, sessionRepository, mockk(relaxed = true), SavedStateHandle(mapOf("token" to "tok")))
     }
 
     @Test

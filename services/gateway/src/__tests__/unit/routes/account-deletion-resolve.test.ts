@@ -28,6 +28,8 @@ jest.mock('../../../utils/password-hash', () => ({
 import { accountDeletionRoutes, MAX_RESOLVE_ATTEMPTS } from '../../../routes/account-deletion';
 
 const PREFIXE = '/api/v1/account/deletion';
+// Un vrai identifiant de compte : la purge refuse tout ce qui n'est pas un ObjectId (#14448).
+const USER_ID = '507f1f77bcf86cd799439aaa';
 const JETON = 'un-jeton-de-courriel';
 const HASH = crypto.createHash('sha256').update(JETON).digest('hex');
 
@@ -39,7 +41,7 @@ type EtatDemande = {
 
 function buildApp(etat: EtatDemande | null) {
   let ligne = etat
-    ? { id: 'req-1', userId: 'u-1', resolveAttempts: 0, confirmTokenHash: HASH, cancelTokenHash: HASH, ...etat }
+    ? { id: 'req-1', userId: USER_ID, resolveAttempts: 0, confirmTokenHash: HASH, cancelTokenHash: HASH, ...etat }
     : null;
   const ecritures: Array<Record<string, unknown>> = [];
 
@@ -69,6 +71,8 @@ function buildApp(etat: EtatDemande | null) {
     userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userRelation: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     pairInteractionDay: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    relationFeatureSetting: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    friendRequest: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     conversationShareLink: {
       findMany: jest.fn(async (_a: unknown) => [] as Array<{ id: string }>),
       deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })),
@@ -202,10 +206,10 @@ describe('POST … /resolve — les effets', () => {
     const res = await app.inject({ method: 'POST', url: `${PREFIXE}/resolve`, payload: { token: JETON, action: 'purge' } });
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
-    expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
+    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     // #10492 — les liens du compte sont LUS, leurs invités révoqués, puis supprimés.
-    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith({ where: { createdBy: 'u-1' }, select: { id: true } });
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith({ where: { createdBy: USER_ID }, select: { id: true } });
 
     await app.close();
   });
@@ -218,8 +222,8 @@ describe('POST … /resolve — les effets', () => {
 
     expect(res.statusCode).toBe(200);
     const [{ where, data }] = (prisma.user.updateMany as jest.Mock).mock.calls[0] as [{ where: any; data: any }];
-    expect(where).toEqual({ id: 'u-1', username: { not: 'compte-supprime-u-1' } });
-    expect(data.username).toBe('compte-supprime-u-1');
+    expect(where).toEqual({ id: USER_ID, username: { not: `compte-supprime-${USER_ID}` } });
+    expect(data.username).toBe(`compte-supprime-${USER_ID}`);
     expect(data.displayName).toBeNull();
 
     await app.close();

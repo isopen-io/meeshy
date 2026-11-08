@@ -506,6 +506,9 @@ export const callersIn = (contents, nsNames) => {
 // 277 -> 281 (#13933, 2026-10-31) : `relations.byUserIdLevel`, `byUserIdRitual`, `config`, `root`, les quatre routes
 // des cercles que la passerelle sert et que les clients appelleront avec l'écran des cercles (#13933, ui-cercles).
 // Entrées PRÉMATURÉES, pas de faux morts (#5427). Valeur MESURÉE en CI (Gardes du dépôt, PR #14082) : quatre nouvelles.
+// 277 -> 276 (#14910, 2026-11-03) : `relations.byUserIdLevel` (`POST /api/v1/relations/:userId/level`) a son
+// appelant web — `apps/web/src/lib/api/relations.ts#lowerRelation`, « Rétrograder » / « Annuler le lien » de la
+// fiche. Valeur MESURÉE en local sur origin/dev.
 // ENTRÉES EN ATTENTE DE CLIENT — déclarées, jamais comptées dans la référence.
 //
 // Une route que la passerelle sert AVANT que son client n'existe n'est pas une
@@ -515,6 +518,8 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
+  'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
   // bulle et la caméra du web liront (#14095).
   'lens.credits': { issue: 14095, reason: 'GET /lens/credits — le crédit des médias reçus, lu par la bulle web' },
@@ -525,9 +530,18 @@ const PENDING_CLIENT_ENTRIES = {
   'lens.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — la file de vérification de la console' },
   'lens.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — vérifier l’état vu' },
   'lens.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — retirer une vérification' },
+  // L'éditeur de packs lié à un compte Meeshy vérifié (#16274, servi par la PR #16378) : la
+  // boutique et la console web liront sa fiche, son espace et sa liste d'administration.
+  'publishers.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique web' },
+  'publishers.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace de l’éditeur connecté' },
+  'publishers.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web' },
+  // La page éditeur (#16433) : iOS la lit d'abord ; la boutique web la lira avec sa page éditeur.
+  'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
 };
 
-const BASELINE_DEAD_ENTRIES = 281;
+// 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et
+// `.byIdMembersByMemberIdRole` ont leur appelant web (l'écran Membres d'une communauté).
+const BASELINE_DEAD_ENTRIES = 270;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

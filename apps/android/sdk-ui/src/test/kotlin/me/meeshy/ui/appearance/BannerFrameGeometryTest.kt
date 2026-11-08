@@ -7,20 +7,26 @@ import me.meeshy.sdk.model.appearance.BannerFrameDesign
 import me.meeshy.sdk.model.appearance.BannerFrameRenderer
 import org.junit.Test
 
-/** Les 7 packs embarqués (2 cadres chacun) se mettent en place au gabarit 300 x 100 du catalogue. */
+/**
+ * Les 25 packs embarqués — les 7 packs de cadres (2 chacun), les bannières illustrées, culturelles et de Noël, les
+ * bordures « par Meeshy » et les offres de Noël et du Nouvel An — se mettent en place au gabarit 300 x 100 du catalogue.
+ */
 class BannerFrameGeometryTest {
 
-    private val frames: List<BannerFrameDesign> by lazy {
+    private val packs by lazy {
         val relative = "sdk-core/src/main/assets/appearance-catalog.json"
         val file = generateSequence(File(".").absoluteFile) { it.parentFile }.take(8)
             .flatMap { sequenceOf(File(it, relative), File(it, "apps/android/$relative")) }
             .first { it.isFile }
-        AppearanceCatalog.decodeOrEmpty(file.readText()) { error(it) }.bannerFramePacks.flatMap { it.frames }
+        AppearanceCatalog.decodeOrEmpty(file.readText()) { error(it) }.bannerFramePacks
     }
 
+    private val frames: List<BannerFrameDesign> by lazy { packs.flatMap { it.frames } }
+
     @Test
-    fun `les sept packs embarques portent quatorze cadres`() {
-        assertThat(frames).hasSize(14)
+    fun `les vingt-cinq packs embarques portent quatre-vingts cadres`() {
+        assertThat(packs).hasSize(25)
+        assertThat(frames).hasSize(80)
     }
 
     @Test

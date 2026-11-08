@@ -1,0 +1,33 @@
+# #15567 — TRIVY S'INSTALLE DEPUIS SA RELEASE GITHUB. L'installeur de
+# `aquasecurity/setup-trivy` télécharge l'archive depuis get.trivy.dev ; ce
+# domaine a cessé de répondre (NXDOMAIN) et chaque run rougissait avant toute
+# analyse. L'archive vient ici de github.com, vérifiée contre la liste des
+# sommes de la même release, et l'appelant passe `skip-setup-trivy: true` à
+# `aquasecurity/trivy-action`.
+name: Installer Trivy
+description: Télécharge Trivy depuis la release GitHub, vérifie sa somme sha256 et l'ajoute au PATH.
+inputs:
+  version:
+    description: Version de Trivy, sans le « v ».
+    required: false
+    default: '0.76.1'
+runs:
+  using: composite
+  steps:
+    - name: Installer Trivy
+      shell: bash
+      env:
+        TRIVY_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+        archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+        dir="${RUNNER_TEMP}/trivy-bin"
+        mkdir -p "$dir"
+        cd "$RUNNER_TEMP"
+        curl -fsSL --retry 3 -o "$archive" "$base/$archive"
+        curl -fsSL --retry 3 -o checksums.txt "$base/trivy_${TRIVY_VERSION}_checksums.txt"
+        grep " ${archive}\$" checksums.txt | sha256sum -c -
+        tar -xzf "$archive" -C "$dir" trivy
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/trivy" --version

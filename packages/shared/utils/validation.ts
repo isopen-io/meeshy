@@ -388,12 +388,16 @@ export const updateBannerSchema = z.object({
  * preuve ; sinon l'ancien mot de passe est exigé et vérifié). Poser la règle
  * dans le schéma la rendrait aveugle à cet état, donc fausse dans un sens ou
  * dans l'autre.
+ *
+ * `confirmPassword` est OPTIONNEL : la confirmation est un contrôle d'INTERFACE
+ * que chaque client vérifie avant d'envoyer (les apps natives iOS et Android ne
+ * l'envoient jamais). Fourni (le web), il doit encore égaler `newPassword`.
  */
 export const updatePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Mot de passe actuel requis').optional(),
   newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
-  confirmPassword: z.string().min(1, 'Confirmation du mot de passe requise')
-}).refine((data) => data.newPassword === data.confirmPassword, {
+  confirmPassword: z.string().optional()
+}).refine((data) => data.confirmPassword === undefined || data.newPassword === data.confirmPassword, {
   message: 'Les mots de passe ne correspondent pas',
   path: ['confirmPassword']
 });

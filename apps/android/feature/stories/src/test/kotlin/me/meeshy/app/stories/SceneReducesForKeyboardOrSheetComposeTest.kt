@@ -57,10 +57,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * #14249 — retour porteur : « On réduit pour le clavier ou pour afficher une feuille avec des options. » La scène garde sa
- * taille pleine quand on sélectionne un objet, qu'on touche le fond ou que leurs outils se posent à plat dans le rail ; elle
- * se réduit, ENTIÈRE, au-dessus du clavier ou de ce qui est effectivement dessiné en bas — bande d'un réglage ou feuille —
- * et rien ne la recouvre alors.
+ * #14249 puis #15192 — la scène ne se réduit que pour le clavier ou une vraie feuille qui monte du bas. Elle garde sa
+ * taille pleine quand on sélectionne un objet, qu'on touche le fond, que leurs outils se posent à plat dans le rail, ou que
+ * les options d'un outil prennent le bas : elles se posent par-dessus elle. Sous le clavier ou une feuille, elle se réduit,
+ * ENTIÈRE, au-dessus d'eux.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -216,19 +216,40 @@ class SceneReducesForKeyboardOrSheetComposeTest {
     }
 
     @Test
-    fun `a setting band drawn at the bottom reduces the scene above it, and the options it keeps never cover it`() {
+    fun `a setting band chosen in the rail lays over the full scene, which keeps its size`() {
         val vm = viewModel()
         withPlacedMediaSelected(vm)
         show(vm)
 
         tapRail("Filters")
 
-        val scene = scene()
-        val band = compose.onNodeWithTag(PLACED_BAND_TAG).fetchSemanticsNode().boundsInRoot
-        val back = compose.onNodeWithText("Back").fetchSemanticsNode().boundsInRoot
-        assertThat(scene.height).isLessThan(640f * density() - 1f)
-        assertThat(scene.bottom).isAtMost(band.top + 1f)
-        assertThat(scene.right).isAtMost(back.left + 1f)
+        compose.onNodeWithTag(PLACED_BAND_TAG).assertExists()
+        compose.onNodeWithText("Back").assertExists()
+        assertSceneFull()
+    }
+
+    @Test
+    fun `a rest tool whose options take the bottom lays them over the full scene`() {
+        val vm = viewModel()
+        show(vm)
+
+        compose.onNodeWithContentDescription("Choose a background").performClick()
+        compose.waitForIdle()
+
+        assertThat(vm.state.value.band.activeTool).isNotNull()
+        assertSceneFull()
+    }
+
+    @Test
+    fun `the brush in hand lays its bar over the full scene`() {
+        val vm = viewModel()
+        show(vm)
+
+        vm.onEnterDrawingMode()
+        compose.waitForIdle()
+
+        assertThat(vm.state.value.isDrawingActive).isTrue()
+        assertSceneFull()
     }
 
     @Test

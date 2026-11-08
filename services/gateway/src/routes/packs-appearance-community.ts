@@ -22,7 +22,7 @@ import { requirePermission } from '../middleware/authorize';
 import type { CommunityAppearancePacks } from '../services/packs/CommunityAppearancePacks';
 import { sendBadRequest, sendConflict, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig } from './me/game-shared';
-import { PACK_ERRORS, packEnvelope, packSlugParamsJsonSchema, type PackRouteGuard, type PackSlugRequest } from './pack-routes';
+import { PACK_ERRORS, packEnvelope, packSlugParamsJsonSchema, sendPublicationRefused, type PackRouteGuard, type PackSlugRequest } from './pack-routes';
 
 export const COMMUNITY_APPEARANCE_ERROR_CODES = {
   INVALID: 'APPEARANCE_PACK_INVALID',
@@ -85,7 +85,8 @@ export function registerCommunityAppearanceRoutes(fastify: FastifyInstance, spec
         description:
           `Propose un pack de ${domain} d'un vendeur tiers (#10709). Le contrat est un DOCUMENT DE DONNÉES validé par le même schéma que les packs officiels ` +
           '(couleurs hex, chemins aux seules commandes SVG, plafonds de longueur et de densité) ; aucune couche animée. ' +
-          'Le pack naît en attente de modération : rien n’est servi avant `approved`. 422 avec `problems` si le manifeste est refusé.',
+          'Le pack naît en attente de modération : rien n’est servi avant `approved`. 422 avec `problems` si le manifeste est refusé. ' +
+          '403 PUBLISHER_ACCOUNT_UNVERIFIED, PUBLISHER_NOT_OWNER (`publisher` nomme l’éditeur d’un autre compte) ou PUBLISHER_RESERVED : le pack est rattaché à l’éditeur du compte connecté (#16274).',
         tags,
         summary: `Submit a ${domain} pack`,
         body: { type: 'object' },
@@ -103,6 +104,8 @@ export function registerCommunityAppearanceRoutes(fastify: FastifyInstance, spec
           return sendConflict(reply, 'This pack name is taken', { code: COMMUNITY_APPEARANCE_ERROR_CODES.SLUG_TAKEN });
         case 'too-many-pending':
           return sendConflict(reply, `At most ${COMMUNITY_APPEARANCE_LIMITS.maxPendingPerAuthor} packs can wait for review`, { code: COMMUNITY_APPEARANCE_ERROR_CODES.TOO_MANY_PENDING });
+        case 'refused':
+          return sendPublicationRefused(reply, outcome.reason);
       }
     }),
   );

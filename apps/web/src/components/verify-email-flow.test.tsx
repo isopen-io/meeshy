@@ -121,7 +121,7 @@ function submit(el: HTMLDivElement) {
  * être centrées même hors smartphone ». La largeur se mesure en navigateur
  * (`check-access-column.mjs`) ; ici, que tout vive dans UNE colonne.
  */
-describe('VerifyEmailFlow — tout tient dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
+describe('VerifyEmailFlow — tout tient dans UNE colonne, le retour « < » compris (#6643)', () => {
   test('saisie du code', () => {
     const { clock, now } = fakeClock();
     const el = mount('ada@meeshy.example', {
@@ -132,7 +132,7 @@ describe('VerifyEmailFlow — tout tient dans UNE colonne, la puce « Fermer » 
     });
     const column = authColumnIn(el);
     expect(column?.querySelector('#verify-email-code')).not.toBeNull();
-    expect(column?.querySelector('a[aria-label="Fermer"]')).not.toBeNull();
+    expect(column?.querySelector('a[aria-label="Retour"]')).not.toBeNull();
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
 
@@ -418,7 +418,8 @@ describe('VerifyEmailFlow — ce que l’écran DIT de l’e-mail reçu (#8034)'
     holdPendingVerification({ email: 'neuf@meeshy.example', password: 'secret-1', accountCreated: true });
     const el = mount('neuf@meeshy.example', { verifyEmail: verifyStub([]).verifyEmail, resendVerification: resendStub().resendVerification, clock, now });
     expect(lead(el)).toContain('Nous avons créé votre compte et envoyé un code et un lien à neuf@meeshy.example.');
-    expect(lead(el)).not.toContain('indésirables');
+    // Un e-mail vient de partir : où le chercher se dit en clair (#16452).
+    expect(el.querySelector('[data-spam-hint]')?.textContent).toBe('Rien reçu ? Regardez aussi dans vos spams ou courriers indésirables.');
   });
 
   test('compte existant à activer (#8186) : dit pourquoi, où regarder, et quoi faire si rien n’arrive', () => {
@@ -429,6 +430,7 @@ describe('VerifyEmailFlow — ce que l’écran DIT de l’e-mail reçu (#8034)'
       'Votre mot de passe est bon, mais votre compte doit d’abord être activé en prouvant que cette adresse est la vôtre. Nous venons d’envoyer un code et un lien à grace@icloud.example.',
     );
     expect(lead(el)).toContain('Ouvrez votre boîte mail, et pensez à regarder dans les indésirables.');
+    expect(el.querySelector('[data-spam-hint]')).toBeNull();
     expect(lead(el)).toContain('Vous n’avez pas reçu le code ?');
     expect(el.querySelector('strong')?.textContent).toBe('grace@icloud.example');
   });

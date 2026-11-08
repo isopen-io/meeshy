@@ -79,6 +79,13 @@ import { Link, href, navigate } from '@/routes/route-table';
  * de la loi partagée, jugée sur le rôle SERVI (`useServedGlobalRole`, jamais
  * deviné) ; le mode qui part est toujours un mode offert et disponible
  * (`chosenCreationMode`). Changer de mode (direct ↔ groupe) garde le choix.
+ *
+ * LA FEUILLE ALLÉGÉE (#14646, directive porteur du 2026-11-02), alignée sur
+ * `NewConversationView.swift` : elle se ferme par (X) et garde son titre ;
+ * la recherche, puis l'interrupteur « Nouveau groupe » (plus de sélecteur
+ * Direct/Groupe), le nom du groupe, les personnes. Aucune description à la
+ * création — elle se règle dans la fiche du groupe ; le chiffrement reste
+ * replié. Un groupe se crée aussi avec soi pour seul membre, son nom suffit.
  */
 
 /** Le temps qu'une frappe se pose — jamais une requête par caractère. */
@@ -98,7 +105,7 @@ export default function ConversationNewScreen() {
   const [draft, setDraft] = useState<GroupDraft>(EMPTY_GROUP_DRAFT);
   const [groupField, setGroupField] = useState<GroupField | null>(null);
   const [groupMessage, setGroupMessage] = useState<string | null>(null);
-  const [focused, setFocused] = useState<'title' | 'description' | null>(null);
+  const [focused, setFocused] = useState<'title' | null>(null);
   const [pickedEncryption, setPickedEncryption] = useState<CreationEncryptionMode | null>(null);
   const platformRole = useServedGlobalRole();
   const queryClient = useQueryClient();
@@ -221,9 +228,9 @@ export default function ConversationNewScreen() {
     }
   };
 
-  const editGroup = (field: 'title' | 'description', value: string) => {
-    setDraft((current) => ({ ...current, [field]: value }));
-    if (groupField === field) {
+  const editTitle = (value: string) => {
+    setDraft((current) => ({ ...current, title: value }));
+    if (groupField === 'title') {
       setGroupField(null);
       setGroupMessage(null);
     }
@@ -242,7 +249,7 @@ export default function ConversationNewScreen() {
     createGroup.mutate({ ...validated.body, encryptionMode });
   };
 
-  /** Changer de mode n'efface RIEN : revenir au groupe retrouve ce qui était
+  /** Basculer l'interrupteur n'efface RIEN : le rallumer retrouve ce qui était
    * choisi. Seul le refus affiché disparaît — il parlait de l'autre geste. */
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -256,18 +263,17 @@ export default function ConversationNewScreen() {
       <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
         <Link
           to="list"
-          aria-label={translate(currentInterfaceLanguage(), 'common.back')}
-          className="grid size-11 shrink-0 place-items-center rounded-chip"
-          style={{ color: 'var(--color-ios-ink)' }}
+          data-new-close
+          aria-label={translate(currentInterfaceLanguage(), 'common.close')}
+          className="grid size-11 shrink-0 place-items-center rounded-full"
+          style={{ color: 'var(--color-ios-ink)', backgroundColor: 'var(--color-ios-card)' }}
         >
-          <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
+          <Glyph name="x" size={18} />
         </Link>
         <h1 className="flex-1 truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(currentInterfaceLanguage(), mode === 'direct' ? 'newConversation.title.direct' : 'newConversation.title.group')}
+          {translate(currentInterfaceLanguage(), 'newConversation.title.direct')}
         </h1>
       </header>
-
-      <ModeSwitch mode={mode} onChange={switchMode} />
 
       <div className="shrink-0 px-4 pb-2">
         <div className="flex items-center gap-2 rounded-[14px] px-4" style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)' }}>
@@ -283,6 +289,8 @@ export default function ConversationNewScreen() {
           />
         </div>
       </div>
+
+      <GroupToggle on={mode === 'group'} solo={draft.participantIds.length === 0} onToggle={() => switchMode(mode === 'group' ? 'direct' : 'group')} />
 
       {creationFailure === null ? null : (
         <p role="alert" className="shrink-0 px-4 pb-2 text-caption" style={{ color: 'var(--color-error)' }}>
@@ -301,7 +309,7 @@ export default function ConversationNewScreen() {
             refusedField={groupField}
             refusalMessage={groupMessage}
             focused={focused}
-            onEdit={editGroup}
+            onEditTitle={editTitle}
             onFocus={setFocused}
             onRemove={pick}
             onSubmit={submitGroup}
@@ -339,38 +347,51 @@ export default function ConversationNewScreen() {
 }
 
 /**
- * LES DEUX MODES, ANNONCÉS — `aria-pressed` plutôt qu'un onglet : on ne change
- * pas de panneau, on change ce qu'un tap PRODUIT dans le même panneau.
+ * L'INTERRUPTEUR « NOUVEAU GROUPE » (#14646) — `groupToggleRow` de
+ * `NewConversationView.swift` : allumé, un tap coche au lieu d'ouvrir. Un
+ * `switch` plutôt que deux onglets : on ne change pas de panneau, on change ce
+ * qu'un tap PRODUIT. Personne choisie, il dit qu'un groupe se crée seul.
  */
-function ModeSwitch({ mode, onChange }: { readonly mode: Mode; readonly onChange: (next: Mode) => void }) {
-  const button = (value: Mode, label: string) => {
-    const active = mode === value;
-    return (
-      <button
-        type="button"
-        data-new-mode={value}
-        aria-pressed={active}
-        onClick={() => onChange(value)}
-        className="grid flex-1 place-items-center rounded-chip text-body font-semibold focus-visible:outline-2"
+function GroupToggle({ on, solo, onToggle }: { readonly on: boolean; readonly solo: boolean; readonly onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      data-new-group-toggle
+      onClick={onToggle}
+      className="mx-4 mb-2 flex shrink-0 items-center gap-3 rounded-[14px] px-3.5 py-2 text-start focus-visible:outline-2"
+      style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)', backgroundColor: 'var(--color-ios-card)' }}
+    >
+      <span
+        aria-hidden="true"
+        className="grid size-8 shrink-0 place-items-center rounded-full"
+        style={{ color: 'var(--color-ios-brand)', backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
+      >
+        <Glyph name="users" size={16} />
+      </span>
+      <span className="grid min-w-0 flex-1 gap-0.5">
+        <span className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+          {translate(currentInterfaceLanguage(), 'newConversation.title.group')}
+        </span>
+        {on && solo ? (
+          <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {translate(currentInterfaceLanguage(), 'newConversation.group.chosen.hint')}
+          </span>
+        ) : null}
+      </span>
+      <span
+        aria-hidden="true"
+        className="grid size-6 shrink-0 place-items-center rounded-full"
         style={{
-          minHeight: 44,
-          outlineColor: 'var(--color-ios-brand)',
-          backgroundColor: active ? 'var(--color-ios-brand)' : 'transparent',
-          color: active ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink-2)',
+          border: on ? 'none' : '1px solid color-mix(in srgb, var(--color-ios-ink-3) 50%, transparent)',
+          backgroundColor: on ? 'var(--color-ios-brand)' : 'transparent',
+          color: 'var(--color-ios-on-brand)',
         }}
       >
-        {label}
-      </button>
-    );
-  };
-  return (
-    <div
-      className="mx-4 mb-2 flex shrink-0 gap-1 rounded-chip p-1"
-      style={{ backgroundColor: 'var(--color-ios-card)' }}
-    >
-      {button('direct', 'Direct')}
-      {button('group', 'Groupe')}
-    </div>
+        {on ? <Glyph name="check" size={12} /> : null}
+      </span>
+    </button>
   );
 }
 

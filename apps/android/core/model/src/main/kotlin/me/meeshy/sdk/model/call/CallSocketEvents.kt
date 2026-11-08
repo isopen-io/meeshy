@@ -134,6 +134,7 @@ data class CallMediaTogglePayload(
 data class CallErrorPayload(
     val code: String? = null,
     val message: String? = null,
+    val callId: String? = null,
 )
 
 /** `call:already-answered` — one of the user's OTHER devices took the call. */
@@ -181,7 +182,12 @@ data class CallScreenCaptureAlertPayload(
     val callId: String,
     val participantId: String? = null,
     val isCapturing: Boolean,
-)
+    val userId: String? = null,
+    val kind: String? = null,
+) {
+    /** #16665 — sans `kind` (passerelle antérieure), l'alerte parle d'un enregistrement d'écran. */
+    val captureKind: CallCaptureKind get() = CallCaptureKind.ofAlert(kind)
+}
 
 /**
  * `call:translated-segment` — a live caption segment from the remote speaker,

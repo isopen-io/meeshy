@@ -1,10 +1,11 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_action_comment">Kommentieren</string>
+    <string name="reels_action_repost">Erneut teilen</string>
     <string name="reels_action_send">Senden</string>
     <string name="reels_author_profile">Profil des Autors</string>
     <string name="reels_caption_translated">Übersetzung verfügbar</string>
     <string name="reels_close">Schließen</string>
-    <string name="reels_comments">Kommentare</string>
     <string name="reels_comments_composer_hint">Kommentieren…</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d Kommentar</item>
@@ -19,6 +20,7 @@
     <string name="reels_like">Gefällt mir</string>
     <string name="reels_menu_copy_text">Text kopieren</string>
     <string name="reels_menu_delete">Löschen</string>
+    <string name="reels_menu_edit">Bearbeiten</string>
     <string name="reels_menu_hint">Öffnet das Aktionsmenü</string>
     <string name="reels_menu_open">Öffnen</string>
     <string name="reels_menu_pin">Anheften</string>
@@ -26,7 +28,13 @@
     <string name="reels_menu_share">Teilen</string>
     <string name="reels_mute">Stummschalten</string>
     <string name="reels_open_failure_back">Zurück</string>
-    <string name="reels_repost">Erneut posten</string>
+    <string name="reels_report_reason_harassment">Belästigung</string>
+    <string name="reels_report_reason_hate_speech">Hassrede</string>
+    <string name="reels_report_reason_impersonation">Identitätsdiebstahl</string>
+    <string name="reels_report_reason_inappropriate">Unangemessener Inhalt</string>
+    <string name="reels_report_reason_other">Andere</string>
+    <string name="reels_report_reason_spam">Spam</string>
+    <string name="reels_report_reason_violence">Gewalt</string>
     <string name="reels_scrub">Vor- oder zurückspringen</string>
     <string name="reels_share">Teilen</string>
     <string name="reels_toast_delete_failed">Fehler beim Löschen des Beitrags</string>
@@ -35,6 +43,8 @@
     <string name="reels_toast_pinned">Beitrag angeheftet</string>
     <string name="reels_toast_report_failed">Fehler beim Melden des Beitrags</string>
     <string name="reels_toast_reported">Beitrag gemeldet</string>
+    <string name="reels_toast_repost_failed">Fehler beim erneuten Teilen</string>
+    <string name="reels_toast_reposted">Erneut geteilt</string>
     <string name="reels_unlike">Gefällt mir nicht mehr</string>
     <string name="reels_unmute">Ton aktivieren</string>
     <string name="reels_views">Aufrufe</string>

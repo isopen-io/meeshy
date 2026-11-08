@@ -67,11 +67,12 @@ class EmailVerificationLinkViewModelTest {
         port: FakePort = FakePort(),
         signedIn: MeeshyUser? = null,
         handle: SavedStateHandle = SavedStateHandle(mapOf("token" to "tok", "email" to "a@b.co")),
+        arrival: me.meeshy.sdk.auth.ArrivalCelebrating = mockk(relaxed = true),
     ): MagicLinkValidateViewModel {
         val opener = ProvenSessionOpener(port, SessionTransitionFlags(), this, System::currentTimeMillis)
         val sessions = mockk<SessionRepository>(relaxed = true)
         every { sessions.currentUser } returns MutableStateFlow(signedIn)
-        return MagicLinkValidateViewModel(repository, opener, SessionOpeningGate(), sessions, handle)
+        return MagicLinkValidateViewModel(repository, opener, SessionOpeningGate(), sessions, arrival, handle)
     }
 
     private fun repository(proof: NetworkResult<LoginOutcome>, signedIn: Boolean = false) =
@@ -91,6 +92,25 @@ class EmailVerificationLinkViewModelTest {
         coVerify(exactly = 0) { repository.verifyMagicLink(any(), any(), any()) }
         assertThat(port.installed).containsExactly(session)
         assertThat(vm.state.value.isAuthenticated).isTrue()
+    }
+
+    @Test
+    fun `l'adresse prouvee par le lien ouvre la fete d'arrivee de son utilisateur`() = runTest(dispatcher) {
+        val arrival = mockk<me.meeshy.sdk.auth.ArrivalCelebrating>(relaxed = true)
+        viewModel(repository(NetworkResult.Success(LoginOutcome.Authenticated(session))), arrival = arrival)
+        advanceUntilIdle()
+
+        io.mockk.verify(exactly = 1) { arrival.begin("u1") }
+    }
+
+    @Test
+    fun `un lien refuse ne fete rien`() = runTest(dispatcher) {
+        val arrival = mockk<me.meeshy.sdk.auth.ArrivalCelebrating>(relaxed = true)
+        viewModel(repository(NetworkResult.Failure(ApiError(message = "", httpStatus = 400))), arrival = arrival)
+        advanceUntilIdle()
+
+        io.mockk.verify(exactly = 0) { arrival.begin(any()) }
+        io.mockk.verify(exactly = 0) { arrival.prepare(any()) }
     }
 
     @Test

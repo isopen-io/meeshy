@@ -23,6 +23,9 @@ data class PackAssetRef(
     val bytes: Long,
     val sha256: String,
 ) {
+    /** Une référence lue est déjà vérifiée : son fichier se nomme sans repasser la garde. */
+    val file: PackAssetFile get() = PackAssetFile(name = src, sha256 = sha256)
+
     companion object {
         private val EXTENSIONS = setOf("webp", "png", "json", "woff2")
         private const val PREFIX_LENGTH = 16
@@ -37,6 +40,13 @@ data class PackAssetRef(
             return PackAssetRef(src = src, bytes = bytes, sha256 = sha256)
         }
 
+        /** Le fichier de pack [content] sous son vrai nom : les 16 premiers caractères de son SHA-256, puis [extension]. */
+        fun forContent(content: ByteArray, extension: String): PackAssetRef? {
+            val sha = java.security.MessageDigest.getInstance("SHA-256").digest(content)
+                .joinToString("") { "%02x".format(it) }
+            return of(src = "${sha.take(PREFIX_LENGTH)}.$extension", bytes = content.size.toLong(), sha256 = sha)
+        }
+
         /** `<16 hex minuscules>.<webp|png|json|woff2>` — rien d'autre ne se télécharge. */
         fun isContentAddressed(name: String): Boolean {
             val parts = name.split('.')
@@ -44,7 +54,7 @@ data class PackAssetRef(
             return isHex(parts[0], PREFIX_LENGTH) && parts[1] in EXTENSIONS
         }
 
-        private fun isHex(value: String, length: Int): Boolean =
+        internal fun isHex(value: String, length: Int): Boolean =
             value.length == length && value.all { it in '0'..'9' || it in 'a'..'f' }
     }
 }

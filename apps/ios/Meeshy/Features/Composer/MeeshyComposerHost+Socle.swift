@@ -35,32 +35,21 @@ extension MeeshyComposerHost {
     }
 
     var socle: some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            // **« Texte du post » au socle, au-dessus de l'envoi** (#13864, R2).
-            if socleServesPostText && !editsPostContent {
-                ComposerPostTextPillView(text: documentText, tint: tint.color) {
-                    handleRailDoor(.content)
-                }
-            }
-            HStack(spacing: MeeshySpacing.smPlus) {
-                if paintedSocleZones.contains(.audience) { audienceChip }
-                Spacer()
-                // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
-                // qu'il n'y a rien à publier, et son toucher dit pourquoi.
-                if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
-            }
+        // **Le même socle pour la story, le post et le réel** (#14457) : « Texte
+        // du post » est une option du rail. Une rangée de plus ici réduisait la
+        // scène dès qu'on cochait Post, sans clavier ni feuille.
+        HStack(spacing: MeeshySpacing.smPlus) {
+            if paintedSocleZones.contains(.audience) { audienceChip }
+            Spacer()
+            // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
+            // qu'il n'y a rien à publier, et son toucher dit pourquoi.
+            if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
         }
         .padding(.horizontal, ComposerSceneArrangementRelay(host: self).socleHorizontalPadding)
         // **Plus bas, sous la scène** : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
         .padding(.top, MeeshySpacing.xs)
         .padding(.bottom, MeeshySpacing.xxs)
-    }
-
-    /// **« Texte du post »** (#13864) : servi au socle d'un post et d'un réel
-    /// composés sur la scène — le format lu est celui que la flèche PUBLIERA.
-    var socleServesPostText: Bool {
-        ComposerPostTextPill.shows(format: armedChoice.format, sceneMounted: mountedComposerView == .scene)
     }
 
     // **La pastille de son n'est pas au socle.**
@@ -107,41 +96,18 @@ extension MeeshyComposerHost {
     /// lettre : un aperçu maison serait un quatrième chemin de rendu, et il
     /// mentirait le premier jour où le lecteur changerait sans lui.
     ///
-    /// **Ce que le meuble remet vient du ViewModel, pas d'un instantané de
-    /// vue.** L'atelier passe par `snapshotAllSlides()` parce que sa slide
-    /// COURANTE vit dans un état de vue (`buildEffects()`) qu'il doit d'abord
-    /// replier dans le tableau. Ici la scène incrustée édite
+    /// **Ce que le meuble remet vient du ViewModel.** La scène édite
     /// `viewModel.currentSlide` en direct par un `Binding` : le tableau EST
     /// déjà à jour, et le replier une seconde fois écraserait la slide courante
     /// par une copie plus ancienne.
-    ///
-    /// Aucun `NotificationCenter.storyComposerMuteCanvas` n'est posté, à la
-    /// différence de l'atelier : la scène incrustée ne joue aucun son, il n'y a
-    /// donc rien à faire taire — poster quand même laisserait un canvas MUET
-    /// derrière l'aperçu, sans personne pour le rallumer sur cette surface.
-    /// **Sous la SCÈNE, l'aperçu est EXÉCUTÉ par l'atelier** — le meuble ne
-    /// fait que presser. La raison est mesurée : l'atelier replie d'abord les
-    /// effets du canvas courant (`snapshotAllSlides`) et rend l'aperçu avec ses
-    /// médias PRÉCHARGÉS ; un aperçu peint et exécuté ici les ignorerait et
-    /// montrerait une scène amputée — ce qu'interdit la loi 6.
-    ///
-    /// Sous le DOCUMENT, rien ne change : la scène incrustée édite
-    /// `viewModel.currentSlide` en direct par un `Binding`, le tableau EST à
-    /// jour, et le replier une seconde fois écraserait la slide courante par une
-    /// copie plus ancienne.
     func performSoclePreview() {
-        switch mountedSurface {
-        case .scene:
-            publishTrigger.requestPreview()
-        case .document, .mood:
-            onPreview(
-                viewModel.slides,
-                viewModel.slideImages,
-                viewModel.loadedImages,
-                viewModel.loadedVideoURLs,
-                viewModel.loadedAudioURLs
-            )
-        }
+        onPreview(
+            viewModel.slides,
+            viewModel.slideImages,
+            viewModel.loadedImages,
+            viewModel.loadedVideoURLs,
+            viewModel.loadedAudioURLs
+        )
     }
 
 
@@ -160,8 +126,8 @@ extension MeeshyComposerHost {
     /// deux contrôles pour un réglage : il y a deux FORMES, une par surface, et
     /// une seule règle de relecture (`ComposerAudienceMemory`).
     ///
-    /// Il n'est peint que là où il a un objet, et il n'en a qu'un : le DOCUMENT.
-    /// Sous la scène l'atelier peint le sien ; sous le mood, le ruban du bloc 3.
+    /// Il n'est peint que là où il a un objet : la scène. Sous le mood, c'est le
+    /// ruban du bloc 3 qui choisit l'audience.
     ///
     /// **La pastille ouvre la vue `2l`, en feuille**, et non un `Menu` :
     ///
@@ -290,23 +256,8 @@ extension MeeshyComposerHost {
     /// Un `Label` — un témoin qui nomme la publication sans la piloter — serait de
     /// l'UI morte.
     ///
-    /// **Ce que la flèche ne peut pas supposer sous la SCÈNE.** Deux blocages de la
-    /// scène, tous deux dans `MeeshyUI`, fixent la forme de l'appel :
-    ///
-    /// - **la télécommande de l'atelier n'a pas de gate de matière.**
-    ///   `ComposerPublishTrigger` entre dans `publishAllSlides()` sans repasser
-    ///   par `canPublish`, `internal` à `MeeshyUI` : une pression sur une page
-    ///   blanche partirait en publication. Le gate de matière est donc évalué ICI,
-    ///   sur la matière que la télécommande relaie ;
-    /// - **le sélecteur de l'atelier est l'UNIQUE écrivain de son audience.**
-    ///   `visibilityMenu` écrit `StoryComposerView.visibility`, un `@State` privé
-    ///   semé à la construction. L'audience choisie au socle voyage donc AVEC le
-    ///   geste (`ComposerPublishTrigger.requestedVisibility`), jamais par un état
-    ///   que l'atelier ne lirait pas.
-    ///
-    /// Sous le document et sous le mood, **il n'y a pas d'atelier** : pas de
-    /// télécommande à armer. Le gate est app-side et pur
-    /// (`ComposerDocumentPublishGate`), l'audience est celle de la surface.
+    /// Le gate de matière est app-side et pur (`ComposerDocumentPublishGate`),
+    /// et l'audience est celle de la surface.
     /// **Ce n'est PAS un second chemin d'envoi.** Le bouton n'appelle ni
     /// service, ni file, ni endpoint : il assemble un `ComposerDocumentDraft` et
     /// le tend à `onPublishDocument`, la fermeture que le site de montage a
@@ -324,51 +275,30 @@ extension MeeshyComposerHost {
     /// composition n'appelle aucun choix. Le canal est une RÈGLE éprouvée
     /// (`ComposerPublishMenuRule.route`), plus un `switch` écrit ici.
     ///
-    /// Sous l'atelier, la flèche presse la télécommande en lui apportant le
-    /// format ET l'audience choisis AU MOMENT DU GESTE : c'est l'atelier qui
-    /// publie. L'audience voyage avec ses personnes nommées, jamais seule.
     /// Plusieurs formats cochés partent chacun par leur canal (#13920).
     func performSoclePublish(_ choice: ComposerPublishChoice) {
         // La frise ouverte rend ses pistes à la slide AVANT l'envoi :
         // sinon un timing réglé à l'instant partirait sans elle.
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
         guard choice.legs.count == 1 else { return publishEachFormat(choice) }
-        // Le texte du post ARMÉ depuis une scène part avec elle :
-        // l'atelier publie le contenu de la slide, pas `documentText`.
-        if let texte = ComposerPublishMenuRule.atelierCarriedPostText(
-            route: ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice),
-            choice: choice, documentText: documentText) {
-            viewModel.applyContentText(texte)
-        }
-        switch ComposerPublishMenuRule.dispatch(surface: mountedSurface, choice: choice) {
-        case .atelier(let type, let alsoAsReel):
-            publishTrigger.requestPublish(
-                as: type,
-                visibility: composerVisibility.rawValue,
-                visibilityUserIds: composerVisibilityUserIds,
-                alsoAsReel: alsoAsReel
-            )
+        switch ComposerPublishMenuRule.dispatch(choice: choice) {
         case .storyScene(let format, let alsoAsReel): publishStoryScene(as: format, alsoAsReel: alsoAsReel)
         case .document(let choice): publishDocument(choice)
         case .unsupported: refuseUnsupportedFormat()
         }
     }
 
-    /// **Publier les unités d'histoire** — le canal que l'atelier utilisait,
-    /// pressé par le meuble puisque l'atelier n'est plus monté.
-    ///
-    /// Les treize arguments sont ceux que `StoryComposerView+Publication`
-    /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
-    /// il relaie.
+    /// **Publier les unités d'histoire** — la fermeture que le site de montage
+    /// a fournie, pressée par le meuble : il ne recalcule rien, il relaie ce que
+    /// porte son modèle de vue. Une édition passe par la MÊME fermeture, que
+    /// `StoryEditComposer` branche sur `updateStoryInBackground`.
     ///
     /// La remise porte les deux cartes d'accessibilité du meuble (légendes et
-    /// textes alternatifs), greffées sur les DEUX bouches du même entonnoir : ce
-    /// site et la remise à l'ATELIER (`MeeshyComposerHost+Surfaces`).
-    /// `accessibilityCarryingComposerCaptions` est le site UNIQUE de la greffe : ce
-    /// qui change ici est la BASE qu'on lui donne — `.empty`, parce que le meuble
-    /// n'a pas de magasin d'atelier à relayer sur ce chemin, et c'est honnête.
-    func publishStoryScene(as format: ComposerFormat, alsoAsReel: Bool = false) {
-        guard canPublishDocument(as: format) else { return }
+    /// textes alternatifs) ; `accessibilityCarryingComposerCaptions` est le site
+    /// UNIQUE de la greffe.
+    @discardableResult
+    func publishStoryScene(as format: ComposerFormat, alsoAsReel: Bool = false, closing: Bool = true) -> Bool {
+        guard canPublishDocument(as: format) else { return false }
         isPublishingDocument = true
         let accepted = onPublishAllInBackground(
             viewModel.slides,
@@ -383,12 +313,16 @@ extension MeeshyComposerHost {
             viewModel.draftId,
             composerReferences,
             accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides)
-                .carryingAlsoAsReel(ComposerPublishTrigger.publishedAlsoAsReel(requested: alsoAsReel,
-                                                                               served: format.postType)),
+                .carryingAlsoAsReel(ComposerPublishMenuRule.publishedAlsoAsReel(requested: alsoAsReel,
+                                                                                served: format.postType)),
             format.postType
         )
         isPublishingDocument = false
-        if accepted { discardAutosavedDraft(); onDismiss() }
+        // VoiceOver entend ce qui PART (#8522) — l'annonce que l'atelier du SDK
+        // portait jusqu'au #15629.
+        if accepted { AdaptiveAccessibility.announce(ComposerFormatWording(format.postType).publishStarted) }
+        if accepted, closing { discardAutosavedDraft(); onDismiss() }
+        return accepted
     }
 
     /// **Le refus d'un format qu'aucun canal ne sait porter.**
@@ -425,8 +359,11 @@ extension MeeshyComposerHost {
                 // La partie principale NOMME le format qui partira si
                 // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
                 if let titre = armedPublishTitle {
+                    // Plusieurs formats cochés passent sur deux lignes plutôt que
+                    // de se couper (« Publicar historia, publicación y reel »).
                     Text(titre)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
                 } else {
                     Text("composer.socle.publish", bundle: .main)
                         .lineLimit(1)
@@ -583,7 +520,7 @@ extension MeeshyComposerHost {
     /// « Publier la story / le post / le réel », ou chacun des formats cochés
     /// (#13920) : la capsule nomme ce qui part.
     var armedPublishTitle: String? {
-        ComposerPublishMenuCopy.publishTitle(for: armedChoice)
+        ComposerPublishMenuCopy.publishTitle(for: armedChoice, origin: intent.origin)
     }
 
     /// **La story peut-elle partir AUSSI en réel ?** — la lecture de
@@ -612,10 +549,9 @@ extension MeeshyComposerHost {
             offered: profile.offeredFormats,
             carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
             slideCount: viewModel.slides.count,
-            layoutsTravel: ComposerPublishMenuRule.documentCarriesEveryMedia(
-                slides: viewModel.slides,
-                slideImageIds: fonds,
-                bridgedObjectIds: Set(documentMediaObjectIdBySource.values))
+            layoutsTravel: hydration?.publicationLayoutsTravel(slides: viewModel.slides) ?? ComposerPublishMenuRule
+                .documentCarriesEveryMedia(slides: viewModel.slides, slideImageIds: fonds,
+                                           bridgedObjectIds: Set(documentMediaObjectIdBySource.values))
         )
     }
 
@@ -685,10 +621,6 @@ extension MeeshyComposerHost {
             visibilityUserIds: composerVisibilityUserIds,
             isPublishing: isPublishingDocument,
             repostOfId: intent.origin.repostedPostId,
-            // Sous la scène, la matière est celle de l'ATELIER, relayée par la
-            // télécommande. Le meuble ne la recalcule pas : il ne voit
-            // ni le son de fond ni les traits de dessin.
-            atelierHasMatter: publishTrigger.canPublish,
             // La matière que le MEUBLE voit, lui — celle que l'écran montre
             // déjà en vignettes et en chip de lieu.
             //
@@ -770,60 +702,21 @@ extension MeeshyComposerHost {
         return ""
     }
 
-    /// Le meuble TRANSMET : il ne connaît ni service, ni file, ni endpoint.
-    ///
-    /// Il referme le composer sur une ACCEPTATION et le laisse ouvert sur un
-    /// refus. Fermer sur un `false` jetterait ce que l'auteur vient d'écrire, et
-    /// c'est le seul geste de cette méthode qu'aucune garde de source ne pourrait
-    /// rattraper — un composer refermé sur un envoi perdu reste PLAUSIBLE : il se
-    /// ferme exactement comme quand tout va bien.
-    ///
-    /// **Un refus EXISTE depuis le lot 4.10, et il faut lire lequel au mot près.**
-    /// Le `Bool` de `onPublishDocument` a été documenté comme une ACCEPTATION
-    /// pendant deux lots sans qu'aucun écrivain n'émette jamais `false` : un
-    /// commentaire qui annonce ce que le code ne tient pas devient la loi que
-    /// lira la session suivante. Ce n'est plus le cas —
-    /// `DocumentComposerDoor.publish` en émet trois : un plan qui refuse (format
-    /// non-post, brouillon sans matière, chemin non durable), un publieur qui
-    /// refuse la ligne, un publieur MUET. La branche du refus est donc
-    /// atteignable, et `test_lEnvoiDuSocle_neFermeQueSurUneAcceptation_etNeJettePasLaSaisie`
-    /// la garde.
-    ///
-    /// **`MoodComposerDoor` en émet sur UNE de ses deux branches**, et il faut
-    /// lire laquelle : son ANCRAGE remonte le refus (`anchorStatusAsPost` rend
-    /// un `Bool` — 403 `REPOST_AUDIENCE_WIDENING`, coupure, hors-ligne), son
-    /// MIROIR se tait. `StatusViewModel.setStatus` ne rend rien — elle avale
-    /// l'erreur réseau dans un `catch` qui se contente d'un toast —, et sa file
-    /// durable n'est atteinte que si `isOffline()` répond oui. Un gateway qui
-    /// répond 500 referme donc le composer sur cette branche-là et perd l'emoji,
-    /// la phrase, l'audience et les mentions. **Dette CONSIGNÉE, condition de
-    /// levée nommée** : que `setStatus` rende un résultat, comme `createPost` le
-    /// fait déjà par `publishSuccess` / `publishError`.
-    func publishDocument(_ choice: ComposerPublishChoice) {
-        // **Un refus qui SE DIT.**
-        //
-        // Ce `guard` rendrait la main SANS un mot : photo posée, texte tapé par la
-        // porte CONTENU, flèche pressée — **aucun post créé, et le composer reste
-        // ouvert**. L'auteur ne verrait rien qui distingue « ça part » de « ça n'est
-        // pas parti » ; il presserait encore, et composerait peut-être une seconde
-        // fois ce qu'il vient d'écrire.
-        //
-        // > **Un refus muet est PIRE qu'une donnée perdue.** Une publication
-        // > incomplète laisse quelque chose à réparer ; une publication qui
-        // > n'a pas eu lieu et ne le dit pas laisse l'auteur croire qu'elle a
-        // > eu lieu. L'étage du dessous l'applique déjà DEUX fois —
-        // > `ComposerDocumentDurablePublisher.refuse()` et
-        // > `DocumentComposerDoor.refuse()` peignent tous deux un toast — et elle
-        // > vaut aussi pour l'étage qui les APPELLE.
-        //
-        // Les deux branches sont distinctes : `canPublishDocument`
-        // faux est un état NORMAL (rien à publier — pas de texte, pas de
-        // média), que la flèche grisée dit déjà. Un brouillon NUL, lui, est une
-        // anomalie : la flèche est armée et rien n'est parti.
+    /// Le meuble TRANSMET : il ne connaît ni service, ni file, ni endpoint. Il
+    /// referme le composer sur une ACCEPTATION et le laisse ouvert sur un refus :
+    /// fermer sur un `false` jetterait ce que l'auteur vient d'écrire.
+    /// `DocumentComposerDoor.publish` refuse (plan, ligne refusée, publieur muet),
+    /// et `MoodComposerDoor` ne remonte le refus que sur son ancrage. `settled`
+    /// rend l'issue à un geste de plusieurs formats, qui décide seul de fermer.
+    func publishDocument(_ choice: ComposerPublishChoice, settled: (@MainActor (Bool) -> Void)? = nil) {
+        // Rien à publier est un état NORMAL, que la flèche grisée dit déjà ; un
+        // brouillon NUL est une anomalie, et un refus muet est pire qu'une donnée
+        // perdue : il se dit.
         guard canPublishDocument(as: choice.format) else { return }
         guard let draft = documentDraft(for: choice) else {
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
+            settled?(false)
             return
         }
         // Le palier RETENU pour la PROCHAINE publication est écrit ICI, au
@@ -834,8 +727,9 @@ extension MeeshyComposerHost {
         }
         isPublishingDocument = true
         Task {
-            let accepted = await onPublishDocument(await ComposerDocumentLookBake.baked(draft))
+            let accepted = await onPublishDocument(await ComposerDocumentLookBake.baked(draft.closingComments(commentsDisabledChoice)))
             isPublishingDocument = false
+            if let settled { return settled(accepted) }
             if accepted { handOverAutosavedDraft(); onDismiss() }
         }
     }

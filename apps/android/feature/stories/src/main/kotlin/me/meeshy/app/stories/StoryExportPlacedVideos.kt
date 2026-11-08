@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import java.io.File
 import me.meeshy.sdk.media.scene.SceneExportPlacedVideo
 import me.meeshy.sdk.media.scene.SceneExportPlacement
+import me.meeshy.sdk.media.scene.SceneExportVideoLook
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookMatrix
 import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
@@ -47,7 +48,7 @@ internal object StoryExportPlacedVideos {
 
     /**
      * La vidéo posée [view] de la slide qui commence à [slideStartMillis] (timeline de l'export) et dure [slideMillis] : son
-     * fichier, son horloge, son look et sa pose à chaque instant, ceux que le lecteur peint (`StoryForegroundLayer`).
+     * fichier, son horloge, son look (et le réglage du compositeur, [look]) et sa pose à chaque instant, ceux que le lecteur peint (`StoryForegroundLayer`).
      * `null` : rien à poser (hors de sa slide, fichier sans durée).
      */
     fun placed(
@@ -58,12 +59,13 @@ internal object StoryExportPlacedVideos {
         slideStartMillis: Long,
         slideMillis: Long,
         format: StoryExportVideoFormat,
+        look: SceneExportVideoLook? = null,
     ): SceneExportPlacedVideo? {
         val clock = StoryExportPlacedVideoClock.of(
             slideStartMillis, slideMillis, view.startTime, view.duration,
             view.sourceWindow?.startMs, view.sourceWindow?.endMs, clipMillis,
         ) ?: return null
-        return SceneExportPlacedVideo(file, clock, depth, colorMatrix(view)) { at -> placement(view, (at - slideStartMillis) / MILLIS_PER_SECOND, format) }
+        return SceneExportPlacedVideo(file, clock, depth, colorMatrix(view), look) { at -> placement(view, (at - slideStartMillis) / MILLIS_PER_SECOND, format) }
     }
 
     /** La pose de [view] à [seconds] de sa slide, en pixels du format ; `null` hors de sa fenêtre de temps. */

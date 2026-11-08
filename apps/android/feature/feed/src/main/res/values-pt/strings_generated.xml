@@ -2,6 +2,7 @@
 <resources>
     <string name="bookmarks_back">Voltar</string>
     <string name="feed_action_bookmark">Salvar</string>
+    <string name="feed_action_cancel">Cancelar</string>
     <string name="feed_action_copy_link">Copiar o link</string>
     <string name="feed_action_copy_text">Copiar o texto</string>
     <string name="feed_action_delete">Excluir</string>
@@ -12,6 +13,12 @@
     <string name="feed_action_send">Enviar</string>
     <string name="feed_action_share">Compartilhar</string>
     <string name="feed_action_view_profile">Ver o perfil</string>
+    <string name="feed_bookmark_success">Adicionado aos favoritos</string>
+    <string name="feed_caption_collapse">menos</string>
+    <string name="feed_caption_expand">mais…</string>
+    <string name="feed_carousel_a11y_position">Mídia %1$d de %2$d</string>
+    <string name="feed_carousel_next">Próxima mídia</string>
+    <string name="feed_carousel_previous">Mídia anterior</string>
     <string name="feed_comment_card_folded">+%1$d respostas</string>
     <string name="feed_comment_card_thread">Conversa de comentários</string>
     <string name="feed_comment_imagine">Criar imagem</string>
@@ -19,6 +26,7 @@
     <string name="feed_composer_open_label">Compartilhar algo</string>
     <string name="feed_delete_cancel">Cancelar</string>
     <string name="feed_delete_confirm">Excluir</string>
+    <string name="feed_draft_recovered">Rascunho offline restaurado</string>
     <string name="feed_empty">Nenhuma publicação</string>
     <string name="feed_empty_subtitle">As publicações dos seus contatos aparecerão aqui</string>
     <string name="feed_header_nearby">Publicações por perto</string>
@@ -27,6 +35,7 @@
     <string name="feed_load_error">Não foi possível carregar o feed</string>
     <string name="feed_location_shared">Localização compartilhada</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
+    <string name="feed_media_view_fullscreen">Toque para ampliar</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nova publicação</item>
         <item quantity="many">%1$d novas publicações</item>
@@ -37,17 +46,56 @@
     <string name="feed_notice_like_failed">Erro ao curtir a publicação</string>
     <string name="feed_notice_pin_failed">Erro ao fixar a publicação</string>
     <string name="feed_notice_publish_failed">Falha ao publicar a publicação</string>
+    <string name="feed_notice_publish_queued_offline">Publicação aguardando envio</string>
     <string name="feed_notice_published">Publicação publicada</string>
     <string name="feed_notice_report_failed">Erro ao denunciar a publicação</string>
     <string name="feed_notice_reported">Publicação denunciada</string>
     <string name="feed_notice_repost_failed">Erro ao republicar</string>
     <string name="feed_notice_translation_failed">Erro de tradução</string>
+    <string name="feed_pending_already_sent">Esta publicação acabou de ser enviada. Exclua-a quando estiver online.</string>
+    <string name="feed_pending_cancel_send">Cancelar envio</string>
+    <string name="feed_pending_chip">Pendente</string>
+    <string name="feed_pending_retry_failed">Não foi possível repetir esta operação.</string>
+    <string name="feed_pending_retry_started">Tentando novamente…</string>
+    <string name="feed_pending_waiting">Aguardando envio</string>
+    <string name="feed_pending_withdraw_failed">Erro ao excluir a publicação</string>
+    <string name="feed_pending_withdrawn">Envio cancelado</string>
+    <string name="feed_post_deleted">Publicação excluída</string>
+    <string name="feed_post_detail_document">Documento</string>
+    <string name="feed_post_detail_pages">páginas</string>
+    <string name="feed_post_detail_story_unavailable">Story indisponível</string>
+    <string name="feed_post_open">Abrir</string>
+    <string name="feed_post_pinned">Publicação fixada</string>
     <string name="feed_post_reposted_from">repostou de @%1$s</string>
+    <plurals name="feed_post_stat_comments">
+        <item quantity="one">%1$d comentário</item>
+        <item quantity="many">%1$d comentários</item>
+        <item quantity="other">%1$d comentários</item>
+    </plurals>
+    <plurals name="feed_post_stat_likes">
+        <item quantity="one">%1$d curtida</item>
+        <item quantity="many">%1$d curtidas</item>
+        <item quantity="other">%1$d curtidas</item>
+    </plurals>
+    <plurals name="feed_post_stat_replies">
+        <item quantity="one">%1$d resposta</item>
+        <item quantity="many">%1$d respostas</item>
+        <item quantity="other">%1$d respostas</item>
+    </plurals>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="one">%1$d repostagem</item>
+        <item quantity="many">%1$d repostagens</item>
+        <item quantity="other">%1$d repostagens</item>
+    </plurals>
+    <string name="feed_post_stat_saves">%1$d salvamentos</string>
+    <string name="feed_post_stat_shares">%1$d compartilhamentos</string>
     <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_quote_submit">Republicar</string>
     <string name="feed_reel">Reel</string>
     <string name="feed_reel_card_a11y">Reel de %1$s</string>
+    <string name="feed_reel_impressions">Impressões</string>
     <string name="feed_reel_republished_by">Republicado por %1$s</string>
+    <string name="feed_reel_views">Visualizações</string>
     <string name="feed_report_reason_harassment">Assédio</string>
     <string name="feed_report_reason_hate_speech">Discurso de ódio</string>
     <string name="feed_report_reason_impersonation">Falsidade ideológica</string>
@@ -80,8 +128,10 @@
     <string name="feed_translated">Tradução disponível</string>
     <string name="feed_translation_available">Traduções disponíveis</string>
     <string name="feed_translation_close">Fechar</string>
+    <string name="feed_translation_confidence_a11y">Confiança da tradução %1$s</string>
     <string name="feed_translation_original">Original</string>
     <string name="feed_translation_other_languages">Outros idiomas</string>
+    <string name="feed_translation_requested">Solicitada</string>
     <string name="feed_translation_title">Idiomas</string>
     <string name="feed_translation_translate">Traduzir</string>
     <string name="feed_translations_badge">Traduções</string>
@@ -94,6 +144,7 @@
         <item quantity="other">Ver os %1$d comentários</item>
     </plurals>
     <string name="hashtag_results_empty">Nenhuma postagem com #%1$s</string>
+    <string name="media_download_video">Baixar o vídeo</string>
     <string name="mood_bubble_react">Reação %1$s</string>
     <string name="mood_bubble_reply">Responder</string>
     <string name="mood_spotlight_close">Fechar</string>
@@ -104,8 +155,12 @@
     <string name="mood_spotlight_reply_sent">Resposta enviada</string>
     <string name="mood_spotlight_unavailable">Este humor não está mais disponível</string>
     <string name="nearby_back">Voltar</string>
+    <string name="nearby_denied_action">Abrir Ajustes</string>
+    <string name="nearby_denied_detail">O Meeshy não tem acesso à sua localização. Permita nos Ajustes ou mova o mapa manualmente.</string>
+    <string name="nearby_denied_title">Localização não autorizada</string>
     <string name="nearby_retry">Tentar novamente</string>
     <string name="nearby_title">Por perto</string>
+    <string name="post_bookmark_removed">Removido dos favoritos</string>
     <string name="post_comments_cancel_reply">Cancelar resposta</string>
     <string name="post_comments_composer_hint">Comentar…</string>
     <string name="post_comments_composer_reply_hint">Responder…</string>
@@ -143,8 +198,23 @@
         <item quantity="other">Ver %1$d respostas</item>
     </plurals>
     <string name="post_detail_back">Voltar</string>
+    <string name="post_detail_media_image">Imagem compartilhada</string>
+    <string name="post_detail_media_more">Ver as %1$d mídias</string>
+    <string name="post_detail_media_open_hint">Abrir em tela cheia</string>
+    <string name="post_detail_media_video">Vídeo compartilhado</string>
     <string name="post_detail_title">Publicação</string>
     <string name="post_detail_viewers">Visualizações</string>
+    <string name="profile_posts_empty">Nenhuma publicação</string>
+    <string name="profile_posts_empty_filter_subtitle">Toque no bloco novamente para ver tudo</string>
+    <string name="profile_posts_empty_posts">Nenhuma publicação</string>
+    <string name="profile_posts_empty_reels">Nenhum reel</string>
+    <string name="profile_posts_empty_subtitle">As publicações aparecerão aqui</string>
+    <string name="profile_posts_end_of_content">Você já viu tudo</string>
+    <string name="profile_posts_first_published_at">Primeiro conteúdo publicado em %1$s</string>
+    <string name="profile_posts_load_error">Erro ao carregar as publicações</string>
+    <string name="profile_posts_stat_posts">Publicações</string>
+    <string name="profile_posts_stat_reels">Reels</string>
+    <string name="profile_posts_stat_stories">Stories</string>
     <string name="status_bubble_republish">Republicar</string>
     <string name="status_bubble_via">via @%1$s</string>
     <string name="status_composer_bare_add">Adicionar uma palavra</string>
@@ -155,11 +225,13 @@
     <string name="status_composer_emoji_more">Mais emojis</string>
     <string name="status_composer_mood_question">Como você está se sentindo?</string>
     <string name="status_composer_publish">Publicar</string>
+    <string name="status_composer_publish_disabled_hint">Escolha um emoji para publicar seu status</string>
     <string name="status_composer_title">Status</string>
     <string name="status_composer_visibility_community">Comunidades</string>
-    <string name="status_composer_visibility_friends">Contatos</string>
+    <string name="status_composer_visibility_friends">Amigos</string>
     <string name="status_composer_visibility_private">Privado</string>
     <string name="status_composer_visibility_public">Público</string>
+    <string name="status_queued_offline">Humor aguardando envio</string>
     <string name="status_react_error">Erro ao reagir ao status</string>
     <string name="user_posts_back">Voltar</string>
     <string name="user_posts_empty">Nenhuma publicação</string>

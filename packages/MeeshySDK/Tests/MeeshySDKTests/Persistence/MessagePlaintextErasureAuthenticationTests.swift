@@ -162,9 +162,7 @@ final class MessagePlaintextErasureAuthenticationTests: XCTestCase {
 
     func test_theMigration_keepsInQueueADeletionNotYetErased_unauthenticated() throws {
         let queue = try DatabaseQueue()
-        var migrator = DatabaseMigrator()
-        migrator.register(Array(MessageDatabaseMigrations.all.dropLast()))
-        try migrator.migrate(queue)
+        try MessageDatabaseMigrations.migrate(queue, upTo: "messages_e2ee_plaintext_erasures_v3")
         try queue.write { db in
             try db.execute(sql: "INSERT INTO e2ee_plaintext_erasures(messageKey, cause) VALUES ('srv_a', 'deleted'), ('srv_b', 'expired')")
             try db.execute(sql: "INSERT INTO e2ee_plaintext_erasures(messageKey, cause, acknowledgedAt) VALUES ('srv_c', 'deleted', '2026-10-20 10:00:00.000')")

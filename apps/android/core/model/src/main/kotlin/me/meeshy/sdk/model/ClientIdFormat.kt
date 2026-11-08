@@ -58,12 +58,20 @@ public object ClientIdFormat {
      * La forme respecte [CMID_PATTERN] : 16 octets d'un SHA-256 de la graine en UTF-8, bits de
      * version (4) et de variante (10xx) posés comme ceux d'un UUID v4.
      */
-    public fun derivedCmid(seed: String): String {
+    public fun derivedCmid(seed: String): String = CMID_PREFIX + derivedUuid(seed)
+
+    private fun derivedUuid(seed: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray(Charsets.UTF_8)).copyOf(UUID_BYTES)
         bytes[VERSION_BYTE] = ((bytes[VERSION_BYTE].toInt() and 0x0F) or 0x40).toByte()
         bytes[VARIANT_BYTE] = ((bytes[VARIANT_BYTE].toInt() and 0x3F) or 0x80).toByte()
-        return CMID_PREFIX + bytes.toUuidString()
+        return bytes.toUuidString()
     }
+
+    /**
+     * Un `cid_` STABLE pour une graine : un envoi rejoué (partage rouvert, retry) retrouve la même identité de bulle et
+     * la passerelle déduplique `(conversationId, clientMessageId)`. Même dérivation que [derivedCmid], forme du [CID_PATTERN].
+     */
+    public fun derivedCid(seed: String): String = CID_PREFIX + derivedUuid("cid|$seed")
 
     /** La clé d'une slide de story publiée depuis sa file : un item, une slide, une clé. */
     public fun storySlideCmid(queueItemId: String, slideId: String): String =

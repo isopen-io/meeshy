@@ -196,8 +196,7 @@ extension UserProfileSheet {
     var profileAvatar: some View {
         let avatarName = displayUser.resolvedDisplayName
         let showRing = !isBlockedByTarget && !isBlocked
-        // App câblée → état réel (pas d'anneau sans story active) ;
-        // call site legacy (nil) → anneau décoratif historique.
+        // App câblée → état réel (pas d'anneau sans story active) ; legacy (nil) → anneau décoratif historique.
         let ringState: StoryRingState = showRing ? (storyRingState ?? .read) : .none
 
         MeeshyLivePresence { MeeshyAvatar(
@@ -216,6 +215,7 @@ extension UserProfileSheet {
             avatarSize: AvatarContext.profileSheet.size,
             storyRingSize: ringState == .none ? nil : AvatarContext.profileSheet.ringSize
         )
+        .overlay { ProfileAvatarListening(userId: isBlockedByTarget || isCurrentUser ? nil : resolvedUserId) }
     }
 
     /// L'humeur peinte sur l'avatar — le grand en-tête ET la barre compacte

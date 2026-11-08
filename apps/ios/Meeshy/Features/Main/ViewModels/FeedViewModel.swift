@@ -25,6 +25,8 @@ class FeedViewModel: ObservableObject {
     /// Number of new posts received via Socket.IO while the user is scrolled down.
     /// Reset to 0 when the user taps the "New posts" banner or pulls to refresh.
     @Published var newPostsCount: Int = 0
+    /// Ce qui arrive en tête pendant qu'on lit plus bas (#16676) — `FeedHeadHold`.
+    var headHold = FeedHeadHold()
     @Published var publishError: String?
     @Published var publishSuccess: Bool = false
 
@@ -91,6 +93,15 @@ class FeedViewModel: ObservableObject {
         self.feedCache = feedCache
         self.cacheSaver = FeedCacheSaver(feedCache: feedCache)
         observePreferredLanguageChanges()
+        observeWithdrawnPublications()
+    }
+
+    /// Une publication annulée AILLEURS (pastille, détail) n'a plus de ligne
+    /// pour réconcilier sa carte optimiste : elle quitte le fil (#10331).
+    private func observeWithdrawnPublications() {
+        PendingPublicationCancel.withdrawn
+            .sink { [weak self] cmid in self?.removeOptimisticPost(id: cmid) }
+            .store(in: &cancellables)
     }
 
     /// B2 (Prisme Linguistique) — when the viewer's preferred-content

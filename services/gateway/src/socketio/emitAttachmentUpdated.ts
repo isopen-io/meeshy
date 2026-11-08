@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
@@ -17,7 +18,7 @@ export interface AttachmentUpdatedParams {
   io: ConversationRoomEmitter | null | undefined;
   prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>;
   deliveryQueue: OfflineParticipantQueueDeps['deliveryQueue'];
-  connectedUsers: { has(key: string): boolean };
+  connectedUsers: OfflineParticipantQueueDeps['connectedUsers'];
   conversationId: string;
   messageId: string;
   /**
@@ -161,7 +162,7 @@ async function loadActiveParticipants(
     // `id` is not decoration: it NAMES the personal room of a participant with
     // no `User` row (see `participantUserRoomTargets`).
     return await prisma.participant.findMany({
-      where: { conversationId, isActive: true },
+      where: { conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true },
     });
   } catch (error) {

@@ -1,9 +1,12 @@
 package me.meeshy.app.calls
 
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.group.CallTeardownSignal
+import me.meeshy.sdk.model.call.group.GroupReconnectCeiling
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -28,8 +31,19 @@ class CallWatchdogsController @Inject constructor(
     private val heartbeatTicker: CallHeartbeatTicker,
     private val reconnectBudget: CallReconnectBudget,
     private val connectingWatchdog: CallConnectingWatchdog,
+    private val restartBackoff: CallRestartBackoff = CallRestartBackoff.None,
 ) {
     private var host: CallSessionHost? = null
+
+    /**
+     * Rattrapage « connecté » par niveau (#8270), consulté AVANT d'escalader : `true` quand la FSM vient de
+     * suivre un pair déjà établi. Sans lui, un restart ICE sur une paire qui porte encore le média (aucun
+     * front de connexion ne revient) brûlait une tentative du budget alors que l'appel passait.
+     */
+    private var catchUp: () -> Boolean = { false }
+
+    /** La relance ICE différée de l'escalade (recul exponentiel) ; annulée avec le budget. */
+    private var restartJob: Job? = null
 
     /** Emits `call:heartbeat` each beat; alive only while media is flowing. */
     private var heartbeatJob: Job? = null
@@ -43,8 +57,9 @@ class CallWatchdogsController @Inject constructor(
     /** One continuous connect window over Offering∪Connecting; fails the call on expiry. */
     private var connectingWatchdogJob: Job? = null
 
-    fun attach(host: CallSessionHost) {
+    fun attach(host: CallSessionHost, catchUp: () -> Boolean = { false }) {
         this.host = host
+        this.catchUp = catchUp
     }
 
     /** The FSM moved: arm what the new phase needs, disarm what it does not. */
@@ -113,16 +128,43 @@ class CallWatchdogsController @Inject constructor(
      * the media down (same duty as a hang-up).
      */
     private fun onReconnectBudgetExpired(host: CallSessionHost) {
+        if (catchUp()) return
         host.dispatch(CallEvent.ReconnectFailed)
-        if (host.callState is CallState.Ended) {
-            if (host.callId.isNotBlank()) signals.emitEnd(host.callId)
+        val next = host.callState
+        if (next is CallState.Ended) {
+            if (host.callId.isNotBlank()) emitCeilingTeardown(host)
             host.endMedia()
         } else {
+            restartAfterBackoff(host, next)
+        }
+    }
+
+    /** Plafond atteint : un groupe qui continue sans moi se quitte (`call:leave`), un duo se termine (`call:end`). */
+    private fun emitCeilingTeardown(host: CallSessionHost) {
+        when (GroupReconnectCeiling.teardownSignal(host.isGroupCall)) {
+            CallTeardownSignal.Leave -> signals.emitLeave(host.callId)
+            CallTeardownSignal.End -> signals.emitEnd(host.callId)
+        }
+    }
+
+    /** La relance de la tentative [next] part après son recul ; si l'appel a bougé entretemps, elle ne part pas. */
+    private fun restartAfterBackoff(host: CallSessionHost, next: CallState) {
+        val attempt = (next as? CallState.Reconnecting)?.attempt ?: 1
+        val delayMs = restartBackoff.delayMs(attempt)
+        if (delayMs <= 0L) {
             host.restartMediaIce()
+            return
+        }
+        restartJob?.cancel()
+        restartJob = host.scope.launch {
+            delay(delayMs)
+            if (host.callState == next) host.restartMediaIce()
         }
     }
 
     private fun stopReconnectBudget() {
+        restartJob?.cancel()
+        restartJob = null
         reconnectBudgetJob?.cancel()
         reconnectBudgetJob = null
         reconnectBudgetArmedFor = null

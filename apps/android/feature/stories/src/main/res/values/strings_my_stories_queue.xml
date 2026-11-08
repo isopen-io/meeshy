@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_resume_failed">Couldn\'t turn this story into a draft. It stays in your queue.</string>
+    <string name="my_stories_draft_open_failed">Couldn\'t open this draft.</string>
+</resources>

@@ -22,7 +22,9 @@ import type { RelationLevel } from '@meeshy/shared/types/relation';
 import {
   presenceStatusAudience,
   presenceStatusEmissions,
+  TEAM_COLLEAGUES_WHERE,
 } from '../../../socketio/presence-audience';
+import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
 
 const SEEN_AT = new Date('2026-08-25T10:00:00.000Z');
 
@@ -92,6 +94,58 @@ describe('presenceStatusAudience', () => {
 
     expect(audience.privilegedRooms).toEqual([ROOMS.user('u_admin_self')]);
     expect(audience.friendRooms).toEqual([]);
+  });
+});
+
+describe('presenceStatusEmissions — l\'équipe (#16623)', () => {
+  const base = {
+    subjectId: 'u_admin_subject',
+    subjectRole: 'ADMIN',
+    isAnonymous: false,
+    friendLevels: levels({ u_friend: 'FRIEND' }),
+    adminIds: ['u_admin'],
+    moderatorIds: ['u_mod'],
+    lastActiveAt: SEEN_AT,
+    showOnlineStatus: true,
+    showLastSeen: true,
+  };
+
+  it('un modérateur reçoit la transition d\'un collègue, avec la date d\'un Sang, sans lien', () => {
+    expect(presenceStatusEmissions(base)).toEqual([
+      { rooms: [ROOMS.user('u_admin'), ROOMS.user('u_admin_subject')], lastActiveAt: SEEN_AT },
+      { rooms: [ROOMS.user('u_mod')], lastActiveAt: SEEN_AT },
+      { rooms: [ROOMS.user('u_friend')], lastActiveAt: null },
+    ]);
+  });
+
+  it('un lien réel d\'Ami ne rabat pas un collègue à « en ligne » seulement', () => {
+    const emissions = presenceStatusEmissions({ ...base, friendLevels: levels({ u_mod: 'FRIEND' }) });
+    expect(emissions).toContainEqual({ rooms: [ROOMS.user('u_mod')], lastActiveAt: SEEN_AT });
+  });
+
+  it('il suit les préférences du collègue : masqué, il ne reçoit rien ; sans dernière vue, pas de date', () => {
+    const rooms = (over: Partial<typeof base>) => presenceStatusEmissions({ ...base, ...over }).flatMap((e) => e.rooms);
+    expect(rooms({ showOnlineStatus: false })).not.toContain(ROOMS.user('u_mod'));
+    expect(presenceStatusEmissions({ ...base, showLastSeen: false })).toContainEqual({
+      rooms: [ROOMS.user('u_mod'), ROOMS.user('u_friend')],
+      lastActiveAt: null,
+    });
+  });
+
+  it.each(['USER', 'AUDIT', 'ANALYST', null, undefined])('la transition d\'un sujet %s ne part chez aucun modérateur', (subjectRole) => {
+    const rooms = presenceStatusEmissions({ ...base, subjectRole }).flatMap((e) => e.rooms);
+    expect(rooms).not.toContain(ROOMS.user('u_mod'));
+  });
+
+  it('la transition d\'un collègue mineur déclaré ne part chez aucun modérateur', () => {
+    const rooms = presenceStatusEmissions({ ...base, subjectMinor: 'minor' }).flatMap((e) => e.rooms);
+    expect(rooms).not.toContain(ROOMS.user('u_mod'));
+    expect(rooms).toContain(ROOMS.user('u_admin'));
+  });
+
+  it('un invité de lien n\'a pas de collègues', () => {
+    const rooms = presenceStatusEmissions({ ...base, isAnonymous: true }).flatMap((e) => e.rooms);
+    expect(rooms).toEqual([ROOMS.user('u_admin')]);
   });
 });
 
@@ -178,5 +232,20 @@ describe('presenceStatusEmissions', () => {
     });
 
     expect(emissions).toEqual([{ rooms: [ROOMS.user('u_self')], lastActiveAt: null }]);
+  });
+});
+
+describe('TEAM_COLLEAGUES_WHERE — les modérateurs destinataires de `user:status` (#16623)', () => {
+  it('ne retient que les modérateurs actifs, ni supprimés ni désactivés', () => {
+    const passe = new Date('2026-10-01T00:00:00Z');
+    const comptes = [
+      { id: 'actif', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null },
+      { id: 'inactif', role: 'MODERATOR', isActive: false, deletedAt: null, deactivatedAt: null },
+      { id: 'supprime', role: 'MODERATOR', isActive: true, deletedAt: passe, deactivatedAt: null },
+      { id: 'desactive', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: passe },
+      { id: 'admin', role: 'ADMIN', isActive: true, deletedAt: null, deactivatedAt: null },
+    ];
+    const retenus = comptes.filter((c) => matchesMongoWhere(c as unknown as MongoDocument, TEAM_COLLEAGUES_WHERE as unknown as MongoDocument));
+    expect(retenus.map((c) => c.id)).toEqual(['actif']);
   });
 });

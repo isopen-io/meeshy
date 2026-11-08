@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { FeedPost } from '@/lib/api/feed-pages';
 import type { PostActionOutcome } from '@/lib/api/publication-actions';
 import type { ReportReason } from '@/lib/api/reports';
+import { closePublicationImage, publicationImageRequest } from '@/lib/export/publication-image-store';
 import * as exportJobs from '@/lib/export/scene/scene-export-jobs';
 import { createDraftStore } from '@/lib/send/draft-store';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
@@ -95,7 +96,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     expect(bouton?.getAttribute('aria-label')).toBe('Plus d’options');
     act(() => bouton?.click());
     await act(async () => {
-      await import('./publication-menu-panel');
+      await Promise.all([import('./publication-menu-panel'), import('@/lib/export/publication-image'), loadSceneExportCatalog('fr')]);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     return [...document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
@@ -125,7 +126,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     const { menu, journal } = host('u-me');
     monte(post(), { ...menu, viewerModerates: true, onRemove: (id, reason) => journal.push(`remove:${id}:${reason}`) });
     const entrees = await ouvre();
-    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'remove', 'report']);
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'remove', 'report']);
     act(() => entrees.find((e) => e.dataset.feedPostAction === 'remove')?.click());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     const champ = document.querySelector<HTMLTextAreaElement>('[data-content-removal-reason]');
@@ -139,6 +140,30 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     });
     act(() => document.querySelector<HTMLButtonElement>('[data-content-removal="confirm"]')?.click());
     expect(journal).toEqual(['remove:p1:Contenu violent']);
+  });
+
+  test('« Désactiver les commentaires » (#16541) : à l’auteur ; le libellé suit le réglage, le geste part vers l’hôte', async () => {
+    const { menu, journal } = host('u-other');
+    monte(post(), { ...menu, onToggleComments: (id, disable) => journal.push(`comments:${id}:${String(disable)}`) });
+    const ouvertes = await ouvre();
+    const entree = ouvertes.find((e) => e.dataset.feedPostAction === 'comments');
+    expect(entree?.textContent).toContain('Désactiver les commentaires');
+    act(() => entree?.click());
+    expect(journal).toEqual(['comments:p1:true']);
+  });
+
+  test('« Réactiver les commentaires » sur une publication qui les a fermés ; rien pour un lecteur ordinaire', async () => {
+    const { menu, journal } = host('u-other');
+    monte(post({ commentsDisabled: true }), { ...menu, onToggleComments: (id, disable) => journal.push(`comments:${id}:${String(disable)}`) });
+    const entree = (await ouvre()).find((e) => e.dataset.feedPostAction === 'comments');
+    expect(entree?.textContent).toContain('Réactiver les commentaires');
+    act(() => entree?.click());
+    expect(journal).toEqual(['comments:p1:false']);
+    act(() => root.unmount());
+    container.remove();
+    const lecteur = host('u-reader');
+    monte(post(), { ...lecteur.menu, onToggleComments: () => undefined });
+    expect((await ouvre()).map((e) => e.dataset.feedPostAction)).not.toContain('comments');
   });
 
   test('« Retirer » ne s’offre pas sans le rôle, ni sur sa propre publication', async () => {
@@ -157,7 +182,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     monte(post(), menu);
 
     const entrees = await ouvre();
-    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'report']);
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'report']);
 
     act(() => entrees.find((e) => e.dataset.feedPostAction === 'copyText')?.click());
     expect(journal).toEqual(['copy:Bonjour le fil']);
@@ -223,7 +248,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       const entrees = await ouvre();
       // #9727, décision porteur 2026-10-09 — l'auteur d'un post n'en voit que le
       // NOMBRE de vues : « Vues » n'est pas dans SON menu.
-      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'pin', 'edit', 'delete']);
+      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'pin', 'edit', 'delete']);
 
       const modifier = entrees.find((e) => e.dataset.feedPostAction === 'edit')!;
       expect(modifier.textContent).toContain('Modifier');
@@ -515,17 +540,22 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       ailleurs.remove();
     });
   });
-  test('une publication à SCÈNE offre « Sauvegarder » et « Imager » (#13873) ; « Sauvegarder » lance l’export au bandeau', async () => {
-    const { menu } = host('u-me');
-    const scene = { v: 3, scenes: [{ id: 's', objects: [{ id: 't', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: {}, payload: { text: 'Salut' } }] }] };
-    monte(post({ storyEffects: scene }), menu);
+  const ouvreAvecImager = async () => {
     const bouton = container.querySelector<HTMLButtonElement>('[data-feed-post-menu]');
     act(() => bouton?.click());
     await act(async () => {
-      await Promise.all([import('./publication-menu-panel'), loadSceneExportCatalog('fr')]);
+      await Promise.all([import('./publication-menu-panel'), import('@/lib/export/publication-image'), loadSceneExportCatalog('fr')]);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    const entrees = [...document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
+    return [...document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
+  };
+
+  const SCENE = { v: 3, scenes: [{ id: 's', objects: [{ id: 't', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: {}, payload: { text: 'Salut' } }] }] };
+
+  test('une publication à SCÈNE offre « Sauvegarder » et « Imager » (#13873) ; « Sauvegarder » lance l’export au bandeau', async () => {
+    const { menu } = host('u-me');
+    monte(post({ storyEffects: SCENE }), menu);
+    const entrees = await ouvreAvecImager();
     expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'saveMedia', 'imager', 'save', 'report']);
     expect(entrees.find((e) => e.dataset.feedPostAction === 'saveMedia')?.textContent).toContain('Sauvegarder');
     expect(entrees.find((e) => e.dataset.feedPostAction === 'imager')?.textContent).toContain('Imager');
@@ -534,10 +564,55 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     act(() => exportJobs.cancel('post:p1'));
   });
 
-  test('une publication SANS scène n’offre ni « Sauvegarder » ni « Imager »', async () => {
+  test('« Imager » une œuvre composée ouvre l’ATELIER DE CARTE avec sa scène à rendre — jamais l’export de scène (#16393)', async () => {
+    const { menu } = host('u-me');
+    monte(post({ storyEffects: SCENE }), menu);
+    const entrees = await ouvreAvecImager();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    const request = publicationImageRequest();
+    expect(request?.key).toBe('post:p1');
+    expect(request?.scene?.fileStem).toBe('post-p1');
+    expect(request?.scene?.watermark).toBeNull();
+    expect(request?.subject.reply).toEqual({ author: 'Nour', text: 'Bonjour le fil', handle: 'nour' });
+    expect(exportJobs.getSnapshot().jobs).toEqual([]);
+    closePublicationImage();
+  });
+
+  test('une publication de TEXTE seul n’offre pas « Sauvegarder », mais « Imager » ouvre l’atelier avec son texte (#16166)', async () => {
     const { menu } = host('u-me');
     monte(post(), menu);
-    const entrees = await ouvre();
-    expect(entrees.map((e) => e.dataset.feedPostAction)).not.toContain('saveMedia');
+    const entrees = await ouvreAvecImager();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'report']);
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    const request = publicationImageRequest();
+    expect(request?.scene).toBeNull();
+    expect(request?.subject.reply.text).toBe('Bonjour le fil');
+    expect(request?.subject.media).toEqual([]);
+    closePublicationImage();
+  });
+
+  test('une publication PHOTO s’image avec sa photo, signée par son auteur', async () => {
+    const { menu } = host('u-me');
+    monte(post({ content: null, media: [{ id: 'm1', fileUrl: 'https://static.meeshy.me/m1.jpg', mimeType: 'image/jpeg', width: 1080, height: 1350 }] }), menu);
+    const entrees = await ouvreAvecImager();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    expect(publicationImageRequest()?.subject.media.map((item) => [item.id, item.card.kind, item.author?.name])).toEqual([['m1', 'image', 'Nour']]);
+    closePublicationImage();
+  });
+
+  test('TÉMOIN DE RANG — la carte d’un post dont la langue d’origine n’est pas au rang 1 porte le texte SERVI', async () => {
+    const { menu } = host('u-me');
+    monte(post({ content: 'Good morning', originalLanguage: 'en', translations: { fr: { text: 'Bonjour' } } }), menu, ['fr', 'en']);
+    const entrees = await ouvreAvecImager();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    expect(publicationImageRequest()?.subject.reply.text).toBe('Bonjour');
+    closePublicationImage();
+  });
+
+  test('une publication vide n’offre pas « Imager »', async () => {
+    const { menu } = host('u-me');
+    monte(post({ content: null }), menu);
+    const entrees = await ouvreAvecImager();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).not.toContain('imager');
   });
 });

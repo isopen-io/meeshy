@@ -293,35 +293,33 @@ nonisolated enum ComposerSceneEffects {
     }
 }
 
-// MARK: - La scène REMONTE au-dessus d'un panneau du bas (#8712)
+// MARK: - La scène garde sa taille sous ce qui se pose par-dessus (#15226)
 
-/// **Un panneau ouvert en bas — les réglages du dessin, une bande — fait
-/// REMONTER la scène, jamais descendre** (directive porteur 2026-09-29 :
-/// « en remontant la scène (pareil dessin : il faut remonter la scène et non
-/// la descendre) »).
+/// **Une bande, la frise, les effets, la barre de dessin, les réglages d'un
+/// outil ou les propriétés d'un objet se posent PAR-DESSUS la scène, qui garde
+/// sa taille du repos** (#15226, même loi qu'Android #15192). Seuls le clavier
+/// et une vraie feuille la réduisent (`ComposerRestChrome.sceneIsReduced`).
 ///
-/// La carte se cadre au-dessus du panneau : son bord bas remonte de la hauteur
-/// du panneau, et son bord haut ne descend jamais — la marge du haut ne bouge
-/// pas. Une carte contrainte en hauteur rétrécit d'autant ; une carte
-/// contrainte en largeur, centrée, remonte de moitié. Le carrousel d'effets, lui, prend la place du socle dans la zone
-/// sûre du bas : la carte se recadre au-dessus de lui par la même mécanique.
+/// La scène se cadre au-dessus du haut des étages du bas. Au repos, c'est le
+/// socle ; sous une feuille, son haut. Sous un étage posé par-dessus, la scène
+/// lit le haut du REPOS, relevé la dernière fois que rien n'occupait le bas :
+/// le calque de chrome garde sa mise en page, la scène ne le suit plus.
 nonisolated enum ComposerSceneLift {
 
-    static let restingInset: CGFloat = 4
-
-    static func bottomInset(panelIsOpen: Bool, panelHeight: CGFloat) -> CGFloat {
-        guard panelIsOpen else { return restingInset }
-        return max(restingInset, panelHeight)
+    static func overlaysScene(lowZone: ComposerLowZone, bottomPanelIsOpen: Bool, drawingBarIsShown: Bool) -> Bool {
+        lowZone != .nothing || bottomPanelIsOpen || drawingBarIsShown
     }
 
-    /// **Quel panneau pousse la scène** : les réglages d'un outil, ou une
-    /// bande — sur tout écran, elle se pose sous la scène (#13839, L6).
-    static func panelIsOpen(lowZone: ComposerLowZone, toolOptionsServed: Bool) -> Bool {
-        switch lowZone {
-        case .properties:  return true
-        case .toolOptions: return toolOptionsServed
-        case .band:        return true
-        case .nothing:     return false
-        }
+    /// Le haut des étages du bas que la scène lit : celui du repos sous un
+    /// étage posé par-dessus — la mesure en direct tant qu'aucun repos n'a été
+    /// relevé —, sinon la mesure en direct.
+    static func floorTop(measured: CGFloat?, rest: CGFloat?, overlaid: Bool) -> CGFloat? {
+        guard overlaid else { return measured }
+        return rest ?? measured
+    }
+
+    /// Le haut du repos ne se relève qu'au repos : rien en bas, aucune frappe.
+    static func restFloorTop(measured: CGFloat?, isRest: Bool, current: CGFloat?) -> CGFloat? {
+        isRest ? measured : current
     }
 }

@@ -25,17 +25,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -55,7 +51,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.feedback.FeedbackToastKind
+import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -75,7 +74,6 @@ fun MoodSpotlightScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val mention by viewModel.mention.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
-    val snackbar = remember { SnackbarHostState() }
     val sentMessage = stringResource(R.string.mood_spotlight_reply_sent)
     val failedMessage = stringResource(R.string.mood_spotlight_reply_failed)
 
@@ -83,18 +81,29 @@ fun MoodSpotlightScreen(
         when (state.replyState) {
             MoodReplyState.SENT -> {
                 haptics.success()
-                snackbar.showSnackbar(sentMessage)
+                viewModel.showToast(sentMessage, FeedbackToastKind.SUCCESS)
                 viewModel.consumeReplyOutcome()
             }
             MoodReplyState.FAILED -> {
                 haptics.error()
-                snackbar.showSnackbar(failedMessage)
+                viewModel.showToast(failedMessage, FeedbackToastKind.ERROR)
                 viewModel.consumeReplyOutcome()
             }
             MoodReplyState.IDLE, MoodReplyState.SENDING -> Unit
         }
     }
 
+    MeeshyTheme(darkTheme = true) { MoodSpotlightBody(state, mention, haptics, viewModel, onClose) }
+}
+
+@Composable
+private fun MoodSpotlightBody(
+    state: MoodSpotlightUiState,
+    mention: MentionAutocompleteState,
+    haptics: MeeshyHaptics,
+    viewModel: MoodSpotlightViewModel,
+    onClose: () -> Unit,
+) {
     val entry = state.entry
     val fallback = hexColor(entry?.avatarColor?.takeIf { it.isNotBlank() } ?: "6366F1")
     Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(fallback, MeeshyPalette.Indigo950)))) {
@@ -132,7 +141,6 @@ fun MoodSpotlightScreen(
 
         // Le composeur universel tient lui-même le clavier et la barre système ; sans lui, la colonne s'en écarte.
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(if (state.canReply) Modifier else Modifier.navigationBarsPadding())) {
-            SnackbarHost(snackbar)
             if (state.canReply) {
                 MoodReplyComposer(
                     text = state.replyText,
@@ -152,11 +160,10 @@ fun MoodSpotlightScreen(
 @Composable
 private fun LoadingAvatar() {
     val label = stringResource(R.string.mood_spotlight_loading)
-    Box(
-        Modifier.size(112.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f))
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) { CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp)) }
+    MeeshySkeletonBox(
+        modifier = Modifier.size(112.dp).semantics { contentDescription = label },
+        shape = CircleShape,
+    )
 }
 
 @Composable
@@ -175,7 +182,11 @@ private fun Unavailable() {
 @Composable
 private fun MoodCard(entry: StatusEntry, avatarUrl: String?) {
     val accent = hexColor(entry.avatarColor.ifBlank { "6366F1" })
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+    ) {
         Box {
             MeeshyAvatar(
                 name = entry.username,

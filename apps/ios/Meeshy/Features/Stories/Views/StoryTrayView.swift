@@ -47,6 +47,11 @@ struct StoryTrayView: View {
     /// la dégage des bulles flottantes (#9363), et doit la contenir.
     static let trayHeight: CGFloat = StoryEntryMetrics.height
 
+    /// #15157 — la place que mon cadre illustré réserve dans la bande (aucune sans film).
+    static var decorReserve: StoryEntryMetrics.DecorReserve {
+        StoryEntryMetrics.decorReserve(ProfileDecorResolver.ring(AuthManager.shared.currentUser?.profileDecor?.avatarRing))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Cache-first: only show the skeleton row when the carousel
@@ -62,7 +67,7 @@ struct StoryTrayView: View {
                 StoryCoverRefresh(signal: viewModel.coverRenders) { storyScrollView }
             }
         }
-        .frame(height: Self.trayHeight)
+        .frame(height: Self.trayHeight + Self.decorReserve.top + Self.decorReserve.bottom)
         .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
         .myStoriesSheet(
             isPresented: $showMyStories,
@@ -105,11 +110,7 @@ struct StoryTrayView: View {
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -298,6 +299,7 @@ private struct MyStoryButton: View {
         let hasAnyStory = viewModel.hasStories(forUserId: userId)
         let userName = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
+        let decorReserve = StoryEntryMetrics.decorReserve(ProfileDecorResolver.ring(currentUser?.profileDecor?.avatarRing))
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
 
         VStack(spacing: StoryEntryMetrics.labelSpacing) {
@@ -369,6 +371,7 @@ private struct MyStoryButton: View {
                         return items
                     }()
                 )
+                .ringDecorRoom(decorReserve.room)
                 // Le libellé porte sur la cible RÉELLEMENT tapée — l'avatar — et
                 // sur elle seule. `MeeshyAvatar` s'annonce avec le nom de la
                 // personne (« Moi »), ce qui ne dit rien de la destination ;
@@ -460,27 +463,32 @@ private struct MyStoryButton: View {
 
                 // Story count dots (si plusieurs stories)
                 if let group = myGroup, group.stories.count > 1 {
-                    HStack(spacing: MeeshySpacing.xxs) {
-                        ForEach(0..<min(group.stories.count, 5), id: \.self) { _ in
-                            Circle()
-                                .fill(group.hasUnviewed ? Color.white.opacity(MeeshyOpacity.intense) : Color.white.opacity(MeeshyOpacity.medium))
-                                .frame(width: 4, height: 4)
-                        }
-                        if group.stories.count > 5 {
-                            Text("+")
-                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                                .foregroundColor(.white.opacity(MeeshyOpacity.strong))
-                        }
-                    }
-                    .offset(y: 28)
-                    .accessibilityHidden(true)
+                    storyCountDots(group)
                 }
             }
+            .padding(EdgeInsets(top: decorReserve.top, leading: decorReserve.side, bottom: decorReserve.bottom, trailing: decorReserve.side))
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
+    }
+
+    private func storyCountDots(_ group: StoryGroup) -> some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            ForEach(0..<min(group.stories.count, 5), id: \.self) { _ in
+                Circle()
+                    .fill(group.hasUnviewed ? Color.white.opacity(MeeshyOpacity.intense) : Color.white.opacity(MeeshyOpacity.medium))
+                    .frame(width: 4, height: 4)
+            }
+            if group.stories.count > 5 {
+                Text("+")
+                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.strong))
+            }
+        }
+        .offset(y: 28)
+        .accessibilityHidden(true)
     }
 }
 
@@ -672,11 +680,7 @@ struct PinnedStoryTrailBand: View {
                         moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                         presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                        postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                        postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
                     )
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_player_waveform">Posición de reproducción</string>
+    <string name="audio_player_error">No se puede reproducir</string>
+    <string name="audio_player_retry">Reintentar</string>
+    <string name="audio_player_edit">Editar audio</string>
+    <string name="audio_player_delete">Quitar audio</string>
+</resources>

@@ -150,17 +150,94 @@ struct ConversationPreviewLine: View {
 
     /// Sans la notation (#7871) : VoiceOver dit « un mot », jamais
     /// « astérisque astérisque un mot », comme `plainTextOf` sur le web.
+    ///
+    /// Les LIBELLÉS du composeur se disent en mots (#15760) : une horloge en
+    /// durée, « 1920 × 1080 » en « 1920 sur 1080 », « 234 Ko » en « 234
+    /// kilooctets ». Un texte d'utilisateur se dit tel qu'il est écrit.
     static func spokenText(
-        _ preview: ConversationPreview, strings: ConversationPreviewStrings, locale: Locale = .current
+        _ preview: ConversationPreview, strings: ConversationPreviewStrings, locale: Locale = .current,
+        dimensions: String = ConversationPreviewCatalog.spokenDimensionsTemplate
     ) -> String {
         let spoken = preview.segments.map { segment -> String in
-            guard case .label(let text) = segment, let seconds = clockSeconds(text) else {
-                return MessageTextRenderer.plainText(segment.text)
-            }
-            return MediaFormat.duration(seconds, style: .spoken, locale: locale)
+            guard case .label(let text) = segment else { return MessageTextRenderer.plainText(segment.text) }
+            return spokenLabel(text, locale: locale, dimensions: dimensions)
         }.joined(separator: ", ")
         guard let author = preview.author else { return spoken }
         return strings(.lineAuthor, ["author": author.label, "line": spoken])
+    }
+
+    private static func spokenLabel(_ text: String, locale: Locale, dimensions: String) -> String {
+        if let seconds = clockSeconds(text) { return MediaFormat.duration(seconds, style: .spoken, locale: locale) }
+        return spokenDimensions(text, template: dimensions)
+            ?? spokenFileSize(text, locale: locale)
+            ?? MessageTextRenderer.plainText(text)
+    }
+
+    /// Ce que l'œil lit, en texte : l'auteur puis les segments, séparés comme
+    /// la ligne les sépare. `styledText` en est la mise en forme — même
+    /// préfixe, même séparateur — ce qui permet de comparer le VU au DIT.
+    static func seenText(_ preview: ConversationPreview, strings: ConversationPreviewStrings) -> String {
+        let body = preview.segments.map { MessageTextRenderer.plainText($0.text) }.joined(separator: segmentSeparator)
+        return authorPrefix(of: preview, strings: strings) + body
+    }
+
+    nonisolated static let segmentSeparator = " · "
+
+    private static func authorPrefix(of preview: ConversationPreview, strings: ConversationPreviewStrings) -> String {
+        preview.author.map { strings(.lineAuthor, ["author": $0.label, "line": ""]) } ?? ""
+    }
+
+    /// « 1920 × 1080 » — la forme exacte que rend le composeur (le × entre
+    /// deux espaces insécables), et rien d'autre : « 1920x1080 » ou un libellé
+    /// qui CONTIENT un produit n'est pas une dimension.
+    nonisolated static func dimensions(_ text: String) -> (width: String, height: String)? {
+        let parts = text.components(separatedBy: "\u{00A0}×\u{00A0}")
+        guard parts.count == 2, parts.allSatisfy(isDigits) else { return nil }
+        return (parts[0], parts[1])
+    }
+
+    /// `template` : « %1$@ sur %2$@ » — la clé `accessibility.preview.dimensions`.
+    nonisolated static func spokenDimensions(_ text: String, template: String) -> String? {
+        dimensions(text).map { String(format: template, $0.width, $0.height) }
+    }
+
+    /// Un poids tel que `ConversationPreviewStrings.fileSize` le rend — « 234 Ko »,
+    /// « 1,4 Mo » en français, « 234 KB », « 1.4 MB » ailleurs — dit en mots par
+    /// Foundation (« 234 kilooctets »), dans la langue de `locale`.
+    nonisolated static func spokenFileSize(_ text: String, locale: Locale) -> String? {
+        let parts = text.components(separatedBy: " ")
+        guard parts.count == 2, let unit = Self.storageUnit(parts[1]), let value = weight(parts[0]) else { return nil }
+        return Measurement(value: value, unit: unit).formatted(
+            .measurement(
+                width: .wide,
+                usage: .asProvided,
+                numberFormatStyle: FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...1))
+            )
+            .locale(locale)
+        )
+    }
+
+    private nonisolated static func storageUnit(_ symbol: String) -> UnitInformationStorage? {
+        switch symbol {
+        case "o", "B": return .bytes
+        case "Ko", "KB": return .kilobytes
+        case "Mo", "MB": return .megabytes
+        case "Go", "GB": return .gigabytes
+        default: return nil
+        }
+    }
+
+    /// `234`, `1,4`, `1.4` — une décimale au plus, comme le composeur.
+    private nonisolated static func weight(_ text: String) -> Double? {
+        let parts = text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "." || $0 == "," })
+        guard (1...2).contains(parts.count), parts.allSatisfy({ isDigits(String($0)) }),
+              parts.dropFirst().allSatisfy({ $0.count == 1 })
+        else { return nil }
+        return Double(parts.joined(separator: "."))
+    }
+
+    private nonisolated static func isDigits(_ text: String) -> Bool {
+        !text.isEmpty && text.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     /// Les secondes d'une horloge `m:ss` / `h:mm:ss` — la forme exacte que rend
@@ -209,8 +286,7 @@ struct ConversationPreviewLine: View {
     private func styledText(_ preview: ConversationPreview, at now: Date) -> Text {
         let strings = ConversationPreviewCatalog.strings()
         let author = preview.author.map { author -> Text in
-            let prefix = strings(.lineAuthor, ["author": author.label, "line": ""])
-            return Text(prefix)
+            Text(Self.authorPrefix(of: preview, strings: strings))
                 .font(authorFont)
                 .foregroundColor(authorColor(author))
         } ?? Text("")
@@ -234,7 +310,7 @@ struct ConversationPreviewLine: View {
     /// décompte est rendu par le système, à la seconde, sans réveiller la vue.
     private func segmentsText(_ segments: [ConversationPreviewSegment], at now: Date) -> Text {
         segments.enumerated().reduce(Text("")) { text, entry in
-            let separator = entry.offset == 0 ? Text("") : Text(" · ")
+            let separator = entry.offset == 0 ? Text("") : Text(Self.segmentSeparator)
             guard case .countdown(_, let deadline) = entry.element,
                   ConversationPreviewCountdown.showsSeconds(at: now, deadline: deadline)
             // Sans la notation (#7849) : `**gras**` se lit « gras » dans la

@@ -1,4 +1,5 @@
-import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
+import { Glyph, type GlyphShape } from '@/components/glyph';
+import { IosSwitch } from '@/components/ios-switch';
 import { STORY_AUDIENCE_PEOPLE_GLYPHS } from '@/components/glyphs-story-audience-people';
 import { Sheet } from '@/components/sheet';
 import { translate } from '@/lib/i18n-catalog';
@@ -10,9 +11,9 @@ import {
   type AudienceAvailability,
   type AudienceRefusalKey,
   type ChoosableAudience,
-  type StudioAudience,
+  type ShownAudience,
 } from '@/lib/stories/publication-audience';
-import { CHOOSABLE_AUDIENCE_GLYPH, type AudienceSource } from '@/routes/story-compose-audience';
+import { AudienceIcon, type AudienceSource } from '@/routes/story-compose-audience';
 
 /**
  * **LA FEUILLE D'AUDIENCE DU STUDIO** (#7683) — la vue `2l` d'iOS
@@ -37,7 +38,10 @@ import { CHOOSABLE_AUDIENCE_GLYPH, type AudienceSource } from '@/routes/story-co
 type AudienceSubtitleKey =
   | 'story.studio.audience.subtitle.public'
   | 'story.studio.audience.subtitle.community'
+  | 'story.studio.audience.subtitle.acquaintances'
   | 'story.studio.audience.subtitle.friends'
+  | 'story.studio.audience.subtitle.close'
+  | 'story.studio.audience.subtitle.blood'
   | 'story.studio.audience.subtitle.private';
 
 /** Les sous-titres des modes CHOISISSABLES — sous `EXCEPT`/`ONLY`, la ligne
@@ -45,14 +49,16 @@ type AudienceSubtitleKey =
 const SUBTITLE_KEY: Readonly<Record<ChoosableAudience, AudienceSubtitleKey>> = {
   PUBLIC: 'story.studio.audience.subtitle.public',
   COMMUNITY: 'story.studio.audience.subtitle.community',
+  ACQUAINTANCES: 'story.studio.audience.subtitle.acquaintances',
   FRIENDS: 'story.studio.audience.subtitle.friends',
+  CLOSE: 'story.studio.audience.subtitle.close',
+  BLOOD: 'story.studio.audience.subtitle.blood',
   PRIVATE: 'story.studio.audience.subtitle.private',
 };
 
-/** La table de la pastille, ÉTENDUE des deux modes nominatifs — que la
- * feuille seule peint, grisés avec leur raison. */
-const AUDIENCE_GLYPH: Readonly<Record<StudioAudience, GlyphShape>> = {
-  ...CHOOSABLE_AUDIENCE_GLYPH,
+/** Les glyphes des deux modes nominatifs — que la feuille seule peint, grisés
+ * avec leur raison ; les autres audiences gardent l'icône de la pastille. */
+const NOMINAL_GLYPH: Readonly<Record<'EXCEPT' | 'ONLY', GlyphShape>> = {
   EXCEPT: STORY_AUDIENCE_PEOPLE_GLYPHS.userMinus,
   ONLY: STORY_AUDIENCE_PEOPLE_GLYPHS.userCheck,
 };
@@ -66,6 +72,8 @@ export function AudienceSheet({
   value,
   source,
   onChoose,
+  commentsDisabled = false,
+  onCommentsDisabledChange,
   onClose,
 }: {
   readonly lang: InterfaceLanguage;
@@ -74,11 +82,15 @@ export function AudienceSheet({
    * aujourd'hui, la loi D-100 étant déjà branchée pour le jour où il en a un. */
   readonly repostOfId: string | null;
   /** Ce qui PARTIRA — la même valeur que la pastille. */
-  readonly value: ChoosableAudience;
+  readonly value: ShownAudience['value'];
   readonly source: AudienceSource;
   /** Ne reçoit JAMAIS un mode refusé : le type le dit (`ChoosableAudience`),
    * la rangée grisée n'a aucun effet. */
   readonly onChoose: (audience: ChoosableAudience) => void;
+  /** **« DÉSACTIVER LES COMMENTAIRES »** (#16541) — une option de publication,
+   * à côté de l'audience ; absent ⇒ aucune rangée (loi 4). */
+  readonly commentsDisabled?: boolean;
+  readonly onCommentsDisabledChange?: (disabled: boolean) => void;
   readonly onClose: () => void;
 }) {
   const defaultMark = translate(lang, 'story.studio.audience.defaultMark');
@@ -102,7 +114,7 @@ export function AudienceSheet({
               className="flex w-full items-center gap-3 px-4 text-start"
               style={{ minHeight: 60, color: choosable ? 'var(--color-ios-ink)' : 'var(--color-ios-ink-3)' }}
             >
-              <GlyphSvg glyph={AUDIENCE_GLYPH[visibility]} size={22} className="shrink-0" />
+              <AudienceIcon visibility={visibility} size={22} {...(visibility === 'EXCEPT' || visibility === 'ONLY' ? { nominal: NOMINAL_GLYPH[visibility] } : {})} />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="text-body font-medium">{translate(lang, audienceLabelKey(visibility))}</span>
                 <span data-audience-caption className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
@@ -114,6 +126,27 @@ export function AudienceSheet({
           </li>
         );
       })}
+      {onCommentsDisabledChange === undefined ? null : (
+        <li>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={commentsDisabled}
+            data-publish-comments-disabled=""
+            onClick={() => onCommentsDisabledChange(!commentsDisabled)}
+            className="flex w-full items-center gap-3 px-4 text-start"
+            style={{ minHeight: 60, color: 'var(--color-ios-ink)' }}
+          >
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-body font-medium">{translate(lang, 'feed.post.menu.comments_off')}</span>
+              <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+                {translate(lang, 'story.studio.comments_off.hint')}
+              </span>
+            </span>
+            <IosSwitch checked={commentsDisabled} tint="var(--accent)" />
+          </button>
+        </li>
+      )}
       <li data-audience-scope className="px-4 py-3 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
         {translate(lang, 'story.studio.audience.scope')}
       </li>

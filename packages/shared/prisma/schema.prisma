@@ -502,6 +502,8 @@ model User {
   pushTokens               PushToken[]
   stickers                 UserSticker[]
   stickerPacks             UserStickerPack[]
+  /// L'ÉDITEUR de packs que ce compte possède (#16274) — au plus un.
+  packPublisher            PartnerProfile?
   packOwnerships           UserPackOwnership[]
 
   // Signal Protocol E2EE Relations
@@ -679,6 +681,15 @@ model Conversation {
   /// Conversation closed for all — no one can write, messages stay readable
   closedAt  DateTime?
   closedBy  String?   @db.ObjectId
+  /// #14643 — conversation rendue OBSOLÈTE par un administrateur
+  /// (`DELETE /conversations/:id/obsolete`) : contenu illisible tout de suite,
+  /// retirée de la liste de tous. Pose aussi `isActive: false` et `closedAt`
+  /// (ce que lisent les anciens clients). Absent ⇒ jamais rendue obsolète.
+  deletedAt   DateTime?
+  /// #14643 — l'instant à partir duquel `jobs/obsolete-conversation-purge.ts`
+  /// efface la conversation et tout son contenu (48 h après `deletedAt`).
+  /// Seul champ que la purge interroge : sans lui, rien ne s'efface.
+  purgeAfter  DateTime?
   /// Denormalized member count for performance
   memberCount   Int      @default(0)
   lastMessageAt DateTime @default(now())
@@ -820,6 +831,9 @@ model Conversation {
   // (`routes/conversations/utils/list-rank.ts`). EXPLOITATION : créer cet index
   // à la main sur la prod (aucune migration jouée).
   @@index([isActive, lastActivityAt])
+  // #14643 — le balayage de purge des conversations obsolètes
+  // (`purgeAfter <= now`). EXPLOITATION : créer cet index à la main sur la prod.
+  @@index([purgeAfter])
 }
 
 /// Share/forward a conversation to a community or another context
@@ -940,6 +954,24 @@ model Participant {
   bannedAt     DateTime?
   /// Permanent personal deletion — conversation hidden forever for this user
   deletedForMe DateTime?
+
+  /// LA BOÎTE DE DEMANDES (#14107, cercles, MSG-01/02) — non nul : cette
+  /// conversation (tête-à-tête, groupe, invitation ou lien) est une DEMANDE de
+  /// message dans la boîte de CE participant depuis cette date (celui qui l'a fait
+  /// entrer n'était ni Connaissance ni plus). Nul ou absent : hors de la boîte.
+  /// Posé à l'entrée par `services/messaging/messageRequests.ts`, effacé quand le
+  /// participant accepte ou répond. Aucun rattrapage : une conversation antérieure
+  /// n'entre jamais dans la boîte.
+  messageRequestAt DateTime?
+  /// Score de risque de la demande (0-100, MIN-03), calculé à l'ouverture ; au-delà
+  /// du seuil, la demande est rangée parmi les demandes FILTRÉES. Nul hors demande.
+  messageRequestRisk Int?
+  /// Qui a fait entrer ce participant par la boîte de demandes (l'expéditeur du
+  /// tête-à-tête, l'ajouteur ou l'inviteur d'un groupe). Seul ce compte voit son
+  /// lien relevé et ses médias rouverts à l'acceptation (audit #14107, E1). Non nul
+  /// tant que la demande n'est pas ACCEPTÉE : une réponse le garde, seul
+  /// « Accepter » l'efface (audit 3, H1).
+  messageRequestFromId String? @db.ObjectId
 
   /// Per-conversation display name override
   nickname String?
@@ -2008,6 +2040,11 @@ type RelationTransition {
   from    String
   to      String
   at      DateTime
+  /// Ce qui a causé le passage (#14406, contre-audit #14464 N1/N2) :
+  /// "auto-acquaintance" (la Connaissance automatique) | "explicit" (un geste : demande
+  /// acceptée, rituel, baisse, rattrapage d'amitié). Absent sur les passages écrits
+  /// avant ce champ. Optionnel : aucune migration.
+  cause   String?
 }
 
 /// Le lien entre DEUX personnes, une ligne par paire NON orientée (#13926).
@@ -2109,16 +2146,38 @@ model PairInteractionDay {
 ///
 /// Les partages que le rituel présente : titre d'écoute, position en direct,
 /// historique de position, alerte de proximité. Les réglages des autres lots du
-/// chantier (talkie, blocage du Bring, fantôme) s'y ajouteront avec leur lot.
+/// chantier (fantôme) s'y ajouteront avec leur lot.
+///
+/// Le Bring (#13936, D-3) et le talkie (#13935) sont l'exception DÉCLARÉE au « faux
+/// par défaut » : des préférences de RÉCEPTION, actives par défaut ; `bringBlockedAt` /
+/// `talkieBlockedAt` non nul dit que `ownerId` les a coupées pour `otherId`. Une ligne née d'un tel blocage ne vaut AUCUN consentement
+/// du rituel : ses quatre partages restent faux.
 /// Index unique posé par `migrations/2026-10-31-relation-feature-setting-indexes.mongodb.js`.
 model RelationFeatureSetting {
   id                    String   @id @default(auto()) @map("_id") @db.ObjectId
   ownerId               String   @db.ObjectId
   otherId               String   @db.ObjectId
+  /// Consentement de `ownerId` à partager la CATÉGORIE de son écoute à `otherId` (#13934,
+  /// #16686) : consentement RGPD de l'émetteur, refusé par défaut (#14407). Optionnel, sans
+  /// migration : absent ou nul = refusé. Accordé dès Proche par `PUT /relations/:userId/settings`.
+  listeningCategoryShared Boolean?
   listeningTitleShared  Boolean  @default(false)
   locationShared        Boolean  @default(false)
   locationHistoryShared Boolean  @default(false)
   proximityShared       Boolean  @default(false)
+  /// Quand chaque partage a été RETIRÉ par `PUT /relations/:userId/settings` (#14401,
+  /// audit #14535 constat 3) : la trace de ce qui avait été consenti survit au retrait.
+  /// Optionnels, sans migration ; la preuve versionnée complète est #14402.
+  listeningCategoryWithdrawnAt DateTime?
+  listeningTitleWithdrawnAt  DateTime?
+  locationWithdrawnAt        DateTime?
+  locationHistoryWithdrawnAt DateTime?
+  proximityWithdrawnAt       DateTime?
+  bringBlockedAt        DateTime?
+  /// Non nul = `ownerId` a coupé la réception DIRECTE du talkie de `otherId` (#13935) :
+  /// préférence de réception, active par défaut (spec `talkieDirect @default(true)`,
+  /// écrite en date nullable — aucun couple booléen + horodatage).
+  talkieBlockedAt       DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -2689,6 +2748,12 @@ model Report {
   updatedAt        DateTime  @updatedAt
   /// Date de résolution
   resolvedAt       DateTime?
+  /// Priorité de modération (#14110, MIN-04) : 1 = en tête de file — le
+  /// signalement implique un mineur déclaré, une position ou un lien Sang ;
+  /// 0 ou absent = ordinaire. Calculée à la création, jamais servie au signalé.
+  priority         Int       @default(0)
+  /// Pourquoi il est en tête : `minor` | `location` | `blood`.
+  priorityReasons  String[]  @default([])
 
   /// Relations
   reporter  User? @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
@@ -2701,6 +2766,7 @@ model Report {
   @@index([reportType])
   @@index([createdAt])
   @@index([resolvedAt])
+  @@index([status, priority, createdAt])
 }
 
 // ============================================
@@ -2743,6 +2809,9 @@ model CallSession {
 
   /// Transcriptions (Phase 2A/2B)
   transcriptions Transcription[]
+
+  /// Captures gardées au journal de l'appel (#16665)
+  captureEvents CallCaptureEvent[]
 
   /// Reason the call ended (null while active)
   endReason CallEndReason?
@@ -2874,6 +2943,28 @@ model CallRecording {
   kind             String?
 
   @@index([callSessionId])
+}
+
+/// Une capture gardée au journal de l'appel (#16665, loi 13 de
+/// `docs/product/appels-vue-finale.md`) : le DÉBUT d'une capture d'écran
+/// signalée par un participant (`recording` | `screenshot`, au plus une ligne
+/// par participant, par sorte et par fenêtre de 5 s), ou un moment de
+/// l'enregistrement consenti (`call-recording-started` | `call-recording-stopped`),
+/// écrit par la passerelle là où elle le diffuse. Relue par
+/// `GET /calls/:callId/transcript` (`captures`). `participantId`/`userId` sont
+/// nuls pour un arrêt que personne n'a demandé (fin d'appel, délai).
+model CallCaptureEvent {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  callSessionId String      @db.ObjectId
+  callSession   CallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+  participantId String?     @db.ObjectId
+  userId        String?     @db.ObjectId
+  kind          String
+  offsetMs      Int
+  createdAt     DateTime    @default(now())
+
+  @@index([callSessionId, createdAt])
+  @@index([callSessionId, participantId, kind, createdAt])
 }
 
 /// Transcription - Phase 2A/2B (prepared for future)
@@ -6043,6 +6134,9 @@ model GameDay {
   chestFreeze      Boolean?
   /// La Gloire du coffre (#10011) — absente d'un coffre ouvert avant elle (champ optionnel, aucun backfill).
   chestGlory       Int?
+  /// La part de précocité de `chestGlory` (#16414) : l'heure du jour de jeu où le coffre s'est ouvert. Absente d'un
+  /// coffre ouvert avant elle (champ optionnel, aucun backfill).
+  chestEarlyGlory  Int?
   /// La prime tirée (#10011) : "none" | "fifth" | "whole", et son montant en points au cours de la Meesh du
   /// compte, déjà compris dans `chestPoints`. Absents d'un coffre ouvert avant elle.
   chestBonus       String?
@@ -6572,17 +6666,45 @@ model LensPack {
   @@index([documentSrc])
 }
 
-/// L'IDENTITÉ d'un partenaire qui propose des lens (#11327, S26) : un nom
-/// affichable, un site et un logo, VÉRIFIÉS par BIGBOSS ou ADMIN (décision
-/// #11251). Optionnel : une lens sans profil vérifié se publie, mais ne crédite
-/// personne. Changer son nom ou son logo RETIRE la vérification — une identité
-/// vérifiée ne se remplace pas après coup. Gratuit des deux côtés : aucun
-/// champ de prix ni de paiement.
+/// L'ÉDITEUR d'un pack (#16274), généralisation à TOUS les domaines de
+/// l'identité partenaire des lens (#11327, S26) : stickers, fonds, contours,
+/// bannières, lens — Meeshy compris. Un éditeur appartient à UN compte Meeshy
+/// (`userId`, relation obligatoire `owner`), et un compte possède au plus un
+/// éditeur (`userId @unique`) : le pack se rattache à l'éditeur du compte qui
+/// le PROPOSE (`*.submitterId`), sans seconde référence qui pourrait diverger.
+/// `displayName` est le nom de BOUTIQUE, distinct du nom d'utilisateur, qui
+/// n'est jamais servi aux clients de la boutique (l'admin seule le voit).
+/// L'éditeur « Meeshy » (`slug = meeshy`) appartient au compte officiel désigné
+/// par `MEESHY_OFFICIAL_ACCOUNT_ID`, jamais à un compte écrit en dur.
+/// VÉRIFIÉ par BIGBOSS ou ADMIN (décision #11251). Changer son nom ou son logo
+/// RETIRE la vérification. Gratuit des deux côtés : aucun champ de prix.
 model PartnerProfile {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  /// Le compte qui propose les lens (`LensPack.submitterId`).
+  /// Le compte PROPRIÉTAIRE (`ownerUserId` de #16274) : celui qui propose les packs (`submitterId`).
   userId      String    @unique @db.ObjectId
+  /// L'adresse de l'éditeur en boutique (`publisherSlugOf`), stable une fois posée.
+  /// Absente sur un profil de partenaire d'avant #16274 jusqu'à sa première
+  /// proposition, ou jusqu'au rattrapage (`scripts/backfill-pack-publishers.ts`).
+  /// Unique par un index PARTIEL (`{ slug: { $type: 'string' } }`) que pose
+  /// `migrations/2026-11-05-partner-profile-publisher-indexes.mongodb.js` — PAS
+  /// d'`@unique` ici : `prisma db push` poserait un index unique non partiel, qui
+  /// échoue dès que deux profils n'ont pas encore d'adresse. `PackPublishers`
+  /// vérifie l'unicité lui-même, sans supposer l'index.
+  slug        String?
   displayName String
+  /// La clé de lecture du nom (`publisherNameKey` : casse, accents, ponctuation et
+  /// confusables repliés) : deux éditeurs ne portent pas le même nom. Absente pour un
+  /// nom neutre. Unique par un index PARTIEL posé par la même migration.
+  nameKey     String?
+  /// Posée quand ce profil, écrit avant les clés de nom, porte un nom qu'un autre
+  /// détient déjà (homonyme vérifié ou plus ancien) ou qui se lit comme Meeshy :
+  /// le profil GARDE son nom (droit acquis), sans clé, et un admin tranche.
+  nameDisputedAt DateTime?
+  /// Posée par le rattrapage quand ce profil HÉRITÉ porte un nom hors de la liste
+  /// blanche : lui seul garde la lecture à jokers bornés (`impersonatesMeeshy(name,
+  /// { grandfathered: true })`), donc son service et son crédit. Lue sur la ligne,
+  /// jamais déduite du nom ; aucune écriture directe ne la pose.
+  nameOffListAt DateTime?
   /// https seulement (`parsePartnerProfileInput`).
   website     String?
   /// `<sha16>.webp|png` — le logo ré-encodé, composé dans le filigrane À CÔTÉ de celui de Meeshy.
@@ -6594,8 +6716,16 @@ model PartnerProfile {
   /// `null` = non vérifié. Posé par BIGBOSS/ADMIN, journalisé avant d'agir.
   verifiedAt  DateTime?
   verifiedBy  String?   @db.ObjectId
+  /// Le CHOIX de l'éditeur de nommer son compte Meeshy sur sa page éditeur
+  /// (`GET /publishers/:slug/page`, #16440) : posée quand il l'affiche, `null`
+  /// (ou absente, sur un profil d'avant) = masqué, le défaut. Écrite par
+  /// `LensPartners.saveOwnProfile` seulement ; le compte officiel en est dispensé.
+  /// Ne touche ni à la vérification ni aux autres gardes de la page.
+  ownerShownAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  owner User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([verifiedAt])
 }

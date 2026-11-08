@@ -29,6 +29,7 @@ import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.auth.guest.GuestSessionEndViewModel
 import me.meeshy.app.auth.guest.GuestSessionEndedScreen
 import me.meeshy.app.calls.CallPill
+import me.meeshy.app.calls.CallScreenShareViewModel
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
@@ -36,6 +37,7 @@ import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.onboarding.OnboardingViewModel
+import me.meeshy.app.navigation.auth.WelcomeHost
 import me.meeshy.app.onboarding.BeneathOnboarding
 import me.meeshy.app.onboarding.hiddenBehindOnboarding
 import me.meeshy.app.navigation.graph.GameRoutes
@@ -53,7 +55,8 @@ import me.meeshy.app.upgrade.UpgradeGateHost
 import me.meeshy.app.upgrade.UpgradeRequiredViewModel
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
-import me.meeshy.sdk.net.SessionExpiryNotifier
+import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
+import me.meeshy.sdk.model.rootnav.RootRoute
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -68,7 +71,6 @@ private const val CALL_ENDED_MINIMISED_SETTLE_MS = 1500L
 @Composable
 fun MeeshyApp(
     floatingButtonPositions: FloatingButtonPositionStore,
-    sessionExpiry: SessionExpiryNotifier,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
     warmDeepLink: Uri? = null,
@@ -78,6 +80,7 @@ fun MeeshyApp(
     onCallLinkHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    val navigator = rememberAppNavigator(navController)
     SheetReturnEffect(navController)
     val authViewModel: AuthViewModel = hiltViewModel()
     val incomingCallViewModel: IncomingCallViewModel = hiltViewModel()
@@ -87,6 +90,7 @@ fun MeeshyApp(
     // that entry's store, never this Activity-scoped instance, so the WebRTC session
     // and every collector in [CallViewModel] stay alive while the conversation shows.
     val callViewModel: CallViewModel = hiltViewModel()
+    val deepLinkHost: DeepLinkHostViewModel = hiltViewModel()
     // Ne collecte QUE la reference : les StateFlow eux-memes (badges, avatar) sont
     // lus a l'interieur de [MeeshyFloatingChrome], pas ici — sinon toute variation
     // d'un badge invaliderait TOUT MeeshyApp, y compris le lambda `builder` du
@@ -94,6 +98,7 @@ fun MeeshyApp(
     // graphe de navigation entier a chaque notification.
     val chromeViewModel: ChromeViewModel = hiltViewModel()
     val extensions = hiltViewModel<AppExtensionsViewModel>().extensions
+    val rootSession: RootSessionViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
     // La passerelle a terminé la session d'un invité de lien : l'appareil est déjà purgé, la racine retombe sur la
     // connexion (état aligné ci-dessous) et l'écran de fin dit pourquoi, à la place du fil.
@@ -112,6 +117,13 @@ fun MeeshyApp(
     // lit l'etat vivant dans [MinimizedCallPill].
     val callStatus by remember(callViewModel) { callViewModel.state.map { it.status }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = callViewModel.state.value.status)
+
+    val pendingLink = warmDeepLink != null && warmDeepLinkAwaitsAccount
+    LaunchedEffect(authState.isAuthenticated, authState.isRestoringSession, pendingLink) {
+        rootSession.onEvent(RootSessionEvent.AuthChanged(authState.isAuthenticated, authState.isRestoringSession))
+        rootSession.onEvent(RootSessionEvent.PendingLinkChanged(pendingLink))
+    }
+    val rootState by rootSession.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(authState.isAuthenticated) {
         chromeViewModel.warmUpIfAuthenticated(authState.isAuthenticated)
@@ -163,7 +175,7 @@ fun MeeshyApp(
     LaunchedEffect(warmDeepLink, authState.isAuthenticated, authState.hasAccount) {
         val uri = warmDeepLink ?: return@LaunchedEffect
         if (!WarmDeepLink.mayReplay(authState.isAuthenticated, authState.hasAccount, warmDeepLinkAwaitsAccount)) return@LaunchedEffect
-        WarmDeepLink.open(navController, uri)
+        if (!deepLinkHost.open(uri.toString(), navController)) WarmDeepLink.open(navController, uri)
         onWarmDeepLinkHandled()
     }
 
@@ -171,15 +183,8 @@ fun MeeshyApp(
     // incoming-call screen (the Android analogue of iOS CallManager.shared observed
     // at RootView). Reads the live destination per offer so a second offer mid-call
     // yields no route (call-waiting stays with CallViewModel's banner).
-    // Session expiree: la passerelle a refuse l'identite hors route d'auth. Sans
-    // ceci, l'ecran affichait « verifiez votre connexion » alors que le reseau
-    // fonctionnait, et l'utilisateur n'avait aucun moyen de comprendre qu'il devait
-    // se reconnecter. La deconnexion vide la session, donc `startDestination`
-    // bascule sur LOGIN.
-    LaunchedEffect(Unit) {
-        sessionExpiry.expirations.collect { authViewModel.logout(closedByServer = true) }
-    }
-
+    // Une session fermée par le serveur (révoquée, expirée) se ferme dans le SDK (`SessionRevocationCenter`) ;
+    // SessionRevocationOverlay aligne la racine et explique pourquoi.
     LaunchedEffect(Unit) {
         incomingCallViewModel.incomingOffers.collect { offer ->
             LaunchRouter.routeIncomingSocketOffer(offer, navController.currentDestination?.route)
@@ -199,6 +204,7 @@ fun MeeshyApp(
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().rootPresentationContent().hiddenBehindOnboarding(onboardingCovers)) {
                 val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
+                val miniPlayerShown by rememberMiniPlayerShown()
                 // The minimised-call pill PUSHES the destination down instead of floating
                 // over it: pinned under the status bar, it would lie under the system status
                 // window (its controls untappable) and cover the destination's top bar. The
@@ -216,13 +222,17 @@ fun MeeshyApp(
                                 .padding(vertical = MeeshySpacing.xs),
                         )
                     }
+                    // Le mini-lecteur audio (iOS `MiniAudioPlayerBar`) se range SOUS la pastille d'appel et pousse la destination.
+                    MediaTopBarSlot(navController, navigator, callPillShown = showsCallPill, screenCoversChrome = onCallScreen)
                     // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
                     // la destination, qu'il comprime au lieu de la recouvrir : le ✕ du compositeur reste entier.
+                    PendingLinkBanner(isVisible = rootState.showsPendingLinkNotice && currentRoute == Routes.LOGIN)
                     ActivationInviteBandHost(
                         navController = navController,
+                        currentRoute = currentRoute,
                         modifier = Modifier
                             .weight(1f)
-                            .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
+                            .then(if (showsCallPill || miniPlayerShown) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
                     ) {
                         ProvideAppLocals(extensions.localsProviders) {
                             // Le retour interactif depuis le bord (#13364) : UN site, armé par le registre des routes.
@@ -245,6 +255,7 @@ fun MeeshyApp(
                                     callNavGraph(navController, callViewModel)
                                     socialNavGraph(navController)
                                     settingsNavGraph(navController, authViewModel)
+                                    mediaRoutes(navController)
                                     extensions.graphContributors.forEach { it.contribute(this, navController) }
                                 }
                             }
@@ -265,19 +276,25 @@ fun MeeshyApp(
             }
         }
 
+        RootUndecidedCover(visible = rootState.route == RootRoute.NONE)
+
         // Les calques posés SOUS le parcours d'accueil ne sont ni lus ni atteignables par TalkBack tant qu'il couvre l'écran.
         BeneathOnboarding(isCovered = onboardingCovers) {
             // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
             // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
+            val bannerPeek = rememberBannerPeekState()
             NotificationBannerHost(
+                onPreviewConversation = bannerPeek::show,
                 activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
                 activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
-                onOpenConversation = { navController.navigate(Routes.chat(it)) },
+                onOpenConversation = { navigator.openConversation(it) },
                 onOpenPost = { navController.navigate(Routes.postDetail(it)) },
                 onOpenGame = { navController.navigate(GameRoutes.route(it)) },
             )
 
+            BannerPeekSheetHost(bannerPeek) { navigator.openConversation(it) }
             AppOverlayStack(extensions.overlays, navController)
+            MediaOverlayHost(navController)
 
             EngagementRevealHost(navController)
         }
@@ -313,7 +330,11 @@ fun MeeshyApp(
 
         VisitorContentHost(navController = navController, isAuthenticated = authState.isAuthenticated)
 
+        WelcomeHost(navController, authViewModel, authState.isAuthenticated)
+
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
+
+        OverlayHost()
 
         LoggingOutVeil(visible = authState.isLoggingOut)
 
@@ -333,6 +354,8 @@ private fun MinimizedCallPill(
 ) {
     val callState by callViewModel.state.collectAsStateWithLifecycle()
     val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
+    val screenShare: CallScreenShareViewModel = hiltViewModel()
+    val share by screenShare.state.collectAsStateWithLifecycle()
     CallPill(
         state = callState,
         peerAvatarUrl = callPeerVisual.avatarUrl,
@@ -345,5 +368,7 @@ private fun MinimizedCallPill(
         onToggleSpeaker = callViewModel::toggleSpeaker,
         onHangUp = callViewModel::hangUp,
         modifier = modifier,
+        isScreenSharing = share.phase == CallScreenSharePhase.Sharing,
+        onStopScreenShare = screenShare::stop,
     )
 }

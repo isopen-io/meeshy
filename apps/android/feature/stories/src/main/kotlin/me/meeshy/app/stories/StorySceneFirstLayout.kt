@@ -55,12 +55,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import me.meeshy.sdk.model.composer.ComposerRailSizing
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.width
 import me.meeshy.sdk.model.composer.ComposerSceneArrangement
+import me.meeshy.sdk.model.composer.ComposerSceneReduction
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions
 import me.meeshy.sdk.model.composer.StoryCanvasFraming
@@ -75,12 +78,13 @@ import me.meeshy.ui.theme.PlateauTint
  * cours sont posés DESSUS — [top] et [strip] en haut, [trailing] à droite, [panel] puis [socle] en bas.
  *
  * Les surimpressions sont du chrome de l'éditeur : la capture d'export n'enregistre que la scène, et chacune ne consomme
- * que ses propres touchers — hors d'elles, la scène garde ses gestes. [reduced] (un panneau monte) réduit la scène, ENTIÈRE,
- * au-dessus du panneau par [StoryCanvasFraming] (échelle et décalage en `graphicsLayer`, sans relayout) ; elle n'est
- * jamais couverte. Un glissé vers le bas de la barre du haut, ou le reste d'un défilement, ferme comme la croix.
+ * que ses propres touchers — hors d'elles, la scène garde ses gestes. Le [panel] du geste en cours (options d'un outil,
+ * bande d'un réglage) se pose par-dessus la scène, qui garde sa taille (#15192) : seuls le clavier et une vraie feuille la
+ * réduisent ([ComposerSceneReduction]). Un glissé vers le bas de la barre du haut, ou le reste d'un défilement, ferme comme
+ * la croix.
  *
- * Une [sheet] ouverte (#13838) est ancrée en bas, sur toute la largeur, sans voile : sa hauteur mesurée réduit la scène de
- * la même façon, et seule la feuille parle — les surimpressions se retirent, toucher la scène ou glisser vers le bas
+ * Une [sheet] ouverte (#13838) est ancrée en bas, sur toute la largeur, sans voile : sa hauteur mesurée réduit la scène,
+ * ENTIÈRE, au-dessus d'elle par [StoryCanvasFraming] (échelle et décalage en `graphicsLayer`, sans relayout), et seule la feuille parle — les surimpressions se retirent, toucher la scène ou glisser vers le bas
  * referme la feuille ([onSheetDismiss]), pas le compositeur.
  *
  * Pendant la frappe ([typing], #13835), aucune surimpression : la scène se réduit, entière, au-dessus d'une barre de style
@@ -98,7 +102,6 @@ import me.meeshy.ui.theme.PlateauTint
 @Composable
 internal fun StorySceneFirstLayout(
     onDismiss: () -> Unit,
-    reduced: Boolean,
     scene: @Composable (Modifier) -> Unit,
     top: @Composable () -> Unit,
     trailing: @Composable ColumnScope.() -> Unit,
@@ -113,7 +116,6 @@ internal fun StorySceneFirstLayout(
     typing: StoryTypingSlot? = null,
     rails: StorySceneRails? = null,
     incoming: (@Composable () -> Unit)? = null,
-    clearsTrailingLane: Boolean = false,
 ) {
     BoxWithConstraints(
         modifier = modifier
@@ -126,12 +128,13 @@ internal fun StorySceneFirstLayout(
         val onRails = rails != null && arrangement == ComposerSceneArrangement.RAILS
         val railsServe = typing == null && sheet == null
         val busy = incoming != null
+        val railSize = ComposerRailSizing.of(maxWidth.value, maxHeight.value)
+        CompositionLocalProvider(LocalComposerRailSize provides railSize) {
         Row(Modifier.fillMaxSize()) {
             if (onRails) LabeledRailSlot(busy) { if (railsServe) rails?.leading?.invoke(this) }
             Box(Modifier.weight(1f).fillMaxHeight().padding(top = if (onRails) RAIL_MARGIN else 0.dp)) {
                 SceneFirstStage(
                     onDismiss = onDismiss,
-                    reduced = reduced,
                     scene = scene,
                     overlays = SceneOverlaySlots(
                         top = if (onRails) NoOverlay else top,
@@ -147,10 +150,10 @@ internal fun StorySceneFirstLayout(
                     sheetContent = sheetContent,
                     typing = typing,
                     incoming = incoming,
-                    clearsTrailingLane = clearsTrailingLane && !onRails,
                 )
             }
             if (onRails) LabeledRailSlot(busy) { if (railsServe) rails?.trailing?.invoke(this) }
+        }
         }
     }
 }
@@ -215,7 +218,6 @@ private fun LabeledRailSlot(busy: Boolean, content: @Composable ColumnScope.() -
 @Composable
 private fun SceneFirstStage(
     onDismiss: () -> Unit,
-    reduced: Boolean,
     scene: @Composable (Modifier) -> Unit,
     overlays: SceneOverlaySlots,
     reservesBelow: Boolean,
@@ -225,7 +227,6 @@ private fun SceneFirstStage(
     sheetContent: @Composable (StoryComposerSheet) -> Unit,
     typing: StoryTypingSlot?,
     incoming: (@Composable () -> Unit)? = null,
-    clearsTrailingLane: Boolean = false,
 ) {
     val busy = incoming != null
     val pull = rememberComposerPullDismiss(if (sheet != null) onSheetDismiss else onDismiss)
@@ -240,28 +241,15 @@ private fun SceneFirstStage(
     ) {
         val windowHeight = maxHeight.value
         val sheetHeights = remember { mutableStateMapOf<StoryComposerSheet, Int>() }
-        var frameBottom by remember { mutableFloatStateOf(0f) }
         var frameHeight by remember { mutableFloatStateOf(0f) }
         var frameWidth by remember { mutableFloatStateOf(0f) }
-        var frameRight by remember { mutableFloatStateOf(0f) }
-        var trailingLeft by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-        var panelTop by remember { mutableFloatStateOf(Float.MAX_VALUE) }
         val sheetTop = sheet?.let { constraints.maxHeight - (sheetHeights[it] ?: 0) }?.toFloat()
-        val overlap = when {
-            sheetTop != null -> frameHeight - sheetTop
-            reduced -> frameBottom - panelTop
-            else -> 0f
-        }.coerceAtLeast(0f)
-        val framing = remember(sheetTop != null || reduced, frameWidth, frameHeight, overlap) {
-            sceneFraming(sheetTop != null || reduced, frameWidth, frameHeight, overlap)
-        }
-        val gutter = with(LocalDensity.current) { LANE_GUTTER.toPx() }
-        val lane = if (clearsTrailingLane && typing == null && sheet == null) (frameRight - trailingLeft + gutter).coerceAtLeast(0f) else 0f
-        val cleared = framing.clearingTrailingLane(lane, frameWidth, frameHeight)
+        val reduced = ComposerSceneReduction.sceneIsReduced(ComposerSceneReduction.State(sheetRaised = sheetTop != null))
+        val overlap = if (reduced) (frameHeight - (sheetTop ?: frameHeight)).coerceAtLeast(0f) else 0f
+        val framing = remember(reduced, frameWidth, frameHeight, overlap) { sceneFraming(reduced, frameWidth, frameHeight, overlap) }
         val reduceMotion = LocalReduceMotion.current
-        val scale by animateFloatAsState(cleared.scale, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstScale")
-        val offsetY by animateFloatAsState(cleared.offsetY, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstOffset")
-        val offsetX by animateFloatAsState(cleared.offsetX, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstOffsetX")
+        val scale by animateFloatAsState(framing.scale, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstScale")
+        val offsetY by animateFloatAsState(framing.offsetY, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstOffset")
         val reserve = if (reservesBelow) BELOW_RESERVE else 0.dp
         Box(
             modifier = Modifier
@@ -271,8 +259,6 @@ private fun SceneFirstStage(
                 .onGloballyPositioned {
                     frameWidth = it.size.width.toFloat()
                     frameHeight = it.size.height.toFloat()
-                    frameBottom = it.positionInRoot().y + frameHeight
-                    frameRight = it.positionInRoot().x + frameWidth
                 },
         ) {
             val keyboard = typing?.keyboard ?: windowKeyboard
@@ -283,7 +269,6 @@ private fun SceneFirstStage(
                     Modifier.fillMaxSize().graphicsLayer {
                         scaleX = scale
                         scaleY = scale
-                        translationX = offsetX
                         translationY = offsetY
                     }
                 }.then(if (busy) Modifier.clearAndSetSemantics {} else Modifier),
@@ -293,7 +278,7 @@ private fun SceneFirstStage(
             } else if (sheet != null) {
                 SheetDismissCatcher(onSheetDismiss)
             } else {
-                SceneOverlays(pull, overlays, onPanelTop = { panelTop = it }, onTrailingLeft = { trailingLeft = it }, veiled = busy)
+                SceneOverlays(pull, overlays, veiled = busy)
             }
             incoming?.let { placeholder ->
                 TouchShield()
@@ -301,7 +286,6 @@ private fun SceneFirstStage(
                     Modifier.fillMaxSize().graphicsLayer {
                         scaleX = scale
                         scaleY = scale
-                        translationX = offsetX
                         translationY = offsetY
                     },
                 ) { placeholder() }
@@ -364,8 +348,6 @@ private fun BoxScope.AnchoredSheetHost(
 private fun SceneOverlays(
     pull: ComposerPullDismiss,
     slots: SceneOverlaySlots,
-    onPanelTop: (Float) -> Unit,
-    onTrailingLeft: (Float) -> Unit,
     veiled: Boolean = false,
 ) {
     Column(modifier = Modifier.fillMaxSize().veiledWhen(veiled).padding(OVERLAY_INSET)) {
@@ -380,13 +362,13 @@ private fun SceneOverlays(
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Spacer(Modifier.weight(1f))
             Column(
-                modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs).onGloballyPositioned { onTrailingLeft(it.positionInRoot().x) },
+                modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs).testTag(SCENE_RAIL_LANE_TAG),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(LocalComposerRailSize.current.gap),
                 content = slots.trailing,
             )
         }
-        Box(modifier = Modifier.fillMaxWidth().onGloballyPositioned { onPanelTop(it.positionInRoot().y) }) { slots.panel() }
+        Box(modifier = Modifier.fillMaxWidth()) { slots.panel() }
         Column(
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xs),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
@@ -437,24 +419,8 @@ private const val SHEET_MAX_FRACTION = 0.55f
 
 private val OVERLAY_INSET = 10.dp
 
-/** Entre le rail et la scène qui lui cède son couloir : sans elle, une option semblerait posée sur la scène. */
-private val LANE_GUTTER = 8.dp
-
-/** Où se pose la scène : son échelle et son décalage, en `graphicsLayer` autour de son centre. */
-private class SceneFrameTransform(val scale: Float, val offsetX: Float, val offsetY: Float)
-
-/**
- * La scène réduite qui cède au rail son couloir ([lane], en px, à droite) quand les options de ce qu'on édite y restent
- * posées (#14249 : rien ne couvre une scène réduite ; une scène pleine n'en cède jamais) : le 9:16 se réduit à la largeur
- * qui reste et se range contre le bord opposé, son haut là où le cadrage le posait.
- */
-private fun StoryCanvasFraming.Result.clearingTrailingLane(lane: Float, width: Float, height: Float): SceneFrameTransform {
-    if (lane <= 0f || width <= 0f || lane >= width) return SceneFrameTransform(scale, 0f, offsetY)
-    val cleared = minOf(scale, (width - lane) / width)
-    val top = height / 2f * (1f - scale) + offsetY
-    val offsetX = minOf(0f, (width - lane) - width / 2f * (1f + cleared))
-    return SceneFrameTransform(cleared, offsetX, top - height / 2f * (1f - cleared))
-}
+/** Le couloir des rails posé sur la scène : la colonne d'outils, ou les options de ce qu'on édite. */
+internal const val SCENE_RAIL_LANE_TAG = "scene-rail-lane"
 
 private val RAIL_MARGIN = ComposerSceneArrangement.MARGIN.dp
 private val BELOW_GAP = 8.dp

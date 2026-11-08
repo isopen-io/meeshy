@@ -75,4 +75,35 @@ class StoryRailPlanTest {
         assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false).pinsCommentComposer).isTrue()
         assertThat(StoryRailPlan.resolve(isOwnStory = true, hasTranslatableContent = false).pinsCommentComposer).isFalse()
     }
+
+    @Test
+    fun `une story de Sang chez autrui n'offre pas de republication`() {
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, isRepublishable = false).showsRepost).isFalse()
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, isRepublishable = true).showsRepost).isTrue()
+    }
+
+    // #14717 — Son et Enregistrer rejoignent le rail, selon la story.
+
+    @Test
+    fun `the sound button needs an audible slide, for anybody`() {
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, hasAudibleSound = true).showsSound).isTrue()
+        assertThat(StoryRailPlan.resolve(isOwnStory = true, hasTranslatableContent = false, hasAudibleSound = true).showsSound).isTrue()
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, hasAudibleSound = false).showsSound).isFalse()
+    }
+
+    @Test
+    fun `save is the author's own, views too, and neither is offered to a viewer`() {
+        val author = StoryRailPlan.resolve(isOwnStory = true, hasTranslatableContent = false)
+        val viewer = StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false)
+        assertThat(author.showsExport to author.showsViews).isEqualTo(true to true)
+        assertThat(viewer.showsExport to viewer.showsViews).isEqualTo(false to false)
+    }
+
+    @Test
+    fun `the author sees no react and no repost, a viewer sees both`() {
+        val author = StoryRailPlan.resolve(isOwnStory = true, hasTranslatableContent = false)
+        val viewer = StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false)
+        assertThat(author.showsReact to author.showsRepost).isEqualTo(false to false)
+        assertThat(viewer.showsReact to viewer.showsRepost).isEqualTo(true to true)
+    }
 }

@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.util.resolveMediaUrl
 
 /**
@@ -17,6 +18,8 @@ internal data class BubbleQuotedReply(
     val mediaKind: ReplyMediaKind,
     val thumbnailUrl: String?,
     val senderName: String?,
+    /** Le vocal cité jouable, avec sa piste servie ; `null` pour tout autre média et pour un cité protégé ou éphémère. */
+    val audio: BubbleAudio? = null,
 )
 
 /**
@@ -75,7 +78,23 @@ internal object BubbleQuotedReplyBuilder {
                 ?.let { it.thumbnailUrl ?: it.fileUrl }
                 ?.let { resolveMediaUrl(it, mediaBaseUrl) },
             senderName = senderName,
+            audio = playableVoice(reply, representative, preferences, mediaBaseUrl),
         )
+    }
+
+    /**
+     * Le vocal cité qu'on peut jouer depuis la citation : la pièce représentative, si elle est un vocal ORDINAIRE d'un
+     * message ordinaire (ni protégé, ni éphémère — la pièce ne voyage pas) ET adressable. Sa piste est celle du Prisme.
+     */
+    private fun playableVoice(
+        reply: ApiMessageReplyPreview,
+        representative: ApiMessageAttachment?,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+        mediaBaseUrl: String?,
+    ): BubbleAudio? {
+        if (reply.expiresAt != null) return null
+        val voice = representative?.takeIf { it.isQuotedAudio && !it.isProtected } ?: return null
+        return BubbleAttachmentBuilder.buildAudio(voice, preferences, mediaBaseUrl).takeIf { it.isPlayable }
     }
 
     private fun representativeOf(
@@ -122,4 +141,24 @@ internal object BubbleQuotedReplyBuilder {
 
     private val ApiMessageAttachment.isQuotedImage: Boolean
         get() = mimeType?.startsWith("image/") == true
+
+    private val ApiMessageAttachment.isQuotedAudio: Boolean
+        get() = mimeType?.startsWith("audio/") == true
+}
+
+/** La fiche de l'auteur cité : jamais pour soi, un message supprimé ni un auteur sans compte (rien à ouvrir). */
+internal fun quotedAuthorProfile(
+    reply: ApiMessageReplyPreview?,
+    senderName: String?,
+    currentUserId: String?,
+): me.meeshy.sdk.model.profile.ProfileSheetUser? {
+    if (reply == null || reply.deletedAt != null) return null
+    val userId = reply.authorUserId?.takeIf { it.isNotBlank() } ?: return null
+    if (userId == currentUserId) return null
+    return me.meeshy.sdk.model.profile.ProfileSheetUser(
+        userId = userId,
+        username = reply.sender?.username ?: senderName.orEmpty(),
+        displayName = senderName,
+        avatarUrl = reply.authorAvatarUrl,
+    )
 }

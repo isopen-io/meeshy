@@ -200,7 +200,7 @@ private fun reasonLabel(reason: ReportReason): String = stringResource(
         ReportReason.VIOLENCE -> R.string.report_reason_violence
         ReportReason.HATE_SPEECH -> R.string.report_reason_hate_speech
         ReportReason.IMPERSONATION -> R.string.report_reason_impersonation
-        ReportReason.OTHER -> R.string.report_reason_other
+        ReportReason.OTHER, ReportReason.FAKE_PROFILE -> R.string.report_reason_other
     },
 )
 

@@ -12,23 +12,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
-import me.meeshy.sdk.conversation.DirectConversationResolution
-import me.meeshy.sdk.conversation.conversationOrNull
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
-import me.meeshy.sdk.lang.ComposeLanguageDetector
-import me.meeshy.sdk.lang.LanguageIdentifying
-import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.mention.MentionAutocomplete
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.mention.MentionContext
-import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.story.StoryReplyOutcome
+import me.meeshy.sdk.story.StoryReplySender
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.session.SessionRepository
@@ -62,6 +57,10 @@ class StoryReplyViewModel @Inject constructor(
     mentionSearch: MentionSearch = MentionSearch.None,
     mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
+
+    private val sender = StoryReplySender(conversationRepository, messageRepository, endToEndRegime) {
+        workManager.enqueue(OutboxFlushWorker.buildRequest())
+    }
 
     private val _state = MutableStateFlow(StoryReplyUiState())
     val state: StateFlow<StoryReplyUiState> = _state.asStateFlow()
@@ -115,43 +114,11 @@ class StoryReplyViewModel @Inject constructor(
         val gesture = accountFence?.ticket()
         viewModelScope.launch(gesture.asCoroutineContext()) {
             try {
-                val resolution = conversationRepository.directConversationWith(authorId)
-                val conversation = resolution.conversationOrNull
-                if (conversation == null) {
-                    fail(text)
-                    return@launch
+                when (sender.send(text, storyId, authorId, user)) {
+                    StoryReplyOutcome.SENT -> _state.update { it.copy(phase = StoryReplyPhase.SENT) }
+                    StoryReplyOutcome.ENCRYPTED -> refuseEncrypted(text)
+                    StoryReplyOutcome.FAILED -> fail(text)
                 }
-                val conversationId = conversation.id
-                // Fail closed (#13621): the outbox would withhold this plaintext anyway, but the sheet must not say « sent ».
-                if (endToEndRegime.isSealed(conversationId)) {
-                    refuseEncrypted(text)
-                    return@launch
-                }
-                // A cached direct may lag: with no mode known, ask the server (a read that carries no words) before any queueing.
-                val mode = knownMode(resolution, conversationId)
-                if (mode == null) {
-                    fail(text)
-                    return@launch
-                }
-                if (EndToEndRegime.isEndToEnd(mode.value)) {
-                    refuseEncrypted(text)
-                    return@launch
-                }
-                val language = ComposeLanguageDetector.originalLanguageAtSend(
-                    text = text,
-                    manual = null,
-                    senderLanguage = LanguageResolver.resolveUserLanguage(user),
-                    identifier = LanguageIdentifying.Unavailable,
-                )
-                messageRepository.sendOptimistic(
-                    conversationId = conversationId,
-                    content = text,
-                    originalLanguage = language,
-                    sender = user,
-                    storyReplyToId = storyId,
-                )
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-                _state.update { it.copy(phase = StoryReplyPhase.SENT) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -163,18 +130,6 @@ class StoryReplyViewModel @Inject constructor(
     private fun refuseEncrypted(text: String) = _state.update {
         it.copy(text = it.text.ifEmpty { text }, phase = StoryReplyPhase.ENCRYPTED)
     }
-
-    /** The conversation's mode when it is known (null inside [KnownMode] = clear), or null when it cannot be learned now. */
-    private suspend fun knownMode(resolution: DirectConversationResolution, conversationId: String): KnownMode? {
-        val served = resolution.conversationOrNull ?: return null
-        val cachedOnly = resolution is DirectConversationResolution.Found && resolution.fromCache
-        if (!cachedOnly || !served.encryptionMode.isNullOrBlank()) return KnownMode(served.encryptionMode)
-        val fresh = (conversationRepository.getById(conversationId) as? NetworkResult.Success)?.data ?: return null
-        conversationRepository.rememberServed(fresh)
-        return KnownMode(fresh.encryptionMode)
-    }
-
-    private data class KnownMode(val value: String?)
 
     private fun fail(text: String) = _state.update {
         it.copy(text = it.text.ifEmpty { text }, phase = StoryReplyPhase.FAILED)

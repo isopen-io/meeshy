@@ -2,12 +2,15 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -137,5 +140,34 @@ class StoryAudiencePickerViewModelTest {
 
         assertThat(vm.state.value.results).isEmpty()
         assertThat(vm.state.value.hasLoadedContacts).isTrue()
+    }
+
+    @Test
+    fun `l'annuaire n'est interroge qu'apres 350 ms de saisie, et une frappe plus recente annule la precedente`() = runTest {
+        coEvery { users.searchUsers(any(), any(), any()) } returns NetworkResult.Success(emptyList())
+        val vm = viewModel()
+        vm.searchDebounceMs = 350L
+        vm.start(emptyList())
+
+        vm.onQueryChange("an")
+        advanceTimeBy(300)
+        runCurrent()
+        coVerify(exactly = 0) { users.searchUsers(any(), any(), any()) }
+
+        vm.onQueryChange("ann")
+        advanceTimeBy(300)
+        runCurrent()
+        coVerify(exactly = 0) { users.searchUsers(any(), any(), any()) }
+
+        advanceTimeBy(60)
+        runCurrent()
+        coVerify(exactly = 1) { users.searchUsers("ann", any(), any()) }
+        coVerify(exactly = 0) { users.searchUsers("an", any(), any()) }
+    }
+
+    @Test
+    fun `le delai de saisie par defaut est de 350 ms`() {
+        assertThat(viewModel().searchDebounceMs).isEqualTo(0L)
+        assertThat(StoryAudiencePickerViewModel(friends, users, blocks, session).searchDebounceMs).isEqualTo(350L)
     }
 }

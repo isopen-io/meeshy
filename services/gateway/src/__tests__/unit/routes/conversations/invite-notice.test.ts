@@ -8,6 +8,13 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: jest.fn<any>().mockResolvedValue('507f1f77bcf86cd799439011'),
 }));
@@ -49,7 +56,7 @@ function monter() {
       }),
       update: jest.fn<any>().mockResolvedValue(undefined),
     },
-    user: { findUnique: jest.fn<any>().mockResolvedValue(bob) },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(bob) },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>().mockResolvedValue({ id: 'p-bob', userId: BOB, displayName: 'Bob', user: bob }),

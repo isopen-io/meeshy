@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.lang.ReaderPrism
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,14 +36,14 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
-import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.model.resolvedLastMessagePreview
-import me.meeshy.sdk.theme.accentColorPalette
+import me.meeshy.ui.theme.displayPaletteInTheme
 import me.meeshy.sdk.theme.displayTitle
+import me.meeshy.ui.component.chrome.conversationEngagementDescription
 import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -70,6 +72,8 @@ internal fun ConversationRowContainer(
     val currentTags = prefs?.tags.orEmpty()
     val title = conversation.displayTitle(model.currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
+    // Un appui long suivi d'un déplacement lève la rangée : le menu s'efface devant le glisser-déposer.
+    LaunchedEffect(model.isDragging) { if (model.isDragging) menuExpanded = false }
 
     val previewLabels = lastMessagePreviewLabels()
     val draftLine = draftPreview(model.draft, previewLabels)
@@ -86,21 +90,24 @@ internal fun ConversationRowContainer(
             // Prisme Linguistique: la rangée sert la même traduction que l'aperçu appui long;
             // des préférences absentes (session non hydratée) donnent le prisme vide, donc l'original.
             resolvedContent = conversation.resolvedLastMessagePreview(
-                model.currentUserPrefs?.let(LanguageResolver::preferredContentLanguages).orEmpty(),
+                model.currentUserPrefs?.let { ReaderPrism.resolve(it, java.util.Locale.getDefault()) }.orEmpty(),
             ),
         ),
     )
     val line2 = ConversationRowPrecedence.line2(hasTyping = typingLine != null, hasDraft = draftLine != null)
-    val managesMembers = remember(conversation, model.currentUserPrefs, model.isLocked) {
+    val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
-            .offersManageMembers(isLocked = model.isLocked)
     }
-    val palette = remember(conversation) { conversation.accentColorPalette() }
+    val avatarGestures = rememberRowAvatarGestures(model, actions, capabilities)
+    MoodImpressionOnAppearance(conversation.id, model.moodEmoji, actions.onMoodShown)
+    val palette = conversation.displayPaletteInTheme()
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
     val timeLabel = conversationRowRelativeTime(conversation, model.nowMillis)
 
-    val label = rowAccessibilityLabel(model, title, rowPreview, timeLabel, isPinned, isMuted)
+    val engagement = rememberRowEngagement(conversation)
+    val spokenPoints = engagement?.let { conversationEngagementDescription(it) }
+    val label = rowAccessibilityLabel(model, title, rowPreview, timeLabel, isPinned, isMuted, spokenPoints)
     val opensHint = stringResource(R.string.conversations_row_opens_conversation)
     val joinCallDescription = stringResource(R.string.row_join_call_a11y)
     val showsJoin = ConversationRowJoinCall.isVisible(
@@ -163,6 +170,8 @@ internal fun ConversationRowContainer(
                 line2 = line2,
                 timeLabel = timeLabel,
                 onJoinCall = actions.onJoinCall.takeIf { showsJoin },
+                engagement = engagement,
+                avatarGestures = avatarGestures,
             )
             if (model.isSelected) {
                 Box(
@@ -178,52 +187,59 @@ internal fun ConversationRowContainer(
             }
         }
 
-        ConversationContextMenu(
-            expanded = menuExpanded,
-            onDismiss = { menuExpanded = false },
-            title = title,
-            isPinned = isPinned,
-            isMuted = isMuted,
-            mentionsOnly = prefs?.mentionsOnly == true,
-            isArchived = prefs?.isArchived == true,
-            hasUnread = conversation.unreadCount > 0,
-            hasDraft = model.draft?.isMeaningful == true,
-            categories = model.categories,
-            currentCategoryId = prefs?.categoryId,
-            previewMessages = model.previewMessages,
-            previewShowSender = conversation.type != "direct",
-            currentUserId = model.currentUserId,
-            currentUserPrefs = model.currentUserPrefs,
-            previewLabels = previewLabels,
-            isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
-            onTogglePin = actions.onTogglePin,
-            onToggleMute = actions.onToggleMute,
-            onToggleMentionsOnly = actions.onToggleMentionsOnly,
-            onToggleArchive = actions.onToggleArchive,
-            onLeaveConversation = actions.onLeaveConversation,
-            onDeleteForMe = actions.onDeleteForMe,
-            onDeleteForAll = actions.onDeleteForAll,
-            onRename = actions.onRename,
-            currentCustomName = prefs?.customName,
-            onSetReaction = actions.onSetReaction,
-            currentReaction = prefs?.reaction,
-            onSetTags = actions.onSetTags,
-            currentTags = currentTags,
-            onMarkRead = actions.onMarkRead,
-            onMarkUnread = actions.onMarkUnread,
-            onDiscardDraft = actions.onDiscardDraft,
-            onAssignCategory = actions.onAssignCategory,
-            onCreateCategory = actions.onCreateCategory,
-            isLocked = model.isLocked,
-            onRemoveCategory = actions.onRemoveCategory,
-            onLockToggle = actions.onLockToggle,
-            onViewInfo = actions.onViewInfo,
-            onViewProfile = actions.onViewProfile,
-            onCreateShareLink = actions.onCreateShareLink,
-            onManageMembers = actions.onManageMembers
-                ?.takeIf { managesMembers }
-                ?.let { open -> { open(accent) } },
-        )
+        if (menuExpanded) {
+            val peerBlocked = remember { actions.peerBlocked() }
+            val readingModes = rememberConversationReadingModes()
+            val readingModeEntries = remember(conversation.id) { readingModes?.entries(conversation) }
+            val menuModel = ConversationMenuModel.make(
+                ConversationMenuInput(
+                    capabilities = capabilities,
+                    isPinned = isPinned,
+                    isMuted = isMuted,
+                    mentionsOnly = prefs?.mentionsOnly == true,
+                    hasUnread = conversation.unreadCount > 0,
+                    hasDraft = model.draft?.isMeaningful == true,
+                    isLocked = model.isLocked,
+                    isArchived = prefs?.isArchived == true,
+                    isPeerBlocked = peerBlocked,
+                    isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
+                    offersReadingModes = readingModeEntries != null,
+                    destinations = ConversationMenuDestinations(
+                        details = actions.onViewInfo != null,
+                        profile = actions.onViewProfile != null,
+                        call = actions.onCall != null,
+                        manageMembers = actions.onManageMembers != null,
+                        admin = actions.adminReachable,
+                    ),
+                ),
+            )
+            ConversationContextMenu(
+                expanded = true,
+                onDismiss = { menuExpanded = false },
+                title = title,
+                isPinned = isPinned,
+                isMuted = isMuted,
+                model = menuModel,
+                panelState = ConversationMenuPanelState(
+                    currentReaction = prefs?.reaction,
+                    categories = model.categories,
+                    currentCategoryId = prefs?.categoryId,
+                    readingModes = readingModeEntries.orEmpty(),
+                ),
+                accent = accent,
+                previewMessages = model.previewMessages,
+                previewUnavailable = model.previewUnavailable,
+                previewShowSender = conversation.type != "direct",
+                currentUserId = model.currentUserId,
+                currentUserPrefs = model.currentUserPrefs,
+                previewLabels = previewLabels,
+                isLocked = model.isLocked,
+                currentTags = currentTags,
+                actions = actions,
+                onManageMembers = actions.onManageMembers?.let { open -> { open(accent) } },
+                onSelectReadingMode = { choice -> readingModes?.choose(conversation, choice) },
+            )
+        }
     }
 }
 
@@ -235,6 +251,7 @@ private fun rowAccessibilityLabel(
     timeLabel: String?,
     isPinned: Boolean,
     isMuted: Boolean,
+    spokenPoints: String? = model.spokenPoints,
 ): String {
     val unread = model.conversation.unreadCount
     val spokenPreview = ConversationRowAccessibility.spokenPreview(rowPreview)
@@ -247,7 +264,7 @@ private fun rowAccessibilityLabel(
         muted = stringResource(R.string.accessibility_muted).takeIf { isMuted },
         pinned = stringResource(R.string.accessibility_pinned).takeIf { isPinned },
         locked = stringResource(R.string.conversations_badge_locked).takeIf { model.isLocked },
-        points = model.spokenPoints,
+        points = spokenPoints,
         pendingSync = stringResource(R.string.row_a11y_pending_sync).takeIf { model.hasPendingSync },
     )
 }

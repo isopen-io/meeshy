@@ -16,6 +16,7 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.ConditionalResult
@@ -42,11 +43,19 @@ internal class MessageCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val messageApi: MessageApi,
     private val clock: CacheClock,
-    private val historyWindow: Flow<Int>,
+    private val historyWindow: Flow<HistoryWindow>,
     /** #13558 — a revalidation lands only while the account that asked for it is still the one signed in. */
     private val fence: AccountFence? = null,
     /** #13792 — chaque page servie nourrit le registre des régimes. */
     private val regime: EndToEndRegimeKeeper? = null,
+    /** Les événements arrivés avant leur message, rejoués à l'ingestion. */
+    private val events: MessageEventBuffer? = null,
+    /** #14655 — un message chiffré que la page dit parti, ou qu'elle ne sert plus, inscrit son effacement. */
+    private val erasures: PlaintextErasureLedger? = null,
+    /** Les traductions déjà reçues, superposées aux messages servis. */
+    private val translations: TranslationLayer? = null,
+    /** #16012 — mon envoi servi par la page avant son accusé : ses fichiers locaux suivent la ligne servie. */
+    private val media: AcknowledgedBubbleMedia? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -56,7 +65,7 @@ internal class MessageCacheSource(
      * regresses, pending outbox mutations protected, unchanged rows left unwritten — and the
      * echoed `cid_` bridged to its server id, the optimistic bubble replaced in place.
      */
-    private val ingestion = MessageIngestPipeline(database, regime = regime)
+    private val ingestion = MessageIngestPipeline(database, regime = regime, events = events, erasures = erasures)
 
     /**
      * #5189 — bounded to [historyWindow] rather than the conversation's whole
@@ -71,18 +80,28 @@ internal class MessageCacheSource(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observe(): Flow<List<LocalMessage>?> =
-        historyWindow.flatMapLatest { limit ->
+        historyWindow.flatMapLatest { window ->
             combine(
-                messageDao.observeRecentForConversation(conversationId, limit),
+                windowRows(window),
                 syncMetaDao.observe(resourceKey),
             ) { rows, syncedAt ->
                 if (rows.isEmpty() && syncedAt == null) {
                     null
                 } else {
-                    rows.asReversed().map { it.toLocalMessage() }
+                    translations?.ensureLoaded(rows.map { it.serverId ?: it.id })
+                    rows.asReversed().map { row -> row.toLocalMessage().let { translations?.project(it) ?: it } }
                 }
             }
         }
+
+    private fun windowRows(window: HistoryWindow) = when (window) {
+        is HistoryWindow.Recent -> messageDao.observeRecentForConversation(conversationId, window.size)
+        is HistoryWindow.Anchored -> messageDao.observeRangeForConversation(
+            conversationId,
+            window.fromMillis,
+            window.throughMillis ?: Long.MAX_VALUE,
+        )
+    }
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(resourceKey)
 
@@ -119,20 +138,34 @@ internal class MessageCacheSource(
         val ticket = fence?.currentTicket()
         val gapAfterMillis = messageDao.newestSyncedCreatedAt(conversationId)
         if (gapAfterMillis != null) {
-            val backfilled = tryAfterSweep(Instant.ofEpochMilli(gapAfterMillis).toString())
-            if (backfilled != null) {
-                if (backfilled.isNotEmpty()) fence.commitOrWrite(ticket) { persistAfterBackfill(backfilled) }
-                return
+            val sweep = tryAfterSweep(Instant.ofEpochMilli(gapAfterMillis).toString())
+            if (sweep != null) {
+                if (sweep.rows.isNotEmpty()) fence.commitOrWrite(ticket) { persistAfterBackfill(sweep.rows) }
+                if (sweep.reachedPresent) return
             }
         }
         revalidateFullWindow(ticket)
     }
 
     /**
+     * #14670 — « back to the present »: the recent window itself, whatever the cache's newest row. After a jump
+     * to an old message the cache's high-water mark is that island's, so a gap sweep would walk from there and
+     * stop [MAX_AFTER_PAGES] later, still in the past.
+     */
+    suspend fun revalidatePresent() {
+        revalidateFullWindow(fence?.currentTicket())
+    }
+
+    /** What a gap sweep brought back, and whether it reached the present or stopped at its page ceiling. */
+    private data class AfterSweep(val rows: List<ApiMessage>, val reachedPresent: Boolean)
+
+    /**
      * Pages `GET .../messages?after=` up to [MAX_AFTER_PAGES] bounded
      * iterations, advancing [after] to the max `createdAt` seen on each page
      * (ascending order + `skip` pinned to 0 server-side means the `after`
      * value itself is the cursor — [MessageApi.listAfter]'s doc-comment).
+     * A sweep that hits the ceiling with more still to come says so (#14670): the caller then reads the
+     * recent window too, so the present is always cached — the gap between is paged by scrolling up.
      * Returns `null` — never a partial, silently-trusted list — on ANY
      * transport failure, a refused envelope (`success = false`), or a
      * response whose `cursorPagination` (or its `hasMore`) is missing: none
@@ -140,7 +173,7 @@ internal class MessageCacheSource(
      * falls back to the full window rather than trusting a doubtful partial
      * result.
      */
-    private suspend fun tryAfterSweep(initialAfter: String): List<ApiMessage>? {
+    private suspend fun tryAfterSweep(initialAfter: String): AfterSweep? {
         val collected = mutableListOf<ApiMessage>()
         var after = initialAfter
         for (page in 0 until MAX_AFTER_PAGES) {
@@ -151,15 +184,15 @@ internal class MessageCacheSource(
                     val rows = body.data
                     collected += rows
                     val hasMore = body.cursorPagination?.hasMore ?: return null
-                    if (!hasMore) return collected
+                    if (!hasMore) return AfterSweep(collected, reachedPresent = true)
                     val maxCreatedAt = rows.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.maxOrNull()
-                        ?: return collected
+                        ?: return AfterSweep(collected, reachedPresent = true)
                     after = Instant.ofEpochMilli(maxCreatedAt).toString()
                 }
                 is NetworkResult.Failure -> return null
             }
         }
-        return collected
+        return AfterSweep(collected, reachedPresent = false)
     }
 
     /**
@@ -201,8 +234,10 @@ internal class MessageCacheSource(
     private suspend fun persist(messages: List<ApiMessage>, newEtag: String?) {
         val now = clock.nowMillis()
         val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
+        val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId)
+            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
+            erasures?.recordRemovedRows(pruned(messages, rows))
             if (rows.isEmpty()) {
                 messageDao.deleteMissing(conversationId, emptyList())
             } else {
@@ -214,6 +249,20 @@ internal class MessageCacheSource(
             }
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, newEtag, null))
         }
+        settlements?.forEach { media?.settle(it.previous, it.written) }
+    }
+
+    /**
+     * #14655 — les lignes serveur que l'élagage va retirer : celles de la fenêtre que la page ne sert plus, sous aucune de
+     * leurs clés (id, id serveur, `cid_`). Une bulle remplacée par sa jumelle serveur n'en est pas une. Seul l'INTÉRIEUR
+     * de la page témoigne d'une suppression : une ligne plus récente que son dernier message (ou toute ligne, sous une
+     * page vide) a pu arriver par le socket pendant la requête, et le coffre est la seule copie de son clair.
+     */
+    private suspend fun pruned(messages: List<ApiMessage>, rows: List<me.meeshy.core.database.entity.MessageEntity>): List<me.meeshy.core.database.entity.MessageEntity> {
+        val newestServed = rows.maxOfOrNull { it.createdAt } ?: return emptyList()
+        val served = messages.flatMap { listOfNotNull(it.id, it.clientMessageId) }.toSet()
+        return messageDao.missingSince(conversationId, rows.minOf { it.createdAt }, rows.map { it.id })
+            .filter { row -> row.createdAt <= newestServed && row.id !in served && row.serverId !in served }
     }
 
     /**
@@ -226,10 +275,12 @@ internal class MessageCacheSource(
     private suspend fun persistAfterBackfill(messages: List<ApiMessage>) {
         val now = clock.nowMillis()
         val currentEtag = syncMetaDao.etag(resourceKey)
+        val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId)
+            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, currentEtag, null))
         }
+        settlements?.forEach { media?.settle(it.previous, it.written) }
     }
 
     private companion object {

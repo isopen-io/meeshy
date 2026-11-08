@@ -82,7 +82,9 @@ struct ComposerSceneArrangementRelay {
                                           clearAllAsked: host.$sceneClearAllAsked,
                                           onClearAll: { host.perform(.clearAll) },
                                           onAnimation: { host.toggleSceneAnimation() },
-                                          onTimeline: { host.toggleSceneFrise() }),
+                                          onTimeline: { host.toggleSceneFrise() },
+                                          soundReuseAllowed: ComposerSoundReuse.isAllowed(host.soundExtractionChoice),
+                                          commentsDisabled: host.commentsDisabledChoice),
             openEntry: ComposerLabeledRailLayout.openEntry(
                 drawing: host.viewModel.isDrawingActive,
                 typing: host.sceneTypesInline,

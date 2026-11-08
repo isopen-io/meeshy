@@ -104,24 +104,7 @@ struct ConversationListEmptyState: View {
             // dupliquer les métriques dans chaque branche, ce
             // qui est précisément ce que ce restylage promet
             // (« même `.padding(.top, 60)` »).
-            Group {
-                if LentilleFeatureFlag.isLentilleListEnabled {
-                    EmptyStateView(
-                        icon: "magnifyingglass",
-                        title: String(localized: "search.no_results"),
-                        subtitle: String(localized: "search.try_other_terms"),
-                        compact: true
-                    )
-                } else {
-                    EmptyStateView(
-                        icon: "magnifyingglass",
-                        title: String(localized: "search.no_results"),
-                        subtitle: String(localized: "search.try_other_terms")
-                    )
-                }
-            }
-            .padding(.top, 60)
-            .transition(.opacity)
+            ConversationSearchNoResultsState()
         case .syncError:
             // Cold-start sync failed AND cache is empty: offer a
             // retry instead of the misleading "no conversations"
@@ -174,6 +157,37 @@ struct ConversationListEmptyState: View {
                         onAction: {
                             onNewConversation?()
                         }
+                    )
+                }
+            }
+            .padding(.top, 60)
+            .transition(.opacity)
+        }
+    }
+}
+
+// MARK: - Recherche sans conversation trouvée
+
+/// « Aucun résultat » — à condition qu'aucun MESSAGE ne réponde non plus
+/// (#14619) : sinon l'état vide contredirait la section qui les liste.
+struct ConversationSearchNoResultsState: View {
+    @EnvironmentObject private var conversationViewModel: ConversationListViewModel
+
+    var body: some View {
+        ConversationSearchNoResultsGate(model: conversationViewModel.searchTextModel.messageSearch) {
+            Group {
+                if LentilleFeatureFlag.isLentilleListEnabled {
+                    EmptyStateView(
+                        icon: "magnifyingglass",
+                        title: String(localized: "search.no_results"),
+                        subtitle: String(localized: "search.try_other_terms"),
+                        compact: true
+                    )
+                } else {
+                    EmptyStateView(
+                        icon: "magnifyingglass",
+                        title: String(localized: "search.no_results"),
+                        subtitle: String(localized: "search.try_other_terms")
                     )
                 }
             }

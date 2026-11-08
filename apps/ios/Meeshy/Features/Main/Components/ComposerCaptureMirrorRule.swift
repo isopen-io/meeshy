@@ -1,3 +1,4 @@
+import Combine
 import AVFoundation
 import CoreGraphics
 import UIKit
@@ -32,6 +33,28 @@ nonisolated enum ComposerCaptureMirrorRule {
     }
 }
 
+/// **La vidéo filmée en marchant reste posée** (OPUS-10, doc 08 § R9).
+///
+/// Sans réglage, la connexion du fichier vidéo n'est pas stabilisée. Le mode
+/// `standard` est retenu des deux côtés : c'est celui qui recadre le moins et
+/// ajoute le moins de délai, donc la vidéo garde le cadrage que l'aperçu
+/// montrait. Les modes `cinematic` recadrent davantage sans que l'aperçu le
+/// montre : ils attendent une recette sur iPhone. La photo n'est jamais
+/// stabilisée par la connexion, et les trames du look en direct non plus : leur
+/// délai se verrait dans le viseur.
+nonisolated enum ComposerCaptureStabilizationRule {
+
+    enum Mode: Equatable, Sendable {
+        case off
+        case standard
+    }
+
+    static func preferred(_ output: ComposerCaptureMirrorRule.Output, supportsStandard: Bool) -> Mode {
+        guard output == .movie, supportsStandard else { return .off }
+        return .standard
+    }
+}
+
 /// **Une photo sort à l'HORIZON, comme l'appareil était tenu** — jamais couchée.
 ///
 /// La connexion photo restait figée debout (`portraitAngle`) : un appareil tenu
@@ -57,6 +80,12 @@ nonisolated enum ComposerCaptureHorizonRule {
         }
     }
 
+    /// La tenue qui ne désigne aucun horizon garde l'angle de la dernière qui en
+    /// désignait un : l'appareil posé à plat reste tenu comme il l'était.
+    static func heldAngle(_ orientation: UIDeviceOrientation, last: CGFloat) -> CGFloat {
+        angle(for: orientation) ?? last
+    }
+
     /// L'équivalent d'avant iOS 17 (`videoOrientation`).
     static func videoOrientation(for angle: CGFloat) -> AVCaptureVideoOrientation {
         switch Int(angle.rounded()) {
@@ -73,9 +102,15 @@ nonisolated enum ComposerCaptureHorizonRule {
 @MainActor
 final class ComposerCaptureHorizon {
 
+    nonisolated deinit {
+        guard readsDeviceOrientation else { return }
+        Task { @MainActor in UIDevice.current.endGeneratingDeviceOrientationNotifications() }
+    }
+
     private var coordinator: AnyObject?
     private var lastAngle: CGFloat = ComposerCaptureMirrorRule.portraitAngle
     private var readsDeviceOrientation = false
+    private var holds: AnyCancellable?
 
     func follow(_ device: AVCaptureDevice) {
         if #available(iOS 17.0, *) {
@@ -83,6 +118,10 @@ final class ComposerCaptureHorizon {
         } else if !readsDeviceOrientation {
             readsDeviceOrientation = true
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            hold(UIDevice.current.orientation)
+            holds = NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in MainActor.assumeIsolated { self?.hold(UIDevice.current.orientation) } }
         }
     }
 
@@ -90,10 +129,12 @@ final class ComposerCaptureHorizon {
         if #available(iOS 17.0, *), let coordinator = coordinator as? AVCaptureDevice.RotationCoordinator {
             return coordinator.videoRotationAngleForHorizonLevelCapture
         }
-        if let angle = ComposerCaptureHorizonRule.angle(for: UIDevice.current.orientation) {
-            lastAngle = angle
-        }
+        hold(UIDevice.current.orientation)
         return lastAngle
+    }
+
+    private func hold(_ orientation: UIDeviceOrientation) {
+        lastAngle = ComposerCaptureHorizonRule.heldAngle(orientation, last: lastAngle)
     }
 
     func level(_ connection: AVCaptureConnection?) {

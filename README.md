@@ -551,9 +551,14 @@ MongoDB UI and Redis UI are **not** routed by Traefik (#3640) — they bind to
 
 ---
 
-## License
+## Licences
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+> Ingénierie de conformité, pas un avis juridique : la rédaction finale attend l'avocat du projet (#11548). Détail : [`NOTICE`](NOTICE).
+
+- **Les fichiers source** écrits pour Meeshy sont sous licence **MIT** ([`LICENSE`](LICENSE)), sauf mention contraire en tête de fichier ou dans le dossier d'un composant tiers (`packages/LibSignalClient/`, `packages/libsignal-wasm/` : AGPL-3.0-only).
+- **Les binaires distribués qui embarquent [libsignal](https://github.com/signalapp/libsignal)** — l'application iOS, l'application Android, le bundle web avec le moteur WASM et l'image Docker de la passerelle — sont des œuvres sous **AGPL-3.0-only** ([`LICENSES/AGPL-3.0.txt`](LICENSES/AGPL-3.0.txt), texte officiel de la FSF).
+- **La Source Correspondante** de chaque binaire est ce dépôt public, au commit exact du build : l'écran *Réglages › À propos › Licences* de chaque application ouvre `https://github.com/isopen-io/meeshy/tree/<commit>` ; l'image de la passerelle porte le commit dans son label OCI `org.opencontainers.image.revision` et dans `GET /health` (`build.commit`). Les recettes de construction de libsignal sont dans le dépôt : `packages/LibSignalClient/scripts/build-signal-ffi-xcframework.sh` (iOS), `packages/libsignal-wasm/build.sh` (web), Gradle pour l'AAR publié par Signal (Android).
+- **Les avis des composants tiers** sont affichés par l'écran *Licences* de chaque application ; leurs fichiers sont listés dans [`NOTICE`](NOTICE) § 4.
 
 ---
 

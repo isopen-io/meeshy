@@ -350,6 +350,10 @@ const THREAD_MENU = [
   'push-pin',
   'prohibit',
   'lock-simple',
+  // L'icône de POST (#16333) : « Composer » ouvre la composition par un carré
+  // et un crayon, miroir de `square.and.pencil` d'iOS. La baguette reste
+  // celle d'« Imager » sur les rails d'actions.
+  'note-pencil',
 ];
 
 emit({
@@ -1109,14 +1113,14 @@ emit({
 
 /**
  * LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) — les onglets du plateau
- * (Styles, Frame, Fond, Police, Liaison, Détails, Médias — #8693), « Au hasard », « Format par
+ * (Contenu — #16393, Styles, Frame, Fond, Police, Liaison, Détails, Médias — #8693), « Au hasard », « Format par
  * défaut » et « Partager ». Chargé avec la feuille d'export, elle-même montée
  * à la demande depuis le menu du message : jamais dans le socle. `translate`
  * (Langue), `download-simple` (Sauvegarder), `magnifying-glass` et `x`
  * restent au socle, où ils vivent déjà.
  */
 emit({
-  ids: ['squares-four', 'palette', 'text-aa', 'arrow-elbow-down-right', 'sliders-horizontal', 'shuffle', 'bookmark-simple', 'export', 'frame-corners', 'images'],
+  ids: ['squares-four', 'palette', 'text-aa', 'arrow-elbow-down-right', 'sliders-horizontal', 'shuffle', 'bookmark-simple', 'export', 'frame-corners', 'images', 'list-checks'],
   output: join(HERE, '../src/components/glyphs-export-card.ts'),
   constant: 'EXPORT_CARD_GLYPHS',
   type: 'ExportCardGlyphName',
@@ -1217,4 +1221,19 @@ emit({
   constant: 'ADMIN_GLYPHS',
   type: 'AdminGlyphName',
   role: "LE JEU D'ECRAN de l'administration (#8876) : le menu groupe et le kit, charge avec les routes /adm et /admin, jamais dans le socle.",
+});
+
+/**
+ * LE JEU DU PLEIN ECRAN D'UNE DECORATION (#16267) — `minus` (reduire le zoom)
+ * et `caret-right` (element suivant), charge avec le plein ecran de la
+ * boutique, jamais dans le socle. `plus`, `x` et `caretLeft` restent au SOCLE.
+ */
+const PACK_PREVIEW = ['minus', 'caret-right'];
+
+emit({
+  ids: PACK_PREVIEW,
+  output: join(HERE, '../src/components/glyphs-pack-preview.ts'),
+  constant: 'PACK_PREVIEW_GLYPHS',
+  type: 'PackPreviewGlyphName',
+  role: "LE JEU du plein ecran d'une decoration de la boutique (#16267) : zoom et element suivant, charge avec le plein ecran, jamais dans le socle.",
 });

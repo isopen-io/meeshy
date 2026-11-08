@@ -31,11 +31,14 @@ const dayRow = (daysAgo: number, low: Record<string, number>, high: Record<strin
 
 const user = (id: string, over: Record<string, unknown> = {}) => ({ id, birthDate: ADULT, blockedUserIds: [], ...over });
 
-const setup = (over: { days?: unknown[]; users?: unknown[]; relations?: unknown[] } = {}) => {
+const choice = (userId: string, autoAcquaintance: unknown) => ({ userId, privacy: { showOnlineStatus: true, autoAcquaintance } });
+
+const setup = (over: { days?: unknown[]; users?: unknown[]; relations?: unknown[]; preferences?: unknown[] } = {}) => {
   const store = pairInteractionStore({
     days: (over.days ?? [dayRow(0, qualifying, qualifying)]) as never,
     users: (over.users ?? [user(LOW), user(HIGH)]) as never,
     relations: (over.relations ?? []) as never,
+    preferences: (over.preferences ?? []) as never,
   });
   const notices: AcquaintanceNotice[] = [];
   const notify = jest.fn(async (notice: AcquaintanceNotice) => {
@@ -152,9 +155,12 @@ describe('evaluateAutoAcquaintance — ce qui l’empêche', () => {
     expect(await evaluate()).toBe('minor');
   });
 
-  it('permise entre deux mineurs déclarés', async () => {
-    const { evaluate } = setup({ users: [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })] });
-    expect(await evaluate()).toBe('created');
+  it('#14406 — entre deux mineurs déclarés, elle attend que chacun l’ait activée : désactivée par défaut', async () => {
+    const minors = [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })];
+
+    expect(await setup({ users: minors }).evaluate()).toBe('opted-out');
+    expect(await setup({ users: minors, preferences: [choice(LOW, true)] }).evaluate()).toBe('opted-out');
+    expect(await setup({ users: minors, preferences: [choice(LOW, true), choice(HIGH, true)] }).evaluate()).toBe('created');
   });
 
   it('un utilisateur introuvable : rien, fail-closed', async () => {
@@ -174,6 +180,168 @@ describe('evaluateAutoAcquaintance — ce qui l’empêche', () => {
 
     expect(await evaluate()).toBe('unchanged');
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'FRIEND' });
+    expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe('evaluateAutoAcquaintance — « je refuse que Meeshy crée des Connaissances automatiquement » (#14406, art. 21)', () => {
+  it('un seul refus suffit : rien n’est créé, personne n’est prévenu', async () => {
+    const { store, notify, evaluate } = setup({ preferences: [choice(HIGH, false)] });
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()).toHaveLength(0);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('le refus ne relève pas non plus son côté d’un lien monté par une demande', async () => {
+    const mixed = {
+      id: 'aa0000000000000000000099', userLowId: LOW, userHighId: HIGH, grantedByLow: 'CLOSE', grantedByHigh: 'PUBLIC',
+      levelSince: new Date('2026-10-20T00:00:00Z'), origin: 'request', transitions: [],
+    };
+    const { store, evaluate } = setup({ relations: [mixed], preferences: [choice(HIGH, false)] });
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'CLOSE', grantedByHigh: 'PUBLIC' });
+  });
+
+  it('le refus défait, en silence, une Connaissance née toute seule', async () => {
+    const auto = {
+      id: 'aa0000000000000000000099', userLowId: LOW, userHighId: HIGH, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE',
+      levelSince: new Date('2026-10-20T00:00:00Z'), origin: 'auto-acquaintance', transitions: [],
+    };
+    const { store, notify, evaluate } = setup({ relations: [auto], preferences: [choice(LOW, false)] });
+
+    expect(await evaluate()).toBe('cancelled');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('le choix d’un mineur déclaré l’emporte sur son défaut, et un majeur qui l’active explicitement reste ouvert', async () => {
+    const { evaluate } = setup({
+      users: [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })],
+      preferences: [choice(LOW, true), choice(HIGH, true)],
+    });
+    expect(await evaluate()).toBe('created');
+    expect(await setup({ preferences: [choice(LOW, true)] }).evaluate()).toBe('created');
+  });
+
+  it('une valeur illisible vaut absence de choix : ouverte pour un majeur, fermée pour un mineur', async () => {
+    expect(await setup({ preferences: [choice(LOW, 'non')] }).evaluate()).toBe('created');
+    const minors = [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })];
+    expect(await setup({ users: minors, preferences: [choice(LOW, 'oui'), choice(HIGH, true)] }).evaluate()).toBe('opted-out');
+  });
+});
+
+const autoRow = () => ({
+  id: 'aa0000000000000000000099', userLowId: LOW, userHighId: HIGH, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE',
+  levelSince: new Date('2026-10-20T00:00:00Z'), origin: 'auto-acquaintance', transitions: [],
+});
+
+describe('evaluateAutoAcquaintance — une annulation par la préférence est RÉVERSIBLE (audit #14464 C2, décision du porteur)', () => {
+  it('un majeur qui retire son opposition retrouve sa Connaissance automatique, les échanges restant qualifiants', async () => {
+    const first = setup({ relations: [autoRow()], preferences: [choice(LOW, false)] });
+    expect(await first.evaluate()).toBe('cancelled');
+
+    const second = setup({ relations: first.store.relations() as unknown[], preferences: [choice(LOW, true)] });
+    expect(await second.evaluate()).toBe('raised');
+    expect(second.store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' });
+    expect(second.notify).toHaveBeenCalledTimes(2);
+  });
+
+  it('l’annulation système ne grave aucune sortie : l’historique n’attribue de baisse à personne', async () => {
+    const { store, evaluate } = setup({ relations: [autoRow()], preferences: [choice(HIGH, false)] });
+    await evaluate();
+
+    expect(store.relations()[0].transitions).toEqual([]);
+  });
+
+  it('une sortie VOLONTAIRE reste respectée : la préférence rallumée ne la défait pas', async () => {
+    const dropped = {
+      ...autoRow(), grantedByLow: 'PUBLIC',
+      transitions: [{ actorId: LOW, from: 'ACQUAINTANCE', to: 'PUBLIC', at: new Date('2026-10-25T00:00:00Z') }],
+    };
+    const { store, evaluate } = setup({ relations: [dropped], preferences: [choice(LOW, true)] });
+
+    expect(await evaluate()).toBe('unchanged');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'ACQUAINTANCE' });
+  });
+
+  it('le défaut ne défait RIEN : deux mineurs sans choix gardent la Connaissance automatique née avant ce lot', async () => {
+    const minors = [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })];
+    const { store, notify, evaluate } = setup({ users: minors, relations: [autoRow()] });
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' });
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('seul un refus EXPLICITE de l’un des deux défait celle de deux mineurs', async () => {
+    const minors = [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })];
+    const { store, evaluate } = setup({ users: minors, relations: [autoRow()], preferences: [choice(HIGH, false)] });
+
+    expect(await evaluate()).toBe('cancelled');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+});
+
+describe('evaluateAutoAcquaintance — ce que le retrait laisse derrière lui (contre-audit #14464 N10, N11)', () => {
+  it('N10 — un retrait par refus oublie le cercle mis en cache des DEUX personnes', async () => {
+    const { store } = setup({ relations: [autoRow()], preferences: [choice(LOW, false)] });
+    const forgotten: string[][] = [];
+    const outcome = await evaluateAutoAcquaintance(
+      { prisma: store.prisma, now: () => NOW, forgetCircles: async (ids) => { forgotten.push([...ids]); } },
+      { userA: HIGH, userB: LOW },
+    );
+
+    expect(outcome).toBe('cancelled');
+    expect(forgotten).toEqual([[LOW, HIGH]]);
+  });
+
+  it('N10 — une panne du cache ne fait pas échouer le retrait', async () => {
+    const { store } = setup({ relations: [autoRow()], preferences: [choice(LOW, false)] });
+    const outcome = await evaluateAutoAcquaintance(
+      { prisma: store.prisma, now: () => NOW, forgetCircles: async () => { throw new Error('redis down'); } },
+      { userA: HIGH, userB: LOW },
+    );
+
+    expect(outcome).toBe('cancelled');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+
+  it('N11 — une annulation pour blocage grave une cause « system », jamais « explicit »', async () => {
+    const { store, evaluate } = setup({ relations: [autoRow()], users: [user(LOW, { blockedUserIds: [HIGH] }), user(HIGH)] });
+
+    expect(await evaluate()).toBe('cancelled');
+    expect((store.relations()[0].transitions as Array<{ cause?: string }>).map((t) => t.cause)).toEqual(['system', 'system']);
+  });
+});
+
+describe('evaluateAutoAcquaintance — la préférence est relue juste avant l’écriture (audit #14464 C3)', () => {
+  it('un refus posé pendant l’évaluation empêche la naissance, et personne n’est prévenu', async () => {
+    const { store, notify, evaluate } = setup();
+    const read = store.prisma.userPreferences.findMany;
+    let calls = 0;
+    store.prisma.userPreferences.findMany = (args) => {
+      calls += 1;
+      return calls === 1 ? read(args) : Promise.resolve([choice(LOW, false)]);
+    };
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()).toHaveLength(0);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('contre-audit N6 — un refus posé PENDANT l’écriture retire le lien juste écrit, sans annonce', async () => {
+    const { store, notify, evaluate } = setup();
+    const read = store.prisma.userPreferences.findMany;
+    let calls = 0;
+    store.prisma.userPreferences.findMany = (args) => {
+      calls += 1;
+      return calls <= 2 ? read(args) : Promise.resolve([choice(HIGH, false)]);
+    };
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
     expect(notify).not.toHaveBeenCalled();
   });
 });

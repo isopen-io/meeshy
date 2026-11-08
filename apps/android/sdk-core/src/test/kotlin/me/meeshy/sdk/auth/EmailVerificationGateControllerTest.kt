@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.game.OnboardingPresence
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.EmailGateReason
 import me.meeshy.sdk.net.EmailVerificationGateRegistry
@@ -21,10 +22,12 @@ class EmailVerificationGateControllerTest {
     private val user = MutableStateFlow<MeeshyUser?>(MeeshyUser(id = "u1", username = "alice", email = "a@mail.com"))
     private val registry = EmailVerificationGateRegistry()
 
+    private val onboarding = OnboardingPresence()
+
     private fun controller(): EmailVerificationGateController {
         val sessions = mockk<SessionRepository>()
         every { sessions.currentUser } returns user
-        return EmailVerificationGateController(sessions, registry)
+        return EmailVerificationGateController(sessions, registry, onboarding)
     }
 
     @Test
@@ -126,5 +129,16 @@ class EmailVerificationGateControllerTest {
         controller.settle(true)
 
         assertThat(controller.emailKnownUnproven()).isTrue()
+    }
+
+    @Test
+    fun `pendant l'onboarding la demande est refusee sans rien presenter`() = runTest(StandardTestDispatcher()) {
+        val controller = controller()
+        onboarding.update(true)
+
+        val verdict = controller.verifyEmail(EmailGateReason.PUBLISH)
+
+        assertThat(verdict).isFalse()
+        assertThat(controller.request.value).isNull()
     }
 }

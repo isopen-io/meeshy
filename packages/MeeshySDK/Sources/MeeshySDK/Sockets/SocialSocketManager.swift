@@ -166,6 +166,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         Task { @MainActor in self.connectionState = .connecting }
 
+        // #16744 — jumeau de `MessageSocketManager.establishTransport` : le
+        // transport remplacé passe par la loi de retraite, sans quoi les quatre
+        // accusés de réaction sociale en vol restent suspendus pour toujours.
+        transportRetirement.retire(manager)
         manager = SocketManager(socketURL: url, config: [
             .log(false),
             .handleQueue(.main),

@@ -179,7 +179,7 @@ class MutationSenderRegistryTest {
         }
 
     @Test
-    fun `a message waiting on two uploads leaves in the pass that delivers them`() = withOutbox { outbox ->
+    fun `a message waiting on two uploads leaves in the pass that delivers them, the text behind it without waiting`() = withOutbox { outbox ->
         val upload = RecordingHandler(result = SendResult.SuccessWithId("media-x"))
         val message = RecordingHandler()
         val registry = MutationSenderRegistry(
@@ -194,7 +194,7 @@ class MutationSenderRegistryTest {
 
         val reports = registry.drainAll(outbox)
 
-        assertThat(message.sent.map { it.targetId }).containsExactly("m1", "m2").inOrder()
+        assertThat(message.sent.map { it.targetId }).containsExactly("m2", "m1").inOrder()
         assertThat(reports.sumOf { it.delivered }).isEqualTo(4)
         assertThat(OutboxFlushPlan.outcome(reports)).isEqualTo(FlushOutcome.SUCCESS)
     }

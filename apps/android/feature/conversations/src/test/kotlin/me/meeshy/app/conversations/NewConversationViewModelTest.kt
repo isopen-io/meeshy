@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -23,6 +24,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.api.UserSearchResult
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
 import io.mockk.every
@@ -54,7 +56,7 @@ class NewConversationViewModelTest {
         users: UserRepository = mockk(relaxed = true),
         conversations: ConversationRepository = mockk(relaxed = true),
         session: SessionRepository = session(),
-    ) = NewConversationViewModel(users, conversations, session, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+    ) = NewConversationViewModel(users, conversations, session, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), BlockCache())
 
     private fun results(vararg ids: String) =
         ids.map { UserSearchResult(id = it, username = it, displayName = it.uppercase()) }
@@ -231,8 +233,7 @@ class NewConversationViewModelTest {
 
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         coVerify { conversations.create(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "server") }
@@ -271,12 +272,32 @@ class NewConversationViewModelTest {
 
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         assertThat(vm.state.value.isCreating).isFalse()
         assertThat(vm.state.value.error).isEqualTo(NewConversationError.CREATE_FAILED)
+        assertThat(vm.state.value.createdConversationId).isNull()
+    }
+
+    @Test
+    fun create_offline_queues_the_conversation_and_closes_without_an_error() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError(code = "NETWORK", message = "offline"))
+        coEvery { conversations.createOptimistic(any(), any(), any(), any()) } returns "pending_1"
+        val vm = viewModel(users = users, conversations = conversations)
+
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.onPersonTapped("u1")
+        advanceUntilIdle()
+
+        coVerify { conversations.createOptimistic(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "server") }
+        assertThat(vm.state.value.queuedOffline).isTrue()
+        assertThat(vm.state.value.error).isNull()
         assertThat(vm.state.value.createdConversationId).isNull()
     }
 
@@ -291,8 +312,7 @@ class NewConversationViewModelTest {
 
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         assertThat(vm.state.value.error).isEqualTo(NewConversationError.BLOCKED)
@@ -311,17 +331,85 @@ class NewConversationViewModelTest {
     }
 
     @Test
-    fun a_failed_search_shows_no_technical_message_only_the_no_result_state() = runTest(dispatcher) {
+    fun a_failed_search_is_told_apart_from_an_empty_one_and_can_be_retried() = runTest(dispatcher) {
         val users = mockk<UserRepository>()
-        coEvery { users.searchUsersPaged(any(), any(), any()) } returns
-            NetworkResult.Failure(ApiError(code = "network", message = "Unable to resolve host"))
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returnsMany listOf(
+            NetworkResult.Failure(ApiError(code = "network", message = "Unable to resolve host")),
+            paged(listOf("u1")),
+        )
         val vm = viewModel(users = users)
 
         vm.onQueryChange("zzz")
         advanceUntilIdle()
 
         assertThat(vm.state.value.error).isNull()
-        assertThat(vm.state.value.showsNoResults).isTrue()
+        assertThat(vm.state.value.searchFailed).isTrue()
+        assertThat(vm.state.value.showsNoResults).isFalse()
+
+        vm.retrySearch()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.searchFailed).isFalse()
+        assertThat(vm.state.value.results.map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun the_search_waits_350_ms_after_the_last_keystroke() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val vm = viewModel(users = users)
+
+        vm.onQueryChange("bo")
+        advanceTimeBy(349)
+        assertThat(vm.state.value.results).isEmpty()
+        advanceTimeBy(2)
+        runCurrent()
+
+        assertThat(vm.state.value.results.map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun blocking_a_user_live_greys_the_row_and_unpicks_it() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val blockCache = BlockCache()
+        val vm = NewConversationViewModel(
+            users, mockk(relaxed = true), session(), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), blockCache,
+        )
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        assertThat(vm.state.value.selected).hasSize(1)
+
+        blockCache.setBlocked("u1", true)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.results.single().isBlocked).isTrue()
+        assertThat(vm.state.value.selected).isEmpty()
+
+        blockCache.setBlocked("u1", false)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.results.single().isBlocked).isFalse()
+    }
+
+    @Test
+    fun dismissing_the_error_clears_it() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError(code = "USER_BLOCKED", message = "Forbidden", httpStatus = 403))
+        val vm = viewModel(users = users, conversations = conversations)
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        vm.create()
+        advanceUntilIdle()
+
+        vm.dismissError()
+
+        assertThat(vm.state.value.error).isNull()
     }
 
     @Test
@@ -351,7 +439,7 @@ class NewConversationViewModelTest {
     }
 
     @Test
-    fun an_analyst_sees_end_to_end_soon_on_this_phone_and_server_stays_checked() = runTest(dispatcher) {
+    fun an_analyst_is_offered_end_to_end_for_a_direct_conversation_and_it_is_checked() = runTest(dispatcher) {
         val vm = viewModel(users = pickerWith("u1"), session = session(role = "ANALYST"))
         vm.onQueryChange("bob")
         advanceUntilIdle()
@@ -359,9 +447,9 @@ class NewConversationViewModelTest {
 
         val e2ee = vm.state.value.encryptionOffer.choices.last()
         assertThat(e2ee.mode).isEqualTo(CreationEncryptionMode.E2EE)
-        assertThat(e2ee.available).isFalse()
-        assertThat(e2ee.unavailability).isEqualTo(CreationEncryptionUnavailability.CLIENT_NOT_YET)
-        assertThat(vm.state.value.encryptionMode).isEqualTo(CreationEncryptionMode.SERVER)
+        assertThat(e2ee.available).isTrue()
+        assertThat(e2ee.unavailability).isNull()
+        assertThat(vm.state.value.encryptionMode).isEqualTo(CreationEncryptionMode.E2EE)
     }
 
     @Test
@@ -380,6 +468,7 @@ class NewConversationViewModelTest {
     fun an_unavailable_mode_cannot_be_checked() = runTest(dispatcher) {
         val vm = viewModel(users = pickerWith("u1"), session = session(role = "ADMIN"))
         advanceUntilIdle()
+        vm.toggleGroupRequested()
 
         vm.selectEncryptionMode(CreationEncryptionMode.E2EE)
 
@@ -393,12 +482,106 @@ class NewConversationViewModelTest {
         val vm = viewModel(users = pickerWith("u1"), conversations = conversations, session = session(role = "USER"))
         vm.onQueryChange("bob")
         advanceUntilIdle()
-        vm.toggleSelection("u1")
-
         vm.selectEncryptionMode(CreationEncryptionMode.HYBRID)
-        vm.create()
+        vm.onPersonTapped("u1")
         advanceUntilIdle()
 
         coVerify { conversations.create(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "hybrid") }
+    }
+
+    @Test
+    fun the_sheet_opens_with_nothing_to_create_and_its_encryption_row_folded() = runTest(dispatcher) {
+        val vm = viewModel(session = session(role = "USER"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.NONE)
+        assertThat(vm.state.value.isGroup).isFalse()
+        assertThat(vm.state.value.showsCreate).isFalse()
+        assertThat(vm.state.value.showsEncryption).isTrue()
+        assertThat(vm.state.value.encryptionExpanded).isFalse()
+    }
+
+    @Test
+    fun the_new_group_switch_asks_for_a_title_and_creates_a_group_of_myself_alone() = runTest(dispatcher) {
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns NetworkResult.Success(ApiConversation(id = "c-solo"))
+        val vm = viewModel(conversations = conversations, session = session(role = "USER"))
+        advanceUntilIdle()
+
+        vm.toggleGroupRequested()
+        assertThat(vm.state.value.isGroup).isTrue()
+        assertThat(vm.state.value.showsSoloHint).isTrue()
+        assertThat(vm.state.value.showsCreate).isTrue()
+        assertThat(vm.state.value.canCreate).isFalse()
+        vm.onGroupTitleChange("Mes notes")
+        assertThat(vm.state.value.canCreate).isTrue()
+        vm.create()
+        advanceUntilIdle()
+
+        coVerify { conversations.create(NewConversationLogic.TYPE_GROUP, "Mes notes", emptyList(), "server") }
+        assertThat(vm.state.value.createdConversationId).isEqualTo("c-solo")
+    }
+
+    @Test
+    fun the_switch_turned_back_off_returns_to_nothing_to_create() = runTest(dispatcher) {
+        val vm = viewModel(session = session(role = "USER"))
+        advanceUntilIdle()
+
+        vm.toggleGroupRequested()
+        vm.toggleGroupRequested()
+
+        assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.NONE)
+    }
+
+    @Test
+    fun one_peer_with_the_group_switch_is_a_titled_group() = runTest(dispatcher) {
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns NetworkResult.Success(ApiConversation(id = "g1"))
+        val vm = viewModel(users = pickerWith("u1"), conversations = conversations, session = session(role = "USER"))
+        advanceUntilIdle()
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.DIRECT)
+        assertThat(vm.state.value.showsSoloHint).isFalse()
+
+        vm.toggleGroupRequested()
+        assertThat(vm.state.value.canCreate).isFalse()
+        vm.onGroupTitleChange("Audit")
+        vm.create()
+        advanceUntilIdle()
+
+        coVerify { conversations.create(NewConversationLogic.TYPE_GROUP, "Audit", listOf("u1"), "server") }
+    }
+
+    @Test
+    fun two_peers_already_make_a_group_and_the_switch_stays_on() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1", "u2"), session = session(role = "USER"))
+        advanceUntilIdle()
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        vm.toggleSelection("u2")
+
+        assertThat(vm.state.value.groupToggleEnabled).isFalse()
+        vm.toggleGroupRequested()
+        assertThat(vm.state.value.isGroup).isTrue()
+        assertThat(vm.state.value.canCreate).isFalse()
+    }
+
+    @Test
+    fun the_encryption_row_folds_its_choices_and_unfolds_them_on_touch() = runTest(dispatcher) {
+        val vm = viewModel(users = pickerWith("u1"), session = session(role = "USER"))
+        advanceUntilIdle()
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+
+        assertThat(vm.state.value.showsEncryption).isTrue()
+        assertThat(vm.state.value.encryptionExpanded).isFalse()
+        vm.toggleEncryptionOptions()
+        assertThat(vm.state.value.encryptionExpanded).isTrue()
+        vm.toggleEncryptionOptions()
+        assertThat(vm.state.value.encryptionExpanded).isFalse()
     }
 }

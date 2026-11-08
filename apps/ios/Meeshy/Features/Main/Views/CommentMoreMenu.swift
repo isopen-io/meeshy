@@ -7,26 +7,16 @@ import MeeshyUI
 /// écrit en ligne dans la ligne d'un post ; la story n'en avait aucun.
 ///
 /// Ce qu'il offre, c'est `CommentMenuPolicy` qui le dit : Copier (le texte
-/// servi), Imager (l'arbre de réponses compris), Modifier (l'auteur), Signaler
-/// (les autres), Supprimer (l'auteur, quand l'hôte le sait). Les mêmes
-/// entrées sont des actions personnalisées VoiceOver du bouton.
+/// servi), Modifier (l'auteur), Signaler (les autres), Supprimer (l'auteur,
+/// quand l'hôte le sait). « Imager » vit dans la rangée d'actions de la ligne
+/// (#16541). Les mêmes entrées sont des actions personnalisées VoiceOver du
+/// bouton.
 struct CommentMoreMenu: View {
     let comment: FeedComment
     /// Le texte que la ligne affiche — ce que « Copier » emporte.
     let servedText: String
     let showOriginal: Bool
     let accentColor: String
-    /// La racine d'une réponse : elle part en citation dans la carte.
-    var root: FeedComment? = nil
-    /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
-    var loadedReplies: [FeedComment] = []
-    /// Le post du commentaire (#9686) : « Imager » compose alors la carte — le
-    /// post en tête, le fil jusqu'à une réponse, les réponses choisies. `nil`
-    /// et sans `story` : la carte du commentaire, sa racine en citation.
-    var post: FeedPost? = nil
-    /// La story du commentaire (#10915) : « Imager » compose alors la carte comme pour
-    /// un post — le visuel de la story en HERO, puis le commentaire (et son fil).
-    var story: PostCommentCardStory? = nil
     var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     /// #11151 — retire le commentaire d'un autre ; reçoit le motif de la feuille.
@@ -36,62 +26,13 @@ struct CommentMoreMenu: View {
 
     @State private var reportPresented = false
 
-    private var viewer: MessageCardSubject.Viewer {
-        let user = AuthManager.shared.currentUser
-        return MessageCardSubject.Viewer(id: user?.id ?? "", displayName: user?.displayName, username: user?.username)
-    }
-
-    private func imagineRequest(_ target: FeedComment, quoting quoted: FeedComment?) -> MessageCardExportRequest? {
-        MessageCardExportMenu.request(
-            comment: target,
-            showOriginal: target.id == comment.id && showOriginal,
-            accentColor: accentColor,
-            viewer: viewer,
-            handle: viewer.username,
-            quoting: quoted,
-            audioPrism: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved
-        )
-    }
-
-    private var ownRequest: MessageCardExportRequest? {
-        guard post != nil || story != nil else { return imagineRequest(comment, quoting: root) }
-        let composed = MessageCardExportMenu.request(
-            post: post, story: story, comment: comment, thread: thread, showOriginal: showOriginal, accentColor: accentColor,
-            viewer: viewer, handle: viewer.username,
-            audioPrism: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved
-        )
-        guard composed == nil, PostCommentCardComposition.fallsBackToCommentAlone(compositionSource) else { return composed }
-        return imagineRequest(comment, quoting: root)
-    }
-
-    private var compositionSource: PostCommentCardSource {
-        PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal, story: story)
-    }
-
-    /// Le fil chargé autour du commentaire : sa racine et les réponses qu'on a.
-    private var thread: [FeedComment] {
-        (root.map { [$0] } ?? []) + loadedReplies
-    }
-
-    /// « Imager » s'offre-t-il ? Pour un commentaire de post ou de story, dès qu'un mode compose une
-    /// carte — ou, quand le fil d'une réponse n'est pas chargé, par la carte du commentaire seul.
-    private var canImagine: Bool {
-        guard post != nil || story != nil else { return ownRequest != nil }
-        let source = compositionSource
-        guard PostCommentCardComposition.modes(of: source).isEmpty else { return true }
-        return PostCommentCardComposition.fallsBackToCommentAlone(source) && imagineRequest(comment, quoting: root) != nil
-    }
-
-    private var threadReplies: [FeedComment] {
-        CommentMenuPolicy.imagineReplies(for: comment, loaded: loadedReplies)
-    }
+    private var viewer: MessageCardSubject.Viewer { ImagerCardRequest.currentViewer }
 
     private var actions: [CommentMenuAction] {
         CommentMenuPolicy.actions(
             for: comment,
             viewerId: viewer.id,
             servedText: servedText,
-            canImagine: canImagine,
             editable: onEdit != nil,
             deletable: onDelete != nil,
             removable: onRemove != nil
@@ -133,21 +74,6 @@ struct CommentMoreMenu: View {
     @ViewBuilder
     private func entry(_ action: CommentMenuAction) -> some View {
         switch action {
-        case .imagine where post == nil && story == nil && !threadReplies.isEmpty:
-            Menu {
-                Button(String(localized: "comment.imagine.alone", defaultValue: "Ce commentaire seul", bundle: .main)) {
-                    perform(.imagine)
-                }
-                ForEach(threadReplies) { reply in
-                    Button(String(format: String(localized: "comment.imagine.withReply", defaultValue: "Avec la réponse de %@", bundle: .main), reply.author)) {
-                        guard let request = imagineRequest(reply, quoting: comment) else { return }
-                        HapticFeedback.light()
-                        MessageCardExportPresenter.present(request)
-                    }
-                }
-            } label: {
-                Label(Self.title(of: action), systemImage: Self.symbol(of: action))
-            }
         case .delete, .remove:
             Button(role: .destructive) { perform(action) } label: {
                 Label(Self.title(of: action), systemImage: Self.symbol(of: action))
@@ -164,10 +90,6 @@ struct CommentMoreMenu: View {
         case .copy:
             UIPasteboard.general.string = servedText
             HapticFeedback.success()
-        case .imagine:
-            guard let request = ownRequest else { return }
-            HapticFeedback.light()
-            MessageCardExportPresenter.present(request)
         case .edit:
             HapticFeedback.light()
             onEdit?()
@@ -204,7 +126,6 @@ struct CommentMoreMenu: View {
     static func title(of action: CommentMenuAction) -> String {
         switch action {
         case .copy: return String(localized: "comment.action.copy", defaultValue: "Copier le texte", bundle: .main)
-        case .imagine: return MessageCardExportMenu.imageLabel
         case .edit: return String(localized: "comment.action.edit", defaultValue: "Modifier", bundle: .main)
         case .report: return String(localized: "comment.action.report", defaultValue: "Signaler", bundle: .main)
         case .delete: return String(localized: "comment.action.delete", defaultValue: "Supprimer", bundle: .main)
@@ -215,7 +136,6 @@ struct CommentMoreMenu: View {
     static func symbol(of action: CommentMenuAction) -> String {
         switch action {
         case .copy: return "doc.on.doc"
-        case .imagine: return MessageCardExportMenu.imageSymbol
         case .edit: return "pencil"
         case .report: return "flag"
         case .delete: return "trash"

@@ -634,4 +634,28 @@ class StoryComposerDraftSnapshotTest {
 
         assertThat(decoded.slides.single().strokes).isEmpty()
     }
+
+    @Test
+    fun `a slide written before the canvas format existed reopens in portrait`() {
+        val legacy = """{"slides":[{"id":"s1"}],"selectedId":"s1"}"""
+
+        val slide = json.decodeFromString<StoryComposerDraftSnapshot>(legacy).slides.single()
+
+        assertThat(slide.canvasFormat).isNull()
+        assertThat(me.meeshy.sdk.model.scene.CanvasFormat.fromWire(slide.canvasFormat))
+            .isEqualTo(me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT)
+    }
+
+    @Test
+    fun `a landscape canvas format survives a JSON round-trip`() {
+        val landscape = me.meeshy.sdk.model.scene.CanvasFormat.LANDSCAPE
+        val snapshot = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", canvasFormat = landscape.wire)),
+            selectedId = "s1",
+        )
+
+        val decoded = json.decodeFromString<StoryComposerDraftSnapshot>(json.encodeToString(StoryComposerDraftSnapshot.serializer(), snapshot))
+
+        assertThat(me.meeshy.sdk.model.scene.CanvasFormat.fromWire(decoded.slides.single().canvasFormat)).isEqualTo(landscape)
+    }
 }

@@ -7,9 +7,9 @@ import SwiftUI
 /// ce lecteur** (#8709).
 ///
 /// Directive porteur 2026-09-29 : « permettre, si on est auteur, de pouvoir
-/// éditer ; signaler pour les autres ; copier ; et Imager avec l'arbre de
-/// réponse si nécessaire ». La loi est UNE — la ligne d'un commentaire de post
-/// et celle d'un commentaire de story la lisent toutes deux.
+/// éditer ; signaler pour les autres ; copier ». La loi est UNE — la ligne d'un
+/// commentaire de post et celle d'un commentaire de story la lisent toutes
+/// deux. « Imager » a quitté ce menu pour la rangée d'actions (#16541).
 @MainActor
 final class CommentMenuPolicyTests: XCTestCase {
 
@@ -31,14 +31,13 @@ final class CommentMenuPolicyTests: XCTestCase {
     private static func actions(
         _ comment: FeedComment,
         viewerId: String? = me,
-        canImagine: Bool = true,
         editable: Bool = true,
         deletable: Bool = false,
         removable: Bool = false
     ) -> [CommentMenuAction] {
         CommentMenuPolicy.actions(
             for: comment, viewerId: viewerId, servedText: comment.displayContent,
-            canImagine: canImagine, editable: editable, deletable: deletable, removable: removable
+            editable: editable, deletable: deletable, removable: removable
         )
     }
 
@@ -46,29 +45,29 @@ final class CommentMenuPolicyTests: XCTestCase {
 
     func test_actions_forItsAuthor_offerEditAndNeverReport() {
         let mine = Self.comment(authorId: Self.me)
-        XCTAssertEqual(Self.actions(mine), [.copy, .imagine, .edit])
-        XCTAssertEqual(Self.actions(mine, deletable: true), [.copy, .imagine, .edit, .delete])
+        XCTAssertEqual(Self.actions(mine), [.copy, .edit])
+        XCTAssertEqual(Self.actions(mine, deletable: true), [.copy, .edit, .delete])
     }
 
     func test_actions_forAnotherReader_offerReportAndNeverEditNorDelete() {
         let theirs = Self.comment(authorId: "u-other")
-        XCTAssertEqual(Self.actions(theirs, deletable: true), [.copy, .imagine, .report])
+        XCTAssertEqual(Self.actions(theirs, deletable: true), [.copy, .report])
     }
 
     func test_actions_whenTheHostCannotEdit_theAuthorGetsNoEdit() {
-        XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), editable: false), [.copy, .imagine])
+        XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), editable: false), [.copy])
     }
 
     func test_actions_forAnUnknownReader_offerNeitherEditNorReport() {
-        XCTAssertEqual(Self.actions(Self.comment(authorId: ""), viewerId: ""), [.copy, .imagine])
-        XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), viewerId: nil), [.copy, .imagine])
+        XCTAssertEqual(Self.actions(Self.comment(authorId: ""), viewerId: ""), [.copy])
+        XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), viewerId: nil), [.copy])
     }
 
     // MARK: - Retrait par la modération (#11151)
 
     func test_actions_whenTheHostCanRemove_anotherReadersCommentOffersRemoveAfterReport() {
         let theirs = Self.comment(authorId: "u-other")
-        XCTAssertEqual(Self.actions(theirs, removable: true), [.copy, .imagine, .report, .remove])
+        XCTAssertEqual(Self.actions(theirs, removable: true), [.copy, .report, .remove])
     }
 
     func test_actions_removeIsNeverOfferedOnItsOwnComment() {
@@ -89,44 +88,16 @@ final class CommentMenuPolicyTests: XCTestCase {
     func test_actions_aProtectedComment_isNeverCopied() {
         for flag in [MessageEffectFlags.blurred, .viewOnce, .ephemeral] {
             let hidden = Self.comment(flags: flag)
-            XCTAssertFalse(Self.actions(hidden, canImagine: false).contains(.copy), "\(flag)")
-            XCTAssertTrue(Self.actions(hidden, canImagine: false).contains(.report), "\(flag)")
+            XCTAssertFalse(Self.actions(hidden).contains(.copy), "\(flag)")
+            XCTAssertTrue(Self.actions(hidden).contains(.report), "\(flag)")
         }
     }
 
     func test_actions_aBlankServedText_isNotCopied() {
-        XCTAssertEqual(Self.actions(Self.comment(content: "   "), canImagine: false), [.report])
+        XCTAssertEqual(Self.actions(Self.comment(content: "   ")), [.report])
     }
 
-    func test_actions_imagineFollowsTheCardLaw_notTheMenu() {
-        XCTAssertFalse(Self.actions(Self.comment(), canImagine: false).contains(.imagine))
-    }
-
-    // MARK: - L'arbre de réponses
-
-    func test_imagineReplies_aRootOffersItsLoadedReplies_withoutTheProtectedOnes() {
-        let root = Self.comment(id: "root")
-        let replies = [
-            Self.comment(id: "r1", parentId: "root"),
-            Self.comment(id: "r2", parentId: "root", flags: .blurred),
-            Self.comment(id: "r3", content: " ", parentId: "root"),
-            Self.comment(id: "r4", parentId: "root"),
-        ]
-        XCTAssertEqual(CommentMenuPolicy.imagineReplies(for: root, loaded: replies).map(\.id), ["r1", "r4"])
-    }
-
-    func test_imagineReplies_aReplyOffersNone_andAProtectedRootOffersNone() {
-        let reply = Self.comment(id: "r1", parentId: "root")
-        XCTAssertTrue(CommentMenuPolicy.imagineReplies(for: reply, loaded: [reply]).isEmpty)
-        let hiddenRoot = Self.comment(id: "root", flags: .viewOnce)
-        XCTAssertTrue(CommentMenuPolicy.imagineReplies(for: hiddenRoot, loaded: [reply]).isEmpty)
-    }
-
-    func test_imagineReplies_areBoundedToTheFirstFive() {
-        let root = Self.comment(id: "root")
-        let replies = (1...9).map { Self.comment(id: "r\($0)", parentId: "root") }
-        XCTAssertEqual(CommentMenuPolicy.imagineReplies(for: root, loaded: replies).map(\.id), ["r1", "r2", "r3", "r4", "r5"])
-    }
+    // MARK: - La carte d'une réponse
 
     func test_imagineRequest_aReplyCarriesItsRoot_asTheQuote() throws {
         let root = Self.comment(id: "root", content: "Bonjour", translated: "Hello")

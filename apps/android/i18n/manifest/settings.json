@@ -277,6 +277,14 @@
           "status": "android-only"
         },
         {
+          "androidName": "change_password_error_weak",
+          "status": "android-only"
+        },
+        {
+          "androidName": "change_password_error_rejected",
+          "status": "android-only"
+        },
+        {
           "catalog": "app",
           "iosKey": "auth.magiclink.error.generic",
           "androidName": "change_password_error_generic",
@@ -792,10 +800,6 @@
         },
         {
           "androidName": "legal_tos_user_conduct_title",
-          "status": "android-only"
-        },
-        {
-          "androidName": "licenses_intro",
           "status": "android-only"
         },
         {
@@ -1794,6 +1798,72 @@
           "catalog": "app",
           "iosKey": "2fa_section_title",
           "androidName": "twofactor_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.meeshy.title",
+          "androidName": "licenses_meeshy_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.meeshy.body",
+          "androidName": "licenses_meeshy_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.meeshy.body_mit",
+          "androidName": "licenses_meeshy_body_mit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.source.title",
+          "androidName": "licenses_source_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.source.body",
+          "androidName": "licenses_source_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.source.commit",
+          "androidName": "licenses_source_commit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.source.open",
+          "androidName": "licenses_source_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.agpl.title",
+          "androidName": "licenses_agpl_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.libsignal.title",
+          "androidName": "licenses_libsignal_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.libsignal.body",
+          "androidName": "licenses_libsignal_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.text.hint",
+          "androidName": "licenses_text_hint",
           "status": "adopted"
         }
       ]

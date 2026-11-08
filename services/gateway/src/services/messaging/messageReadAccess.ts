@@ -174,7 +174,7 @@ const unknownMessage = (id: string): ReadableMessageRow => ({
 /** Ce que vaut un masquage personnel ILLISIBLE — chaque appelant le dit. */
 export type UnreadableHidingPosture = 'serve' | 'refuse';
 
-type ReaderParticipation = { readonly id: string };
+export type ReaderParticipation = { readonly id: string };
 
 function participationWhere(reader: HistoryReader, conversationId: string): Prisma.ParticipantWhereInput {
   return reader.kind === 'anonymous'
@@ -224,6 +224,30 @@ async function readingLawOf(
     hidingOf(prisma, { userId: reader.kind === 'user' ? reader.userId : null, conversationId }),
   ]);
   return { floor, hiding };
+}
+
+/**
+ * La PARTICIPATION du lecteur quand il lit ce message, `null` sinon — la même
+ * loi que {@link readerMayReadMessage}, dont le booléen n'est qu'une
+ * projection.
+ *
+ * Elle est exposée parce que la ligne qu'elle rend est la CLÉ DE LECTEUR des
+ * accusés (`MessageStatusEntry`), sans laquelle aucune échéance d'éphémère
+ * n'est adressable : un appelant qui doit, après avoir jugé la lecture, juger
+ * ce que le contenu est encore POUR ce lecteur (#16604) la tiendrait sinon
+ * d'une seconde requête de participation — deux lectures, deux occasions de
+ * diverger.
+ */
+export async function readerParticipationForMessage(
+  prisma: PrismaClient,
+  params: {
+    readonly reader: HistoryReader;
+    readonly message: ReadableMessageRow;
+    readonly now: Date;
+    readonly whenHidingUnreadable: UnreadableHidingPosture;
+  },
+): Promise<ReaderParticipation | null> {
+  return readerParticipation(prisma, params);
 }
 
 async function readerParticipation(
@@ -408,19 +432,41 @@ export async function loadMessageReadableByParticipant(
     prisma.message.findUnique({ where: { id: params.messageId }, select: READER_VISIBLE_MESSAGE_SELECT }),
   ]);
   if (!reader) return null;
+  return visibleToReader(prisma, { reader, messageId: params.messageId, message, now: params.now });
+}
 
+/**
+ * La forme d'une DEMANDE : elle connaît son lecteur par son identité, et ce
+ * qu'il désigne par un identifiant. Même verdict que la forme d'un envoi (#16557).
+ * PROPAGE ses lectures, comme elle : voir `translationReadGate.ts` pour ce que
+ * « rien » veut dire chez une traduction.
+ */
+export async function loadMessageReadableByReader(
+  prisma: PrismaClient,
+  params: { readonly reader: HistoryReader; readonly messageId: string; readonly now: Date },
+): Promise<ReaderVisibleMessageRow | null> {
+  const message = await prisma.message.findUnique({ where: { id: params.messageId }, select: READER_VISIBLE_MESSAGE_SELECT });
+  return visibleToReader(prisma, { ...params, message });
+}
+
+async function visibleToReader(
+  prisma: PrismaClient,
+  params: {
+    readonly reader: HistoryReader;
+    readonly messageId: string;
+    readonly message: ReaderVisibleMessageRow | null;
+    readonly now: Date;
+  },
+): Promise<ReaderVisibleMessageRow | null> {
+  const { reader, messageId, message, now } = params;
   const participation = await readerParticipation(prisma, {
     reader,
-    message: message ?? unknownMessage(params.messageId),
-    now: params.now,
+    message: message ?? unknownMessage(messageId),
+    now,
     whenHidingUnreadable: 'refuse',
   });
   if (!message || !participation) return null;
 
-  const visible = await contentStillVisibleToReader(prisma, {
-    readerParticipantId: participation.id,
-    message,
-    now: params.now,
-  });
+  const visible = await contentStillVisibleToReader(prisma, { readerParticipantId: participation.id, message, now });
   return visible ? message : null;
 }

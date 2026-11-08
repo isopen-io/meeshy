@@ -1,23 +1,28 @@
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+
+import { legibleTint } from '@/lib/view/author-ink';
+
 /**
- * **UNE COULEUR PAR PERSONNE DANS UN APPEL** (#8393) — le nom d'un locuteur
- * dans le bandeau des sous-titres et le liseré de sa vignette dans la grille
- * portent la MÊME couleur, dérivée de son identifiant : stable d'un rendu, d'un
- * appel et d'un appareil à l'autre, sans rien stocker.
+ * **LA COULEUR DE L'AUTEUR, DANS L'APPEL AUSSI** (#16614, décision #16612) —
+ * le sous-titre d'une personne (son texte ET son nom) et le liseré de sa
+ * vignette portent la couleur vive qu'elle a PARTOUT ailleurs :
+ * `authorAccentColor` (`@meeshy/shared`, miroir iOS
+ * `DynamicColorGenerator.colorForName(userId)`), l'identifiant primant sur le
+ * nom. Aucune seconde palette : celle de #8393 divergeait du fil.
  *
- * La palette est celle des « 300 » de la table iOS (bleu, rose, vert, ambre,
- * violet, fuchsia, cyan, orange) : claire, pour se LIRE sur le verre d'appel
- * sombre — chaque teinte y tient AA, mesurée par `call-speaker-color.test.ts`
- * contre le pire cas de `glass-call-prominent` (`styles/glass.css`). Ma propre
- * couleur est le blanc, hors palette : mes lignes et ma vignette se
- * reconnaissent sans voler la teinte d'un autre.
+ * Le verre d'appel est sombre : la teinte est éclaircie vers le blanc du plus
+ * petit pas qui la rend lisible (AA) sur le pire fond de
+ * `glass-call-prominent` (mesuré par `call-speaker-color.test.ts`) — le geste
+ * d'`adaptedColor(.dark)` côté iOS.
  */
 
-export const SPEAKER_PALETTE: readonly string[] = ['#93c5fd', '#fca5a5', '#86efac', '#fcd34d', '#c4b5fd', '#f9a8d4', '#67e8f9', '#fdba74'];
+/** Le pire fond de `glass-call-prominent` (`glassWorstCaseBackground`, sur toile blanche, les deux schémas). */
+export const CALL_GLASS_WORST_BACKGROUND = '#3e3b64';
+
+const WHITE = '#ffffff';
 
 export const SELF_SPEAKER_COLOR = 'var(--color-on-media)';
 
-const hash = (id: string): number => [...id].reduce((acc, char) => (Math.imul(acc, 31) + (char.codePointAt(0) ?? 0)) >>> 0, 7);
-
-export function speakerColor(userId: string): string {
-  return SPEAKER_PALETTE[hash(userId) % SPEAKER_PALETTE.length] ?? SELF_SPEAKER_COLOR;
+export function speakerColor(userId: string, name = ''): string {
+  return legibleTint({ tint: authorAccentColor(userId, name).toLowerCase(), toward: WHITE, backgrounds: [CALL_GLASS_WORST_BACKGROUND] });
 }

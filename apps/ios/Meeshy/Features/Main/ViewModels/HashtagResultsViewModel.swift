@@ -11,9 +11,18 @@ final class HashtagResultsViewModel: ObservableObject {
     let tag: String
     @Published private(set) var posts: [FeedPost] = []
     @Published private(set) var isLoading = false
+    /// Les favoris en cours d'écriture : un second toucher n'envoie rien.
+    @Published private(set) var bookmarkInFlightIds: Set<String> = []
 
     private let service: PostServiceProviding
     private let languageProvider: LanguageProviding
+    /// « Repartager » d'une carte (#15934) : l'écrivain unique, construit sur
+    /// le service injecté, et le retour à l'utilisateur.
+    private let reposter: ListedPostReposter
+    /// « Enregistrer » d'une carte (#15994) : le même écrivain que le fil.
+    private let bookmarker: PostBookmarkWriter
+    /// « Partager » du menu ⋯ (#15994).
+    private let sharer: ListedPostSharer
     /// La file des impressions de CE listing — la carte y situe son
     /// apparition et y relaie sa visibilité (#10501).
     let impressions: ReachImpressionRecording
@@ -28,11 +37,16 @@ final class HashtagResultsViewModel: ObservableObject {
         tag: String,
         service: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
-        impressions: ReachImpressionRecording? = nil
+        impressions: ReachImpressionRecording? = nil,
+        reposter: ListedPostReposter? = nil,
+        bookmarker: PostBookmarkWriter? = nil
     ) {
         self.tag = tag
         self.service = service
         self.languageProvider = languageProvider
+        self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: service))
+        self.bookmarker = bookmarker ?? PostBookmarkWriter()
+        self.sharer = ListedPostSharer(service: service)
         if let impressions {
             self.impressions = impressions
         } else {
@@ -108,6 +122,53 @@ final class HashtagResultsViewModel: ObservableObject {
             }
             FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
         }
+    }
+
+    /// **« Repartager » ne faisait rien depuis un hashtag** (#15934) : la vue
+    /// montait la carte sans `onRepost`, et le choix appelait un rappel absent.
+    /// Même règle que le profil — bascule optimiste de l'icône et du compteur,
+    /// retour arrière à l'échec — par `PostRepostMutation`.
+    func toggleRepost(_ postId: String) async {
+        guard let index = posts.firstIndex(where: { $0.id == postId }),
+              let reposted = PostRepostMutation.reposted(posts[index]) else { return }
+        let shown = posts[index]
+        posts[index] = reposted
+        guard await !reposter.repost(shown),
+              let current = posts.firstIndex(where: { $0.id == postId }) else { return }
+        posts[current] = PostRepostMutation.withdrawn(posts[current])
+    }
+
+    /// **« Enregistrer » ne faisait rien depuis un hashtag** (#15994) : la vue
+    /// montait la carte sans `onBookmark`, et le marque-page s'affichait avec
+    /// son compteur sur un rappel absent. Bascule optimiste de l'icône et du
+    /// compteur (`PostBookmarkMutation`), envoi par l'écrivain du fil, retour
+    /// arrière du SEUL favori à l'échec.
+    func toggleBookmark(_ postId: String) async {
+        guard !bookmarkInFlightIds.contains(postId),
+              let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let wanted = !posts[index].isBookmarkedByMe
+        posts[index] = PostBookmarkMutation.setting(posts[index], bookmarked: wanted)
+        bookmarkInFlightIds.insert(postId)
+        defer { bookmarkInFlightIds.remove(postId) }
+        await bookmarker.write(bookmarked: wanted, postId: postId, post: posts[index], onRejected: { [weak self] in
+            guard let self, let current = posts.firstIndex(where: { $0.id == postId }) else { return }
+            posts[current] = PostBookmarkMutation.setting(posts[current], bookmarked: !wanted)
+        })
+    }
+
+    func isBookmarkInFlight(_ postId: String) -> Bool {
+        bookmarkInFlightIds.contains(postId)
+    }
+
+    /// Le lien à présenter pour « Partager » ; le compteur ne bouge que si la
+    /// passerelle a enregistré le partage.
+    func shareLink(for postId: String) async -> ShareableLink? {
+        guard let post = posts.first(where: { $0.id == postId }) else { return nil }
+        let outcome = await sharer.share(post)
+        if outcome.recorded, let index = posts.firstIndex(where: { $0.id == postId }) {
+            posts[index].shareCount += 1
+        }
+        return outcome.link
     }
 
     func loadMore() async {

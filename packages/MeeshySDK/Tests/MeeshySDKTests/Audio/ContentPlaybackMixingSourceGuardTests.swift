@@ -12,8 +12,8 @@ import Foundation
 struct ContentPlaybackMixingSourceGuardTests {
 
     private static let allowed: Set<String> = [
+        "CallAudioSessionController.swift",
         "CallAudioSessionTuning.swift",
-        "CallManager+Connection.swift",
         "RingbackTonePlayer.swift",
         "StoryTimelineEngine.swift",
     ]
@@ -58,6 +58,16 @@ struct ContentPlaybackMixingSourceGuardTests {
         let names = Set((Self.swiftFiles(under: "packages/MeeshySDK/Sources") + Self.swiftFiles(under: "apps/ios/Meeshy"))
             .map(\.lastPathComponent))
         #expect(Self.allowed.isSubset(of: names), "\(Self.allowed.subtracting(names))")
+    }
+
+    /// 1bf4f0d4a0 a déplacé la session d'appel de `CallManager+Connection`
+    /// vers `CallAudioSessionController` : l'exemption restait sur un fichier
+    /// qui ne mélangeait plus rien, et l'aurait laissé recommencer en silence.
+    /// Une exemption n'existe que pour un fichier qui pose l'option.
+    @Test func everyAllowedFileStillSetsAMixingOption() {
+        let files = Self.swiftFiles(under: "packages/MeeshySDK/Sources") + Self.swiftFiles(under: "apps/ios/Meeshy")
+        let mixing = Set(files.filter { !Self.mixingLines(in: $0).isEmpty }.map(\.lastPathComponent))
+        #expect(Self.allowed.isSubset(of: mixing), "\(Self.allowed.subtracting(mixing))")
     }
 }
 #endif

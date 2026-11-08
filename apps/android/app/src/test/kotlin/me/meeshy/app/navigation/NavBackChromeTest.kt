@@ -38,7 +38,9 @@ class NavBackChromeTest {
     private fun sheetHostedRoutes(): List<String> =
         declaredRoutes(Regex("""sheetComposable\(\s*(?:route = )?("[^"]*"|[A-Za-z_.]+)"""))
 
-    private fun declaredRoutes(call: Regex): List<String> = graphDir.listFiles { f -> f.extension == "kt" }.orEmpty()
+    private val chatDestination = File(androidRoot, "app/src/main/kotlin/me/meeshy/app/navigation/ChatDestination.kt")
+
+    private fun declaredRoutes(call: Regex): List<String> = (graphDir.listFiles { f -> f.extension == "kt" }.orEmpty().toList() + chatDestination)
         .flatMap { file ->
             call.findAll(file.readText()).map { m ->
                 val raw = m.groupValues[1]
@@ -149,6 +151,21 @@ class NavBackChromeTest {
         }.toSet()
     }
 
+    /** #16676 — directive porteur du 2026-11-07 : le détail d'un post s'ouvre en feuille, plus jamais empilé. */
+    @Test
+    fun `the post detail is a sheet with its cross, as on iOS`() {
+        val post = NavBackChrome.entries.single { it.source == "Routes.POST_DETAIL" }
+        assertThat(post.viaSheetHost).isTrue()
+        assertThat(post.ios).isEqualTo(IosPresentation.SHEET)
+        assertThat(post.chrome).isEqualTo(BackChrome.MODAL)
+        assertThat(sheetHostedRoutes()).contains("Routes.POST_DETAIL")
+        assertThat(coverHostedRoutes()).doesNotContain("Routes.POST_DETAIL")
+        assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.POST_DETAIL)).isFalse()
+        val screen = File(androidRoot, checkNotNull(post.evidence)).readText()
+        assertThat(screen).contains("leadingNavigationIcon()")
+        assertThat(screen).doesNotContain("MeeshyIcons.Back")
+    }
+
     @Test
     fun `the sheet host presents full screen exactly the routes iOS presents as a cover`() {
         val iosCovers = NavBackChrome.entries.filter { it.viaSheetHost && it.ios == IosPresentation.COVER }.map { it.source }
@@ -171,7 +188,7 @@ class NavBackChromeTest {
             "Routes.LOGIN", "Routes.MAGIC_LINK_VALIDATE", "Routes.VERIFY_EMAIL_LINK", "Routes.CONVERSATIONS", "Routes.FEED",
         )
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL && !it.viaSheetHost }.map { it.source }).containsExactly(
-            "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "Routes.COMPOSER", "Routes.STORY_COMPOSER_ROUTE",
+            "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "StoryRoutes.STORY_POST", "Routes.COMPOSER", "Routes.STORY_COMPOSER_ROUTE",
             "Routes.PROFILE_USER", "Routes.CALL",
         )
         assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.SETTINGS)).isTrue()

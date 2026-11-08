@@ -15,5 +15,4 @@
         <item quantity="many">%1$d segundos</item>
         <item quantity="other">%1$d segundos</item>
     </plurals>
-    <string name="call_error_callee_refuses_non_contacts">Esta pessoa só aceita chamadas dos seus contatos</string>
 </resources>

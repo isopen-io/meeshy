@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_comments_overlay_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_cancel_reply",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_copy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_delete",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_edit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_editing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_expired",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_hide_replies",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_like",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_more_replies",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_reply",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_report",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_save",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_show_original",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_show_replies",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_show_translated",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_comments_overlay_unlike",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_location_open_hint",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -107,6 +107,10 @@ public struct FeedPost: Identifiable, Sendable {
     /// `nil` quand le serveur ne l'a pas servi. Persisté par le cache : un
     /// rendu cache-first montre déjà la marque « · ✦+N » (#9571).
     public var viewerPoints: Int? = nil
+    /// Les commentaires de CE post sont fermés (#16541) — son propre drapeau,
+    /// celui que le menu ⋯ bascule. La règle effective, qui compte aussi la
+    /// publication republiée, est `commentsClosed`.
+    public var commentsDisabled: Bool = false
 
     /// Story canvas payload (`StoryEffects`) when this post is a story. `nil`
     /// for normal posts. Mirrors `RepostContent.storyEffects`. Carried on the
@@ -165,6 +169,7 @@ public struct FeedPost: Identifiable, Sendable {
         // Les commentaires embarqués suivent le post : un changement de langue
         // les laissait dans l'ancienne.
         copy.comments = comments.map { $0.resolved(preferredLanguages: preferredLanguages) }
+        copy.repost = repost?.resolved(preferredLanguages: preferredLanguages)
         guard translations?.isEmpty == false else { return copy }
         copy.translatedContent = servedTranslation(preferredLanguages: preferredLanguages)?.text
         return copy
@@ -244,6 +249,7 @@ extension FeedPost: Codable {
         case originalLanguage, translations, translatedContent
         case storyEffects, audioUrl, location, mentions
         case visibility, visibilityUserIds, trackedLinkMap, viewerPoints, authorRing
+        case commentsDisabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -302,6 +308,7 @@ extension FeedPost: Codable {
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         viewerPoints = try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)
         authorRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .authorRing)
+        commentsDisabled = (try? c.decodeIfPresent(Bool.self, forKey: .commentsDisabled)) ?? false
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -349,6 +356,7 @@ extension FeedPost: Codable {
         if !trackedLinkMap.isEmpty { try c.encode(trackedLinkMap, forKey: .trackedLinkMap) }
         try c.encodeIfPresent(viewerPoints, forKey: .viewerPoints)
         try c.encodeIfPresent(authorRing, forKey: .authorRing)
+        if commentsDisabled { try c.encode(commentsDisabled, forKey: .commentsDisabled) }
     }
 }
 

@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_settings_block_talkie">Silenciar o talkie dessa pessoa</string>
+    <string name="circles_settings_block_talkie_detail">A voz dela não vai mais tocar diretamente no seu aparelho: chegará como mensagem de voz. Essa pessoa não é avisada.</string>
     <string name="contacts_back">Voltar</string>
     <string name="contacts_blocked_empty">Nenhum usuário bloqueado</string>
     <string name="contacts_blocked_unblock">Desbloquear</string>
@@ -16,6 +18,7 @@
     <string name="contacts_discover_email_send">Enviar</string>
     <string name="contacts_discover_email_send_a11y">Enviar convite por e-mail</string>
     <string name="contacts_discover_email_title">Convidar por e-mail</string>
+    <string name="contacts_discover_invite_sent">Convite enviado para %1$s</string>
     <string name="contacts_discover_no_results">Nenhum usuário encontrado</string>
     <string name="contacts_discover_pending">Pendente</string>
     <string name="contacts_discover_search_hint">Buscar um usuário do Meeshy</string>
@@ -23,6 +26,8 @@
     <string name="contacts_discover_sms_send">Enviar</string>
     <string name="contacts_discover_sms_send_a11y">Enviar convite por SMS</string>
     <string name="contacts_discover_sms_title">Convidar por SMS</string>
+    <string name="contacts_discover_sms_unavailable">SMS indisponível</string>
+    <string name="contacts_discover_view_profile">Ver o perfil</string>
     <string name="contacts_filter_all">Todos</string>
     <string name="contacts_filter_offline">Offline</string>
     <string name="contacts_filter_online">Online</string>
@@ -44,4 +49,32 @@
     <string name="contacts_tab_discover">Descobrir</string>
     <string name="contacts_tab_requests">Pedidos</string>
     <string name="contacts_title">Contatos</string>
+    <string name="keypad_call">Ligar</string>
+    <string name="keypad_call_audio">Chamada de voz</string>
+    <string name="keypad_call_video">Chamada de vídeo</string>
+    <string name="keypad_clear_a11y">Limpar tudo</string>
+    <string name="keypad_delete_a11y">Limpar</string>
+    <string name="keypad_delete_a11y_hint">Apaga o último caractere</string>
+    <string name="keypad_input_a11y">Campo de número ou nome</string>
+    <string name="keypad_input_placeholder">Número ou nome</string>
+    <string name="keypad_no_match_subtitle">Verifique o número ou o nome digitado.</string>
+    <string name="keypad_no_match_title">Nenhum contato encontrado</string>
+    <string name="keypad_online_lower">online</string>
+    <string name="keypad_prompt_subtitle">Encontre uma pessoa por número de telefone ou por nome.</string>
+    <string name="keypad_prompt_title">Digite um número ou nome</string>
+    <string name="keypad_result_open_profile_a11y">Abrir o perfil</string>
+    <string name="phone_prompt_benefit">Seus contatos encontram você no Meeshy pelo seu número. Você também poderá usá-lo para entrar.</string>
+    <string name="phone_prompt_code_label">Código de 6 dígitos</string>
+    <string name="phone_prompt_code_sent">Código enviado por SMS</string>
+    <string name="phone_prompt_edit">Editar</string>
+    <string name="phone_prompt_error_code_invalid">Código incorreto ou expirado</string>
+    <string name="phone_prompt_error_generic">Ocorreu um erro</string>
+    <string name="phone_prompt_implausible">Este número não parece real: confira-o.</string>
+    <string name="phone_prompt_later">Mais tarde</string>
+    <string name="phone_prompt_later_a11y">Mais tarde, buscar meus contatos sem adicionar número</string>
+    <string name="phone_prompt_phone_label">Telefone</string>
+    <string name="phone_prompt_send_code">Receber o código por SMS</string>
+    <string name="phone_prompt_title">Adicione seu número</string>
+    <string name="phone_prompt_too_short">Este número é curto demais: pelo menos %1$d dígitos.</string>
+    <string name="phone_prompt_verify">Verificar</string>
 </resources>

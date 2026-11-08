@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="menu_block">حظر</string>
+    <string name="menu_unblock">إلغاء الحظر</string>
+    <string name="menu_my_conversations">محادثاتي</string>
+</resources>

@@ -6,7 +6,8 @@ import MeeshyUI
 ///
 /// ✕ en haut à gauche, la rangée des diapos au centre dès deux diapos, ↶ ↷ en
 /// haut à droite seulement avec un historique, puis la colonne des boutons
-/// ronds sous ↶ ↷ — elle défile quand elle dépasse la hauteur (#14050). Ce chrome est de l'éditeur : il n'entre ni dans l'export,
+/// ronds sous ↶ ↷ — ses outils défilent quand elle dépasse la hauteur (#14050),
+/// son pied jamais (#14622). Ce chrome est de l'éditeur : il n'entre ni dans l'export,
 /// ni dans la capture du player, ni dans la vignette, et un toucher qui le vise
 /// n'atteint jamais le canvas. Hors de ses boutons, la scène garde ses gestes.
 struct ComposerSceneOverlayChrome: View {
@@ -31,9 +32,17 @@ struct ComposerSceneOverlayChrome: View {
     var sound = Sound()
     var pasteEntry: AnyView?
     var backgroundIsMedia = false
+    /// Le texte du post déjà écrit (#14457) : l'option le dit par un point.
+    var postText = ""
     /// Le niveau du haut du rail d'édition (#13957, #13974, R6) : il prend la
     /// place de la colonne des outils, jamais une barre en plus.
     var selection: ComposerSelectionColumn?
+    /// L'écart entre le bord de l'écran et celui de la scène, quand elle prend
+    /// toute la HAUTEUR et laisse une marge de chaque côté (iPhone SE).
+    var sceneSideInset: CGFloat = 0
+    /// L'écart entre le haut du chrome et celui de la scène, quand elle
+    /// commence plus bas que lui (iPhone SE, 12 pt d'air au-dessus d'elle).
+    var sceneTopInset: CGFloat = 0
 
     @State private var press = ComposerRailDoorPress()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,7 +71,8 @@ struct ComposerSceneOverlayChrome: View {
         .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion),
                    value: ComposerRestChrome.selectionColumnIsShown(state))
         .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.top, MeeshySpacing.xs)
+        .padding(.horizontal, max(0, sceneSideInset))
+        .padding(.top, MeeshySpacing.xs + max(0, sceneTopInset))
     }
 
     private var topRow: some View {
@@ -92,18 +102,36 @@ struct ComposerSceneOverlayChrome: View {
         }
     }
 
+    /// Le pied — « Texte du post », ⋯, puis Coller quand le presse-papiers
+    /// porte quelque chose — ne défile jamais (#14622) : ce sont les outils
+    /// au-dessus de lui qui défilent, et leur bord le dit par un fondu.
     private var toolColumn: some View {
-        ViewThatFits(in: .vertical) {
-            toolButtons
-            ScrollView(.vertical, showsIndicators: false) { toolButtons }
+        VStack(spacing: MeeshySpacing.sm) {
+            ViewThatFits(in: .vertical) {
+                bodyButtons
+                bodyButtons.modifier(ComposerScrollEdgeCue())
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("composer.rest.column.body")
+            footButtons
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(ComposerRestChromeCopy.column))
     }
 
-    private var toolButtons: some View {
+    private var bodyButtons: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            ForEach(tools.map { AsyncRenderRow(id: $0, content: toolButton($0)) }, content: asyncRenderRowContent)
+            ForEach(ComposerRestChrome.columnBody(tools).map { AsyncRenderRow(id: $0, content: toolButton($0)) },
+                    content: asyncRenderRowContent)
+        }
+    }
+
+    private var footButtons: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            ForEach(ComposerRestChrome.columnFoot(tools).map { AsyncRenderRow(id: $0, content: toolButton($0)) },
+                    content: asyncRenderRowContent)
             if let pasteEntry { pasteEntry }
         }
     }
@@ -121,6 +149,13 @@ struct ComposerSceneOverlayChrome: View {
                 .accessibilityActions { mediaSourceActions }
         case .sound:
             soundButton
+        case .postText:
+            roundButton(symbol: outil.symbol, label: ComposerRestChromeCopy.label(outil),
+                        id: "composer.rest.postText", action: { tap(outil) })
+                .overlay(alignment: .topTrailing) {
+                    if ComposerPostTextPill.isWritten(postText) { ComposerCarriedDot().offset(x: -6, y: 6) }
+                }
+                .accessibilityValue(Text(ComposerPostTextPill.spokenValue(postText)))
         default:
             roundButton(symbol: outil.symbol,
                         label: ComposerRestChromeCopy.label(outil, backgroundIsMedia: backgroundIsMedia),
@@ -132,13 +167,7 @@ struct ComposerSceneOverlayChrome: View {
         roundButton(symbol: ComposerRestTool.sound.symbol, label: ComposerRestChromeCopy.label(.sound),
                     id: "composer.rest.sound", action: soundTap)
             .overlay(alignment: .topTrailing) {
-                if sound.trace != nil {
-                    Circle().fill(MeeshyColors.brandPrimary)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -6, y: 6)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
+                if sound.trace != nil { ComposerCarriedDot().offset(x: -6, y: 6) }
             }
             .modifier(ComposerSoundActionsMenu(supprimer: sound.trace == nil ? nil : sound.onDelete,
                                                promouvoir: sound.trace == nil ? nil : sound.onPromote))
@@ -215,5 +244,17 @@ struct ComposerSceneRoundGlyph: View {
                            tint: isOn ? MeeshyColors.brandPrimary : Color.black.opacity(Self.veil),
                            interactive: true)
             .contentShape(Circle())
+    }
+}
+
+/// **Le point discret d'une option qui porte déjà quelque chose** — le son de
+/// fond, le texte du post (#14457) : 8 pt de la couleur de la marque, muet pour
+/// VoiceOver, qui lit la valeur de l'option.
+struct ComposerCarriedDot: View {
+    var body: some View {
+        Circle().fill(MeeshyColors.brandPrimary)
+            .frame(width: 8, height: 8)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }

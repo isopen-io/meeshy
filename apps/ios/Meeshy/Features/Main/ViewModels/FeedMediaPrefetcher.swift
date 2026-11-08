@@ -32,7 +32,7 @@ final class FeedMediaPrefetcher {
 
     /// Décision PURE : ce média de post doit-il être PRÉCHARGÉ, la politique
     /// d'auto-téléchargement étant déjà résolue ? Miroir de
-    /// `BubbleCarouselView.shouldPrefetchAttachment`, avec l'axe que le feed
+    /// `BubbleCarouselView.shouldPrefetch`, avec l'axe que le feed
     /// ajoute : une vidéo n'est pas UN chemin mais DEUX.
     ///
     /// - vidéo AVEC vignette : la branche ne tire qu'une image distante → `prefs.image` ;

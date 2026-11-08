@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ConversationNotice, NoticeActor } from '@meeshy/shared/utils/conversation-notice';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { sealMessageIfConversationObsoleted } from './obsoleteMessageSeal';
 
 const logger = enhancedLogger.child({ module: 'ConversationNotice' });
 
@@ -95,6 +96,8 @@ export async function postSystemNotice(deps: SystemNoticeDeps, input: SystemNoti
     return null;
   }
 
+  if (await sealedByObsolescence(deps, message, input.conversationId)) return null;
+
   if (input.advanceConversationClock === false) return deliver(deps, message, input.conversationId);
 
   try {
@@ -110,6 +113,18 @@ export async function postSystemNotice(deps: SystemNoticeDeps, input: SystemNoti
   }
 
   return deliver(deps, message, input.conversationId);
+}
+
+function messageId(message: unknown): string | null {
+  if (typeof message !== 'object' || message === null || !('id' in message)) return null;
+  const id = (message as { id: unknown }).id;
+  return typeof id === 'string' ? id : null;
+}
+
+/** #14643 — un avis écrit pendant l'obsolescence de sa conversation naît effacé et ne part pas. */
+async function sealedByObsolescence(deps: SystemNoticeDeps, message: unknown, conversationId: string): Promise<boolean> {
+  const id = messageId(message);
+  return id !== null && sealMessageIfConversationObsoleted(deps.prisma, { conversationId, messageId: id });
 }
 
 async function deliver(deps: SystemNoticeDeps, message: unknown, conversationId: string): Promise<unknown> {

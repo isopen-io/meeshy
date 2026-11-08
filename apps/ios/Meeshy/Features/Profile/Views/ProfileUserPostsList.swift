@@ -181,6 +181,10 @@ struct ProfileUserPostsList: View {
     /// profil : le bouton commentaire ne répondait plus, et celui d'un réel
     /// fermait carrément la feuille de profil (openReel).
     @State private var commentingPost: FeedPost?
+    /// Poste ou réel cité (#15911) — la porte de citation s'ouvre par-dessus le
+    /// profil, comme depuis le fil ; sans hôte de racine, « Citer » est absent.
+    @State private var quotedPost: FeedPost?
+    @Environment(\.meeshyQuoteComposerHost) private var quoteHost
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { theme.mode.isDark }
@@ -216,11 +220,7 @@ struct ProfileUserPostsList: View {
                 ProfilePostsStatsBand(
                     counts: viewModel.postsCounts,
                     selectedFilter: viewModel.filter,
-                    onSelectFilter: { tapped in
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            viewModel.filter = viewModel.filter.toggled(with: tapped)
-                        }
-                    },
+                    onSelectFilter: selectFilter,
                     onStoriesTap: {
                         openStories()
                     }
@@ -283,22 +283,10 @@ struct ProfileUserPostsList: View {
             // d'un poste OU d'un réel du profil commente sans quitter le profil.
             CommentsSheetView(post: post, accentColor: post.authorColor)
         }
-        .postEditCover(item: $editingPost) { post in
-            EditPostSheet(
-                originalContent: post.content,
-                originalLanguage: post.originalLanguage,
-                originalType: post.type,
-                media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
-                originalLocation: post.location,
-                originalVisibility: post.visibility,
-                originalVisibilityUserIds: post.visibilityUserIds ?? [],
-                isRepost: post.repost != nil,
-                onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                },
-                onDismiss: { editingPost = nil }
-            )
+        .postEditCover(item: $editingPost) { post, draft in
+            await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
         }
+        .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
     }
 
     // MARK: - Card routing (reel vs post)
@@ -339,6 +327,7 @@ struct ProfileUserPostsList: View {
                 commentingPost = post
             },
             onRepost: { id in Task { await viewModel.toggleRepost(id) } },
+            onQuote: quote(post),
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onShare: { id in Task { await share(id) } },
             // We are already inside this user's profile sheet — tapping the
@@ -348,7 +337,8 @@ struct ProfileUserPostsList: View {
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
             onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
             onReport: !isOwnPost ? { id in Task { await viewModel.report(id) } } : nil,
-            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil
+            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil,
+            onToggleComments: commentSettingsToggle(for: post)
         )
         .equatable()
         .padding(.horizontal, MeeshySpacing.md)
@@ -368,7 +358,7 @@ struct ProfileUserPostsList: View {
             onOpenComments: { commentingPost = post },
             onLike: { id in Task { await viewModel.toggleLike(id) } },
             onRepost: { id in Task { await viewModel.toggleRepost(id) } },
-            onQuote: { _ in openPost(post) },
+            onQuote: quote(post),
             onShare: { id in Task { await share(id) } },
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onSelectLanguage: { postId, language in
@@ -387,9 +377,29 @@ struct ProfileUserPostsList: View {
             onEdit: isOwnPost ? { post in editingPost = post } : nil
         )
         .equatable()
+        .environment(\.commentSettingsAction, commentSettingsToggle(for: post))
+    }
+
+    /// « Désactiver / Réactiver les commentaires » (#16541) : l'auteur et la modération.
+    private func commentSettingsToggle(for post: FeedPost) -> ((String) -> Void)? {
+        guard CommentSettingsToggle.isOffered(authorId: post.authorId) else { return nil }
+        return { [viewModel] id in Task { await viewModel.toggleComments(id) } }
+    }
+
+    private func selectFilter(_ tapped: ProfilePostsFilter) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.filter = viewModel.filter.toggled(with: tapped)
+        }
     }
 
     // MARK: - Open
+
+    /// « Citer » ouvre la porte de citation sur la carte touchée — la porte
+    /// remonte elle-même à la RACINE d'une chaîne de republication.
+    private func quote(_ post: FeedPost) -> ((String) -> Void)? {
+        guard quoteHost != nil else { return nil }
+        return { _ in quotedPost = post }
+    }
 
     /// L'ouverture se compte à DESTINATION (#10483) : le détail
     /// (`PostDetailViewModel.registerDetailOpen`) et le lecteur de réels

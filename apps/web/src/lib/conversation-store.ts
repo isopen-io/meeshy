@@ -16,7 +16,7 @@ import { servedWriteRestriction } from './write-restriction';
  * `localStorage`) — seulement des OVERRIDES, la correction optimiste qu'un
  * appel serveur confirmera ou effacera. Quand le lot `staging` câble le
  * réseau, chaque action appelle le port correspondant
- * (`pushConversationFlags`/`pushRead`/`pushUnread`, `api/preferences.ts`)
+ * (`pushConversationFlags`/`pushRead`/`pushUnread`, `api/preference-ports.ts`)
  * puis RETIRE l'override sur 4xx — sémantique iOS
  * `ConversationListViewModel.togglePin` (`:2044-2053`) : la mise à jour
  * optimiste précède l'appel, un refus la défait, un succès la laisse telle

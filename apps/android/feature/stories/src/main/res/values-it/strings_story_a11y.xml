@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_a11y_pause">Pausa</string>
+    <string name="story_a11y_resume">Riprendi la riproduzione</string>
+    <string name="story_a11y_hint">Menu azioni: storia successiva, storia precedente, pausa, schermo intero, chiudi</string>
+</resources>

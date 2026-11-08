@@ -1,14 +1,21 @@
 package me.meeshy.app.reels
 
+import me.meeshy.sdk.model.trackedLinkMap
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.commentsClosed
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.fullscreen.MediaChromeBackdrop
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.ReelMediaLayout
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.SocialAudioSurface
+import me.meeshy.sdk.model.servedAudioUrl
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.app.stories.StorySlideView
 import me.meeshy.sdk.model.StoryItem
@@ -35,6 +42,8 @@ data class ReelPresentation(
     val captionOriginalLanguage: String? = null,
     val captionOriginal: String? = null,
     val captionTranslations: Map<String, String> = emptyMap(),
+    /** `adresse écrite -> jeton` servi avec la légende : l'adresse s'ouvre par le lien suivi. */
+    val trackedLinks: Map<String, String> = emptyMap(),
     val createdAtIso: String? = null,
     /** Compteurs de portée : servis par la passerelle à l'auteur seul. */
     val viewCount: Int = 0,
@@ -43,6 +52,10 @@ data class ReelPresentation(
     val isLiked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
+    /** Le lecteur a republié ce réel — servi par la passerelle, ou posé au geste en attendant sa réponse (#14456). */
+    val isReposted: Boolean = false,
+    /** Le réel que celui-ci republie : « Republier » vise l'original (iOS `originalRepostOfId ?? repostOfId ?? id`). */
+    val repostOf: ApiRepostOf? = null,
     val isBookmarked: Boolean,
     val bookmarkCount: Int,
     /** Les envois du réel (iOS `reel.shareCount`), compte d'« Envoyer » au rail. */
@@ -54,7 +67,17 @@ data class ReelPresentation(
     val scene: StorySlideView? = null,
     /** Ce que « Enregistrer », « Partager » et « Imager » rendent (#13896) : la charge servie et la scène qu'elle peint. */
     val export: Pair<StoryItem, StorySlideView>? = null,
-)
+    /** Le média dont la luminance commande la teinte des glyphes du rail (iOS `MediaLuminanceScheme`) ; `null` : glyphes blancs. */
+    val backdrop: MediaChromeBackdrop? = null,
+    /** Les commentaires de CE réel sont fermés (#16541) : le menu offre « Réactiver ». */
+    val commentsDisabled: Boolean = false,
+    /** Fermés par ce réel ou par celui qu'il republie : la feuille se lit, son composeur cède la place au bandeau. */
+    val commentsClosed: Boolean = false,
+) {
+    /** Le réel après un geste sur ses commentaires : la fermeture héritée de la source reste. */
+    fun withCommentsDisabled(disabled: Boolean): ReelPresentation =
+        copy(commentsDisabled = disabled, commentsClosed = disabled || repostOf?.commentsDisabled == true)
+}
 
 object ReelBuilder {
 
@@ -81,7 +104,14 @@ object ReelBuilder {
                 if (layout is ReelMediaLayout.Empty && scene == null) return@mapNotNull null
                 val resolve = { url: String -> resolveMediaUrl(url, mediaBaseUrl) }
                 val images = feedMedia.filter { it.type == FeedMediaType.IMAGE }.mapNotNull { it.url?.let(resolve) }
-                val audio = feedMedia.firstOrNull { it.type == FeedMediaType.AUDIO }?.url?.let(resolve)
+                val audioMedia = post.media.orEmpty().sortedBy { it.order ?: Int.MAX_VALUE }
+                    .firstOrNull { it.mimeType.orEmpty().startsWith("audio/") && !it.fileUrl.isNullOrBlank() }
+                val audio = audioMedia?.servedAudioUrl(
+                    surface = SocialAudioSurface.REEL,
+                    carrierLanguage = post.originalLanguage,
+                    preferredLanguages = preferences?.let { ReaderPrism.resolve(it) }.orEmpty(),
+                    resolveUrl = resolve,
+                )
                 val video = (layout as? ReelMediaLayout.Video)?.media
                 ReelPresentation(
                     id = post.id,
@@ -102,6 +132,7 @@ object ReelBuilder {
                     captionTranslations = post.translations.orEmpty()
                         .mapNotNull { (language, entry) -> entry.text.takeIf { it.isNotBlank() }?.let { language to it } }
                         .toMap(),
+                    trackedLinks = post.trackedLinkMap,
                     createdAtIso = post.createdAt,
                     viewCount = post.viewCount ?: 0,
                     impressionCount = post.impressionCount ?: 0,
@@ -109,11 +140,16 @@ object ReelBuilder {
                     isLiked = post.isLikedByMe == true,
                     commentCount = post.commentCount ?: 0,
                     repostCount = post.repostCount ?: 0,
+                    isReposted = post.isRepostedByMe == true,
+                    repostOf = post.repostOf,
                     isBookmarked = post.isBookmarkedByMe == true,
                     bookmarkCount = post.bookmarkCount ?: 0,
                     shareCount = post.shareCount ?: 0,
                     scene = scene,
                     export = ReelScene.export(post, scene, layout, mediaBaseUrl, preferences),
+                    backdrop = post.media.orEmpty().sortedBy { it.order ?: Int.MAX_VALUE }.firstNotNullOfOrNull { MediaChromeBackdrop.postMedia(it) },
+                    commentsDisabled = post.commentsDisabled,
+                    commentsClosed = post.commentsClosed,
                 )
             }
             .toList()

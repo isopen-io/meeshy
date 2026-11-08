@@ -159,7 +159,7 @@ class EditingLaneHistoryComposeTest {
 
         val scene = compose.onNodeWithContentDescription(canvas).getUnclippedBoundsInRoot()
         val undo = compose.onNodeWithContentDescription("Undo").getUnclippedBoundsInRoot()
-        val text = compose.onNodeWithContentDescription("Text").getUnclippedBoundsInRoot()
+        val text = compose.onNodeWithContentDescription("Add text").getUnclippedBoundsInRoot()
         assertThat(undo.bottom).isAtMost(text.top)
         assertThat(undo.right).isAtMost(scene.right)
     }

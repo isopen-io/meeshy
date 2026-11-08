@@ -37,6 +37,7 @@ sealed interface ImageUploadValidation {
 object ImageUploadValidator {
     private const val IMAGE_MIME_PREFIX = "image/"
 
+    /** Avant compression : la taille n'est jamais terminale, l'image volumineuse est compressée (iOS `ImageCompressor`). */
     fun validate(
         target: ImageUploadTarget,
         byteCount: Int,
@@ -44,6 +45,17 @@ object ImageUploadValidator {
     ): ImageUploadValidation {
         if (byteCount <= 0) return reject(ImageUploadValidation.Reason.EMPTY)
         if (!isImageMime(mimeType)) return reject(ImageUploadValidation.Reason.UNSUPPORTED_TYPE)
+        return ImageUploadValidation.Accepted
+    }
+
+    /** Après compression : une image qui dépasse encore le plafond de sa cible est impossible à compresser. */
+    fun validateCompressed(
+        target: ImageUploadTarget,
+        byteCount: Int,
+        mimeType: String,
+    ): ImageUploadValidation {
+        val base = validate(target, byteCount, mimeType)
+        if (base is ImageUploadValidation.Rejected) return base
         if (byteCount > target.maxBytes) return reject(ImageUploadValidation.Reason.TOO_LARGE)
         return ImageUploadValidation.Accepted
     }

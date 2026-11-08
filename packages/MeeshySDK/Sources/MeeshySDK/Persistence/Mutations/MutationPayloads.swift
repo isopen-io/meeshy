@@ -168,10 +168,13 @@ public struct UpdateConversationPayload: Codable, Sendable, Equatable {
 public struct SendFriendRequestPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let targetUserId: String
+    /// Le cran visé (#13938) : une ligne gravée avant ce champ se relit sans (`nil` = Ami).
+    public let targetLevel: String?
 
-    public init(clientMutationId: String, targetUserId: String) {
+    public init(clientMutationId: String, targetUserId: String, targetLevel: String? = nil) {
         self.clientMutationId = clientMutationId
         self.targetUserId = targetUserId
+        self.targetLevel = targetLevel
     }
 }
 
@@ -494,6 +497,12 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// laisse derrière.
     public let localMediaMimeTypes: [String]?
 
+    /// Le nom choisi de chaque fichier, aligné par index sur `localMediaPaths`
+    /// (#11166). Le fichier en file s'appelle `pending-media/<cmid>/0.pdf` : sans
+    /// ce champ, le serveur garderait `0.pdf` en `originalName`. `nil` : aucune
+    /// copie importée dans cette publication, ou ligne écrite avant ce champ.
+    public let localMediaOriginalNames: [String?]?
+
     /// **LE CANVAS composé sur la scène.**
     ///
     /// Porté ici pour la même raison que `location` et `mentions`, et c'est ici
@@ -557,6 +566,15 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// de décoder.
     public let allowSoundExtraction: Bool?
 
+    /// **La publication naît fermée aux commentaires** (#16541), même clé
+    /// top-level `commentsDisabled` que `CreatePostSchema`.
+    ///
+    /// Le choix vit sur la LIGNE, et c'est ce qui le rend aussi durable que la
+    /// publication : il s'écrit dans la même transaction, se rejoue avec elle
+    /// et disparaît avec elle. `nil` omet la clé — ouvert, le défaut de la
+    /// passerelle —, et c'est aussi ce que relit toute ligne d'avant ce champ.
+    public let commentsDisabled: Bool?
+
     /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
     /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
     ///
@@ -566,6 +584,16 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     public func declaredMimeType(at index: Int) -> String? {
         guard let mimes = localMediaMimeTypes, mimes.indices.contains(index) else { return nil }
         return mimes[index]
+    }
+
+    /// Le nom choisi du fichier en file `fileURL`, ou `nil` s'il n'en a pas : le
+    /// téléverseur prend alors le nom du fichier. La lecture se fait par nom de
+    /// fichier parce qu'une variante réencodée n'est pas le fichier choisi.
+    public func originalMediaName(forSentFile fileURL: URL) -> String? {
+        guard let paths = localMediaPaths, let names = localMediaOriginalNames,
+              let index = paths.firstIndex(where: { URL(fileURLWithPath: $0).lastPathComponent == fileURL.lastPathComponent }),
+              names.indices.contains(index) else { return nil }
+        return names[index]
     }
 
     /// **Ce qu'une tentative PRÉCÉDENTE a déjà monté.**
@@ -605,11 +633,13 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         repostOfId: String? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
         localMediaMimeTypes: [String]? = nil,
+        localMediaOriginalNames: [String?]? = nil,
         storyEffects: StoryEffects? = nil,
         mediaCaptions: [String?]? = nil,
         mediaAlts: [String?]? = nil,
         mediaObjectIds: [String?]? = nil,
         allowSoundExtraction: Bool? = nil,
+        commentsDisabled: Bool? = nil,
         uploadedMedia: [UploadedPostMedia]? = nil
     ) {
         self.clientMutationId = clientMutationId
@@ -629,11 +659,13 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.repostOfId = repostOfId
         self.mobileTranscription = mobileTranscription
         self.localMediaMimeTypes = localMediaMimeTypes
+        self.localMediaOriginalNames = localMediaOriginalNames
         self.storyEffects = storyEffects
         self.mediaCaptions = mediaCaptions
         self.mediaAlts = mediaAlts
         self.mediaObjectIds = mediaObjectIds
         self.allowSoundExtraction = allowSoundExtraction
+        self.commentsDisabled = commentsDisabled
         self.uploadedMedia = uploadedMedia
     }
 }
@@ -662,6 +694,21 @@ public struct ToggleLikePostPayload: Codable, Sendable, Equatable {
         self.postId = postId
         self.liked = liked
         self.emoji = emoji
+    }
+}
+
+/// #15997 — « Enregistrer » rejoué depuis la file durable
+/// (`POST|DELETE /posts/:id/bookmark`). L'état VOULU voyage explicitement,
+/// jamais une bascule : un rejeu ne peut que le poser.
+public struct ToggleBookmarkPostPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    public let postId: String
+    public let bookmarked: Bool
+
+    public init(clientMutationId: String, postId: String, bookmarked: Bool) {
+        self.clientMutationId = clientMutationId
+        self.postId = postId
+        self.bookmarked = bookmarked
     }
 }
 

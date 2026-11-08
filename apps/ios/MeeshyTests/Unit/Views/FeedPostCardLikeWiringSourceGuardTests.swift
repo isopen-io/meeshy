@@ -23,10 +23,13 @@ import XCTest
 /// une fois compilée, elle est indistinguable d'un choix. Elle balaye TOUS les
 /// montages du dossier des vues, jamais une liste — une liste se périme au
 /// premier écran ajouté, et se périme en silence.
+///
+/// Le cœur n'était que la première action. « Repartager » (#15934), puis
+/// « Enregistrer » et « Partager » (#15994) ont menti de la même façon sur les
+/// mêmes surfaces : la loi porte désormais sur CHAQUE action de la barre et du
+/// menu ⋯, et une dernière assertion vérifie qu'aucun rappel optionnel n'y
+/// échappe.
 final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
-
-    /// Montages délibérément muets, chacun justifié par une MESURE.
-    private static let deliberatelyUnwired: Set<String> = []
 
     private var viewsDirectory: URL {
         URL(fileURLWithPath: #filePath)
@@ -55,7 +58,7 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
     /// deux fichiers qui ne montent aucune carte. Mesuré : c'est exactement ce
     /// que la première version de ce relevé, écrite sans `stripComments`, a
     /// rapporté.
-    private func mountings() throws -> [Mounting] {
+    private func mountings(of card: String = "FeedPostCard") throws -> [Mounting] {
         let enumerator = FileManager.default.enumerator(
             at: viewsDirectory, includingPropertiesForKeys: nil
         )
@@ -65,7 +68,7 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
                 try String(contentsOf: url, encoding: .utf8)
             )
             var cursor = source.startIndex
-            while let hit = source.range(of: "FeedPostCard(", range: cursor..<source.endIndex) {
+            while let hit = source.range(of: card + "(", range: cursor..<source.endIndex) {
                 cursor = hit.upperBound
                 // Le glyphe qui précède ne doit pas PROLONGER l'identifiant :
                 // sans cela `ReelFeedPostCard(` ou `MyFeedPostCard(` seraient
@@ -140,19 +143,147 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
             "Un commentaire est compté comme un montage — stripComments ne s'applique pas.")
     }
 
-    // MARK: - La loi
+    // MARK: - La loi : aucune action de la barre sans effet (#15934, #15994)
 
-    func test_toutMontageDeFeedPostCard_cableSonRappelDeLike() throws {
-        let silent = try mountings()
-            .filter { !$0.arguments.contains("onLike") }
-            .filter { !Self.deliberatelyUnwired.contains($0.enclosingType) }
+    /// Une action de la barre (ou du menu ⋯) d'une carte, et ce que son
+    /// montage doit lui passer pour qu'elle AGISSE.
+    private struct ActionWiring {
+        let action: String
+        let arguments: [String]
+        let symptom: String
+    }
 
-        XCTAssertTrue(silent.isEmpty, """
-            \(silent.count) montage(s) de FeedPostCard sans `onLike` : le cœur y joue \
-            sa rafale et sa haptique, puis n'aime rien.
-            \(silent.map { "  • \($0.enclosingType) — \($0.file):\($0.line)" }.joined(separator: "\n"))
-            Câbler le rappel, ou justifier l'exception par une MESURE dans \
-            `deliberatelyUnwired`.
+    /// **Chaque action qu'une carte affiche sans condition.** Le cœur (loi 4,
+    /// retour porteur 2026-09-13) : `onLike` absent, il joue sa rafale et sa
+    /// haptique puis n'aime rien. « Repartager » (#15934) : le choix appelait
+    /// un rappel absent. « Enregistrer » (#15994) : le hashtag rendait le
+    /// marque-page avec son compteur, et le toucher ne faisait rien.
+    /// « Partager » du menu ⋯ : `onShare?(post.id)` sur un rappel absent.
+    ///
+    /// L'ÉTAT voyage avec l'action : sans `isReposted` / `isBookmarked`, la
+    /// bascule optimiste n'atteint jamais l'icône, et une carte des favoris
+    /// s'affiche « non enregistrée ».
+    private static let unconditionalActions = [
+        ActionWiring(action: "Aimer", arguments: ["onLike:"],
+                     symptom: "le cœur joue sa rafale et sa haptique, puis n'aime rien"),
+        ActionWiring(action: "Repartager", arguments: ["onRepost:", "isReposted:"],
+                     symptom: "« Repartager » est offert sans effet, ou son état ne s'affiche jamais"),
+        ActionWiring(action: "Enregistrer", arguments: ["onBookmark:", "isBookmarked:"],
+                     symptom: "le marque-page s'affiche avec son compteur et ne fait rien"),
+        ActionWiring(action: "Partager", arguments: ["onShare:"],
+                     symptom: "« Partager » du menu ⋯ ne présente aucune feuille"),
+    ]
+
+    /// Les rappels optionnels que la carte n'affiche QUE s'ils sont fournis
+    /// (« Citer » dans le choix du repartage, « Épingler », « Modifier », la
+    /// baguette « Imager » et son « Export rapide », #16163 : sans `onImager`
+    /// `FeedPostActionsBar.imagerButton` ne rend rien, sans `onImagerQuick`
+    /// `ImagerWandButton` n'offre pas d'appui long).
+    /// Leur absence retire le contrôle : elle ne peut pas le rendre inerte.
+    /// `test_lesRappelsImager_retirentLeurControleEnLeurAbsence` le mesure.
+    private static let conditionalActions: Set<String> = ["onQuote", "onPin", "onEdit", "onImager", "onImagerQuick"]
+
+    /// Montages délibérément muets, chacun justifié par une MESURE.
+    private static let deliberatelyUnwired: [String: Set<String>] = [:]
+
+    func test_toutMontageDeFeedPostCard_cableChaqueActionDeSaBarre() throws {
+        let cards = try mountings()
+        let failures = Self.unconditionalActions.flatMap { wiring in
+            cards
+                .filter { mounting in wiring.arguments.contains { !mounting.arguments.contains($0) } }
+                .filter { !(Self.deliberatelyUnwired[wiring.action] ?? []).contains($0.enclosingType) }
+                .map { "  • \(wiring.action) — \($0.enclosingType) (\($0.file):\($0.line)) : \(wiring.symptom)" }
+        }
+
+        XCTAssertTrue(failures.isEmpty, """
+            \(failures.count) action(s) de FeedPostCard montée(s) sans effet :
+            \(failures.joined(separator: "\n"))
+            Câbler l'écrivain et son état (\(Self.unconditionalActions.map { $0.arguments.joined(separator: " + ") }.joined(separator: ", "))), \
+            ou justifier l'exception par une MESURE dans `deliberatelyUnwired`.
             """)
+    }
+
+    /// Un rappel FOURNI mais vide (`{ _ in }`) est le même mensonge qu'un
+    /// rappel omis, et le compilateur l'accepte même là où le paramètre est
+    /// obligatoire — c'est le cas de `ReelFeedCard`, dont les actions ne sont
+    /// pas optionnelles.
+    func test_aucuneCarteNeCableUneActionDeSaBarreSurUnRappelVide() throws {
+        let labels = ["onLike", "onComment", "onRepost", "onBookmark", "onShare"]
+        let empty = try NSRegularExpression(
+            pattern: #"\b(\#(labels.joined(separator: "|"))):\s*\{\s*_\s*in\s*\}"#
+        )
+        let failures = try (mountings(of: "FeedPostCard") + mountings(of: "ReelFeedCard")).flatMap { mounting in
+            empty.matches(in: mounting.arguments, range: NSRange(mounting.arguments.startIndex..., in: mounting.arguments))
+                .compactMap { Range($0.range(at: 1), in: mounting.arguments).map { String(mounting.arguments[$0]) } }
+                .map { "  • \($0) — \(mounting.enclosingType) (\(mounting.file):\(mounting.line))" }
+        }
+
+        XCTAssertTrue(failures.isEmpty, """
+            Action(s) de carte câblée(s) sur un rappel vide : le bouton s'affiche et ne fait rien.
+            \(failures.joined(separator: "\n"))
+            """)
+    }
+
+    func test_leReleve_trouveAussiLesCartesDeReel() throws {
+        XCTAssertGreaterThanOrEqual(try mountings(of: "ReelFeedCard").count, 2,
+            "Le relevé ne trouve plus les montages de ReelFeedCard : la loi du rappel vide ne mesure rien.")
+    }
+
+    /// **La table couvre TOUTE la barre.** Un rappel optionnel ajouté à la
+    /// rangée d'actions ou au menu ⋯ sans entrer dans la loi ci-dessus serait
+    /// un nouveau bouton qu'aucun montage n'est tenu de câbler. Le relevé lit
+    /// les déclarations des deux types qui RENDENT ces actions.
+    func test_laLoiCouvreChaqueRappelOptionnelDeLaBarreEtDuMenu() throws {
+        let covered = Set(Self.unconditionalActions.flatMap(\.arguments)
+            .filter { $0.hasPrefix("on") }
+            .map { String($0.dropLast()) })
+        let declared = try Self.optionalCallbacks(declaredBy: "FeedPostActionsBar", in: "Main/Views/FeedPostActionsBar.swift")
+            .union(Self.optionalCallbacks(declaredBy: "FeedPostOnlineMenuItems", in: "Main/Views/FeedPostCard+Header.swift"))
+
+        XCTAssertGreaterThanOrEqual(declared.count, 5, "Le relevé des rappels de la barre ne trouve plus rien.")
+        let ungoverned = declared.subtracting(covered).subtracting(Self.conditionalActions)
+        XCTAssertTrue(ungoverned.isEmpty, """
+            Rappel(s) optionnel(s) de la barre ou du menu hors de la loi : \(ungoverned.sorted()). \
+            Les ajouter à `unconditionalActions` (et câbler chaque montage), ou prouver que le \
+            contrôle disparaît en leur absence et les ranger dans `conditionalActions`.
+            """)
+    }
+
+    /// La preuve qui range `onImager` / `onImagerQuick` parmi les rappels
+    /// CONDITIONNELS : la barre ne monte la baguette que si `onImager` est
+    /// fourni, et la baguette ne propose son entrée rapide que si `quick`
+    /// l'est. Leur absence retire le contrôle, jamais ne le rend inerte.
+    func test_lesRappelsImager_retirentLeurControleEnLeurAbsence() throws {
+        let features = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features")
+        let bar = AppSourceGuard.stripComments(try String(
+            contentsOf: features.appendingPathComponent("Main/Views/FeedPostActionsBar.swift"), encoding: .utf8))
+        let wand = AppSourceGuard.stripComments(try String(
+            contentsOf: features.appendingPathComponent("Export/ImagerWandButton.swift"), encoding: .utf8))
+
+        let guarded = try XCTUnwrap(bar.range(of: "if let onImager {"), "la baguette n'est plus conditionnée à `onImager`")
+        let block = bar[guarded.upperBound...].prefix(400)
+        XCTAssertTrue(block.contains("ImagerWandButton("), "la baguette doit vivre sous `if let onImager`")
+        XCTAssertTrue(block.contains("quick: onImagerQuick"), "l'entrée rapide voyage par `quick`")
+        XCTAssertTrue(wand.contains("if let quick {"), "l'entrée rapide de la baguette doit disparaître sans `quick`")
+    }
+
+    private static func optionalCallbacks(declaredBy type: String, in relativePath: String) throws -> Set<String> {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features").appendingPathComponent(relativePath)
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        guard let start = source.range(of: "struct \(type)"),
+              let end = source.range(of: "var body", range: start.upperBound..<source.endIndex) else {
+            XCTFail("\(type) introuvable dans \(relativePath)")
+            return []
+        }
+        let declarations = String(source[start.upperBound..<end.lowerBound])
+        let pattern = try NSRegularExpression(pattern: #"(?:let|var)\s+(on[A-Z]\w*)\s*:\s*\(\("#)
+        return Set(pattern.matches(in: declarations, range: NSRange(declarations.startIndex..., in: declarations))
+            .compactMap { Range($0.range(at: 1), in: declarations).map { String(declarations[$0]) } })
     }
 }

@@ -25,15 +25,43 @@ class PushMessageDispatcherTest {
             firstArg<Map<String, String>>()["type"] == NotificationRevocationParser.TYPE
         } }
         val messagePresenter: MessageNotificationPresenter = mockk(relaxed = true)
+        val ringer = RecordingRinger()
+        val freshness: me.meeshy.sdk.call.CallFreshnessChecker = mockk {
+            io.mockk.coEvery { check(any()) } returns me.meeshy.sdk.model.call.CallFreshness.Live
+        }
         val dispatcher = PushMessageDispatcher(
             ringStore = IncomingCallRingStore(),
             session = session,
             tokenStore = tokenStore,
             callPresenter = callPresenter,
             revocationHandler = revocationHandler,
+            bringHandler = me.meeshy.app.bring.BringPushHandler(ringer),
             messagePresenter = messagePresenter,
+            freshness = freshness,
             observers = observers,
         )
+    }
+
+    private class RecordingRinger : me.meeshy.app.bring.BringRinger {
+        val rings = mutableListOf<String>()
+        val stops = mutableListOf<String>()
+        override fun ring(push: me.meeshy.sdk.model.relation.BringRingPush) { rings += push.bringId }
+        override fun stop(bringId: String) { stops += bringId }
+    }
+
+    @Test
+    fun `un Bring sonne par son gardien et jamais comme une banniere de message`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(
+            push("type" to "bring", "bringId" to "b1", "fromUserId" to "alice", "expiresAt" to "2100-01-01T00:00:00Z"),
+            nowMillis = 100,
+        )
+        fixture.dispatcher.dispatch(push("type" to "bring_stopped", "bringId" to "b1", "reason" to "recipient"), nowMillis = 200)
+
+        assertThat(fixture.ringer.rings).containsExactly("b1")
+        assertThat(fixture.ringer.stops).containsExactly("b1")
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
     }
 
     private class RecordingObserver(
@@ -46,6 +74,26 @@ class PushMessageDispatcherTest {
             log += label
             failure?.let { throw it }
         }
+    }
+
+    @Test
+    fun `un appel deja fini ne sonne pas`() {
+        val fixture = Fixture()
+        io.mockk.coEvery { fixture.freshness.check("call-1") } returns me.meeshy.sdk.model.call.CallFreshness.Finished
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        verify(exactly = 0) { fixture.callPresenter.show(any()) }
+    }
+
+    @Test
+    fun `une erreur de verification retombe sur sonner`() {
+        val fixture = Fixture()
+        io.mockk.coEvery { fixture.freshness.check(any()) } throws java.io.IOException("offline")
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        verify { fixture.callPresenter.show(any()) }
     }
 
     private fun push(vararg pairs: Pair<String, String>) = IncomingPush.of(mapOf(*pairs))

@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-0tzqfi` |
+| Branche de travail de la session courante | `claude/practical-fermat-9e6ean` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -42,7 +42,43 @@ normal.
 | **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ✅ mergé |
 | **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | [#12925](https://github.com/isopen-io/meeshy/pull/12925) → `dev` | ✅ mergé |
 | **77w** | 2026-10-31 | `claude/practical-fermat-95xnj5` | → `dev` | ✅ mergé |
-| **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | → `dev` | ⏳ ouverte |
+| **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | [#14198](https://github.com/isopen-io/meeshy/pull/14198) → `dev` | ✅ mergé |
+| **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ✅ mergé |
+| **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ✅ mergé |
+| **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ⏳ ouverte |
+
+**81w** — maintenabilité / cohérence (périmètre du gate d'harmonie) : l'art GÉNÉRÉ
+`components/screen-wait-art.ts` (SVG baké du sticker Mee/Meo « On danse », byte-identique
+à sa source `lib/mee/screen-wait-art-source` DÉJÀ exemptée) était compté comme du chrome —
+**70 des 92 violations du gate (76 %), tous des faux positifs** noyant les 22 vraies cibles.
+Nouvelle entrée `EXEMPT_PATHS` (préfixe serré `components/screen-wait-art`, raison motivée),
+posée à côté de l'entrée `lib/mee/` dont elle est le prolongement ; le composant hôte
+`screen-wait.tsx` reste du chrome scanné. Témoin : `check-design-harmony.test.ts` describe
+« l'art d'attente baké » (RED→GREEN), 20→21. Gate **92 → 22 violations**, **9 → 8 fichiers**.
+Housekeeping : 80w confirmée mergée (`DEFAULT_AUTHOR_ACCENT` sur `dev`) ; appariement
+analyses↔plans 1:1 revérifié (45w→80w). Analyse : `docs/analyses/uiux/2026-11-08-iteration-81w.md`.
+
+**80w** — cohérence / maintenabilité (classe harmonie, héritée 76w→79w) : l'indigo de
+marque `#6366F1` était réécrit EN DUR sur TROIS surfaces web comme accent de repli de
+`authorAccentColor()` — `routes/profile-sections.tsx` (`DECOR_ACCENT`),
+`components/decor-preview.tsx` et `components/pack-sheet.tsx` (`FALLBACK_ACCENT`) —
+trois jumelles divergeant en silence si la marque changeait. Source unique désormais :
+`DEFAULT_AUTHOR_ACCENT` (`@meeshy/shared/utils/conversation-colors`, à côté de
+`authorAccentColor` et de la palette dont elle est la première entrée indigo). Témoins :
+`conversation-colors.test.ts` (parité palette, shared) + `decor-accent-single-source.test.ts`
+(re-export + propreté au gate d'harmonie, web), RED→GREEN. Gate d'harmonie 94 → 91 (−3),
+11 → 8 fichiers. Housekeeping : 79w confirmée mergée (`media.video.paused` sur `dev`) ;
+appariement analyses↔plans 1:1 revérifié (45w→79w) ; sweep i18n texte figé média/overlay
+épuisé. Analyse : `docs/analyses/uiux/2026-11-07-iteration-80w.md`.
+
+**79w** — i18n / Prisme UI : la pastille d'état « En pause » de la visionneuse vidéo
+(`components/viewer-video-page.tsx`) était écrite EN DUR en français — un texte VISIBLE
+À L'ÉCRAN dans toutes les langues sauf le français, alors que le bouton central voisin
+du même composant servait déjà `translate(language, 'media.video.pause')`. Site unique
+désormais : la clé `media.video.paused` ×7 langues (voisine de `media.video.pause`) +
+`translate` + marqueur `data-viewer-paused-badge` ; témoin `viewer-video-paused-i18n.test.tsx`
+(RED→GREEN). Housekeeping : 78w confirmée mergée (#14198) ; appariement analyses↔plans
+1:1 revérifié (45w→78w). Analyse : `docs/analyses/uiux/2026-11-02-iteration-79w.md`.
 
 **78w** — a11y / i18n : les noms accessibles des pastilles de palier (`TierDots`,
 `routes/progression-parts.tsx`) étaient écrits EN DUR en français — un lecteur d'écran
@@ -88,6 +124,8 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **79w**
-Revue fraîche `apps/web` — voir les pistes 79w+ en pied de
-`docs/analyses/uiux/2026-11-01-iteration-78w.md`.
+## Prochaine itération : **82w**
+Revue fraîche `apps/web` — voir les pistes 82w+ en pied de
+`docs/analyses/uiux/2026-11-08-iteration-81w.md` (gate d'harmonie enfin lisible à
+22/8 : `mood-page.tsx` (13), `message-menu`/`message-edit-composer`,
+`comment-compose-bar`, letterbox admin ; + axe épuration).

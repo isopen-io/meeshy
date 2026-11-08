@@ -31,6 +31,8 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
+import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.story.StoryPublishQueue
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
@@ -88,10 +90,11 @@ class MyStoriesViewModelTest {
     }
     private val blocks = BlockCache()
 
-    private fun viewModel(repo: StoryRepository): MyStoriesViewModel {
+    private fun viewModel(repo: StoryRepository, drafts: StoryComposerDraftStore = InMemoryStoryComposerDraftStore()): MyStoriesViewModel {
         val session = mockk<SessionRepository>(relaxed = true).also { every { it.currentUserId } returns "me" }
         val socket = mockk<SocialSocketManager>(relaxed = true).also { every { it.storyDeleted } returns deletedFlow }
-        return MyStoriesViewModel(repo, postRepo, session, socket, blocks) { nowMillis }
+        val library = testDraftLibrary(drafts, dispatcher)
+        return MyStoriesViewModel(repo, postRepo, session, socket, blocks, library, testFailureResume(), { nowMillis })
     }
 
     @Test
@@ -603,5 +606,74 @@ class MyStoriesViewModelTest {
             repo.republish("a")
             postRepo.update("a", PostEditDraft(visibility = "ONLY", visibilityUserIds = listOf("x")))
         }
+    }
+
+    private fun failedPublish() = me.meeshy.sdk.story.FailedStoryPublish(
+        cmid = "c1", tempId = "pending_1", content = "x", visibility = "PUBLIC",
+        originalLanguage = null, createdAtMillis = 1L, failedAtMillis = 2L,
+    )
+
+    private fun draftSnapshot() = me.meeshy.sdk.model.StoryComposerDraftSnapshot(
+        slides = listOf(me.meeshy.sdk.model.StoryDraftSlideSnapshot(id = "s1", text = "  mon brouillon ", background = "6366F1")),
+        selectedId = "s1",
+    )
+
+    @Test
+    fun `sans story publiee un echec de publication ouvre File et la liste`() = runTest(dispatcher) {
+        val repo = repository(stream = emptyList(), drained = NetworkResult.Success(emptyList()))
+        every { repo.publishQueue() } returns flowOf(StoryPublishQueue(emptyList(), listOf(failedPublish())))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tab).isEqualTo(MyStoriesTab.QUEUE)
+        assertThat(vm.state.value.visibleTabs).contains(MyStoriesTab.QUEUE)
+        assertThat(vm.state.value.failed.map { it.cmid }).containsExactly("c1")
+    }
+
+    @Test
+    fun `sans story ni file un brouillon local ouvre Brouillons`() = runTest(dispatcher) {
+        val repo = repository(stream = emptyList(), drained = NetworkResult.Success(emptyList()))
+        val vm = viewModel(repo, InMemoryStoryComposerDraftStore(draftSnapshot()))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tab).isEqualTo(MyStoriesTab.DRAFTS)
+        assertThat(vm.state.value.drafts.single().title).isEqualTo("mon brouillon")
+        assertThat(vm.state.value.drafts.single().backgroundHex).isEqualTo("6366F1")
+    }
+
+    @Test
+    fun `supprimer le brouillon demande confirmation puis vide l'emplacement`() = runTest(dispatcher) {
+        val store = InMemoryStoryComposerDraftStore(draftSnapshot())
+        val vm = viewModel(repository(), store)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RequestDeleteDraft(MyStoryDraftEntry.SLOT_ID))
+        assertThat(vm.state.value.pendingDelete?.target).isEqualTo(MyStoryDeleteConfirmation.Target.DRAFT)
+        assertThat(store.load()).isNotNull()
+        vm.onEvent(MyStoriesUiEvent.ConfirmDelete)
+        advanceUntilIdle()
+
+        assertThat(store.load()).isNull()
+        assertThat(vm.state.value.drafts).isEmpty()
+    }
+
+    @Test
+    fun `jeter un echec demande confirmation puis l'ecarte de la file, reessayer rejoue sans confirmer`() = runTest(dispatcher) {
+        val repo = repository()
+        every { repo.publishQueue() } returns flowOf(StoryPublishQueue(emptyList(), listOf(failedPublish())))
+        coEvery { repo.retryPublish("c1") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onEvent(MyStoriesUiEvent.RetryFailed("c1"))
+        advanceUntilIdle()
+        coVerify { repo.retryPublish("c1") }
+        coVerify(exactly = 0) { repo.discardPublish(any()) }
+
+        vm.onEvent(MyStoriesUiEvent.RequestDiscardFailed("c1"))
+        assertThat(vm.state.value.pendingDelete?.target).isEqualTo(MyStoryDeleteConfirmation.Target.FAILED_ITEM)
+        vm.onEvent(MyStoriesUiEvent.ConfirmDelete)
+        advanceUntilIdle()
+        coVerify { repo.discardPublish("c1") }
     }
 }

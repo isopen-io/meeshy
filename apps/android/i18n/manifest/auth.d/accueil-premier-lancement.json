@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "welcome.tagline",
+          "androidName": "welcome_tagline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "welcome.createAccount",
+          "androidName": "welcome_createAccount",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "welcome.createAccount.hint",
+          "androidName": "welcome_createAccount_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "welcome.signIn",
+          "androidName": "welcome_signIn",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "welcome.signIn.hint",
+          "androidName": "welcome_signIn_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

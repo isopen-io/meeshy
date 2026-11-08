@@ -1,18 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Source unique des libellés de média (lot media-vocabulaire-partage). -->
-    <string name="media_label_photo">صورة</string>
-    <string name="media_label_video">فيديو</string>
-    <string name="media_label_audio">صوت</string>
-    <string name="media_label_file">ملف</string>
-    <string name="media_label_location">الموقع</string>
-    <string name="media_summary_photo">📷 صورة</string>
-    <string name="media_summary_video">🎥 فيديو</string>
-    <string name="media_summary_voice">🎙️ رسالة صوتية</string>
-    <string name="media_summary_file">📎 ملف</string>
-    <string name="media_summary_location">📍 الموقع</string>
-    <string name="media_voice_message">رسالة صوتية</string>
-    <string name="media_voice_recording">رسالة صوتية (%1$s)</string>
     <plurals name="media_duration_minutes">
         <item quantity="zero">%1$d دقيقة</item>
         <item quantity="one">دقيقة واحدة</item>

@@ -9,9 +9,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,7 +46,7 @@ internal fun feedbackAccentColor(kind: FeedbackKind): Color = when (kind) {
 
 private fun feedbackDefaultIcon(kind: FeedbackKind): ImageVector = when (kind) {
     FeedbackKind.Success -> Icons.Filled.CheckCircle
-    FeedbackKind.Error -> Icons.Filled.Warning
+    FeedbackKind.Error -> Icons.Filled.Cancel
     FeedbackKind.Info -> Icons.Filled.Info
 }
 
@@ -61,6 +62,7 @@ public fun MeeshyFeedbackToast(
     modifier: Modifier = Modifier,
     kind: FeedbackKind = FeedbackKind.Info,
     icon: ImageVector = feedbackDefaultIcon(kind),
+    showsChevron: Boolean = false,
 ) {
     MeeshyGlassSurface(
         modifier = modifier,
@@ -84,6 +86,15 @@ public fun MeeshyFeedbackToast(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (showsChevron) {
+                Spacer(Modifier.width(MeeshySpacing.sm))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }

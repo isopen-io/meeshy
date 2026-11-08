@@ -62,6 +62,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.format.RelativeTimeLongText
+import me.meeshy.ui.component.ProfileCompletionRing
 import me.meeshy.ui.format.rememberRelativeTimeLongStrings
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -117,9 +118,9 @@ internal fun ProfileAvatar(
             header?.completionPercent?.let { percent ->
                 ProfileCompletionRing(
                     percent = percent,
-                    color = MeeshyPalette.Indigo500,
-                    track = MeeshyTheme.tokens.backgroundTertiary,
-                    modifier = Modifier.size(108.dp),
+                    size = 108.dp,
+                    strokeWidth = 4.dp,
+                    showLabel = false,
                 )
             }
         }
@@ -558,41 +559,6 @@ private fun profileDetailLabel(kind: ProfileDetailKind): Int = when (kind) {
     ProfileDetailKind.REGIONAL_LANGUAGE -> R.string.profile_detail_regional_language
     ProfileDetailKind.COUNTRY -> R.string.profile_detail_country
     ProfileDetailKind.TIMEZONE -> R.string.profile_detail_timezone
-}
-
-/** A circular progress ring around the avatar showing the profile-completion percentage. */
-@Composable
-internal fun ProfileCompletionRing(
-    percent: Int,
-    color: Color,
-    track: Color,
-    modifier: Modifier = Modifier,
-) {
-    val sweep = 360f * (percent.coerceIn(0, 100) / 100f)
-    Canvas(modifier = modifier) {
-        val stroke = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-        val inset = stroke.width / 2f
-        val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke.width, size.height - stroke.width)
-        val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-        drawArc(
-            color = track,
-            startAngle = 0f,
-            sweepAngle = 360f,
-            useCenter = false,
-            topLeft = topLeft,
-            size = arcSize,
-            style = stroke,
-        )
-        drawArc(
-            color = color,
-            startAngle = -90f,
-            sweepAngle = sweep,
-            useCenter = false,
-            topLeft = topLeft,
-            size = arcSize,
-            style = stroke,
-        )
-    }
 }
 
 /**

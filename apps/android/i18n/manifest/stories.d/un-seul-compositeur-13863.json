@@ -15,8 +15,10 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.socle.postText",
           "androidName": "composer_post_text",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "composer_post_text_counter",

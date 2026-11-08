@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net
 
+import me.meeshy.sdk.model.AuthStorageKeys
 import me.meeshy.sdk.model.security.SecureStore
 
 /**
@@ -10,9 +11,17 @@ import me.meeshy.sdk.model.security.SecureStore
  * namespace as soon as [userId] is set (and once per process for an install that
  * predates namespacing), the bare original always being removed.
  *
+ * [profileStore] est le coffre où vit le profil du compte (`meeshy_user_<id>`, un AUTRE fichier que celui des jetons) :
+ * quel que soit l'appelant de [clear] — déconnexion, refus 401, session révoquée — le profil du compte actif part avec
+ * ses jetons, sans dépendre d'un écouteur de l'interface (#14840).
+ *
  * Reads are lazy: nothing opens the Keystore before the first token access.
  */
-class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
+class EncryptedTokenStore(
+    private val store: SecureStore,
+    private val profileStore: SecureStore? = null,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+) : TokenStore {
 
     private val vault = EncryptedAccountTokenVault(store)
 
@@ -40,6 +49,9 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
             vault.adoptLegacyTokens(value)
         }
 
+    override val tokenDateMillis: Long?
+        get() = read(EncryptedAccountTokenVault.KEY_TOKEN_DATE)?.toLongOrNull()
+
     override val isAuthenticated: Boolean get() = jwt != null || sessionToken != null
 
     override fun accountsWithTokens(candidates: Collection<String>): Set<String> = vault.accountsWithTokens(candidates)
@@ -56,7 +68,10 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
 
     /** Signs the active account out: its tokens and the active pointer go; dormant accounts stay. */
     override fun clear() {
-        store.get(KEY_USER_ID)?.let(vault::remove)
+        store.get(KEY_USER_ID)?.let {
+            vault.remove(it)
+            profileStore?.remove(AuthStorageKeys.user(it), it)
+        }
         EncryptedAccountTokenVault.TOKEN_KEYS.forEach { store.remove(it) }
         store.remove(KEY_USER_ID)
     }
@@ -74,6 +89,7 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
             store.remove(key)
         } else {
             store.put(key, value, account)
+            store.put(EncryptedAccountTokenVault.KEY_TOKEN_DATE, nowMillis().toString(), account)
             if (key == EncryptedAccountTokenVault.KEY_JWT) store.remove(VisitorReaderKey.STORAGE_KEY)
         }
     }

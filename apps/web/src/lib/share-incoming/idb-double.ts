@@ -6,6 +6,7 @@
  * double servi aux deux est le témoin qui rougirait si leurs littéraux
  * (base, magasin, clé) divergeaient. Sous-ensemble strict : `open`,
  * `onupgradeneeded`, une transaction, `put` / `get` / `delete`, `oncomplete`.
+ * `put` du double pose une ligne telle qu'une version ANTÉRIEURE l'aurait écrite.
  */
 type Handler = ((event: { readonly target: unknown }) => void) | null;
 
@@ -70,6 +71,7 @@ export type FakeIndexedDb = {
   readonly factory: IDBFactory;
   readonly rowsOf: (database: string, store: string) => ReadonlyMap<string, unknown>;
   readonly failOpen: () => void;
+  readonly put: (database: string, store: string, key: string, value: unknown) => void;
 };
 
 export function fakeIndexedDb(): FakeIndexedDb {
@@ -99,6 +101,12 @@ export function fakeIndexedDb(): FakeIndexedDb {
     rowsOf: (database, store) => databases.get(database)?.stores.get(store) ?? new Map(),
     failOpen: () => {
       failing = true;
+    },
+    put: (database, store, key, value) => {
+      const known = databases.get(database) ?? new Database();
+      databases.set(database, known);
+      if (!known.objectStoreNames.contains(store)) known.createObjectStore(store);
+      known.stores.get(store)?.set(key, value);
     },
   };
 }

@@ -34,15 +34,16 @@ import XCTest
 @MainActor
 final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
 
-    private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
+    /// toggleVideo() lives in `CallCameraActuator` (`CallCollaborators/`, #11522).
+    private func cameraActuatorSource() throws -> String {
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallCameraActuator.swift")
     }
 
     /// Bounded from the `ensureCamera` pre-flight check up to the `do {` that
     /// starts the WebRTC upgrade/downgrade attempt right after it — semantically,
     /// not by a character count (Vague 167's lesson).
     func test_toggleVideo_permissionPreflightFailure_resetsVideoSurvivalController() throws {
-        let source = try callManagerSource()
+        let source = try cameraActuatorSource()
         let startMarker = "await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) == false {"
         guard let startRange = source.range(of: startMarker) else {
             XCTFail("Camera permission pre-flight check not found in toggleVideo — file structure changed"); return
@@ -56,7 +57,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
         let block = String(source[startRange.lowerBound..<endRange.lowerBound])
 
         XCTAssertTrue(
-            block.contains("self.isVideoEnabled = false"),
+            block.contains("call.isVideoEnabled = false"),
             "Sanity check: this must be toggleVideo's permission pre-flight branch, which disables video."
         )
         XCTAssertTrue(
@@ -68,20 +69,21 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
         )
     }
 
-    /// Bounded by the unique log message of this branch, up to the next `catch {`.
+    /// Bounded by the unique log message of this branch, up to `videoToggleFailed(_:)`,
+    /// the generic-catch handler declared right after it.
     func test_toggleVideo_cameraPermissionDeniedCatch_resetsVideoSurvivalController() throws {
-        let source = try callManagerSource()
+        let source = try cameraActuatorSource()
         let logMarker = "Logger.calls.error(\"toggleVideo failed: camera permission denied — prompting settings redirect\")"
         guard let logRange = source.range(of: logMarker) else {
             XCTFail("cameraPermissionDenied-catch log message not found in toggleVideo — file structure changed"); return
         }
-        guard let endRange = source.range(of: "} catch {", range: logRange.upperBound..<source.endIndex) else {
+        guard let endRange = source.range(of: "private func videoToggleFailed(_ error: Error) {", range: logRange.upperBound..<source.endIndex) else {
             XCTFail("Could not bound the cameraPermissionDenied catch block"); return
         }
         let block = String(source[logRange.lowerBound..<endRange.lowerBound])
 
         XCTAssertTrue(
-            block.contains("self.isVideoEnabled = false"),
+            block.contains("call.isVideoEnabled = false"),
             "Sanity check: this must be toggleVideo's cameraPermissionDenied catch branch, which disables video."
         )
         XCTAssertTrue(
@@ -95,7 +97,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
     /// Bounded by the unique log message of this branch, up to `switchCamera()`,
     /// the next function declared in the file after toggleVideo() closes.
     func test_toggleVideo_genericCatch_resetsVideoSurvivalController() throws {
-        let source = try callManagerSource()
+        let source = try cameraActuatorSource()
         let logMarker = "Logger.calls.error(\"toggleVideo failed: \\(error.localizedDescription)\")"
         guard let logRange = source.range(of: logMarker) else {
             XCTFail("Generic-catch log message not found in toggleVideo — file structure changed"); return
@@ -106,7 +108,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
         let block = String(source[logRange.lowerBound..<endRange.lowerBound])
 
         XCTAssertTrue(
-            block.contains("self.isVideoEnabled = false"),
+            block.contains("call.isVideoEnabled = false"),
             "Sanity check: this must be toggleVideo's generic catch branch, which disables video."
         )
         XCTAssertTrue(

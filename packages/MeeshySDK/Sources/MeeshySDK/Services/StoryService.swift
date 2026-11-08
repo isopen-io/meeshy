@@ -95,7 +95,7 @@ public final class StoryService: StoryServiceProviding, Sendable {
         // l'utilisateur tapait sur n'importe quel emoji de la palette, le serveur
         // enregistrait toujours un coeur. On envoie maintenant l'emoji explicite.
         let body = LikeRequest(emoji: emoji)
-        let _: APIResponse<[String: String]> = try await api.post(PostsEndpoint.byPostIdLike(postId: storyId), body: body)
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(PostsEndpoint.byPostIdLike(postId: storyId), body: body)
     }
 
     /// Interne au module : un commentaire se crée par `CommentPublisher` (#9743).
@@ -107,7 +107,7 @@ public final class StoryService: StoryServiceProviding, Sendable {
 
     public func repost(storyId: String) async throws {
         let body = RepostRequest()
-        let _: APIResponse<[String: String]> = try await api.post(PostsEndpoint.byPostIdRepost(postId: storyId), body: body)
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(PostsEndpoint.byPostIdRepost(postId: storyId), body: body)
     }
 
     public func listMine(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {

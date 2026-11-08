@@ -85,9 +85,19 @@ internal object CommentCardReading {
         username = author?.username,
     )
 
-    /** Les photos, vidéos et sons, dans leur ordre ; un document ou un lieu ne se nomme pas sur une carte. */
+    /**
+     * Les photos, vidéos et sons, dans leur ordre, avec leur fichier tel que la passerelle le sert (l'atelier le joint), l'image
+     * d'attente d'une vidéo et leurs côtés ; un document ou un lieu ne se nomme pas sur une carte.
+     */
     private fun mediaOf(media: List<ApiPostMedia>?): List<PostCommentCardMedia> =
-        media.orEmpty().sortedBy { it.order ?: 0 }.mapNotNull { piece -> kindOf(piece.mimeType)?.let { PostCommentCardMedia(piece.id, it) } }
+        media.orEmpty().sortedBy { it.order ?: 0 }.mapNotNull { piece ->
+            kindOf(piece.mimeType)?.let { kind ->
+                PostCommentCardMedia(
+                    id = piece.id, kind = kind, url = piece.fileUrl?.takeIf { it.isNotBlank() },
+                    posterUrl = piece.thumbnailUrl?.takeIf { it.isNotBlank() }, width = piece.width, height = piece.height,
+                )
+            }
+        }
 
     private fun kindOf(mimeType: String?): PostCommentCardMediaKind? {
         val type = mimeType?.lowercase().orEmpty()

@@ -3,7 +3,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 
 import type { CommunityPage, CommunitySummary } from '@/lib/api/communities';
 
-import { cachedSearchPlaceholder, communityAccent, compactCount, conversationTitleOf, findCachedCommunity } from './view';
+import { cachedSearchPlaceholder, communityAccent, compactCount, conversationTitleOf, findCachedCommunity, membershipActionOf } from './view';
 
 /**
  * LES RÈGLES PURES DES ÉCRANS DE COMMUNAUTÉ (#6364) — ce que les cartes, le
@@ -78,5 +78,33 @@ describe('findCachedCommunity — le détail se peint depuis la liste', () => {
 
   test('absente de tout cache : `undefined`, ce qu’`initialData` lit comme « rien »', () => {
     expect(findCachedCommunity([page([summary()])], 'inconnue')).toBeUndefined();
+  });
+});
+
+describe('membershipActionOf — miroir `CommunityDetailView.actionsSection` (#6378)', () => {
+  test('un non-membre d’une communauté publique la REJOINT', () => {
+    expect(membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner' }), 'u-me')).toBe('join');
+  });
+
+  test('un membre, un modérateur ou un admin non créateur la QUITTE', () => {
+    expect(membershipActionOf(summary({ viewerRole: 'member', createdBy: 'u-owner' }), 'u-me')).toBe('leave');
+    expect(membershipActionOf(summary({ viewerRole: 'moderator', createdBy: 'u-owner' }), 'u-me')).toBe('leave');
+    expect(membershipActionOf(summary({ viewerRole: 'admin', createdBy: 'u-owner' }), 'u-me')).toBe('leave');
+  });
+
+  test('le créateur ne quitte pas sa communauté : rien', () => {
+    expect(membershipActionOf(summary({ viewerRole: 'admin', createdBy: 'u-me' }), 'u-me')).toBe('none');
+  });
+
+  test('une communauté privée ne se rejoint pas sans invitation : rien', () => {
+    expect(membershipActionOf(summary({ viewerRole: null, isPrivate: true, createdBy: 'u-owner' }), 'u-me')).toBe('none');
+  });
+
+  test('un rôle encore INCONNU (carte de liste, serveur ancien) n’offre rien plutôt qu’un geste faux', () => {
+    expect(membershipActionOf(summary({ createdBy: 'u-owner' }), 'u-me')).toBe('none');
+  });
+
+  test('sans lecteur identifié, rien', () => {
+    expect(membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner' }), null)).toBe('none');
   });
 });

@@ -24,10 +24,6 @@ extension CallView {
                     duoLayout
                 }
 
-                CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
-                    .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
-                    .callChromeVisibility(chromeVisibility.isVisible(.screenShareBanner))
-
                 if !isGroupStage && chromeVisibility.isVisible(.selfView) && !isLiveFrameShown {
                     duoOverlays
                 }
@@ -38,13 +34,9 @@ extension CallView {
 
                 callModeLayer
 
-                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
-                    .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
-
-                liveFrameStatus
-                    .padding(.top, 160)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                // APP-1 — partage, enregistrement, cadre : une pile sous l'en-tête.
+                CallTopBannerStackView(screenShare: callManager.screenShare, recording: callManager.recording, captureJournal: transcriptionService.captureJournal, remoteName: callManager.remoteUsername ?? "", chrome: chromeVisibility, hasLiveFrameStatus: hasLiveFrameStatus,
+                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) { liveFrameStatus }
 
                 CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
                 CallCaptureOutcomeAnnouncer(capture: capture)
@@ -59,7 +51,7 @@ extension CallView {
         .task(id: callManager.isVideoEnabled) {
             if callManager.isVideoEnabled { callManager.cameraActuator.refreshAvailableCameras() }
         }
-        .onAppear { showEffectsToolbar = false }
+        .onAppear { layer = layer.reconciled(with: currentActionSet) }
         .onDisappear {
             showControls = true
             layer = .idle
@@ -205,7 +197,7 @@ extension CallView {
                 swipeDownOffset = CallPiPPolicy.swipeDownOffset(
                     translation: value.translation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide
+                    isEffectsOpen: !layer.mayAutoHide
                 )
             }
             .onEnded { value in
@@ -213,7 +205,7 @@ extension CallView {
                     translation: value.translation.height,
                     predictedTranslation: value.predictedEndTranslation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide,
+                    isEffectsOpen: !layer.mayAutoHide,
                     canSystemPiP: callManager.canActivateSystemPiP
                 )
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -411,9 +403,6 @@ extension CallView {
                 }
                 if !callManager.isRemoteAudioEnabled {
                     statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
-                }
-                if callManager.isRemoteScreenCapturing {
-                    statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
                 }
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
@@ -632,7 +621,7 @@ extension CallView {
             // is replaced by the live feed. When it fires, the peer is
             // shown with its camera off: nothing is loading any more.
             .task(id: callManager.currentCallId) {
-                try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
+                try? await Task.sleep(for: .seconds(Double(videoConnectWatchdogSeconds)))
                 if !Task.isCancelled {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         remoteVideoWaitElapsedCallId = callManager.currentCallId

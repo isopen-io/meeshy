@@ -31,6 +31,10 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     // MARK: - Stubbing
 
     private var stubs: [String: Any] = [:]
+    /// Réponses rendues UNE par appel, dans l'ordre, avant la table `stubs` :
+    /// une route à curseur rend une page différente à chaque aller. Un
+    /// `Error` posé dans la file est levé à son tour.
+    private var stubQueues: [String: [Any]] = [:]
     var errorToThrow: Error?
     /// Suspend un `paginatedRequest` APRÈS qu'il a lu son stub : le témoin
     /// change le stub, laisse passer un autre appel, puis libère le premier —
@@ -44,6 +48,8 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     var requestCount = 0
     var requestEndpoints: [String] = []
     var requestMethods: [String] = []
+    /// Les paramètres d'URL de chaque `request`, dans l'ordre d'appel.
+    var requestQueryItems: [[URLQueryItem]] = []
     var postCount = 0
     var putCount = 0
     var patchCount = 0
@@ -56,6 +62,10 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
 
     func stub<T>(_ endpoint: String, result: T) {
         stubs[endpoint] = result
+    }
+
+    func stubSequence(_ endpoint: String, results: [Any]) {
+        stubQueues[endpoint] = results
     }
 
     // MARK: - Protocol Methods
@@ -73,12 +83,18 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestCount += 1
         requestEndpoints.append(endpoint)
         requestMethods.append(method)
+        requestQueryItems.append(queryItems ?? [])
         // Corps déjà encodé par l'appelant (`FeedViewModel.createBorrowedSoundPost`
         // passe par ce chemin brut plutôt que par `post<T,U>`) — même point de
         // capture, même ordre : AVANT le throw, pour que le corps reste
         // observable même quand le test court-circuite la réponse.
         if let body { lastPostBodies.append(body) }
         if let error = errorToThrow { throw error }
+        if let next = stubQueues[endpoint]?.first {
+            stubQueues[endpoint]?.removeFirst()
+            if let error = next as? Error { throw error }
+            if let queued = next as? T { return queued }
+        }
         guard let result = stubs[endpoint] as? T else {
             throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for endpoint '\(endpoint)' returning \(T.self)"])
         }

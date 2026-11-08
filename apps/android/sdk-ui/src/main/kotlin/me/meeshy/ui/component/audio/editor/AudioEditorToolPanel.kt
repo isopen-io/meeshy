@@ -35,6 +35,7 @@ import java.util.Locale
 import kotlin.math.abs
 import me.meeshy.sdk.model.audioedit.AudioEditorStaging
 import me.meeshy.sdk.model.audioedit.AudioEditorTool
+import me.meeshy.sdk.model.audioedit.AudioTranscriptionState
 import me.meeshy.sdk.model.format.LocalizedNumber
 import me.meeshy.ui.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -56,6 +57,10 @@ internal fun AudioEditorToolPanel(
     accent: Color,
     onChange: ((AudioEditorStaging) -> AudioEditorStaging) -> Unit,
     modifier: Modifier = Modifier,
+    transcription: AudioTranscriptionState = AudioTranscriptionState.Idle,
+    transcriptionLanguage: String = TRANSCRIPTION_LANGUAGES.first(),
+    onTranscriptionLanguage: (String) -> Unit = {},
+    onTranscribe: () -> Unit = {},
 ) {
     val tokens = LocalMeeshyTokens.current
     Column(
@@ -77,7 +82,9 @@ internal fun AudioEditorToolPanel(
             AudioEditorTool.FADE -> FadePanel(staging, accent, onChange)
             AudioEditorTool.SPEED -> SpeedPanel(staging.speed) { rate -> onChange { it.copy(speed = rate) } }
             AudioEditorTool.VOLUME -> VolumePanel(staging.gain, accent) { gain -> onChange { it.copy(gain = gain) } }
-            AudioEditorTool.TRANSCRIBE -> Unit
+            AudioEditorTool.TRANSCRIBE -> AudioEditorTranscribePanel(
+                transcription, transcriptionLanguage, accent, onTranscriptionLanguage, onTranscribe,
+            )
         }
     }
 }

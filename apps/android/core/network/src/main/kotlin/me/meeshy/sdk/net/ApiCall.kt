@@ -6,6 +6,9 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiResponseMeta
 import me.meeshy.sdk.model.DeletionAcknowledgement
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.feedback.DailyGestureLimit
+import me.meeshy.sdk.model.net.MaskedEmailOwner
+import me.meeshy.sdk.model.net.NewcomerSlowMode
 import okhttp3.ResponseBody
 import retrofit2.HttpException
 import retrofit2.Response
@@ -24,17 +27,36 @@ data class PagedResult<T>(val data: T, val pagination: Pagination?, val meta: Ap
  * `code` et jamais sous `error` ; les lire ici, et non chez chaque appelant,
  * est ce qui permet à un écran de poser chaque refus sous SON champ.
  */
-private fun ApiResponse<*>.toApiError(fallbackMessage: String, fallbackCode: String?, httpStatus: Int?): ApiError =
-    ApiError(
+private fun ApiResponse<*>.toApiError(
+    fallbackMessage: String,
+    fallbackCode: String?,
+    httpStatus: Int?,
+    retryAfterHeader: String? = null,
+): ApiError {
+    val refusalCode = code ?: fallbackCode
+    return ApiError(
         message = error ?: message ?: fallbackMessage,
-        code = code ?: fallbackCode,
+        code = refusalCode,
         httpStatus = httpStatus,
         fieldName = fieldName,
         suggestions = suggestions.orEmpty(),
         violations = violations.orEmpty(),
         limit = limit,
         unlinked = unlinked,
+        emailOwner = MaskedEmailOwner.from(emailOwner),
+        resetAtEpochMillis = DailyGestureLimit.parseInstant(resetAt),
+        retryAfterSeconds = retryAfterSecondsOf(httpStatus, refusalCode, retryAfterHeader),
+        requiredConsents = requiredConsents,
     )
+}
+
+/**
+ * Le délai d'un refus TEMPORAIRE : le mode lent des nouveaux comptes lit `Retry-After` puis `retryAfter` de l'enveloppe
+ * (plancher d'une seconde) ; une limite du jour garde le `retryAfter` de l'enveloppe quand il est servi.
+ */
+private fun ApiResponse<*>.retryAfterSecondsOf(httpStatus: Int?, refusalCode: String?, header: String?): Int? =
+    NewcomerSlowMode.from(httpStatus ?: 0, refusalCode, header, retryAfter)?.retryAfterSeconds
+        ?: retryAfter?.takeIf { DailyGestureLimit.isDailyLimitCode(refusalCode) }?.let { NewcomerSlowMode.seconds(it) }
 
 /**
  * Turns a Retrofit [HttpException] into an [ApiError] carrying the GATEWAY'S OWN
@@ -53,6 +75,7 @@ private fun apiErrorFromHttpException(e: HttpException): ApiError {
         fallbackMessage = e.message(),
         fallbackCode = "HTTP_${e.code()}",
         httpStatus = e.code(),
+        retryAfterHeader = e.response()?.headers()?.get("Retry-After"),
     ) ?: ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code())
 }
 
@@ -232,6 +255,7 @@ private fun apiErrorFromResponse(response: Response<*>): ApiError {
         fallbackMessage = "HTTP ${response.code()}",
         fallbackCode = "HTTP_${response.code()}",
         httpStatus = response.code(),
+        retryAfterHeader = response.headers()["Retry-After"],
     ) ?: ApiError(
         message = "HTTP ${response.code()}",
         code = "HTTP_${response.code()}",

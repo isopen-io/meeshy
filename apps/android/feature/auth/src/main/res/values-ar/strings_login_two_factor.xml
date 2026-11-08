@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_two_factor_error_invalid_code">هذا الرمز غير صحيح. تحقق من تطبيق المصادقة وحاول مرة أخرى.</string>
+    <string name="login_two_factor_error_too_many_attempts">محاولات كثيرة جدًا. حاول مرة أخرى بعد بضع دقائق.</string>
+    <string name="login_two_factor_error_token_expired">انتهت صلاحية تسجيل الدخول هذا. أدخل كلمة المرور مرة أخرى.</string>
+    <string name="login_two_factor_description_with_backup">أدخل رمز التحقق المكوّن من 6 أرقام من تطبيق المصادقة الخاص بك، أو أحد رموز الاسترداد الاحتياطية.</string>
+</resources>

@@ -147,10 +147,8 @@ extension MeeshyComposerHost {
             // l'écran ne montrait. Elles seraient reparties avec la
             // publication suivante, notification comprise.
             composerReferences = []
-            // L'index des durées sources n'est plus ici : il vivait pour la
-            // bande de rognage du bas de scène, retirée le 2026-09-05, et sa
-            // mesure appartient désormais à l'éditeur plein écran — qui la
-            // refait à chaque ouverture, donc n'a rien à effacer.
+            soundExtractionChoice = nil
+            commentsDisabledChoice = false
         }
     }
 

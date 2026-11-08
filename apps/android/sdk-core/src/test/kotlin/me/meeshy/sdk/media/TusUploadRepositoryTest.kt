@@ -205,7 +205,7 @@ class TusUploadRepositoryTest {
         assertThat((result as NetworkResult.Success).data).isEmpty()
     }
 
-    // --- uploadAll: sequential batch over the same single-item upload ---
+    // --- uploadAll: bounded parallel batch over the same single-item upload ---
 
     @Test
     fun `uploadAll of an empty list is success without calling the api`() = runTest {
@@ -215,22 +215,26 @@ class TusUploadRepositoryTest {
         coVerify(exactly = 0) { api.createUpload(any(), any(), any()) }
     }
 
+    private fun filenameKey(name: String) = "filename " + java.util.Base64.getEncoder().encodeToString(name.toByteArray())
+
     @Test
-    fun `uploadAll uploads every item in order and flattens the results`() = runTest {
-        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
-        coEvery { api.uploadData(any(), any(), any(), any()) } returnsMany listOf(
-            finishResponse(MediaAttachmentWire(id = "a", fileUrl = "https://cdn/a.jpg")),
-            finishResponse(MediaAttachmentWire(id = "b", fileUrl = "https://cdn/b.jpg")),
-        )
+    fun `uploadAll returns the results in the order of the inputs whatever the pool does`() = runTest {
+        listOf("a", "b", "c").forEach { id ->
+            coEvery { api.createUpload(any(), match { it.startsWith(filenameKey("$id.jpg")) }, any()) } returns
+                locationResponse("https://gate/api/v1/uploads/$id")
+            coEvery { api.uploadData("https://gate/api/v1/uploads/$id", any(), any(), any()) } returns
+                finishResponse(MediaAttachmentWire(id = id, fileUrl = "https://cdn/$id.jpg"))
+        }
 
-        val result = repository().uploadAll(listOf(item("a.jpg"), item("b.jpg")), TusUploadContext.STORY)
+        val result = repository().uploadAll(listOf(item("a.jpg"), item("b.jpg"), item("c.jpg")), TusUploadContext.STORY)
 
-        assertThat((result as NetworkResult.Success).data.map { it.id }).containsExactly("a", "b").inOrder()
+        assertThat((result as NetworkResult.Success).data.map { it.id }).containsExactly("a", "b", "c").inOrder()
     }
 
     @Test
-    fun `uploadAll stops at the first failure and never uploads the remaining items`() = runTest {
-        coEvery { api.createUpload(any(), any(), any()) } returnsMany listOf(locationResponse(), errorResponse(400))
+    fun `uploadAll surfaces the first failure of the batch`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.createUpload(any(), match { it.startsWith(filenameKey("b.jpg")) }, any()) } returns errorResponse(400)
         coEvery { api.uploadData(any(), any(), any(), any()) } returns
             finishResponse(MediaAttachmentWire(id = "a", fileUrl = "https://cdn/a.jpg"))
 
@@ -240,8 +244,7 @@ class TusUploadRepositoryTest {
         )
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
-        coVerify(exactly = 2) { api.createUpload(any(), any(), any()) }
-        coVerify(exactly = 1) { api.uploadData(any(), any(), any(), any()) }
+        assertThat((result as NetworkResult.Failure).error.httpStatus).isEqualTo(400)
     }
 
     // --- chunking: a body larger than chunkSizeBytes is split across uploadChunk
@@ -328,6 +331,15 @@ class TusUploadRepositoryTest {
     // --- checkpointed retries: a Room-backed checkpoint lets a retried upload skip
     // already-acknowledged chunks instead of restarting from byte zero ---
 
+    /** La clé de reprise est l'empreinte du CONTENU : le même octets sous un autre nom retrouvent la même session. */
+    private fun storyKeyOf(item: MediaUploadItem): String {
+        val outgoing = kotlinx.coroutines.runBlocking {
+            OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined).sanitize(item)
+        }
+        val sent = (outgoing as NetworkResult.Success).data
+        return me.meeshy.sdk.model.media.TusCheckpointKey.ofContent(ContentHash.sha256Hex(sent.source), TusUploadContext.STORY)
+    }
+
     private fun bigItem(bytes: Int = 25) =
         MediaUploadItem(bytes = videoBytes(bytes), fileName = "video.mp4", mimeType = "video/mp4")
 
@@ -402,7 +414,7 @@ class TusUploadRepositoryTest {
         repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
 
         assertThat(key.captured).isEqualTo(
-            me.meeshy.sdk.model.media.TusCheckpointKey.of(TusUploadContext.STORY, "video.mp4", "video/mp4", 25L),
+            storyKeyOf(bigItem()),
         )
     }
 
@@ -433,7 +445,7 @@ class TusUploadRepositoryTest {
     private fun headResponse(offset: Long) = Response.success(Unit, Headers.headersOf("Upload-Offset", offset.toString()))
 
     private fun storedCheckpoint(uploaded: Long = 10L, location: String = "https://gate/uploads/resume-me"): String {
-        val key = me.meeshy.sdk.model.media.TusCheckpointKey.of(TusUploadContext.STORY, "video.mp4", "video/mp4", 25L)
+        val key = storyKeyOf(bigItem())
         coEvery { checkpoints.find(key) } returns TusUploadCheckpointEntity(
             checkpointKey = key,
             location = location,

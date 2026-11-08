@@ -19,7 +19,6 @@ import me.meeshy.sdk.media.scene.SceneMediaProbe
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.composer.scene.SceneExportState
-import me.meeshy.sdk.model.scene.export.ImagerDecision
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
 import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.sdk.model.scene.export.StoryExportMood
@@ -28,9 +27,10 @@ import me.meeshy.sdk.relation.RelationLevelProvider
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusRepository
+import me.meeshy.ui.component.retouch.StoryVideoLook
 
 /**
- * L'export vidéo d'une story depuis le lecteur, ou des scènes d'un post ou d'un réel : Enregistrer, Partager ou Imager. Le bake vit à la portée du ViewModel —
+ * L'export vidéo d'une story depuis le lecteur, ou des scènes d'un post ou d'un réel : Enregistrer, Partager, ou la carte de l'atelier. Le bake vit à la portée du ViewModel —
  * quitter le lecteur arrête le moteur et efface ce qu'il avait écrit.
  */
 @HiltViewModel
@@ -53,9 +53,9 @@ class StoryVideoExportViewModel @Inject constructor(
         probeMillis = SceneMediaProbe::durationMillis,
         blankPicture = ::writeBlankPicture,
         lastFrame = ::writeLastFrame,
-        decideImager = stages::askImager,
         paint = stages::askPaint,
         paintBrand = ::paintBrand,
+        exportLook = StoryVideoLook::exportLook,
     )
 
     /** Le mood de l'auteur et le niveau de son lien sont lus à l'export, bornés : ce qui n'arrive pas à temps manque. */
@@ -81,7 +81,6 @@ class StoryVideoExportViewModel @Inject constructor(
      */
     fun export(mode: StoryExportMode, scenes: List<Pair<StoryItem, StorySlideView>>, author: StoryExportAuthorFacts? = null) {
         if (scenes.isEmpty() || state.value.isExporting) return
-        if (mode.opensImagerView) stages.openImager()
         val exported = scenes.map { (item, slide) -> StoryExportScene.of(item, slide, config.apiBaseUrl) }
         coordinator.export(mode.destination) { output, work ->
             preparer.prepare(mode, exported, output, work, author?.let { brandResolver.identity(it) })
@@ -94,11 +93,6 @@ class StoryVideoExportViewModel @Inject constructor(
         throw cancelled
     } catch (failure: Exception) {
         null
-    }
-
-    /** `null` : l'auteur ferme la vue Imager, l'export s'arrête. */
-    fun decideImager(decision: ImagerDecision?) {
-        if (decision == null) cancel() else stages.answerImager(decision)
     }
 
     fun painted(files: List<File>?) = stages.answerPaint(files)

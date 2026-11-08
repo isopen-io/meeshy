@@ -10,7 +10,7 @@ import androidx.navigation.navDeepLink
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.ForgotPasswordScreen
 import me.meeshy.app.auth.LoginScreen
-import me.meeshy.app.auth.MagicLinkScreen
+import me.meeshy.app.auth.MagicLinkSheet
 import me.meeshy.app.auth.MagicLinkValidateScreen
 import me.meeshy.app.auth.MagicLinkValidateViewModel
 import me.meeshy.app.auth.NewPasswordScreen
@@ -46,7 +46,15 @@ internal fun NavGraphBuilder.authNavGraph(
         ForgotPasswordScreen(onBack = dismiss)
     }
     sheetComposable(Routes.MAGIC_LINK, navController) { _, dismiss ->
-        MagicLinkScreen(onBack = dismiss)
+        MagicLinkSheet(
+            onBack = dismiss,
+            // Le code saisi ouvre la session feuille refermée : la racine bascule comme pour le lien reçu.
+            onSessionOpened = {
+                authViewModel.onExternalSessionOpened()
+                navController.navigate(Routes.CONVERSATIONS) { popUpTo(0) { inclusive = true } }
+            },
+            onSecondFactor = authViewModel::completeEmailProof,
+        )
     }
     composable(
         route = Routes.MAGIC_LINK_VALIDATE,
@@ -107,6 +115,9 @@ internal fun NavGraphBuilder.authNavGraph(
             onOpenPrivacy = {
                 navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
             },
+            // « Est-ce vous ? » : le code et le lien sont partis, la connexion par e-mail s'ouvre sur son attente.
+            onOpenSignInLink = { navController.navigate(Routes.MAGIC_LINK) },
+            onOpenForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) },
         )
     }
     sheetComposable(

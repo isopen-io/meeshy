@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ShareLinkEntryIntent
+import me.meeshy.sdk.model.ShareLinkInfo
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AnonymousSessionStore
 import javax.inject.Inject
@@ -117,6 +118,14 @@ public class ShareLinkEntryViewModel @Inject constructor(
     private val _state = MutableStateFlow<ShareLinkEntryUiState>(ShareLinkEntryUiState.Resolving)
     public val state: StateFlow<ShareLinkEntryUiState> = _state.asStateFlow()
 
+    private val _landingInfo = MutableStateFlow<ShareLinkInfo?>(null)
+
+    /**
+     * L'aperçu du lien tel que la résolution l'a lu : la page d'invitation le peint (identique avec ou
+     * sans compte). Hors de [ShareLinkEntryUiState] pour que ses branches de navigation restent des valeurs.
+     */
+    public val landingInfo: StateFlow<ShareLinkInfo?> = _landingInfo.asStateFlow()
+
     init {
         resolve()
     }
@@ -162,6 +171,7 @@ public class ShareLinkEntryViewModel @Inject constructor(
             knownConversationIds = known,
         ) ?: return if (isAuthenticated) attemptAuthenticatedJoin() else ShareLinkEntryUiState.GuestForm
 
+        _landingInfo.value = resolution.info
         return when (val intent = resolution.intent) {
             is ShareLinkEntryIntent.OpenConversation ->
                 ShareLinkEntryUiState.OpenConversation(intent.conversationId)

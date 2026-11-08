@@ -15,6 +15,17 @@ struct FeedPostRowActions {
     let onAuthorMoodTap: (String, CGPoint) -> Void
     let moodLookup: (String) -> (emoji: String?, tapHandler: ((CGPoint) -> Void)?)
     let onViewAuthorStory: (String) -> Void
+
+    /// Une carte encore dans la file d'envoi (#15123) n'engage rien : ses
+    /// gestes n'atteignent pas l'hôte, qui les enverrait sous un cmid.
+    func offered(for post: FeedPost) -> FeedPostRowActions {
+        guard PendingPublicationMarker.isPending(postId: post.id) else { return self }
+        return FeedPostRowActions(
+            onHeart: { _ in }, onRepost: { _ in }, onBookmark: { _ in }, onShare: { _ in },
+            onQuote: { _ in }, onEdit: { _ in }, onOpenReelComments: { _ in },
+            onAuthorMoodTap: onAuthorMoodTap, moodLookup: moodLookup, onViewAuthorStory: onViewAuthorStory
+        )
+    }
 }
 
 nonisolated struct FeedPostRowRenderInputs: Equatable {
@@ -31,6 +42,7 @@ nonisolated struct FeedPostRowRenderInputs: Equatable {
     let commentCount: Int
     let authorRing: ServedProfileDecorItem?
     let trackedLinkMap: [String: String]
+    let commentsDisabled: Bool
     let engagement: FeedPostEngagementSnapshot
     let authorStoryRing: StoryRingState
     let authorMoodEmoji: String?
@@ -54,6 +66,7 @@ nonisolated struct FeedPostRowRenderInputs: Equatable {
         commentCount = post.commentCount
         authorRing = post.authorRing
         trackedLinkMap = post.trackedLinkMap
+        commentsDisabled = post.commentsDisabled
         self.engagement = engagement
         self.authorStoryRing = authorStoryRing
         self.authorMoodEmoji = authorMoodEmoji
@@ -68,7 +81,19 @@ struct FeedPostRow: View {
     let engagement: FeedPostEngagementSnapshot
     let authorStoryRing: StoryRingState
     let authorMoodEmoji: String?
-    let actions: FeedPostRowActions
+    private let actions: FeedPostRowActions
+
+    init(post: FeedPost, viewModel: FeedViewModel, reelAutoplay: ReelFeedAutoplayCoordinator,
+         engagement: FeedPostEngagementSnapshot, authorStoryRing: StoryRingState,
+         authorMoodEmoji: String?, actions: FeedPostRowActions) {
+        self.post = post
+        self.viewModel = viewModel
+        self.reelAutoplay = reelAutoplay
+        self.engagement = engagement
+        self.authorStoryRing = authorStoryRing
+        self.authorMoodEmoji = authorMoodEmoji
+        self.actions = actions.offered(for: post)
+    }
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -96,6 +121,9 @@ struct FeedPostRow: View {
             ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
         }
     }
+
+    /// « Désactiver / Réactiver les commentaires » (#16541) : l'auteur et la modération.
+    private var commentSettingsToggle: ((String) -> Void)? { CommentSettingsToggle.feedAction(for: post, in: viewModel) }
 
     private var removalOffer: PublicationModerationOffer? {
         ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) }
@@ -146,6 +174,7 @@ struct FeedPostRow: View {
                 actions.onOpenReelComments(post)
             },
             onRepost: { postId in actions.onRepost(postId) },
+            onQuote: { postId in actions.onQuote(postId) },
             onBookmark: { postId in actions.onBookmark(postId) },
             onShare: { postId in actions.onShare(postId) },
             onTapAuthor: { authorId in
@@ -166,7 +195,8 @@ struct FeedPostRow: View {
             } : nil,
             onPin: isOwnPost ? { postId in
                 Task { await viewModel.pinPost(postId) }
-            } : nil
+            } : nil,
+            onToggleComments: commentSettingsToggle
         )
         // Marge latérale volontairement plus serrée que les posts standards
         // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
@@ -243,6 +273,7 @@ struct FeedPostRow: View {
             reelAutoplay: reelAutoplay
         )
         .equatable()
+        .environment(\.commentSettingsAction, commentSettingsToggle)
     }
 }
 

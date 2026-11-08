@@ -131,13 +131,17 @@ async function postAtteignable(
 async function publicationAtteignable(
   prisma: PrismaClient,
   postId: string,
-  viewerId: string
+  viewerId: string,
+  soiRefuse = false
 ): Promise<VerdictCible> {
   const post = await prisma.post.findUnique({
     where: { id: postId },
     select: { authorId: true, visibility: true, visibilityUserIds: true, deletedAt: true },
   });
   if (!post || post.deletedAt) return INTROUVABLE;
+  // #14110 (contre-audit N2) — signaler SA publication n'a pas de sens. Le
+  // commentaire d'un autre sous sa propre publication, lui, se signale.
+  if (soiRefuse && viewerId !== '' && post.authorId === viewerId) return INACCESSIBLE;
   const vu = await postAtteignable(
     prisma,
     {
@@ -191,12 +195,17 @@ export async function verifierCible(options: {
         select: { id: true },
       });
       if (!conversation) return INTROUVABLE;
+      // #14626 — une conversation n'a pas d'AUTEUR : celui qui ouvre un
+      // tête-à-tête porte le rôle `creator`, et celui qui hérite d'un groupe
+      // aussi. Le lui refuser retirait le signalement à la mineure qui a écrit
+      // la première à son harceleur. Tout membre actif la signale, comme le
+      // promet `conversation-action-policy` (`report`) aux trois clients.
       return (await participe(prisma, entityId, signalant)) ? ATTEIGNABLE : INACCESSIBLE;
     }
 
     case 'post':
     case 'story':
-      return publicationAtteignable(prisma, entityId, viewerId);
+      return publicationAtteignable(prisma, entityId, viewerId, true);
 
     case 'comment': {
       // Un commentaire (de post, de réel ou de story — #8709) est atteignable
@@ -212,13 +221,15 @@ export async function verifierCible(options: {
     }
 
     case 'community': {
-      const communaute = await prisma.community.findUnique({ where: { id: entityId }, select: { id: true } });
-      return communaute ? ATTEIGNABLE : INTROUVABLE;
+      const communaute = await prisma.community.findUnique({ where: { id: entityId }, select: { id: true, createdBy: true } });
+      if (!communaute) return INTROUVABLE;
+      return viewerId !== '' && communaute.createdBy === viewerId ? INACCESSIBLE : ATTEIGNABLE;
     }
 
     case 'sound': {
-      const son = await prisma.sound.findUnique({ where: { id: entityId }, select: { id: true } });
-      return son ? ATTEIGNABLE : INTROUVABLE;
+      const son = await prisma.sound.findUnique({ where: { id: entityId }, select: { id: true, uploaderId: true } });
+      if (!son) return INTROUVABLE;
+      return viewerId !== '' && son.uploaderId === viewerId ? INACCESSIBLE : ATTEIGNABLE;
     }
   }
 }

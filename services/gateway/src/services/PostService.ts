@@ -56,13 +56,11 @@ import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 import { quantizeCoordinate, resolveDiscoverabilityPrecision, type DiscoverabilityPrecision } from './location/geoDiscoverability';
 import { isAdult } from '@meeshy/shared/utils/age';
-import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 import { detectContentLanguage } from '../utils/content-language';
 import { unclaimedContentLanguage } from './posts/unclaimedContentLanguage';
-import { guardedTimeout } from '../utils/guarded-timer';
-import { resolveServerTargetLanguages } from './message-translation/serverTargetLanguages';
+import { translateStoryContent } from './posts/storyContentTranslation';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -494,127 +492,22 @@ export class PostService {
     return { ...served, soundLibrary };
   }
 
+  /**
+   * La traduction du CONTENU d'une story vit dans
+   * `posts/storyContentTranslation.ts` : elle a sa propre doctrine (le jeu des
+   * langues attendues, le doublon du bus, le retrait de l'écouteur) et ce
+   * fichier est hors budget de taille. Les trois sites d'appel — création,
+   * mise à jour, édition de story — gardent leur signature.
+   */
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
-    try {
-      // An explicit source (e.g. the language chosen when editing a post) wins
-      // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectContentLanguage(content);
-
-      // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
-      // la langue source elle-même — même garde que le sibling
-      // `triggerStoryTextObjectTranslation`. Sans elle, un auteur écrivant
-      // dans une langue déjà parlée par (une partie de) son audience
-      // déclenche un aller-retour NLLB source→source qui réécrit
-      // `translations.<source>` avec une paraphrase de l'original au lieu de
-      // le laisser intact. Une langue sans code NLLB-200 (#3659) ne se demande
-      // ni ne se compte : `expectedCount` attendait sinon 60 s une langue
-      // refusée avant de retirer l'écouteur.
-      const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
-      const targetLanguages = resolveServerTargetLanguages(sourceLanguage, allTargetLanguages);
-
-      if (targetLanguages.length === 0) {
-        log.info('StoryTranslation: no target languages', { postId });
-        return;
-      }
-
-      // 2. Obtenir le client ZMQ
-      const zmqClient = ZMQSingleton.getInstanceSync();
-      if (!zmqClient) {
-        log.warn('StoryTranslation: ZMQ client not available', { postId });
-        return;
-      }
-
-      const storyMessageId = translationTargetId('story', postId);
-
-      log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
-
-      // 3. Listener pour recevoir les résultats un par un
-      let receivedCount = 0;
-      const expectedCount = targetLanguages.length;
-      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-
-      // Subscribe to the per-messageId scoped event instead of the global
-      // `translationCompleted`. Avoids O(active_stories × global_events) filter
-      // overhead — previously every translation across the entire gateway
-      // (messages, comments, etc.) fanned out to every active story listener
-      // which then filtered by messageId. With 100 active stories and 1000
-      // messages/min that was ~100k listener invocations/min.
-      const scopedEvent = `translationCompleted:${storyMessageId}`;
-
-      const removeListener = () => {
-        zmqClient.off(scopedEvent, handleResult);
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-          timeoutHandle = null;
-        }
-      };
-
-      const handleResult = async (event: { taskId: string; result: { messageId: string; translatedText: string; confidenceScore?: number; translatorModel?: string }; targetLanguage: string; metadata: Record<string, unknown> }) => {
-        // The scoped event guarantees messageId match, but keep the guard for
-        // defense in depth (the event payload is reused).
-        if (event.result.messageId !== storyMessageId) return;
-
-        // Reject malformed `targetLanguage` before interpolating into the
-        // raw Mongo `$set` field path. A value like `"a.b.$inject"` would
-        // otherwise let a compromised translator write arbitrary fields.
-        if (!/^[a-z]{2,5}$/.test(event.targetLanguage)) {
-          log.warn('StoryTranslation: rejected malformed targetLanguage', { postId, targetLanguage: event.targetLanguage });
-          return;
-        }
-
-        try {
-          await (this.prisma as any).$runCommandRaw({
-            update: 'Post',
-            updates: [{
-              q: { _id: { $oid: postId }, originalLanguage: { $ne: event.targetLanguage } },
-              u: { $set: { [`translations.${event.targetLanguage}`]: {
-                text: event.result.translatedText,
-                translationModel: event.result.translatorModel ?? 'nllb',
-                confidenceScore: event.result.confidenceScore ?? 1,
-                createdAt: new Date().toISOString(),
-              }}},
-            }],
-          });
-
-          log.info('StoryTranslation: saved', { postId, lang: event.targetLanguage });
-        } catch (err) {
-          log.warn('StoryTranslation: save failed', { err, postId });
-        }
-
-        receivedCount++;
-        if (receivedCount >= expectedCount) {
-          log.info('StoryTranslation: all languages received, removing listener', { postId, receivedCount });
-          removeListener();
-        }
-      };
-
-      zmqClient.on(scopedEvent, handleResult);
-
-      // 4. Envoyer la requête ZMQ
-      try {
-        await zmqClient.translateToMultipleLanguages(
-          content,
-          sourceLanguage,
-          targetLanguages,
-          storyMessageId,
-          `story_context:${postId}`,
-        );
-      } catch (sendError) {
-        removeListener();
-        throw sendError;
-      }
-
-      // 5. Cleanup du listener après timeout (fallback si certaines langues échouent)
-      timeoutHandle = guardedTimeout({ name: 'story-translation-timeout', afterMs: 60_000, logger: log, run: () => {
-        if (receivedCount < expectedCount) {
-          log.warn('StoryTranslation: timeout, removing listener', { postId, receivedCount, expectedCount });
-        }
-        removeListener();
-      } });
-
-    } catch (error) {
-      log.warn('StoryTranslation failed', { err: error, postId });
-    }
+    await translateStoryContent({
+      prisma: this.prisma,
+      postId,
+      content,
+      authorId,
+      sourceLanguageOverride,
+      resolveAudienceLanguages: (id: string) => this.resolveAudienceTargetLanguages(id),
+    });
   }
 
   private async triggerStoryTextObjectTranslation(
@@ -1001,6 +894,8 @@ export class PostService {
     mediaCaption?: Record<string, string>;
     /** Opt-in extraction bande-son vidéo — `undefined` = inchangé. */
     allowSoundExtraction?: boolean;
+    /** #16541 — fermeture des commentaires par l'auteur — `undefined` = inchangé. */
+    commentsDisabled?: boolean;
     /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
     /// Déjà validé par `parseSharedPlace` côté route — jamais un bloc client brut.
     location?: SharedPlace | null;
@@ -1156,25 +1051,15 @@ export class PostService {
       updateData.translations = {};
     }
 
-    // Editing a published story's CONTENT restarts its life (directive
-    // 2026-07-29): views, reactions and impressions are wiped — rows,
-    // denormalized counters AND embedded JSON mirrors — so every viewer sees
-    // the story as new again. The publication date never moves: createdAt and
-    // expiresAt are absent from updateData. Metadata-only updates (visibility)
-    // leave engagement untouched. Same predicate as the route's broadcast flag.
+    // Modifier une story en cours met l'EXISTANT à jour (directive porteur
+    // 2026-11-05, #16386, qui remplace celle du 2026-07-29) : ses vues, ses
+    // réactions et ses impressions restent, et `contentEditedAt` ne bouge pas
+    // — la garde « vu » des clients ne cède donc pas. Seul le texte périmé
+    // perd ses traductions. La date de publication ne bouge jamais :
+    // createdAt et expiresAt restent hors de updateData.
     const editedTextObjects = storyTranslatableTexts(data.storyEffects);
     const storyContentEdit = post.type === PostType.STORY && storyContentEditRequested(data);
     if (storyContentEdit) {
-      // `updatedAt` bouge sur CHAQUE écriture (compteurs de vues inclus) —
-      // ce champ dédié est le SEUL horodatage fiable pour que les clients
-      // fassent céder leur garde « viewed monotone » après cette édition.
-      updateData.contentEditedAt = new Date();
-      Object.assign(updateData, STORY_VIEW_RESET);
-      updateData.reactionCount = 0;
-      updateData.likeCount = 0;
-      updateData.reactionSummary = {};
-      updateData.reactions = [];
-      updateData.storyViews = [];
       // Text changed → the existing translations describe the OLD content.
       // (languageChanged already wiped them with the new source language.)
       if (!languageChanged) {
@@ -1234,11 +1119,6 @@ export class PostService {
         writtenMediaAlts = await writeMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
         writtenMediaCaptions = await writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
-      }
-      if (storyContentEdit) {
-        await tx.postView.deleteMany({ where: { postId } });
-        await tx.postReaction.deleteMany({ where: { postId } });
-        await tx.postImpression.deleteMany({ where: { postId } });
       }
       return tx.post.update({
         where: { id: postId, ...(updateData.visibility && updateData.visibility !== PostVisibility.PRIVATE ? { OR: [{ moderationHiddenAt: null }, { moderationHiddenAt: { isSet: false } }] } : {}) },

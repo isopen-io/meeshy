@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="send_failure_ineligible">Rien à envoyer : ajoutez du texte, un fichier ou un lieu.</string>
+    <string name="send_failure_offline_enqueue_failed">Impossible de mettre ce message en file hors ligne.</string>
+    <string name="send_failure_write_restricted">Vous ne pouvez pas écrire dans cette conversation.</string>
+    <string name="send_failure_slow_mode">Mode lent activé : patientez %1$d s avant de renvoyer.</string>
+    <string name="send_failure_recipient_blocked">Cette personne vous a bloqué, le message n\'est pas parti.</string>
+    <string name="send_failure_queued_for_retry">Pas encore envoyé : nouvelle tentative automatique.</string>
+    <string name="send_failure_retry_enqueue_failed">Impossible de mettre ce message en file pour réessai.</string>
+</resources>

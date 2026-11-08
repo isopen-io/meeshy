@@ -63,6 +63,7 @@ internal fun StoryTextStyle.labelRes(): Int = when (this) {
     StoryTextStyle.TYPEWRITER -> R.string.stories_composer_style_typewriter
     StoryTextStyle.HANDWRITING -> R.string.stories_composer_style_handwriting
     StoryTextStyle.CLASSIC -> R.string.stories_composer_style_classic
+    else -> R.string.stories_composer_style_bold
 }
 
 /**
@@ -113,7 +114,7 @@ internal fun TextStyleToolbar(
                 .horizontalScroll(rememberScrollState()),
         ) {
             if (shows(style)) {
-                StoryTextStyle.entries.forEach { textStyle ->
+                StoryTextStyle.composerOffered.forEach { textStyle ->
                     FilterChip(
                         selected = element.style == textStyle,
                         onClick = { onStyle(textStyle) },
