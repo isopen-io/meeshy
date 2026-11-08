@@ -132,6 +132,14 @@ Au-dessous d'Ami :
   - L'analyse `conformite-juridique` (RGPD art. 8, géolocalisation des mineurs, Age Appropriate Design Code) est d'autant plus requise avant la production.
 - **Conformité AVANT la production.** L'agent `conformite-juridique` produit l'AIPD, les durées, les consentements et la politique de confidentialité, et dit ce qui exige un avis signé. **Aucune promotion sans elle.**
 
+### 1.9 L'équipe a toutes les features entre elle (directives du 2026-11-07 et du 2026-11-08, #16623)
+
+Entre deux comptes de l'équipe (MODERATOR, ADMIN, BIGBOSS), **toutes** les features de cercle sont disponibles **directement**. Il n'y a ni lien à construire ni condition de continuité, et les deux rôles sont lus en fail-closed.
+
+- **Ce qui s'ouvre** : les outils (Bring, talkie, écoute, position, appel, jeu, présence détaillée, messages directs), et, depuis le 2026-11-08, **les audiences de contenu et l'entourage** (`audience.*`, `notify.newContent`, `relay.*`).
+- **Ce qui reste fermé** : `acquaintance.auto` (un rôle ne crée aucun lien), le blocage, soi-même, `NOBODY`, le consentement et le bouclier des mineurs déclarés.
+- **Face à un utilisateur ordinaire**, rien ne change.
+
 ## 2. Modèles
 
 Proposition, que le cadrage du lot `rel-modele` confirme ou corrige sur l'arbre vivant.
