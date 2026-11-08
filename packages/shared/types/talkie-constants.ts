@@ -17,6 +17,27 @@ export const TALKIE_MAX_CHUNKS = 300;
 export const TALKIE_CODECS = ['aac-adts'] as const;
 export type TalkieCodec = (typeof TALKIE_CODECS)[number];
 
+/**
+ * `live` : le destinataire a une socket, la voix sort chez lui en direct.
+ * `waking` (#17142) : il n'en a pas mais il est joignable par push — un réveil part, la voix est gardée en mémoire et
+ * rejouée dans l'ordre quand il émet `talkie:join`, puis le direct continue.
+ */
+export const TALKIE_DELIVERIES = ['live', 'waking'] as const;
+export type TalkieDelivery = (typeof TALKIE_DELIVERIES)[number];
+
+/** Après la fin d'une prise de parole réveillée, le destinataire a encore 60 s pour la rejoindre et l'entendre. */
+export const TALKIE_JOIN_WINDOW_MS = 60_000;
+
+/** Le type (`data.type`) du push de réveil, sur les deux canaux (PushToTalk et notification haute priorité). */
+export const TALKIE_PUSH_TYPES = { INCOMING: 'talkie_incoming' } as const;
+
+/**
+ * Le repli n'est pas une erreur (précision du porteur, #17141) : l'émetteur lit une INFORMATION. La copie vocale est
+ * créée par le CLIENT émetteur, dans la conversation la plus récente avec ce destinataire (`conversationId` de l'accusé).
+ */
+export const TALKIE_FALLBACK_VOICE_MESSAGE =
+  'L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.';
+
 export const TALKIE_ERROR_CODES = {
   /** Pas de lien d'au moins Proche, blocage, compte inconnu ou désactivé — indistincts. */
   NOT_ALLOWED: 'TALKIE_NOT_ALLOWED',
