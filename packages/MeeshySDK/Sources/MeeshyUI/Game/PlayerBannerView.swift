@@ -283,7 +283,7 @@ public struct PlayerBannerView: View {
             }
             let rest = model.pieces.filter { $0 != .level && $0 != .sparks }
             if !rest.isEmpty {
-                FlowLayout(spacing: 8) {
+                FlowLayout(itemSpacing: 0, lineSpacing: 8) {
                     ForEach(rest, id: \.self) { kind in
                         select(kind) { pieceContent(kind) }
                     }

@@ -553,3 +553,47 @@ socket jusqu'au client.
 1. #16819 et #16820 : flush final de `stop()` vers des workers arrêtés, et clé de lot sans `conversation_id`. Ce sont des petits lots sur `connection_manager.py`, à grouper.
 2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 14 — 2026-11-08
+
+- **Base** : `origin/dev` @ `4fb1112cc`. Le cycle 13 (#16782, #16783) y est fusionné.
+- **Branche** : `claude/determined-volta-77he7d`.
+- **Objectif** : #16819 et #16820, piste 1 du cycle 13. À l'arrêt du traducteur, aucune tâche acceptée ne disparaît en silence, et un lot ne mélange plus des tâches « any » et des tâches de conversation.
+- **Constat** :
+  - `stop_workers` arrêtait les workers avant `connection_manager.stop()`. Le flush final, et tout ce qui restait dans `fast_pool`, `normal_pool` et `any_pool`, tombait dans des files que plus aucun worker ne lisait. La passerelle n'avait ni traduction ni erreur et attendait son délai (~30 s).
+  - `_get_batch_key` ignorait `conversation_id`. Un lot mélangeant « any » et conversation allait dans la file de sa première tâche.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni la forme des erreurs) :
+  - `ConnectionManager.reject_pending_at_shutdown()` est appelé par `stop_workers` après le flush final. Il vide l'accumulateur (sous `_batch_lock`) et les trois files, déplie chaque lot en ses tâches d'origine, et remet le tout à `_report_rejected`, donc à `publish_pool_full`.
+  - La forme JSON est identique à celle du cycle 12, et la réserve en vol est libérée. La passerelle (`ZmqTranslationClient.ts:361`) traite « pool full » comme transitoire et relance avec le même taskId.
+  - Nouvelle stat : `shutdown_rejections`.
+  - On ne flushe pas avant d'arrêter les workers : un worker inactif aurait pu prendre un lot de 10 et allonger l'arrêt.
+  - La clé de lot est préfixée `any_` ou `normal_`. Elle n'est jamais découpée par conversation, pour garder le regroupement.
+- **Tests** : `tests/test_shutdown_and_batch_key.py` (8) et `tests/test_shutdown_and_batch_key_qa.py` (9, QA).
+  - **Rouge sur le code d'avant** : 7 sur 8 (le vert restant garde le regroupement de deux conversations), puis 9 sur 9 pour la QA.
+  - **Vert** : 82/82 sur le lot, la voie rapide, le quota et le refus de lot, relancé par moi.
+  - **Suites voisines** (QA) : 327 passés, 4 sautés et 6 erreurs, contre 319 passés et les mêmes 6 erreurs sur `origin/dev`. Les erreurs sont préexistantes : `sacrebleu` et `soundfile` absents du venv, et `TestBatchTranslateEndpoint`.
+  - **Mutations QA** : 4 sur 5 tuées. Le mutant survivant, qui inverse l'ordre flush/vidange, est quasi équivalent et va dans #17002.
+- **CI** : le run `workflow_dispatch` 42491615899 est rouge sur `Qualité TS`, au budget du chunk web « zod » (18,86 Ko pour 9 Ko). Ce rouge est celui de `dev` : je l'ai reproduit sur `origin/dev` pur. → #17014. Comme les jobs traducteur dépendent de `quality`, ils ont été sautés. J'ai donc relancé moi-même la commande de `test-python` en local, sur toute la suite :
+  - **branche** : 2257 passés ;
+  - **`dev`** : 2240 passés ;
+  - 38 échecs et 95 erreurs, identiques des deux côtés (modules ML absents, sans torch).
+- **QA** : favorable avec réserves. R1 et R5 → #17002, R2 → #17003, R3 → #17004, R4 → #17005.
+
+- **Intégration** : PR #17006 ouverte, mais **non fusionnée**. La fusion, refusée par le garde-fou d'autonomie tant que la CI n'est pas verte, attend que #17014 soit corrigé ou que le porteur donne son feu vert.
+
+### Limites connues
+
+- Une tâche reçue par PULL entre `stop_workers` et la fermeture du socket se perd encore. → #17002.
+- Le journal d'un refus en masse n'est pas borné. → #17003.
+- Plus de 8 signalements ouvrent le disjoncteur de la passerelle pour 30 s. → #17004.
+- La livraison PUB à l'arrêt n'est pas mesurée. → #17005.
+- Les tâches **en cours**, annulées par le délai d'arrêt de 30 s de `zmq_server_core`, ne sont pas signalées. Le minuteur de renvoi de la passerelle les couvre.
+
+### Cycle suivant : par où reprendre
+
+0. **PR #17006** : dès que `Qualité TS` est vert (#17014), mettre la branche à jour sur `dev`, relancer `workflow_dispatch`, puis fusionner.
+1. #17002 : refuser l'enfilement une fois l'arrêt lancé (petit lot, même site), avec #17003 si le temps le permet.
+2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
+3. #17014 : tant que `Qualité TS` est rouge sur `dev`, aucune PR traducteur n'a sa preuve CI. Vérifier son état d'abord.
+4. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
+5. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.

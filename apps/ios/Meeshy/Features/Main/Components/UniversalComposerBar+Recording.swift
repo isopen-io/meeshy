@@ -220,7 +220,7 @@ extension UniversalComposerBar {
                         value: effectiveIsRecording
                     )
 
-                Text(formatDuration(effectiveDuration))
+                Text(MediaFormat.duration(effectiveDuration))
                     .font(.system(.footnote, design: .monospaced).weight(.semibold))
                     .foregroundColor(timerColor)
                     .contentTransition(.numericText())
@@ -403,7 +403,6 @@ extension UniversalComposerBar {
         onStopRecordingToAttachment()
     }
 
-
     // MARK: - Déplier puis démarrer
 
     func expandAndStartRecording() {
@@ -414,11 +413,5 @@ extension UniversalComposerBar {
             startRecording()
         }
         onExpand?()
-    }
-
-    // MARK: - Helpers
-
-    func formatDuration(_ seconds: TimeInterval) -> String {
-        MediaFormat.duration(seconds)
     }
 }

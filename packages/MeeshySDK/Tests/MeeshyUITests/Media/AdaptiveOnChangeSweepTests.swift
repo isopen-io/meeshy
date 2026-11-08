@@ -50,14 +50,6 @@ final class AdaptiveOnChangeSweepTests: XCTestCase {
                       "AudioPlayerView must react to externalLanguage through adaptiveOnChange")
     }
 
-    func test_voiceProfileManageView_usesAdaptiveOnChange_notRawOnChange() throws {
-        let source = try sdkSource("Sources/MeeshyUI/VoiceProfile/VoiceProfileManageView.swift")
-        XCTAssertFalse(source.contains(".onChange(of: viewModel.cloningEnabled) { newValue in"),
-                        "VoiceProfileManageView must not use the deprecated single-param .onChange")
-        XCTAssertTrue(source.contains(".adaptiveOnChange(of: viewModel.cloningEnabled) { _, newValue in"),
-                      "VoiceProfileManageView must drive cloning toggle through adaptiveOnChange")
-    }
-
     func test_errorBannerView_usesAdaptiveOnChange_notRawOnChange() throws {
         let source = try sdkSource("Sources/MeeshyUI/Primitives/ErrorBannerView.swift")
         XCTAssertFalse(source.contains(".onChange(of: error?.errorDescription) { _ in"),

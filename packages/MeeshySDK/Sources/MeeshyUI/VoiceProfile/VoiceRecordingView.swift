@@ -203,7 +203,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
 
             HStack(spacing: MeeshySpacing.xl) {
                 if recorder.isRecording {
-                    Text(formattedDuration(recorder.duration))
+                    Text(MediaFormat.duration(recorder.duration))
                         .font(.system(size: MeeshyFont.labelSize, weight: .bold, design: .monospaced))
                         .foregroundStyle(MeeshyColors.tileCoral)
 
@@ -272,7 +272,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
 
                     Spacer()
 
-                    Text(formattedDuration(sample.duration))
+                    Text(MediaFormat.duration(sample.duration))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium, design: .monospaced))
                         .foregroundStyle(Color.secondary)
 
@@ -347,10 +347,6 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
         guard capturedDuration >= Double(minimumDurationSeconds) else { return }
         let data = try? Data(contentsOf: url)
         recordedSamples.append(RecordedSample(duration: capturedDuration, data: data, url: url))
-    }
-
-    private func formattedDuration(_ duration: TimeInterval) -> String {
-        MediaFormat.duration(duration)
     }
 }
 

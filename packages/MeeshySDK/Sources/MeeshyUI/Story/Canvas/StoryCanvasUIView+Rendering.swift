@@ -98,7 +98,7 @@ extension StoryCanvasUIView {
         // concerne que le mode fit explicite (double-tap auteur).
         let letterboxColor: UIColor? = {
             guard !bgKind.isVisualMedia, let hex = slide.effects.background else { return nil }
-            return Self.parseBackgroundHex(hex)
+            return HexColor(hex: hex)?.uiColor
         }()
         backgroundLayer.configure(
             kind: bgKind,
@@ -367,17 +367,5 @@ extension StoryCanvasUIView {
                                                         current: stamp) else { continue }
             textLayer.setBackdropTexture(backdropCapture.cropRegion(textLayer.frame), stamp: stamp)
         }
-    }
-
-    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor.
-    /// Local helper; matches the logic used by StoryRenderer + StoryAVCompositor.
-    nonisolated static func parseBackgroundHex(_ hex: String) -> UIColor? {
-        var s = hex
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
-        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
-                       green: CGFloat((v >> 8) & 0xff) / 255,
-                       blue: CGFloat(v & 0xff) / 255,
-                       alpha: 1)
     }
 }

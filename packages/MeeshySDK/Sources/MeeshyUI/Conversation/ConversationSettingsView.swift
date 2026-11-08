@@ -648,6 +648,8 @@ public final class ConversationSettingsViewModel: ObservableObject {
     public let accentColor: String
     public let currentUserRole: MemberRole
 
+    private let imageUploader: UserServiceProviding
+
     private let originalTitle: String
     private let originalDescription: String
     private let originalAvatarUrl: String
@@ -668,7 +670,12 @@ public final class ConversationSettingsViewModel: ObservableObject {
         autoTranslateEnabled != originalAutoTranslateEnabled
     }
 
-    init(conversation: MeeshyConversation, currentUserRole: MemberRole = .member) {
+    init(
+        conversation: MeeshyConversation,
+        currentUserRole: MemberRole = .member,
+        imageUploader: UserServiceProviding = UserService.shared
+    ) {
+        self.imageUploader = imageUploader
         self.originalConversation = conversation
         self.conversationId = conversation.id
         self.conversationName = conversation.name
@@ -872,34 +879,20 @@ public final class ConversationSettingsViewModel: ObservableObject {
         }
     }
 
+    /// L'avatar et la bannière d'une conversation sont des images d'IDENTITÉ :
+    /// elles passent par `UserService.uploadImage`, jamais par un TUS sans
+    /// contexte, réservé aux pièces jointes de message (#16896).
     private func uploadCompressedImage(_ data: Data, prefix: String) async -> String? {
         do {
-            let fileName = "\(prefix)_\(UUID().uuidString).jpg"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try data.write(to: tempURL)
-
-            let serverOrigin = MeeshyConfig.shared.serverOrigin
-            guard let baseURL = URL(string: serverOrigin),
-                  let token = APIClient.shared.authToken else { return nil }
-
-            let manager = TusUploadManager(baseURL: baseURL)
-            let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", credential: .bearer(token))
-            try? FileManager.default.removeItem(at: tempURL)
-            return result.fileUrl
+            return try await imageUploader.uploadImage(data, filename: "\(prefix)_\(UUID().uuidString).jpg")
         } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.showError = true
-            }
+            errorMessage = error.localizedDescription
+            showError = true
             return nil
         }
     }
 
     private func postToast(message: String, isSuccess: Bool) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": isSuccess]
-        )
+        FeedbackToastCenter.post(message, isSuccess: isSuccess)
     }
 }

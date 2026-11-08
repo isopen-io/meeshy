@@ -33,6 +33,10 @@ nonisolated enum CallColorLook {
         var saturation: Float = 1
         /// Part de l'étalonnage de COULEUR que les tons chair n'emportent pas (0…1).
         var skinProtection: Float = 0.7
+        /// Gain d'exposition en IL, appliqué avant la balance.
+        var exposure: Float = 0
+        /// Poids R, V, B d'un noir et blanc ; `nil` garde la couleur.
+        var monochrome: SIMD3<Float>?
     }
 
     /// `nil` : la teinte ne touche à rien (Naturel).
@@ -56,6 +60,34 @@ nonisolated enum CallColorLook {
             return Recipe(balance: SIMD3(1.01, 1.0, 0.99), curve: -0.18, blackLift: 0.05,
                           shadows: SIMD3(0.006, 0.006, 0.012), highlights: SIMD3(0.012, 0.008, 0.0),
                           vibrance: -0.1, saturation: 0.76, skinProtection: 0.5)
+        case .golden:
+            return Recipe(balance: SIMD3(1.045, 1.0, 0.93), curve: 0.12, blackLift: 0.02,
+                          shadows: SIMD3(0.01, 0.004, -0.006), highlights: SIMD3(0.04, 0.016, -0.03),
+                          vibrance: 0.1, saturation: 1.04, skinProtection: 0.6)
+        case .film:
+            return Recipe(balance: SIMD3(1.015, 1.0, 0.985), curve: 0.24, blackLift: 0.06,
+                          shadows: SIMD3(-0.02, 0.006, 0.035), highlights: SIMD3(0.03, 0.016, -0.02),
+                          vibrance: -0.05, saturation: 0.86, skinProtection: 0.7)
+        case .softNight:
+            return Recipe(balance: SIMD3(0.965, 1.0, 1.04), curve: -0.12, blackLift: 0.05,
+                          shadows: SIMD3(-0.004, 0.0, 0.025), highlights: SIMD3(0, 0, 0.006),
+                          vibrance: 0, saturation: 0.9, skinProtection: 0.75, exposure: 0.15)
+        case .bright:
+            return Recipe(balance: SIMD3(1.01, 1.0, 0.99), curve: -0.08, blackLift: 0.04,
+                          shadows: SIMD3(0, 0, 0), highlights: SIMD3(0.008, 0.008, 0.008),
+                          vibrance: 0, saturation: 0.82, skinProtection: 0.6, exposure: 0.25)
+        case .velvet:
+            return Recipe(balance: SIMD3(1.02, 1.0, 0.98), curve: 0.36, blackLift: 0,
+                          shadows: SIMD3(0.012, -0.004, 0.012), highlights: SIMD3(0.01, 0.004, 0),
+                          vibrance: 0.3, saturation: 1.08, skinProtection: 0.8, exposure: -0.08)
+        case .sky:
+            return Recipe(balance: SIMD3(0.98, 1.0, 1.03), curve: 0.22, blackLift: 0,
+                          shadows: SIMD3(0, 0, 0.008), highlights: SIMD3(-0.006, 0, 0.02),
+                          vibrance: 0.5, saturation: 1.06, skinProtection: 0.85)
+        case .monochrome:
+            return Recipe(balance: SIMD3(1, 1, 1), curve: 0.3, blackLift: 0.02,
+                          shadows: SIMD3(0, 0, 0), highlights: SIMD3(0, 0, 0),
+                          vibrance: 0, saturation: 1, skinProtection: 0, monochrome: SIMD3(0.42, 0.46, 0.12))
         }
     }
 
@@ -64,14 +96,15 @@ nonisolated enum CallColorLook {
     /// Étalonne une couleur sRGB (composantes 0…1, encodées gamma). Pure.
     static func grade(_ rgb: SIMD3<Float>, recipe: Recipe) -> SIMD3<Float> {
         let input = clamp(rgb)
-        let balanced = clamp(input * recipe.balance)
+        let exposed = recipe.exposure == 0 ? input : clamp(input * pow(2, recipe.exposure))
+        let balanced = gray(clamp(exposed * recipe.balance), recipe: recipe)
         let toned = SIMD3(curve(balanced.x, recipe), curve(balanced.y, recipe), curve(balanced.z, recipe))
         let luma = luminance(toned)
         let split = recipe.shadows * ((1 - luma) * (1 - luma)) + recipe.highlights * (luma * luma)
         let tinted = clamp(toned + split)
         let saturated = saturate(tinted, recipe: recipe)
         let skin = skinLikelihood(input)
-        let toneOnly = SIMD3(curve(input.x, recipe), curve(input.y, recipe), curve(input.z, recipe))
+        let toneOnly = SIMD3(curve(exposed.x, recipe), curve(exposed.y, recipe), curve(exposed.z, recipe))
         let protected = skin * recipe.skinProtection
         return clamp(saturated * (1 - protected) + toneOnly * protected)
     }
@@ -88,6 +121,12 @@ nonisolated enum CallColorLook {
         let hueWeight = smoothstep(0, 8, hue) * (1 - smoothstep(40, 55, hue))
         let saturationWeight = smoothstep(0.08, 0.18, saturation) * (1 - smoothstep(0.62, 0.8, saturation))
         return hueWeight * saturationWeight
+    }
+
+    /// Le noir et blanc d'une recette : un gris pondéré par ses poids R, V, B.
+    private static func gray(_ rgb: SIMD3<Float>, recipe: Recipe) -> SIMD3<Float> {
+        guard let poids = recipe.monochrome else { return rgb }
+        return SIMD3(repeating: min(max(simd_dot(rgb, poids), 0), 1))
     }
 
     static func luminance(_ rgb: SIMD3<Float>) -> Float {

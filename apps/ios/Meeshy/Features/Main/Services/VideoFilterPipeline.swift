@@ -73,6 +73,13 @@ nonisolated enum CallVideoLowLight {
 
 nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
     case natural, warm, cool, vivid, muted
+    case golden, film, softNight, bright, velvet, sky, monochrome
+
+    /// **Les huit ambiances Meeshy** (OPUS-2, choisies par Jacques) : ce
+    /// que proposent le viseur et l'appel, dans cet ordre.
+    /// Les quatre teintes d'avant restent lisibles (un brouillon ou un appel en
+    /// cours qui en porte une la garde), mais ne sont plus proposées.
+    static let catalog: [VideoFilterPreset] = [.natural, .golden, .film, .softNight, .bright, .velvet, .sky, .monochrome]
 
     var config: VideoFilterConfig {
         var c = VideoFilterConfig()
@@ -98,6 +105,41 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
             c.contrast = 0.9
             c.saturation = 0.7
             c.exposure = -0.1
+        case .golden:
+            c.temperature = 6900
+            c.tint = 3
+            c.contrast = 1.04
+            c.saturation = 1.04
+        case .film:
+            c.temperature = 6600
+            c.tint = 1
+            c.contrast = 1.08
+            c.saturation = 0.86
+        case .softNight:
+            c.temperature = 6100
+            c.tint = -2
+            c.contrast = 0.94
+            c.saturation = 0.9
+            c.exposure = 0.1
+        case .bright:
+            c.temperature = 6600
+            c.contrast = 0.96
+            c.saturation = 0.82
+            c.exposure = 0.15
+        case .velvet:
+            c.temperature = 6800
+            c.tint = 2
+            c.contrast = 1.12
+            c.saturation = 1.08
+            c.exposure = -0.05
+        case .sky:
+            c.temperature = 6200
+            c.tint = -1
+            c.contrast = 1.08
+            c.saturation = 1.12
+        case .monochrome:
+            c.contrast = 1.1
+            c.saturation = 0
         }
         return c
     }

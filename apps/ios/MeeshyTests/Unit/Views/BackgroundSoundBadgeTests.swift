@@ -344,6 +344,7 @@ final class BackgroundSoundSingleCreditTests: XCTestCase {
 
     func test_theReel_saysItsCreditOnce() throws {
         let host = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+            + source("Meeshy/Features/Main/Views/ReelPageView.swift")
         XCTAssertFalse(host.contains("borrowedSoundBadge("),
                        "la pastille statique doublait le crédit défilant de la rangée auteur")
         let info = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")

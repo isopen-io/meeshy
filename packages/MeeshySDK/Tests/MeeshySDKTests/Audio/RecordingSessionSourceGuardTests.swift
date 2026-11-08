@@ -26,6 +26,7 @@ struct RecordingSessionSourceGuardTests {
     private static let appRecorder = "apps/ios/Meeshy/Features/Main/Services/AudioRecorderManager.swift"
     private static let sdkRecorder = "packages/MeeshySDK/Sources/MeeshySDK/Audio/DefaultSDKAudioRecorder.swift"
     private static let camera = "apps/ios/Meeshy/Features/Main/Components/CameraModel.swift"
+    private static let cameraVideo = "apps/ios/Meeshy/Features/Main/Components/CameraModel+Video.swift"
 
     @Test(arguments: [appRecorder, sdkRecorder])
     func aVoiceRecorder_takesAndGivesBackTheSessionThroughTheOrchestrator(path: String) throws {
@@ -39,7 +40,7 @@ struct RecordingSessionSourceGuardTests {
     }
 
     @Test func theCamera_noLongerLetsTheCaptureConfigureTheSession() throws {
-        let code = try Self.code(Self.camera)
+        let code = try Self.code(Self.camera) + "\n" + Self.code(Self.cameraVideo)
 
         #expect(code.contains("automaticallyConfiguresApplicationAudioSession = false"))
         #expect(code.contains("recordingSession.begin(.video)"))

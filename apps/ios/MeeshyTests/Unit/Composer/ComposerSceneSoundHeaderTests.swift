@@ -69,6 +69,9 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
     // MARK: - Ce que la ligne PORTE, et ce qu'elle ne porte plus
 
     private func source(_ chemin: String) throws -> String {
+        if chemin == "ComposerSceneSurface.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()

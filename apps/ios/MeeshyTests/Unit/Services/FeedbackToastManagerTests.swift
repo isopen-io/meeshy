@@ -108,7 +108,7 @@ final class FeedbackToastManagerTests: XCTestCase {
     func test_showToastNotification_nameIsCorrect() {
         XCTAssertEqual(
             FeedbackToastManager.showToastNotification,
-            Notification.Name("meeshy.showToast")
+            FeedbackToastCenter.notificationName
         )
     }
 

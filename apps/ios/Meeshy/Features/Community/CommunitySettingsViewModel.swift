@@ -133,11 +133,7 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     }
 
     private func postToast(message: String, isSuccess: Bool) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": isSuccess]
-        )
+        FeedbackToastCenter.post(message, isSuccess: isSuccess)
     }
 
     /// L'avatar et la bannière d'une communauté sont des images d'IDENTITÉ,
