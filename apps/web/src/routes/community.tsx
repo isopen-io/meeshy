@@ -13,6 +13,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { performJoinCommunity, performLeaveCommunity } from '@/lib/api/community-actions';
 import { sessionStore } from '@/lib/api/session';
+import { takeInviteStatus } from '@/lib/communities/invite-status';
 import { canInviteOf, findCachedCommunity, membershipActionOf } from '@/lib/communities/view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -80,7 +81,7 @@ export default function CommunityScreen() {
   const [membershipPending, setMembershipPending] = useState(false);
   const [membershipFailure, setMembershipFailure] = useState<MembershipFailure | null>(null);
   const [inviting, setInviting] = useState(false);
-  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(() => takeInviteStatus(communityId));
   const enabled = apiDeps.source === 'fixtures' || signedIn;
 
   const detail = useQuery(
