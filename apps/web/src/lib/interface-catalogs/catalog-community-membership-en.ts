@@ -58,6 +58,16 @@ const enCommunityMembership = {
   'community.create.members.title': 'Add members',
   'community.create.members.search': 'Search by name or username…',
   'community.create.members.remove': 'Remove {name}',
+  'community.posts.tabs.label': "Community content",
+  'community.posts.tab.channels': "Conversations",
+  'community.posts.tab.posts': "Posts",
+  'community.posts.loading': "Loading posts",
+  'community.posts.empty.title': "No posts yet",
+  'community.posts.empty.body': "The community’s posts will appear here.",
+  'community.posts.error.title': "Couldn’t load the posts",
+  'community.posts.error.offline': "Offline: posts will show up when the network is back.",
+  'community.posts.retry': "Try again",
+  'community.posts.loadingMore': "Loading more",
 } as const satisfies CommunityMembershipCatalog;
 
 export default enCommunityMembership;

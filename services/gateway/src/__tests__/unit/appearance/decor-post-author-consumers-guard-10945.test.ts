@@ -31,6 +31,8 @@ const REVIEWED = [
   // #11264 — `notifyPostReaders` relit le post par `postInclude` et le sert par `withMentions(post, WIRE_BROADCAST)`.
   'services/attachments/media-processing/ready-listener.ts',
   'services/posts/PostAudioService.ts',
+  // #6379 — le fil d'une communauté lit par `postInclude` et sert chaque ligne par `withMentions(…, reader)`.
+  'services/posts/communityFeed.ts',
   'services/posts/postIncludes.ts',
   // #14620 — la recherche de posts lit par `postInclude` et sert chaque ligne par `withMentions(…, reader)`.
   'services/search/globalPostSearch.ts',

@@ -5,6 +5,7 @@ import {
   COMMUNITIES_QUERY_PREFIX,
   communitiesQueryKey,
   communityConversationsQueryKey,
+  communityPostsQueryKey,
   communityQueryKey,
   createCommunity,
   validateCommunityDraft,
@@ -148,6 +149,7 @@ export async function performJoinCommunity({
   if (list !== undefined) queryClient.setQueryData(communitiesQueryKey(''), prepend(list, joined));
   void queryClient.invalidateQueries({ queryKey: [...LIST_PREFIX], refetchType: 'none' });
   void queryClient.invalidateQueries({ queryKey: communityConversationsQueryKey(community.id) });
+  void queryClient.invalidateQueries({ queryKey: communityPostsQueryKey(community.id) });
   return { status: 'joined' };
 }
 
@@ -170,6 +172,7 @@ export async function performLeaveCommunity({
     return { status: 'error' };
   }
   queryClient.removeQueries({ queryKey: communityConversationsQueryKey(community.id) });
+  queryClient.removeQueries({ queryKey: communityPostsQueryKey(community.id) });
   void queryClient.invalidateQueries({ queryKey: [...LIST_PREFIX], refetchType: 'none' });
   return { status: 'left' };
 }

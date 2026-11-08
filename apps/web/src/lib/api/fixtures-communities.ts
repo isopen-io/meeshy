@@ -3,6 +3,7 @@ import type { CommunitySettingsBody } from './community-settings';
 import type { CommunityConversationPage, CommunityPage, CommunitySummary, CreateCommunityBody, MembershipGesture } from './communities';
 import { COMMUNITIES_PAGE_SIZE, searchTermOf } from './communities';
 import { VIEWER_ID } from './fixtures-base';
+import type { FeedPage } from './feed-pages';
 
 /**
  * **LES COMMUNAUTÉS DU LECTEUR DE RECETTE** (#6364) — servies par le MÊME
@@ -137,6 +138,23 @@ export function fixtureChangeMembership(communityId: string, gesture: Membership
 export function fixtureCommunityConversations(communityId: string): CommunityConversationPage {
   const community = fixtureCommunity(communityId);
   return (community === null ? undefined : CONVERSATIONS[community.id]) ?? { conversations: [], nextOffset: null };
+}
+
+/**
+ * LES PUBLICATIONS D'UNE COMMUNAUTÉ (#6379) — « Équipe déploiement » en porte
+ * deux (une photo, un texte), les autres aucune : c'est ce qui fait voir au gate
+ * navigateur la liste ET l'état vide. Le corpus du Flux est chargé à la demande.
+ */
+const COMMUNITY_POST_IDS: Readonly<Record<string, readonly string[]>> = {
+  'm-deploiement': ['post-image-fr', 'post-text-rank2'],
+};
+
+export async function fixtureCommunityPosts(communityId: string, page: { readonly cursor?: string; readonly limit: number }): Promise<FeedPage> {
+  const { FEED_POSTS, pageOfFeed } = await import('./fixtures-feed');
+  const community = fixtureCommunity(communityId);
+  const ids = (community === null ? undefined : COMMUNITY_POST_IDS[community.id]) ?? [];
+  const corpus = FEED_POSTS.filter((post) => ids.includes(post.id));
+  return pageOfFeed(corpus, page);
 }
 
 const slugOf = (name: string): string =>
