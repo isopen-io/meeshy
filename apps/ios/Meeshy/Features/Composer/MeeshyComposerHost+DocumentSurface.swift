@@ -63,12 +63,12 @@ extension MeeshyComposerHost {
     /// fondateurs ne produirait aucun retour à la création d'une scène, tant
     /// qu'on ne lui a pas donné de photo.
     ///
-    /// Chaque tuile EST la vignette de sa scène ; le rail se
-    /// monte dès qu'une scène existe et est montée (`showsRail`) — une scène
-    /// neuve y paraît donc tout de suite, noire parce qu'elle est vide.
+    /// Chaque tuile EST la vignette de sa scène ; la rangée paraît à partir de
+    /// deux scènes (`showsRail`, L13) — une scène neuve y paraît donc tout de
+    /// suite, noire parce qu'elle est vide.
     var slideRailSlot: AnyView? {
         let scenes = ComposerHeaderTiles.tiles(for: viewModel.slides)
-        guard ComposerHeaderTiles.showsRail(sceneCount: scenes.count, scenePresent: sceneIsPresent) else {
+        guard ComposerHeaderTiles.showsRail(sceneCount: scenes.count) else {
             return nil
         }
         return AnyView(ComposerSlideRail(
@@ -77,7 +77,11 @@ extension MeeshyComposerHost {
             slideImages: viewModel.slideImages,
             loadedImages: viewModel.loadedImages,
             onSelect: { viewModel.selectSlide(at: $0) },
-            onDelete: { retractScene(at: $0) }))
+            onDelete: { retractScene(at: $0) },
+            canAdd: intent.origin.addsSlides && viewModel.canAddSlide,
+            onAdd: intent.origin.addsSlides ? { addSceneSlide() } : nil,
+            onDuplicate: intent.origin.addsSlides ? { viewModel.duplicateSlide(at: $0) } : nil,
+            onMove: { viewModel.moveSlide(from: $0, to: $1) }))
     }
 
     /// **L'outil Texte du document : la scène, le texte posé, le clavier — un

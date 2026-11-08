@@ -66,6 +66,18 @@ nonisolated struct ComposerIntent: Equatable {
         }
         return opening
     }
+
+    /// **La caméra autonome remet sa prise au composer** (#17109, A8–A10 hors
+    /// du composer). La prise arrive SEMÉE — elle est le fond de la scène —,
+    /// donc la porte s'ouvre comme toute porte semée (`.mediaSeeded`, sur la
+    /// scène), en story, avec le post offert ; et puisque la scène porte déjà
+    /// sa matière, le toucher sur la scène ne réarme pas la caméra.
+    ///
+    /// Elle reprend le PROFIL de la porte de partage, qui pose déjà son média
+    /// par une graine : même question produite (« que fait-on d'un média qu'on
+    /// apporte ? »), même réponse de la table. Le format qu'elle porte, la
+    /// story, est celui de la porte d'où l'on est parti — le tray des stories.
+    static var cameraTake: ComposerIntent { ComposerIntent(origin: .share, opening: .story) }
 }
 
 /// Les huit portes du composer. La GRAINE qu'une porte apporte n'a pas de champ

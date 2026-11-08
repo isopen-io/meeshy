@@ -28,6 +28,7 @@ import { withoutCaptureNotices } from './captureNoticeVisibility';
 import { boundCaptureNoticesNaming } from './captureNoticeRetention';
 import { eraseSharedTranslations } from './sharedTranslationErasure';
 import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
+import { cutTogetherWhere } from '../together/togetherDeps';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -397,4 +398,13 @@ export async function applyMessageRemovalEffects(
   } catch (err) {
     log.warn('message removal: capture notices not expired', { messageId: message.id, err });
   }
+
+  // Une séance « ensemble » qui lisait une pièce de ce message s'arrête chez les deux
+  // (#17022). Rejuger la conversation suffit : la porte refuse un message supprimé, et les
+  // séances des autres pièces continuent. Ne rejette jamais.
+  if (message.attachmentMimeTypes.some(isPlayableTogether)) {
+    await cutTogetherWhere({ conversationId: message.conversationId });
+  }
 }
+
+const isPlayableTogether = (mimeType: string): boolean => /^(audio|video)\//i.test(mimeType);

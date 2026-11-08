@@ -26,6 +26,7 @@ import {
   recipientLanguage,
 } from '../utils/recipient-language';
 import { guardedInterval } from '../utils/guarded-timer';
+import { cutTogetherWhere } from './together/togetherDeps';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -711,6 +712,8 @@ export class MaintenanceService {
    * ratée par l'appelant.
    */
   private async revokeSessionsOfDeletedAccount(userId: string): Promise<void> {
+    // #17022 — ses séances « ensemble » s'arrêtent chez les deux ; ne rejette jamais.
+    await cutTogetherWhere({ userId });
     const revoke = this.sessionRevoker;
     if (!revoke) return;
     try {

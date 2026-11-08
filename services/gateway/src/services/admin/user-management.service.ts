@@ -20,6 +20,7 @@ import {
   type GlobalMembershipSocketManager,
 } from '../conversations/ensureGlobalConversationMembership';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
+import { cutTogetherWhere } from '../together/togetherDeps';
 
 type UserSortKey = NonNullable<UserFilters['sortBy']>;
 
@@ -480,6 +481,7 @@ export class UserManagementService {
 
     if (!data.isActive) {
       await this.revokeSessionsBestEffort(userId, 'deactivation');
+      await cutTogetherWhere({ userId });
       await this.endSharedLocationBestEffort(userId);
     }
     await this.forgetTeamCirclesBestEffort(userId);
@@ -613,6 +615,7 @@ export class UserManagementService {
     });
 
     await this.revokeSessionsBestEffort(userId, 'deletion');
+    await cutTogetherWhere({ userId });
     await this.endSharedLocationBestEffort(userId);
     await this.forgetTeamCirclesBestEffort(userId);
 

@@ -6,6 +6,7 @@ import { validateBody } from '../validation/helpers.js';
 import { sendSuccess, sendGone, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { revokeDeletedAccountSessions } from '../socketio/revokeDeletedAccountSessions';
+import { cutTogetherWhere } from '../services/together/togetherDeps';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../services/AccountPurgeService';
 import { endSharedLocationAfter } from '../services/sharedLocation/sharedLocationDeps';
@@ -301,6 +302,8 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
           userId: demande.userId,
           onError: (err) => logger.warn(`[Deletion] coupure des sockets échouée user=${demande.userId}`, err),
         });
+        // #17022 — ses séances « ensemble » s'arrêtent chez les deux ; ne rejette jamais.
+        await cutTogetherWhere({ userId: demande.userId });
 
         logger.info(`[Deletion] compte désactivé immédiatement user=${demande.userId}`);
 
