@@ -153,6 +153,18 @@ describe('#16642 — tout ce qui n\'est pas deux collègues utilisables est refu
     expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ proximityShared: true });
   });
 
+  it('une lecture des comptes qui échoue ferme : rien ne s\'écrit, aucun consentement ne se lit', async () => {
+    const app = await appli(equipe());
+    app.prisma.user.findUnique.mockRejectedValueOnce(new Error('base injoignable'));
+    const res = await regler(app, { locationShared: true });
+    const lu = await consent(app, MOI, AUTRE, 'location.live');
+    await app.close();
+
+    expect(res.status).toBe(500);
+    expect(app.reglages.has(`${MOI}:${AUTRE}`)).toBe(false);
+    expect(lu).toBe('refused');
+  });
+
   it('une valeur qui n\'est pas un booléen reste refusée avant tout', async () => {
     const app = await appli(equipe());
     const statuts = await Promise.all([null, 0, 'true', 'false'].map((v) => regler(app, { locationShared: v }).then((r) => r.status)));

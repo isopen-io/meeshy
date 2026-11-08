@@ -35,7 +35,13 @@ import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb, type PairAccessSubject } from '../relations/pairAccess';
-import { relationConsentGrantedAmong, relationConsentGrantedBy, type ShareConsentFeature } from '../relations/relationConsent';
+import {
+  relationConsentCounterpartsOf,
+  relationConsentGrantedAmong,
+  relationConsentGrantedBy,
+  type ShareConsentFeature,
+} from '../relations/relationConsent';
+import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from '../relations/usableAccount';
 import {
   clearNowPlaying,
   readNowPlaying,
@@ -130,12 +136,29 @@ const serve = (io: NowPlayingIo | undefined, readerId: string, data: NowPlayingC
 const unserve = (io: NowPlayingIo | undefined, readerId: string, emitterId: string): void =>
   safely(() => io?.to(ROOMS.user(readerId)).emit(SERVER_EVENTS.NOW_PLAYING_CLEARED, { userId: emitterId }));
 
+/**
+ * Les CANDIDATS de l'éventail de `subjectId` : ses Proches et Sangs liés et — pour un compte de
+ * l'équipe, qui a l'écoute sans lien face à un collègue (#16623) — ceux avec qui un partage
+ * d'écoute est consenti hors lien (#16642). La loi juge chacun ensuite ; un utilisateur
+ * ordinaire garde ses seuls liens.
+ */
+async function candidatesOf(prisma: NowPlayingDb, subjectId: string, subjectIs: PairAccessSubject): Promise<readonly string[]> {
+  const [linked, subject] = await Promise.all([
+    comptesAuMoins(prisma, subjectId, 'CLOSE', { limit: AUDIENCE_LIMIT }),
+    prisma.user.findUnique({ where: { id: subjectId }, select: { role: true, ...ACCOUNT_STATE_SELECT } }),
+  ]);
+  const consented = isUsableTeamAccount(subject)
+    ? await relationConsentCounterpartsOf(prisma, { subjectId, subjectIs, features: LEVELS.map(([, feature]) => feature), limit: AUDIENCE_LIMIT })
+    : [];
+  return [...new Set([...linked.map((link) => link.id), ...consented])].filter((id) => id !== subjectId);
+}
+
 async function audienceOf(deps: NowPlayingRelayDeps, emitterId: string): Promise<ReadonlyMap<string, NowPlayingReaderAccess>> {
-  const linked = await comptesAuMoins(deps.prisma, emitterId, 'CLOSE', { limit: AUDIENCE_LIMIT });
-  if (linked.length === 0) return new Map();
+  const candidates = await candidatesOf(deps.prisma, emitterId, 'target');
+  if (candidates.length === 0) return new Map();
   return accessAmong(deps.prisma, {
     subjectId: emitterId,
-    otherIds: linked.map((link) => link.id),
+    otherIds: candidates,
     subjectIs: 'target',
     now: new Date(deps.now()),
   });
@@ -231,11 +254,11 @@ export async function refreshNowPlayingBetween(
   }
 }
 
-/** Ce que `readerId` voit, à la connexion : les écoutes en cours de ses Proches et Sangs, tronquées. */
+/** Ce que `readerId` voit, à la connexion : les écoutes en cours de ses Proches et Sangs (et de ses collègues consentants), tronquées. */
 export async function nowPlayingSnapshotFor(deps: NowPlayingRelayDeps, readerId: string): Promise<NowPlayingSnapshot> {
   const now = deps.now();
-  const linked = await comptesAuMoins(deps.prisma, readerId, 'CLOSE', { limit: AUDIENCE_LIMIT });
-  const states = (await Promise.all(linked.map(async (link) => [link.id, await readNowPlaying(deps.cache, link.id, now)] as const)))
+  const candidates = await candidatesOf(deps.prisma, readerId, 'viewer');
+  const states = (await Promise.all(candidates.map(async (id) => [id, await readNowPlaying(deps.cache, id, now)] as const)))
     .filter((entry): entry is readonly [string, NowPlayingState] => entry[1] !== null);
   if (states.length === 0) return { items: [] };
 

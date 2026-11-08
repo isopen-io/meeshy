@@ -13,6 +13,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { RelationRitualShare } from '@meeshy/shared/types/relation-person-settings';
+import type { PairAccessSubject } from './pairAccess';
 
 export const RITUAL_CONSENT_FEATURES = ['listening.title', 'location.live', 'location.history', 'location.proximity'] as const;
 export type RitualConsentFeature = (typeof RITUAL_CONSENT_FEATURES)[number];
@@ -81,4 +82,24 @@ export async function relationConsentGrantedBy(
     select: { ownerId: true, [column]: true } as Record<'ownerId' | typeof column, true>,
   })) as ReadonlyArray<Record<string, unknown>>;
   return new Set(rows.filter((row) => row[column] === true).map((row) => String(row.ownerId)));
+}
+
+/**
+ * Les personnes avec qui `subjectId` est lié par un partage d'au moins une des `features` :
+ * celles à qui il les partage (`subjectIs: 'target'`, il est l'émetteur) ou celles qui les
+ * lui partagent (`'viewer'`). Ce sont des CANDIDATS d'un éventail hors lien (#16642), que
+ * la loi juge ensuite un par un — jamais un accès.
+ */
+export async function relationConsentCounterpartsOf(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly subjectId: string; readonly subjectIs: PairAccessSubject; readonly features: readonly ShareConsentFeature[]; readonly limit: number },
+): Promise<readonly string[]> {
+  if (params.features.length === 0) return [];
+  const [own, other] = params.subjectIs === 'target' ? (['ownerId', 'otherId'] as const) : (['otherId', 'ownerId'] as const);
+  const rows = (await prisma.relationFeatureSetting.findMany({
+    where: { [own]: params.subjectId, OR: params.features.map((feature) => ({ [COLUMN[feature]]: true })) },
+    select: { [other]: true } as Record<typeof other, true>,
+    take: params.limit,
+  })) as ReadonlyArray<Record<string, unknown>>;
+  return rows.map((row) => String(row[other]));
 }
