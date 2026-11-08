@@ -400,9 +400,16 @@ class TranslationHandler:
             'conversationId': task.conversation_id
         }
 
+    def release_inflight(self, task_id: str) -> None:
+        """Libère la réserve d'une tâche qui ne tournera pas : sa relance
+        par la passerelle doit être réacceptée."""
+        self._inflight_tasks.pop(task_id, None)
+
     async def publish_pool_full(self, tasks) -> None:
         """Signale à la passerelle chaque tâche refusée par une file pleine,
         directe ou en lot : UNE `translation_error` par tâche."""
+        for task in tasks:
+            self.release_inflight(task.task_id)
         if not self.pub_socket:
             logger.error("❌ Socket PUB non initialisé pour envoyer l'erreur")
             return
