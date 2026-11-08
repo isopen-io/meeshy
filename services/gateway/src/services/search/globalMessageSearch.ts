@@ -3,6 +3,7 @@ import { generateDefaultConversationTitle, resolvePrismTranslation } from '@mees
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 import type { GlobalSearchPagination, MessageSearchHit } from '@meeshy/shared/types/global-search';
+import { contentExitLaw } from '@meeshy/shared/utils/content-exit-law';
 
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { buildLastMessagePreviewTranslations } from '../../routes/conversations/utils/last-message-preview';
@@ -13,6 +14,13 @@ import { withOrphanedSenderRepair } from '../messaging/withOrphanedSenderRepair'
 import { keepAliveForReader } from '../messaging/quoteCascade';
 import { appearsInSearch, SEARCH_EXIT_LAW_SELECT } from '../messaging/searchExitLaw';
 import { decodeCursor, encodeCursor, keysetBeforeClause, type CursorData } from '../../utils/keyset-cursor';
+import {
+  answeringPiece,
+  pieceIsBlurred,
+  SEARCH_HIT_ATTACHMENT_SELECT,
+  servedTranscript,
+  type SearchHitAttachment,
+} from './searchHitTranscript';
 
 /**
  * #14619 — LA RECHERCHE DE MESSAGES DE LA LISTE DES CONVERSATIONS.
@@ -31,6 +39,11 @@ import { decodeCursor, encodeCursor, keysetBeforeClause, type CursorData } from 
  * - les avis de capture, qui ne se trouvent jamais par leur texte ici.
  *
  * Le texte SERVI est celui du Prisme du lecteur (`resolvePrismTranslation`).
+ *
+ * #16957 — LE FLOU VOYAGE AVEC LE RÉSULTAT. Un flouté paraît (ce n'est pas une
+ * disparition), mais porte `isBlurred` pour que le client le VOILE. Un client
+ * qui ne déclare pas `protectionCaps` ne sait pas voiler : il ne reçoit aucun
+ * flouté, et aucune transcription n'est cherchée pour lui (#16958).
  */
 
 export type GlobalMessageSearchParams = {
@@ -39,6 +52,7 @@ export type GlobalMessageSearchParams = {
   readonly query: string;
   readonly limit: number;
   readonly cursor?: string;
+  readonly protectionCaps?: boolean;
 };
 
 export type GlobalMessageSearchPage = {
@@ -107,6 +121,7 @@ const HIT_SELECT = {
   isEncrypted: true,
   encryptionMode: true,
   ...SEARCH_EXIT_LAW_SELECT,
+  attachments: SEARCH_HIT_ATTACHMENT_SELECT,
   sender: {
     select: {
       id: true,
@@ -128,6 +143,9 @@ type HitRow = {
   readonly createdAt: Date;
   readonly isEncrypted: boolean | null;
   readonly encryptionMode: string | null;
+  readonly isBlurred: boolean | null;
+  readonly effectFlags: number | null;
+  readonly attachments: readonly SearchHitAttachment[];
   readonly sender: {
     readonly id: string;
     readonly userId: string | null;
@@ -168,13 +186,18 @@ const newestBound = (bounds: ReadonlyArray<CursorData | null>): CursorData | nul
     .filter((bound): bound is CursorData => bound !== null)
     .reduce<CursorData | null>((best, bound) => (best === null || !isNewerOrEqual({ createdAt: new Date(best.createdAt), id: best.id }, bound) ? bound : best), null);
 
-async function scanCandidates(prisma: PrismaClient, scope: Scope, needle: string, limit: number, cursor: CursorData | null) {
+type ScanOptions = { readonly needle: string; readonly limit: number; readonly cursor: CursorData | null; readonly transcripts: boolean };
+
+const textAnswers = (row: HitRow, needle: string): boolean =>
+  (row.content ?? '').toLowerCase().includes(needle) || translationMatches(row.translations, needle);
+
+async function scanCandidates(prisma: PrismaClient, scope: Scope, { needle, limit, cursor, transcripts }: ScanOptions) {
   const base = withoutCaptureNotices({
     deletedAt: null,
     AND: [{ OR: scope.clauses }, ...(cursor ? [keysetBeforeClause(cursor)] : [])],
   });
   const contentTake = limit * 3 + 1;
-  const [contentRows, translationRows] = (await withOrphanedSenderRepair(
+  const [contentRows, translationRows, transcriptRows] = (await withOrphanedSenderRepair(
     { prisma, conversationIds: [...scope.participantByConversation.keys()] },
     () =>
       Promise.all([
@@ -190,26 +213,49 @@ async function scanCandidates(prisma: PrismaClient, scope: Scope, needle: string
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: TRANSLATION_SCAN_SIZE,
         }),
+        transcripts
+          ? prisma.message.findMany({
+              where: { ...base, attachments: { some: { transcription: { not: { equals: null } } } } },
+              select: HIT_SELECT,
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: TRANSLATION_SCAN_SIZE,
+            })
+          : Promise.resolve([]),
       ])
-  )) as unknown as [HitRow[], HitRow[]];
-  const bound = newestBound([boundOf(contentRows, contentTake), boundOf(translationRows, TRANSLATION_SCAN_SIZE)]);
+  )) as unknown as [HitRow[], HitRow[], HitRow[]];
+  const bound = newestBound([
+    boundOf(contentRows, contentTake),
+    boundOf(translationRows, TRANSLATION_SCAN_SIZE),
+    boundOf(transcriptRows, TRANSLATION_SCAN_SIZE),
+  ]);
   const seen = new Set<string>();
-  const merged = [...contentRows, ...translationRows.filter((row) => translationMatches(row.translations, needle))]
+  const merged = [
+    ...contentRows,
+    ...translationRows.filter((row) => translationMatches(row.translations, needle)),
+    ...transcriptRows.filter((row) => answeringPiece(row.attachments, needle) !== null),
+  ]
     .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)))
     .filter((row) => bound === null || isNewerOrEqual(row, bound))
     .sort(byRecency);
   return { merged, bound };
 }
 
-async function servableForReader(prisma: PrismaClient, scope: Scope, rows: readonly HitRow[]): Promise<HitRow[]> {
+const messageIsBlurred = (row: HitRow): boolean => !contentExitLaw(row).exportable;
+
+const answersFor = (row: HitRow, options: ScanOptions): boolean =>
+  (typeof row.content === 'string' && row.content.trim() !== '' && textAnswers(row, options.needle))
+  || (options.transcripts && answeringPiece(row.attachments, options.needle) !== null);
+
+async function servableForReader(prisma: PrismaClient, scope: Scope, rows: readonly HitRow[], options: ScanOptions): Promise<HitRow[]> {
   const readable = rows
     .filter((row) => sharedTranslationServerReadsMessage({
       conversationEncryptionMode: scope.modeByConversation.get(row.conversationId) ?? null,
       messageIsEncrypted: row.isEncrypted,
       messageEncryptionMode: row.encryptionMode,
     }))
-    .filter((row) => typeof row.content === 'string' && row.content.trim() !== '')
-    .filter((row) => appearsInSearch(row as never));
+    .filter((row) => answersFor(row, options))
+    .filter((row) => appearsInSearch(row as never))
+    .filter((row) => options.transcripts || !messageIsBlurred(row));
   const groups = [...new Set(readable.map((row) => row.conversationId))];
   const alive = await Promise.all(
     groups.map(async (conversationId) => {
@@ -224,16 +270,14 @@ async function servableForReader(prisma: PrismaClient, scope: Scope, rows: reado
 async function collectServable(
   prisma: PrismaClient,
   scope: Scope,
-  needle: string,
-  limit: number,
-  cursor: CursorData | null,
+  options: ScanOptions,
   round = 1,
   gathered: readonly HitRow[] = []
 ): Promise<{ servable: HitRow[]; bound: CursorData | null }> {
-  const { merged, bound } = await scanCandidates(prisma, scope, needle, limit, cursor);
-  const servable = [...gathered, ...(await servableForReader(prisma, scope, merged))];
-  const settled = servable.length > limit || bound === null || round >= MAX_SCAN_ROUNDS;
-  return settled ? { servable, bound } : collectServable(prisma, scope, needle, limit, bound, round + 1, servable);
+  const { merged, bound } = await scanCandidates(prisma, scope, options);
+  const servable = [...gathered, ...(await servableForReader(prisma, scope, merged, options))];
+  const settled = servable.length > options.limit || bound === null || round >= MAX_SCAN_ROUNDS;
+  return settled ? { servable, bound } : collectServable(prisma, scope, { ...options, cursor: bound }, round + 1, servable);
 }
 
 type ConversationCard = MessageSearchHit['conversation'];
@@ -273,7 +317,9 @@ async function conversationCards(prisma: PrismaClient, userId: string, ids: read
   }));
 }
 
-function toHit(row: HitRow, card: ConversationCard, languages: readonly string[]): MessageSearchHit {
+function toHit(row: HitRow, card: ConversationCard, languages: readonly string[], options: ScanOptions): MessageSearchHit {
+  const piece = options.transcripts && !textAnswers(row, options.needle) ? answeringPiece(row.attachments, options.needle) : null;
+  const transcript = piece ? servedTranscript(piece, options.needle, languages) : null;
   const original = row.content ?? '';
   const served = resolvePrismTranslation({
     translations: buildLastMessagePreviewTranslations({ translations: row.translations, originalLanguage: row.originalLanguage, viewerLanguages: languages }),
@@ -300,17 +346,21 @@ function toHit(row: HitRow, card: ConversationCard, languages: readonly string[]
         }
       : null,
     conversation: card,
+    isBlurred: messageIsBlurred(row) || (piece !== null && pieceIsBlurred(piece)),
+    match: transcript ? 'transcript' : 'content',
+    transcript,
   };
 }
 
 export async function searchMessagesForReader(prisma: PrismaClient, params: GlobalMessageSearchParams): Promise<GlobalMessageSearchPage> {
-  const { userId, languages, query, limit } = params;
+  const { userId, languages, query, limit, protectionCaps = false } = params;
   const needle = query.trim().toLowerCase();
   const scope = await readerScope(prisma, userId);
   if (!scope) return EMPTY_PAGE(limit);
 
   const cursor = params.cursor ? decodeCursor(params.cursor) : null;
-  const { servable, bound } = await collectServable(prisma, scope, needle, limit, cursor);
+  const options: ScanOptions = { needle, limit, cursor, transcripts: protectionCaps };
+  const { servable, bound } = await collectServable(prisma, scope, options);
   const pageFull = servable.length > limit;
   const rows = servable.slice(0, limit);
   const last = rows[rows.length - 1];
@@ -323,7 +373,7 @@ export async function searchMessagesForReader(prisma: PrismaClient, params: Glob
   const cards = await conversationCards(prisma, userId, [...new Set(rows.map((row) => row.conversationId))]);
   const data = rows.flatMap((row) => {
     const card = cards.get(row.conversationId);
-    return card ? [toHit(row, card, languages)] : [];
+    return card ? [toHit(row, card, languages, options)] : [];
   });
   return { data, pagination: { limit, hasMore: nextCursor !== null, nextCursor } };
 }

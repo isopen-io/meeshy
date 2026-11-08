@@ -14,6 +14,7 @@ const enThreadSearch = {
   'thread.search.retry': 'Try again',
   'thread.search.more': 'More results',
   'thread.search.translated': 'Found in a translation',
+  'thread.search.blurred': 'Blurred message',
 } satisfies ThreadSearchCatalogSlice;
 
 export default enThreadSearch;

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_search_message_blurred">Mensagem desfocada</string>
+    <string name="global_search_transcript_audio">Transcrição de uma mensagem de voz</string>
+    <string name="global_search_transcript_video">Transcrição de um vídeo</string>
+    <string name="global_search_transcript_image">Texto de uma imagem</string>
+    <string name="global_search_transcript_document">Texto de um documento</string>
+</resources>

@@ -14,6 +14,7 @@ const itThreadSearch = {
   'thread.search.retry': 'Riprova',
   'thread.search.more': 'Altri risultati',
   'thread.search.translated': 'Trovato in una traduzione',
+  'thread.search.blurred': 'Messaggio sfocato',
 } satisfies ThreadSearchCatalogSlice;
 
 export default itThreadSearch;

@@ -31,7 +31,8 @@ public object MessageEncryptionGuard {
 
     /**
      * Le texte que la recherche locale peut indexer ; `null` pour un message chiffré, sans texte,
-     * supprimé, éphémère, à vue unique ou flouté : ce qu'on masque à l'écran ne s'indexe jamais en clair.
+     * supprimé, éphémère ou à vue unique. Un message flouté reste trouvable (le flou n'est pas une
+     * disparition, parité iOS et passerelle), mais son résultat se voile : voir [isVeiled].
      */
     public fun searchableText(message: ApiMessage): String? =
         message.content.takeIf {
@@ -40,7 +41,12 @@ public object MessageEncryptionGuard {
                 message.deletedAt == null &&
                 message.expiresAt.isNullOrBlank() &&
                 message.isViewOnce != true &&
-                message.isBlurred != true &&
-                ((message.effectFlags?.toLong() ?: 0L) and AttachmentProtection.MASKING_FLAGS) == 0L
+                (message.effectFlagBits and MessageEffectFlags.VIEW_ONCE) == 0L
         }
+
+    /** Un message flouté, par son drapeau ou par son bit : son extrait se voile partout où il est trouvé. */
+    public fun isVeiled(message: ApiMessage): Boolean =
+        message.isBlurred == true || (message.effectFlagBits and MessageEffectFlags.BLURRED) != 0L
+
+    private val ApiMessage.effectFlagBits: Long get() = effectFlags?.toLong() ?: 0L
 }

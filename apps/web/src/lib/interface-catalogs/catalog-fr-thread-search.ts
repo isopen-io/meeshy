@@ -20,6 +20,7 @@ const frThreadSearch = {
   'thread.search.retry': 'Réessayer',
   'thread.search.more': 'Plus de résultats',
   'thread.search.translated': 'Trouvé dans une traduction',
+  'thread.search.blurred': 'Message flouté',
 } as const;
 
 export type ThreadSearchCatalogSlice = Readonly<Record<keyof typeof frThreadSearch, string>>;

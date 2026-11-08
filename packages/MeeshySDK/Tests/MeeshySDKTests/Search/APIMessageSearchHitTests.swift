@@ -52,4 +52,60 @@ struct APIMessageSearchHitTests {
         #expect(page.data.map(\.senderLabel) == ["invite", "?"])
         #expect(page.pagination?.nextCursor == nil)
     }
+
+    private static func hitJSON(_ protection: String) -> String {
+        """
+        {"success":true,"data":[{
+          "id":"m1","conversationId":"c1","createdAt":"2026-11-02T10:00:00.000Z","messageType":"audio",
+          "content":"","servedLanguage":null,"originalContent":"","originalLanguage":null,"sender":null,
+          "conversation":{"id":"c1","identifier":null,"type":"group","title":"Equipe","avatar":null}\(protection)
+        }],"pagination":{"limit":20,"hasMore":false,"nextCursor":null}}
+        """
+    }
+
+    @Test func protectionFieldsAbsent_meanAClearHitFoundByItsText() throws {
+        let hit = try #require(try Self.decodePage(Self.hitJSON("")).data.first)
+
+        #expect(hit.isBlurred == false)
+        #expect(hit.match == .content)
+        #expect(hit.transcript == nil)
+        #expect(hit.excerpt == hit.content)
+    }
+
+    @Test func blurredTranscriptHit_decodesTheVeilAndTheTranscriptAsExcerpt() throws {
+        let hit = try #require(try Self.decodePage(Self.hitJSON("""
+        ,"isBlurred":true,"match":"transcript",
+          "transcript":{"attachmentId":"a1","mediaKind":"audio","text":"on se voit demain","servedLanguage":"fr","durationMs":4200}
+        """)).data.first)
+
+        #expect(hit.isBlurred == true)
+        #expect(hit.match == .transcript)
+        #expect(hit.transcript?.attachmentId == "a1")
+        #expect(hit.transcript?.mediaKind == .audio)
+        #expect(hit.transcript?.servedLanguage == "fr")
+        #expect(hit.transcript?.durationMs == 4200)
+        #expect(hit.excerpt == "on se voit demain")
+    }
+
+    @Test func unknownMatchAndMediaKind_neverFailTheDecode() throws {
+        let hit = try #require(try Self.decodePage(Self.hitJSON("""
+        ,"isBlurred":false,"match":"ocr",
+          "transcript":{"attachmentId":"a1","mediaKind":"hologram","text":"x","servedLanguage":null,"durationMs":null}
+        """)).data.first)
+
+        #expect(hit.match == .content)
+        #expect(hit.transcript?.mediaKind == .document)
+        #expect(hit.transcript?.durationMs == nil)
+    }
+
+    @Test func nullTranscript_decodesAsNone() throws {
+        let hit = try #require(try Self.decodePage(Self.hitJSON(#","isBlurred":true,"match":"content","transcript":null"#)).data.first)
+
+        #expect(hit.isBlurred == true)
+        #expect(hit.transcript == nil)
+    }
+
+    @Test func capabilityHeader_declaresTheProtectionLevelOfTheContract() {
+        #expect(MessageSearchCapabilities.requestHeaders == ["X-Search-Caps": "1"])
+    }
 }
