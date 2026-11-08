@@ -834,32 +834,14 @@ public actor StoryPublishQueue {
 
     // MARK: - Disk Persistence
 
+    private static let fileLocation = QueueFileLocation(logCategory: .storyPublishQueue)
+
     private var queueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            do {
-                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-            } catch {
-                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
-                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-        return cacheDir.appendingPathComponent(Self.queueFileName)
+        Self.fileLocation.writeURL(fileName: Self.queueFileName)
     }
 
     private var failedQueueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            do {
-                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-            } catch {
-                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
-                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-        return cacheDir.appendingPathComponent(Self.failedQueueFileName)
+        Self.fileLocation.writeURL(fileName: Self.failedQueueFileName)
     }
 
     private func saveToDisk() {
@@ -880,15 +862,11 @@ public actor StoryPublishQueue {
     }
 
     private static func loadItemsFromDisk() -> [StoryPublishQueueItem] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        return loadItems(from: cacheDir.appendingPathComponent(queueFileName))
+        return loadItems(from: QueueFileLocation.readURL(fileName: queueFileName))
     }
 
     private static func loadFailedItemsFromDisk() -> [StoryPublishQueueItem] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        return loadItems(from: cacheDir.appendingPathComponent(failedQueueFileName))
+        return loadItems(from: QueueFileLocation.readURL(fileName: failedQueueFileName))
     }
 
     private static func loadItems(from url: URL) -> [StoryPublishQueueItem] {

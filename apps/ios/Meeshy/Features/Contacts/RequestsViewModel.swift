@@ -308,17 +308,13 @@ final class RequestsViewModel: ObservableObject {
         rollback: @escaping @MainActor () -> Void,
         toast: String
     ) {
-        let offlineQueue = self.offlineQueue
-        Task { @MainActor in
-            let stream = await offlineQueue.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    rollback()
-                    FeedbackToastManager.shared.showError(toast)
-                    HapticFeedback.error()
-                }
-            }
-        }
+        OutboxOutcomeObserver.observe(
+            queue: offlineQueue,
+            cmid: cmid,
+            rollback: rollback,
+            toast: toast,
+            hapticOnFailure: true
+        )
     }
 
     // MARK: - Cancel

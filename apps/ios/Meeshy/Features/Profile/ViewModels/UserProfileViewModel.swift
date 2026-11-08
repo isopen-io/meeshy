@@ -245,16 +245,13 @@ final class UserProfileViewModel: ObservableObject {
         rollback: @escaping @MainActor () -> Void,
         toast: String
     ) {
-        Task { @MainActor in
-            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    rollback()
-                    FeedbackToastManager.shared.showError(toast)
-                    HapticFeedback.error()
-                }
-            }
-        }
+        OutboxOutcomeObserver.observe(
+            queue: OfflineQueue.shared,
+            cmid: cmid,
+            rollback: rollback,
+            toast: toast,
+            hapticOnFailure: true
+        )
     }
 
     /// P1 — `blockService` (the canonical, live-updated blocklist source,

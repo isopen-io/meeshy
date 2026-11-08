@@ -391,16 +391,13 @@ class PostDetailViewModel: ObservableObject {
         rollback: @escaping @MainActor () -> Void,
         toast: String
     ) {
-        let queue = offlineQueue
-        Task { @MainActor in
-            let stream = await queue.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    rollback()
-                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid) ?? toast)
-                }
-            }
-        }
+        OutboxOutcomeObserver.observe(
+            queue: offlineQueue,
+            cmid: cmid,
+            rollback: rollback,
+            toast: toast,
+            honorsDailyGestureLimit: true
+        )
     }
 
     /// Updates the loaded post's body content. Optimistic UX mirrors
