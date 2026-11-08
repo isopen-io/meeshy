@@ -14,6 +14,7 @@ import { relationPairKey } from '@meeshy/shared/types/relation';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { TOGETHER_ERROR_CODES, TOGETHER_INVITE_TTL_SECONDS, TOGETHER_SESSION_TTL_SECONDS } from '@meeshy/shared/types/together';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { sealSecret } from '../../../../utils/secret-at-rest';
 import {
   inviteTogether,
   joinTogether,
@@ -55,12 +56,16 @@ type Emission = { readonly room: string; readonly event: string; readonly data: 
 
 function cacheEnMemoire() {
   const entries = new Map<string, { value: string; ttl?: number }>();
+  const hooks: { onSessionWrite: (() => Promise<void>) | null } = { onSessionWrite: null };
   return {
     entries,
+    hooks,
     get: (key: string) => Promise.resolve(entries.get(key)?.value ?? null),
-    set: (key: string, value: string, ttl?: number) => {
+    set: async (key: string, value: string, ttl?: number) => {
       entries.set(key, { value, ttl });
-      return Promise.resolve();
+      const hook = key.startsWith('together:session:') ? hooks.onSessionWrite : null;
+      hooks.onSessionWrite = hook ? null : hooks.onSessionWrite;
+      if (hook) await hook();
     },
     del: (key: string) => {
       entries.delete(key);
@@ -137,6 +142,9 @@ const inviter = (m: ReturnType<typeof monde>, toUserId = PROCHE, attachmentId = 
   inviteTogether(m.deps, HOTE, { toUserId, conversationId, attachmentId });
 
 const REFUS = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_ALLOWED };
+const INTROUVABLE = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_FOUND };
+const sessionValues = (m: ReturnType<typeof monde>) =>
+  [...m.cache.entries.entries()].filter(([key]) => !key.startsWith('together:ended:')).map(([, entry]) => entry);
 const KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
 afterEach(() => {
@@ -183,6 +191,24 @@ describe('inviter — dès Proche, sur un média audio ou vidéo d\'une conversa
 
   it('refuse quand l\'invité a quitté la conversation', async () => {
     const m = monde({ participants: [membre(HOTE), membre(PROCHE, CONV, { isActive: false, leftAt: new Date(T0 - 1) })] });
+    expect(await inviter(m)).toEqual(REFUS);
+  });
+
+  it('refuse quand l\'invité est banni de la conversation, même resté actif', async () => {
+    const m = monde({ participants: [membre(HOTE), membre(PROCHE, CONV, { bannedAt: new Date(T0 - 1) })] });
+    expect(await inviter(m)).toEqual(REFUS);
+  });
+
+  it('refuse un compte désactivé', async () => {
+    const m = monde();
+    await m.world.users.updateMany({ where: { id: PROCHE }, data: { deactivatedAt: new Date(T0 - 1) } });
+    expect(await inviter(m)).toEqual(REFUS);
+  });
+
+  it('refuse un message à vue unique dont la pièce ne le déclare pas', async () => {
+    const m = monde();
+    const video = (m.deps.prisma as unknown as { messageAttachment: { rows: Row[] } }).messageAttachment.rows.find((r) => r.id === VIDEO)!;
+    Object.assign(video, { message: { ...(video.message as Row), isViewOnce: true } });
     expect(await inviter(m)).toEqual(REFUS);
   });
 
@@ -246,17 +272,31 @@ describe('rejoindre — la séance démarre chez les deux', () => {
     expect(await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID })).toMatchObject({ code: TOGETHER_ERROR_CODES.NOT_FOUND });
   });
 
-  it('un lien tombé sous Proche entre l\'invitation et l\'acceptation coupe la séance', async () => {
+  it('un lien tombé sous Proche entre l\'invitation et l\'acceptation coupe la séance, dite comme un départ', async () => {
     const m = monde();
     await inviter(m);
     await m.lier(HOTE, PROCHE, 'FRIEND');
     m.emissions.length = 0;
 
-    expect(await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID })).toEqual(REFUS);
+    expect(await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID })).toEqual(INTROUVABLE);
     expect(m.emissions.map((e) => [e.room, e.event, e.data.reason])).toEqual([
-      [ROOMS.user(HOTE), SERVER_EVENTS.TOGETHER_ENDED, 'cut'],
-      [ROOMS.user(PROCHE), SERVER_EVENTS.TOGETHER_ENDED, 'cut'],
+      [ROOMS.user(HOTE), SERVER_EVENTS.TOGETHER_ENDED, 'left'],
+      [ROOMS.user(PROCHE), SERVER_EVENTS.TOGETHER_ENDED, 'left'],
     ]);
+  });
+
+  it('un blocage écrit entre le jugement et l\'écriture l\'emporte : rien ne démarre, rien ne reste', async () => {
+    const m = monde();
+    await inviter(m);
+    m.emissions.length = 0;
+    m.cache.hooks.onSessionWrite = async () => {
+      await m.world.users.updateMany({ where: { id: PROCHE }, data: { blockedUserIds: [HOTE] } });
+      await rejudgeTogetherBetween(m.deps, { userA: HOTE, userB: PROCHE });
+    };
+
+    expect(await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID })).toEqual(INTROUVABLE);
+    expect(m.emissions.map((e) => e.event)).toEqual([SERVER_EVENTS.TOGETHER_ENDED, SERVER_EVENTS.TOGETHER_ENDED]);
+    expect(sessionValues(m)).toEqual([]);
   });
 });
 
@@ -302,15 +342,26 @@ describe('synchroniser — lecture, pause et déplacement arrivent chez l\'autre
     const m = await seance();
     await m.world.users.updateMany({ where: { id: PROCHE }, data: { blockedUserIds: [HOTE] } });
 
-    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toEqual(REFUS);
-    expect(m.emissions.map((e) => e.data.reason)).toEqual(['cut', 'cut']);
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toEqual(INTROUVABLE);
+    expect(m.emissions.map((e) => e.data.reason)).toEqual(['left', 'left']);
     expect(m.emissions.some((e) => e.event === SERVER_EVENTS.TOGETHER_SYNCED)).toBe(false);
   });
 
   it('un membre parti de la conversation coupe la séance à la synchronisation suivante', async () => {
     const m = await seance();
     await m.world.participant.updateMany({ where: { userId: PROCHE }, data: { isActive: false } });
-    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toEqual(REFUS);
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toEqual(INTROUVABLE);
+  });
+
+  it('une synchronisation jugée avant une coupure et écrite après ne relaie rien', async () => {
+    const m = await seance();
+    m.cache.hooks.onSessionWrite = async () => {
+      await m.lier(HOTE, PROCHE, 'FRIEND');
+      await rejudgeTogetherBetween(m.deps, { userA: HOTE, userB: PROCHE });
+    };
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toEqual(INTROUVABLE);
+    expect(m.emissions.some((e) => e.event === SERVER_EVENTS.TOGETHER_SYNCED)).toBe(false);
+    expect(sessionValues(m)).toEqual([]);
   });
 
   it('une synchronisation prolonge la séance', async () => {
@@ -357,8 +408,8 @@ describe('quitter et couper', () => {
     await m.lier(HOTE, PROCHE, 'ACQUAINTANCE');
     await rejudgeTogetherBetween(m.deps, { userA: PROCHE, userB: HOTE });
     expect(m.emissions.map((e) => [e.room, e.data.reason])).toEqual([
-      [ROOMS.user(HOTE), 'cut'],
-      [ROOMS.user(PROCHE), 'cut'],
+      [ROOMS.user(HOTE), 'left'],
+      [ROOMS.user(PROCHE), 'left'],
     ]);
     expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toMatchObject({ code: TOGETHER_ERROR_CODES.NOT_FOUND });
   });
@@ -378,26 +429,36 @@ describe('au repos — la séance est scellée, jamais en clair', () => {
     await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
     await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 4242 });
 
-    const stored = [...m.cache.entries.values()].map((e) => e.value).join('\n');
-    [VIDEO, CONV, '4242', HOTE, PROCHE].forEach((clair) => expect(stored).not.toContain(clair));
+    const stored = [...m.cache.entries.entries()].map(([key, e]) => `${key}=${e.value}`).join('\n');
+    [VIDEO, CONV, '4242', HOTE, PROCHE].forEach((clair) => expect(stored.toLowerCase()).not.toContain(clair.toLowerCase()));
   });
 
-  it('une valeur scellée recopiée sous la clé d\'une autre séance ne s\'ouvre pas', async () => {
+  it('une séance scellée pour une autre séance ne s\'ouvre pas, même quand son contenu la nomme', async () => {
     process.env.SECRETS_AT_REST_KEY = KEY;
     const m = monde();
     await inviter(m);
-    const [key, entry] = [...m.cache.entries.entries()].find(([k]) => k.includes(SESSION_ID))!;
     const autre = 'fedcba9876543210fedcba9876543210';
-    m.cache.entries.set(key.replace(SESSION_ID, autre), entry);
-    expect(await joinTogether(m.deps, PROCHE, { sessionId: autre })).toMatchObject({ code: TOGETHER_ERROR_CODES.NOT_FOUND });
+    const forgee = {
+      sessionId: autre, hostId: HOTE, guestId: PROCHE, conversationId: CONV, attachmentId: VIDEO, media: 'video',
+      joined: false, playback: { playing: false, positionMs: 0, at: T0, rev: 0, byUserId: HOTE }, expiresAt: T0 + 60_000,
+    };
+    m.cache.entries.set(`together:session:${autre}`, { value: sealSecret(JSON.stringify(forgee), `Together.session:${SESSION_ID}`) });
+    expect(await joinTogether(m.deps, PROCHE, { sessionId: autre })).toEqual(INTROUVABLE);
+  });
+
+  it('une séance rangée en clair n\'est jamais lue quand la clé est posée', async () => {
+    const m = monde();
+    await inviter(m);
+    process.env.SECRETS_AT_REST_KEY = KEY;
+    expect(await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID })).toEqual(INTROUVABLE);
   });
 
   it('les durées de vie suivent l\'état : courte pour l\'invitation, longue pour la séance', async () => {
     const m = monde();
     await inviter(m);
-    expect([...m.cache.entries.values()].map((e) => e.ttl)).toEqual([TOGETHER_INVITE_TTL_SECONDS, TOGETHER_INVITE_TTL_SECONDS]);
+    expect(sessionValues(m).map((e) => e.ttl)).toEqual([TOGETHER_INVITE_TTL_SECONDS, TOGETHER_INVITE_TTL_SECONDS]);
     await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
-    expect([...m.cache.entries.values()].map((e) => e.ttl)).toEqual([TOGETHER_SESSION_TTL_SECONDS, TOGETHER_SESSION_TTL_SECONDS]);
+    expect(sessionValues(m).map((e) => e.ttl)).toEqual([TOGETHER_SESSION_TTL_SECONDS, TOGETHER_SESSION_TTL_SECONDS]);
   });
 });
 

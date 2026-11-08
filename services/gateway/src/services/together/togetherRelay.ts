@@ -8,7 +8,8 @@
  *
  * Chaque acceptation et chaque synchronisation REJUGE la paire (`togetherGate.ts`) : une
  * baisse, un blocage, un départ de la conversation ou un média devenu protégé coupe la
- * séance chez les deux (`cut`). Les routes qui changent un lien appellent
+ * séance chez les deux, dite comme un départ (`left`) : le bloqué n'apprend rien de plus.
+ * Une pierre tombale posée par la fin protège de la course entre un jugement et l'écriture. Les routes qui changent un lien appellent
  * {@link rejudgeTogetherBetween} : la coupure n'attend pas la synchronisation suivante.
  *
  * Le journal ne porte jamais la séance : seulement l'erreur.
@@ -33,7 +34,16 @@ import {
 } from '@meeshy/shared/types/together';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { judgeTogether, type TogetherGateDb, type TogetherVerdict } from './togetherGate';
-import { clearTogether, readPairTogether, readTogether, storeTogether, type TogetherCache, type TogetherSession } from './togetherStore';
+import {
+  clearTogether,
+  isTogetherEnded,
+  markTogetherEnded,
+  readPairTogether,
+  readTogether,
+  storeTogether,
+  type TogetherCache,
+  type TogetherSession,
+} from './togetherStore';
 
 export type TogetherIo = ServerEmitIO;
 
@@ -74,14 +84,26 @@ const parse = <T>(schema: ZodType<T>, data: unknown): T | null => {
 
 const ttlOf = (session: TogetherSession): number => (session.joined ? TOGETHER_SESSION_TTL_SECONDS : TOGETHER_INVITE_TTL_SECONDS);
 
-async function save(deps: TogetherRelayDeps, session: TogetherSession): Promise<TogetherSession> {
+/**
+ * Écrit la séance, puis relit sa pierre tombale : une coupure survenue entre le jugement et
+ * l'écriture l'emporte — ce qui vient d'être écrit est effacé, et rien ne sera émis (`null`).
+ */
+async function save(deps: TogetherRelayDeps, session: TogetherSession): Promise<TogetherSession | null> {
   const ttl = ttlOf(session);
   const kept = { ...session, expiresAt: deps.now() + ttl * 1000 };
   await storeTogether(deps.cache, kept, ttl);
-  return kept;
+  if (!(await isTogetherEnded(deps.cache, kept.sessionId))) return kept;
+  await clearTogether(deps.cache, kept);
+  return null;
 }
 
+/**
+ * La fin, dite aux deux par la MÊME raison : une coupure (blocage, baisse, départ, média
+ * devenu protégé) se dit `left`, comme un départ — celui qu'on a bloqué ou quitté n'en
+ * apprend pas davantage.
+ */
 async function end(deps: TogetherRelayDeps, session: TogetherSession, reason: TogetherEndReason): Promise<void> {
+  await markTogetherEnded(deps.cache, session.sessionId, TOGETHER_SESSION_TTL_SECONDS);
   await clearTogether(deps.cache, session);
   emitTo(deps.io, membersOf(session), SERVER_EVENTS.TOGETHER_ENDED, {
     sessionId: session.sessionId,
@@ -93,11 +115,11 @@ async function end(deps: TogetherRelayDeps, session: TogetherSession, reason: To
 const judge = (deps: TogetherRelayDeps, session: Pick<TogetherSession, 'hostId' | 'guestId' | 'conversationId' | 'attachmentId'>): Promise<TogetherVerdict> =>
   judgeTogether({ prisma: deps.prisma, now: new Date(deps.now()) }, session);
 
-/** Rejuge une séance en cours ; refusée, elle est coupée chez les deux. */
+/** Rejuge une séance en cours ; refusée, elle finit chez les deux comme un départ. */
 async function stillAllowed(deps: TogetherRelayDeps, session: TogetherSession): Promise<boolean> {
   const verdict = await judge(deps, session).catch((): TogetherVerdict => ({ ok: false }));
   if (verdict.ok) return true;
-  await end(deps, session, 'cut');
+  await end(deps, session, 'left');
   return false;
 }
 
@@ -134,6 +156,7 @@ export async function inviteTogether(deps: TogetherRelayDeps, hostId: string, da
     playback: { playing: false, positionMs: 0, at: deps.now(), rev: 0, byUserId: hostId },
     expiresAt: 0,
   });
+  if (!session) return UNAVAILABLE;
   const expiresAt = new Date(session.expiresAt).toISOString();
   emitTo(deps.io, [session.guestId], SERVER_EVENTS.TOGETHER_INVITED, {
     sessionId: session.sessionId,
@@ -151,9 +174,10 @@ export async function joinTogether(deps: TogetherRelayDeps, userId: string, data
   if (!payload) return INVALID;
   const session = await readTogether(deps.cache, payload.sessionId, deps.now());
   if (!session || session.joined || session.guestId !== userId) return NOT_FOUND;
-  if (!(await stillAllowed(deps, session))) return NOT_ALLOWED;
+  if (!(await stillAllowed(deps, session))) return NOT_FOUND;
 
   const joined = await save(deps, { ...session, joined: true, playback: { ...session.playback, at: deps.now() } });
+  if (!joined) return NOT_FOUND;
   const started = startedOf(joined);
   emitTo(deps.io, membersOf(joined), SERVER_EVENTS.TOGETHER_STARTED, started);
   return { success: true, data: started };
@@ -164,10 +188,11 @@ export async function syncTogether(deps: TogetherRelayDeps, userId: string, data
   if (!payload) return INVALID;
   const session = await readTogether(deps.cache, payload.sessionId, deps.now());
   if (!session || !session.joined || !membersOf(session).includes(userId)) return NOT_FOUND;
-  if (!(await stillAllowed(deps, session))) return NOT_ALLOWED;
+  if (!(await stillAllowed(deps, session))) return NOT_FOUND;
 
   const playback = { playing: payload.playing, positionMs: payload.positionMs, at: deps.now(), rev: session.playback.rev + 1, byUserId: userId };
   const synced = await save(deps, { ...session, playback });
+  if (!synced) return NOT_FOUND;
   emitTo(deps.io, membersOf(synced), SERVER_EVENTS.TOGETHER_SYNCED, { sessionId: synced.sessionId, playback });
   return { success: true, data: { playback } };
 }

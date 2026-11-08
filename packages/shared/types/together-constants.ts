@@ -23,7 +23,7 @@ export const TOGETHER_ERROR_CODES = {
   NOT_ALLOWED: 'TOGETHER_NOT_ALLOWED',
   /** Charge illisible (identifiant, position, état). */
   INVALID: 'TOGETHER_INVALID',
-  /** La séance n'existe pas (finie, expirée, coupée) ou n'est pas la mienne. */
+  /** La séance n'existe pas (finie, expirée, coupée) ou n'est pas la mienne — une coupure rend ce code, jamais un autre. */
   NOT_FOUND: 'TOGETHER_NOT_FOUND',
   /** Trop d'invitations ou de synchronisations. */
   RATE_LIMITED: 'TOGETHER_RATE_LIMITED',
@@ -33,9 +33,10 @@ export const TOGETHER_ERROR_CODES = {
 export type TogetherErrorCode = (typeof TOGETHER_ERROR_CODES)[keyof typeof TOGETHER_ERROR_CODES];
 
 /**
- * `left` : l'un a quitté · `declined` : l'invité a refusé avant de rejoindre · `replaced` :
- * une nouvelle invitation de la paire remplace celle-ci · `cut` : blocage, baisse sous
- * Proche, média ou conversation devenus inaccessibles.
+ * `left` : l'un a quitté — ou la séance a été coupée (blocage, baisse sous Proche, départ de
+ * la conversation, média devenu protégé), dite comme un départ pour que celui qu'on a bloqué
+ * n'en apprenne pas davantage · `declined` : l'invité a refusé avant de rejoindre ·
+ * `replaced` : une nouvelle invitation de la paire remplace celle-ci.
  */
-export const TOGETHER_END_REASONS = ['left', 'declined', 'replaced', 'cut'] as const;
+export const TOGETHER_END_REASONS = ['left', 'declined', 'replaced'] as const;
 export type TogetherEndReason = (typeof TOGETHER_END_REASONS)[number];

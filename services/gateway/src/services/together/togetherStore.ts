@@ -1,9 +1,9 @@
 /**
  * L'ÉTAT D'UNE SÉANCE « ENSEMBLE » (#17012) — scellé au repos, durée de vie courte.
  *
- * Deux clés : la séance (`together:session:<id>`), SCELLÉE par `secret-at-rest` et liée à
+ * Deux clés (et une pierre tombale) : la séance (`together:session:<id>`), SCELLÉE par `secret-at-rest` et liée à
  * son identifiant comme données authentifiées (une valeur recopiée sous la clé d'une autre
- * séance ne s'ouvre pas) ; et l'index de la paire (`together:pair:<bas>:<haut>`) qui ne
+ * séance ne s'ouvre pas) ; et l'index de la paire (`together:pair:<HMAC de la paire>`) qui ne
  * porte que l'identifiant aléatoire de sa séance courante — une séance par paire.
  *
  * Rien n'est gardé au-delà de la séance : la durée de vie suit l'état (invitation courte,
@@ -11,8 +11,9 @@
  * illisible, expirée ou scellée pour une autre séance vaut « rien ».
  */
 import { TOGETHER_MEDIA_KINDS, type TogetherMediaKind, type TogetherPlayback } from '@meeshy/shared/types/together';
+import { createHash, createHmac } from 'node:crypto';
 import type { CacheStore } from '../CacheStore';
-import { openSecret, sealSecret } from '../../utils/secret-at-rest';
+import { SECRETS_AT_REST_KEY_ENV, hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
 
 export type TogetherSession = {
   readonly sessionId: string;
@@ -31,9 +32,19 @@ export type TogetherCache = Pick<CacheStore, 'get' | 'set' | 'del'>;
 const sessionKey = (sessionId: string): string => `together:session:${sessionId}`;
 const contextOf = (sessionId: string): string => `Together.session:${sessionId}`;
 
+const endedKey = (sessionId: string): string => `together:ended:${sessionId}`;
+
+/**
+ * L'index d'une paire ne dit pas QUI : son nom est un HMAC de la paire, à la clé de
+ * scellement (séparée par son domaine). Sans clé — développement et test seulement, où
+ * le scellement range aussi en clair — une empreinte SHA-256.
+ */
 export const togetherPairKey = (a: string, b: string): string => {
   const [low, high] = [a.toLowerCase(), b.toLowerCase()].sort();
-  return `together:pair:${low}:${high}`;
+  const material = `Together.pair:${low}:${high}`;
+  const key = hasValidSecretsKey() ? process.env[SECRETS_AT_REST_KEY_ENV]?.trim() : undefined;
+  const digest = key ? createHmac('sha256', Buffer.from(key, 'base64')).update(material) : createHash('sha256').update(material);
+  return `together:pair:${digest.digest('hex')}`;
 };
 
 const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
@@ -79,7 +90,8 @@ export async function storeTogether(cache: TogetherCache, session: TogetherSessi
 /** La séance, ou `null` (absente, expirée, illisible, scellée pour une autre). */
 export async function readTogether(cache: TogetherCache, sessionId: string, now: number): Promise<TogetherSession | null> {
   const stored = await cache.get(sessionKey(sessionId));
-  if (stored === null) return null;
+  // Une séance naît scellée : une valeur en clair n'est jamais lue quand la clé est posée.
+  if (stored === null || (hasValidSecretsKey() && !isSealedSecret(stored))) return null;
   try {
     const session = parseSession(openSecret(stored, contextOf(sessionId)), sessionId);
     return session && session.expiresAt > now ? session : null;
@@ -92,6 +104,19 @@ export async function readTogether(cache: TogetherCache, sessionId: string, now:
 export async function readPairTogether(cache: TogetherCache, a: string, b: string, now: number): Promise<TogetherSession | null> {
   const sessionId = await cache.get(togetherPairKey(a, b));
   return sessionId ? readTogether(cache, sessionId, now) : null;
+}
+
+/**
+ * La PIERRE TOMBALE d'une séance finie : posée AVANT l'effacement, relue APRÈS chaque
+ * écriture. Une acceptation ou une synchronisation qui a été jugée avant une coupure et
+ * écrit après elle voit la pierre, efface ce qu'elle vient d'écrire et n'émet rien.
+ */
+export async function markTogetherEnded(cache: TogetherCache, sessionId: string, ttlSeconds: number): Promise<void> {
+  await cache.set(endedKey(sessionId), '1', ttlSeconds);
+}
+
+export async function isTogetherEnded(cache: TogetherCache, sessionId: string): Promise<boolean> {
+  return (await cache.get(endedKey(sessionId))) !== null;
 }
 
 /** Efface la séance, et l'index de la paire s'il la désigne encore. */

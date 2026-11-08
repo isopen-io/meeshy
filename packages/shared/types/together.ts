@@ -17,7 +17,7 @@
  * matrice), jamais entre deux comptes dont l'un a bloqué l'autre ; le média est une pièce
  * jointe audio ou vidéo, ni supprimée, ni à vue unique, ni éphémère, d'une conversation où
  * les deux sont membres actifs ; une séance par paire. Chaque synchronisation est
- * rejugée, et une baisse, un retrait ou un blocage termine la séance (`cut`).
+ * rejugée ; une baisse, un retrait ou un blocage la termine, dite comme un départ (`left`).
  *
  * Le serveur ne voit ni ne relaie le CONTENU : seulement des identifiants et une position
  * de lecture. L'état de séance est scellé au repos (`secret-at-rest`), avec une durée de vie

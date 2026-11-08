@@ -22,6 +22,11 @@ jest.mock('../../../../services/CacheStore', () => ({
   getCacheStore: () => ({ del: (key: string) => cacheDel(key) }),
 }));
 
+const rejudgeTogetherAfter = jest.fn(async (_params: unknown, _pair: unknown) => undefined);
+jest.mock('../../../../services/together/togetherDeps', () => ({
+  rejudgeTogetherAfter: (params: unknown, pair: unknown) => rejudgeTogetherAfter(params, pair),
+}));
+
 import { relationLevelResponseSchema } from '@meeshy/shared/types/relation-level-response';
 import { relationsRoutes } from '../../../../routes/relations';
 import { relationsLevelRoutes } from '../../../../routes/relations/level';
@@ -206,6 +211,15 @@ describe('#14910 — une baisse sous le Sang retire les partages du rituel, des 
     expect(ligneDe(app, MOI)).toMatchObject({ ...PARTAGES_ETEINTS, ...DATES_DE_RETRAIT });
     expect(ligneDe(app, AUTRE)).toMatchObject(PARTAGES_ETEINTS);
     Object.keys(DATES_DE_RETRAIT).forEach((cle) => expect(ligneDe(app, AUTRE)[cle]).toBeUndefined());
+  });
+
+  it('une baisse rejuge la séance « ensemble » de la paire (#17012)', async () => {
+    rejudgeTogetherAfter.mockClear();
+    const app = await appli({ liens: [lien('CLOSE', 'CLOSE')] });
+    await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'FRIEND' });
+    await app.close();
+
+    expect(rejudgeTogetherAfter).toHaveBeenCalledWith(expect.anything(), { userA: MOI, userB: AUTRE });
   });
 
   it('un partage déjà retiré garde sa date de retrait', async () => {
