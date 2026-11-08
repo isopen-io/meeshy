@@ -19,8 +19,7 @@ struct WebRTCVideoView: UIViewRepresentable {
         view.videoContentMode = contentMode
         view.clipsToBounds = true
         if let track {
-            track.add(view)
-            context.coordinator.currentTrack = track
+            context.coordinator.attach(track, to: view)
         }
         return view
     }
@@ -29,12 +28,9 @@ struct WebRTCVideoView: UIViewRepresentable {
         uiView.videoContentMode = contentMode
 
         if let newTrack = track, newTrack !== context.coordinator.currentTrack {
-            context.coordinator.currentTrack?.remove(uiView)
-            newTrack.add(uiView)
-            context.coordinator.currentTrack = newTrack
-        } else if track == nil, let oldTrack = context.coordinator.currentTrack {
-            oldTrack.remove(uiView)
-            context.coordinator.currentTrack = nil
+            context.coordinator.attach(newTrack, to: uiView)
+        } else if track == nil {
+            context.coordinator.detach()
         }
 
         if mirror {
@@ -45,8 +41,7 @@ struct WebRTCVideoView: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ uiView: RTCMTLVideoView, coordinator: Coordinator) {
-        coordinator.currentTrack?.remove(uiView)
-        coordinator.currentTrack = nil
+        coordinator.detach()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -59,7 +54,25 @@ struct WebRTCVideoView: UIViewRepresentable {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-        var currentTrack: RTCVideoTrack?
+        private(set) var currentTrack: RTCVideoTrack?
+        private var gate: CallVideoRendererGate?
+
+        /// #17039 — la piste ne voit jamais la vue, seulement une porte : son
+        /// ajout et son retrait attendent le fil de travail de libwebrtc et
+        /// partent sur la file du moteur (`CallVideoRendererGate`).
+        func attach(_ track: RTCVideoTrack, to view: RTCMTLVideoView) {
+            detach()
+            gate = CallVideoRendererGate.attach(track, to: view)
+            currentTrack = track
+        }
+
+        /// Ferme la porte sur place (plus aucune image vers la vue), puis la
+        /// retire de la piste hors du fil principal.
+        func detach() {
+            gate?.detach()
+            gate = nil
+            currentTrack = nil
+        }
     }
 }
 
