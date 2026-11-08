@@ -1,8 +1,6 @@
-# Deux sessions sur un même incident produisent deux COUCHES, pas deux copies — ne pas céder, composer
+## 2026-11-08 — Deux sessions sur un même incident produisent deux COUCHES, pas deux copies : ne pas céder, composer (#16852)
 
-**2026-11-08** — #16852, rencontré pendant le cycle 145 de l'audit temps réel.
-
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 La CI du SDK iOS était par terre sur TOUT le dépôt, `dev` compris. Deux sessions
 l'ont attaquée en parallèle.
@@ -22,7 +20,7 @@ que je l'ai mesuré : mon `workflow_dispatch` est passé l'étape de résolution
 mon lot la fait enfin *tenter*, là où elle échouait instantanément — **et a
 quand même échoué**.
 
-## Le réflexe à ne pas avoir
+### Le réflexe à ne pas avoir
 
 Devant un correctif de session sœur qui va plus loin que le sien, le réflexe est
 de céder (« ils l'ont fait, je retire »). **Il aurait laissé la CI du SDK rouge
@@ -31,7 +29,7 @@ AVEC le bon correctif dans le dépôt** : leur remède vit dans un script que
 que pour `ios.yml`. Mesuré, pas supposé : `grep -c resolve-spm-packages
 .github/workflows/sdk-tests.yml` rendait **0** sur `dev` après leur fusion.
 
-## La règle
+### La règle
 
 Deux sessions sur un même incident ne produisent presque jamais deux fois le
 même correctif : elles produisent **deux couches**, et il faut demander de
@@ -48,7 +46,7 @@ les deux côtés, et en vérifiant **ligne à ligne** que les deux mécanismes
 survivent (ici : `prefetch_artifact` ET le déréférencement sûr de
 `PROJECT_ARGS`, plus un garde qui passe de 4/4 à **5/5** scénarios).
 
-## Le geste
+### Le geste
 
 Quand `dev` apporte un correctif au défaut qu'on traite :
 1. lire leur commit **en entier**, y compris son récit — c'est là que le
