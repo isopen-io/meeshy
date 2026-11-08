@@ -20,12 +20,13 @@ final class ComposerLimitFeedbackTests: XCTestCase {
 
     func test_attached_typingPastTheCapOnTheScene_saysTheBound() {
         ComposerLimitFeedback.attached(to: StoryComposerViewModel())
-        FeedbackToastManager.shared.currentToast = nil
+        ComposerLimitCapsule.shared.retire()
 
         NotificationCenter.default.post(name: StoryInlineTextLengthGate.limitReached, object: nil)
 
-        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message,
-                       ComposerLimitFeedback.message(for: .textLength))
+        XCTAssertEqual(ComposerLimitCapsule.shared.message,
+                       ComposerLimitFeedback.message(for: .textLength),
+                       "la limite se dit par la capsule posée sur la scène (#17111), plus par un toast")
     }
 
     func test_composerRetouchTextRule_capIsTheSharedTextLimit() {

@@ -129,9 +129,9 @@ nonisolated enum ComposerSceneCameraOverlay {
         /// La trace du son de fond, ancrée AU-DESSUS du dessin (#5017). Le
         /// viseur ne monte pas jusque-là.
         case soundTrace
-        /// Les deux rails, dans les COULOIRS du plateau (#4561). Le viseur est
-        /// borné au dessin ; il ne les atteint pas, et les cacher priverait
-        /// l'auteur de sa sortie autant que de ses portes.
+        /// Les deux rails. Le viseur s'arme plein écran (A8, #17109) et sa
+        /// sortie est « Quitter », dans son propre en-tête : les rails cèdent
+        /// (loi 13, « pas de rail au viseur »), et reviennent avec la scène.
         case rails
     }
 
@@ -139,7 +139,7 @@ nonisolated enum ComposerSceneCameraOverlay {
         switch furniture {
         case .description: return true
         case .soundTrace:  return false
-        case .rails:       return false
+        case .rails:       return true
         }
     }
 
@@ -196,6 +196,10 @@ nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Senda
     case card
     /// Il occupe l'écran entier — plus de plateau, plus de rails.
     case fullScreen
+
+    /// **La taille d'armement : le plein écran** (A8, #17109). La carte ne
+    /// reste que pour le selfie éclairé par l'écran (#9566), qui peut s'y réduire.
+    static let armed: ComposerSceneCameraSize = .fullScreen
 
     /// Ce qu'un appui sur le bouton de taille produit.
     var toggled: ComposerSceneCameraSize { self == .card ? .fullScreen : .card }
