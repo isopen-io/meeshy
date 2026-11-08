@@ -141,3 +141,185 @@ d'un coup.
 > atteste un gestionnaire qui lève. Le double est complété, et le témoin assert
 > désormais la RÉPONSE. Détail :
 > `tasks/lessons/2026-11-08-un-double-mente-aussi-par-ce-qu-il-omet.md`.
+
+---
+
+## Le cycle a dû ouvrir son PROPRE périmètre, et ça a changé sa forme
+
+Quatre des sept suivis cédés, le cycle était à deux lots. Deux auditeurs
+adversariaux sont partis sur des périmètres **explicitement disjoints de
+`socketio/`** — l'un sur `routes/conversations/` + `services/conversations/`,
+l'autre sur `services/notifications/` + `services/messaging/` — avec l'interdit
+écrit dans leur consigne plutôt que laissé à leur jugement.
+
+**Onze constats, tous vrais contre l'arbre vivant** (vérifiés ligne à ligne
+avant d'être repris, deux en primaire par moi). Trois sont devenus des lots,
+huit des issues (#17075 à #17082, plus #17076 et #17077 sans milestone car
+elles demandent chacune un lot à elles).
+
+## Lot D — rentrer dans une conversation supprimée POUR SOI (#17072)
+
+Le constat le plus grave du cycle, et le correctif d'une ligne.
+
+`Participant` porte TROIS colonnes de départ, et le dépôt les lit ENSEMBLE là
+où il en dépend : le flux de tombstones interroge
+`OR: [{leftAt:{gt}}, {bannedAt:{gt}}, {deletedForMe:{gt}}]`.
+`REJOIN_PARTICIPANT_STATE` en effaçait DEUX sur trois — `leftAt` y figurait,
+`deletedForMe` non — et le doc-comment de la constante justifiait nommément
+`historyVisibleFrom`, les trois `messageRequest*` et l'OMISSION de `joinedAt`
+sans la mentionner une fois.
+
+`delete-for-me` écrit pourtant `{ deletedForMe: now, isActive: false }` d'un
+seul geste, et `resolveConversationEntry` ne lit que la seconde. Rentrer après
+avoir supprimé « pour soi » rendait donc `'rejoin'`, rallumait la ligne, et
+laissait la première posée : **appartenance vivante pour tout le service,
+absente de `GET /conversations` pour toujours.** Messages reçus, écriture
+permise, présence au trombinoscope des autres — et la conversation toujours
+dans la corbeille, avec son tombstone servi par `/sync`.
+
+> **Le cliquet qui aurait dû le voir était VERT, et sa langue est la raison.**
+> `participant-reactivation-writers-sweep` est l'inventaire des écritures qui
+> RALLUMENT une participation, et il ne posait qu'une question : « celle-ci
+> peut-elle rallumer un BANNI ? ». La langue de l'inventaire est *banni* ;
+> `deletedForMe` n'y est pas un mot. C'est « un lot ferme une classe dans SA
+> langue », mesuré sur un cliquet plutôt que sur un correctif.
+
+Les deux témoins sont RELATIONNELS : l'un relève les colonnes de départ DANS le
+source du flux plutôt que de les recopier et porte un verdict écrit pour
+chacune (effacée, effacée, **jamais** — une rentrée ne débannit personne) ;
+l'autre est au niveau de la PORTE.
+
+**Et le premier a attrapé sa propre première version.** Mon relevé cherchait
+`{ gt }` en forme abrégée quand le flux écrit `{ gt: floor }` : le balayage
+rendait `[]`, et le témoin de verdict passait À VIDE. C'est le premier `it` du
+fichier — « un balayage à vide resterait vert » — qui l'a dit, dans le lot même
+qui l'écrivait.
+
+## Lot E — le budget de mention valait 2, pas 5 (#17073)
+
+`shouldCreateMentionNotification` est un prédicat MUTANT : il pousse un
+horodatage quand il autorise. Il était appelé DEUX FOIS sur le même chemin pour
+la même paire — filtre d'éligibilité du lot, puis tête de
+`createMentionNotification` que ce lot appelle. Chaque notification consommait
+deux jetons : la troisième mention de quelqu'un dans la minute ne lui arrivait
+jamais.
+
+Le second appel était justifié par « la garde par destinataire reste, pour
+l'appelant qui l'atteint en solo ». **Cet appelant n'existe pas** — mesuré.
+
+> **Un prédicat qui répond « peut-on ? » ne doit pas écrire.** Sa signature ne
+> dit rien de sa mutation, donc rien n'empêche un second appelant de
+> l'interroger, et le coût d'une question devient une réponse fausse.
+
+**Le piège s'est refermé pendant le correctif, et c'est le plus instructif du
+lot.** La même méthode était exposée aux éventails de PUBLICATION et de
+COMMENTAIRE par la surface `fanoutDependencies` — et pour eux, c'est le SEUL
+gate de leur chemin : les lier à la question pure aurait rendu ces mentions
+illimitées. Le nom a donc été corrigé plutôt que la liaison
+(`consumeMentionBudget`), ce qui est exactement la leçon du lot appliquée à
+elle-même.
+
+Seconde moitié : la liste explicite n'était dédoublonnée nulle part, si bien
+que `slice(0, MAX_MENTIONS_PER_MESSAGE)` bornait cinquante **COPIES**. Une
+charge `[victime ×50]` produisait plusieurs bannières identiques et épuisait le
+budget de la paire. Dédoublonnée à la frontière (le plafond compte des
+PERSONNES) **et** au site qui notifie (c'est là que « ne pas notifier deux
+fois » est une propriété, pas une espérance sur ses appelants).
+
+Le témoin de performance existant appelait le lot avec cinquante destinataires
+**distincts** : cinquante clés de paire, aucun budget épuisé, vert. **La
+propriété ne se voit qu'en RÉPÉTANT sur la MÊME paire.**
+
+## Lot F — une demande en attente ne sonne pas, sauf si on ÉDITE (#17074)
+
+La garde #14107 était posée sur l'éventail d'ENVOI et sur l'événement socket
+`mention:created` de l'ÉDITION — **et absente de la NOTIFICATION de cette même
+édition**, c'est-à-dire du seul des trois canaux qui perce la sourdine, pousse
+un e-mail immédiat et fait pré-enregistrer le texte dans la base locale de
+l'appareil.
+
+Un inconnu dont la demande n'est pas acceptée obtenait donc, en éditant son
+message pour y ajouter `@cible`, exactement ce que le chemin d'envoi venait de
+lui refuser. **L'asymétrie vivait dans la même fonction** : le handler socket
+pose la garde dix lignes au-dessus de l'appel qui laissait partir la
+notification sans elle.
+
+Et la garde était GRATUITE : les deux sites lisent DÉJÀ les participants de la
+conversation — il ne manquait qu'une colonne au `select`, et un NOM partagé
+pour que la règle cesse d'être une formulation locale (`pendingRequestUserIds`,
+désormais le site unique du prédicat, employé par les deux éventails).
+
+> Avant de conclure qu'une garde coûterait une requête, regarder ce que le site
+> lit déjà. C'était écrit dans le dépôt depuis le cycle 127 ; ce lot est le
+> troisième à le vérifier.
+
+## Un défaut introduit et corrigé dans le cycle (lot F)
+
+Le prédicat partagé du lot F a d'abord vécu dans `MentionService`, à côté de
+son jumeau qui interroge la base — l'endroit évident. **Une suite
+d'intégration E2EE à deux appareils, qui ne parle ni de mentions ni de demandes
+de message, a cessé de voir AUCUNE notification.**
+
+Sa cause : ce fichier remplace `MentionService` par un double qui ÉNUMÈRE cinq
+méthodes à la main. L'import s'est résolu en `undefined`, l'appel a levé dans le
+`try` best-effort de l'éventail — qui ne lève jamais, par contrat — et rien
+n'est parti.
+
+> La règle « un double PARTIEL perd en silence tout ce que le module GAGNE » est
+> écrite dans le dépôt, avec trois exemplaires. Ce qu'elle ne disait pas : **le
+> risque est une propriété du module qu'on AGRANDIT.** Un module lourd est
+> précisément celui que les suites remplacent ; y ajouter une fonction, c'est la
+> placer derrière tous les doubles existants, dont on ne sait pas combien il y
+> en a. Avant d'ajouter une fonction à un module, demander : *combien de suites
+> le REMPLACENT ?*
+
+Réparé aux deux niveaux — le prédicat part dans un module FEUILLE (rien à
+doubler, donc rien à oublier de doubler), et le double est PROLONGÉ plutôt que
+remplacé. Détail :
+`tasks/lessons/2026-11-08-un-predicat-pur-appartient-a-un-module-feuille.md`.
+
+---
+
+## Preuve
+
+| gate | résultat |
+|---|---|
+| `tsc --noEmit` gateway | **EXIT=0**, 0 ligne |
+| suite gateway COMPLÈTE, arbre gelé, machine au repos | **2 573 suites, 40 194 témoins — 6 rouges** |
+| rouges à l'arrivée comme au départ | **les SIX suites de codecs d'image**, celles que le cycle 147 a relevées sur `dev` |
+| le diff touche-t-il leur chemin ? | **non** — zéro fichier sous `attach`/`upload`/`exif`/`heif`/`avif`/`sharp`/`image` |
+| rouge, lot A | 4 des 6 témoins tombent ; les 2 cas nominaux verts des deux côtés |
+| rouge, lot C | 2 cliquets neufs, plus 4 témoins existants démasqués par le réordonnancement |
+| rouge, lot D | les 2 témoins tombent sous la mutation de la constante (un au site, un à la PORTE) |
+| rouge, lot E | 4 des 5 tombent, en rendant exactement `[1,1,0]` et 2 écritures pour 5 tentatives |
+| rouge, lot F | les 2 témoins tombent ; les 3 du prédicat partagé sont neufs |
+| cliquets élargis | 3 (findMany borné, portes d'arrivée par délégation, réactivation sur les DEUX colonnes de départ) |
+
+Le cycle rend donc `dev` **exactement à sa ligne de base**, et il y ajoute cinq
+cliquets (deux neufs, trois élargis).
+
+## Trois mesures de méthode, toutes payées dans ce cycle
+
+1. **Une annulation de CI répétée n'est pas une panne d'infrastructure.** Sur la
+   branche du cycle 147, c'était une autre session qui poussait. Sur la mienne,
+   un run de dispatch a été évincé à 60 s avec trois jobs déjà verts et deux en
+   vol — et `ci.yml` DÉCRIT ce motif dans son propre en-tête (« les annulations
+   surviennent à des âges courts et irréguliers, signature d'un run qui
+   ATTENDAIT et qu'un arrivant plus récent a évincé »). **La CI des PR est de
+   plus GELÉE par `vars.PR_CI_GEL`** : tous les jobs y sont `skipped`, et le
+   « Verdict CI » vert d'une PR n'atteste donc rien du code. La preuve d'un lot
+   de passerelle est la suite locale.
+
+2. **Une mesure prise sur une machine SATURÉE ne mesure rien**, et c'est la
+   seconde moitié de la règle du cycle 147. `tsc-never-loaded-tests-ratchet`
+   LANCE un compilateur : étouffé par une seconde passe `jest`, il a rendu
+   `Received: 0` sur son garde anti-vide — soit exactement le symptôme d'une
+   sonde mal configurée. Relancé seul : 24 ms, vert. Détail :
+   `tasks/lessons/2026-11-08-un-cliquet-qui-lance-un-compilateur-rougit-sur-une-machine-saturee.md`.
+
+3. **Sur les six lots du cycle, cinq ont fait tomber un témoin qui gelait le
+   défaut** — cinq fixtures de pin, un `toEqual` sur l'état de rentrée, un
+   témoin de plafond à soixante entrées distinctes, un témoin de performance à
+   cinquante paires distinctes. Aucun n'était faux ; tous mesuraient à côté.
+   C'est la forme dominante de ce cycle, et elle a une question :
+   **« ce témoin pourrait-il tomber sur le défaut que je viens de décrire ? »**

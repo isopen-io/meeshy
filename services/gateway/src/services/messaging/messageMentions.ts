@@ -4,6 +4,7 @@ import { participationEstVivante } from '../../routes/conversations/utils/access
 import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
 import { protectedPreview } from '../notifications/notification-preview';
 import { editReadership, blockedEditKeys } from '../../socketio/editedAudience';
+import { pendingRequestUserIds } from './pendingMessageRequests';
 
 /**
  * Le masque servi quand la relecture des drapeaux ne conclut pas — message
@@ -406,7 +407,12 @@ async function notifyNewlyMentioned(
       }),
       prisma.conversation.findUnique({
         where: { id: message.conversationId },
-        select: { participants: { where: { isActive: true }, select: { userId: true } } },
+        // `messageRequestAt` n'est pas une colonne de plus pour le plaisir :
+        // c'est ce qui rend la garde #14107 GRATUITE ici (#17074). La lecture
+        // existait déjà ; il ne manquait que la colonne — et une projection
+        // trop étroite rend une loi impossible en aval sans qu'aucun témoin ne
+        // rougisse.
+        select: { participants: { where: { isActive: true }, select: { userId: true, messageRequestAt: true } } },
       }),
     ]);
     if (!sender || !conversation) return;
@@ -448,7 +454,29 @@ async function notifyNewlyMentioned(
     // (leçon `[]`-vs-`undefined`, cycle 116).
     if (readership.kind === 'unknown') return;
     const blocked = blockedEditKeys(readership);
-    const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId));
+
+    // #17074 — une DEMANDE de message en attente ne sonne PAS, et l'édition
+    // était la porte par laquelle elle sonnait quand même. La garde est posée
+    // sur l'éventail d'ENVOI (`messageNotificationFanOut`) et sur l'événement
+    // socket `mention:created` de cette même édition ; elle manquait à sa
+    // NOTIFICATION — c'est-à-dire au seul des trois canaux qui perce la
+    // sourdine, pousse un e-mail immédiat et fait PRÉ-ENREGISTRER le texte dans
+    // la base locale de l'appareil (la NSE lit `content` sur le fil push).
+    //
+    // Un inconnu dont la demande n'est pas acceptée obtenait donc, en ÉDITANT
+    // son message pour y ajouter `@cible`, exactement ce que le chemin d'envoi
+    // venait de lui refuser.
+    //
+    // Le prédicat est PARTAGÉ avec l'éventail d'envoi (`pendingRequestUserIds`)
+    // plutôt que reformulé : c'est la reformulation locale qui avait laissé
+    // cette porte ouverte. Il est posé ICI et non chez l'appelant, pour la
+    // raison que les deux paragraphes au-dessus donnent déjà — « une garde de
+    // confidentialité qui dépend du câblage de l'appelant échoue en montrant
+    // PLUS » — et parce que trois des quatre transports d'édition sont des
+    // routes REST qui ne passent pas par le handler socket.
+    const pending = pendingRequestUserIds(conversation.participants);
+
+    const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId) && !pending.has(userId));
     if (admitted.length === 0) return;
 
     await notificationService.createMentionNotificationsBatch(

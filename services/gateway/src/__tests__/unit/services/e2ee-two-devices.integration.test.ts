@@ -58,7 +58,16 @@ jest.mock('../../../services/TrackingLinkService', () => ({
   }))
 }));
 
+// PROLONGÉ, pas remplacé (#17074). Ce double ÉNUMÉRAIT cinq méthodes à la
+// main : le jour où l'éventail de notifications a importé une fonction de plus
+// de ce module, elle s'est résolue en `undefined`, l'appel a levé dans le `try`
+// de l'éventail, et cette suite a cessé de voir AUCUNE notification — un
+// symptôme à deux fichiers de sa cause. « Un double PARTIEL perd en silence
+// tout ce que le module GAGNE, et il ne se signale qu'au moment où le module
+// grandit » : la réparation de FOND a été de sortir la fonction pure dans un
+// module feuille, celle-ci empêche la prochaine.
 jest.mock('../../../services/MentionService', () => ({
+  ...jest.requireActual<Record<string, unknown>>('../../../services/MentionService'),
   MentionService: jest.fn().mockImplementation(() => ({
     extractMentions: jest.fn().mockReturnValue([]),
     extractMentionsWithParticipants: jest.fn().mockReturnValue([]),
