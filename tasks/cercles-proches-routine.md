@@ -380,3 +380,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   des identifiants et une position) — à confirmer par `crypto-e2ee`.
 - Prochain lot recommandé : « ensemble » sur le web (inviter depuis une vidéo/un audio, accepter, lecteur synchronisé),
   puis iOS ; l'icône par cercle (#17013) quand les clients de la position temporaire auront fusionné.
+
+## 2026-11-08 — réveil 20 : regarder ou écouter ensemble sur le web (#17055 ⊂ #17011)
+
+- Reprise : #16986 (position temporaire, serveur) est menée par le réveil 18, encore actif après deux contre-audits ;
+  ce réveil ne la touche pas. #17043 (réserves de l'audit d'« ensemble ») est fusionnée. Aucune branche n'écrivait le
+  web d'« ensemble » : issue #17055 ouverte sous #17011 (milestone #215), branche `claude/cercles-ensemble-web` réservée
+  avant toute écriture.
+- Lot : PR #17060 vers `dev`. Loi pure de synchronisation (`together-sync.ts` : position à l'horloge du serveur, écart
+  d'horloge par le plus grand `at − local`, vitesse ±5 % dès 150 ms puis saut dès 1 s, un geste local ne part que s'il
+  change l'état partagé) ; séance sur l'onglet (`together-live.ts` : décodeurs, store, `rev`, séance close jamais
+  rouverte, gestes avec accusé) ; hôte du chrome différé (bandeau d'invitation non modal, attente annulable, lecteur
+  flottant aux commandes natives) ; invitation depuis la fiche d'un Proche ou d'un Sang, par la galerie servie de la
+  conversation directe (`GET /conversations/:id/attachments`, référence des entrées TS mortes 270 → 269, l'index des
+  médias devant rester `import()` seulement). Libellés `together.*` en sept langues.
+- Gates locaux : 42 témoins du lot verts, `tsc` web vert, `vite build` et `measure-weight` verts, catalogue TS conforme.
+  Les gates Playwright ne tournent pas en conteneur (navigateur absent).
+- Ce qui reste d'« ensemble » : iOS (référence), Android, inviter depuis la visionneuse et dans un groupe, coupures
+  manquantes côté serveur (#17022), préférence de réception (#17023), décision E2EE ouverte (#17011).
+- Prochain lot recommandé : « ensemble » sur iOS (recevoir, rejoindre, lecteur synchronisé, inviter depuis la fiche),
+  sinon l'icône de position par cercle (#17013) quand les clients de la position temporaire auront fusionné.
