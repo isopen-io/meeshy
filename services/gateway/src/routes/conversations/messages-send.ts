@@ -7,6 +7,7 @@
  * `registerSendMessageRoute` et ré-exporte `SendMessageBodySchema`.
  */
 import { signReaderAttachmentsIn, type SignableAttachment } from '../../services/attachments/signedAttachmentUrls';
+import { withSubmittedClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { protectionOfFullMessageRow } from '../../socketio/readerSignedDelivery';
 import { FastifyInstance } from 'fastify';
@@ -541,7 +542,14 @@ export function registerSendMessageRoute(
       // #8562 — la citation, telle que CET expéditeur a le droit de la lire.
       // #13100 — et ses pièces protégées ou scellées au repos, sous SES adresses signées.
       const served = await withQuoteServedToReader(prisma, result.data, result.data?.senderId ?? undefined);
-      return sendSuccess(reply, served ? withAttachmentsSignedForSender(served) : served);
+      // #17058 — SECOND transport du même défaut, que l'issue ne nommait pas.
+      // La réponse rend la LIGNE, donc son `clientMessageId` : sur un hit de
+      // déduplication par contenu la ligne est celle du PREMIER message, et la
+      // réponse à `cid_B` repartait sous `cid_A`. Le web fusionne « par id OU
+      // clientMessageId », si bien que la seconde bulle était absorbée par la
+      // ligne du premier message et disparaissait. Une réponse d'envoi ne nomme
+      // que le message qu'on lui a soumis.
+      return sendSuccess(reply, served ? withSubmittedClientMessageId(withAttachmentsSignedForSender(served), clientMessageId) : served);
 
     } catch (error) {
       logger.error('Error in REST send message:', error);
