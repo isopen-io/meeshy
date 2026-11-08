@@ -5,8 +5,8 @@ import MeeshySDK
 
 // MARK: - Le texte en feu (#17112, L10)
 
-/// **Les flammes de l'effet Flamme brûlent SUR les lettres** (retour porteur du
-/// 2026-11-08 : « les flammes doivent être sur les lettres pour le texte en
+/// **Les flammes de l'effet Flamme brûlent SUR les lettres** (retour porteur,
+/// #17019 : « les flammes doivent être sur les lettres pour le texte en
 /// feu »). Ce n'est ni une bande de feu posée derrière le texte, ni une teinte :
 ///
 /// 1. la **silhouette** naît de la couverture des glyphes — pleine dans chaque
