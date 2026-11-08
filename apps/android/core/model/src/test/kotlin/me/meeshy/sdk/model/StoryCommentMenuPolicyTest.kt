@@ -11,7 +11,8 @@ class StoryCommentMenuPolicyTest {
         role: String? = "USER",
         text: String = "Bonjour",
         flags: Int? = null,
-    ) = StoryCommentMenuPolicy.actions(authorId, viewerId, role, text, flags)
+        closed: Boolean = false,
+    ) = StoryCommentMenuPolicy.actions(authorId, viewerId, role, text, flags, commentsClosed = closed)
 
     @Test
     fun `the author copies, edits and deletes but never reports nor removes`() {
@@ -40,5 +41,13 @@ class StoryCommentMenuPolicyTest {
     @Test
     fun `an unknown viewer gets nothing to report nor remove`() {
         assertThat(actions(viewerId = null, role = "ADMIN")).containsExactly(StoryCommentMenuAction.COPY)
+    }
+
+    @Test
+    fun `on a closed story thread the author no longer edits but still deletes, another still reports`() {
+        assertThat(actions(viewerId = "u-author", closed = true)).containsExactly(
+            StoryCommentMenuAction.COPY, StoryCommentMenuAction.DELETE,
+        ).inOrder()
+        assertThat(actions(closed = true)).containsExactly(StoryCommentMenuAction.COPY, StoryCommentMenuAction.REPORT).inOrder()
     }
 }

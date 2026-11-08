@@ -53,6 +53,16 @@ class PostCommentsEngineEditTest {
     }
 
     @Test
+    fun `a refusal says why, so a closed thread can be told from a failure`() = runTest {
+        val thread = thread()
+        val outcome = PostCommentsEngine.edit(thread, replies(), root, request) {
+            NetworkResult.Failure(ApiError(message = "Comments are disabled", code = "COMMENTS_DISABLED", httpStatus = 403))
+        }
+        assertThat(outcome).isEqualTo(CommentEditOutcome.Refused("Comments are disabled", code = "COMMENTS_DISABLED"))
+        assertThat(thread.value.comments).containsExactly(root, other).inOrder()
+    }
+
+    @Test
     fun `an exception also brings the original row back`() = runTest {
         val thread = thread()
         val outcome = PostCommentsEngine.edit(thread, replies(), root, request) { error("boom") }

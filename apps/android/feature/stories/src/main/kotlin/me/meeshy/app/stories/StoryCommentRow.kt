@@ -122,7 +122,7 @@ internal fun StoryCommentRow(
         MeeshyAvatar(name = comment.authorName, size = 32.dp, containerColor = authorColor, imageUrl = comment.avatarUrl, modifier = Modifier.opensProfile(author))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
             StoryCommentHeader(comment, showOriginal, authorColor, callbacks)
-            if (editing) {
+            if (editing && StoryCommentMenuAction.EDIT in menu) {
                 StoryCommentEditor(
                     original = comment.originalContent,
                     onCancel = { editing = false },
