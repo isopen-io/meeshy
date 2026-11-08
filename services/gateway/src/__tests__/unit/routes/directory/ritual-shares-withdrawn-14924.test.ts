@@ -92,7 +92,7 @@ async function rompreLeSang() {
   return { status: res.statusCode, partages: reglages.rows(), liens: links.relations() };
 }
 
-async function bloquerLAutre(times = 1) {
+async function bloquerLAutre(times = 1, pannes = 0) {
   const store = pairInteractionStore({
     users: [
       { id: MOI, birthDate: ADULT, blockedUserIds: [] },
@@ -101,19 +101,32 @@ async function bloquerLAutre(times = 1) {
     relations: [SANG] as never,
   });
   const reglages = ritualSharesStore(PARTAGES);
+  const panne = { active: false };
+  const enPanne = <A extends unknown[], R>(fn: (...args: A) => Promise<R>) => async (...args: A): Promise<R> => {
+    if (panne.active) throw new Error('mongo down');
+    return fn(...args);
+  };
+  const relationFeatureSetting = {
+    ...reglages.relationFeatureSetting,
+    findUnique: enPanne(reglages.relationFeatureSetting.findUnique),
+    updateMany: enPanne(reglages.relationFeatureSetting.updateMany),
+  };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', { ...store.prisma, relationFeatureSetting: reglages.relationFeatureSetting } as never);
+  app.decorate('prisma', { ...store.prisma, relationFeatureSetting } as never);
   app.decorate('authenticate', authenticate);
   await app.register(directoryBlocksRoutes, { prefix: PREFIXE });
   await app.ready();
   const statuses: number[] = [];
+  const apresChaqueAppel: Array<ReturnType<typeof reglages.rows>> = [];
   for (let i = 0; i < times; i += 1) {
+    panne.active = i < pannes;
     const res = await app.inject({ method: 'PUT', url: `${PREFIXE}/blocks/${AUTRE}` });
     statuses.push(res.statusCode);
+    await settle();
+    apresChaqueAppel.push(reglages.rows());
   }
-  await settle();
   await app.close();
-  return { statuses, partages: reglages.rows() };
+  return { statuses, partages: reglages.rows(), apresChaqueAppel };
 }
 
 const partage = (rows: Array<Record<string, unknown>>, ownerId: string) => rows.find((row) => row.ownerId === ownerId);
@@ -144,10 +157,13 @@ describe('#14924 — le blocage éteint les partages du rituel', () => {
     expect(partage(partages, AUTRE)).toMatchObject(SHARES_OFF);
   });
 
-  it('rejoué sur un blocage déjà posé, le retrait converge : un blocage dont le retrait aurait échoué se solde au rejeu', async () => {
-    const { statuses, partages } = await bloquerLAutre(2);
+  it('rejoué sur un blocage déjà posé, le retrait converge : un blocage dont le retrait a échoué se solde au rejeu', async () => {
+    const { statuses, partages, apresChaqueAppel } = await bloquerLAutre(2, 1);
 
     expect(statuses).toEqual([200, 200]);
+    expect(partage(apresChaqueAppel[0], MOI)).toMatchObject(SHARES_ON);
+    expect(partage(apresChaqueAppel[0], AUTRE)).toMatchObject(SHARES_ON);
     expect(partage(partages, MOI)).toMatchObject(SHARES_OFF);
+    expect(partage(partages, AUTRE)).toMatchObject(SHARES_OFF);
   });
 });
