@@ -83,7 +83,7 @@ final class ComposerToolFocusTests: XCTestCase {
     // MARK: - Les sites de montage demandent à la règle
 
     func test_surface_neMonteAucuneColonneEnSurplus_etCedeSonChrome() throws {
-        let surface = try source("Meeshy/Features/Composer/ComposerSceneSurface.swift")
+        let surface = AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
         XCTAssertTrue(surface.contains("struct ComposerSceneSurface"), "le fichier lu n'est pas la surface")
         for interdit in ["flyoutColumn", "ComposerRailFlyoutAnchorKey", ".flyout("] {
             XCTAssertFalse(surface.contains(interdit), "la colonne en surplus est revenue : \(interdit)")

@@ -443,9 +443,12 @@ final class ComposerCaptureSession: ObservableObject {
     func photographWhenReady(intent: ComposerTakeIntent = .edit) {
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            guard await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
-                  !Task.isCancelled else { return }
-            takePhoto(intent: intent)
+            let pret = await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout)
+            switch ComposerCaptureReadiness.outcome(ready: pret, cancelled: Task.isCancelled) {
+            case .shoot: takePhoto(intent: intent)
+            case .notReady: ComposerCaptureReadiness.announceNotReady()
+            case .silent: break
+            }
         }
     }
 

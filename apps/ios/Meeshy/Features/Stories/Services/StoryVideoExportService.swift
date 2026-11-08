@@ -212,15 +212,6 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         // is @Sendable. Bridge via an @unchecked Sendable box: the box's
         // contents are only ever invoked on the MainActor via the inner
         // Task hop, so the unchecked annotation is safe.
-        final class ProgressSinkBox: @unchecked Sendable {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-            let sink: (Double) -> Void
-            init(_ sink: @escaping (Double) -> Void) { self.sink = sink }
-        }
         let progressTrampoline: (@Sendable (Double) -> Void)?
         if let sink = onProgress {
             let box = ProgressSinkBox(sink)

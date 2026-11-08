@@ -112,7 +112,7 @@ struct LentilleConversationRow: View {
     // écrit → dot présence forcé vert (typing = preuve d'activité) », répété
     // mot pour mot dans la matrice de couverture ET dans les critères
     // d'acceptation R5 (« typing, dot vert forcé »). Combiné SEULEMENT ici,
-    // au niveau du rang — jamais dans `LentilleRowAvatar`/`MeeshyAvatar`, qui
+    // au niveau du rang — jamais dans `ConversationRowAvatar`/`MeeshyAvatar`, qui
     // restent de purs relais (même discipline que L10 ci-dessous, « mood
     // gagne, présence sinon » vit dans `MeeshyAvatar`, jamais réinterprété).
     //
@@ -240,7 +240,8 @@ struct LentilleConversationRow: View {
                     height: LentilleMetrics.Avatar.size + LentilleMetrics.Avatar.ringWidth * 2
                 )
 
-            LentilleRowAvatar(
+            ConversationRowAvatar(
+                style: .lentille,
                 conversation: conversation,
                 palette: palette,
                 presenceState: effectivePresenceState,
@@ -356,7 +357,7 @@ struct LentilleConversationRow: View {
     /// endroit pour dire l'état d'un envoi : elle le disait pour toutes les
     /// conversations à la fois, sans rien offrir à faire de cette information.
     ///
-    /// `LentilleRowTimestamp` garde son `TimelineView` — l'horodatage relatif
+    /// `LiveRelativeTimestamp` garde son `TimelineView` — l'horodatage relatif
     /// doit ticker hors du portillon `.equatable()`, qui n'a délibérément
     /// aucune composante temporelle.
     private var dateLine: some View {
@@ -428,7 +429,7 @@ struct LentilleConversationRow: View {
     /// change — relatif court au repos, date complète sous la loupe, par la
     /// même loi que le message en focus du fil.
     ///
-    /// `LentilleRowTimestamp` garde son `TimelineView` au repos : l'horodatage
+    /// `LiveRelativeTimestamp` garde son `TimelineView` au repos : l'horodatage
     /// relatif doit ticker hors du portillon `.equatable()`, qui n'a
     /// délibérément aucune composante temporelle. La date complète, elle, n'a
     /// rien à ticker.
@@ -442,7 +443,7 @@ struct LentilleConversationRow: View {
                 locale: .current
             ))
         } else {
-            LentilleRowTimestamp(date: conversation.lastMessageAt)
+            LiveRelativeTimestamp(date: conversation.lastMessageAt)
         }
     }
 
@@ -626,115 +627,11 @@ extension LentilleConversationRow: @MainActor Equatable {
     }
 }
 
-// MARK: - Avatar du rang plat
-
-/// Même stratégie de menu contextuel que `ConversationAvatarView`
-/// (`ThemedConversationRow.swift`, privée à ce fichier interdit) :
-/// `ConversationAvatarMenu`/`AvatarMenuRole` sont déclarés SANS modificateur
-/// d'accès dans le fichier historique (donc `internal`, module-wide) —
-/// réutilisés tels quels plutôt que redéclarés (Single Source of Truth).
-/// Seule différence avec l'original : le contexte d'avatar,
-/// `LentilleMetrics.Avatar.context` (44pt) au lieu de `.conversationList`
-/// (52pt, réservé au rang historique, §0).
-private struct LentilleRowAvatar: View {
-    let conversation: Conversation
-    let palette: ConversationColorPalette
-    let presenceState: PresenceState?
-    let isPeerHere: ConversationHere
-    let storyRingState: StoryRingState
-    let moodStatus: StatusEntry?
-    var onViewStory: (() -> Void)? = nil
-    var onViewProfile: (() -> Void)? = nil
-    var onViewConversationInfo: (() -> Void)? = nil
-    var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
-    var onCreateShareLink: (() -> Void)? = nil
-    var avatarRoute: ConversationAvatarRoute = .info
-
-    private var isDirect: Bool { conversation.type == .direct }
-
-    private var contextMenuItems: [AvatarContextMenuItem] {
-        ConversationAvatarMenu.roles(
-            type: conversation.type, opensProfile: avatarRoute.opensProfile, hasShareAction: onCreateShareLink != nil
-        ).map(menuItem(for:))
-    }
-
-    private func menuItem(for role: AvatarMenuRole) -> AvatarContextMenuItem {
-        let action: (() -> Void)? = switch role {
-        case .conversationInfo: onViewConversationInfo
-        case .profile: onViewProfile
-        case .shareLink: onCreateShareLink
-        }
-        return AvatarContextMenuItem(label: role.label, icon: role.icon) { action?() }
-    }
-
-    var body: some View {
-        MeeshyAvatar(
-            name: conversation.name,
-            context: LentilleMetrics.Avatar.context,
-            accentColor: palette.primary,
-            secondaryColor: palette.secondary,
-            avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
-            storyState: storyRingState,
-            moodEmoji: moodStatus?.moodEmoji,
-            // behaviour-matrix:L10 — « … avec des dots de présence aussi
-            // pour les groupes (agrégat PresenceManager, "quelqu'un
-            // d'actif") ». La règle « un seul coin, mood gagne, présence
-            // sinon » vit dans MeeshyAvatar (§1.3, frozen) : ce fichier ne
-            // fait plus que la moitié de cette règle (mood gagne), le
-            // second membre (« présence sinon ») ne doit plus être
-            // court-circuité par `isDirect` — un groupe a autant droit à un
-            // dot de présence agrégée qu'un DM. `presenceState` porte déjà
-            // `.offline` = aucun dot (contrat §4.3 « offline = aucun dot »,
-            // verrouillé par MeeshyAvatar, pas ici).
-            presenceState: presenceState,
-            isHere: isDirect ? isPeerHere : .absent,
-            // LE CONTOUR DU PAIR (#10757) — même loi que `ThemedConversationRow` : l'avatar
-            // le pose dans son empreinte, l'anneau de story concentrique à l'intérieur (#10714).
-            ring: isDirect ? conversation.participantRing : nil,
-            enablePulse: false,
-            // Story non lue d'abord (`MeeshyAvatar.handleTap`), puis ce que la loi
-            // décide (#15887) : le profil du pair, sinon les détails — jamais rien.
-            onTap: avatarRoute.opensProfile ? onViewProfile : onViewConversationInfo,
-            onViewProfile: nil,
-            onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
-            onMoodTap: onMoodBadgeTap,
-            contextMenuItems: contextMenuItems
-        )
-        // Hors de la fusion VoiceOver de la ligne : l'élément frère posé par
-        // `ConversationRowItem` parle pour lui (#15887).
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Horodatage relatif (ticker 60 s)
-
-/// Même patron que `ThemedConversationRow.RelativeTimestampText` (privée à
-/// ce fichier interdit) : `TimelineView(.periodic)` ticke le texte hors du
-/// portillon `.equatable()` (qui n'a délibérément aucune composante
-/// temporelle), sans quoi l'horodatage relatif gèlerait au montage.
-private struct LentilleRowTimestamp: View {
-    let date: Date
-
-    var body: some View {
-        // Miroir de `ThemedConversationRow.RelativeTimestampText.liveTickWindow`
-        // (audit chauffe 2026-08-26) : le tick minute ne vit que tant que le
-        // libellé change à la minute ; une rangée ancienne rend un texte
-        // statique, rafraîchi au prochain passage de body de la liste.
-        if Date().timeIntervalSince(date) > 3600 {
-            Text(RelativeTimeFormatter.shortString(for: date))
-        } else {
-            TimelineView(.periodic(from: date, by: 60)) { _ in
-                Text(RelativeTimeFormatter.shortString(for: date))
-            }
-        }
-    }
-}
-
 // MARK: - Appel en cours (Scène) — badge (behaviour-matrix:L13)
 
 /// « ● pulsant (accent) + « {n} voix · depuis {durée} » — durée par le
 /// TimelineView 60 s déjà présent pour l'heure » (contrat §3.3). Même
-/// patron que `LentilleRowTimestamp` pour le ticker : la durée vit HORS du
+/// patron que `LiveRelativeTimestamp` pour le ticker : la durée vit HORS du
 /// portillon `.equatable()` du rang, recalculée à chaque tick plutôt que
 /// figée au montage. Purement dérivé de `ConversationLiveCall` (LWS-2bis,
 /// `LentilleProviders.swift`) : cette vue ne sait rien d'un

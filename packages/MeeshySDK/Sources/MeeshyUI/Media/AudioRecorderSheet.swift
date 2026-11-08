@@ -204,11 +204,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     /// Temps écoulé, sans « / plafond » : l'enregistrement n'a plus de limite
     /// de durée (directive produit 2026-07-26).
     private var recordingTimeLabel: String {
-        formatTime(recorder.duration)
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        MediaFormat.duration(seconds)
+        MediaFormat.duration(recorder.duration)
     }
 
     // MARK: - Language strip

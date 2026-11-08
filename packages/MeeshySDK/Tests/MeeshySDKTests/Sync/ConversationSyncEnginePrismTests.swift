@@ -150,6 +150,8 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
         let famille = [
             "Sync/ConversationSyncEngine.swift",
             "Sync/ConversationSyncEngine+Chargement.swift",
+            "Sync/ConversationSyncEngine+Messages.swift",
+            "Sync/ConversationSyncEngine+DeltaSync.swift",
             "Sync/ConversationSyncEngine+Socket.swift",
             "Sync/ConversationSyncEngine+Ecritures.swift",
             "Sync/ConversationSyncEngine+Rehydratation.swift",

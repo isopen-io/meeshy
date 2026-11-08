@@ -388,7 +388,7 @@ final class LentilleFocusCardTests: XCTestCase {
     func test_theDateKeepsItsPlace_onlyItsPrecisionChanges() throws {
         let row = try rowSource("LentilleConversationRow.swift")
         XCTAssertTrue(row.contains("LentilleFocusCard.fullTimestamp("), "date complète sous la loupe")
-        XCTAssertTrue(row.contains("LentilleRowTimestamp(date: conversation.lastMessageAt)"), "relatif court au repos")
+        XCTAssertTrue(row.contains("LiveRelativeTimestamp(date: conversation.lastMessageAt)"), "relatif court au repos")
         let dateLine = try XCTUnwrap(row.range(of: "private var dateLine: some View {"))
         // Borné au corps de la ligne, AVANT la date — pas à une fenêtre de caractères :
         // la pastille de série (#8906) a allongé ce qui précède le `Spacer` (#8972).

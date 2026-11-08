@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Quand la Live Activity d'appel s'ouvre, ce qu'elle montre et quand elle
 /// se ferme** (#9782).
@@ -121,13 +122,9 @@ enum CallActivityLaw {
     }
 
     /// Initiales d'un nom (« Alice Martin » → « AM »), une lettre pour un nom
-    /// simple, rien pour un nom vide.
+    /// simple, rien pour un nom vide — la règle de `NameInitials` (#8143).
     static func initials(of name: String) -> String {
-        name.split(whereSeparator: \.isWhitespace)
-            .prefix(2)
-            .compactMap(\.first)
-            .map { String($0).uppercased() }
-            .joined()
+        NameInitials.of(name)
     }
 
     private static func activityPhase(_ input: Input) -> CallActivitySnapshot.Phase? {

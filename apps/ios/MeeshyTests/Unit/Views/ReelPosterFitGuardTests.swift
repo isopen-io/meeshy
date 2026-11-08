@@ -38,6 +38,7 @@ final class ReelPosterFitGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
         "Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift",
         "Meeshy/Features/Main/Views/ReelsPlayerView+Carousel.swift",
+        "Meeshy/Features/Main/Views/ReelPageView.swift",
     ]
 
     private func source() throws -> String {

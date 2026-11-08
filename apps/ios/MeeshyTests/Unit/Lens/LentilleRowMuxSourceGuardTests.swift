@@ -51,8 +51,7 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     /// Les deux rangs doivent lire LA même donnée, au même endroit de l'avatar.
     func test_bothRows_drawThePeerRing_inTheAvatarFootprint() throws {
         let rows = [
-            "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
-            "Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+            "Meeshy/Features/Main/Views/ConversationRowAvatar.swift",
         ]
         for path in rows {
             let code = normalizedCode(try source(at: path))
