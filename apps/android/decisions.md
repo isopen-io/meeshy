@@ -50,7 +50,7 @@ with 2840-/2400-LOC god objects.
 review (§6.1) the data SDK is **split** so it is not a module-level monolith:
 `:core:network`, `:core:database`, `:core:datastore`, `:core:crypto`.
 Dependency rules enforced by a `build-logic/` convention plugin; no
-feature→feature edges; `:core:crypto` isolated as a small audit surface.
+feature→feature edges (except the four listed in ADR-033); `:core:crypto` isolated as a small audit surface.
 
 **Rejected.** (a) Single `:app` module — re-creates the god-object problem,
 slow incremental builds. (b) Pure Clean-Architecture 3-module-per-feature —
@@ -916,3 +916,22 @@ Le rôle passé est le rôle CONNU (`ApiConversation.knownUserRole` : celui de l
 repli `MEMBER` de `currentUserRole` : un lecteur dont le rôle est inconnu n'a pas de copie. Le rôle est une clé de
 l'effet de chargement (un lecteur rétrogradé fiche ouverte relit), et la fiche fermée coupe ses écouteurs de la room
 (`ParticipantProfileViewModel.close`).
+
+---
+
+## ADR-033 — Quatre arêtes feature → feature sont admises, nommées, et tenues par une garde (#17018, amende ADR-003)
+
+ADR-003 interdisait toute arête entre features, et le graphe en portait déjà quatre. Plutôt que de laisser l'écart
+croître en silence, la règle se dit comme le graphe : une arête feature → feature n'est admise que si une feature
+CONSOMME une section d'écran qu'une autre feature possède déjà (vue Compose + ViewModel Hilt + chaînes d'un seul
+tenant), parce que la déménager dans `:sdk-ui` y tirerait un ViewModel et des dépôts qui n'appartiennent pas au
+design system. Le graphe doit rester acyclique. Les arêtes admises :
+
+- `:feature:profile` → `:feature:contacts` (la fiche monte `ReceptionBlockSection`, #16643)
+- `:feature:reels` → `:feature:stories`
+- `:feature:reels` → `:feature:feed`
+- `:feature:stories` → `:feature:feed`
+
+`scripts/check-feature-edges.sh` (témoins : `check-feature-edges.test.sh`, job « Graphe des modules » d'`android.yml`)
+rejette une arête hors de `scripts/feature-edges-allowlist.txt`, une arête admise absente du graphe ou de cette ADR, et
+tout cycle. Admettre une cinquième arête = l'écrire ici ET dans la liste, dans le même commit.

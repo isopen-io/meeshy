@@ -187,6 +187,23 @@ jobs:
       - name: MeeshyPaletteGenerated.kt is up to date (generate-android-from-ios.mjs --check)
         run: node packages/design-tokens/scripts/generate-android-from-ios.mjs --check
 
+  # Graphe des modules : les arêtes feature -> feature sont celles de l'ADR-033, rien d'autre, et sans cycle.
+  # Pur shell, aucun SDK Android requis.
+  modules:
+    name: Graphe des modules Android
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Témoins de la garde
+        run: bash apps/android/scripts/check-feature-edges.test.sh
+
+      - name: Arêtes feature vers feature conformes à l'ADR-033
+        run: bash apps/android/scripts/check-feature-edges.sh
+
   android:
     name: Android (assemble + unit tests)
     needs: i18n
