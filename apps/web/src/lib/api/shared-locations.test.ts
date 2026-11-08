@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import { decodeSharedLocation, loadSharedLocations, sharedLocationsQueryOptions } from './shared-locations';
 import { estClefNonPersistable } from './souverain';
+import { apiResponseMayBeCached } from '@/lib/net/api-runtime-cache';
+import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
 
 /**
  * **LES POSITIONS QU’ON ME PARTAGE, CÔTÉ PORT (#16984)** — `GET /relations/locations?bbox=`.
@@ -106,5 +108,11 @@ describe('sharedLocationsQueryOptions', () => {
     expect(data.bbox).toEqual(bbox);
     expect(data.requestedAt).toBeGreaterThanOrEqual(before);
     expect(data.requestedAt).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe('le service worker ne garde pas les positions de mes liens (audit #16984)', () => {
+  test('la réponse brute de GET /relations/locations n’entre pas dans le seau « api » (NetworkFirst, 7 jours sur disque, rejouée hors réseau)', () => {
+    expect(apiResponseMayBeCached(`${relationsEndpoints.locations}?bbox=-180,-90,180,90`)).toBe(false);
   });
 });
