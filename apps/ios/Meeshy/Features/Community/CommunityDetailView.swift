@@ -19,7 +19,10 @@ struct CommunityDetailView: View {
          onInvite: ((String) -> Void)? = nil,
          onDismiss: (() -> Void)? = nil,
          onCreatePost: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(communityId: communityId))
+        _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(
+            communityId: communityId,
+            postsCache: { CacheCoordinator.shared.feed }
+        ))
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
         self.onOpenMembers = onOpenMembers
@@ -36,7 +39,6 @@ struct CommunityDetailView: View {
             onOpenMembers: onOpenMembers,
             onInvite: onInvite,
             onDismiss: onDismiss,
-            onCreatePost: onCreatePost,
             settingsSheet: { community, actions in
                 CommunitySettingsView(
                     community: community,
@@ -47,6 +49,9 @@ struct CommunityDetailView: View {
             },
             addChannelSheet: { onAdded in
                 AddChannelSheet(communityId: viewModel.communityId, onAdded: onAdded)
+            },
+            postsTab: {
+                CommunityPostsTab(communityId: viewModel.communityId, onCreatePost: onCreatePost)
             }
         )
     }
