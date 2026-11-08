@@ -257,6 +257,33 @@ pour laquelle ce workflow ne l'appelait pas : `MeeshySDK-Package` est un PAQUET.
 Déréférencement par `${PROJECT_ARGS[@]+"${PROJECT_ARGS[@]}"}` : sous `set -u`, le
 bash 3.2 de macOS tue un script qui lit `"${vide[@]}"`.
 
+### Et mon diagnostic était le SYMPTÔME, pas la cause — mesuré sur mon propre run
+
+Une session sœur travaillait le même incident, et a livré dans `dev` pendant ce
+cycle : *« un téléchargement d'artefact SPM refusé ne se déguise plus en
+collision de cache »*. Son diagnostic va plus loin que le mien. **Sur une
+réponse non-200, l'URLSession de SwiftPM déplace le corps d'erreur à
+l'emplacement du cache** : « already exists in file system » est donc un REFUS
+DE TÉLÉCHARGEMENT déguisé (les téléchargements anonymes depuis les runners
+partagés sont limités), et purger ne peut rien — l'entrée purgée réapparaît au
+même essai. Leur remède est un préchargement AUTHENTIFIÉ (`gh`, puis `curl`).
+
+C'est mesuré, pas concédé : le `workflow_dispatch` 42468250905 est passé
+l'étape de résolution — mon lot la fait enfin TENTER, là où elle échouait
+instantanément — **et a quand même échoué**. Ma purge soignait le symptôme.
+
+> **Deux sessions sur un même incident ne produisent pas deux fois le même
+> correctif ; elles produisent deux COUCHES, et aucune ne suffit seule.** La
+> leur corrige la cause mais vit dans un script que `sdk-tests.yml` n'appelle
+> toujours pas sur `dev` (mesuré : 0 occurrence), et dont le garde ne vérifie
+> l'appel que pour `ios.yml`. La mienne généralise ce script, le fait appeler
+> par `sdk-tests.yml` et étend le garde aux DEUX workflows : c'est elle qui
+> PORTE leur correctif jusqu'à la CI du SDK. Le réflexe de céder (« ils l'ont
+> fait, je retire ») aurait laissé la CI du SDK rouge avec le bon correctif
+> dans le dépôt.
+
+Le garde fusionné rend **5/5** scénarios au lieu de 4/4 de chaque côté.
+
 ### Le premier témoin de la forme paquet NE POUVAIT PAS TOMBER
 
 Et c'est la leçon du lot. Avec l'ancien `-project "$PROJECT"` toujours en place,
