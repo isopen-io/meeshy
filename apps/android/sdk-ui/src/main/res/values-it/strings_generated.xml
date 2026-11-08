@@ -188,6 +188,7 @@
     <string name="content_failure_unavailable_title">Questo contenuto non è più disponibile</string>
     <string name="document_card_pages">%1$d pagine</string>
     <string name="document_delete_attachment">Elimina l\'allegato</string>
+    <string name="email_check_spam">Non è arrivata? Controlla anche la cartella spam o della posta indesiderata.</string>
     <string name="emoji_category_activities">Attività</string>
     <string name="emoji_category_animals">Animali</string>
     <string name="emoji_category_faces">Faccine</string>
