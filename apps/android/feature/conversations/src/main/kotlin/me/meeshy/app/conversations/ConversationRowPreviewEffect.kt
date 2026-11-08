@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +35,7 @@ import me.meeshy.sdk.model.preview.shouldPlayEntrance
 import me.meeshy.sdk.model.text.RainbowLetters
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.rememberPowerSaver
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -115,7 +114,7 @@ internal fun TextStyle.withPreviewFinish(finish: PreviewFinish?, accent: Color, 
 internal fun PreviewFinishMark(finish: PreviewFinish?, accent: Color) {
     when (finish) {
         PreviewFinish.SPARKLE -> Icon(
-            imageVector = Icons.Filled.AutoAwesome,
+            imageVector = MeeshyIcons.Sparkles,
             contentDescription = null,
             tint = accent,
             modifier = Modifier

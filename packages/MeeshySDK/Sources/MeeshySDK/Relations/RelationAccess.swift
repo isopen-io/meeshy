@@ -61,6 +61,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case listeningCategory = "listening.category"
     case listeningTitle = "listening.title"
     case talkie
+    case together
     case bring
     case locationLive = "location.live"
     case locationHistory = "location.history"
@@ -81,7 +82,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         switch self {
         case .presenceOnline, .gameBasic, .bring: return .friend
         case .presenceDetailed, .gameSparksGlory, .notifyNewContent, .relayCommentersOnMyPosts,
-             .audienceClose, .listeningCategory, .talkie: return .close
+             .audienceClose, .listeningCategory, .talkie, .together: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
@@ -104,7 +105,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// (`RELATION_DIRECTED_FEATURES`).
     public var isDirected: Bool {
         switch self {
-        case .bring, .talkie, .acquaintanceAuto, .dmRequest, .callRing: return true
+        case .bring, .talkie, .together, .acquaintanceAuto, .dmRequest, .callRing: return true
         default: return false
         }
     }

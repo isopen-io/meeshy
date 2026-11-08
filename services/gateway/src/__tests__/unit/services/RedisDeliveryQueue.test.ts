@@ -21,6 +21,63 @@ function makeMemoryQueue() {
 }
 
 describe('RedisDeliveryQueue (memory fallback)', () => {
+  /**
+   * La JUMELLE du repli mémoire de `cleanup()`. Elle rendait déjà le bon
+   * verdict, mais par accident de la négation (`NaN > cutoff` est faux, donc
+   * l'entrée n'était pas gardée) : le jour où quelqu'un inverse le test pour
+   * le lire plus facilement, le défaut revient en silence. Les deux branches
+   * partagent désormais `isPastRetention`, et ce témoin le prouve des deux
+   * côtés.
+   */
+  test('cleanup — le repli MÉMOIRE retire aussi une entrée dont la date est illisible', async () => {
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-mem', makePayload({ messageId: 'undated', enqueuedAt: 'pas-une-date' }));
+      await queue.enqueue('user-mem', makePayload({ messageId: 'fresh' }));
+
+      const removed = await queue.cleanup();
+
+      expect(removed).toBe(1);
+      expect(await queue.size('user-mem')).toBe(1);
+    } finally {
+      await cacheStore.close();
+    }
+  });
+
+  /**
+   * L'ÉVICTION par capacité lisait la même valeur avec `new Date(...).getTime()`,
+   * donc `NaN` pour une date illisible — et un comparateur qui rend `NaN`
+   * laisse l'ordre INDÉFINI : on évinçait une entrée arbitraire, dont la plus
+   * fraîche. Le commentaire de production nommait déjà cette divergence comme
+   * celle que `byEnqueuedAt` avait fermée pour le drain, sans partager son
+   * helper. Avec `enqueuedAtMillis`, une entrée non datée se range à la FIN
+   * donc survit — l'arbitrage que ce helper DÉCLARE (son message est toujours
+   * en base, et le drain est la seule occasion de le rejouer).
+   */
+  test('éviction — une entrée non datée survit, et ce sont les plus VIEILLES datées qui partent', async () => {
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-eviction', makePayload({ messageId: 'undated', enqueuedAt: 'pas-une-date' }));
+      // 50 entrées DATÉES par-dessus : la file plafonne à 50 par compte, donc
+      // la 51e force l'éviction d'une entrée.
+      for (let i = 0; i < 50; i++) {
+        await queue.enqueue(
+          'user-eviction',
+          makePayload({ messageId: `dated-${i}`, enqueuedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() }),
+        );
+      }
+
+      const drained = await queue.drain('user-eviction');
+      const ids = drained.map((e) => e.messageId);
+
+      expect(ids).toContain('undated');
+      // La plus VIEILLE datée est celle qui est partie, pas une au hasard.
+      expect(ids).not.toContain('dated-0');
+    } finally {
+      await cacheStore.close();
+    }
+  });
+
   test('enqueue adds message to queue', async () => {
     const { cacheStore, queue } = makeMemoryQueue();
     try {
@@ -393,6 +450,70 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       JSON.stringify(stale),
     );
     expect(redis.del).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Une entrée dont la DATE est illisible n'expirait jamais.
+   *
+   * `new Date('pas-une-date').getTime()` rend `NaN`, et `NaN <= cutoff` est
+   * FALSE : l'entrée était jugée fraîche, et elle le restait à chaque passage.
+   * Le TTL de la clé ne la sauvait pas — `EXPIRE` est rejoué à CHAQUE enfilage,
+   * donc la clé d'un compte actif ne vient jamais à échéance — et les deux
+   * autres filets dépendent d'un événement qui peut ne jamais venir : le drain
+   * exige une reconnexion, la purge par message exige un index qui expire lui
+   * aussi par TTL. `cleanup()` est le seul qui tourne tout seul.
+   *
+   * Ce que ça coûtait : le CLAIR d'un message pouvait rester dans Redis (et
+   * dans ses sauvegardes AOF) au-delà des 48 h que le doc-comment
+   * d'`isTextBearingCopyOf` revendique comme borne — « ce qu'on laisse n'est
+   * pas remis : … `cleanup()` la retire à son échéance. La fenêtre est bornée,
+   * la destruction ne l'est pas ». Vrai d'une ligne non-JSON (le `catch` rend
+   * `true`, elle est jetée) et FAUX d'une ligne JSON dont la date ne se lit
+   * pas : la plus lisible des deux était traitée avec plus d'indulgence.
+   *
+   * L'incohérence était interne au module : ses deux autres lecteurs de la
+   * même valeur traitent le cas explicitement (`enqueuedAtMillis` →
+   * `POSITIVE_INFINITY`, `isStillLive` → fail-closed). `cleanup()` était le
+   * seul à fail-OPEN, et le seul dont dépende une affirmation de sécurité.
+   *
+   * PIÈGE ARMÉ : aucun producteur n'écrit de mauvaise date aujourd'hui
+   * (`enqueuedAt: new Date().toISOString()`). Mais le module a DÉJÀ décidé que
+   * le cas existe — c'est tout l'objet d'`enqueuedAtMillis`, écrit pour un
+   * déploiement progressif où deux versions partagent la même file.
+   */
+  test('cleanup — une entrée dont la DATE est illisible est périmée, pas éternelle', async () => {
+    const undated = makePayload({ messageId: 'undated' });
+    const broken = JSON.stringify({ ...undated, enqueuedAt: 'pas-une-date' });
+    const fresh = makePayload({ messageId: 'fresh' });
+
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    redis.scan.mockResolvedValue(['0', ['delivery:queue:user-undated']]);
+    redis.lrange.mockResolvedValue([broken, JSON.stringify(fresh)]);
+
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+    const removed = await queue.cleanup();
+
+    expect(removed).toBe(1);
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('LREM'),
+      1,
+      'delivery:queue:user-undated',
+      broken,
+    );
+  });
+
+  test('cleanup — une entrée DATÉE et fraîche reste (le repli ne devient pas une purge)', async () => {
+    const fresh = makePayload({ messageId: 'fresh-only' });
+
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(0) });
+    redis.scan.mockResolvedValue(['0', ['delivery:queue:user-fresh']]);
+    redis.lrange.mockResolvedValue([JSON.stringify(fresh)]);
+
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+    const removed = await queue.cleanup();
+
+    expect(removed).toBe(0);
+    expect(redis.eval).not.toHaveBeenCalled();
   });
 
   test('cleanup — removes every entry by value when all are stale', async () => {

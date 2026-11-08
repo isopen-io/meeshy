@@ -18,6 +18,25 @@ export interface MentionCreatedParams {
   editorUserId: string;
   content: string;
   timestamp: Date;
+  /**
+   * Les lecteurs que le PLANCHER D'HISTORIQUE écarte de ce message
+   * (`blockedEditKeys`, `editedAudience.ts`).
+   *
+   * Cette charge porte `content` — le texte APRÈS édition — et c'est la leçon
+   * 275 littérale : la garde du plancher retenait la chaîne de
+   * `message:edited`, et l'objet voisin la laissait partir, émis à QUATRE
+   * lignes de chaque appel gardé. Nommer quelqu'un ne l'autorise pas à lire un
+   * message que `GET …/messages` et `/sync` lui refusent : un inscrit entré par
+   * un lien sans historique recevait le texte intégral d'un message
+   * d'avant son arrivée dès qu'une édition l'y mentionnait.
+   *
+   * La garde vit ICI, avec celle d'auto-mention, et pour la même raison écrite
+   * dans le doc-comment ci-dessous : c'est une garde qu'un nouvel écrivain
+   * oublierait. Absente ⇒ aucun lecteur n'est écarté, ce qui est le bon défaut
+   * pour un message NEUF (son `createdAt` est postérieur à tout plancher, donc
+   * personne ne peut y être sous plancher).
+   */
+  blockedReaders?: ReadonlySet<string>;
   onError?: (error: unknown) => void;
 }
 
@@ -48,9 +67,13 @@ export interface MentionCreatedParams {
 export function emitMentionCreated(params: MentionCreatedParams): void {
   const { io, newlyMentionedUserIds, messageId, conversationId, editorUserId, content, timestamp, onError } = params;
   if (!io || newlyMentionedUserIds.length === 0) return;
+  const blocked = params.blockedReaders;
 
   for (const mentionedUserId of newlyMentionedUserIds) {
     if (mentionedUserId === editorUserId) continue;
+    // Le plancher d'historique : voir `blockedReaders`. Les clés sont des
+    // `userId ?? id`, donc comparables à un `User.id` mentionné.
+    if (blocked?.has(mentionedUserId)) continue;
     try {
       io.to(ROOMS.user(mentionedUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
         messageId,
