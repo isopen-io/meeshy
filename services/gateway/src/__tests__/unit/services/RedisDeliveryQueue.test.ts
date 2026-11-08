@@ -116,74 +116,6 @@ describe('RedisDeliveryQueue (memory fallback)', () => {
     }
   });
 
-  test('peek returns messages without removing them', async () => {
-    const { cacheStore, queue } = makeMemoryQueue();
-    try {
-      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
-      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
-
-      const peeked = await queue.peek('user-1');
-      expect(peeked).toHaveLength(2);
-
-      const size = await queue.size('user-1');
-      expect(size).toBe(2);
-    } finally {
-      await cacheStore.close();
-    }
-  });
-
-  test('peek respects limit parameter', async () => {
-    const { cacheStore, queue } = makeMemoryQueue();
-    try {
-      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
-      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
-      await queue.enqueue('user-1', makePayload({ messageId: 'msg-3' }));
-
-      const peeked = await queue.peek('user-1', 2);
-      expect(peeked).toHaveLength(2);
-      expect(peeked[0].messageId).toBe('msg-1');
-      expect(peeked[1].messageId).toBe('msg-2');
-    } finally {
-      await cacheStore.close();
-    }
-  });
-
-  test('peek — memory-only path orders a superseded entry by enqueuedAt, matching drain()', async () => {
-    // Mirror of the Redis fast-path test: an in-place supersede keeps the
-    // entry's ORIGINAL slot but stamps a NEWER enqueuedAt, so raw memory-array
-    // (slot) order can disagree with chronological order. drain() re-sorts by
-    // enqueuedAt; peek()'s memory-only fallback must do the same or it reports a
-    // replay order the reconnecting client will never actually see.
-    const { cacheStore, queue } = makeMemoryQueue();
-    try {
-      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(1000).toISOString(), payload: { content: 'v1' } }));
-      await queue.enqueue('user-1', makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'N' } }));
-      // Supersedes M0 in place at slot 0 (older slot, newer ts).
-      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(3000).toISOString(), payload: { content: 'v2' } }));
-
-      const peeked = await queue.peek('user-1');
-      expect(peeked.map(p => p.messageId)).toEqual(['N', 'M0']);
-    } finally {
-      await cacheStore.close();
-    }
-  });
-
-  test('peek — memory-only limit picks the chronologically-earliest, not the first slot', async () => {
-    const { cacheStore, queue } = makeMemoryQueue();
-    try {
-      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(1000).toISOString() }));
-      await queue.enqueue('user-1', makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString() }));
-      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(3000).toISOString() }));
-
-      // limit=1 must preview N (t2000) — the first entry drain() replays — not
-      // M0, which merely occupies slot 0 after the in-place supersede.
-      const peeked = await queue.peek('user-1', 1);
-      expect(peeked.map(p => p.messageId)).toEqual(['N']);
-    } finally {
-      await cacheStore.close();
-    }
-  });
-
   test('cleanup removes expired entries', async () => {
     const { cacheStore, queue } = makeMemoryQueue();
     try {
@@ -245,15 +177,21 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
 
     await queue.enqueue('user-r', entry);
 
+    // #16706 — DEUX clés : la file, puis l'index inverse du message. Les deux
+    // ARGV de queue déclarent « cette entrée porte du texte » et nomment le
+    // membre à indexer (la clé de file du lecteur).
     expect(redis.eval).toHaveBeenCalledWith(
       expect.stringContaining('RPUSH'),
-      1,
+      2,
       'delivery:queue:user-r',
+      'delivery:msg-queues:redis-msg-1',
       JSON.stringify(entry),
       entry.messageId,
       String(DELIVERY_QUEUE_TTL_SECONDS),
       'new',
-      String(DELIVERY_QUEUE_MAX_PER_USER)
+      String(DELIVERY_QUEUE_MAX_PER_USER),
+      '1',
+      'user-r'
     );
   });
 
@@ -306,84 +244,6 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     expect(drained[0].messageId).toBe('drain-fallback');
   });
 
-  test('peek — full-reads then sorts before applying the limit (fast path)', async () => {
-    // A bounded lrange(0, limit-1) is unsafe: an in-place superseded entry keeps
-    // its original slot but carries a newer enqueuedAt, so the fast path must read
-    // the whole slice and sort by enqueuedAt (like drain()) before slicing.
-    const entries = [
-      makePayload({ messageId: 'p1', enqueuedAt: new Date(1000).toISOString() }),
-      makePayload({ messageId: 'p2', enqueuedAt: new Date(2000).toISOString() }),
-    ];
-    const redis = makeMockRedis();
-    redis.lrange.mockResolvedValue(entries.map(e => JSON.stringify(e)));
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const peeked = await queue.peek('user-r', 2);
-
-    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-r', 0, -1);
-    expect(peeked).toHaveLength(2);
-    expect(peeked[0].messageId).toBe('p1');
-  });
-
-  test('peek — fast path orders a superseded Redis entry by enqueuedAt, matching drain()', async () => {
-    // ENQUEUE_DEDUP_LUA supersedes a mutable event in place: it keeps the entry's
-    // ORIGINAL FIFO slot but stamps a NEWER enqueuedAt. So the raw Redis list
-    // (slot) order can disagree with chronological order. drain() re-sorts by
-    // enqueuedAt; peek()'s preview must do the same or it reports a replay order
-    // the reconnecting client will never actually see.
-    const editedM = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(3000).toISOString(), payload: { content: 'v2' } });
-    const newN = makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'N' } });
-    // Raw list order = slot order: M superseded in slot 0 (older slot, newer ts),
-    // N in slot 1 (newer slot, older ts).
-    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(editedM), JSON.stringify(newN)]) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const peeked = await queue.peek('user-super');
-
-    expect(peeked.map(p => p.messageId)).toEqual(['N', 'M']);
-  });
-
-  test('peek — fast path limit picks the chronologically-earliest, not the first slot', async () => {
-    const editedM = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(3000).toISOString() });
-    const newN = makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString() });
-    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(editedM), JSON.stringify(newN)]) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    // limit=1 must preview N (t2000) — the first entry drain() replays — not M,
-    // which merely occupies slot 0.
-    const peeked = await queue.peek('user-super', 1);
-
-    expect(peeked.map(p => p.messageId)).toEqual(['N']);
-  });
-
-  test('peek — queries lrange(0, -1) when no limit specified', async () => {
-    const redis = makeMockRedis();
-    redis.lrange.mockResolvedValue([]);
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    await queue.peek('user-r');
-
-    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-r', 0, -1);
-  });
-
-  test('peek — falls back to memory when Redis lrange throws', async () => {
-    const entry = makePayload({ messageId: 'peek-fallback' });
-    const redis = makeMockRedis();
-    redis.lrange.mockRejectedValue(new Error('lrange fail'));
-
-    const cacheStore: any = { getNativeClient: jest.fn() };
-    cacheStore.getNativeClient
-      .mockReturnValueOnce(null)  // enqueue → memory
-      .mockReturnValue(redis);    // peek → failing Redis → memory fallback
-
-    const queue = new RedisDeliveryQueue(cacheStore);
-    await queue.enqueue('user-r', entry);
-    const peeked = await queue.peek('user-r');
-
-    expect(peeked).toHaveLength(1);
-    expect(peeked[0].messageId).toBe('peek-fallback');
-  });
-
   test('size — calls Redis llen and returns the count', async () => {
     const redis = makeMockRedis();
     redis.llen.mockResolvedValue(7);
@@ -420,43 +280,6 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
 
     // 2 Redis-backed + 1 memory-fallback = 3 truly pending (drain replays both).
     expect(await queue.size('user-mix')).toBe(3);
-  });
-
-  test('peek — merges memory-fallback entries with the Redis slice, ordered by enqueuedAt', async () => {
-    const memEntry = makePayload({ messageId: 'mem-early', enqueuedAt: new Date(1000).toISOString() });
-    const redisEntry = makePayload({ messageId: 'redis-late', enqueuedAt: new Date(2000).toISOString() });
-    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(redisEntry)]) });
-
-    const cacheStore: any = { getNativeClient: jest.fn() };
-    cacheStore.getNativeClient
-      .mockReturnValueOnce(null)  // enqueue → memory fallback
-      .mockReturnValue(redis);    // peek → recovered Redis
-
-    const queue = new RedisDeliveryQueue(cacheStore);
-    await queue.enqueue('user-mix', memEntry);
-
-    const peeked = await queue.peek('user-mix');
-
-    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-mix', 0, -1);
-    expect(peeked.map(p => p.messageId)).toEqual(['mem-early', 'redis-late']);
-  });
-
-  test('peek — applies limit across the merged memory + Redis set', async () => {
-    const memEntry = makePayload({ messageId: 'mem-early', enqueuedAt: new Date(1000).toISOString() });
-    const redisEntry = makePayload({ messageId: 'redis-late', enqueuedAt: new Date(2000).toISOString() });
-    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(redisEntry)]) });
-
-    const cacheStore: any = { getNativeClient: jest.fn() };
-    cacheStore.getNativeClient
-      .mockReturnValueOnce(null)
-      .mockReturnValue(redis);
-
-    const queue = new RedisDeliveryQueue(cacheStore);
-    await queue.enqueue('user-mix', memEntry);
-
-    const peeked = await queue.peek('user-mix', 1);
-
-    expect(peeked.map(p => p.messageId)).toEqual(['mem-early']);
   });
 
   // ---------------------------------------------------------------------------
@@ -544,24 +367,6 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     const drained = await queue.drain('user-x');
     expect(drained).toHaveLength(2);
     expect(drained.map(e => e.dedupKey)).toEqual(['M:pA:😀', 'M:pB:😀']);
-  });
-
-  test('peek — collapses a cross-slice duplicate in the merged preview', async () => {
-    const memEdit = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(1000).toISOString(), payload: { content: 'v1' } });
-    const redisEdit = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'v2' } });
-    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(redisEdit)]) });
-
-    const cacheStore: any = { getNativeClient: jest.fn() };
-    cacheStore.getNativeClient
-      .mockReturnValueOnce(null)  // enqueue → memory fallback
-      .mockReturnValue(redis);    // peek → recovered Redis
-
-    const queue = new RedisDeliveryQueue(cacheStore);
-    await queue.enqueue('user-x', memEdit);
-
-    const peeked = await queue.peek('user-x');
-    expect(peeked).toHaveLength(1);
-    expect(peeked[0].payload).toEqual({ content: 'v2' });
   });
 
   test('cleanup — removes only the stale entry by value, preserving the fresh one', async () => {
@@ -894,13 +699,16 @@ describe('RedisDeliveryQueue (Redis path)', () => {
 
     expect(redis.eval).toHaveBeenCalledWith(
       expect.stringContaining('RPUSH'),
-      1,
+      2,
       expect.stringContaining('user-redis'),
+      expect.stringContaining('delivery:msg-queues:'),
       JSON.stringify(entry),
       entry.messageId,
       String(DELIVERY_QUEUE_TTL_SECONDS),
       'new',
       String(DELIVERY_QUEUE_MAX_PER_USER),
+      '1',
+      'user-redis',
     );
     // memory fallback was NOT used
     expect(await queue.size('user-redis')).toBe(0);
@@ -969,33 +777,6 @@ describe('RedisDeliveryQueue (Redis path)', () => {
 
     expect([...r1, ...r2]).toHaveLength(1);
     expect(redis.eval).toHaveBeenCalledTimes(2);
-  });
-
-  test('peek with limit full-reads lrange(key, 0, -1) then sorts before slicing', async () => {
-    // The fast path can no longer use a bounded lrange: an in-place superseded
-    // entry keeps its slot but carries a newer enqueuedAt, so peek must read the
-    // whole slice and sort by enqueuedAt (like drain()) before applying the limit.
-    const e1 = makePayload({ messageId: 'p-1', enqueuedAt: new Date(1000).toISOString() });
-    const e2 = makePayload({ messageId: 'p-2', enqueuedAt: new Date(2000).toISOString() });
-    const redis = makeMockRedis({
-      lrange: jest.fn().mockResolvedValue([JSON.stringify(e1), JSON.stringify(e2)]),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const result = await queue.peek('user-peek', 2);
-
-    expect(redis.lrange).toHaveBeenCalledWith(expect.any(String), 0, -1);
-    expect(result).toHaveLength(2);
-    expect(result[0].messageId).toBe('p-1');
-  });
-
-  test('peek without limit calls lrange(key, 0, -1)', async () => {
-    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([]) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    await queue.peek('user-peek-nolimit');
-
-    expect(redis.lrange).toHaveBeenCalledWith(expect.any(String), 0, -1);
   });
 
   test('size calls llen and returns the count', async () => {
@@ -1120,22 +901,6 @@ describe('RedisDeliveryQueue (Redis error → memory fallback)', () => {
     const result = await q2.drain('user-d');
     expect(result).toHaveLength(1);
     expect(result[0].messageId).toBe('mem-1');
-  });
-
-  test('peek falls back to memory when Redis lrange throws', async () => {
-    const redis = makeMockRedis({
-      eval: jest.fn().mockRejectedValue(new Error('eval fail')),
-      lrange: jest.fn().mockRejectedValue(new Error('lrange error')),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    // eval fails → enqueue uses memory; lrange fails → peek uses memory
-    await queue.enqueue('user-pk', makePayload({ messageId: 'pk-1' }));
-    await queue.enqueue('user-pk', makePayload({ messageId: 'pk-2' }));
-
-    const result = await queue.peek('user-pk', 1);
-    expect(result).toHaveLength(1);
-    expect(result[0].messageId).toBe('pk-1');
   });
 
   test('size falls back to memory when Redis llen throws', async () => {
@@ -1284,12 +1049,6 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     // The genuinely-oldest entry (by enqueuedAt) was the one evicted.
     expect(drained.some(e => e.messageId === 'fill-1')).toBe(false);
     expect(drained.some(e => e.messageId === 'overflow')).toBe(true);
-  });
-
-  test('peek on an unknown userId returns empty array (memory ?? [] branch)', async () => {
-    const queue = new RedisDeliveryQueue(makeCacheStore(null));
-    const result = await queue.peek('unknown-user-peek');
-    expect(result).toEqual([]);
   });
 
   test('dedup (memory): second enqueue with same messageId is ignored', async () => {
@@ -1450,9 +1209,13 @@ describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
     await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'edited' }));
     await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'deleted' }));
 
-    expect(redis.eval).toHaveBeenNthCalledWith(1, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'new', expect.any(String));
-    expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited', expect.any(String));
-    expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted', expect.any(String));
+    // Le DERNIER argument utile ici est le drapeau d'indexation (#16706), et il
+    // DISCRIMINE : `new` et `edited` portent du texte, `deleted` annonce la mort
+    // du message et n'en porte pas. C'est le même cadrage que la garde de
+    // vivacité du drain, lu à l'enfilage.
+    expect(redis.eval).toHaveBeenNthCalledWith(1, expect.any(String), 2, expect.any(String), expect.any(String), expect.any(String), 'm1', expect.any(String), 'new', expect.any(String), '1', 'user-evt');
+    expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 2, expect.any(String), expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited', expect.any(String), '1', 'user-evt');
+    expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 2, expect.any(String), expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted', expect.any(String), '0', 'user-evt');
   });
 
   test('enqueue passes dedupKey (not messageId) as ARGV[2] when the entry sets one', async () => {
@@ -1466,9 +1229,9 @@ describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
     }));
 
     expect(redis.eval).toHaveBeenCalledWith(
-      expect.any(String), 1, expect.any(String),
+      expect.any(String), 2, expect.any(String), expect.any(String),
       expect.any(String), 'msg-reacted:participant-a:👍', expect.any(String), 'reaction-added',
-      expect.any(String)
+      expect.any(String), '0', 'user-evt'
     );
   });
 });
@@ -1546,19 +1309,6 @@ describe('RedisDeliveryQueue (malformed JSON resilience)', () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     expect(await queue.drain('user-r')).toEqual([]);
-  });
-
-  test('peek — drops malformed entry and returns only valid ones', async () => {
-    const valid = makePayload({ messageId: 'peek-valid' });
-    const redis = makeMockRedis({
-      lrange: jest.fn().mockResolvedValue(['{corrupt', JSON.stringify(valid)])
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const peeked = await queue.peek('user-r');
-
-    expect(peeked).toHaveLength(1);
-    expect(peeked[0].messageId).toBe('peek-valid');
   });
 
   /**
