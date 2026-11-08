@@ -15,6 +15,7 @@ const esCommunityMembership = {
   'community.membership.offline': 'Sin conexión.',
   'community.membership.error': 'Error. Inténtalo de nuevo.',
   'community.membership.error.refused': 'Esta comunidad es privada: solo se entra por invitación.',
+  'community.settings.open': "Ajustes",
   'community.members.open': 'Miembros',
   'community.members.title': 'Miembros',
   'community.members.section.admin': 'Administradores',

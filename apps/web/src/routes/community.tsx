@@ -12,6 +12,7 @@ import {
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { performJoinCommunity, performLeaveCommunity } from '@/lib/api/community-actions';
+import { canEditSettingsOf } from '@/lib/api/community-settings';
 import { sessionStore } from '@/lib/api/session';
 import { takeInviteStatus } from '@/lib/communities/invite-status';
 import { canInviteOf, findCachedCommunity, membershipActionOf } from '@/lib/communities/view';
@@ -34,7 +35,7 @@ import {
   CommunityRowsSkeleton,
   CommunityStats,
 } from '@/routes/communities-parts';
-import { CommunityInviteButton, CommunityMembersLink } from '@/routes/community-members-parts';
+import { CommunityInviteButton, CommunityMembersLink, CommunitySettingsLink } from '@/routes/community-members-parts';
 import { CommunityMembershipAction, type MembershipFailure } from '@/routes/community-membership';
 import { href, navigate } from '@/routes/route-table';
 
@@ -59,9 +60,11 @@ import { href, navigate } from '@/routes/route-table';
  * pour qui la passerelle l'accepte (`canInviteOf`) : un membre d'une
  * communauté publique, un administrateur ou un modérateur d'une privée.
  *
+ * **« Réglages »** (#6377) mène, au créateur seul, à `community-settings.tsx`.
+ *
  * **Ce que l'écran ne montre pas, parce que le web ne le sert pas encore** —
- * loi 4, un contrôle n'existe que s'il a un effet : Réglages, l'onglet
- * Publications — #6377, #6379 (D-60). Le
+ * loi 4, un contrôle n'existe que s'il a un effet : l'onglet
+ * Publications — #6379 (D-60). Le
  * cœur « Réagir à la communauté » d'iOS n'a aucun effet, là-bas non plus.
  *
  * 403 et 404 rendent le MÊME refus (D-6) : un identifiant ne dit pas si une
@@ -179,6 +182,7 @@ export default function CommunityScreen() {
               {online ? null : <CommunitiesOfflineNotice language={language} />}
               <CommunityStats language={language} community={community} />
               <CommunityMembersLink language={language} communityId={community.id} />
+              {canEditSettingsOf(community, viewerId) ? <CommunitySettingsLink language={language} communityId={community.id} /> : null}
               {canInviteOf(community) ? <CommunityInviteButton language={language} onOpen={() => setInviting(true)} /> : null}
               {inviteStatus === null ? null : (
                 <p role="status" className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-community-invite-status>
