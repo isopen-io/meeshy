@@ -317,7 +317,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
 
     func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
         // Regression guard: toggleTranscription() must not hardcode language strings.
-        // Language resolution is delegated to CallManager.preferredCallLanguage(for:)
+        // Language resolution is delegated to CallLanguagePreference.preferredCallLanguage(for:)
         // (Prisme Linguistique), which reads systemLanguage > regionalLanguage > "fr".
         let source = try callManagerSource()
 
@@ -332,12 +332,12 @@ final class CallManagerAudioSessionTests: XCTestCase {
         XCTAssertFalse(
             fnBody.contains("let localLang = \"fr\""),
             "toggleTranscription() must not hardcode localLang = \"fr\". " +
-            "Delegate to CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
+            "Delegate to CallLanguagePreference.preferredCallLanguage(for:) (Prisme Linguistique)."
         )
         XCTAssertTrue(
             fnBody.contains("preferredCallLanguage"),
             "toggleTranscription() must delegate language resolution to " +
-            "CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
+            "CallLanguagePreference.preferredCallLanguage(for:) (Prisme Linguistique)."
         )
     }
 
