@@ -25,7 +25,7 @@
         "@capacitor/push-notifications": "8.1.3",
         "@mediapipe/tasks-vision": "1.2.2",
         "@meeshy/shared": "workspace:*",
-        "@tanstack/react-query": "5.105.0",
+        "@tanstack/react-query": "5.106.1",
         "@tanstack/react-virtual": "3.14.26",
         "preact": "11.1.0",
         "socket.io-client": "4.8.4",
@@ -101,7 +101,7 @@
         "@jest/globals": "^30.3.0",
         "@types/jest": "^30.0.0",
         "@types/mustache": "^4.2.6",
-        "@types/node": "^20.19.39",
+        "@types/node": "^20.19.43",
         "jest": "^30.3.0",
         "prisma": "^6.19.3",
         "ts-jest": "^29.4.9",
@@ -118,7 +118,7 @@
         "@fastify/helmet": "^13.2.0",
         "@fastify/jwt": "^10.2.7",
         "@fastify/multipart": "^10.1.3",
-        "@fastify/rate-limit": "^11.2.0",
+        "@fastify/rate-limit": "^11.2.2",
         "@fastify/sensible": "^6.0.7",
         "@fastify/static": "^10.1.10",
         "@fastify/swagger": "^9.9.0",
@@ -132,7 +132,7 @@
         "@signalapp/libsignal-client": "0.106.1",
         "@socket.io/redis-adapter": "^8.3.0",
         "@tus/file-store": "^2.1.1",
-        "@tus/server": "^2.4.6",
+        "@tus/server": "^2.4.7",
         "axios": "^1.21.0",
         "bcrypt": "^6.0.0",
         "bcryptjs": "^3.0.3",
@@ -140,14 +140,14 @@
         "dompurify": "^3.4.14",
         "dotenv": "^18.0.0",
         "fastify": "^5.12.3",
-        "firebase-admin": "^14.4.0",
+        "firebase-admin": "^14.5.0",
         "fluent-ffmpeg": "^2.1.3",
         "ioredis": "^6.0.0",
         "isomorphic-dompurify": "^4.5.0",
         "jsonwebtoken": "^9.0.3",
         "libphonenumber-js": "^1.13.15",
         "mmdb-lib": "^3.0.4",
-        "mongodb": "^7.7.0",
+        "mongodb": "^7.8.0",
         "music-metadata": "^12.3.2",
         "nice-grpc": "^2.1.18",
         "pdf-parse": "^2.4.5",
@@ -157,7 +157,7 @@
         "protobufjs": "^7.5.6",
         "qrcode": "^1.5.4",
         "sharp": "^0.35.5",
-        "socket.io": "^4.8.3",
+        "socket.io": "^4.8.4",
         "speakeasy": "^2.0.0",
         "thumbhash": "^0.1.1",
         "ua-parser-js": "^2.0.10",
@@ -636,7 +636,7 @@
 
     "@fastify/proxy-addr": ["@fastify/proxy-addr@5.1.2", "", { "dependencies": { "@fastify/forwarded": "^3.0.0", "ipaddr.js": "^2.1.0" } }, "sha512-uqB4QsgVoro0XDC+DIftIMGXHdBPn+lK6Ek3xXAIxPMCJfqxnbtyEoMCm2KPUVOuIosd7Cyw9HawEqMFM/UA+g=="],
 
-    "@fastify/rate-limit": ["@fastify/rate-limit@11.2.1", "", { "dependencies": { "@lukeed/ms": "^2.0.2", "fastify-plugin": "^6.0.0", "ip-address": "^10.2.0", "toad-cache": "^3.7.0" } }, "sha512-uTQjii3tJUnb6ZyEMcunuvKE3FDKNZEaPpxdyWADDgthHnUV1swdvwuiZfi3DDDgxm1iBrhOkQ/w0yDBQ8qJtA=="],
+    "@fastify/rate-limit": ["@fastify/rate-limit@11.2.2", "", { "dependencies": { "@lukeed/ms": "^2.0.2", "fastify-plugin": "^6.0.0", "ip-address": "^10.2.0", "toad-cache": "^3.7.0" } }, "sha512-Ynxk9BU82Y5Ux7NOk9NqyZpTMdFes8EY8quXrN6ePDsbtG4G9Afb3l9mD8Vw2nv0hXg0iFjV+gkdABReFPlShw=="],
 
     "@fastify/send": ["@fastify/send@4.2.0", "", { "dependencies": { "@lukeed/ms": "^2.0.2", "escape-html": "~1.0.3", "fast-decode-uri-component": "^1.0.1", "http-errors": "^2.0.0", "mime": "^3" } }, "sha512-B5Hr+IFsPbqJJQu6FHE2MFpnHfbPlCOVQUPTdm6PxCcilYGrEQsulbO0z9blgbjndIyLJwa2NWFIIjXpPhbwUg=="],
 
@@ -1136,9 +1136,9 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.4", "", { "dependencies": { "@tailwindcss/node": "4.3.4", "@tailwindcss/oxide": "4.3.4", "tailwindcss": "4.3.4" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-wGukGWb8SVuN7+FJvSS7M5eSJWDIWwVSvUvj1q41eTIhGPsS2DAgFWjA7YURJNwjHSgty59Hz8iMUiyO+YMHBQ=="],
 
-    "@tanstack/query-core": ["@tanstack/query-core@5.105.0", "", {}, "sha512-7p56vRmT/z4UJ6sctGIdl5WRUQyUv53IUpUwEKi2g97zMbO7zh8ZsCLffGAvCPBR4xD72e3VXsDyLwXHhoNTMQ=="],
+    "@tanstack/query-core": ["@tanstack/query-core@5.106.1", "", {}, "sha512-erYv/UACddcdgjOL2ixmFdK6tO/AVBeUcTCOtX2N51yZpDQ2U7KJ+xgB/bCNfsF3uoCDTqGHEEbDiFsIO9YUmQ=="],
 
-    "@tanstack/react-query": ["@tanstack/react-query@5.105.0", "", { "dependencies": { "@tanstack/query-core": "5.105.0" }, "peerDependencies": { "@types/react": "^18 || ^19", "react": "^18 || ^19" }, "optionalPeers": ["@types/react"] }, "sha512-y+hMuDERvgg6ay1da0V1a6ZC0ZONt7dELxSFkqRZuwm7p1TTZs0MoXrPlBRflIpRoYjvzQVYxycnLImpFLhWrw=="],
+    "@tanstack/react-query": ["@tanstack/react-query@5.106.1", "", { "dependencies": { "@tanstack/query-core": "5.106.1" }, "peerDependencies": { "@types/react": "^18 || ^19", "react": "^18 || ^19" }, "optionalPeers": ["@types/react"] }, "sha512-ORDvJG/DSfmlFL9lQ8GDkE0VjtQbLeRDY7BL8xjKkQFGLfjFGfNWNuteWgPqA2gPJgLLuWfQ7IX0FlsHCJriyg=="],
 
     "@tanstack/react-virtual": ["@tanstack/react-virtual@3.14.26", "", { "dependencies": { "@tanstack/virtual-core": "3.19.11" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-HUDlfsrYH6ko5xH56L62Mcl/uzT+AGVNMHFuDNqDJMdZWc1AQa2oeVKNUvZ/RWBZQ4TYtyQerFrNvLnp39h65A=="],
 
