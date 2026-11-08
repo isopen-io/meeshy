@@ -31,6 +31,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Piste de correction : format actif compatible photo et vidéo, `maxPhotoDimensions` au plus grand supporté, priorisation `.balanced` en avant et `.quality` en arrière si le délai toucher → photo reste dans le budget, `isResponsiveCaptureEnabled` et `isZeroShutterLagEnabled` quand supportés, stabilisation `cinematicExtended` en vidéo arrière. Garder la session chaude (#16504).
 - Critères d'acceptation : définition native en photo, délai toucher → flash mesuré sur iPhone 12 et récent, aperçu identique à la photo, `thermalState` ≤ fair sur 10 min de viseur.
 - Liens : #16482, #16504, #16505, #16506.
+- Relu le 2026-11-08 (audit 09) : la recette de #16506 doit aussi couvrir OPUS-14 (effets de visage en paysage), une vidéo qui change de tenue entre deux segments (mise en bandes sur la toile du premier, `CameraSegmentOrientation.swift:44-60`) et, pour #16505, l'écart de teinte d'un même look entre l'aperçu (trames vidéo) et la photo (traitement photo).
 
 ## OPUS-2 — Le catalogue de filtres est trop mince pour dépasser le marché
 - Statut : décision attendue
@@ -50,6 +51,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Constat et liens : #16506 photo en paysage ou inclinée enregistrée de travers ; #16504 viseur qui rouvre sur une session chaude sans armer le micro ; #16482 armement et déclenchement rapides ; #9778 bascule vers l'arrière en moins de 400 ms ; #9777 contrôles posés sur un cadre lisibles sans cacher son texte ; #11305 lens dans l'échelle de dégradation en appel ; #9174 cycle AttributeGraph au second toucher du viseur en scène ; #11043 PiP d'appel avec les deux flux.
 - Pourquoi la routine ne les fait pas : session caméra, WebRTC ou recette sur iPhone réel.
 - Piste : lire chaque ticket, vérifier qu'il n'est pas déjà corrigé sur dev, puis le traiter ou le fermer avec la preuve.
+- Relu le 2026-11-08 (audit 09) : `CameraPhotoTuning.swift` pose déjà `maxPhotoDimensions`, la priorité `.balanced`, l'obturateur sans latence et la capture réactive. Reste : la définition volontairement bornée à 2560 px (OPUS-12) et la stabilisation (OPUS-10).
 
 ## OPUS-4 — Avant la connexion, « Filtres » ouvre un ancien panneau au lieu des « Effets de ma caméra »
 - Statut : fait (#16668) — reste la recette iPhone listée dans la PR
@@ -128,3 +130,91 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Piste de correction : `cinematicExtended` en arrière quand le format le sert, `standard` en avant ; 30 i/s par défaut, 60 i/s proposé dans le menu `⋯` ; `isLowLightBoostEnabled` en vidéo quand supporté ; ne pas couper l'exposition pilotée par le visage après un toucher sans visage.
 - Critères d'acceptation : vidéo stable en marchant (arrière), recadrage avant acceptable, latence d'aperçu inchangée, `thermalState` ≤ fair sur 5 min de vidéo, rendu plus clair en basse lumière.
 - Liens : OPUS-1, #16482.
+
+## OPUS-11 — Une vidéo interrompue (appel, arrière-plan, Siri) est jetée en entier
+- Statut : à faire
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § S1
+- Constat : `CameraModel.handleSegmentFinished` jette TOUS les segments dès que `error != nil` (`Main/Components/CameraModel.swift:823-830`, `endRecordingWithoutOutput`). AVFoundation clôt pourtant la prise avec une erreur ET un fichier valide (`userInfo[AVErrorRecordingSuccessfullyFinishedKey] == true`) en cas d'appel entrant, de passage en arrière-plan, de Siri, de durée ou de taille maximale, de disque presque plein. Si l'assemblage de plusieurs segments échoue, seul le dernier est livré et les autres restent dans `tmp/` (`:892-903`). La photo sans données sort aussi en silence (`:948-951`).
+- Reproduction : iPhone réel, filmer 20 s dans le viseur du composeur, se faire appeler (ou passer l'app en arrière-plan) : aucune vidéo n'arrive en retouche ni dans Photos, aucun message.
+- Pourquoi la routine ne l'a pas fait : `CameraModel.swift` interdit, recette sur iPhone réel (interruptions).
+- Piste de correction : lire `AVErrorRecordingSuccessfullyFinishedKey` ; si vrai, traiter le segment comme fini (le garder, livrer la prise avec les segments déjà pris) ; sinon garder les segments précédents valides plutôt que tout jeter. Repli d'assemblage : livrer le premier segment et dire que la prise a été coupée, ou assembler sans ré-encodage ; effacer les segments non livrés. Photo sans données : `HapticFeedback.error()` et message. Règle pure (erreur + clé → garder / jeter) testée.
+- Critères d'acceptation : test de la règle sur les codes d'interruption ; sur iPhone, une vidéo coupée par un appel ou l'arrière-plan arrive en retouche avec ce qui a été filmé ; aucun fichier ne reste dans `tmp/` ; un échec réel se dit.
+- Liens : `/mnt/project-files/frames/09-audit-bogues-capture-camera.md` § S1, #9684 (aucune prise ne se perd).
+
+## OPUS-12 — « Enregistrer l'original » met dans Photos une copie réduite à 2560 px, débruitée et rognée en 16:9
+- Statut : décision attendue
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § F1 ; recoupe OPUS-1
+- Constat : le délégué photo traite la prise avec `PhotoCaptureSettings.capture` (`CameraModel.swift:952` ; `packages/MeeshySDK/Sources/MeeshySDK/Media/PhotoCaptureProcessor.swift:61` : 2560 px, débruitage et netteté `:220-224`), puis c'est ce fichier que le réglage « enregistrer l'original » écrit dans Photos (`CameraModel.swift:967-976`). La session est en `.high` (`:275`), donc la photo est au 16:9 : le capteur 4:3 perd un quart de son champ. Le traitement tourne de façon synchrone dans le délégué d'AVFoundation.
+- Reproduction : activer Réglages › Médias « enregistrer l'original », prendre une photo, ouvrir ses informations dans Photos : ~2560×1440 au lieu de 4032×3024.
+- Pourquoi la routine ne l'a pas fait : décision produit (définition et format de l'original), session caméra, recette chauffe et délai.
+- Piste de correction : garder les octets natifs de `fileDataRepresentation()` pour Photos, n'appliquer `PhotoCaptureSettings.capture` qu'à la copie de travail et à l'envoi ; traiter hors du délégué (file dédiée) ; si Jacques veut un vrai mode photo, format 4:3 actif en photo et 16:9 en vidéo (bascule de format à mesurer, #16504).
+- Critères d'acceptation : définition native dans Photos ; délai toucher → photo suivante inchangé ; aperçu et photo de mêmes proportions ; `thermalState` ≤ fair sur 10 min de viseur.
+- Liens : OPUS-1, #16505.
+
+## OPUS-13 — Aucune photo prise dans Meeshy ne porte de lieu
+- Statut : décision attendue
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § I1
+- Constat : `AVCapturePhotoOutput` n'écrit jamais de GPS ; rien dans `CameraModel`, `PhotoCaptureProcessor` ni `PhotosAssetCreator` (`PhotoLibraryManager.swift:308-327`, pas de `location`) ne l'ajoute. Deux commentaires disent le contraire (`Features/Composer/ComposerCaptureOrientation.swift:56-57`, `PhotoCaptureProcessor.swift:14`). Les cadres n'ont pas d'élément « lieu ». La décision du projet (précision du lieu réglée par l'utilisateur, aussi pour les posts) n'est pas appliquée.
+- Reproduction : prendre une photo au viseur avec « enregistrer l'original », l'ouvrir dans Photos : aucun lieu.
+- Pourquoi la routine ne l'a pas fait : décision produit (vie privée), localisation et session caméra.
+- Piste de correction : selon le réglage de précision, poser la position (arrondie à la précision choisie) dans les métadonnées de la copie de Photos (`AVCapturePhotoFileDataRepresentationCustomizer` ou `PHAssetCreationRequest.location`) ; l'envoi la retire déjà selon la politique (`OutgoingImagePreparer.swift:161-166`, `:324-325`) ; corriger les deux commentaires ; l'élément « lieu » des cadres lit la même source.
+- Critères d'acceptation : lieu présent dans Photos quand le réglage le permet, absent sinon ; jamais envoyé sans accord (test de `OutgoingImagePreparer`) ; pas de demande de localisation sans geste de l'utilisateur.
+- Liens : `/mnt/project-files/frames/01-spec-frames-et-packs.md` (éléments lieu), #9347.
+
+## OPUS-14 — Le lissage et les effets de visage s'éteignent probablement dans l'aperçu quand l'iPhone est couché
+- Statut : à faire (recette d'abord)
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § R2
+- Constat : les trames de l'aperçu sont redressées pour un appareil debout (`Features/Composer/ComposerLiveLook.swift:74-76`) et le visage y est cherché avec `rotation: 0` et `orientation: .up` (`Features/Composer/ComposerFaceEffects.swift:61`, `:75`). En paysage, le visage est de travers dans la trame ; la photo, redressée à l'horizon, reçoit l'effet. L'aperçu ne montrerait plus ce qui part.
+- Reproduction : iPhone réel, viseur du composeur, effet « Lissage de peau », tourner l'appareil en paysage : vérifier si l'effet disparaît de l'aperçu ; prendre la photo et comparer.
+- Pourquoi la routine ne l'a pas fait : moteur partagé avec l'appel (`CallFaceEffectsRenderer`, `Features/Call/`), recette sur iPhone.
+- Piste de correction : passer l'angle de l'horizon (`ComposerCaptureHorizon.captureAngle`) au suivi du visage : orientation Vision et `rotation` dérivées de l'angle, sonde inchangée ; même correction côté appel si l'appel a le même défaut.
+- Critères d'acceptation : effet visible dans l'aperçu dans les quatre tenues ; test de la règle angle → orientation Vision ; coût du suivi inchangé.
+- Liens : #16506, OPUS-3.
+
+## OPUS-15 — Au viseur, le lissage est figé à 0,4 et le Teint naturel n'existe pas
+- Statut : décision attendue
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § I2
+- Constat : `ComposerFaceEffects.intensity` lit un `VideoFilterConfig()` neuf (`Features/Composer/ComposerFaceEffects.swift:32`, valeur par défaut `skinSmoothingIntensity = 0.4`, `Main/Services/VideoFilterPipeline.swift:32`), jamais le réglage du curseur de l'appel (`Features/Call/Views/CallModeControls.swift:209`). Le Teint naturel (décision du 2026-10-02 : filtre permanent imperceptible) n'est appliqué qu'en appel (`Features/Call/Services/CallSkinRetouch.swift`).
+- Reproduction : régler le lissage à 80 % en appel, prendre une photo au viseur avec « Lissage de peau » : le lissage est à 40 % ; pas de Teint naturel.
+- Pourquoi la routine ne l'a pas fait : décision produit (un réglage commun ou deux), `VideoFilterPipeline` interdit.
+- Piste de correction : un réglage de peau unique (force + Teint naturel) lu par l'appel et le viseur, persistant ; curseur dans la miniature « Lissage » du rail Effets ; le Teint naturel peint par le peintre unique (`ComposerLookPainter.paint`, étage `.face`) ; mêmes rendus dans l'aperçu, la photo et la vidéo.
+- Critères d'acceptation : même force et même teint en appel et au viseur ; test de la lecture du réglage ; budget GPU inchangé.
+- Liens : `/mnt/project-files/frames/03-peau-teint-naturel-et-lissage.md`, #9199.
+
+## OPUS-16 — Une prise en retouche est perdue si l'app est tuée avant « Terminé »
+- Statut : décision attendue
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § S4
+- Constat : par défaut l'original ne rejoint pas Photos (`CaptureSavePolicy.standard`, `Features/Composer/ComposerGallery.swift:56`) ; la prise vit dans `ComposerCaptureSession` (`editPhoto`, `editPhotoData`) et dans `tmp/` jusqu'à « Terminé ». Le brouillon du composeur (`ComposerAutosave*`) ne la connaît qu'après la remise à l'hôte. App tuée en arrière-plan (pression mémoire, fréquente avec la caméra), plantage ou balayage : la prise disparaît.
+- Reproduction : prendre une photo ou une vidéo, rester en retouche, passer en arrière-plan et forcer la fermeture : rien au relancement, rien dans Photos.
+- Pourquoi la routine ne l'a pas fait : décision (garder la prise sans la mettre dans Photos), brouillon du composeur hors périmètre, plus de 300 lignes.
+- Piste de correction : à l'arrivée de la prise, l'écrire dans le dossier du brouillon (même mécanique que `ComposerAutosaveSnapshot` : nom de fichier, jamais URL de `tmp/`) avec le look et le cadrage ; au relancement, rouvrir la retouche ; effacer à « Terminé » ou à l'abandon explicite.
+- Critères d'acceptation : prise retrouvée après fermeture forcée ; aucun fichier orphelin après « Terminé » ou abandon ; tests du cycle de vie du fichier.
+- Liens : #9684.
+
+## OPUS-17 — Le HDR de la photo disparaît dès qu'on peint un filtre, un cadre ou un texte
+- Statut : à faire
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § F2
+- Constat : sans look, la prise garde sa carte de gain (`PhotoCaptureProcessor.swift:119-131`). Avec un look, un cadre ou un texte, la prise est décodée sans carte de gain (`Features/Composer/ComposerCaptureSession+Takes.swift:275-282`) et peinte en RGBA8 (`Features/Composer/ComposerLookPainter.swift:251-259`) : la photo sort SDR. La vidéo, elle, garde HLG/PQ (`ComposerLookVideoExporter.swift:100-107`).
+- Reproduction : iPhone 12 ou plus, scène lumineuse, photo avec le cadre de son choix enregistrée dans Photos, comparée à la même sans cadre : la première est terne sur écran HDR.
+- Pourquoi la routine ne l'a pas fait : chaîne HDR (gain map, espace PQ) et recette sur écran HDR.
+- Piste de correction : décoder avec `.expandToHDR`, peindre en demi-flottants Display P3 PQ comme `renderHDR`, encoder avec `kCGImageDestinationEncodeToISOGainmap` ; le cadre et le texte restent au blanc de référence (pas d'éblouissement).
+- Critères d'acceptation : photo avec look et cadre HDR dans Photos ; cadre au blanc SDR ; coût du rendu mesuré.
+- Liens : #11247, #11847.
+
+## OPUS-18 — Une photo prise pour un commentaire perd son EXIF et passe en JPEG
+- Statut : à faire (petit, hors périmètre de la routine)
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : audit 09 § I3
+- Constat : `ComposerReturnedMedia(capture:)` jette les octets de la prise (`Features/Composer/ComposerReturnMedia.swift:19`) et `CommentAttachmentIntake.stage` ré-encode l'image en JPEG 0,9 (`Features/Main/Views/CommentAttachmentIntake.swift:220`) : date, appareil, HDR et HEIC perdus, une compression de plus. La conversation et le composeur gardent les octets (`Main/Views/ConversationView+SceneRetouch.swift:85`, `Composer/MeeshyComposerHost+Ingestion.swift:122-136`).
+- Reproduction : commentaire, viseur, photo, publier ; télécharger la pièce : JPEG sans EXIF de prise.
+- Pourquoi la routine ne l'a pas fait : fichiers hors du périmètre de la routine.
+- Piste de correction : `stage(capture:)` lit `.photo(_, data:)` et passe par `ComposerCapturePayload.bytes(original:fallback:)` comme le composeur ; garde de source contre `jpegData` sur une prise.
+- Critères d'acceptation : test : les octets écrits sont ceux de la prise (EXIF présent, extension lue dans les octets) ; repli JPEG seulement sans octets.
+- Liens : #4080, #9347.
