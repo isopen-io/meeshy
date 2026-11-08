@@ -1620,6 +1620,15 @@ export class NotificationService {
     firstAttachmentWidth?: number | null;
     firstAttachmentHeight?: number | null;
     /**
+     * #17080 — l'ENVELOPPE que l'appareil a scellée, celle que la NSE ouvre avec
+     * ses propres clés. Elle n'est posée qu'en `e2ee` (`deviceEnvelopeForPush`
+     * est son unique producteur) : en `server`/`hybrid`, `encryptedContent` est
+     * le chiffré AU REPOS sous la clé de conversation, et il ne quitte pas le
+     * serveur. Sans elle, la NSE ne tire NI sa réécriture de corps NI son repli
+     * de placeholder localisé — les deux dérivent de ce seul champ.
+     */
+    encryptedContent?: string;
+    /**
      * Cf. `createMessageNotification.notificationLocKey` — cycle 126. La clé de
      * protection, dont `protectedPreview` est l'unique producteur du dépôt : sa
      * présence est une DÉCLARATION de protection, jamais un indice. Elle vaut
@@ -1741,6 +1750,8 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        // #17080 — l'enveloppe que la NSE ouvre. `undefined` hors E2EE.
+        encryptedContent: params.encryptedContent,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },
@@ -1773,6 +1784,8 @@ export class NotificationService {
       messageExpiresAt?: Date | null;
       /** Cf. `createMessageNotification.previewBasis`. */
       previewBasis?: PreviewPrismBasis;
+      /** Cf. `createMentionNotification.encryptedContent` — #17080. */
+      encryptedContent?: string;
       /** Cf. `createMentionNotification.notificationLocKey`. */
       notificationLocKey?: string;
       /** Cf. `createMessageNotification.contentDetail` — #8857. */
@@ -1825,6 +1838,11 @@ export class NotificationService {
     // tout ce qui reste se répand. Recopié champ par champ, ce relais retenait
     // silencieusement chaque champ de bannière ajouté en amont — c'est ainsi que
     // le verrou de protection n'est jamais arrivé jusqu'ici.
+    // `banner` RÉPAND tout ce qui n'est pas renommé — dont `encryptedContent`
+    // (#17080). C'est la propriété que le cycle 126 a installée ici
+    // volontairement : un relais qui recopie champ par champ retient en silence
+    // chaque champ ajouté en amont, et c'est exactement ce qui avait laissé le
+    // verrou de protection, puis l'enveloppe, hors de ce lot.
     const { senderId, messageContent, ...banner } = commonData;
 
     // Débit BORNÉ (#17081), comme l'éventail `regular` depuis #10819 : ce lot
@@ -2289,6 +2307,13 @@ export class NotificationService {
     messageId: string;
     conversationId: string;
     messagePreview: string;
+    /**
+     * #17080 — l'ENVELOPPE que l'appareil a scellée, celle que la NSE ouvre avec
+     * ses propres clés. Cf. `createMentionNotification.encryptedContent` : elle
+     * n'est posée qu'en `e2ee`, le chiffré AU REPOS ne quittant jamais le
+     * serveur. Sans elle, une réponse restait « 🔒 💬 » à vie.
+     */
+    encryptedContent?: string;
     originalMessageId?: string;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
@@ -2417,6 +2442,8 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        // #17080 — l'enveloppe que la NSE ouvre. `undefined` hors E2EE.
+        encryptedContent: params.encryptedContent,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },

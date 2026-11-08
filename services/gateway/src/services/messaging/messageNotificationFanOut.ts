@@ -683,6 +683,22 @@ export async function notifyMessageRecipients(params: {
     // sans cela, un éventail entièrement tombé continuerait d'annoncer son
     // audience comme si elle avait été servie.
 
+    // #17080 — **l'enveloppe de l'APPAREIL, pour les TROIS lots.** Seul
+    // `regular` la portait, et les cycles 125 bis → 128 ne l'ont pas vue parce
+    // qu'elle **ne compose aucune chaîne** : ce n'est ni un texte, ni un
+    // qualificatif de texte (comme `notificationLocKey`), ni une horloge — c'est
+    // la charge que le LECTEUR déchiffre. On ne la trouve donc pas en demandant
+    // « qui compose ce corps ? », la question qui a trouvé les quatre autres.
+    //
+    // Sans elle, la NSE ne tire NI sa réécriture (qui exige
+    // `userInfo["encryptedContent"]` non vide) NI son repli de placeholder
+    // localisé — `isEncryptedPush` accepte bien `userInfo["isEncrypted"]`, mais
+    // la charge push ne porte pas ce champ (mesuré sur ce que
+    // `createNotification` assemble). Une réponse et une mention restaient donc
+    // « 🔒 💬 » à vie dans un groupe chiffré, pendant qu'un message ordinaire
+    // arrivait en clair.
+    const deviceEnvelope = deviceEnvelopeForPush(message, conversation.encryptionMode);
+
     const owesReplyNotification =
       !!originalMessageAuthorUserId &&
       !silenced.has(originalMessageAuthorUserId) &&
@@ -716,6 +732,10 @@ export async function notifyMessageRecipients(params: {
             // localisation cliente du placeholder et le second verrou de
             // `createNotification`.
             notificationLocKey,
+            // #17080 — l'enveloppe que la NSE ouvre. Hors E2EE elle vaut
+            // `undefined` : rien ne voyage, et le chiffré AU REPOS ne quitte
+            // jamais le serveur.
+            encryptedContent: deviceEnvelope,
           });
           return created != null;
         })
@@ -747,6 +767,9 @@ export async function notifyMessageRecipients(params: {
               // Cycle 126 — cf. `createReplyNotification` : la clé de protection
               // qualifie l'aperçu que ce lot vient de recevoir.
               notificationLocKey,
+              // #17080 — cf. `createReplyNotification` : l'enveloppe de
+              // l'appareil, la même pour tous les mentionnés d'un même message.
+              encryptedContent: deviceEnvelope,
             },
             memberIds
           )
@@ -783,7 +806,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: deviceEnvelopeForPush(message, conversation.encryptionMode),
+          encryptedContent: deviceEnvelope,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
