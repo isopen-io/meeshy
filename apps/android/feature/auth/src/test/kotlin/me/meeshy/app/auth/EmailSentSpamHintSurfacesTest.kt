@@ -15,16 +15,22 @@ class EmailSentSpamHintSurfacesTest {
     private fun source(name: String): String = File(sources, name).readText()
 
     @Test
-    fun `every code-by-email surface mounts the shared spam line`() {
-        listOf("EmailVerificationSheet.kt", "SignupCodeStep.kt", "EmailVerificationGateSheet.kt").forEach { file ->
+    fun `every email-sent access surface mounts the shared spam line`() {
+        listOf(
+            "MagicLinkSheet.kt",
+            "AccountRecoveryScreens.kt",
+            "EmailVerificationSheet.kt",
+            "SignupCodeStep.kt",
+            "EmailVerificationGateSheet.kt",
+        ).forEach { file ->
             assertWithMessage(file).that(source(file)).contains("SpamFolderHint(")
         }
     }
 
     @Test
-    fun `the link-by-email surfaces keep their « Nothing received? » spam disclosure`() {
+    fun `the spam advice is never folded behind a disclosure again`() {
         listOf("MagicLinkSheet.kt", "AccountRecoveryScreens.kt").forEach { file ->
-            assertWithMessage(file).that(source(file)).contains("R.string.auth_magic_nothing_text")
+            assertWithMessage(file).that(source(file)).doesNotContain("auth_magic_nothing")
         }
     }
 }

@@ -38,6 +38,7 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.auth.AuthActionButton
 import me.meeshy.ui.component.auth.AuthContentType
 import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.component.auth.SpamFolderHint
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.ui.text.input.ImeAction
 import me.meeshy.ui.theme.MeeshyPalette
@@ -98,10 +99,7 @@ fun ForgotPasswordScreen(
                     title = stringResource(R.string.auth_magic_sent_title),
                     message = stringResource(R.string.auth_magic_sent, state.recovery.submittedEmail.orEmpty()),
                 )
-                AuthInfoDisclosure(
-                    label = stringResource(R.string.auth_magic_nothing_label),
-                    text = stringResource(R.string.auth_magic_nothing_text),
-                )
+                SpamFolderHint()
                 TextButton(onClick = onBack) {
                     Text(stringResource(R.string.auth_back_to_login))
                 }
