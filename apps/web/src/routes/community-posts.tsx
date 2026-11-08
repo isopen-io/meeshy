@@ -9,7 +9,7 @@ import { communityPostsInfiniteOptions, flattenCommunityPosts } from '@/lib/api/
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
-import { translateCommunityPosts } from '@/lib/i18n-community-posts-catalog';
+import { translateMembership } from '@/lib/i18n-community-membership-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useListingSessionId } from '@/lib/telemetry/listing-session';
 import { listingAt } from '@/lib/telemetry/served-listing';
@@ -80,7 +80,7 @@ export default function CommunityPostsPanel({
       ) : (
         <span
           aria-busy="true"
-          aria-label={translateCommunityPosts(language, 'community.posts.loading')}
+          aria-label={translateMembership(language, 'community.posts.loading')}
           data-community-posts-loading
           className="block rounded-card"
           style={{ ...SECTION_CARD_STYLE, height: 160 }}
@@ -108,7 +108,7 @@ export default function CommunityPostsPanel({
         {posts.hasNextPage ? <span ref={sentinel.observe} aria-hidden="true" style={{ display: 'block', height: 1 }} /> : null}
         {posts.isFetchingNextPage ? (
           <p role="status" className="text-center text-caption" style={{ color: SECTION_INK_2 }}>
-            {translateCommunityPosts(language, 'community.posts.loadingMore')}
+            {translateMembership(language, 'community.posts.loadingMore')}
           </p>
         ) : null}
         {posts.isFetchNextPageError ? (
@@ -133,10 +133,10 @@ export function CommunityPostsEmpty({ language }: { readonly language: Interface
         <Glyph name="image" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: SECTION_INK }}>
-        {translateCommunityPosts(language, 'community.posts.empty.title')}
+        {translateMembership(language, 'community.posts.empty.title')}
       </p>
       <p className="text-caption" style={{ color: SECTION_INK_2 }}>
-        {translateCommunityPosts(language, 'community.posts.empty.body')}
+        {translateMembership(language, 'community.posts.empty.body')}
       </p>
     </div>
   );
@@ -149,7 +149,7 @@ export function CommunityPostsFailure({ language, online, onRetry }: { readonly 
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: SECTION_INK }}>
-        {translateCommunityPosts(language, online ? 'community.posts.error.title' : 'community.posts.error.offline')}
+        {translateMembership(language, online ? 'community.posts.error.title' : 'community.posts.error.offline')}
       </p>
       <button
         type="button"
@@ -158,7 +158,7 @@ export function CommunityPostsFailure({ language, online, onRetry }: { readonly 
         className="grid place-items-center rounded-chip px-5 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ minHeight: 44, backgroundColor: 'var(--ios-indigo-600)', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
-        {translateCommunityPosts(language, 'community.posts.retry')}
+        {translateMembership(language, 'community.posts.retry')}
       </button>
     </div>
   );

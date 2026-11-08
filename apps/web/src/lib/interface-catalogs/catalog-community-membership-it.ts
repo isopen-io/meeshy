@@ -58,6 +58,16 @@ const itCommunityMembership = {
   'community.create.members.title': 'Aggiungi membri',
   'community.create.members.search': 'Cerca per nome o nome utente…',
   'community.create.members.remove': 'Rimuovi {name}',
+  'community.posts.tabs.label': "Contenuti della community",
+  'community.posts.tab.channels': "Conversazioni",
+  'community.posts.tab.posts': "Post",
+  'community.posts.loading': "Caricamento dei post",
+  'community.posts.empty.title': "Ancora nessun post",
+  'community.posts.empty.body': "I post della community appariranno qui.",
+  'community.posts.error.title': "Impossibile caricare i post",
+  'community.posts.error.offline': "Offline: i post appariranno quando tornerà la rete.",
+  'community.posts.retry': "Riprova",
+  'community.posts.loadingMore': "Caricamento di altri post",
 } as const satisfies CommunityMembershipCatalog;
 
 export default itCommunityMembership;

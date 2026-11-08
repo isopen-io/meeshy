@@ -1,7 +1,7 @@
 import { useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { SECTION_CARD_STYLE, SECTION_INK } from '@/components/grouped-section';
-import { translateCommunityPosts } from '@/lib/i18n-community-posts-catalog';
+import { translateMembership } from '@/lib/i18n-community-membership-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -44,7 +44,7 @@ export function CommunityDetailTabs({
   return (
     <div
       role="tablist"
-      aria-label={translateCommunityPosts(language, 'community.posts.tabs.label')}
+      aria-label={translateMembership(language, 'community.posts.tabs.label')}
       onKeyDown={onKeyDown}
       data-community-tabs
       className="grid grid-cols-2 gap-1 rounded-chip p-1"
@@ -74,7 +74,7 @@ export function CommunityDetailTabs({
               outlineColor: 'var(--color-ios-brand)',
             }}
           >
-            {translateCommunityPosts(language, tab === 'channels' ? 'community.posts.tab.channels' : 'community.posts.tab.posts')}
+            {translateMembership(language, tab === 'channels' ? 'community.posts.tab.channels' : 'community.posts.tab.posts')}
           </button>
         );
       })}

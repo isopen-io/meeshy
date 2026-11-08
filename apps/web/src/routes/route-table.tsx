@@ -201,15 +201,13 @@ const withAccountRecoveryCatalog = <Screen,>(screen: Promise<Screen>) =>
     import('@/lib/i18n-account-recovery-catalog').then((m) => m.loadAccountRecoveryCatalog(currentInterfaceLanguage())),
   ]).then(([loaded]) => loaded);
 
-/* LE DÉTAIL D'UNE COMMUNAUTÉ (#6378) — son chunk ET les catalogues
-   `community.membership.*` et `community.posts.*` (#6379, ses onglets), en
-   parallèle : le catalogue d'interface est à son plafond, et `translateMembership`
-   comme `translateCommunityPosts` lèvent sur un catalogue non chargé. */
+/* LE DÉTAIL D'UNE COMMUNAUTÉ (#6378) — son chunk ET le catalogue
+   `community.membership.*`, en parallèle : le catalogue d'interface est à son
+   plafond, et `translateMembership` lève sur un catalogue non chargé. */
 const communityScreen = () =>
   Promise.all([
     import('@/routes/community'),
     import('@/lib/i18n-community-membership-catalog').then((m) => m.loadCommunityMembershipCatalog(currentInterfaceLanguage())),
-    import('@/lib/i18n-community-posts-catalog').then((m) => m.loadCommunityPostsCatalog(currentInterfaceLanguage())),
   ]).then(([screen]) => screen);
 
 /* LES MEMBRES D'UNE COMMUNAUTÉ (#6375) — même catalogue que le détail

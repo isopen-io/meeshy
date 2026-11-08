@@ -4,7 +4,6 @@ import { dropCardPost, mapCardPosts, type CardPages } from '@/lib/feed/interacti
 import { servedOverHeld } from '@/lib/feed/viewer-points';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
-import { COMMUNITY_POSTS_QUERY_ROOT } from './communities';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedPost } from './feed-pages';
 import { postQueryKey } from './publication-detail';
@@ -64,6 +63,14 @@ type CardList = {
    */
   readonly frozen: boolean;
 };
+
+/* Les publications d'une communauté (#6379) : la racine est RECOPIÉE de
+   `communityPostsQueryKey` (`communities.ts`) au lieu d'être importée — importer
+   `communities.ts` ici le faisait précharger, avec `zod`, par chaque écran qui
+   tient une carte, au prix du premier affichage. Le témoin « la caisse d'une
+   communauté est au registre des cartes » (`community-posts.test.ts`) lie les
+   deux : une racine qui diverge le fait tomber. */
+const COMMUNITY_POSTS_QUERY_ROOT = ['community-posts'] as const;
 
 const CARD_LISTS: readonly CardList[] = [
   { queryKey: FEED_QUERY_KEY, exact: true, frozen: false },

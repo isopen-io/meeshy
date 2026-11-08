@@ -6,7 +6,7 @@ import { POST_IMAGE_FR, POST_TEXT_RANK2 } from '@/lib/api/fixtures-feed';
 import type { FeedPage } from '@/lib/api/feed-pages';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { loadCommunityPostsCatalog } from '@/lib/i18n-community-posts-catalog';
+import { loadCommunityMembershipCatalog } from '@/lib/i18n-community-membership-catalog';
 
 import CommunityPostsPanel, { CommunityPostsEmpty, CommunityPostsFailure } from './community-posts';
 import { CommunityDetailTabs } from './community-tabs';
@@ -25,7 +25,7 @@ const seed = (communityId: string, page: FeedPage) =>
 
 describe('les onglets du détail d’une communauté', () => {
   beforeAll(async () => {
-    await Promise.all([loadInterfaceCatalog('fr'), loadCommunityPostsCatalog('fr'), loadCommunityPostsCatalog('ar')]);
+    await Promise.all([loadInterfaceCatalog('fr'), loadCommunityMembershipCatalog('fr'), loadCommunityMembershipCatalog('ar')]);
   });
 
   test('deux onglets nommés, un seul choisi et un seul arrêt de tabulation', () => {
@@ -53,7 +53,7 @@ describe('les onglets du détail d’une communauté', () => {
 
 describe('l’onglet Publications', () => {
   beforeAll(async () => {
-    await Promise.all([loadInterfaceCatalog('fr'), loadCommunityPostsCatalog('fr'), loadCommunityPostsCatalog('en')]);
+    await Promise.all([loadInterfaceCatalog('fr'), loadCommunityMembershipCatalog('fr'), loadCommunityMembershipCatalog('en')]);
   });
 
   test('le cache se peint aussitôt, avec la carte du Flux, dans un panneau relié à son onglet', () => {
