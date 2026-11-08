@@ -156,4 +156,69 @@ final class CommunityDetailViewModelTests: XCTestCase {
         let stored = await cache.stored(for: CommunityPostsViewModel.cacheKey(communityId: "c1"))
         XCTAssertNil(stored)
     }
+
+    // #7816 — un 403 est une RÉPONSE : le détail dit pourquoi dans la langue du
+    // lecteur, jamais le message brut du serveur, et n'offre pas de réessayer.
+
+    func test_load_communautePriveeRefusee_estRefusee_sansReessayer() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.forbidden(reason: "Access denied to this community", body: nil))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .refused)
+        XCTAssertEqual(viewModel.loadFailure?.offersRetry, false)
+        XCTAssertNil(viewModel.community)
+    }
+
+    func test_load_communauteIntrouvable_seDitCommeUnRefus() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.server(statusCode: 404, message: "Community not found"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .refused)
+    }
+
+    func test_load_reseauAbsent_proposeDeReessayer() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.network(.noConnection))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .network)
+        XCTAssertEqual(viewModel.loadFailure?.offersRetry, true)
+    }
+
+    func test_load_panneServeur_nAccusePasLaConnexion() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.server(statusCode: 500, message: "Internal Server Error"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .server)
+    }
+
+    func test_load_reussiApresUnEchec_effaceLaCause() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.network(.noConnection))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+        await viewModel.load()
+
+        service.getResult = .success(CommunityStubs.community())
+        await viewModel.load()
+
+        XCTAssertNil(viewModel.loadFailure)
+        XCTAssertNotNil(viewModel.community)
+    }
+
+    func test_causeDuRefus_seDitDansLeCatalogue_jamaisDansLeMessageDuServeur() {
+        XCTAssertFalse(CommunityLoadFailure.refused.message.contains("Access denied"))
+        XCTAssertFalse(CommunityLoadFailure.refused.title.isEmpty)
+        XCTAssertNotEqual(CommunityLoadFailure.refused.actionLabel, CommunityLoadFailure.network.actionLabel)
+    }
 }

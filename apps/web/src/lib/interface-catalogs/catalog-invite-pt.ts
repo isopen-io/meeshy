@@ -88,6 +88,7 @@ const pt = {
   'invite.refusal.banned': 'Você não pode mais participar desta conversa.',
   'invite.refusal.region': 'Este convite não está acessível a partir da sua rede.',
   'invite.refusal.account-required': 'É preciso uma conta Meeshy para participar desta conversa.',
+  'invite.refusal.members-only': 'Esta conversa é reservada aos membros da comunidade.',
   'invite.refusal.session-expired': 'Sua sessão expirou. Entre de novo para participar.',
   'invite.refusal.rate-limited': 'Tentativas demais. Tente de novo em instantes.',
   'invite.refusal.offline': 'Você está sem conexão. O convite vai aparecer quando a rede voltar.',

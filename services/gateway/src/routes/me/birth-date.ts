@@ -36,6 +36,7 @@ import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { invalidateAllSessions } from '../../services/SessionService';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { revisitAutoAcquaintancesOnAgeDeclared } from '../../services/relations/autoAcquaintance';
+import { forgetTeamCircles } from '../../services/relations/relationCaches';
 
 const logger = enhancedLogger.child({ module: 'MeBirthDate' });
 
@@ -52,6 +53,12 @@ export type MeBirthDateRoutesOptions = {
    * leur évaluation sans attendre (rien qui jette). Injectable pour les tests.
    */
   readonly onAgeDeclared?: (userId: string) => void;
+  /**
+   * Le privilège d'équipe s'éteint entre un mineur et un majeur déclarés (#16623) : un âge
+   * déclaré oublie les cercles de l'équipe (fil 5 min, temps réel 30 s), pour que le
+   * bouclier se lise aussitôt. Best-effort. Injectable pour les tests.
+   */
+  readonly forgetTeamCircles?: (userId: string) => Promise<void>;
 };
 
 const revokeEverywhere = (fastify: FastifyInstance) => async (userId: string): Promise<void> => {
@@ -105,6 +112,9 @@ export async function meBirthDateRoutes(fastify: FastifyInstance, options: MeBir
   const revokeAllSessions = options.revokeAllSessions ?? revokeEverywhere(fastify);
   const onAgeDeclared =
     options.onAgeDeclared ?? ((userId: string) => revisitAutoAcquaintancesOnAgeDeclared(fastify.prisma, { userId }));
+  const forgetCircles = options.forgetTeamCircles ?? ((userId: string) => forgetTeamCircles(fastify, userId));
+  const forgetCirclesQuietly = (userId: string): Promise<void> =>
+    forgetCircles(userId).catch((error: unknown) => logger.warn('team circles not forgotten after an age declaration', { error }));
   const service = new OnboardingService(fastify.prisma);
 
   fastify.put(
@@ -141,7 +151,10 @@ export async function meBirthDateRoutes(fastify: FastifyInstance, options: MeBir
       if (!birthDate) return sendBadRequest(reply, INVALID_BIRTH_DATE, { code: 'VALIDATION_ERROR' });
       try {
         const outcome = await service.declareBirthDate(userId, birthDate, now());
-        if (outcome.kind === 'declared' || outcome.kind === 'below-minimum') onAgeDeclared(userId);
+        if (outcome.kind === 'declared' || outcome.kind === 'below-minimum') {
+          onAgeDeclared(userId);
+          await forgetCirclesQuietly(userId);
+        }
         switch (outcome.kind) {
           case 'declared':
             logger.info('birth date declared', { userId, ageClass: outcome.ageClass });

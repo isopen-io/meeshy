@@ -88,6 +88,7 @@ const en = {
   'invite.refusal.banned': 'You can no longer join this conversation.',
   'invite.refusal.region': 'This invitation isn’t available from your network.',
   'invite.refusal.account-required': 'A Meeshy account is required to join this conversation.',
+  'invite.refusal.members-only': 'This conversation is for members of its community only.',
   'invite.refusal.session-expired': 'Your session has expired. Sign in again to join.',
   'invite.refusal.rate-limited': 'Too many attempts. Try again in a moment.',
   'invite.refusal.offline': 'You’re offline. The invitation will appear when you’re back online.',
