@@ -618,9 +618,7 @@ export function registerCommentRoutes(
       if (error instanceof Error && error.message === 'EMPTY_CONTENT') {
         return sendBadRequest(reply, 'A text comment cannot be edited to blank', { code: 'EMPTY_CONTENT' });
       }
-      if (error instanceof Error && error.message === 'COMMENTS_DISABLED') {
-        return sendForbidden(reply, 'Comments are disabled on this post', { code: 'COMMENTS_DISABLED' });
-      }
+      if (error instanceof Error && error.message === 'COMMENTS_DISABLED') return sendForbidden(reply, 'Comments are disabled on this post', { code: 'COMMENTS_DISABLED' });
       enhancedLogger.error('[PATCH /posts/:postId/comments/:commentId]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
