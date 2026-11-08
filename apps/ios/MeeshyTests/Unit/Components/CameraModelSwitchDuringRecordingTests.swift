@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import Meeshy
 
 /// Source-analysis guards for the camera-switch-mid-recording fix (2026-07-09).
@@ -248,5 +249,100 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
             "surface as nil so callers fail soft to the last segment instead " +
             "of handing off a broken/partial file."
         )
+    }
+}
+
+/// **Une vidéo interrompue garde ce qui a été filmé** (OPUS-11).
+///
+/// Un appel entrant, le passage en arrière-plan ou Siri closent la prise avec
+/// une erreur ET un fichier valide (`AVErrorRecordingSuccessfullyFinishedKey`).
+/// `handleSegmentFinished` jetait tout dès `error != nil` : 40 s de vidéo
+/// disparaissaient sans un mot.
+final class CameraRecordingInterruptionTests: XCTestCase {
+
+    private func erreur(fichierValide: Bool?) -> NSError {
+        var info: [String: Any] = [:]
+        if let fichierValide { info[AVErrorRecordingSuccessfullyFinishedKey] = fichierValide }
+        return NSError(domain: AVFoundationErrorDomain, code: AVError.Code.sessionWasInterrupted.rawValue, userInfo: info)
+    }
+
+    func test_sansErreur_laPriseSuitSonCours() {
+        XCTAssertEqual(CameraRecordingEnding.of(nil), .finished)
+        XCTAssertEqual(CameraRecordingEnding.finished.next(keptSegments: 1), .asUsual)
+    }
+
+    func test_erreurAvecFichierValide_laPriseEstGardee() {
+        let fin = CameraRecordingEnding.of(erreur(fichierValide: true))
+        XCTAssertEqual(fin, .interrupted)
+        XCTAssertTrue(fin.keepsFile)
+        XCTAssertEqual(fin.next(keptSegments: 1), .keepWhatWasFilmed)
+    }
+
+    func test_erreurSansFichierValide_estUnePerte() {
+        XCTAssertEqual(CameraRecordingEnding.of(erreur(fichierValide: false)), .lost)
+        XCTAssertEqual(CameraRecordingEnding.of(erreur(fichierValide: nil)), .lost)
+        XCTAssertFalse(CameraRecordingEnding.lost.keepsFile)
+        XCTAssertEqual(CameraRecordingEnding.lost.next(keptSegments: 0), .nothingToKeep)
+    }
+
+    /// Après une bascule d'objectif, les segments déjà pris restent même si le
+    /// dernier est illisible.
+    func test_pertePartielle_gardeLesSegmentsDejaPris() {
+        XCTAssertEqual(CameraRecordingEnding.lost.next(keptSegments: 2), .keepWhatWasFilmed)
+    }
+
+    private func source(_ chemin: String) throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8)
+    }
+
+    private func corps(_ texte: String, de debut: String, a fin: String) -> String {
+        guard let d = texte.range(of: debut) else { return "" }
+        let f = texte.range(of: fin, range: d.upperBound..<texte.endIndex)?.lowerBound ?? texte.endIndex
+        return String(texte[d.lowerBound..<f])
+    }
+
+    func test_laFinDeSegmentLitLErreurAuLieuDeLaJeter() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let fn = corps(modele, de: "private func handleSegmentFinished", a: "private func resumeRecordingAfterSwitch")
+        XCTAssertFalse(fn.isEmpty)
+        XCTAssertFalse(fn.contains("guard error == nil"),
+                       "Une erreur n'est pas une perte : AVFoundation livre un fichier valide après une interruption.")
+        XCTAssertTrue(fn.contains("CameraRecordingEnding.of(error)"))
+        XCTAssertTrue(fn.contains("deliverInterruptedRecording(token: jeton)"))
+    }
+
+    func test_laPriseInterrompueEstAnnoncee() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let fn = corps(modele, de: "private func deliverInterruptedRecording", a: "private func deliverRecording")
+        XCTAssertTrue(fn.contains("await deliverRecording(token: token)"))
+        XCTAssertTrue(fn.contains("CameraTakeNotice.announceInterruptedRecording()"),
+                      "La coupure doit se dire : l'auteur croyait filmer encore.")
+    }
+
+    /// Une photo sans données ne sort plus en silence.
+    func test_unePhotoSansDonnees_seDit() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let fn = corps(modele, de: "didFinishProcessingPhoto photo:", a: "let nom = ComposerPhotoEncoding")
+        XCTAssertEqual(fn.components(separatedBy: "self.photoWasLost()").count - 1, 2)
+        let perte = corps(modele, de: "func photoWasLost()", a: "/// Le tic du cadre")
+        XCTAssertTrue(perte.contains("CameraTakeNotice.announceLostPhoto()"))
+    }
+
+    /// Un assemblage raté garde le dernier segment ; les autres ne restent pas dans `tmp/`.
+    func test_assemblageRate_neLaissePasDeSegmentsOrphelins() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let fn = corps(modele, de: "private func deliverRecording", a: "nonisolated static func mergeSegments")
+        XCTAssertTrue(fn.contains("for segment in segments.dropLast()"))
+    }
+
+    /// Le viseur, encore « en prise », se clôt lui aussi : sinon le cadenas et le
+    /// chrono restent affichés sur une caméra qui ne filme plus.
+    func test_leViseurClotUnePriseCloseParLeSysteme() throws {
+        let prises = try source("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
+        let fn = corps(prises, de: "func videoArrived(", a: "switch intent {")
+        XCTAssertTrue(fn.contains("if stage == .recording { closeTake() }"))
     }
 }

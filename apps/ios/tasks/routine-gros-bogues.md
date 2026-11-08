@@ -132,7 +132,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : OPUS-1, #16482.
 
 ## OPUS-11 — Une vidéo interrompue (appel, arrière-plan, Siri) est jetée en entier
-- Statut : à faire
+- Statut : fait (#16807), recette iPhone à faire
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : audit 09 § S1
 - Constat : `CameraModel.handleSegmentFinished` jette TOUS les segments dès que `error != nil` (`Main/Components/CameraModel.swift:823-830`, `endRecordingWithoutOutput`). AVFoundation clôt pourtant la prise avec une erreur ET un fichier valide (`userInfo[AVErrorRecordingSuccessfullyFinishedKey] == true`) en cas d'appel entrant, de passage en arrière-plan, de Siri, de durée ou de taille maximale, de disque presque plein. Si l'assemblage de plusieurs segments échoue, seul le dernier est livré et les autres restent dans `tmp/` (`:892-903`). La photo sans données sort aussi en silence (`:948-951`).

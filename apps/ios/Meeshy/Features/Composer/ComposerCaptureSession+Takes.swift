@@ -208,9 +208,9 @@ extension ComposerCaptureSession {
         guard let url = camera.capturedVideoURL else { return }
         let intent = filmIntents.removeValue(forKey: id) ?? .edit
         guard stage != .off || intent == .gallery else {
-            discardTake(url, context: "prise arrivée après la fermeture du viseur")
-            return
+            return discardTake(url, context: "prise arrivée après la fermeture du viseur")
         }
+        if stage == .recording { closeTake() } // Close par le système (appel, arrière-plan, Siri : OPUS-11).
         switch intent {
         case .gallery where stage == .off: saveRenderedVideo(url)
         case .gallery: openFrameTake(video: url)
