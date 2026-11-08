@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_filter_backgroundBlur">Desfoque de fundo</string>
+    <string name="video_filter_brightness">Brilho</string>
+    <string name="video_filter_contrast">Contraste</string>
+    <string name="video_filter_exposure">Exposição</string>
+    <string name="video_filter_naturalComplexion">Tez natural</string>
+    <string name="video_filter_naturalComplexion_hint">Uniformiza e ilumina a tez, sem retoque visível</string>
+    <string name="video_filter_performanceDegraded">Desempenho reduzido — alguns filtros desativados</string>
+    <string name="video_filter_radius">Raio</string>
+    <string name="video_filter_reinit">Redefinir</string>
+    <string name="video_filter_reset">Redefinir</string>
+    <string name="video_filter_saturation">Saturação</string>
+    <string name="video_filter_skinSmoothing">Suavização da pele</string>
+    <string name="video_filter_temperature">Temperatura</string>
+    <string name="video_filter_title">Filtros de vídeo</string>
+</resources>

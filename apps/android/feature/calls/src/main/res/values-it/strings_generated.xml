@@ -257,23 +257,9 @@
     <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>
     <string name="permission_microphone_denied">Microfono negato — tocca per aprire Impostazioni</string>
-    <string name="video_filter_backgroundBlur">Sfocatura dello sfondo</string>
-    <string name="video_filter_brightness">Luminosità</string>
-    <string name="video_filter_contrast">Contrasto</string>
-    <string name="video_filter_exposure">Esposizione</string>
-    <string name="video_filter_naturalComplexion">Incarnato naturale</string>
-    <string name="video_filter_naturalComplexion_hint">Uniforma e illumina l\'incarnato, senza ritocco visibile</string>
-    <string name="video_filter_performanceDegraded">Prestazioni ridotte — alcuni filtri disattivati</string>
     <string name="video_filter_preset_cool">Freddo</string>
     <string name="video_filter_preset_muted">Morbido</string>
     <string name="video_filter_preset_natural">Naturale</string>
     <string name="video_filter_preset_vivid">Vivido</string>
     <string name="video_filter_preset_warm">Caldo</string>
-    <string name="video_filter_radius">Raggio</string>
-    <string name="video_filter_reinit">Reimposta</string>
-    <string name="video_filter_reset">Reimposta</string>
-    <string name="video_filter_saturation">Saturazione</string>
-    <string name="video_filter_skinSmoothing">Levigatura della pelle</string>
-    <string name="video_filter_temperature">Temperatura</string>
-    <string name="video_filter_title">Filtri video</string>
 </resources>
