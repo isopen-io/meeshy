@@ -4,7 +4,9 @@ import { useStore } from 'zustand/react';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
+import { CallIncomingAnswer } from '@/components/call-incoming-answer';
 import { CallJournalColumn } from '@/components/call-journal-column';
+import { RoundButton } from '@/components/call-round-button';
 import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
@@ -75,65 +77,13 @@ import type { EffectsCompanion } from './call-effects-companions';
  * l'appel » (#8438). Les réactions montent par-dessus la scène, et le mot d'un
  * contrôle s'affiche en haut (`call-control-overlays.tsx`).
  *
- * L'appel entrant, l'écran de fin, la pastille, la bulle et la fenêtre PiP ne
- * changent pas.
+ * L'appel entrant vit dans `call-incoming-answer.tsx` (P17, #16944) ; l'écran
+ * de fin, la pastille, la bulle et la fenêtre PiP ne changent pas.
  */
 
 const INK = 'var(--color-on-media)';
 const INK_2 = 'var(--color-on-media-3)';
 const BACKDROP = 'linear-gradient(180deg, var(--ios-indigo-950) 0%, var(--color-media-backdrop) 100%)';
-const HANGUP = 'var(--ios-error-strong)';
-const ANSWER = 'var(--ios-success)';
-
-/* Refuser et Accepter gardent leur couleur de signal ; le neutre prend le verre d'appel. */
-const SIGNAL_TONE = { danger: { background: HANGUP, color: INK }, accept: { background: ANSWER, color: INK } } as const;
-
-/**
- * Le bouton rond de l'appel entrant et de l'écran de fin. Neutre, il porte le
- * verre d'appel comme tout bouton qui flotte seul (#8432) ; Refuser est rouge,
- * Accepter vert.
- */
-function RoundButton({
-  label,
-  glyph,
-  onPress,
-  tone = 'plain',
-  size = 56,
-  caption,
-  popup = false,
-  control,
-}: {
-  readonly label: string;
-  readonly glyph: ReactNode;
-  readonly onPress: () => void;
-  readonly tone?: 'plain' | 'danger' | 'accept';
-  readonly size?: number;
-  readonly caption?: string;
-  readonly popup?: boolean;
-  readonly control?: string;
-}) {
-  const glass = tone === 'plain';
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <button
-        type="button"
-        aria-label={label}
-        {...(popup ? { 'aria-haspopup': 'dialog' as const } : {})}
-        {...(control === undefined ? {} : { 'data-call-control': control })}
-        onClick={onPress}
-        className={`${glass ? 'glass-call ' : ''}grid place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none`}
-        style={tone === 'plain' ? { width: size, height: size } : { width: size, height: size, ...SIGNAL_TONE[tone] }}
-      >
-        {glyph}
-      </button>
-      {caption === undefined ? null : (
-        <span className="text-mini" style={{ color: INK_2 }}>
-          {caption}
-        </span>
-      )}
-    </div>
-  );
-}
 
 /**
  * Un chunk chargé UNE fois — et rechargé après un échec : un préchargement
@@ -451,7 +401,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
 
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">
-      <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} />
+      {/* P17 (#16944) : la vidéo de l'appelant tient lieu de portrait pendant la sonnerie. */}
+      {phase === 'incoming' && hasVideo(call.preview) ? null : (
+        <span data-call-incoming-portrait="">
+          <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} />
+        </span>
+      )}
       <h2 className="text-[1.6rem] font-bold leading-tight" style={{ color: INK }}>
         {call.title}
       </h2>
@@ -553,26 +508,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     />
   );
 
-  const incomingControls = (
-    <div className="flex flex-col gap-6">
-      <div className="flex justify-center">
-        <RoundButton
-          label={translate(language, 'callDecline.title')}
-          caption={translate(language, 'callDecline.open')}
-          size={48}
-          glyph={screenGlyph('chatCircleText', 22)}
-          onPress={() => setDeclineOpen(true)}
-          popup
-          control="decline-message"
-        />
-      </div>
-      <div className="flex items-start justify-around gap-6 px-8">
-        <RoundButton label={t('call.decline')} caption={t('call.decline')} tone="danger" size={68} glyph={screenGlyph('phoneDisconnect', 30)} onPress={callActions.decline} />
-        {call.media === 'video' ? <RoundButton label={t('call.accept.audioOnly')} caption={t('call.accept.audioOnly')} size={68} glyph={<Glyph name="phone" size={28} />} onPress={() => callActions.accept({ audioOnly: true })} /> : null}
-        <RoundButton label={t('call.accept')} caption={t('call.accept')} tone="accept" size={68} glyph={call.media === 'video' ? screenGlyph('videoCamera', 30) : <Glyph name="phone" size={28} />} onPress={() => callActions.accept()} />
-      </div>
-    </div>
-  );
+  const incomingControls = <CallIncomingAnswer call={call} language={language} onAccept={callActions.accept} onDecline={callActions.decline} onDeclineMessage={() => setDeclineOpen(true)} />;
 
   const openAppSettings = appSettingsOpener();
   const endedControls = (
