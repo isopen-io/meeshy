@@ -32,43 +32,57 @@ final class MeeStickerLottieTests: XCTestCase {
         XCTAssertGreaterThan(opaqueFraction(cg), 0.1, "le personnage est dessiné, pas une image vide")
     }
 
-    func test_decodedFilm_hasOneLoopOfFramesAtTheRasterRate() throws {
+    func test_decodedFilm_hasOneLoopOfFramesAtTheRasterRate() async throws {
         let sticker = try animatedSticker()
         let url = try XCTUnwrap(MeeStickerCatalog.fileURL(for: sticker))
-        let source = try XCTUnwrap(LottieFilm.loadNow(url: url))
-        let decoded = try XCTUnwrap(MeeStickerCatalog.decoded(sticker, maxPixelSize: 96))
+        let loaded = await LottieFilm.load(url: url)
+        let source = try XCTUnwrap(loaded)
+        let entry = await MeeStickerCatalog.film(at: url, maxPixelSize: 96)
+        let decoded = try XCTUnwrap(entry?.decoded)
         XCTAssertEqual(decoded.frames.count, LottieFilm.frameCount(duration: source.duration, framesPerSecond: LottieFilm.rasterFramesPerSecond))
         XCTAssertEqual(decoded.duration, Double(decoded.frames.count) / LottieFilm.rasterFramesPerSecond, accuracy: 1e-9)
         XCTAssertEqual(decoded.frames.first?.width, 96)
         XCTAssertNotEqual(pixels(decoded.frames[0]), pixels(decoded.frames[decoded.frames.count / 2]), "le film bouge")
     }
 
-    func test_asyncFilm_matchesTheSynchronousOne() async throws {
+    /// **Le film se rend sans bloquer le fil principal** (#17040) : le rendu
+    /// Lottie exige ce fil (moteur « main thread »), il lui rend donc la main
+    /// à CHAQUE image — un minuteur du fil principal continue de battre.
+    func test_asyncFilm_yieldsTheMainThreadBetweenFrames() async throws {
         let sticker = try animatedSticker()
         let url = try XCTUnwrap(MeeStickerCatalog.fileURL(for: sticker))
         let loaded = await LottieFilm.load(url: url)
         let source = try XCTUnwrap(loaded)
+        let beats = MainThreadBeats()
+        let ticker = Task { @MainActor in
+            while !Task.isCancelled {
+                beats.count += 1
+                await Task.yield()
+            }
+        }
         let rendered = await LottieFilm.decoded(source, pixelSize: 64)
-        let viaAsync = try XCTUnwrap(rendered)
-        let viaSync = try XCTUnwrap(LottieFilm.decodedNow(source, pixelSize: 64))
-        XCTAssertEqual(viaAsync.frames.count, viaSync.frames.count)
-        XCTAssertEqual(pixels(viaAsync.frames[1]), pixels(viaSync.frames[1]))
+        ticker.cancel()
+        let decoded = try XCTUnwrap(rendered)
+        XCTAssertGreaterThanOrEqual(beats.count, decoded.frames.count - 1,
+                                    "le fil principal doit reprendre la main entre deux images")
     }
 
     /// La story publiée part en PNG animé : le conteneur que
     /// `StoryViewModel+PublicationUpload` reconnaît, et qui se redécode en film.
-    func test_animatedImageData_isAnAPNGThatEveryClientDecodes() throws {
+    func test_animatedImageData_isAnAPNGThatEveryClientDecodes() async throws {
         let sticker = try animatedSticker()
-        let data = try XCTUnwrap(MeeStickerCatalog.animatedImageData(for: sticker))
+        let encoded = await MeeStickerCatalog.animatedImageData(for: sticker)
+        let data = try XCTUnwrap(encoded)
         XCTAssertEqual(AnimatedImageEligibility.container(data), .apng)
         XCTAssertTrue(AnimatedImageDecoder.animates(data))
         let redecoded = try XCTUnwrap(AnimatedImageDecoder.decode(data, maxPixelSize: 120))
         XCTAssertGreaterThan(redecoded.frames.count, 1)
     }
 
-    func test_animatedImageData_isNilForAStillSticker() throws {
+    func test_animatedImageData_isNilForAStillSticker() async throws {
         guard let still = MeeStickerCatalog.all.first(where: { !$0.animated }) else { return }
-        XCTAssertNil(MeeStickerCatalog.animatedImageData(for: still))
+        let encoded = await MeeStickerCatalog.animatedImageData(for: still)
+        XCTAssertNil(encoded)
     }
 
     /// La feuille monte une case par sticker, et chacune lit son film en
@@ -110,4 +124,9 @@ final class MeeStickerLottieTests: XCTestCase {
         let alphas = stride(from: 3, to: bytes.count, by: 4).map { bytes[$0] }
         return Double(alphas.filter { $0 > 200 }.count) / Double(max(1, alphas.count))
     }
+}
+
+@MainActor
+private final class MainThreadBeats {
+    var count = 0
 }
