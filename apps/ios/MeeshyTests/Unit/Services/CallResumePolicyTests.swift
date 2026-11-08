@@ -108,14 +108,14 @@ final class CallResumePolicyTests: XCTestCase {
     // MARK: - Les compteurs de négociation convergent quand un pair revient
 
     func test_isStaleNegotiation_freshLinkOffer_convergesInsteadOfBeingDropped() {
-        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 5, isOffer: true))
-        XCTAssertTrue(CallManager.isFreshLinkOffer(incoming: 1, highWaterMark: 5, isOffer: true))
+        XCTAssertFalse(CallNegotiationRules.isStaleNegotiation(incoming: 1, highWaterMark: 5, isOffer: true))
+        XCTAssertTrue(CallNegotiationRules.isFreshLinkOffer(incoming: 1, highWaterMark: 5, isOffer: true))
     }
 
     func test_isStaleNegotiation_oldRenegotiationOrLateAnswer_staysStale() {
-        XCTAssertTrue(CallManager.isStaleNegotiation(incoming: 3, highWaterMark: 5, isOffer: true))
-        XCTAssertTrue(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 5, isOffer: false))
-        XCTAssertFalse(CallManager.isFreshLinkOffer(incoming: 1, highWaterMark: 1, isOffer: true))
+        XCTAssertTrue(CallNegotiationRules.isStaleNegotiation(incoming: 3, highWaterMark: 5, isOffer: true))
+        XCTAssertTrue(CallNegotiationRules.isStaleNegotiation(incoming: 1, highWaterMark: 5, isOffer: false))
+        XCTAssertFalse(CallNegotiationRules.isFreshLinkOffer(incoming: 1, highWaterMark: 1, isOffer: true))
     }
 
     // MARK: - Le pair d'un duo revient pendant la reprise

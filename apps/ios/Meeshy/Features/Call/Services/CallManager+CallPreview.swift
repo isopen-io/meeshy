@@ -38,9 +38,9 @@ extension CallManager: CallPreviewHostActing {
             callId: currentCallId,
             localUserId: AuthManager.shared.currentUser?.id ?? "",
             peerUserId: remoteUserId,
-            phase: Self.previewPhase(
+            phase: CallPreviewPhaseRule.phase(
                 of: callState,
-                ringsInApp: Self.previewRingsInApp(
+                ringsInApp: CallPreviewPhaseRule.ringsInApp(
                     usesCallKit: callUsesCallKit,
                     isAppActive: UIApplication.shared.applicationState == .active
                 )
@@ -49,24 +49,6 @@ extension CallManager: CallPreviewHostActing {
             isMicMuted: isMuted,
             isVideoEnabled: isVideoEnabled
         )
-    }
-
-    /// #8627 — CallKit ne montre pas de vidéo, mais un appel qu'il signale
-    /// sonne aussi dans l'app dès qu'elle est au premier plan.
-    nonisolated static func previewRingsInApp(usesCallKit: Bool, isAppActive: Bool) -> Bool {
-        !usesCallKit || isAppActive
-    }
-
-    nonisolated static func previewPhase(of state: CallState, ringsInApp: Bool) -> CallPreviewPhase {
-        switch state {
-        case .idle: return .none
-        case .ringing(let isOutgoing) where isOutgoing: return .outgoingRinging
-        case .ringing: return ringsInApp ? .incomingRinging : .none
-        case .offering: return .outgoingRinging
-        case .connecting: return .answering
-        case .connected, .reconnecting: return .connected
-        case .ended: return .ended
-        }
     }
 }
 
