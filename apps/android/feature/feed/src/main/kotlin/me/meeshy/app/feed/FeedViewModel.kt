@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.getUserDisplayName
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.feed.FeedHeadHold
 import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -122,6 +123,12 @@ class FeedViewModel @Inject constructor(
      */
     private val realtimeHead = MutableStateFlow(FeedRealtimeHead())
 
+    /** L'écran demande la retenue de tête ([holdHead]) : lecteur loin du haut, ou fil hors de l'écran (#16676). */
+    private val headHoldRequested = MutableStateFlow(false)
+
+    /** La retenue de tête en cours ([FeedHeadHold]) : ce qui arrive en tête attend, compté par la bannière. */
+    private val headHold = MutableStateFlow(FeedHeadHold())
+
     /** The raw posts currently displayed — the flag-tap handler resolves against these. */
     private var latestPosts: List<ApiPost> = emptyList()
 
@@ -175,7 +182,9 @@ class FeedViewModel @Inject constructor(
                 activeLanguageOverride,
                 realtimeHead,
             ) { result, user, hasMore, overrides, head -> FeedInputs(result, user, hasMore, overrides, head) }
-                .collect { (result, user, hasMore, overrides, head) ->
+                .combine(headHoldRequested) { inputs, holding -> inputs.copy(holding = holding) }
+                .combine(headHold) { inputs, hold -> inputs.copy(hold = hold) }
+                .collect { (result, user, hasMore, overrides, head, holding, hold) ->
                     val cachePosts = result.postsOrNull() ?: latestCachePosts
                     latestCachePosts = cachePosts
                     val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
@@ -210,16 +219,21 @@ class FeedViewModel @Inject constructor(
                         .withBookmarkOverlays(bookmarks)
                         .withCommentOverlays(comments)
                         .withRepostMarks(marks)
-                    latestPosts = visibleRealtime + visibleCache
+                    val candidate = visibleRealtime + visibleCache
+                    latestPosts = candidate
+
+                    // Lecteur loin du haut ou fil hors de l'écran : ce qui arrive en tête attend, la liste ne bouge pas
+                    // au-dessus du post lu et la position restaurée retombe sur lui (#16676).
+                    val split = hold.steered(holding, candidate.map { it.id }).split(candidate) { it.id }
+                    headHold.compareAndSet(hold, split.next)
                     _state.update {
                         it.project(
                             result = result,
-                            cachePosts = visibleCache,
-                            realtimePosts = visibleRealtime,
+                            posts = split.displayed,
                             user = user,
                             mediaBaseUrl = config.apiBaseUrl,
                             overrides = overrides,
-                            newPostsCount = reconciled.newPostsCount,
+                            newPostsCount = FeedHeadHold.bannerCount(reconciled.newPostsCount, split.held.size),
                         ).copy(hasMore = hasMore)
                     }
                 }
@@ -323,11 +337,22 @@ class FeedViewModel @Inject constructor(
     private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
     /**
-     * Tap on the "new posts" banner (scroll-to-top): clear the banner count. The posts
-     * already sit at the head, so only the counter resets. Port of iOS `acknowledgeNewPosts`.
+     * Tap on the "new posts" banner (scroll-to-top): clear the banner count and let the held
+     * posts in at the head ([FeedHeadHold]), even before the list has reached the top. Port of
+     * iOS `acknowledgeNewPosts`.
      */
     fun acknowledgeNewPosts() {
+        headHold.update { it.release() }
         realtimeHead.update { FeedRealtimeReducer.acknowledge(it) }
+    }
+
+    /**
+     * L'écran pilote la retenue de tête (#16676) : [holding] vrai quand le premier élément visible est un post ou que
+     * le fil n'est pas à l'écran (quitté, recouvert, en arrière-plan) ; faux quand le lecteur est revenu en haut, ce
+     * qui laisse entrer ce qui attendait.
+     */
+    fun holdHead(holding: Boolean) {
+        headHoldRequested.value = holding
     }
 
     /**
@@ -459,6 +484,7 @@ class FeedViewModel @Inject constructor(
     }
 
     fun refresh() {
+        headHold.update { it.release() }
         realtimeHead.update { FeedRealtimeReducer.clear(it) }
         _state.update { it.copy(loadFailed = false, isSyncing = true) }
         viewModelScope.launch {
@@ -642,13 +668,15 @@ class FeedViewModel @Inject constructor(
     }
 }
 
-/** The combined inputs of the feed projection (Kotlin has no built-in Quintuple). */
+/** The combined inputs of the feed projection, the head hold ([FeedHeadHold]) included. */
 private data class FeedInputs(
     val result: CacheResult<List<ApiPost>>,
     val user: MeeshyUser?,
     val hasMore: Boolean,
     val overrides: Map<String, String>,
     val head: FeedRealtimeHead,
+    val holding: Boolean = false,
+    val hold: FeedHeadHold = FeedHeadHold(),
 )
 
 /**
@@ -715,22 +743,20 @@ private fun List<ApiPost>.toPresentations(
     map { FeedPostBuilder.build(it, preferences, mediaBaseUrl, activeLanguageCode = overrides[it.id], viewerRole = viewerRole) }
 
 /**
- * Projects the cache result plus the real-time head into the UI state. Realtime posts
- * (already filtered to be disjoint from the cache) are prepended to the cache-projected
- * list; skeleton shows only when there is genuinely nothing to display.
+ * Projects the displayed posts (the real-time head, disjoint from the cache, then the
+ * cache-projected list, minus what the head hold keeps aside) into the UI state; skeleton
+ * shows only when there is genuinely nothing to display.
  */
 private fun FeedUiState.project(
     result: CacheResult<List<ApiPost>>,
-    cachePosts: List<ApiPost>,
-    realtimePosts: List<ApiPost>,
+    posts: List<ApiPost>,
     user: MeeshyUser?,
     mediaBaseUrl: String,
     overrides: Map<String, String>,
     newPostsCount: Int,
 ): FeedUiState {
     val prefs = user ?: EmptyContentPreferences
-    val projected = realtimePosts.toPresentations(prefs, mediaBaseUrl, overrides, user?.role) +
-        cachePosts.toPresentations(prefs, mediaBaseUrl, overrides, user?.role)
+    val projected = posts.toPresentations(prefs, mediaBaseUrl, overrides, user?.role)
     val stillFailed = loadFailed && result !is CacheResult.Fresh && projected.isEmpty()
     val isSyncing = when (result) {
         is CacheResult.Fresh -> false
