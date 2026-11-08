@@ -225,17 +225,29 @@ function wireServerToFastify(
 ) {
   const invalidateParticipantCache = jest.fn<any>();
   const endLiveLocationForDepartedMember = jest.fn<any>();
+  // `joinUserToConversationRoom` COMPLÈTE le double, et son absence coûtait
+  // plus qu'une méthode manquante (#17032). L'ajout d'un participant l'appelle
+  // — `socketManager.joinUserToConversationRoom(...).catch(...)` lève quand la
+  // méthode n'existe pas — et l'appel vivait APRÈS les diffusions : le
+  // `TypeError` partait donc dans le `catch` de fin de route, qui répondait
+  // 500, pendant que les témoins d'émission restaient verts. Ils n'assertaient
+  // que `io.to` / `io._emit`, jamais la réponse. C'est « un double mente aussi
+  // par ce qu'il ACCEPTE » dans sa variante par OMISSION : la méthode absente
+  // ne refusait rien, elle faisait tomber la suite du gestionnaire.
+  const joinUserToConversationRoom = jest.fn<any>(async () => undefined);
   fastify.socketIOHandler = server?.io
     ? {
         getManager: () => ({
           getIO: () => server.io,
           invalidateParticipantCache,
           endLiveLocationForDepartedMember,
+          joinUserToConversationRoom,
         }),
       }
     : undefined;
   fastify.notificationService = server?.notificationService;
   fastify._invalidateParticipantCache = invalidateParticipantCache;
+  fastify._joinUserToConversationRoom = joinUserToConversationRoom;
   fastify._endLiveLocationForDepartedMember = endLiveLocationForDepartedMember;
 }
 
@@ -1600,6 +1612,11 @@ describe('registerParticipantsRoutes', () => {
         conversationId: VALID_CONV_ID,
         userId: TARGET_USER_ID,
       });
+      // Et la route RÉPOND l'ajout : ce témoin a couvert un 500 pendant toute
+      // la vie du double incomplet ci-dessus, parce qu'il n'assertait que
+      // l'émission. Une diffusion juste au-dessus d'un gestionnaire qui lève
+      // n'est pas un succès.
+      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
     it('should not crash when io is undefined (R6-1 graceful)', async () => {
