@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 
 RejectedTasksHandler = Callable[[List[TranslationTask]], Awaitable[None]]
 
+LOGGED_TASK_IDS_LIMIT = 20
+
+
+def summarize_task_ids(tasks: List[TranslationTask], limit: int = LOGGED_TASK_IDS_LIMIT) -> str:
+    """
+    #17003 — une ligne de journal bornée pour N tâches : le total et au plus
+    `limit` task_id, jamais de texte. Un refus de 15 000 tâches tient sur une
+    ligne de taille fixe.
+    """
+    shown = [t.task_id for t in tasks[:limit]]
+    rest = len(tasks) - len(shown)
+    suffix = f" (+{rest} autres)" if rest > 0 else ""
+    return f"{len(tasks)} tasks {shown}{suffix}"
+
 
 class SignalingQueue(asyncio.Queue):
     """
@@ -202,6 +216,8 @@ class ConnectionManager:
         self._batch_accumulator: Dict[str, List[TranslationTask]] = {}
         self._batch_lock = asyncio.Lock()
         self._batch_flush_task: Optional[asyncio.Task] = None
+        # #17002 — levé par `stop()` : toute tâche reçue ensuite est refusée et signalée
+        self._shutting_down = False
 
         # Priority queue configuration
         PERFORMANCE_MODULE_AVAILABLE = False
@@ -250,7 +266,15 @@ class ConnectionManager:
             )
 
     async def stop(self):
-        """Arrête les services de connexion"""
+        """
+        Arrête les services de connexion.
+
+        #17002 — l'entrée se ferme AVANT le flush final et la vidange : une
+        tâche qui arrive ensuite (le PULL reste ouvert pendant l'arrêt) est
+        refusée et signalée, jamais déposée là où plus rien ne lit.
+        """
+        self._shutting_down = True
+
         # Arrêter la boucle de flush
         if self._batch_flush_task:
             self._batch_flush_task.cancel()
@@ -283,11 +307,22 @@ class ConnectionManager:
             return 0
         self.stats['shutdown_rejections'] += len(pending)
         logger.warning(
-            f"[TRANSLATOR] Shutdown: signaling {len(pending)} unprocessed tasks: "
-            f"{[t.task_id for t in pending]}"
+            f"[TRANSLATOR] Shutdown: signaling unprocessed {summarize_task_ids(pending)}"
         )
         await self._report_rejected(pending)
         return len(pending)
+
+    async def _refuse_at_shutdown(self, task: TranslationTask) -> bool:
+        """
+        #17002 — une tâche reçue après le début de l'arrêt : comptée, signalée
+        par le rappel de rejet. Comme une tâche entrée dans l'accumulateur,
+        elle est « acceptée » : son refus se dit par le rappel, jamais par le
+        retour, sinon la passerelle la recevrait deux fois.
+        """
+        self.stats['shutdown_rejections'] += 1
+        logger.debug(f"[TRANSLATOR] Shutdown in progress, refusing task {task.task_id}")
+        await self._report_rejected([task])
+        return True
 
     async def enqueue_task(self, task: TranslationTask) -> bool:
         """
@@ -300,6 +335,11 @@ class ConnectionManager:
             True si enfilée avec succès, False sinon
         """
         try:
+            # Aucun `await` entre ce test et le dépôt dans une file : la vidange
+            # de l'arrêt, postérieure au drapeau, retrouve toute tâche passée.
+            if self._shutting_down:
+                return await self._refuse_at_shutdown(task)
+
             if is_live_call_caption(task.message_id):
                 return await self._enqueue_live_caption(task)
 
@@ -323,24 +363,16 @@ class ConnectionManager:
             # ════════════════════════════════════════════════════════════════
             if self.enable_batching:
                 async with self._batch_lock:
-                    batch_key = self._get_batch_key(task)
+                    # #17002 — l'attente du verrou peut chevaucher le début de
+                    # l'arrêt : le drapeau se relit sous le verrou, que le flush
+                    # final et la vidange prennent aussi.
+                    if self._shutting_down:
+                        accepted, rejected = False, []
+                    else:
+                        accepted, rejected = True, await self._accumulate(task)
 
-                    if batch_key not in self._batch_accumulator:
-                        self._batch_accumulator[batch_key] = []
-
-                    self._batch_accumulator[batch_key].append(task)
-
-                    # Flush immédiat si batch max atteint
-                    rejected: List[TranslationTask] = []
-                    if len(self._batch_accumulator[batch_key]) >= self.batch_max_size:
-                        tasks_to_flush = self._batch_accumulator.pop(batch_key)
-                        if not await self._enqueue_batch(tasks_to_flush):
-                            rejected = tasks_to_flush
-                        logger.debug(
-                            f"⚡ [BATCH] Max size reached, immediate flush of "
-                            f"{len(tasks_to_flush)} tasks"
-                        )
-
+                if not accepted:
+                    return await self._refuse_at_shutdown(task)
                 # #16781 — une tâche entrée dans l'accumulateur est ACCEPTÉE :
                 # son éventuel refus se dit par le rappel, jamais par ce retour,
                 # sinon la tâche déclenchante serait signalée deux fois.
@@ -353,6 +385,21 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error enqueueing task {task.task_id}: {e}")
             return False
+
+    async def _accumulate(self, task: TranslationTask) -> List[TranslationTask]:
+        """Range la tâche dans l'accumulateur, sous `_batch_lock` ; un lot plein
+        part aussitôt. Rend les tâches d'un lot refusé par une file pleine."""
+        batch_key = self._get_batch_key(task)
+        self._batch_accumulator.setdefault(batch_key, []).append(task)
+        if len(self._batch_accumulator[batch_key]) < self.batch_max_size:
+            return []
+        tasks_to_flush = self._batch_accumulator.pop(batch_key)
+        logger.debug(
+            f"⚡ [BATCH] Max size reached, immediate flush of {len(tasks_to_flush)} tasks"
+        )
+        if await self._enqueue_batch(tasks_to_flush):
+            return []
+        return tasks_to_flush
 
     async def _enqueue_live_caption(self, task: TranslationTask) -> bool:
         """
@@ -431,8 +478,8 @@ class ConnectionManager:
         if pool.full():
             self.stats['pool_full_rejections'] += len(tasks)
             logger.warning(
-                f"[TRANSLATOR] {pool_name} pool full, rejecting batch of {len(tasks)} "
-                f"tasks: {[t.task_id for t in tasks]}"
+                f"[TRANSLATOR] {pool_name} pool full, rejecting batch of "
+                f"{summarize_task_ids(tasks)}"
             )
             return False
 
@@ -449,8 +496,8 @@ class ConnectionManager:
             await self.on_tasks_rejected(tasks)
         except Exception as e:
             logger.error(
-                f"[TRANSLATOR] Rejection callback failed for {len(tasks)} tasks "
-                f"{[t.task_id for t in tasks]}: {type(e).__name__}"
+                f"[TRANSLATOR] Rejection callback failed for "
+                f"{summarize_task_ids(tasks)}: {type(e).__name__}"
             )
 
     def _get_batch_key(self, task: TranslationTask) -> str:

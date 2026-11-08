@@ -18,6 +18,7 @@ Promesses tenues ici :
 3. Un refus de N tâches produit un nombre de lignes de journal indépendant de N,
    chaque ligne citant au plus 20 task_id et le total — jamais de texte.
 """
+import asyncio
 import json
 import logging
 import re
@@ -162,6 +163,24 @@ class TestStopClosesIngressBeforeDraining:
         assert mgr.get_stats()["shutdown_rejections"] == 4
         _assert_nothing_left(mgr)
 
+
+    async def test_task_waiting_on_the_batch_lock_when_stop_begins_has_exactly_one_outcome(self):
+        mgr = _manager()
+        pub_socket = AsyncMock()
+        _handler(mgr, pub_socket)
+        cm = mgr.connection_manager
+        await cm._batch_lock.acquire()
+        enqueuing = asyncio.create_task(mgr.enqueue_task(_task("racing")))
+        await asyncio.sleep(0)
+        stopping = asyncio.create_task(mgr.stop_workers())
+        await asyncio.sleep(0.01)
+        cm._batch_lock.release()
+
+        await asyncio.wait_for(asyncio.gather(enqueuing, stopping), timeout=5.0)
+
+        assert _signaled_ids(pub_socket) == ["racing"]
+        assert mgr.get_stats()["shutdown_rejections"] == 1
+        _assert_nothing_left(mgr)
 
 def _ids_in(message: str, prefix: str) -> int:
     return len(re.findall(rf"{prefix}-\d+", message))
