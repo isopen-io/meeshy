@@ -293,7 +293,18 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // qui restent sont celles de l'admission (`POST …/participants`), qui n'a
   // pas bouge. Total inchange.
   'conversations/participant-rights-core.ts': 1,
-  'conversations/participants-writes.ts': 3,
+  // 3 -> 2 + 1 : #16837 a emporté dans `memberArrivalFanOut.ts` la lecture de
+  // l'AUDIENCE de l'éventail d'arrivée, parce que les TROIS portes d'arrivée
+  // doivent la partager et qu'une seule l'émettait. Le compte total est
+  // inchangé — c'est une MIGRATION, comme celles de #4176, #4284 et #4713
+  // au-dessus.
+  //
+  // Elle reste non bornée pour la même raison que les lectures de participants
+  // déjà gelées ici : un éventail qui s'arrête à N destinataires ne prévient
+  // pas les autres, et un `take` y serait un défaut de livraison, pas une
+  // protection. La borne qui compte est l'appartenance à UNE conversation.
+  'conversations/participants-writes.ts': 2,
+  'conversations/memberArrivalFanOut.ts': 1,
   'conversations/participant-removal.ts': 2,
   'conversations/search.ts': 1,
   'conversations/sharing.ts': 2,

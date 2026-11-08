@@ -24,6 +24,9 @@ import {
  *
  * - « Bloquer ses Bring » dès Ami ; « Couper son talkie » dès Proche (sa voix
  *   arrive alors en message vocal).
+ * - « Ce que j'écoute » dès Proche (#16831) : un ACCORD, refusé par défaut —
+ *   coché, ce que j'écoute sur mon iPhone part vers cette personne (iso
+ *   `CirclePersonSwitch`, iOS). Même interrupteur : coché = le champ est vrai.
  * - `GET|PUT /relations/:userId/settings`, une lecture pour toute la fiche, une
  *   écriture stricte d'un champ.
  * - Optimiste : basculé au geste, rendu à l'état d'avant sur un refus, qui se dit.
@@ -32,9 +35,9 @@ import {
 
 type BlockSpec = {
   readonly minLevel: RelationLevel;
-  readonly label: 'circles.settings.blockBring' | 'circles.settings.blockTalkie';
-  readonly detail: 'circles.settings.blockBring.detail' | 'circles.settings.blockTalkie.detail';
-  readonly failed: 'circles.settings.blockBring.failed' | 'circles.settings.blockTalkie.failed';
+  readonly label: 'circles.settings.blockBring' | 'circles.settings.blockTalkie' | 'circles.settings.listening';
+  readonly detail: 'circles.settings.blockBring.detail' | 'circles.settings.blockTalkie.detail' | 'circles.settings.shareListening.detail';
+  readonly failed: 'circles.settings.blockBring.failed' | 'circles.settings.blockTalkie.failed' | 'circles.settings.shareListening.failed';
   /** Ce qui se relit après le réglage : un blocage croisé change ma disponibilité de Bring. */
   readonly refresh: (userId: string) => readonly unknown[] | null;
 };
@@ -54,17 +57,25 @@ const SPECS: Readonly<Record<ReceptionBlock, BlockSpec>> = {
     failed: 'circles.settings.blockTalkie.failed',
     refresh: () => null,
   },
+  listeningCategoryShared: {
+    minLevel: 'CLOSE',
+    label: 'circles.settings.listening',
+    detail: 'circles.settings.shareListening.detail',
+    failed: 'circles.settings.shareListening.failed',
+    refresh: () => null,
+  },
 };
 
 const reaches = (level: RelationLevel, min: RelationLevel): boolean => RELATION_LEVELS.indexOf(level) >= RELATION_LEVELS.indexOf(min);
 
-/** Les coupures qu'ouvre ce niveau, dans l'ordre de la fiche. */
+/** Les coupures et les accords qu'ouvre ce niveau, dans l'ordre de la fiche. */
 export const receptionBlocksFor = (level: RelationLevel): readonly ReceptionBlock[] =>
   (Object.keys(SPECS) as ReceptionBlock[]).filter((block) => reaches(level, SPECS[block].minLevel));
 
 const withBlock = (settings: ReceptionSettings | undefined, block: ReceptionBlock, value: boolean): ReceptionSettings => ({
   bringBlocked: settings?.bringBlocked ?? false,
   talkieBlocked: settings?.talkieBlocked ?? false,
+  listeningCategoryShared: settings?.listeningCategoryShared ?? false,
   [block]: value,
 });
 

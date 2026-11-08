@@ -56,6 +56,7 @@ struct MeeshyApp: App {
         // Publier, inviter par e-mail ou créer un lien sans adresse
         // prouvée ouvre la validation, puis la requête repart (`APIClient`).
         EmailVerificationGate.current = EmailVerificationGateController.shared
+        SheetKeyboardDismissal.install()
 
         #if DEBUG
         // Filet de diagnostic dev : capture la stack des SIGSEGV que

@@ -157,6 +157,40 @@ final class ComposerLiveLookTests: XCTestCase {
                                                       timeRange: Self.coupe, audioGain: 1, hasOverlay: false), .trimOnly(Self.coupe))
     }
 
+    // MARK: - Un recadrage choisi part recadré (CAM-14)
+
+    private static let debout = CGSize(width: 1080, height: 1920)
+
+    func test_plan_unRecadrage_seRend_memeSansLookNiCoupe() {
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: nil, audioGain: 1, reshapes: true), .render)
+        XCTAssertEqual(ComposerLookVideoExporter.plan(look: ComposerPhotoLook(), framing: .identity,
+                                                      timeRange: Self.coupe, audioGain: 1, reshapes: true), .render)
+    }
+
+    func test_reshapes_seulementUnRecadrageChoisi_quiChangeLesProportions() {
+        XCTAssertTrue(ComposerLookVideoExporter.reshapes(upright: Self.debout, aspect: 1, chosen: true),
+                      "un carré choisi sur une vidéo 9:16 se rend carré")
+        XCTAssertFalse(ComposerLookVideoExporter.reshapes(upright: Self.debout, aspect: 1, chosen: false),
+                       "des proportions que l'auteur n'a pas touchées ne rognent rien")
+        XCTAssertFalse(ComposerLookVideoExporter.reshapes(upright: Self.debout, aspect: 9.0 / 16.0, chosen: true),
+                       "les proportions de la prise ne demandent aucun ré-encodage")
+        XCTAssertFalse(ComposerLookVideoExporter.reshapes(upright: .zero, aspect: 1, chosen: true))
+    }
+
+    func test_session_unRecadrageDeLAuteur_seDistingueDeLOuverture() async {
+        let session = ComposerCaptureSession(stage: .armed, loopPlayerFactory: { _ in
+            MockComposerLoopPlayer(duration: 6, hasAudio: false, uprightSize: Self.debout)
+        })
+        session.canvasAspect = 9.0 / 16.0
+        await session.beginEditing(video: FileManager.default.temporaryDirectory.appendingPathComponent("recadrage.mov"))
+        XCTAssertEqual(session.editAspect, session.openingAspect, "à l'ouverture, rien n'est recadré")
+        session.setEditAspect(1)
+        XCTAssertNotEqual(session.editAspect, session.openingAspect, "un carré choisi est un recadrage")
+        session.cancelEditing()
+        XCTAssertNil(session.openingAspect, "l'ouverture part avec la retouche")
+    }
+
     func test_coupeSansReencodage_laPisteLeDit_etLExportCopie() throws {
         let piste = try Self.code("Meeshy/Features/Composer/ComposerTrimTrack.swift")
         XCTAssertTrue(piste.contains("if cutsOnKeyframe { keyframeNote }"), "l'interface dit la précision de la coupe")

@@ -67,6 +67,9 @@ updates:
       # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
@@ -127,6 +130,9 @@ updates:
       # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
       # libsignal est en 0.x : chaque mineure casse l'API et l'ABI natives.
       - dependency-name: "@signalapp/libsignal-client"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
@@ -194,6 +200,10 @@ updates:
       # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Épinglés à la main, jamais par Dependabot : numpy<1.24.0 (ESPnet 202412 +
+      # chatterbox-tts, voir espnet ci-dessous) et httpcore 0.17.3 (Prisma Python).
+      - dependency-name: "numpy"
+      - dependency-name: "httpcore"
       # espnet 202509+/202511 exigent numpy>=2.0, incompatible avec le pin
       # numpy<1.24.0 (ESPnet 202412 + chatterbox-tts). Un bump casse le build
       # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
@@ -263,6 +273,9 @@ updates:
       # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
       # libsignal est en 0.x : chaque mineure casse l'API et l'ABI natives.
       - dependency-name: "@signalapp/libsignal-client"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
@@ -311,6 +324,9 @@ updates:
       # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
       # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
       - dependency-name: "@types/node"
