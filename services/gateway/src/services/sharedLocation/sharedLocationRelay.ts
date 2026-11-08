@@ -42,7 +42,9 @@ import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
 import {
   clearSharedLocation,
+  markSharedLocationStopped,
   readSharedLocation,
+  stoppedSince,
   storeSharedLocation,
   type SharedLocationCache,
   type SharedLocationState,
@@ -159,14 +161,44 @@ const UNAVAILABLE = failed(SHARED_LOCATION_ERROR_CODES.UNAVAILABLE, 'Position mo
 
 const recipientIdsOf = (state: SharedLocationState | null): readonly string[] => state?.recipients.map((recipient) => recipient.userId) ?? [];
 
-/** Sert la projection de `state` à chaque destinataire ouvert ; rend l'accès de chacun. */
-async function fanOut(deps: SharedLocationRelayDeps, emitterId: string, state: SharedLocationState): Promise<ReadonlyMap<string, SharedLocationReaderAccess>> {
+const sameServed = (a: SharedLocationChangedEventData | null, b: SharedLocationChangedEventData | null): boolean =>
+  a !== null && b !== null && a.latitude === b.latitude && a.longitude === b.longitude && a.precision === b.precision && a.radiusMeters === b.radiusMeters;
+
+/**
+ * Sert la projection de `state` à chaque destinataire ouvert ; rend l'accès de chacun et
+ * ceux qui ont reçu. Avec `previous`, un destinataire dont la projection n'a pas bougé ne
+ * reçoit rien : un lecteur flouté n'apprend pas quand l'appareil se déplace dans sa maille.
+ */
+async function fanOut(
+  deps: SharedLocationRelayDeps,
+  emitterId: string,
+  state: SharedLocationState,
+  previous?: SharedLocationState,
+): Promise<{ readonly access: ReadonlyMap<string, SharedLocationReaderAccess>; readonly served: readonly string[] }> {
   const access = await accessOf(deps, emitterId, state, recipientIdsOf(state));
+  const served: string[] = [];
   access.forEach((readerAccess, readerId) => {
-    const served = projectSharedLocation(emitterId, state, readerAccess);
-    if (served) serve(deps.io, readerId, served);
+    const projection = projectSharedLocation(emitterId, state, readerAccess);
+    if (!projection) return;
+    if (previous && sameServed(projection, projectSharedLocation(emitterId, previous, readerAccess))) return;
+    serve(deps.io, readerId, projection);
+    served.push(readerId);
   });
-  return access;
+  return { access, served };
+}
+
+const STOPPED = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Partage arrêté');
+
+/**
+ * Un arrêt survenu pendant le geste l'emporte : la valeur que le geste vient d'écrire est
+ * retirée (rien ne revient à la connexion), et qui vient de recevoir apprend la fin.
+ */
+async function yieldToStop(deps: SharedLocationRelayDeps, emitterId: string, state: SharedLocationState, served: readonly string[]): Promise<boolean> {
+  if (!(await stoppedSince(deps.cache, emitterId, state))) return false;
+  const current = await readSharedLocation(deps.cache, emitterId, deps.now());
+  if (current && current.startedAt === state.startedAt) await clearSharedLocation(deps.cache, emitterId);
+  served.forEach((readerId) => unserve(deps.io, readerId, emitterId));
+  return true;
 }
 
 /**
@@ -181,6 +213,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
   const previous = await readSharedLocation(deps.cache, emitterId, now);
   const before = previous ? await accessOf(deps, emitterId, previous, recipientIdsOf(previous)) : new Map<string, SharedLocationReaderAccess>();
   const state: SharedLocationState = {
+    startedAt: now,
     recipients: parsed.data.recipients
       .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
       .map((recipient) => ({ userId: recipient.userId.toLowerCase(), precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION })),
@@ -193,11 +226,13 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
   } catch {
     return UNAVAILABLE;
   }
+  if (await yieldToStop(deps, emitterId, state, [])) return STOPPED;
 
   const after = await fanOut(deps, emitterId, state);
   before.forEach((access, readerId) => {
-    if (access !== 'none' && (after.get(readerId) ?? 'none') === 'none') unserve(deps.io, readerId, emitterId);
+    if (access !== 'none' && (after.access.get(readerId) ?? 'none') === 'none') unserve(deps.io, readerId, emitterId);
   });
+  if (await yieldToStop(deps, emitterId, state, after.served)) return STOPPED;
   return { success: true, data: { expiresAt: state.expiresAt } };
 }
 
@@ -215,7 +250,9 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
   } catch {
     return UNAVAILABLE;
   }
-  await fanOut(deps, emitterId, state);
+  if (await yieldToStop(deps, emitterId, state, [])) return STOPPED;
+  const { served } = await fanOut(deps, emitterId, state, current);
+  if (await yieldToStop(deps, emitterId, state, served)) return STOPPED;
   return { success: true, data: { expiresAt: state.expiresAt } };
 }
 
@@ -225,6 +262,7 @@ export async function stopSharedLocation(deps: SharedLocationRelayDeps, emitterI
   const had = await readSharedLocation(deps.cache, emitterId, now);
   const seen = had ? await accessOf(deps, emitterId, had, recipientIdsOf(had)) : new Map<string, SharedLocationReaderAccess>();
   try {
+    await markSharedLocationStopped(deps.cache, emitterId, now);
     await clearSharedLocation(deps.cache, emitterId);
   } catch {
     return UNAVAILABLE;

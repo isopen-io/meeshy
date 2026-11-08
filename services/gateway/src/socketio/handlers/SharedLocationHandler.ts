@@ -53,14 +53,13 @@ export function listenSharedLocation(socket: SharedLocationSocket, deps: SharedL
   };
 
   type Reply = SharedLocationAck | SharedLocationStopAck;
-  const gate = (event: string, act: (userId: string, data: unknown) => Promise<Reply>) => {
+  const gate = (event: string, act: (userId: string, data: unknown) => Promise<Reply>, options: { readonly limited: boolean } = { limited: true }) => {
     socket.on(event, (data: unknown, ack?: unknown) => {
       const reply = replier<Reply>(ack);
       const userId = registered();
       if (!userId) return reply(NOT_ALLOWED);
       const answer = (within: boolean | null): Promise<Reply> => (within === false ? Promise.resolve(RATE_LIMITED) : act(userId, data));
-      deps
-        .withinRate(userId)
+      (options.limited ? deps.withinRate(userId) : Promise.resolve(true))
         .then(answer)
         .then(reply, (error: unknown) => {
           logger.error(`[${event}] Error`, { error: error instanceof Error ? error.message : 'unknown' });
@@ -71,7 +70,8 @@ export function listenSharedLocation(socket: SharedLocationSocket, deps: SharedL
 
   gate(CLIENT_EVENTS.SHARED_LOCATION_START, (userId, data) => startSharedLocation(deps.relay, userId, data));
   gate(CLIENT_EVENTS.SHARED_LOCATION_UPDATE, (userId, data) => updateSharedLocation(deps.relay, userId, data));
-  gate(CLIENT_EVENTS.SHARED_LOCATION_STOP, (userId) => stopSharedLocation(deps.relay, userId));
+  // Arrêter n'est jamais limité : après une rafale de positions, on doit encore pouvoir se taire.
+  gate(CLIENT_EVENTS.SHARED_LOCATION_STOP, (userId) => stopSharedLocation(deps.relay, userId), { limited: false });
 }
 
 let limiter: { readonly client: unknown; readonly limiter: RateLimiter } | null = null;

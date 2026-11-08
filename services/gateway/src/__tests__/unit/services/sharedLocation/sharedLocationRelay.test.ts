@@ -25,6 +25,7 @@ import {
   updateSharedLocation,
   type SharedLocationRelayDeps,
 } from '../../../../services/sharedLocation/sharedLocationRelay';
+import { readSharedLocation } from '../../../../services/sharedLocation/sharedLocationStore';
 import { ADULT_BIRTH, messagingWorld, type CircleLink } from '../../../helpers/messaging-circle-world';
 
 const EMETTEUR = '6300000000000000000000e1';
@@ -44,12 +45,23 @@ type Emission = { readonly room: string; readonly event: string; readonly data: 
 
 function cacheEnMemoire() {
   const entries = new Map<string, { value: string; ttl?: number }>();
+  let pause: Promise<void> | null = null;
+  let relacher = (): void => undefined;
   return {
     entries,
+    /** Le prochain `set` attend `relacher()` : un geste en vol, rattrapé par un autre. */
+    suspendreProchaineEcriture: () => {
+      pause = new Promise<void>((resolve) => {
+        relacher = resolve;
+      });
+    },
+    relacher: () => relacher(),
     get: (key: string) => Promise.resolve(entries.get(key)?.value ?? null),
-    set: (key: string, value: string, ttl?: number) => {
+    set: async (key: string, value: string, ttl?: number) => {
+      const attente = pause;
+      pause = null;
+      if (attente) await attente;
       entries.set(key, { value, ttl });
-      return Promise.resolve();
     },
     del: (key: string) => {
       entries.delete(key);
@@ -223,7 +235,7 @@ describe('mettre à jour et arrêter', () => {
     m.emissions.length = 0;
 
     expect(await stopSharedLocation(m.deps, EMETTEUR)).toEqual({ success: true });
-    expect(m.cache.entries.size).toBe(0);
+    expect(m.cache.entries.has(`shared-location:${EMETTEUR}`)).toBe(false);
     expect(m.emissions.map((e) => e.room).sort()).toEqual([AMI, PROCHE, SANG].map((id) => ROOMS.user(id)).sort());
     expect(new Set(m.emissions.map((e) => e.event))).toEqual(new Set([SERVER_EVENTS.SHARED_LOCATION_ENDED]));
   });
@@ -247,11 +259,20 @@ describe('le repos — la position complète est gardée SCELLÉE, jamais en cla
     const m = monde();
     await demarrer(m);
     const [[, entry]] = [...m.cache.entries.entries()];
-    m.cache.entries.delete(`shared-location:${EMETTEUR}`);
     m.cache.entries.set(`shared-location:${PROCHE}`, entry);
 
-    expect((await sharedLocationSnapshotFor(m.deps, EMETTEUR, {})).items).toEqual([]);
+    expect(await readSharedLocation(m.cache, PROCHE, T0)).toBeNull();
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).not.toBeNull();
   });
+
+  it('avec une clé de scellement, une valeur en clair glissée dans le cache vaut « rien »', async () => {
+    const m = monde();
+    await demarrer(m);
+    process.env.SECRETS_AT_REST_KEY = KEY;
+
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toBeNull();
+  });
+
 });
 
 describe('le lien change — la troncature se recalcule sans nouvel envoi', () => {
@@ -315,5 +336,55 @@ describe('le rattrapage — `GET /relations/locations` sert les partages tronqu�
     await demarrer(m);
     m.avancer(HEURE + 1);
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+  });
+});
+
+describe('les gestes qui se croisent — un partage arrêté ne revient jamais tout seul', () => {
+  it('une mise à jour en vol pendant l\'arrêt ne ressuscite pas le partage, et l\'arrêt a le dernier mot chez chacun', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    m.cache.suspendreProchaineEcriture();
+    const enVol = updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(await stopSharedLocation(m.deps, EMETTEUR)).toEqual({ success: true });
+    m.cache.relacher();
+
+    expect(await enVol).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.NOT_SHARING });
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toBeNull();
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+    [AMI, PROCHE, SANG].forEach((id) => expect(m.vers(id).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED));
+  });
+
+  it('un démarrage en vol pendant l\'arrêt ne survit pas ; un démarrage APRÈS l\'arrêt, si', async () => {
+    const m = monde();
+    await demarrer(m);
+
+    m.cache.suspendreProchaineEcriture();
+    const enVol = demarrer(m);
+    await new Promise((resolve) => setImmediate(resolve));
+    await stopSharedLocation(m.deps, EMETTEUR);
+    m.cache.relacher();
+    await enVol;
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toBeNull();
+
+    m.avancer(1);
+    expect(await demarrer(m)).toMatchObject({ success: true });
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0 + 1)).not.toBeNull();
+  });
+});
+
+describe('ce qui ne change pas ne part pas — un lecteur flouté n\'apprend pas quand l\'appareil bouge', () => {
+  it('une mise à jour dans la même maille ne part pas chez le lecteur flouté, mais part chez l\'exact', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+    m.avancer(60_000);
+    await updateSharedLocation(m.deps, EMETTEUR, { latitude: 48.8571, longitude: 2.3529, accuracy: 4 });
+
+    expect(m.vers(SANG)).toEqual([]);
+    expect(m.vers(PROCHE)).toEqual([]);
+    expect(m.vers(AMI).map((e) => e.data.latitude)).toEqual([48.8571]);
   });
 });

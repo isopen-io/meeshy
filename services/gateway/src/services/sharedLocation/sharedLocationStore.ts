@@ -18,11 +18,13 @@ import {
   type SharedLocationPrecision,
 } from '@meeshy/shared/types/shared-location';
 import type { CacheStore } from '../CacheStore';
-import { openSecret, sealSecret } from '../../utils/secret-at-rest';
+import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
 
 export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision };
 
 export type SharedLocationState = {
+  /** L'instant du `start` qui a ouvert ce partage (ms) : un arrêt postérieur ou simultané l'éteint. */
+  readonly startedAt: number;
   readonly recipients: readonly SharedLocationRecipient[];
   readonly position: SharedLocationPosition;
   readonly updatedAt: string;
@@ -59,10 +61,11 @@ function parseState(raw: string): SharedLocationState | null {
   if (typeof value !== 'object' || value === null) return null;
   const row = value as Record<string, unknown>;
   const position = parsePosition(row.position);
-  if (!position || !Array.isArray(row.recipients) || typeof row.updatedAt !== 'string' || typeof row.expiresAt !== 'string') return null;
+  if (!position || !Array.isArray(row.recipients) || typeof row.startedAt !== 'number') return null;
+  if (typeof row.updatedAt !== 'string' || typeof row.expiresAt !== 'string') return null;
   const recipients = row.recipients.map(parseRecipient);
   if (recipients.some((recipient) => recipient === null)) return null;
-  return { recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt };
+  return { startedAt: row.startedAt, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt };
 }
 
 /** Range le partage COMPLET, scellé, jusqu'à son terme. Sans clé de scellement dans un environnement servi, LÈVE : rien n'est rangé en clair. */
@@ -75,12 +78,34 @@ export async function storeSharedLocation(cache: SharedLocationCache, userId: st
 export async function readSharedLocation(cache: SharedLocationCache, userId: string, now: number): Promise<SharedLocationState | null> {
   const stored = await cache.get(keyOf(userId));
   if (stored === null) return null;
+  if (hasValidSecretsKey() && !isSealedSecret(stored)) return null;
   try {
     const state = parseState(openSecret(stored, contextOf(userId)));
     return state && Date.parse(state.expiresAt) > now ? state : null;
   } catch {
     return null;
   }
+}
+
+const stopKeyOf = (userId: string): string => `shared-location-stop:${userId.toLowerCase()}`;
+/** Le plus long partage : l'arrêt n'a pas à être retenu au-delà. */
+const STOP_MEMORY_SECONDS = 480 * 60;
+
+/**
+ * Retient l'instant d'un ARRÊT. Les gestes d'un même émetteur ne passent par aucune file : une
+ * mise à jour ou un démarrage partis AVANT l'arrêt peuvent écrire APRÈS lui. Ils relisent cet
+ * instant après leur écriture et s'éteignent d'eux-mêmes ({@link stoppedSince}).
+ */
+export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, at: number): Promise<void> {
+  await cache.set(stopKeyOf(userId), String(at), STOP_MEMORY_SECONDS);
+}
+
+/** Vrai si un arrêt est survenu au démarrage du partage `state` ou après. Illisible = arrêté. */
+export async function stoppedSince(cache: SharedLocationCache, userId: string, state: Pick<SharedLocationState, 'startedAt'>): Promise<boolean> {
+  const stored = await cache.get(stopKeyOf(userId));
+  if (stored === null) return false;
+  const at = Number(stored);
+  return !Number.isFinite(at) || at >= state.startedAt;
 }
 
 export async function clearSharedLocation(cache: SharedLocationCache, userId: string): Promise<void> {

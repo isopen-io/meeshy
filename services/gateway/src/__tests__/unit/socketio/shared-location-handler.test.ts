@@ -57,10 +57,19 @@ describe('SharedLocationHandler — la porte', () => {
     expect(p.entries.size).toBe(0);
   });
 
+  it('arrêter n\'est jamais limité : au-delà du débit, on peut encore arrêter', async () => {
+    const p = porte();
+    await p.call('location:share-start', DEMARRER);
+    const limitee = porte({ within: false });
+    limitee.entries.set(...([...p.entries.entries()][0] as [string, string]));
+    expect(await limitee.call('location:share-stop', {})).toEqual({ success: true });
+    expect(limitee.entries.has(`shared-location:${MOI}`)).toBe(false);
+  });
+
   it('arrêter retire le partage rangé', async () => {
     const p = porte();
     await p.call('location:share-start', DEMARRER);
     expect(await p.call('location:share-stop', {})).toEqual({ success: true });
-    expect(p.entries.size).toBe(0);
+    expect(p.entries.has(`shared-location:${MOI}`)).toBe(false);
   });
 });
