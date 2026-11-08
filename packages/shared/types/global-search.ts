@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import { MESSAGE_SEARCH_MATCHES, MESSAGE_SEARCH_MEDIA_KINDS } from './global-search-constants.js';
+
+export * from './global-search-constants.js';
+
 /**
  * LA RECHERCHE GLOBALE — messages (#14619) et publications (#14620).
  *
@@ -61,22 +65,6 @@ export const messageSearchConversationSchema = z.object({
   title: z.string(),
   avatar: z.string().nullable(),
 });
-
-/**
- * LA CAPACITÉ DU CLIENT (#16957). Un client qui envoie `X-Search-Caps` à
- * `GLOBAL_SEARCH_PROTECTION_CAPS` ou plus déclare savoir VOILER un résultat
- * flouté et peindre une transcription. Sans elle, la passerelle ne lui sert
- * aucun flouté et ne cherche pas les transcriptions : un ancien client ne peut
- * pas afficher en clair ce qu'il ne sait pas voiler.
- */
-export const GLOBAL_SEARCH_CAPS_HEADER = 'X-Search-Caps';
-export const GLOBAL_SEARCH_PROTECTION_CAPS = 1;
-
-export const MESSAGE_SEARCH_MEDIA_KINDS = ['audio', 'video', 'image', 'document'] as const;
-
-export type MessageSearchMediaKind = (typeof MESSAGE_SEARCH_MEDIA_KINDS)[number];
-
-export const MESSAGE_SEARCH_MATCHES = ['content', 'transcript'] as const;
 
 /**
  * La transcription qui a répondu (#16958) : `text` est servi par le Prisme du
