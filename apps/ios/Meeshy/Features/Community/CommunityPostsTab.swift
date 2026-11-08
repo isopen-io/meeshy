@@ -24,7 +24,7 @@ struct CommunityPostsTab: View {
         _viewModel = StateObject(wrappedValue: CommunityPostsViewModel(
             communityId: communityId,
             service: PostService.shared,
-            cacheProvider: { CacheCoordinator.shared.feed },
+            cacheProvider: { await CacheCoordinator.shared.feed },
             onError: { FeedbackToastManager.shared.showError($0) }
         ))
         self.onCreatePost = onCreatePost

@@ -21,7 +21,7 @@ struct CommunityDetailView: View {
          onCreatePost: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(
             communityId: communityId,
-            postsCache: { CacheCoordinator.shared.feed }
+            postsCache: { await CacheCoordinator.shared.feed }
         ))
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
