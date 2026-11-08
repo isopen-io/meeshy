@@ -421,8 +421,9 @@ export class MessageHandler {
         resolvedParticipantId
       );
 
-      // Répondre au client
-      this._sendResponse(callback, response, socket);
+      // Répondre au client. Le cid SOUMIS voyage explicitement : celui de la
+      // ligne relue nomme un AUTRE message sur un hit de dédup (#17058).
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       // Broadcaster le message si succès — SAUF sur un dedup idempotent
       // (même clientMessageId renvoyé). Le message existe déjà et a déjà été
@@ -641,7 +642,7 @@ export class MessageHandler {
       // (Prisma read failure, connection drop) would silently skip the
       // callback and leave iOS / web waiting indefinitely → spurious
       // retry. Mirror the order used by `handleMessageSend` above.
-      this._sendResponse(callback, response, socket);
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
@@ -2223,7 +2224,9 @@ export class MessageHandler {
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
-    response: MessageResponse, socket?: MeeshySocket
+    response: MessageResponse, socket?: MeeshySocket,
+    /** Le cid SOUMIS — #17058. Jamais celui de la ligne relue. */
+    submittedClientMessageId?: string,
   ): void {
     const refusal = response.success ? null : messageRefusalEvent(response);
     if (refusal) socket?.emit(SERVER_EVENTS.ERROR, refusal);
@@ -2238,10 +2241,12 @@ export class MessageHandler {
         // `createdAt` is echoed too so the WS-first send path can stamp the
         // optimistic row with the authoritative server time without waiting
         // for the `message:new` broadcast.
-        const data = response.data as MessageAckSource;
         callback({
           success: true,
-          data: buildMessageAckData(data)
+          data: buildMessageAckData({
+            row: response.data as MessageAckSource,
+            ...(submittedClientMessageId ? { submittedClientMessageId } : {}),
+          }),
         });
       } else callback(buildMessageFailureAck(response));
     } catch (error) {

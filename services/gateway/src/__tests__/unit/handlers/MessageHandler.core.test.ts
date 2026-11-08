@@ -2857,11 +2857,12 @@ describe('MessageHandler — coverage gap tests', () => {
     expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
-  it('handleMessageSend: _sendResponse with no clientMessageId → stripped from response', async () => {
+  // #17058 — « sans cid » = sans cid SOUMIS ; raison dans `message-ack-submitted-cid.test.ts`.
+  it('#17058 — handleMessageSend: aucun cid SOUMIS → aucun cid dans l’accusé', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
     const cb = jest.fn();
-    const data = makeValidSendData();
+    const data = makeValidSendData({ clientMessageId: undefined });
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
 
     const messagingService = makeMockMessagingService({ clientMessageId: undefined });
