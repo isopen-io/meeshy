@@ -447,3 +447,14 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   attachments, handlers, jobs) 5 854/5 854 vertes ; `tsc` passerelle vert après fusion de `origin/dev` ; cliquet `any` 490.
 - Prochain lot recommandé : #17147 (la porte lit la conversation close, petit et serveur), puis « ensemble » sur Android
   (#17100), puis l'icône de position par cercle (#17013) quand les clients de la position temporaire auront fusionné.
+
+## 2026-11-08 — réveil 23 : mener #17148 (suite de #17146) jusqu'à la fusion (#17022)
+
+- Reprise : #17146 a été fusionnée dans `dev` sur son premier commit (auto-fusion de la CI de PR gelée) ; ses
+  corrections d'audit sont dans #17148, restée ouverte parce que `dev` était verrouillée à 22:30. `dev` a repris ses
+  fusions depuis : ce réveil n'ouvre rien d'autre et mène #17148.
+- Fusion de `origin/dev` dans la branche : sans conflit, les nouveautés de `dev` ne touchent que l'iOS (caméra,
+  écoute) — aucun fichier de la passerelle. Le `ci.yml` dispatché sur la tête d'avant fusion (`ac2abe92`) était vert ;
+  un nouveau dispatch prouve le commit de fusion.
+- Prochain lot recommandé : inchangé — #17147 (la porte lit la conversation close), puis « ensemble » sur Android
+  (#17100), puis l'icône de position par cercle (#17013).
