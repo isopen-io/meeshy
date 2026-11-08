@@ -1,10 +1,10 @@
-# Cycle 143 — une langue perdue pour toujours, une population sans reconnexion, et deux portes muettes
+# Cycle 143 — une langue perdue pour toujours, une population sans reconnexion, deux portes muettes, et la CI du SDK par terre
 
 **Issues livrées** : #16751 (lot A, passerelle) · #16750 (lot B, SDK iOS) ·
-#16830 (lot C, passerelle) · #16837 (lot D, passerelle).
+#16830 (lot C, passerelle) · #16837 (lot D, passerelle) · #16852 (lot E, CI) ·
+#16856 (lot F, passerelle).
 **Branche** : `claude/exciting-planck-zigx42`. **PR** : #16829.
-**Milestones** : #250, #251, #252 (et celui de #16750, préexistant).
-**Issues ouvertes en chemin** : #16838 (`décision-produit`).
+**Issues ouvertes en chemin** : #16838 (`décision-produit`), #16857, #16858.
 
 ## Ce que ce cycle a cédé, et pourquoi c'est encore la première décision
 
@@ -212,6 +212,74 @@ garder.
 > mesure sa popularité, pas une propriété — cycle 107, retrouvé en écrivant le
 > cliquet. L'erreur commise en l'écrivant est le meilleur cas de test qu'il aura.
 
+## Lot E — la CI du SDK iOS était par terre sur TOUT le dépôt (#16852)
+
+Rencontré en cherchant la preuve du lot B, et c'est le lot le plus utile du
+cycle à tout le monde sauf à moi. `sdk-tests.yml` échouait à « Build SDK »,
+**avant toute compilation Swift**, sur `failed downloading … already exists in
+file system` (WebRTC, Lottie, SignalFfi). Mesuré : repo-WIDE depuis ~07:39 UTC,
+trois branches de sessions sœurs **et `dev` lui-même** (run 42463036975). Un
+`rerun_failed_jobs` rejoue la même collision.
+
+**Donc aucun lot iOS n'était prouvable, et un rouge de CI sur une PR iOS ne
+disait RIEN de son code.**
+
+C'est #6545, mot pour mot, sur un autre workflow — et **le dépôt portait déjà sa
+réparation** : `scripts/ci/resolve-spm-packages.sh`, dont le doc-comment décrit
+ce cas exact (« Une collision se corrige en PURGEANT l'entrée en cause avant
+l'essai suivant — jamais en attendant »). `ios.yml` l'appelle ; `sdk-tests.yml`
+lançait `build-for-testing` à cru.
+
+> **Un remède écrit, motivé, testé — et qui ne vaut que là où quelqu'un l'a
+> récité.** C'est la leçon 307 appliquée à un script de CI, et le coût s'est
+> mesuré en CI iOS à l'arrêt pour tout le dépôt. La garde qui l'aurait attrapé
+> existait aussi : `check-ios-spm-resolve-retry.mjs` vérifiait qu'**UN** workflow
+> appelle le script. Il en vérifie deux désormais, et c'est cette seconde
+> assertion qui est le correctif durable.
+
+Le script est GÉNÉRALISÉ, pas doublé — écrire une seconde boucle est exactement
+ce qu'il existe pour éviter. Il prenait un `-project`, et c'était la seule raison
+pour laquelle ce workflow ne l'appelait pas : `MeeshySDK-Package` est un PAQUET.
+Déréférencement par `${PROJECT_ARGS[@]+"${PROJECT_ARGS[@]}"}` : sous `set -u`, le
+bash 3.2 de macOS tue un script qui lit `"${vide[@]}"`.
+
+### Le premier témoin de la forme paquet NE POUVAIT PAS TOMBER
+
+Et c'est la leçon du lot. Avec l'ancien `-project "$PROJECT"` toujours en place,
+le garde restait **VERT** : un faux `xcodebuild` qui ignore ses arguments
+accepte `-project -` sans broncher. Le faux REFUSE désormais ce que le vrai
+refuse (un chemin de projet `-` n'existe pas), et le rouge est re-prouvé : deux
+défauts nommés, dont « a dormi (15,30,45,60s) au lieu de purger » — le symptôme
+de #6545 lui-même.
+
+> **Un double ment aussi par ce qu'il ACCEPTE** (cycle 112), et un faux
+> `xcodebuild` est le cas limite : il n'a aucune raison de regarder ses
+> arguments, donc il valide toutes les formes d'appel, y compris celles que le
+> vrai outil refuse. Un témoin de FORME D'APPEL exige un double qui lise ses
+> arguments.
+
+## Lot F — la règle n'était appliquée que par celui qui l'avait écrite (#16856)
+
+`PUT /user-preferences/communities/:communityId` upsertait depuis l'id d'URL
+sans AUCUNE vérification d'appartenance — pendant que son voisin du **même
+fichier**, vingt lignes plus bas, exige la règle en toutes lettres : « un lot
+non borné laisserait n'importe quel appelant authentifié fabriquer des lignes de
+préférences contre des ids arbitraires ». Et l'applique.
+
+> **Un commentaire ne documente que l'exemplaire qu'il touche** — avec la
+> circonstance aggravante que la jumelle est dans le MÊME fichier, et que c'est
+> le PUT qui **CRÉE** la ligne (le commentaire du réordonnancement le dit
+> lui-même). La règle manquait à son site le plus exposé.
+
+Borne de gravité vérifiée plutôt que supposée : `categoryId` est écrit sans
+contrôle lui aussi, mais il n'a aucune relation Prisma et la route ne fait aucun
+`include` de catégorie — c'est de la pollution de stockage, pas une fuite. Ce
+qui ne change rien au correctif, et tout au récit.
+
+Et le double de `community-preferences-broadcast.test.ts` a été **COMPLÉTÉ, pas
+contourné** : il n'exposait que `findMany` (le besoin du réordonnancement), donc
+le PUT y tombait sur un `findFirst` absent.
+
 ## Preuve
 
 | gate | résultat |
@@ -226,7 +294,10 @@ garder.
 | rouge, lot B | prédicats des gardes rejoués en Python sur les deux révisions : `authToken` lu 4 fois (attendu 0), 0 porte sur le credential (attendu 3), branche et signature absentes |
 | rouge, lot C | les 3 témoins tombent |
 | rouge, lot D | aucune des 3 portes ne contient `announceMemberArrival(` avant le lot |
-| preuve Swift | `workflow_dispatch` de `sdk-tests.yml` |
+| rouge, lot E | garde rejoué contre la forme d'avant : 2 défauts nommés, dont « a dormi (15,30,45,60s) au lieu de purger » ; auto-test du garde vert (il retire la branche de purge et vérifie que le scénario l'attrape) |
+| rouge, lot F | 2 des 3 témoins tombent ; le 3e (un membre passe) vert des deux côtés |
+| garde SPM | **4/4 scénarios** verts (collision projet, collision paquet, panne réseau, échec permanent) |
+| preuve Swift | `workflow_dispatch` de `sdk-tests.yml`, débloqué par le lot E |
 
 Les rouges du dépôt qui subsistent sont les **6 suites de codecs d'image**
 (HEIF, AVIF 10 bits, carte de gain HDR, orientation EXIF) — capacité libvips du
@@ -253,17 +324,25 @@ sans mise en arrière-plan).
 | issue | sujet | vérifié par la session ? |
 |---|---|---|
 | #16838 | l'arrivée d'un INVITÉ ne peut pas être annoncée sous le contrat actuel | **oui** — contrat relu |
-| — | les communautés n'ont AUCUNE surface temps réel (rename, avatar, membres, rôles : invisible chez les autres membres ; aucun nom `community:*` au contrat) | partiellement — c'est un LOT, pas un correctif |
-| — | iOS jette la portée COMMUNAUTÉ de `user:preferences-updated` (`category` non optionnel au décodeur) | piège armé : aucun consommateur iOS aujourd'hui |
-| — | `PUT /user-preferences/communities/:id` upserte sans le filtre d'appartenance que son propre fichier exige vingt lignes plus bas | **oui** |
+| #16857 | les communautés n'ont AUCUNE surface temps réel (rename, avatar, membres, rôles : invisible chez les autres ; aucun nom `community:*` au contrat) | **oui** — c'est un LOT, pas un correctif : il faut d'abord un contrat et ses trois décodeurs |
+| #16858 | iOS jette la portée COMMUNAUTÉ de `user:preferences-updated` (`category` non optionnel au décodeur) | **oui** — piège armé : aucun consommateur iOS aujourd'hui |
 
 Et, intacte du cycle 140 : **#16688**, cédée pour la seconde fois.
 
 ## Méthode, confirmée une fois de plus
 
-Les deux agents d'audit de ce cycle ont rendu **onze constats**. Les sept
+Les deux agents d'audit de ce cycle ont rendu **onze constats**. Les neuf
 re-vérifiés ligne à ligne ont tous tenu **sauf deux** (les deux du lot B), et la
 re-vérification a par ailleurs TROUVÉ ce que les rapports n'avaient pas vu : la
 projection manquante du lot C, et la limite de contrat du lot D. **Un rapport
 d'audit se reçoit comme une piste, pas comme un constat** — et la relecture ne
 sert pas seulement à écarter le faux, elle sert à trouver le reste.
+
+Et une leçon de forme, celle du lot E : **trois témoins de ce cycle ne pouvaient
+pas tomber tels qu'ils étaient d'abord écrits** — le témoin de projection du lot
+C (un double rend ses participants quel que soit le `select`), le balayage du lot
+D (il ne cherchait qu'un idiome sur trois), et le scénario paquet du lot E (le
+faux ignorait ses arguments). Dans les trois cas c'est en CHERCHANT le rouge,
+pas en relisant l'assertion, que le défaut du témoin est apparu. **Prouver le
+rouge n'est pas une formalité de clôture : c'est la seule mesure qui distingue
+un témoin d'une décoration.**
