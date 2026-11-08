@@ -3,6 +3,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { translationReaders, type TranslationReaders } from './translationReaders';
+import { safeBroadcast } from './serverEmit';
 import type { ServerEmitIO, ServerEmitTarget } from './serverEmit';
 import type { ServerEventPayload } from './serverEmit';
 
@@ -147,7 +148,15 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
   readonly io: ServerEmitIO | null | undefined;
   readonly conversationId: string;
   readonly payload: P;
-  readonly plan: EditedReaderPlan | null;
+  /**
+   * Un plan ⇒ remise par lecteur ; `null` ⇒ les trois sorties ordinaires ;
+   * `'unavailable'` ⇒ la lecture du plan est tombée, donc RIEN en direct
+   * (#17026). La troisième valeur ne se confond pas avec `null` : retomber sur
+   * la room servirait l'adresse nue d'une pièce peut-être protégée. Et elle ne
+   * se confond pas non plus avec un `throw` chez l'appelant, dont le `catch` de
+   * fin de méthode emporterait l'enfilage durable qui SUIT cette émission.
+   */
+  readonly plan: EditedReaderPlan | null | 'unavailable';
   readonly sealed: ReadonlyMap<string, Date>;
   readonly blocked: ReadonlySet<string>;
   /** La variante d'un lecteur dont la citation est échue (#8562). */
@@ -157,11 +166,18 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
 }): void {
   const { io, conversationId, payload, plan, sealed, blocked } = params;
   if (!io) return;
+  if (plan === 'unavailable') return;
 
   if (plan) {
     for (const target of plan.targets) {
       if (blocked.has(target.key)) continue;
-      io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(params.sealedVariant(payload, target.key), target.participantId));
+      // Par CIBLE, jamais autour de la boucle : une cible qui lève priverait
+      // toutes les suivantes, que la file hors ligne ne compense pas (elle
+      // saute les connectés) — audit adversarial de #17026.
+      safeBroadcast(
+        `message:edited (per reader ${target.room})`,
+        () => io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(params.sealedVariant(payload, target.key), target.participantId)),
+      );
     }
     return;
   }

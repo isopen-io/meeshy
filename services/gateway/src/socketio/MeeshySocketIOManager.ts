@@ -46,8 +46,8 @@ import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
 import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSocket';
-import { emitMessageNew } from './messageNewEmission';
-import { readerSignedPlan } from './readerSignedDelivery';
+import { emitMessageNewBestEffort } from './messageNewEmission';
+import { readerSignedPlanBestEffort } from './readerSignedDelivery';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { deliverTextTranslation, type TextTranslationReady } from './deliverTextTranslation';
@@ -110,7 +110,7 @@ import { MentionService, resolveUsernamesToIds, withoutPendingMessageRequests } 
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
-import { emitServerEvent } from './serverEmit';
+import { emitServerEvent, safeBroadcast } from './serverEmit';
 import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
@@ -3148,7 +3148,10 @@ export class MeeshySocketIOManager {
       // destinataire avec adresses signées pour un message dont une pièce se
       // lit par lecteur (#9646) : `messageNewEmission.ts`. Aucun socket
       // d'expéditeur ici : il est rejoué plus bas, pour les appelants de test.
-      emitMessageNew({
+      // Émission et lecture de plan BEST-EFFORT : raison au site unique,
+      // `safeBroadcast` (#17026). L'enfilage est délégué plus bas à
+      // `syncConversationListOnNewMessage`, dans ce même `try`.
+      emitMessageNewBestEffort({
         io: this.io,
         room,
         senderPayload,
@@ -3161,8 +3164,12 @@ export class MeeshySocketIOManager {
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
           ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
           : null,
-        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: broadcastPayload.attachments }),
-      });
+        readerSigned: await readerSignedPlanBestEffort(
+          this.prisma,
+          { conversationId: normalizedId, message, attachments: broadcastPayload.attachments },
+          (error) => logger.error('reader-signed plan failed (REST/ZMQ send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+        ),
+      }, (error) => logger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
       // Il reçoit le payload cid-aware : c'est SON socket, et c'est lui qui doit
@@ -3170,7 +3177,15 @@ export class MeeshySocketIOManager {
       // aujourd'hui (les deux sites, `broadcastMessage` et le retour ZMQ, l'omettent) —
       // la branche reste pour les appelants de test et une éventuelle réutilisation.
       if (senderSocket) {
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+        // 9e site #17026 — PIÈGE ARMÉ, pas panne : aucun appelant de production
+        // ne passe `senderSocket`, donc cette émission ne tourne jamais. On ne
+        // laisse pas un piège armé au motif que personne n'a marché dessus
+        // (cycle 84).
+        safeBroadcast(
+          'message:new (sender socket)',
+          () => senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload),
+          (error) => logger.error('message:new sender-socket emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }),
+        );
       }
 
       // 2b. Emit mention:created to each mentioned user's personal room.
@@ -3368,7 +3383,9 @@ export class MeeshySocketIOManager {
         attachments: serializeMessageAttachmentsForSocket(message.attachments),
       };
 
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      // 6e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
+      safeBroadcast('message:edited (call summary)', () => this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload),
+        (error) => logger.error('message:edited (call summary) live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
 
       await emitConversationPreviewUpdate(
         this.prisma, this.io, normalizedId, resolvedSenderId ?? '',

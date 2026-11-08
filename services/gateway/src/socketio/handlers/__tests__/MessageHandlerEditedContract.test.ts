@@ -527,3 +527,90 @@ describe('message:edited — le transport socket respecte le PLANCHER D\'HISTORI
     expect(versRoom.length).toBe(1);
   });
 });
+
+/**
+ * #17026 — CINQUIÈME site de la famille, que l'issue n'énumérait pas.
+ *
+ * `handleMessageEdit` lit le plan signé, émet `message:edited`, PUIS enfile
+ * pour les absents — les trois dans le MÊME `try`, dont le `catch` journalise
+ * « message:edit failed » et rend une erreur au client. L'édition est déjà
+ * PERSISTÉE à ce point (`message.updateMany` a rendu `{count: 1}`) : une
+ * diffusion ou une lecture tombée la faisait donc disparaître pour les pairs EN
+ * LIGNE **et** pour les ABSENTS, en annonçant à l'éditeur un échec sur un geste
+ * réussi.
+ *
+ * Une énumération de sites porte DEUX affirmations — « ces sites appliquent la
+ * règle » (vérifiable) et « ce sont les sites où elle s'applique » (presque
+ * jamais vérifiée, leçon 261). Celui-ci s'est trouvé en relisant ce que l'import
+ * partagé touchait dans le fichier, pas en cherchant le site.
+ */
+describe('#17026 — l’émission de `message:edited` n’emporte pas l’enfilage des absents', () => {
+  let handler: MessageHandler;
+  let deps: ReturnType<typeof makeDeps>;
+  let socket: jest.Mocked<Socket>;
+  let callback: jest.Mock<any>;
+  let enqueueSpy: jest.Mock<any>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
+    mockValidateSocketEvent.mockReturnValue({
+      success: true,
+      data: { messageId: VALID_MSG_ID, content: 'Edited content' },
+    });
+    mockGetCacheStore.mockReturnValue({ get: mockCacheGet, set: mockCacheSet });
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+    mockNormalizeConversationId.mockResolvedValue(VALID_CONV_ID);
+    mockResolveMentionedUsers.mockResolvedValue([]);
+
+    deps = makeDeps();
+    handler = new MessageHandler(deps);
+    socket = makeSocket();
+    callback = jest.fn();
+
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, {
+      id: USER_ID, socketId: 'socket-1', isAnonymous: false,
+      language: 'fr', resolvedLanguages: ['fr'], userId: USER_ID, participantId: PARTICIPANT_ID,
+    });
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+    (deps.prisma.mention.findMany as jest.Mock<any>).mockResolvedValue([]);
+
+    // La SORTIE DURABLE, observée à sa frontière : la file elle-même n'est pas
+    // câblée dans ce harnais, et c'est l'APPEL qui porte la garantie.
+    enqueueSpy = jest.fn(async () => undefined) as jest.Mock<any>;
+    (handler as unknown as Record<string, unknown>)._enqueueOfflineEventForParticipants = enqueueSpy;
+
+    // `io.to(...).emit(...)` LÈVE sur `message:edited` — adaptateur ou encodeur
+    // en défaut, ce que le dépôt affirme là où il s'en garde (`emitWithSeq`).
+    const io = deps.io as unknown as { to: jest.Mock<any> };
+    const base = io.to;
+    io.to = jest.fn((room: string) => {
+      const target = base(room);
+      return { ...target, emit: jest.fn((event: string) => { if (event === SERVER_EVENTS.MESSAGE_EDITED) throw new Error('adapter down'); return true; }) };
+    }) as jest.Mock<any>;
+  });
+
+  it('une diffusion tombée laisse l’enfilage hors ligne avoir lieu', async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(enqueueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'edited', messageId: VALID_MSG_ID }),
+    );
+  });
+
+  it("et l'éditeur n'apprend pas un ÉCHEC sur une édition persistée", async () => {
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).not.toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+});
