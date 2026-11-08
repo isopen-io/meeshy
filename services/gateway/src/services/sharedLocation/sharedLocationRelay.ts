@@ -263,6 +263,9 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     if (await lost()) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
       await forgetSharedLocationGeneration(deps.cache, emitterId, generation);
+      if (displaced !== null && displaced !== previous?.sessionId && displaced !== (await currentSharedLocationSession(deps.cache, emitterId))) {
+        await retireSession(deps, emitterId, displaced);
+      }
       return STOPPED;
     }
     if (previous) await dropSharedLocationSession(deps.cache, emitterId, previous.sessionId);
@@ -331,7 +334,8 @@ export async function stopSharedLocation(deps: SharedLocationRelayDeps, emitterI
   seen.forEach((access, readerId) => {
     if (access !== 'none') unserve(deps.io, readerId, emitterId);
   });
-  if (late !== null) await retireSession(deps, emitterId, late);
+  // L'arrêt a eu lieu : une panne en retirant le démarrage tardif ne le dément pas (la session échoit à son terme).
+  if (late !== null) await retireSession(deps, emitterId, late).catch(() => undefined);
   return { success: true };
 }
 
