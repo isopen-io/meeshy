@@ -32,7 +32,7 @@ extension CameraModel {
 /// Le jeter perdait la vidéo entière, sans un mot. Seule une erreur sans fichier
 /// lisible est une perte — et même alors, les segments déjà pris d'une bascule
 /// d'objectif restent.
-enum CameraRecordingEnding: Equatable {
+nonisolated enum CameraRecordingEnding: Equatable {
     /// L'arrêt demandé, ou la fin d'un segment de bascule.
     case finished
     /// Le système a clos la prise ; son fichier est lisible.
