@@ -112,7 +112,7 @@ final class ComposerPhotoLookTests: XCTestCase {
     }
 
     func test_filtres_sontLesPreReglagesDeLAppel_naturelEnTete() {
-        XCTAssertEqual(ComposerPhotoLookRule.filters, VideoFilterPreset.allCases)
+        XCTAssertEqual(ComposerPhotoLookRule.filters, VideoFilterPreset.catalog)
         XCTAssertEqual(ComposerPhotoLookRule.filters.first, .natural)
         XCTAssertFalse(ComposerPhotoLookRule.grades(.natural), "naturel rend l'original sans passe")
         XCTAssertTrue(ComposerPhotoLookRule.grades(.warm))

@@ -50,7 +50,7 @@ nonisolated enum ComposerPhotoLookRule {
     static let catalogPeople = 2
 
     /// Les filtres de l'appel, dans son ordre ; `.natural` en tête rend l'original.
-    static let filters: [VideoFilterPreset] = VideoFilterPreset.allCases
+    static let filters: [VideoFilterPreset] = VideoFilterPreset.catalog
 
     /// « Classiques » puis les ambiances du catalogue — les puces du Montage.
     static func chips() -> [CallMontageMoodChip] {
