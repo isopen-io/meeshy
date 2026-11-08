@@ -11,13 +11,64 @@ Responsabilités:
 import asyncio
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 
 # Import local
 from ..zmq_models import TranslationTask
+from ..task_privacy import is_live_call_caption
 
 logger = logging.getLogger(__name__)
+
+
+class SignalingQueue(asyncio.Queue):
+    """
+    #16780 — une file qui lève le drapeau partagé « du travail est arrivé » à
+    chaque dépôt. Les workers attendent ce drapeau, jamais un `get()` : un
+    `Event.wait()` annulé ne consomme rien, là où un `get()` perdant d'un
+    `asyncio.wait` sur deux files peut avoir déjà retiré son élément.
+    `Queue.put` dépose par `put_nowait` : surcharger ce seul point couvre les deux.
+    """
+
+    def __init__(self, maxsize: int, work_arrived: asyncio.Event):
+        super().__init__(maxsize=maxsize)
+        self._work_arrived = work_arrived
+
+    def put_nowait(self, item) -> None:
+        super().put_nowait(item)
+        self._work_arrived.set()
+
+
+async def take_next_task(
+    queues: Tuple[asyncio.Queue, ...],
+    work_arrived: asyncio.Event,
+    timeout: float
+) -> Optional[TranslationTask]:
+    """
+    Prend la première tâche disponible dans `queues`, DANS L'ORDRE (la voie
+    rapide d'abord), en attendant au plus `timeout` secondes qu'une arrive.
+
+    Le drapeau est baissé AVANT de regarder les files, sans `await` entre les
+    deux : un dépôt postérieur le relève donc forcément, et aucun réveil ne se
+    perd. Un réveil pour rien (un autre worker a pris la tâche, ou elle est
+    tombée dans une file que ce worker ne sert pas) ne fait que reboucler.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        work_arrived.clear()
+        for queue in queues:
+            try:
+                return queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return None
+        try:
+            await asyncio.wait_for(work_arrived.wait(), timeout=remaining)
+        except asyncio.TimeoutError:
+            pass
 
 
 class ConnectionManager:
@@ -45,10 +96,11 @@ class ConnectionManager:
             any_pool_size: Taille max de la pool "any"
             fast_pool_size: Taille max de la fast pool (textes courts)
         """
-        # Queues FIFO
-        self.normal_pool = asyncio.Queue(maxsize=normal_pool_size)
-        self.any_pool = asyncio.Queue(maxsize=any_pool_size)
-        self.fast_pool = asyncio.Queue(maxsize=fast_pool_size)
+        # Queues FIFO, toutes reliées au même drapeau « du travail est arrivé » (#16780)
+        self.work_arrived = asyncio.Event()
+        self.normal_pool = SignalingQueue(normal_pool_size, self.work_arrived)
+        self.any_pool = SignalingQueue(any_pool_size, self.work_arrived)
+        self.fast_pool = SignalingQueue(fast_pool_size, self.work_arrived)
 
         # Configuration batch accumulation
         self.enable_batching = os.getenv("TRANSLATOR_BATCH_ENABLED", "true").lower() == "true"
@@ -127,6 +179,9 @@ class ConnectionManager:
             True si enfilée avec succès, False sinon
         """
         try:
+            if is_live_call_caption(task.message_id):
+                return await self._enqueue_live_caption(task)
+
             # ════════════════════════════════════════════════════════════════
             # OPTIMISATION: Textes courts → fast_pool (traités en priorité)
             # ════════════════════════════════════════════════════════════════
@@ -171,6 +226,19 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error enqueueing task {task.task_id}: {e}")
             return False
+
+    async def _enqueue_live_caption(self, task: TranslationTask) -> bool:
+        """
+        #16780 — un sous-titre d'appel se lit pendant qu'on parle : voie rapide
+        quelle que soit sa longueur, sans `utils.performance`, jamais en lot.
+        Voie rapide pleine : la file régulière directe, dont le refus se dit.
+        """
+        if self.fast_pool.full():
+            return await self._enqueue_single_task(task)
+        await self.fast_pool.put(task)
+        self.stats['fast_pool_size'] = self.fast_pool.qsize()
+        self.stats['fast_track_count'] += 1
+        return True
 
     async def _enqueue_single_task(self, task: TranslationTask) -> bool:
         """Enfile une tâche unique (sans batching)"""
