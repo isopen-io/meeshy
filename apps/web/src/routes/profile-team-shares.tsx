@@ -6,7 +6,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { TEAM_SHARES, type PersonSettingsDeps, type TeamShare } from '@/lib/relations/person-settings';
+import { GRANTABLE_TEAM_SHARES, type PersonSettingsDeps, type TeamShare } from '@/lib/relations/person-settings';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { PersonSettingSwitch } from '@/routes/circle-reception-block';
 
@@ -30,6 +30,10 @@ import { PersonSettingSwitch } from '@/routes/circle-reception-block';
  * L'interrupteur est celui des réglages de réception (`PersonSettingSwitch`) :
  * une seule lecture, un seul état, la même mécanique optimiste. Hors ligne,
  * l'état servi se lit, le geste ne s'offre pas.
+ *
+ * Ne s'offre que ce que le contrat partagé ACCEPTE d'accorder
+ * (`GRANTABLE_TEAM_SHARES`) : tant que la passerelle du même commit ne tient que
+ * le retrait, la fiche n'offre aucun accord voué au 400.
  */
 
 type ShareSpec = {
@@ -54,6 +58,7 @@ export function ProfileTeamShares({
   targetRole,
   online,
   onNotice,
+  grantable = GRANTABLE_TEAM_SHARES,
   deps = apiDeps,
 }: {
   readonly language: InterfaceLanguage;
@@ -61,12 +66,13 @@ export function ProfileTeamShares({
   readonly targetRole: string | null | undefined;
   readonly online: boolean;
   readonly onNotice: (message: string) => void;
+  readonly grantable?: readonly TeamShare[];
   readonly deps?: PersonSettingsDeps;
 }) {
   const ready = useCirclesCatalog(language);
-  const colleague = isPlatformTeam(targetRole);
+  const colleague = grantable.length > 0 && isPlatformTeam(targetRole);
   const viewer = useQuery({ ...adminIdentityQueryOptions(deps), enabled: colleague }, appQueryClient);
-  if (!ready || !isTeamPair(viewer.data?.role, targetRole)) return null;
+  if (!ready || !colleague || !isTeamPair(viewer.data?.role, targetRole)) return null;
 
   const name = person.displayName ?? person.username;
   const headingId = `profile-team-shares-${person.id}`;
@@ -76,7 +82,7 @@ export function ProfileTeamShares({
       <h3 id={headingId} className="text-body font-bold">
         {translateCircles(language, 'circles.team.title', { name })}
       </h3>
-      {TEAM_SHARES.map((share) => (
+      {grantable.map((share) => (
         <PersonSettingSwitch
           key={share}
           userId={person.id}

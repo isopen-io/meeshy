@@ -1,5 +1,5 @@
 import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
-import { RELATION_RITUAL_SHARES, type RelationRitualShare } from '@meeshy/shared/types/relation-person-settings';
+import { RELATION_RITUAL_SHARES, relationPersonSettingsUpdateSchema, type RelationRitualShare } from '@meeshy/shared/types/relation-person-settings';
 
 import type { DataSource } from '@/lib/api/config';
 import type { ApiResult, HttpTransport } from '@/lib/api/http';
@@ -30,6 +30,15 @@ export type ReceptionBlock = (typeof RECEPTION_BLOCKS)[number];
 
 export const TEAM_SHARES = RELATION_RITUAL_SHARES;
 export type TeamShare = RelationRitualShare;
+
+/**
+ * Les partages que le contrat de `PUT` ACCEPTE d'accorder (`true`) : ceux-là seuls
+ * s'offrent. Un contrat qui ne tient que le retrait (`false`) n'en offre aucun — un
+ * interrupteur dont chaque accord reviendrait en 400 serait un contrôle sans effet.
+ */
+export const GRANTABLE_TEAM_SHARES: readonly TeamShare[] = TEAM_SHARES.filter(
+  (share) => relationPersonSettingsUpdateSchema.safeParse({ [share]: true }).success,
+);
 
 export type PersonSettingField = ReceptionBlock | TeamShare;
 
