@@ -21,20 +21,13 @@ import {
 } from './retractMessageNotifications';
 import { loadQuoteCascadeAudience } from './quoteCascade';
 import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
+// La borne — et la mesure qui la justifie — vit avec le COÛT qu'elle borne
+// (`createNotification`), pas avec l'éventail qui l'a mesurée la première
+// (#17081). Elle n'est PAS réexportée d'ici : un ré-export ne traverse pas un
+// double qui énumère ses clés à la main, et ce module est doublé partout.
+import { NOTIFICATION_FANOUT_CONCURRENCY } from '../notifications/notificationFanOutBudget';
 import { pendingRequestUserIds } from './pendingMessageRequests';
 
-/**
- * Combien de `createMessageNotification` l'éventail `new_message` laisse en vol
- * à la fois (#10819). Chaque création lit une quinzaine de lignes et recompte
- * le badge non lu du destinataire (une requête par conversation qu'il suit) :
- * lancées toutes ensemble sur Meeshy Global (375 membres), elles tenaient la
- * file Prisma et la boucle d'événements 10 à 14 s, et TOUTES les routes de la
- * passerelle attendaient derrière. Seize créations en vol, c'est quelques
- * centaines de lectures au plus dans la file — un groupe ordinaire part
- * toujours d'un seul coup, et le débit d'un grand groupe se remesure en
- * production (p95 des routes, retard de boucle) avant d'ajuster cette borne.
- */
-export const MESSAGE_FANOUT_CONCURRENCY = 16;
 
 export type { NotificationActorProfile };
 
@@ -781,8 +774,8 @@ export async function notifyMessageRecipients(params: {
       // `allSettled` et non `all` : le destinataire dont la lecture de contexte
       // hoquette ne doit pas emporter le compte rendu de ses voisins, dont les
       // notifications sont déjà parties.
-      // Débit BORNÉ (#10819) : cf. `MESSAGE_FANOUT_CONCURRENCY`.
-      const results = await settleWithConcurrency(regularRecipients, MESSAGE_FANOUT_CONCURRENCY, recipientUserId =>
+      // Débit BORNÉ (#10819) : cf. `NOTIFICATION_FANOUT_CONCURRENCY`.
+      const results = await settleWithConcurrency(regularRecipients, NOTIFICATION_FANOUT_CONCURRENCY, recipientUserId =>
         notificationService.createMessageNotification({
           recipientUserId,
           senderId: sender.actorId,
