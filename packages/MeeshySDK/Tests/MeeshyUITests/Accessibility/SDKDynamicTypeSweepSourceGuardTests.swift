@@ -48,6 +48,7 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Media/AudioEditorToolPanel.swift",
         "Media/MeeshyAudioEditorView.swift",
         "Media/MeeshyImageEditorView.swift",
+        "Media/MeeshyImageEditorView+Panels.swift",
         "Media/ImageEditorHistoryOverlay.swift"
     ]
 
