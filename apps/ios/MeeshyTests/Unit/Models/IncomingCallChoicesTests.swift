@@ -3,6 +3,7 @@ import XCTest
 
 /// OPUS-5 — l'écran d'appel entrant : « Répondre sans vidéo » et la vignette
 /// de ma caméra, pour un appel vidéo seulement.
+@MainActor
 final class IncomingCallChoicesTests: XCTestCase {
 
     func test_videoCall_offersAnswerWithoutVideo_betweenDeclineAndAccept() {

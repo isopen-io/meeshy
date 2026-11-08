@@ -7,8 +7,10 @@ nonisolated enum ComposerCaptureTopItem: Equatable, Hashable, Sendable {
     case close
     /// La puce du chrono et de l'indicateur de segment.
     case chrono
-    /// `[ ]` : carte ↔ plein écran.
+    /// `[ ]` : carte ↔ plein écran — en retouche ; au viseur, il vit dans ⋯.
     case size
+    /// `⋯` : le menu du viseur — la grille, et la taille quand elle s'offre (OPUS-6).
+    case more
     /// Retirer le dernier segment.
     case dropSegment
     /// ✓ : poser les segments.
@@ -31,11 +33,15 @@ nonisolated enum ComposerCaptureTopItem: Equatable, Hashable, Sendable {
 /// > du bouton (x). »
 ///
 /// À gauche, la croix puis — dès qu'une vidéo se prend — la puce du chrono. À
-/// droite, de l'intérieur vers le bord : `[ ]`, les contrôleurs de segment, le
+/// droite, de l'intérieur vers le bord : `⋯`, les contrôleurs de segment, le
 /// flash, le retournement. Pendant l'enregistrement, seuls la croix et le chrono
 /// restent : le zoom passe au glissé, et rien d'autre ne se règle en filmant.
-/// Dès que des segments attendent, `[ ]` cède sa place : la rangée tient alors
+/// Dès que des segments attendent, `⋯` cède sa place : la rangée tient alors
 /// sept contrôles, et la largeur d'un iPhone n'en porte pas huit.
+///
+/// **`⋯` remplace `[ ]` au viseur** (décision porteur, OPUS-6) : il
+/// ouvre la grille et la taille, et accueillera le retardateur, sans huitième
+/// contrôle.
 nonisolated enum ComposerCaptureTopRow {
 
     /// L'écart entre deux contrôles de la rangée.
@@ -62,9 +68,9 @@ nonisolated enum ComposerCaptureTopRow {
         }
         guard input.stage != .recording else { return [] }
         let segments = input.pendingSegments > 0
-        let taille: [ComposerCaptureTopItem] = input.offersSizeToggle && !segments ? [.size] : []
+        let menu: [ComposerCaptureTopItem] = segments ? [] : [.more]
         let controleurs: [ComposerCaptureTopItem] = segments ? [.dropSegment, .validate] : []
-        return taille + controleurs + [.flash, .flip]
+        return menu + controleurs + [.flash, .flip]
     }
 
     /// La puce paraît dès qu'une vidéo se prend : en filmant, ou segments en attente.
@@ -92,6 +98,44 @@ nonisolated enum ComposerCaptureTopRow {
         guard let rang = trailing.firstIndex(of: .flash) else { return 0 }
         let aDroite = CGFloat(trailing.count - 1 - rang)
         return aDroite * (tapTarget + spacing)
+    }
+}
+
+/// Une entrée du menu `⋯` du viseur.
+nonisolated enum ComposerCaptureMoreItem: Equatable, Hashable, Sendable {
+    case grid
+    case size
+}
+
+/// **Ce que le menu `⋯` du viseur propose** (OPUS-6) : la grille toujours ; la
+/// taille seulement s'il y a une carte où rentrer (#9125).
+nonisolated enum ComposerCaptureMoreMenu {
+    static func items(offersSizeToggle: Bool) -> [ComposerCaptureMoreItem] {
+        [.grid] + (offersSizeToggle ? [.size] : [])
+    }
+}
+
+/// **La grille des tiers du viseur** (CAM-2, décision porteur, OPUS-6) :
+/// désactivée par défaut, gardée d'une ouverture à l'autre, peinte au viseur
+/// et jamais dans la prise — ni en retouche, où l'on ne cadre plus.
+nonisolated enum ComposerCaptureGrid {
+    static let storageKey = "composer.camera.grid"
+
+    nonisolated struct Lines: Equatable, Sendable {
+        let vertical: [CGFloat]
+        let horizontal: [CGFloat]
+    }
+
+    /// Les deux lignes de chaque axe, aux tiers de la zone donnée.
+    static func lines(in zone: CGRect) -> Lines {
+        guard zone.width > 0, zone.height > 0 else { return Lines(vertical: [], horizontal: []) }
+        let tiers: [CGFloat] = [1.0 / 3.0, 2.0 / 3.0]
+        return Lines(vertical: tiers.map { zone.minX + zone.width * $0 },
+                     horizontal: tiers.map { zone.minY + zone.height * $0 })
+    }
+
+    static func shows(enabled: Bool, editing: Bool) -> Bool {
+        enabled && !editing
     }
 }
 

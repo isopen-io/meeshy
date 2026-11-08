@@ -104,6 +104,16 @@ enum ComposerSceneCameraCopy {
                      defaultValue: "Revenir à la carte", bundle: .main)
     }
 
+    /// La grille des tiers du viseur, dans le menu `⋯` (CAM-2).
+    static var gridLabel: String {
+        String(localized: "composer.camera.grid", defaultValue: "Grille", bundle: .main)
+    }
+
+    /// Le bouton `⋯` du viseur, qui ouvre la grille et la taille (OPUS-6).
+    static var moreLabel: String {
+        String(localized: "composer.camera.more", defaultValue: "Plus d’options", bundle: .main)
+    }
+
     /// La bascule d'objectif — l'action, parce qu'elle n'a que deux positions
     /// et qu'aucune des deux n'a besoin d'être nommée pour qu'on sache ce
     /// qu'un appui fera.
