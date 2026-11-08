@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { authorPostsInfiniteOptions } from '@/lib/api/author-posts';
 import { bookmarkedPostsQuery } from '@/lib/api/bookmarked-posts';
+import { communityPostsInfiniteOptions } from '@/lib/api/community-posts';
 import { updateCardPost } from '@/lib/api/card-caches';
 import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
@@ -197,6 +198,9 @@ describe('toute caisse qui peint une carte est atteinte par le registre', () => 
     'routes/hashtag.tsx': [{ names: 'hashtagInfiniteOptions', queryKey: hashtagInfiniteOptions({ ...deps, tag: 'voyage' }).queryKey, holds: 'pages' }],
     'routes/user-profile-posts.tsx': [
       { names: 'authorPostsInfiniteOptions', queryKey: authorPostsInfiniteOptions({ ...deps, authorId: 'u' }).queryKey, holds: 'pages' },
+    ],
+    'routes/community-posts.tsx': [
+      { names: 'communityPostsInfiniteOptions', queryKey: communityPostsInfiniteOptions({ ...deps, communityId: 'c' }).queryKey, holds: 'pages' },
     ],
   };
 
