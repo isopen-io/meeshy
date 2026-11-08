@@ -41,17 +41,17 @@ export const togetherInvitePayloadSchema = z.object({
   toUserId: objectId,
   conversationId: objectId,
   attachmentId: objectId,
-});
+}).strict();
 export type TogetherInvitePayload = z.infer<typeof togetherInvitePayloadSchema>;
 
-export const togetherSessionPayloadSchema = z.object({ sessionId });
+export const togetherSessionPayloadSchema = z.object({ sessionId }).strict();
 export type TogetherSessionPayload = z.infer<typeof togetherSessionPayloadSchema>;
 
 export const togetherSyncPayloadSchema = z.object({
   sessionId,
   playing: z.boolean(),
   positionMs: z.number().int().nonnegative().max(TOGETHER_MAX_POSITION_MS),
-});
+}).strict();
 export type TogetherSyncPayload = z.infer<typeof togetherSyncPayloadSchema>;
 
 /** L'état de lecture partagé. `at` : horloge du serveur (ms epoch) quand `positionMs` valait. */
