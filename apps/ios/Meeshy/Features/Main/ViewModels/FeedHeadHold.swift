@@ -10,7 +10,8 @@ import MeeshySDK
 ///
 /// Tant que le lecteur lit plus bas que la tête, ou que le fil est caché, ce
 /// qui ARRIVE en tête attend ici ; il entre dès que le lecteur remonte en haut.
-/// Un fil vide ne tient jamais rien : le premier chargement se montre.
+/// Un fil vide ne tient jamais rien : le premier chargement se montre. Loi
+/// jumelle d'Android : `FeedHeadHold` (`apps/android/core/model/.../feed/`).
 struct FeedHeadHold {
     private(set) var isHolding = false
     private(set) var held: [FeedPost] = []
