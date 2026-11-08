@@ -1,6 +1,4 @@
-## Deux sessions sur un même incident produisent deux COUCHES, pas deux copies — ne pas céder, composer
-
-**2026-11-08** — #16852, rencontré pendant le cycle 145 de l'audit temps réel.
+## 2026-11-08 — Deux sessions sur un même incident produisent deux COUCHES, pas deux copies : ne pas céder, composer (#16852)
 
 ### Ce qui s'est passé
 

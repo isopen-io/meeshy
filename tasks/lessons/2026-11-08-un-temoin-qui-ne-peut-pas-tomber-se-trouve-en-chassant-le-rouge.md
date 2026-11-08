@@ -1,6 +1,4 @@
-## Un témoin qui ne peut pas tomber se trouve en CHASSANT le rouge, jamais en relisant l'assertion
-
-**2026-11-08** — cycle 145 de l'audit temps réel (#16751, #16750, #16830, #16837, #16852, #16856).
+## 2026-11-08 — Un témoin qui ne peut pas tomber se trouve en CHASSANT le rouge, jamais en relisant l'assertion (#16830, #16837, #16852)
 
 ### Ce qui s'est passé
 
