@@ -160,7 +160,7 @@ struct GamePhotoFlowView: View {
                 ZStack {
                     switch phase {
                     case .live:
-                        CameraPreviewLayer(session: session.camera.session)
+                        CameraPreviewLayer(session: session.camera.session, sessionQueue: session.camera.sessionQueue)
                     case .opening:
                         Color(white: 0.12)
                         ProgressView().tint(.white)

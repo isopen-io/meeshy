@@ -20,6 +20,7 @@ import {
   type GlobalMembershipSocketManager,
 } from '../conversations/ensureGlobalConversationMembership';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
+import { cutTogetherWhere } from '../together/togetherDeps';
 
 type UserSortKey = NonNullable<UserFilters['sortBy']>;
 
@@ -473,6 +474,7 @@ export class UserManagementService {
     });
 
     if (!data.isActive) await this.revokeSessionsBestEffort(userId, 'deactivation');
+    if (!data.isActive) await cutTogetherWhere({ userId });
     await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
@@ -593,6 +595,7 @@ export class UserManagementService {
     });
 
     await this.revokeSessionsBestEffort(userId, 'deletion');
+    await cutTogetherWhere({ userId });
     await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;

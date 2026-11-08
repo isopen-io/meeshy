@@ -98,6 +98,7 @@ struct ConversationHeaderTalkieButton: View {
     }
 
     private var accent: Color { Color(hex: accentColor) }
+    private var gradient: LinearGradient { LinearGradient(colors: [accent, Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing) }
 
     private var liveValue: String {
         switch sender.phase {
@@ -114,7 +115,7 @@ struct ConversationHeaderTalkieButton: View {
             }
             Circle()
                 .fill(
-                    LinearGradient(colors: [accent, Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    gradient
                 )
                 .opacity(look == .idle ? 0 : 1)
             symbol
@@ -130,7 +131,7 @@ struct ConversationHeaderTalkieButton: View {
             .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
         if look == .idle {
             image.foregroundStyle(
-                LinearGradient(colors: [accent, Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                gradient
             )
         } else {
             image

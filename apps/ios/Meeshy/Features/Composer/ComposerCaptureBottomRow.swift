@@ -31,8 +31,6 @@ struct ComposerCaptureBottomRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Le cadenas qui se ferme, élastique, avant de partir (#9753).
     @State private var lockSeal = ComposerLockSeal()
-    /// La phrase du geste a servi : une prise a été faite (#16482).
-    @AppStorage(ComposerShutterFeedback.hintSeenKey) private var hintSeen = false
 
     private var capture: ComposerSceneCameraBar.Capture { session.barCapture }
 
@@ -59,15 +57,6 @@ struct ComposerCaptureBottomRow: View {
         return (url, lecteur.duration)
     }
 
-    /// La phrase du geste se tait pendant la prise et la retouche, sous un
-    /// cadre, dont le bas porte sa propre écriture (#9557) — et bande ouverte,
-    /// où le nom du choix prend sa place (#9566).
-    private var showsHint: Bool {
-        ComposerShutterFeedback.showsHint(
-            base: !recording && !editing && session.look.frame == ComposerPhotoFrame.none && session.openFamily == nil,
-            hasTakenAPhoto: hintSeen)
-    }
-
     var body: some View {
         Group {
             if editing { editTools } else { captureRow }
@@ -85,8 +74,6 @@ struct ComposerCaptureBottomRow: View {
             guard !Task.isCancelled else { return }
             lockSeal.finish(scellement)
         }
-        .adaptiveOnChange(of: session.camera.shutterPresses) { _, _ in hintSeen = true }
-        .adaptiveOnChange(of: recording) { _, enregistre in if enregistre { hintSeen = true } }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))
@@ -120,18 +107,6 @@ struct ComposerCaptureBottomRow: View {
                     .padding(.bottom, ComposerLookStripRule.railBottomInset)
                         .transition(.opacity)
                 }
-            }
-            if showsHint {
-                Text(showsLock ? ComposerSceneCameraCopy.lockHint
-                               : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, MeeshySpacing.mdPlus)
-                    .accessibilityHidden(true)
             }
         }
         .padding(.bottom, MeeshySpacing.lg)
@@ -227,6 +202,56 @@ struct ComposerCaptureBottomRow: View {
                                switching: capture.switchingCamera,
                                onSelect: { session.controls.setZoom($0) },
                                onStep: { session.stepZoom(up: $0) })
+    }
+}
+
+/// **La phrase du geste, centrée sur la scène** (A8, #17109 : « Touchez deux
+/// fois pour une photo · maintenez pour filmer »). Elle se tait pendant la
+/// prise et la retouche, sous un cadre, dont le bas porte sa propre écriture
+/// (#9557), bande ouverte, où le nom du choix prend sa place (#9566), et dès
+/// qu'une prise a été faite (#16482). Elle ne prend aucun doigt : la scène
+/// sous elle vise et photographie.
+struct ComposerCaptureGestureHint: View {
+    @ObservedObject var session: ComposerCaptureSession
+
+    /// La phrase du geste a servi : une prise a été faite (#16482).
+    @AppStorage(ComposerShutterFeedback.hintSeenKey) private var hintSeen = false
+
+    private var recording: Bool { session.stage == .recording }
+
+    private var showsHint: Bool {
+        ComposerShutterFeedback.showsHint(
+            base: !recording && !session.phase.isEditing && session.look.frame == ComposerPhotoFrame.none
+                && session.openFamily == nil,
+            hasTakenAPhoto: hintSeen)
+    }
+
+    private var showsLock: Bool {
+        let capture = session.barCapture
+        return ComposerCaptureHold.showsLock(stage: session.stage, holding: capture.holding, locked: capture.locked)
+    }
+
+    var body: some View {
+        ZStack {
+            if showsHint {
+                Text(showsLock ? ComposerSceneCameraCopy.lockHint
+                               : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 4, y: 1)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.75)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.2), value: showsHint)
+        .adaptiveOnChange(of: session.camera.shutterPresses) { _, _ in hintSeen = true }
+        .adaptiveOnChange(of: recording) { _, enregistre in if enregistre { hintSeen = true } }
     }
 }
 

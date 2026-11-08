@@ -1,4 +1,4 @@
-import CoreGraphics
+import SwiftUI
 
 /// **La scène est le plus grand 9:16 de la zone sûre** (#13839).
 ///
@@ -39,6 +39,26 @@ nonisolated enum ComposerSceneFit {
             : CGSize(width: zone.width, height: zone.width / ratio)
         return CGRect(x: zone.midX - size.width / 2, y: zone.midY - size.height / 2,
                       width: size.width, height: size.height)
+    }
+
+    /// **L'état masqué : la scène prend le viewport ENTIER** (#17111), sans
+    /// l'air du haut ni la zone sûre, en gardant ses proportions — les bandes
+    /// qui restent sont le letterbox.
+    static func letterbox(in viewport: CGSize, aspectRatio ratio: CGFloat) -> CGRect {
+        frame(in: stageZone(in: viewport, aspectRatio: ratio, concealed: true), aspectRatio: ratio)
+    }
+
+    /// La zone où la scène se pose : celle du repos, ou le viewport entier
+    /// quand le chrome est masqué.
+    static func stageZone(in size: CGSize, aspectRatio ratio: CGFloat, concealed: Bool) -> CGRect {
+        concealed ? CGRect(origin: .zero, size: size) : zone(in: size, aspectRatio: ratio)
+    }
+
+    /// Masquée, la scène ignore toute la zone sûre ; au repos, le bas seulement
+    /// (le socle se pose dessus), et rien entre deux rails d'iPad.
+    static func ignoredEdges(rails: Bool, concealed: Bool) -> Edge.Set {
+        if concealed { return .all }
+        return rails ? [] : .bottom
     }
 
     static func lift(scene: CGRect, visibleBottom: CGFloat) -> Lift {

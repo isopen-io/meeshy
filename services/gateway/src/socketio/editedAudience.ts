@@ -4,6 +4,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { translationReaders, type TranslationReaders } from './translationReaders';
 import { safeBroadcast } from './serverEmit';
+import { PLAN_UNAVAILABLE, type PlanOutcome } from './planOutcome';
 import type { ServerEmitIO, ServerEmitTarget } from './serverEmit';
 import type { ServerEventPayload } from './serverEmit';
 
@@ -156,7 +157,7 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
    * se confond pas non plus avec un `throw` chez l'appelant, dont le `catch` de
    * fin de méthode emporterait l'enfilage durable qui SUIT cette émission.
    */
-  readonly plan: EditedReaderPlan | null | 'unavailable';
+  readonly plan: PlanOutcome<EditedReaderPlan>;
   readonly sealed: ReadonlyMap<string, Date>;
   readonly blocked: ReadonlySet<string>;
   /** La variante d'un lecteur dont la citation est échue (#8562). */
@@ -166,7 +167,7 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
 }): void {
   const { io, conversationId, payload, plan, sealed, blocked } = params;
   if (!io) return;
-  if (plan === 'unavailable') return;
+  if (plan === PLAN_UNAVAILABLE) return;
 
   if (plan) {
     for (const target of plan.targets) {

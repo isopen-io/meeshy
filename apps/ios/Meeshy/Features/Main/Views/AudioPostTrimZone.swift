@@ -14,6 +14,8 @@ struct AudioPostTrimZone: View {
     let onRetry: () -> Void
 
     @ResolvedThemePalette private var theme
+    /// L'écoute de la sélection : la tête de la bande la suit.
+    @StateObject private var player = AudioTrimPreviewPlayer()
 
     @ViewBuilder
     var body: some View {
@@ -57,14 +59,47 @@ struct AudioPostTrimZone: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 trimHeader
                 if let url = recordedURL {
-                    MeeshyAudioTrimmer(
-                        url: url,
-                        duration: recordedDuration,
-                        range: $trimRange,
-                        tint: MeeshyColors.indigo500
-                    )
+                    trimmer(url: url)
                 }
             }
+        }
+    }
+
+    /// **« Rogner et régler »** (#17110) — le composant UNIQUE du SDK, celui que
+    /// le composer sert au son et à la vidéo : poignées jaunes, onde mesurée,
+    /// tête qui suit l'écoute. Déplacer une poignée suspend l'écoute.
+    private func trimmer(url: URL) -> some View {
+        let bornes = MediaTrimRule.resolved(start: trimRange.lowerBound, end: trimRange.upperBound,
+                                            sourceDuration: recordedDuration)
+        return MediaTrimStrip(
+            content: .audioFile(url),
+            sourceDuration: recordedDuration,
+            bounds: bornes,
+            waveformReading: .measured,
+            accent: MeeshyColors.indigo500,
+            controls: MediaTrimStrip.Controls(
+                playhead: player.playhead,
+                isPlaying: player.isPlaying,
+                onTogglePlayback: { toggleListening() },
+                onSeek: { player.seek(to: $0) },
+                options: []),
+            onChange: { nouvelles in
+                player.pause()
+                trimRange = nouvelles.start...nouvelles.end
+            }
+        )
+        .task(id: url) {
+            _ = player.load(url: url)
+            player.play(from: trimRange.lowerBound, to: trimRange.upperBound)
+        }
+        .onDisappear { player.stop() }
+    }
+
+    private func toggleListening() {
+        if player.isPlaying {
+            player.pause()
+        } else {
+            player.play(from: trimRange.lowerBound, to: trimRange.upperBound)
         }
     }
 

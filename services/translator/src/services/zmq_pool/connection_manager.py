@@ -201,6 +201,8 @@ class ConnectionManager:
                 pleine (#16781). Sans rappel, le refus est compté et journalisé.
         """
         self.on_tasks_rejected = on_tasks_rejected
+        # #17064 — rappel des refus à l'entrée pendant l'arrêt ; à défaut, `on_tasks_rejected`
+        self.on_refused_at_shutdown: Optional[RejectedTasksHandler] = None
         # Queues FIFO, toutes reliées au même drapeau « du travail est arrivé » (#16780)
         self.work_arrived = asyncio.Event()
         self.normal_pool = SignalingQueue(normal_pool_size, self.work_arrived)
@@ -218,6 +220,7 @@ class ConnectionManager:
         self._batch_flush_task: Optional[asyncio.Task] = None
         # #17002 — levé par `stop()` : toute tâche reçue ensuite est refusée et signalée
         self._shutting_down = False
+        self._late_refusal_announced = False
 
         # Priority queue configuration
         PERFORMANCE_MODULE_AVAILABLE = False
@@ -320,8 +323,14 @@ class ConnectionManager:
         retour, sinon la passerelle la recevrait deux fois.
         """
         self.stats['shutdown_rejections'] += 1
+        if not self._late_refusal_announced:
+            self._late_refusal_announced = True
+            logger.warning(
+                f"[TRANSLATOR] Shutdown in progress: late tasks are refused, first {task.task_id} "
+                f"(each one signaled, total in shutdown_rejections)"
+            )
         logger.debug(f"[TRANSLATOR] Shutdown in progress, refusing task {task.task_id}")
-        await self._report_rejected([task])
+        await self._report_rejected([task], self.on_refused_at_shutdown or self.on_tasks_rejected)
         return True
 
     async def enqueue_task(self, task: TranslationTask) -> bool:
@@ -487,13 +496,18 @@ class ConnectionManager:
         self.stats['batches_created'] += 1
         return True
 
-    async def _report_rejected(self, tasks: List[TranslationTask]) -> None:
+    async def _report_rejected(
+        self,
+        tasks: List[TranslationTask],
+        handler: Optional[RejectedTasksHandler] = None
+    ) -> None:
         """Remet les tâches refusées au rappel, appelé HORS du verrou de lot ;
         un rappel qui lève est journalisé et n'interrompt rien."""
-        if not tasks or self.on_tasks_rejected is None:
+        handler = handler or self.on_tasks_rejected
+        if not tasks or handler is None:
             return
         try:
-            await self.on_tasks_rejected(tasks)
+            await handler(tasks)
         except Exception as e:
             logger.error(
                 f"[TRANSLATOR] Rejection callback failed for "
@@ -550,7 +564,22 @@ class ConnectionManager:
             # Vider l'accumulateur
             self._batch_accumulator.clear()
 
-        for tasks in rejected_batches:
+        if rejected_batches:
+            await self._report_through_cancellation(rejected_batches)
+
+    async def _report_through_cancellation(self, batches: List[List[TranslationTask]]) -> None:
+        """#17063 — les lots refusés ont déjà quitté l'accumulateur et sont
+        comptés : leur report va jusqu'au bout même si `stop()` annule la boucle
+        de flush, et l'annulation n'est rendue qu'une fois le report fini."""
+        report = asyncio.ensure_future(self._report_batches(batches))
+        try:
+            await asyncio.shield(report)
+        except asyncio.CancelledError:
+            await report
+            raise
+
+    async def _report_batches(self, batches: List[List[TranslationTask]]) -> None:
+        for tasks in batches:
             await self._report_rejected(tasks)
 
     def get_stats(self) -> dict:

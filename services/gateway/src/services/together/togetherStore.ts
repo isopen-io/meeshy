@@ -1,7 +1,7 @@
 /**
  * L'ÉTAT D'UNE SÉANCE « ENSEMBLE » (#17012) — scellé au repos, durée de vie courte.
  *
- * Deux clés (et une pierre tombale) : la séance (`together:session:<id>`), SCELLÉE par `secret-at-rest` et liée à
+ * Deux clés (et une pierre tombale, et les index par compte et par conversation) : la séance (`together:session:<id>`), SCELLÉE par `secret-at-rest` et liée à
  * son identifiant comme données authentifiées (une valeur recopiée sous la clé d'une autre
  * séance ne s'ouvre pas) ; et l'index de la paire (`together:pair:<HMAC de la paire>`) qui ne
  * porte que l'identifiant aléatoire de sa séance courante — une séance par paire.
@@ -49,13 +49,28 @@ export const togetherPairKey = (a: string, b: string): string => {
   return `together:pair:${digest.digest('hex')}`;
 };
 
-/** L'index d'un compte (ses séances en cours, pour les couper à sa déconnexion) : même discrétion que l'index de paire. */
-export const togetherUserKey = (userId: string): string => {
-  const material = `Together.user:${userId.toLowerCase()}`;
+const indexKey = (domain: string, id: string): string => {
+  const material = `Together.${domain}:${id.toLowerCase()}`;
   const key = hasValidSecretsKey() ? process.env[SECRETS_AT_REST_KEY_ENV]?.trim() : undefined;
   const digest = key ? createHmac('sha256', Buffer.from(key, 'base64')).update(material) : createHash('sha256').update(material);
-  return `together:user:${digest.digest('hex')}`;
+  return `together:${domain}:${digest.digest('hex')}`;
 };
+
+/** L'index d'un compte (ses séances en cours, pour les couper à sa déconnexion ou à sa désactivation) : même discrétion que l'index de paire. */
+export const togetherUserKey = (userId: string): string => indexKey('user', userId);
+
+/**
+ * L'index d'une conversation (#17022) : les séances qui y lisent une pièce, pour les rejuger
+ * quand un message y est supprimé. Même discrétion : il ne nomme pas la conversation.
+ */
+export const togetherConversationKey = (conversationId: string): string => indexKey('conversation', conversationId);
+
+/** Les index où une séance est inscrite : ses deux comptes et sa conversation. */
+const indexKeysOf = (session: TogetherSession): readonly string[] => [
+  togetherUserKey(session.hostId),
+  togetherUserKey(session.guestId),
+  togetherConversationKey(session.conversationId),
+];
 
 const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
@@ -165,34 +180,43 @@ const parseIds = (raw: string | null): readonly string[] => {
   }
 };
 
-const USER_INDEX_MAX = 20;
+const INDEX_MAX = 20;
 
-/** Inscrit la séance à l'index de ses deux comptes : de quoi la couper quand l'un d'eux disparaît. */
-export async function indexTogetherUsers(cache: TogetherCache, session: TogetherSession): Promise<void> {
+/**
+ * Inscrit la séance aux index de ses deux comptes et de sa conversation : de quoi la
+ * retrouver quand l'un d'eux disparaît, est banni, ou qu'un message de la conversation est
+ * supprimé (#17022), même sortie de l'index de paire par une invitation concurrente.
+ */
+export async function indexTogether(cache: TogetherCache, session: TogetherSession): Promise<void> {
   await Promise.all(
-    [session.hostId, session.guestId].map((userId) =>
+    indexKeysOf(session).map((key) =>
       exclusive(async () => {
-        const key = togetherUserKey(userId);
         const ids = parseIds(await cache.get(key)).filter((id) => id !== session.sessionId);
-        await cache.set(key, JSON.stringify([...ids, session.sessionId].slice(-USER_INDEX_MAX)), TOGETHER_SESSION_TTL_SECONDS);
+        await cache.set(key, JSON.stringify([...ids, session.sessionId].slice(-INDEX_MAX)), TOGETHER_SESSION_TTL_SECONDS);
       }),
     ),
   );
 }
 
-const unindexTogetherUser = (cache: TogetherCache, userId: string, sessionId: string): Promise<void> =>
+const unindexTogether = (cache: TogetherCache, key: string, sessionId: string): Promise<void> =>
   exclusive(async () => {
-    const key = togetherUserKey(userId);
     const kept = parseIds(await cache.get(key)).filter((id) => id !== sessionId);
     if (kept.length === 0) await cache.del(key);
     else await cache.set(key, JSON.stringify(kept), TOGETHER_SESSION_TTL_SECONDS);
   });
 
-/** Les séances en cours d'un compte (invitations comprises) ; une entrée expirée ne compte pas. */
-export async function readUserTogether(cache: TogetherCache, userId: string, now: number): Promise<readonly TogetherSession[]> {
-  const sessions = await Promise.all(parseIds(await cache.get(togetherUserKey(userId))).map((id) => readTogether(cache, id, now)));
+const readIndexed = async (cache: TogetherCache, key: string, now: number): Promise<readonly TogetherSession[]> => {
+  const sessions = await Promise.all(parseIds(await cache.get(key)).map((id) => readTogether(cache, id, now)));
   return sessions.filter((session): session is TogetherSession => session !== null);
-}
+};
+
+/** Les séances en cours d'un compte (invitations comprises) ; une entrée expirée ne compte pas. */
+export const readUserTogether = (cache: TogetherCache, userId: string, now: number): Promise<readonly TogetherSession[]> =>
+  readIndexed(cache, togetherUserKey(userId), now);
+
+/** Les séances en cours dans une conversation (invitations comprises). */
+export const readConversationTogether = (cache: TogetherCache, conversationId: string, now: number): Promise<readonly TogetherSession[]> =>
+  readIndexed(cache, togetherConversationKey(conversationId), now);
 
 /** La séance, ou `null` (absente, expirée, illisible, scellée pour une autre). */
 export async function readTogether(cache: TogetherCache, sessionId: string, now: number): Promise<TogetherSession | null> {
@@ -234,5 +258,5 @@ export async function clearTogether(
 ): Promise<void> {
   await releasePair(togetherPairKey(session.hostId, session.guestId), session.sessionId);
   await cache.del(sessionKey(session.sessionId));
-  await Promise.all([session.hostId, session.guestId].map((userId) => unindexTogetherUser(cache, userId, session.sessionId)));
+  await Promise.all([...new Set(indexKeysOf(session))].map((key) => unindexTogether(cache, key, session.sessionId)));
 }

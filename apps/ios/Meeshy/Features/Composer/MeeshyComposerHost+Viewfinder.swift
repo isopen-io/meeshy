@@ -123,7 +123,8 @@ extension MeeshyComposerHost {
     /// entrée, pas un mode »). Le mode d'ouverture vient de `ComposerSceneCamera`, jamais d'un littéral.
     func armSceneCamera() {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
-        sceneCameraSize = .card
+        sceneCameraSize = .armed
+        sceneCapture.recordingBudget = ComposerCaptureRecordingBudget.maxDuration(for: selectedFormat)
         // **Ce que le viseur prend appartient à la SCÈNE** : le marquage se fait à l'ARMEMENT, car
         // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879).
         railPosesNextMedia = true
@@ -144,7 +145,7 @@ extension MeeshyComposerHost {
         }
         sceneCapture.finishCapture()
         HapticFeedback.success()
-        Task {
+        ComposerSceneHistoryHold.around {
             if sceneIntakeAllowsAnother, let cadrage = await ComposerTakeAspect.sceneFit(of: result) { applySceneFitMode(cadrage) }
             await ingestCameraCapture(result)
         }
@@ -154,9 +155,8 @@ extension MeeshyComposerHost {
     /// les segments abandonnés avec leurs fichiers.
     func disarmSceneCamera() {
         sceneCaptureReplacesBackgroundId = nil
-        sceneCameraSize = .card
-        // Quitter sans prendre RETIRE la marque : laissée posée, elle
-        // classerait sur la scène le prochain média venu d'une AUTRE porte.
+        sceneCameraSize = .armed
+        // Quitter sans prendre RETIRE la marque, sinon le prochain média d'une AUTRE porte irait sur la scène.
         railPosesNextMedia = false
         sceneCapture.disarm()
     }
@@ -164,9 +164,8 @@ extension MeeshyComposerHost {
     // MARK: - Le montage unique
 
     /// **Le composer monte LE montage de la capture** (#9351) — celui que la
-    /// barre de conversation monte aussi, en plein écran figé. Ici la taille
-    /// est pilotée (carte ↔ plein écran), et le FORMAT dit si la photo et la
-    /// vidéo sont offertes ; la prise se POSE dans la scène.
+    /// barre de conversation monte aussi. Ici il s'arme plein écran (A8, #17109), le
+    /// FORMAT dit si la photo et la vidéo sont offertes ; la prise se POSE dans la scène.
     func withSceneCameraViewfinder<Contenu: View>(_ contenu: Contenu) -> some View {
         let modes = ComposerSceneCamera.modes(for: selectedFormat)
         return ComposerCaptureMount(session: sceneCapture, size: $sceneCameraSize,
@@ -176,5 +175,23 @@ extension MeeshyComposerHost {
                                     onDeliver: { poseSceneCapture($0) }) {
             contenu
         }
+    }
+}
+
+/// **UNE prise, UN pas d'annulation** (#17109) : le cadrage et le média s'écrivent de part et
+/// d'autre d'attentes asynchrones ; l'historique est tenu entre les deux comme pendant un geste.
+@MainActor
+enum ComposerSceneHistoryHold {
+    static func around(_ pose: @escaping @MainActor () async -> Void) {
+        hold(true)
+        Task { @MainActor in
+            await pose()
+            hold(false)
+        }
+    }
+
+    static func hold(_ held: Bool, center: NotificationCenter = .default) {
+        center.post(name: .storyCanvasManipulationDidChange, object: nil,
+                    userInfo: [StoryCanvasManipulation.activeKey: held])
     }
 }
