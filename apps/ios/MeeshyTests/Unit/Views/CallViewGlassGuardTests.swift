@@ -242,6 +242,17 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("screenSharePicker.toggle(controller: callManager.screenShare)"))
     }
 
+    /// Loi 4 — la vignette du duo établi porte la couleur de qui elle montre,
+    /// comme ma vignette à l'appel entrant : jamais un trait blanc neutre.
+    func test_pipStroke_carriesTheColorOfWhoIsInTheTile() throws {
+        let code = try callViewCode()
+        let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
+        XCTAssertTrue(pip.contains("CallSelfTileStroke.colorKey(showsLocal: !effectiveSwapStreams"), "La couleur suit le flux montré dans la vignette")
+        XCTAssertTrue(pip.contains("lineWidth: CallSelfTileStroke.lineWidth"))
+        let chrome = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTileChrome.swift")
+        XCTAssertTrue(chrome.contains("Color(hex: CallSpeakerColor.hex(for: key))"), "La fonction partagée, jamais une palette locale")
+    }
+
     func test_cameraZoom_followsMyFullScreenImage_neverTheTile() throws {
         let code = try callViewCode()
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.answerNoVideo",
+          "androidName": "call_incoming_answer_no_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.answerNoVideo.label",
+          "androidName": "call_incoming_answer_no_video_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.answerNoVideo.hint",
+          "androidName": "call_incoming_answer_no_video_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

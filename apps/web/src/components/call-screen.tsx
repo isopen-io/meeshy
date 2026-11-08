@@ -4,6 +4,10 @@ import { useStore } from 'zustand/react';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
+import { CallIncomingAnswer } from '@/components/call-incoming-answer';
+import { CallJournalColumn } from '@/components/call-journal-column';
+import { RoundButton } from '@/components/call-round-button';
+import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
@@ -17,9 +21,10 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
+import { useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
-import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
+import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
@@ -72,65 +77,13 @@ import type { EffectsCompanion } from './call-effects-companions';
  * l'appel » (#8438). Les réactions montent par-dessus la scène, et le mot d'un
  * contrôle s'affiche en haut (`call-control-overlays.tsx`).
  *
- * L'appel entrant, l'écran de fin, la pastille, la bulle et la fenêtre PiP ne
- * changent pas.
+ * L'appel entrant vit dans `call-incoming-answer.tsx` (P17, #16944) ; l'écran
+ * de fin, la pastille, la bulle et la fenêtre PiP ne changent pas.
  */
 
 const INK = 'var(--color-on-media)';
 const INK_2 = 'var(--color-on-media-3)';
 const BACKDROP = 'linear-gradient(180deg, var(--ios-indigo-950) 0%, var(--color-media-backdrop) 100%)';
-const HANGUP = 'var(--ios-error-strong)';
-const ANSWER = 'var(--ios-success)';
-
-/* Refuser et Accepter gardent leur couleur de signal ; le neutre prend le verre d'appel. */
-const SIGNAL_TONE = { danger: { background: HANGUP, color: INK }, accept: { background: ANSWER, color: INK } } as const;
-
-/**
- * Le bouton rond de l'appel entrant et de l'écran de fin. Neutre, il porte le
- * verre d'appel comme tout bouton qui flotte seul (#8432) ; Refuser est rouge,
- * Accepter vert.
- */
-function RoundButton({
-  label,
-  glyph,
-  onPress,
-  tone = 'plain',
-  size = 56,
-  caption,
-  popup = false,
-  control,
-}: {
-  readonly label: string;
-  readonly glyph: ReactNode;
-  readonly onPress: () => void;
-  readonly tone?: 'plain' | 'danger' | 'accept';
-  readonly size?: number;
-  readonly caption?: string;
-  readonly popup?: boolean;
-  readonly control?: string;
-}) {
-  const glass = tone === 'plain';
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <button
-        type="button"
-        aria-label={label}
-        {...(popup ? { 'aria-haspopup': 'dialog' as const } : {})}
-        {...(control === undefined ? {} : { 'data-call-control': control })}
-        onClick={onPress}
-        className={`${glass ? 'glass-call ' : ''}grid place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none`}
-        style={tone === 'plain' ? { width: size, height: size } : { width: size, height: size, ...SIGNAL_TONE[tone] }}
-      >
-        {glyph}
-      </button>
-      {caption === undefined ? null : (
-        <span className="text-mini" style={{ color: INK_2 }}>
-          {caption}
-        </span>
-      )}
-    </div>
-  );
-}
 
 /**
  * Un chunk chargé UNE fois — et rechargé après un échec : un préchargement
@@ -333,9 +286,11 @@ type CallScreenProps = {
   readonly initiallyExpanded?: boolean;
   /** Ce que le navigateur sait faire en effets — imposé par les témoins. */
   readonly effectsSupport?: EffectsSupport;
+  /** La fenêtre a la place du journal en colonne (#16942) — mesurée, ou imposée par les témoins. */
+  readonly wide?: boolean;
 };
 
-export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport }: CallScreenProps) {
+export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport, wide }: CallScreenProps) {
   useMediaSystemBars();
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
@@ -348,6 +303,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const stageRef = useRef<HTMLDivElement>(null);
   const myPreview = useRef<HTMLVideoElement | null>(null);
   const moderation = useCallModeration(call);
+  const liveFrame = useLiveFrameState();
   const phase = call.phase.kind;
   const joined = phase === 'connected' || phase === 'reconnecting';
   const statusKey = callStatusKey(call);
@@ -369,7 +325,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const support = useEffectsSupport(call.localStream, effectsSupport);
   const cameraSwitch = useCameraSwitch(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, canPip: shouldOfferPip(call, browserPipSupport()), videoScene });
-  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
+  const framed = liveFrameShown(call, liveFrame, live && layer.kind !== 'mode');
+  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn && !framed });
   const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
@@ -397,7 +354,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     focusNext.current = focusTarget(shown, next);
     setLayer(next);
   };
-  const panels: CallPanels = { open: chrome.panel, toggle: (panel) => send({ type: 'open-panel', panel }), enter: (mode) => send({ type: 'enter-mode', mode }) };
+  const { docks, column, panels, reserve, reserveEnd, bleedEnd } = useJournalDock({ wide, available: live && offer.journal && chrome.mode === null, panel: chrome.panel, send });
   const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
   const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
   const expanded = shown.kind === 'menu' || shown.kind === 'panel';
@@ -422,19 +379,16 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     if (selector !== null) root.current?.querySelector<HTMLElement>(selector)?.focus();
   });
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !live) return;
-      if (chrome.panel !== null) send({ type: 'close' });
-      else callActions.minimize();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [live, chrome.panel]);
+  useEscapeFolds({ live, panelOpen: chrome.panel !== null, column, send });
 
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">
-      <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} />
+      {/* P17 (#16944) : la vidéo de l'appelant tient lieu de portrait pendant la sonnerie. */}
+      {phase === 'incoming' && hasVideo(call.preview) ? null : (
+        <span data-call-incoming-portrait="">
+          <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} />
+        </span>
+      )}
       <h2 className="text-[1.6rem] font-bold leading-tight" style={{ color: INK }}>
         {call.title}
       </h2>
@@ -490,6 +444,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const self: SelfView = {
     topInset: captureShown ? CALL_CAPTURE_ROW_CLEARANCE : 0,
     full: selfFull,
+    tileHidden: framed && !selfFull,
     onToggle: () => setSelfFull((full) => !full),
     controls: chrome.selfControls,
     mine: set.mine,
@@ -532,29 +487,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       self={self}
       chromeVisible={visibility === 'shown'}
       onRevealChrome={revealChrome}
+      bleedEnd={bleedEnd}
     />
   );
 
-  const incomingControls = (
-    <div className="flex flex-col gap-6">
-      <div className="flex justify-center">
-        <RoundButton
-          label={translate(language, 'callDecline.title')}
-          caption={translate(language, 'callDecline.open')}
-          size={48}
-          glyph={screenGlyph('chatCircleText', 22)}
-          onPress={() => setDeclineOpen(true)}
-          popup
-          control="decline-message"
-        />
-      </div>
-      <div className="flex items-start justify-around gap-6 px-8">
-        <RoundButton label={t('call.decline')} caption={t('call.decline')} tone="danger" size={68} glyph={screenGlyph('phoneDisconnect', 30)} onPress={callActions.decline} />
-        {call.media === 'video' ? <RoundButton label={t('call.accept.audioOnly')} caption={t('call.accept.audioOnly')} size={68} glyph={<Glyph name="phone" size={28} />} onPress={() => callActions.accept({ audioOnly: true })} /> : null}
-        <RoundButton label={t('call.accept')} caption={t('call.accept')} tone="accept" size={68} glyph={call.media === 'video' ? screenGlyph('videoCamera', 30) : <Glyph name="phone" size={28} />} onPress={() => callActions.accept()} />
-      </div>
-    </div>
-  );
+  const incomingControls = <CallIncomingAnswer call={call} language={language} onAccept={callActions.accept} onDecline={callActions.decline} onDeclineMessage={() => setDeclineOpen(true)} />;
 
   const openAppSettings = appSettingsOpener();
   const endedControls = (
@@ -631,7 +568,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         audio={callAudio}
       />
     ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} call={call} loadFrames={loadFrameStudio} />
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} />
     ) : null;
   /* Le fondu ne retire JAMAIS le doigt à un bouton encore visible (#8735) :
      rangées d'un toucher, les commandes deviennent `invisible` à la FIN du
@@ -650,6 +587,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       data-call-screen={phase}
       data-call-chrome={hidden ? 'hidden' : 'shown'}
       data-call-layer={shown.kind}
+      data-call-journal-dock={column.shown ? 'column' : undefined}
     >
       {call.preview === null ? null : (
         <Suspense fallback={null}>
@@ -657,10 +595,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         </Suspense>
       )}
       {overlayVideo ? (
-        <div ref={stageRef} className="absolute inset-0" data-call-stage-surface="">
+        <div ref={stageRef} className="absolute inset-0" style={bleedEnd === 0 ? undefined : { insetInlineEnd: bleedEnd }} data-call-stage-surface="" {...reserve}>
           {stage}
         </div>
       ) : null}
+      <CallLiveFrameSurfaceSlot shown={framed} state={liveFrame} language={language} call={call} stage={() => stageRef.current} load={loadFrameStudio} />
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         {chrome.header ? (
@@ -669,6 +608,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           </div>
         ) : null}
         {captureRow}
+        {live ? <CallLiveFrameStatusSlot language={language} state={liveFrame} load={loadFrameStudio} /> : null}
         {layout === 'grid' ? (
           <>
             {immersive || chrome.mode !== null ? null : (
@@ -676,12 +616,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                 {pillRow}
               </div>
             )}
-            <div ref={stageRef} className="flex min-h-0 flex-1 flex-col" data-call-stage-surface="">
+            <div ref={stageRef} className="flex min-h-0 flex-1 flex-col" style={reserveEnd} data-call-stage-surface="" {...reserve}>
               {stage}
             </div>
           </>
         ) : overlayVideo ? (
-          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} aria-hidden={hidden || chrome.mode !== null ? true : undefined}>
+          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} style={reserveEnd} aria-hidden={hidden || chrome.mode !== null ? true : undefined} {...reserve}>
             {sharer === null ? null : (
               <span className="glass-call-prominent rounded-full px-3 py-1 text-mini" role="status" data-call-screen-banner="">
                 {translate(language, 'call.screen.peerSharing', {
@@ -699,8 +639,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         )}
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
-          <div className="relative z-20 flex flex-col gap-3 pb-6" data-call-plane="">
-            {captionsFramed ? null : <div className="relative z-10">{captions}</div>}
+          <div className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
+            {captionsFramed ? null : (
+              <div className={`relative z-10 w-full ${docks ? 'mx-auto max-w-[592px]' : ''}`} data-call-captions-band="">
+                {captions}
+              </div>
+            )}
             {mode === null ? (
               <div className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
                 <CallControlPill
@@ -723,6 +667,13 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         ) : (
           <div className="pb-6">{phase === 'incoming' ? incomingControls : endedControls}</div>
         )}
+        {column.shown ? (
+          <CallJournalColumn>
+            <Suspense fallback={null}>
+              <CallJournalPanel id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} fill />
+            </Suspense>
+          </CallJournalColumn>
+        ) : null}
         {declineOpen && phase === 'incoming' ? (
           <Suspense fallback={null}>
             <CallDeclineSheet call={call} language={language} onClose={() => setDeclineOpen(false)} />

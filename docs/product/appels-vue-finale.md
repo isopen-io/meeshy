@@ -179,24 +179,25 @@ Sur un écran large, la scène reste centrée et le journal se pose en colonne d
 |---|
 | ![W2](appels-vue-finale/vues/W2.png) |
 
-## Où en est chaque plateforme (relevé du 2026-11-07 sur `dev`)
+## Où en est chaque plateforme (relevé du 2026-11-08, branche `claude/calls-end-to-end-cvakev` fusionnée avec `dev`)
 
-Ce tableau est un compte rendu daté. L'état vivant est dans les issues du milestone « Appels de groupe et appels traduits ».
+Ce tableau est un compte rendu daté. L'état vivant est dans les issues du milestone « Appels de groupe et appels traduits ». « Livré dans le code » sur iOS et Android veut dire relu et gardé localement, mais pas encore compilé : la preuve est la CI `ios.yml` / `android.yml` de la PR, puis une capture au simulateur ou depuis l'artefact `assembleDebug`.
 
 | Loi / vue | Web | iOS | Android natif |
 |---|---|---|---|
-| Pilule, rails, groupe (lois 1–3) | livré | livré ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` (APP-1 à APP-6) | à vérifier contre la planche |
+| Pilule, rails, groupe (lois 1–3) | livré | livré ; le verre qui s'assombrit sur un écran reçu (loi 3) reste à porter, #16972 ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` | livré dans le code, verre de la loi 3 compris (#16952) ; à vérifier sur capture |
 | Sous-titre coloré, original puis traduction (lois 4–5) | livré (#16613, #16614) | livré | livré (`CallSpeakerColor`) |
-| Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`, « me » compris) | à vérifier |
-| Journal pendant l'appel coloré (lois 4, 7) | livré, nom et phrase (#16634) | livré (`CallCaptionRow`) | livré (`CallCaptionRow`) |
-| Journal après l'appel coloré (lois 4, 7) | livré, `authorInk` sur le fil (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) |
+| Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`) ; duo : liseré de 2 pt à la couleur de qui est montré, livré dans le code (`CallSelfTileStroke`), à recouper avec #16973 | livré dans le code, duo compris, celle de l'autre après permutation (#16952) |
+| Journal pendant l'appel coloré (lois 4, 7) | livré, nom et phrase (#16634) ; bascule Traduit / Original dans l'en-tête (#16942) | livré (`CallCaptionRow`) | livré (`CallCaptionRow`) |
+| Journal après l'appel coloré (lois 4, 7) | livré, `authorInk` sur le fil (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) ; avatars de l'historique encore teintés par le nom, #16954 |
 | Couleur : pseudo toujours, phrase seulement traduite (loi 4) | livré (#16662) | livré (#16662) | livré (#16662) |
-| Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) | livré (#16663) | livré (#16663) |
-| Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) | livré (#16664) | livré (#16664) |
-| Capture visible chez tous et gardée au journal (loi 13) | livré : puce audio et vidéo, ligne datée au journal vivant, au bandeau (R1) et au journal d'après l'appel (#16665) | enregistrement d'écran seul, puce en audio seulement, #16665 | à vérifier, #16665 |
-| Cadres en direct (loi 16) | absent | livré | à vérifier |
-| Journal en colonne sur grand écran (W1) | à faire | sans objet (iPad : à trancher) | sans objet |
-| Vidéo entrante avec aperçu et « Sans vidéo » (P17) | à vérifier | APP-6 | à vérifier |
+| Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) ; la colonne du journal ne s'efface pas encore au toucher | livré (#16663) | livré (#16663) |
+| Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) | livré (#16664) | livré (#16664) ; vignette vidéo flottante de P18, #16953 |
+| Capture visible chez tous et gardée au journal (loi 13) | livré (#16709) : capsule R1, ligne datée au journal vivant, au bandeau et au journal d'après l'appel ; en disposition audio la capsule reste dans la rangée d'alertes | livré (#16709) : capsule R1 en audio comme en vidéo, ligne au journal vivant et d'après l'appel | en partie (#16709) : sorte de capture sur le fil et lignes au journal d'après l'appel ; capsule R1 en direct et détection locale, #16981 |
+| Cadres en direct (loi 16) | livré dans le code pour l'appel à deux (#16943) ; groupe, #12313 ; disparition de ma vignette en C3 à trancher, #16974 ; disposition de la barre C1, #16979 ; pas de suspension au mouvement ni à la chauffe | livré ; clés `call.liveFrame.*` sans traduction pt | le cadre tombe quand l'appel passe à trois (#16952) ; à vérifier sur capture |
+| Journal en colonne sur grand écran (W1, W2) | livré dans le code (#16942) ; marges latérales de W2 plus étroites que la référence | sans objet (iPad : à trancher) | sans objet (tablette : #15640) |
+| Vidéo entrante avec aperçu et « Sans vidéo » (P17) | livré dans le code (#16944) ; ordre de l'en-tête, #16978 | livré dans le code (#16945, ouverte jusqu'à la CI et la capture au simulateur) ; style de « Activer le son » à trancher (#8627) | « Sans vidéo » livré dans le code (#16952) ; barre micro et caméra et aperçu de ma caméra, #16949 |
+| Médaillon de la caméra de qui partage (P15, L5) | à vérifier | à vérifier | reporté, demande une seconde piste vidéo, #8404 |
 
 ## Pour les agents qui travaillent l'interface d'appel
 

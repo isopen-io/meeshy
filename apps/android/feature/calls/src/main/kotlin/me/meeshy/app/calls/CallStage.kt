@@ -54,7 +54,8 @@ private val CAMERA_RAIL_TOP = 56.dp
  * tient tout le fond. Le flux d'un pair qui escalade l'audio en vidéo s'affiche même caméra locale coupée.
  *
  * [layout] — mon image en plein écran ou dans la vignette — est décidé par l'écran (`CallDuoStageLaw`) : la pilule
- * lit le même pour ne pas répéter les commandes que la vignette ou le rail du haut portent.
+ * lit le même pour ne pas répéter les commandes que la vignette ou le rail du haut portent. La vignette porte le liseré
+ * de qui elle montre ([selfUserId], ou [peerUserId] après permutation — loi 4).
  */
 @Composable
 internal fun CallDuoVideoStage(
@@ -75,6 +76,8 @@ internal fun CallDuoVideoStage(
     selfCamera: CallSelfCameraActions? = null,
     controlsVisible: Boolean = true,
     framed: Boolean = false,
+    selfUserId: String = "",
+    peerUserId: String = "",
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
@@ -157,6 +160,7 @@ internal fun CallDuoVideoStage(
                     effectsCount = effectsCount,
                     cameraCount = cameraCount,
                     controlsVisible = controlsVisible,
+                    rimHex = CallTileRim.duoSelfTile(selfUserId, peerUserId, showsPeer = featuresLocal),
                     effectsControls = { selfEffects?.let { CallSelfEffectsRow(it) } },
                     cameraControls = {
                         selfCamera?.let {

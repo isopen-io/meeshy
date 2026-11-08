@@ -74,6 +74,9 @@ const ar = {
   'callStudio.frames.mood.feerique': 'ساحر',
   'callStudio.mode.pickFrame': 'اختر إطارًا',
   'callStudio.capture.framePreview': 'معاينة إطار {name}',
+  'callStudio.liveFrame.hold': 'إطار مباشر',
+  'callStudio.liveFrame.short': 'إطار',
+  'callStudio.liveFrame.hint': 'يُبقي هذا الإطار حول الفيديوهين طوال المكالمة ويقترحه على الطرف الآخر',
 } satisfies CallStudioCatalog;
 
 export default ar;

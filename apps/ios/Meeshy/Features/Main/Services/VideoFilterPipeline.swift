@@ -152,13 +152,12 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
     /// advanced-filter fields. `isEnabled` is intentionally ignored so the
     /// "Reset" affordance (which sets `.natural`'s colorimetry but flips
     /// `isEnabled` back to `false`) still resolves to `.natural`. The advanced
-    /// fields are ignored because `presetChip` deliberately carries the
-    /// caller's own `backgroundBlurEnabled`/`skinSmoothingEnabled` across a
-    /// preset switch (see `VideoFiltersPanel.presetChip`) — they are
-    /// orthogonal to which colorimetry preset is active.
+    /// fields are ignored because a preset switch deliberately carries the
+    /// caller's own `backgroundBlurEnabled`/`skinSmoothingEnabled` across —
+    /// they are orthogonal to which colorimetry preset is active.
     ///
     /// Returns `nil` when no preset's colorimetry matches — e.g. the user
-    /// hand-tuned a slider in `VideoFilterControlView`, which is a legitimate
+    /// hand-tuned a slider in the effects mode, which is a legitimate
     /// "no preset selected" state, not a bug.
     static func matching(_ config: VideoFilterConfig) -> VideoFilterPreset? {
         allCases.first { preset in
@@ -249,13 +248,13 @@ protocol VideoFilterPipelineProviding {
 // chaque méthode/property serait @MainActor et trap au premier frame livré.
 
 nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unchecked Sendable {
-    // `config` is written from the MainActor (slider drags in VideoFiltersPanel,
+    // `config` is written from the MainActor (slider drags in the effects mode,
     // CallManager toggles) and read from WebRTC's serial capture queue inside
     // `process(_:averageBrightness:)` at ~30Hz. Without a lock, a write racing a
     // read can tear the struct — e.g. pairing a new `backgroundBlurEnabled` with
     // a stale `backgroundBlurRadius` — producing a visibly glitchy frame.
     // `isAutoDegraded`/`lastFrameProcessingTime` have the same MainActor-reads/
-    // capture-queue-writes shape (VideoFiltersPanel reads `isAutoDegraded`), so
+    // capture-queue-writes shape, so
     // they share the same lock.
     private let stateLock = NSLock()
 
