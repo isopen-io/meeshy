@@ -113,4 +113,47 @@ final class CommunityDetailViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isMember)
         XCTAssertEqual(service.getConversationsCallCount, 0)
     }
+
+    // #16878 — les publications d'une communauté vivent en cache : la quitter
+    // les retire (une communauté privée ne se relit plus hors ligne), la
+    // rejoindre les fait relire (un membre peut lire plus qu'un visiteur).
+    private static func seededPostsCache(_ communityId: String) -> InMemoryFeedPostsCache {
+        let post: APIPost = JSONStub.decode(#"{"id":"p1","type":"POST","content":"Bonjour","createdAt":"2026-11-01T00:00:00.000Z","author":{"id":"a1","username":"alice"}}"#)
+        return InMemoryFeedPostsCache(
+            seed: [CommunityPostsViewModel.cacheKey(communityId: communityId): [post.toFeedPost(preferredLanguages: ["fr"])]],
+            freshness: .fresh
+        )
+    }
+
+    func test_leaveCommunity_success_forgetsTheCachedPosts() async {
+        let cache = Self.seededPostsCache("c1")
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: MockCommunityService(), postsCache: { cache })
+
+        await viewModel.leaveCommunity()
+
+        let stored = await cache.stored(for: CommunityPostsViewModel.cacheKey(communityId: "c1"))
+        XCTAssertNil(stored)
+    }
+
+    func test_leaveCommunity_failure_keepsTheCachedPosts() async {
+        let service = MockCommunityService()
+        service.voidResult = .failure(APIError.serverError(500, nil))
+        let cache = Self.seededPostsCache("c1")
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, postsCache: { cache })
+
+        await viewModel.leaveCommunity()
+
+        let stored = await cache.stored(for: CommunityPostsViewModel.cacheKey(communityId: "c1"))
+        XCTAssertEqual(stored?.map(\.id), ["p1"])
+    }
+
+    func test_joinCommunity_success_forgetsTheVisitorsCachedPosts() async {
+        let cache = Self.seededPostsCache("c1")
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: MockCommunityService(), postsCache: { cache })
+
+        await viewModel.joinCommunity()
+
+        let stored = await cache.stored(for: CommunityPostsViewModel.cacheKey(communityId: "c1"))
+        XCTAssertNil(stored)
+    }
 }

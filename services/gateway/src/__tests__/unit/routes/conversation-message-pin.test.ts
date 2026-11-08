@@ -78,6 +78,13 @@ const CONV_ID = '507f1f77bcf86cd799439011';
 const OTHER_CONV_ID = '507f1f77bcf86cd7994390ff';
 const USER_ID = '507f1f77bcf86cd799439022';
 const MESSAGE_ID = '507f1f77bcf86cd799439033';
+/**
+ * La PRÉ-CONDITION d'un dépinglage : un message déjà épinglé (#17031). Un
+ * `DELETE` sur `pinnedAt: null` est un REJEU — la route n'y écrit, n'y annonce
+ * et n'y diffuse plus rien — donc un témoin d'EFFET posé là ne peut plus
+ * tomber.
+ */
+const PINNED_AT = new Date('2026-11-01T08:30:00.000Z');
 
 // ─── Fabrique d'application ───────────────────────────────────────────────────
 
@@ -91,7 +98,7 @@ const MESSAGE_ID = '507f1f77bcf86cd799439033';
  * seconde discrimination, le double rendrait un message tombstone à une route
  * qui croit avoir demandé un message vivant.
  */
-function buildPrisma(message: { id: string; conversationId: string; deletedAt?: Date | null } | null) {
+function buildPrisma(message: { id: string; conversationId: string; deletedAt?: Date | null; pinnedAt?: Date | null } | null) {
   const update = jest.fn(async (args: any) => {
     const matches =
       message !== null &&
@@ -111,10 +118,15 @@ function buildPrisma(message: { id: string; conversationId: string; deletedAt?: 
       message: {
         findFirst: jest.fn(async (args: any) => {
           if (!message) return null;
+          // `pinnedAt`/`pinnedBy` sont rendus EXPLICITEMENT, et par défaut
+          // nuls : la route lit désormais l'état d'épingle pour distinguer un
+          // GESTE d'un REJEU (#17031), et un double qui tait la colonne
+          // décrirait un message non épinglé à un `DELETE` — donc un rejeu,
+          // c'est-à-dire l'absence d'effet que ces témoins cherchent à voir.
           if (args.where.id !== message.id) return null;
           if (args.where.conversationId !== undefined && args.where.conversationId !== message.conversationId) return null;
           if (args.where.deletedAt === null && (message.deletedAt ?? null) !== null) return null;
-          return message;
+          return { pinnedAt: null, pinnedBy: null, ...message };
         }),
         update,
       },
@@ -159,7 +171,7 @@ function buildSocket(opts: { emitThrows?: boolean; enqueueRejects?: boolean } = 
 }
 
 async function buildApp(
-  message: { id: string; conversationId: string; deletedAt?: Date | null } | null,
+  message: { id: string; conversationId: string; deletedAt?: Date | null; pinnedAt?: Date | null } | null,
   socketOpts: { emitThrows?: boolean; enqueueRejects?: boolean } = {}
 ) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -193,7 +205,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it('dépingle un message qui appartient bien à la conversation', async () => {
-    const { app, update, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID });
+    const { app, update, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID, pinnedAt: PINNED_AT });
     try {
       const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(res.statusCode).toBe(200);
@@ -207,7 +219,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it("n'écrit rien quand le message appartient à une AUTRE conversation", async () => {
-    const { app, update, socket } = await buildApp({ id: MESSAGE_ID, conversationId: OTHER_CONV_ID });
+    const { app, update, socket } = await buildApp({ id: MESSAGE_ID, conversationId: OTHER_CONV_ID, pinnedAt: PINNED_AT });
     try {
       const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(res.statusCode).toBe(404);
@@ -218,7 +230,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it("ne diffuse rien vers la conversation de la route quand le message est ailleurs", async () => {
-    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: OTHER_CONV_ID });
+    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: OTHER_CONV_ID, pinnedAt: PINNED_AT });
     try {
       await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(socket.emit).not.toHaveBeenCalled();
@@ -240,7 +252,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
 
   it('refuse un non-membre avant toute écriture', async () => {
     mockCanAccessConversation.mockResolvedValue(false);
-    const { app, update } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID });
+    const { app, update } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID, pinnedAt: PINNED_AT });
     try {
       const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(res.statusCode).toBe(403);
@@ -290,7 +302,7 @@ describe('PUT /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it('la charge `message:unpinned` diffusée à la room ne porte que l’identité du message', async () => {
-    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID });
+    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID, pinnedAt: PINNED_AT });
     try {
       await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(socket.emit).toHaveBeenCalledWith('message:unpinned', { messageId: MESSAGE_ID, conversationId: CONV_ID });
@@ -464,7 +476,7 @@ describe('la diffusion de l’épingle est un canal LATÉRAL — elle ne décide
   });
 
   it('DELETE rend 200 et met en file même quand l’émission de room LÈVE', async () => {
-    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID }, { emitThrows: true });
+    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID, pinnedAt: PINNED_AT }, { emitThrows: true });
     try {
       const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(res.statusCode).toBe(200);
@@ -490,7 +502,7 @@ describe('la diffusion de l’épingle est un canal LATÉRAL — elle ne décide
   });
 
   it('une mise en file qui REJETTE ne laisse aucun rejet sans écouteur — DELETE', async () => {
-    const { app } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID }, { enqueueRejects: true });
+    const { app } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID, pinnedAt: PINNED_AT }, { enqueueRejects: true });
     try {
       const unhandled = await captureUnhandledRejections(async () => {
         const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });

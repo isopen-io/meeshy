@@ -204,12 +204,19 @@ public actor MediaSessionCoordinator {
         case barrier(CheckedContinuation<Void, Never>)
     }
 
+    /// Le centre où les signaux qui révoquent le bail sont écoutés : `.default`
+    /// en production. Un témoin en reçoit un à part, pour qu'une interruption
+    /// publiée par une suite parallèle ne révoque pas son bail.
+    private nonisolated let leaseNotificationCenter: NotificationCenter
+
     private init(
         scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real,
-        session: any AudioSessionProviding = SystemAudioSession()
+        session: any AudioSessionProviding = SystemAudioSession(),
+        leaseNotificationCenter: NotificationCenter = .default
     ) {
         self.scheduleAfter = scheduleAfter
         self.audioSession = session
+        self.leaseNotificationCenter = leaseNotificationCenter
     }
 
     #if DEBUG
@@ -217,9 +224,10 @@ public actor MediaSessionCoordinator {
     /// des suites qui tournent en parallèle et le remettent à zéro.
     static func makeForTesting(
         scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real,
-        session: any AudioSessionProviding = SystemAudioSession()
+        session: any AudioSessionProviding = SystemAudioSession(),
+        leaseNotificationCenter: NotificationCenter = .default
     ) -> MediaSessionCoordinator {
-        MediaSessionCoordinator(scheduleAfter: scheduleAfter, session: session)
+        MediaSessionCoordinator(scheduleAfter: scheduleAfter, session: session, leaseNotificationCenter: leaseNotificationCenter)
     }
     #endif
 
@@ -653,7 +661,7 @@ public actor MediaSessionCoordinator {
         guard firstCall else { return }
         let lease = _playbackLeaseLock
         let audibleHold = _audibleHoldLock
-        let center = NotificationCenter.default
+        let center = leaseNotificationCenter
         // Le passage en arrière-plan aussi : une app suspendue perd sa session
         // sans interruption notifiée (iOS 14.5+), et le premier balayage au
         // retour doit la réactiver.

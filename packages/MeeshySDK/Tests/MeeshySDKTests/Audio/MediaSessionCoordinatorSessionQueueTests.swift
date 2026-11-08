@@ -64,7 +64,11 @@ struct MediaSessionCoordinatorSessionQueueTests {
 
     private func makeSUT() -> (MediaSessionCoordinator, RecordingAudioSession) {
         let session = RecordingAudioSession()
-        return (MediaSessionCoordinator.makeForTesting(session: session), session)
+        // Un centre à part : `aSystemInterruptionRevokesTheLease` publie une
+        // interruption sur `.default` pendant que cette suite tourne en
+        // parallèle, et révoquait le bail de ces témoins (rouge iOS SDK de dev).
+        let center = NotificationCenter()
+        return (MediaSessionCoordinator.makeForTesting(session: session, leaseNotificationCenter: center), session)
     }
 
     @Test func anAudiblePlayback_isConfiguredOffTheMainThread() async {

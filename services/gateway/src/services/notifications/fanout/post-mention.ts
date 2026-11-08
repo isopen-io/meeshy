@@ -112,7 +112,7 @@ export async function createPostMentionNotificationsBatch(
     // #14318 — la SYNTHÈSE du post, dans la langue de cadrage du destinataire.
     const excerpt = textSynthesis(lang, params.postExcerpt);
 
-    if (!deps.shouldCreateMentionNotification(params.posterId, userId)) {
+    if (!deps.consumeMentionBudget(params.posterId, userId)) {
       notificationLogger.info('Post mention notification blocked (rate limit)', {
         posterId: params.posterId,
         recipientId: userId,

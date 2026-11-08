@@ -201,11 +201,15 @@ export function registerMessagePinRoutes(
       // pour un `if (!message)`. Le jumeau qui dépingle sélectionnait déjà `id`
       // seul ; c'est l'asymétrie que le correctif précédent avait laissée.
       //
-      // `pinnedAt` en plus : seul un message qui DEVIENT épinglé rapporte
-      // `tool.pin` (#8959) — ré-épingler n'est pas un geste nouveau.
+      // `pinnedAt` et `pinnedBy` en plus : ce sont les DEUX colonnes qui disent
+      // qu'un appel est un REJEU, et ce que le rejeu doit servir sans y toucher
+      // (#17031). Elles ne sont plus seulement lues pour le crédit
+      // d'engagement — « seul un message qui DEVIENT épinglé rapporte
+      // `tool.pin` (#8959) » — mais pour la décision, en amont, de ne rien
+      // écrire et de ne rien annoncer.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
+        select: { id: true, pinnedAt: true, pinnedBy: true, messageType: true, metadata: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
@@ -227,6 +231,31 @@ export function registerMessagePinRoutes(
         return sendBadRequest(reply, 'A capture notice cannot be pinned', { code: 'CAPTURE_NOTICE_NOT_PINNABLE' });
       }
 
+      // ─── Un REJEU n'est pas un geste (#17031) ────────────────────────────
+      // Rien à écrire : le message est déjà épinglé. Ce qui PARTAIT pourtant à
+      // chaque rejeu, et que rien ne rattrape :
+      //   - `pinnedBy = moi`, donc l'attribution volée à qui a épinglé, et la
+      //     liste des épinglés réordonnée (`orderBy: { pinnedAt: 'desc' }`) ;
+      //   - `announcePinActivity`, qui avance `lastActivityAt` — jamais
+      //     réversible — et émet un `conversation:updated` porteur d'un
+      //     `listRankAt` neuf À CHAQUE PARTICIPANT : la conversation remontait
+      //     en tête de liste de tout le monde, autant de fois qu'on rejoue ;
+      //   - la diffusion `message:pinned` et son entrée de file, pour un état
+      //     que tous les clients portent déjà.
+      // La réponse sert l'épingle EXISTANTE, pas `now` : c'est ce que la base
+      // dit, et c'est la seule forme qui rend l'appel idempotent jusqu'à son
+      // corps. `pinnedBy` n'est servi que s'il existe — une ligne ancienne peut
+      // porter la date sans l'auteur, et le schéma le déclare `string` :
+      // omettre la clé dit « je ne sais pas qui », là où un `null` coercé par
+      // le sérialiseur dirait n'importe quoi.
+      if (message.pinnedAt) {
+        logger.info(`[PIN] message ${messageId} already pinned — no write, no activity, no broadcast`);
+        return sendSuccess(reply, {
+          pinnedAt: message.pinnedAt.toISOString(),
+          ...(message.pinnedBy ? { pinnedBy: message.pinnedBy } : {})
+        });
+      }
+
       const now = new Date();
       await prisma.message.update({
         where: { id: messageId },
@@ -234,7 +263,12 @@ export function registerMessagePinRoutes(
       });
       announcePinActivity(conversationId, userId, now);
 
-      if (!message.pinnedAt && !authRequest.authContext.isAnonymous && userId) {
+      // Le court-circuit ci-dessus EST la garde de `tool.pin` : passé lui,
+      // l'épingle est une TRANSITION. La condition `!message.pinnedAt` qui
+      // vivait ici la redisait une seconde fois, à un endroit où la retirer un
+      // jour n'aurait fait tomber que ce crédit — alors que c'est l'annonce qui
+      // coûte un éventail par participant.
+      if (!authRequest.authContext.isAnonymous && userId) {
         void engagement
           .recordActivity(userId, 'tool.pin', { conversationId })
           .catch((error: unknown) => logger.warn('[PIN] tool.pin engagement credit failed', { messageId, error }));
@@ -337,9 +371,14 @@ export function registerMessagePinRoutes(
       // (épingler puis supprimer) reste en base sans être atteignable ici —
       // elle n'est visible nulle part (toutes les lectures filtrent
       // `deletedAt: null`) et le tombstone lui-même part au balayage.
+      // `pinnedAt` : sans cette colonne, ce jumeau ne pouvait pas APERCEVOIR
+      // qu'on lui demande de dépingler un message qui ne l'est pas (#17031) —
+      // il écrivait `{ pinnedAt: null, pinnedBy: null }` sur une ligne déjà
+      // nulle, puis annonçait l'activité. C'est l'asymétrie exacte que le
+      // jumeau qui épingle avait refermée pour son crédit d'engagement.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
+        select: { id: true, pinnedAt: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
@@ -354,6 +393,15 @@ export function registerMessagePinRoutes(
       }
       if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
         return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+      }
+
+      // Même règle que le jumeau, même raison (#17031) : dépingler un message
+      // qui ne l'est pas n'a rien à écrire, et son annonce remontait pourtant
+      // la conversation en tête de liste de TOUS les participants. La réponse
+      // ne change pas — `DELETE` sur un état déjà atteint réussit.
+      if (!message.pinnedAt) {
+        logger.info(`[UNPIN] message ${messageId} is not pinned — no write, no activity, no broadcast`);
+        return sendSuccess(reply, null);
       }
 
       await prisma.message.update({

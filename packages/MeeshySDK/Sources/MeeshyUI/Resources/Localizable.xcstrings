@@ -632,6 +632,53 @@
     "Avancer de 10 secondes": {},
     "Boucle": {},
     "Choisir ou créer une catégorie...": {},
+    "community.detail.tab.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محتوى المجتمع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inhalt der Community"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Community content"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contenido de la comunidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contenu de la communauté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contenuto della community"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conteúdo da comunidade"
+          }
+        }
+      }
+    },
     "community.settings.color.swatch.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -12222,43 +12269,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "القنوات"
+            "value": "المحادثات"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Kanäle"
+            "state": "translated",
+            "value": "Unterhaltungen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Channels"
+            "state": "translated",
+            "value": "Conversations"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Canales"
+            "state": "translated",
+            "value": "Conversaciones"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Channels"
+            "state": "translated",
+            "value": "Conversations"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Canali"
+            "value": "Conversazioni"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Canais"
+            "state": "translated",
+            "value": "Conversas"
           }
         }
       }
@@ -12269,43 +12316,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التدفق"
+            "value": "المنشورات"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Feed"
+            "state": "translated",
+            "value": "Beiträge"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Feed"
+            "state": "translated",
+            "value": "Posts"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Feed"
+            "state": "translated",
+            "value": "Publicaciones"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Feed"
+            "state": "translated",
+            "value": "Publications"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Feed"
+            "value": "Post"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Feed"
+            "state": "translated",
+            "value": "Publicações"
           }
         }
       }

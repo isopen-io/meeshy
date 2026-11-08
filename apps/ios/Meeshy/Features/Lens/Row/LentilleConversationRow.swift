@@ -186,7 +186,7 @@ struct LentilleConversationRow: View {
         // `accessibility.unread_messages` sans `String(format:)` et laissait
         // fuir son `%lld` dans l'annonce VoiceOver.
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
+        .modifier(ConversationRowListeningSpeech(userId: ConversationRowListening.userId(for: conversation)))
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

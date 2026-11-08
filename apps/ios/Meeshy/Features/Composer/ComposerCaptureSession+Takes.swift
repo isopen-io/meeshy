@@ -176,6 +176,7 @@ extension ComposerCaptureSession {
     func shootPhoto(intent: ComposerTakeIntent) {
         selfTimer.run { [weak self] in
             self?.camera.noteShutterPress()
+            ComposerCaptureHaptic.play(.photoTaken)
             self?.photographWhenReady(intent: intent)
         }
     }
