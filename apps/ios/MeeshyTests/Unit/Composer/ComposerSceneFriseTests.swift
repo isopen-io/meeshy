@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 import MeeshySDK
 import MeeshyUI
@@ -496,7 +497,7 @@ final class ComposerSceneFrisePremiumTests: XCTestCase {
         let icones = familles.map(ComposerSceneFriseMetrics.familySymbol(kind:))
         XCTAssertEqual(Set(icones).count, familles.count, "une icône par famille")
         XCTAssertFalse(icones.contains(""), "aucun couloir vide")
-        let teintes = familles.map(ComposerSceneFriseMetrics.familyHex(kind:))
+        let teintes = familles.map(ComposerSceneFriseMetrics.familyColor(kind:))
         XCTAssertEqual(Set(teintes).count, familles.count, "une couleur du design system par famille")
     }
 
