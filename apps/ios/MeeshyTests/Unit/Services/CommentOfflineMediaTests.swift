@@ -489,6 +489,9 @@ final class CommentOfflineFirstSendTests: XCTestCase {
     /// la base d'Alice est effacé — une file laissée dessus refuse toute écriture
     /// aux suites suivantes (CI 38043332830 : le blocage d'un profil se défaisait).
     private var savedOutbox: (any DatabaseWriter)?
+    /// Les chemins inscrits au registre par CETTE suite, à retirer au tearDown :
+    /// le registre n'a pas de portée de test, il vaut pour tout le processus.
+    private var registeredBases: [String] = []
 
     override func setUp() async throws {
         scratch = FileManager.default.temporaryDirectory.appendingPathComponent("first-send-\(UUID().uuidString)")
@@ -498,10 +501,10 @@ final class CommentOfflineFirstSendTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        if let savedOutbox {
-            await OfflineQueue.shared.configure(pool: savedOutbox)
-        }
+        await OfflineQueue.shared.configure(pool: savedOutbox)
         savedOutbox = nil
+        for path in registeredBases { AccountStoreRegistry.unregister(databasePath: path) }
+        registeredBases = []
         APIClient.shared.authToken = savedToken
         OfflineQueue.purgePendingCommentMedia(ownerId: alice)
         try? FileManager.default.removeItem(at: scratch)
@@ -516,6 +519,7 @@ final class CommentOfflineFirstSendTests: XCTestCase {
         let base = try DatabaseQueue(path: path)
         try MessageDatabaseMigrations.runAll(on: base)
         AccountStoreRegistry.register(databasePath: base.path, key: key)
+        registeredBases.append(base.path)
         await OfflineQueue.shared.configure(pool: base)
         return base
     }

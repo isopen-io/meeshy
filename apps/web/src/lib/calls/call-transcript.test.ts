@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { HttpRequest } from '@/lib/api/http';
 
-import { decodeCallTranscript, loadCallTranscript, transcriptLines, type CallTranscript } from './call-transcript';
+import { decodeCallTranscript, loadCallTranscript, transcriptLines, transcriptNotes, type CallTranscript } from './call-transcript';
 
 /**
  * LA TRANSCRIPTION D'APRÈS L'APPEL (#8048, G6) — la forme servie par
@@ -22,6 +22,11 @@ const wire = {
     { id: 't-2', speakerId: 'u-me', speakerDisplayName: null, text: 'Oui, très bien.', language: 'fr', confidence: 0.8, capturedAtMs: Date.parse('2026-09-26T09:00:09.000Z'), translations: [{ targetLanguage: 'en', translatedText: 'Yes, very well.' }] },
     { id: 'vide', speakerId: 'u-peer', text: '  ', language: 'en', capturedAtMs: 0 },
     { pasUnSegment: true },
+  ],
+  captures: [
+    { id: 'cap-2', participantId: null, userId: null, displayName: null, kind: 'call-recording-stopped', offsetMs: 80_000, at: '2026-09-26T09:01:20.000Z' },
+    { id: 'cap-1', participantId: 'p-peer', userId: 'u-peer', displayName: 'Kwame', kind: 'screenshot', offsetMs: 10_000, at: '2026-09-26T09:00:10.000Z' },
+    { id: 'cap-x', participantId: 'p-peer', userId: 'u-peer', displayName: 'Kwame', kind: 'selfie', offsetMs: 1, at: '2026-09-26T09:00:00.000Z' },
   ],
 };
 
@@ -50,9 +55,16 @@ describe('la transcription d’après l’appel (#8048)', () => {
     expect(spanish[2]).toMatchObject({ text: 'Genial, vamos.', language: 'es', translated: true });
   });
 
+  test('#16665 — les captures se rangent à leur heure dans l’appel ; une sorte inconnue s’ignore', () => {
+    expect(transcriptNotes(decodeCallTranscript(wire) as CallTranscript)).toEqual([
+      { id: 'cap-1', kind: 'screenshot', userId: 'u-peer', name: 'Kwame', offsetSec: 10 },
+      { id: 'cap-2', kind: 'call-recording-stopped', userId: null, name: null, offsetSec: 80 },
+    ]);
+  });
+
   test('un corps illisible n’est pas une transcription', () => {
     expect(decodeCallTranscript({ segments: 'non' })).toBeNull();
-    expect(decodeCallTranscript({ callId: 'c', segments: [] })).toEqual({ callId: 'c', startedAtMs: null, segments: [] });
+    expect(decodeCallTranscript({ callId: 'c', segments: [] })).toEqual({ callId: 'c', startedAtMs: null, segments: [], captures: [] });
   });
 
   test('la passerelle est lue au bon chemin ; un refus (403) ou un appel inconnu (404) se lisent « rien », une panne reste une panne', async () => {

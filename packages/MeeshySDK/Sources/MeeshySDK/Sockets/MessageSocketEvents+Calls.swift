@@ -113,13 +113,39 @@ public struct CallQualityAlertData: Decodable, Sendable {
     public let threshold: Double
 }
 
+/// #16665 — la sorte de capture que porte `call:screen-capture-detected` :
+/// un enregistrement d'écran (`isCapturing` vrai puis faux) ou une capture
+/// ponctuelle (`isCapturing` vrai seul). Absente ou inconnue, elle se lit
+/// `recording`, ce qu'envoient les clients d'avant.
+public enum CallScreenCaptureKind: String, Sendable, Equatable, CaseIterable {
+    case recording
+    case screenshot
+}
+
 /// Received when the remote peer starts or stops screen-capturing the call.
 /// The gateway relays `call:screen-capture-alert` to the OTHER participant
 /// only (socket.to(room)) — every event we receive reflects the remote peer.
 public struct CallScreenCaptureAlertData: Decodable, Sendable {
     public let callId: String
     public let participantId: String
+    public let userId: String?
     public let isCapturing: Bool
+    public let kind: String?
+
+    public init(callId: String, participantId: String, userId: String? = nil, isCapturing: Bool, kind: String? = nil) {
+        self.callId = callId
+        self.participantId = participantId
+        self.userId = userId
+        self.isCapturing = isCapturing
+        self.kind = kind
+    }
+
+    /// La personne qui capture : `userId` d'abord, `participantId` sinon.
+    public var capturerId: String { userId ?? participantId }
+
+    public var captureKind: CallScreenCaptureKind {
+        kind.flatMap(CallScreenCaptureKind.init(rawValue:)) ?? .recording
+    }
 }
 
 /// Received when the gateway force-removes the current user from an active call.

@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
+import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
+import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -25,6 +27,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * phrase originale (la mienne comprise) reste à l'encre de l'appel, et
  * l'original déplié dessous à l'encre secondaire (#16634,
  * `docs/product/appels-vue-finale.md` loi 4).
+ *
+ * Une capture d'écran et les moments de l'enregistrement consenti y entrent à
+ * leur heure (#16665, loi 13) : une ligne datée, la phrase à l'encre
+ * secondaire, le pseudo seul à sa couleur.
  */
 
 const INK = 'var(--color-on-media)';
@@ -40,7 +46,8 @@ type JournalProps = {
   readonly onClose: () => void;
   readonly back?: PanelBack | undefined;
   readonly captions: readonly CallCaption[];
-  readonly colorOf: (caption: CallCaption) => string;
+  readonly notes: readonly CallJournalNote[];
+  readonly colorOf: (who: Pick<CallCaption, 'speakerId' | 'speakerName'>) => string;
   /** Les sous-titres sont coupés : rien ne s'inscrit, et l'état vide propose de les activer. */
   readonly listening: boolean;
   readonly onListen: () => void;
@@ -48,18 +55,19 @@ type JournalProps = {
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
-export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, colorOf, listening, onListen }: JournalProps) {
+export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen }: JournalProps) {
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
   const clock = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const last = captions.at(-1);
+  const entries = journalEntries(captions, notes);
 
   useLayoutEffect(() => {
     const element = list.current;
     if (element !== null && stuck.current) element.scrollTop = element.scrollHeight;
-  }, [captions.length, last?.original, last?.translated]);
+  }, [entries.length, last?.original, last?.translated]);
 
   const onScroll = (): void => {
     const element = list.current;
@@ -79,7 +87,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
 
   return (
     <CallPanelFrame id={id} title={t(language, 'callControls.journal')} closeLabel={t(language, 'callControls.close')} closeGlyph={closeGlyph} onClose={onClose} back={back} data={{ 'data-call-journal-panel': '' }}>
-      {captions.length === 0 ? (
+      {entries.length === 0 ? (
         <div className="flex flex-col items-start gap-2 px-3 pb-2" data-call-journal-empty="">
           <p className="text-body" style={{ color: INK_2 }}>
             {t(language, 'callControls.journal.empty')}
@@ -102,7 +110,21 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
             data-call-journal=""
             data-panel-first=""
           >
-            {captions.map((caption) => {
+            {entries.map((entry) => {
+              if (entry.type === 'note') {
+                const { note } = entry;
+                return (
+                  <li key={note.id} className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 48px' }} data-call-journal-note={note.kind}>
+                    <time className="text-mini" style={{ color: INK_2 }} dateTime={new Date(note.at).toISOString()}>
+                      {clock.format(note.at)}
+                    </time>
+                    <span className="text-body" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-journal-note-text="">
+                      <JournalNoteSentence note={note} language={language} ink={{ style: { color: colorOf({ speakerId: note.userId ?? '', speakerName: note.name ?? '' }) } }} />
+                    </span>
+                  </li>
+                );
+              }
+              const { caption } = entry;
               const served = captionText(caption, 'translated');
               const languages = captionLanguageLabel(caption, 'translated');
               const color = colorOf(caption);

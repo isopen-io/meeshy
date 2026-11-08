@@ -5,6 +5,7 @@ import { communitiesQueryKey, communityQueryKey, type CommunityPage, type Commun
 import type { CommunityActionDeps } from './community-actions';
 import {
   canEditSettingsOf,
+  performCommunityImageUpload,
   performDeleteCommunity,
   performUpdateCommunitySettings,
   settingsChangesOf,
@@ -226,5 +227,67 @@ describe('ce qu’un enregistrement rend, et ce qu’un refus ne touche pas', ()
     });
     expect(await performDeleteCommunity({ community: summary(), deps })).toEqual({ status: 'error' });
     expect(listNames(queryClient)).toEqual(['A', 'Club', 'B']);
+  });
+});
+
+describe('l’avatar et la bannière (#6377, seconde moitié)', () => {
+  const STORED = '2026/11/65f0c0ffee/avatar.webp';
+
+  test('une image posée part avec « Enregistrer », seule si elle a changé', () => {
+    const draft = { ...settingsDraftOf(summary()), avatar: STORED };
+    expect(settingsChangesOf(summary(), draft)).toEqual({ ok: true, body: { avatar: STORED } });
+    expect(settingsChangesOf(summary({ banner: STORED }), { ...settingsDraftOf(summary({ banner: STORED })) })).toEqual({ ok: true, body: null });
+  });
+
+  test('l’image se peint AU GESTE dans le détail et la liste, et un refus la rend', async () => {
+    const { deps, queryClient, calls } = depsReplying({ status: 403, body: { success: false, error: 'no', code: 'COMMUNITY_CREATOR_ONLY' } });
+    seed(queryClient, summary());
+    const draft = { ...settingsDraftOf(summary()), banner: STORED };
+    expect(await performUpdateCommunitySettings({ community: summary(), draft, deps })).toEqual({ status: 'refused' });
+    expect(calls[0]?.body).toEqual({ banner: STORED });
+    expect(queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'))?.banner).toBeNull();
+  });
+
+  test('l’image servie par la réponse remplace celle du geste', async () => {
+    const { deps, queryClient } = depsReplying({
+      status: 200,
+      body: { success: true, data: { id: 'm-club', identifier: 'mshy_club', name: 'Club', isPrivate: true, avatar: STORED, banner: null } },
+    });
+    seed(queryClient, summary());
+    await performUpdateCommunitySettings({ community: summary(), draft: { ...settingsDraftOf(summary()), avatar: STORED }, deps });
+    expect(queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'))?.avatar).toBe(STORED);
+    expect(queryClient.getQueryData<InfiniteData<CommunityPage, number>>(communitiesQueryKey(''))?.pages[0]?.communities[0]?.avatar).toBe(STORED);
+  });
+
+  test('téléverser : recompressée, montée, et l’adresse servie revient — rien ne touche la communauté avant « Enregistrer »', async () => {
+    const { deps, calls, queryClient } = depsReplying({ status: 200, body: { success: true, data: { attachments: [{ id: 'a1', fileUrl: STORED }] } } });
+    seed(queryClient, summary());
+    const recompressed: string[] = [];
+    const outcome = await performCommunityImageUpload({
+      kind: 'banner',
+      file: new File([new Uint8Array(64)], 'photo.jpg', { type: 'image/jpeg' }),
+      deps: { ...deps, recompress: async (file, kind) => (recompressed.push(kind), file) },
+    });
+    expect(outcome).toEqual({ status: 'uploaded', url: STORED, bytesSent: 64 });
+    expect(recompressed).toEqual(['banner']);
+    expect(calls.map((call) => [call.method, call.url])).toEqual([['POST', 'https://gate.test/api/v1/attachments/upload']]);
+    expect(queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'))?.banner).toBeNull();
+  });
+
+  test('une adresse servie hors de la loi des images d’identité est refusée, jamais posée', async () => {
+    const { deps } = depsReplying({ status: 200, body: { success: true, data: { attachments: [{ id: 'a1', fileUrl: 'javascript:alert(1)' }] } } });
+    const outcome = await performCommunityImageUpload({
+      kind: 'avatar',
+      file: new File([new Uint8Array(8)], 'p.png', { type: 'image/png' }),
+      deps: { ...deps, recompress: async (file) => file },
+    });
+    expect(outcome.status).toBe('refused');
+  });
+
+  test('hors ligne, rien ne part', async () => {
+    const { deps, calls } = depsReplying({ status: 200, body: {} }, false);
+    const outcome = await performCommunityImageUpload({ kind: 'avatar', file: new File([new Uint8Array(8)], 'p.png', { type: 'image/png' }), deps });
+    expect(outcome).toEqual({ status: 'offline' });
+    expect(calls).toHaveLength(0);
   });
 });

@@ -427,3 +427,37 @@ describe('POST /communities/:id/conversations/:conversationId', () => {
     await app.close();
   });
 });
+
+describe('POST /communities — avatar (#16788)', () => {
+  it('accepte le chemin de stockage que rend un téléversement', async () => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar: '2026/11/65f0c0ffee/community_avatar.webp' },
+    });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'data:image/png;base64,iVBORw0KGgo=',
+    '//evil.example/a.png',
+  ])('refuse %s en 400 INVALID_COMMUNITY sans rien créer', async (avatar) => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_COMMUNITY');
+    expect(prisma.community.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+});

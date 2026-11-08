@@ -173,8 +173,8 @@ internal fun CallConnectedColumn(
                 groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md))
             } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
-                // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
-                CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())
+                // vivent dans la puce de l'en-tête (CallHeaderBar) ; la capture, dans la capsule ci-dessous.
+                Spacer(Modifier.weight(1f).fillMaxWidth())
             } else if (audioPanel) {
                 CallCaptionsTranscriptPanel(state = state, peer = peer, modifier = Modifier.weight(1f))
             } else {
@@ -222,6 +222,14 @@ internal fun CallConnectedColumn(
                     )
                 }
             }
+        }
+        // #16665 — R1 : la capsule de capture, UNE fois sous l'en-tête, en audio comme en vidéo, en duo
+        // comme en groupe ; hors du fondu du chrome : une capture ne se cache pas.
+        if (state.isPeerScreenCapturing && !inPip) {
+            CallCaptureCapsule(
+                name = state.peerScreenCapturerName.ifBlank { state.peerName },
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = CALL_CAPTURE_CAPSULE_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg),
+            )
         }
     }
 

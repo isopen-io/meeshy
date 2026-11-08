@@ -134,6 +134,52 @@ export const DELIVERY_QUEUE_PREFIX = 'delivery:queue:' as const;
 export const DELIVERY_QUEUE_TTL_SECONDS = 172800;
 
 /**
+ * L'INDEX INVERSE `messageId → clés de file qui portent son texte` (#16706).
+ *
+ * La file est une LISTE PAR UTILISATEUR, donc rien ne permettait d'aller d'un
+ * message vers les files qui en gardent une copie. C'est ce qui a laissé le
+ * CLAIR d'un message détruit survivre jusqu'à 48 h dans Redis (et dans ses
+ * sauvegardes AOF) alors que `ExpiredMessagesCleanupService._burn` revendique
+ * l'invariant « le contenu est détruit » : l'invariant tenait dans Mongo, pas
+ * ici. #16685 avait fermé la REMISE — le drain interroge la vivacité avant
+ * d'émettre — et laissé le STOCKAGE ouvert, délibérément.
+ *
+ * Trois propriétés décident de sa forme :
+ *
+ * 1. **Il n'indexe QUE les familles qui portent du texte**
+ *    (`TextBearingQueuedEvent`). Une suppression, une expiration, une épingle ou
+ *    une réaction ne porte que des identifiants et un emoji : rien à purger, donc
+ *    rien à indexer. C'est ce qui borne la taille de l'index au sous-ensemble
+ *    des messages dont une copie lisible est effectivement stockée.
+ * 2. **Il s'écrit dans l'EVAL qui enfile déjà**, comme une seconde commande du
+ *    même script — pas comme un aller-retour de plus. Le chemin d'enfilage est
+ *    le plus chaud du module (une passe par destinataire hors ligne) et le
+ *    tableau de coûts de #16706 chiffrait cette piste à « une écriture Redis de
+ *    plus par destinataire » : c'est vrai d'une COMMANDE, faux d'un
+ *    ALLER-RETOUR, et c'est l'aller-retour qui coûte.
+ * 3. **Il expire avec les entrées qu'il désigne** (`DELIVERY_QUEUE_TTL_SECONDS`,
+ *    rafraîchi à chaque poussée). Un index qui survivrait à ses files ferait
+ *    balayer des clés vides ; un index qui mourrait avant elles laisserait le
+ *    clair sans moyen de le retrouver — c'est-à-dire le défaut d'origine.
+ *
+ * Son PRÉFIXE est hors de `delivery:queue:` à dessein, et ce n'est pas une
+ * question de goût : `RedisDeliveryQueue.cleanup()` balaie
+ * `SCAN MATCH delivery:queue:*` puis fait un `LRANGE` sur chaque clé trouvée.
+ * Une clé d'index — un `SET` — y répondrait `WRONGTYPE`, l'exception tomberait
+ * dans le `catch` du balayage, et **le nettoyage de TOUTES les files
+ * s'arrêterait** : un index posé pour empêcher le clair de survivre 48 h aurait
+ * empêché la seule unité qui le fait expirer. Le premier nom essayé
+ * (`delivery:queue:msg:`) appariait ce motif.
+ *
+ * Il est un ACCÉLÉRATEUR, jamais une preuve : une purge ne tient pas sa
+ * correction de lui. Une entrée que l'index a perdue (Redis indisponible à
+ * l'enfilage, repli mémoire, TTL) reste refusée à la REMISE par la garde de
+ * vivacité du drain, qui ne lit que la base. Les deux moitiés se complètent —
+ * l'une empêche de GARDER, l'autre de REMETTRE — et aucune ne suppose l'autre.
+ */
+export const DELIVERY_QUEUE_MESSAGE_INDEX_PREFIX = 'delivery:msg-queues:' as const;
+
+/**
  * Hard bound on the number of entries the DURABLE (Redis) slice keeps per user.
  *
  * The queue holds up to `DELIVERY_QUEUE_TTL_SECONDS` (48 h) of events for one

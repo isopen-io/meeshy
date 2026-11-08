@@ -98,6 +98,54 @@
         }
       }
     },
+    "NSAppleMusicUsageDescription" : {
+      "comment" : "Privacy - Media Library Usage Description",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يقرأ Meeshy المقطع الذي يعمل في Apple Music لمشاركته مع المقرّبين الذين منحتهم ذلك، ومعهم فقط."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy liest den Titel, der in Apple Music läuft, um ihn mit den Nahestehenden zu teilen, denen du es gewährt hast – und nur mit ihnen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy reads the song playing in Apple Music to share it with the Close friends you granted it to, and only with them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy lee la canción que suena en Apple Music para compartirla con los Cercanos a quienes se lo concediste, y solo con ellos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy lit le morceau qui joue dans Apple Music pour le partager avec les Proches à qui vous l’avez accordé, et seulement avec eux."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy legge il brano in riproduzione su Apple Music per condividerlo con i Vicini a cui l’hai concesso, e solo con loro."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy lê a música que está tocando no Apple Music para compartilhá-la com os Próximos a quem você concedeu, e só com eles."
+          }
+        }
+      }
+    },
     "NSCameraUsageDescription" : {
       "comment" : "Privacy - Camera Usage Description",
       "localizations" : {

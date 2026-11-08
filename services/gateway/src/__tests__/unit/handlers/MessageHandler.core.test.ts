@@ -3892,7 +3892,7 @@ describe('MessageHandler.handleMessageEdit', () => {
     it('queues the edit for the OFFLINE AUTHOR when a moderator edits their message', async () => {
       const { handler, enqueue, socket } = makeModeratedSetup({ moderatorOnline: true });
 
-      await handler.handleMessageEdit(socket, makeEditData(), jest.fn());
+      await handler.handleMessageEdit(socket, makeEditData(), jest.fn()); await new Promise((r) => setImmediate(r)); // l'enfilage hors ligne n'est PAS attendu par le handler (cf. tasks/lessons/2026-11-08-un-await-ajoute-en-amont-d-un-canal-non-attendu-en-change-la-semantique-observable.md)
 
       expect(enqueue).toHaveBeenCalledWith(
         'user-1',
@@ -3905,7 +3905,7 @@ describe('MessageHandler.handleMessageEdit', () => {
       // tenait qu'à `connectedUsers`, il recevrait le rejeu de sa propre action.
       const { handler, enqueue, socket } = makeModeratedSetup({ moderatorOnline: false });
 
-      await handler.handleMessageEdit(socket, makeEditData(), jest.fn());
+      await handler.handleMessageEdit(socket, makeEditData(), jest.fn()); await new Promise((r) => setImmediate(r)); // l'enfilage hors ligne n'est PAS attendu par le handler (cf. tasks/lessons/2026-11-08-un-await-ajoute-en-amont-d-un-canal-non-attendu-en-change-la-semantique-observable.md)
 
       expect(enqueue).not.toHaveBeenCalledWith('user-mod', expect.anything());
       expect(enqueue).toHaveBeenCalledWith('user-1', expect.anything());
@@ -4251,7 +4251,7 @@ describe('MessageHandler.handleMessageDelete', () => {
       deliveryQueue: { enqueue },
     });
 
-    await handler.handleMessageDelete(makeSocket(), makeDeleteData(), jest.fn());
+    await handler.handleMessageDelete(makeSocket(), makeDeleteData(), jest.fn()); await new Promise((r) => setImmediate(r)); // idem : canal best-effort, à attendre explicitement
 
     expect(enqueue).toHaveBeenCalledWith(
       'user-1',

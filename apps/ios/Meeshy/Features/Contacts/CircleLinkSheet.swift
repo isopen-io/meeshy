@@ -74,16 +74,16 @@ struct CircleLinkSheet: View {
                     .font(.footnote)
                     .foregroundStyle(theme.textMuted)
             } else {
-                if !settingsEnabled && settings.contains(where: { $0.receptionSetting == nil }) {
+                if !settingsEnabled && settings.contains(where: { $0.personSwitch == nil }) {
                     Text(String(localized: "circles.sheet.settings.unavailable", defaultValue: "Ces réglages arrivent avec la prochaine étape de Meeshy. Ils sont désactivés pour l'instant.", bundle: .main))
                         .font(.footnote)
                         .foregroundStyle(theme.textMuted)
                 }
                 ForEach(settings) { setting in
-                    if let reception = setting.receptionSetting {
+                    if let personSwitch = setting.personSwitch {
                         CircleReceptionBlockToggle(
                             userId: row.id,
-                            setting: reception,
+                            personSwitch: personSwitch,
                             title: setting.title,
                             detail: setting.detail,
                             identifier: "circles.settings.\(setting.rawValue)"

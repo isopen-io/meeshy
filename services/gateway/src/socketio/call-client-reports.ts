@@ -50,6 +50,9 @@ import {
 import { checkSocketRateLimit, SOCKET_RATE_LIMITS, getSocketRateLimiter } from '../utils/socket-rate-limiter';
 import { logger } from '../utils/logger';
 import type { CallError, CallScreenCaptureEvent, CallAnalyticsEvent, CallQualityFeedbackEvent } from '@meeshy/shared/types/video-call';
+import { screenCaptureKindOf } from '@meeshy/shared/types/call-capture';
+import type { CallCaptureJournal } from '../services/calls/callCaptureJournal';
+import { screenshotEndRelay, type ScreenshotEndRelay } from './call-screenshot-end';
 
 /**
  * Ce que ces gestionnaires empruntent à l'instance.
@@ -68,6 +71,10 @@ export type CallClientReportDeps = {
   ) => Promise<{ participantId: string; userId: string } | null>;
   readonly resolveActiveCallParticipantId: (userId: string, callId: string) => Promise<string | null>;
   readonly resolveEverCallParticipantId: (userId: string, callId: string) => Promise<string | null>;
+  /** #16665 — chaque DÉBUT de capture d'écran s'écrit au journal de l'appel. */
+  readonly captureJournal: Pick<CallCaptureJournal, 'screenCaptureStarted'>;
+  /** #16665 — la fin synthétique d'une capture ponctuelle, pour les clients d'avant. */
+  readonly screenshotEnd?: ScreenshotEndRelay;
 };
 
 /**
@@ -227,6 +234,8 @@ export function registerCallClientReportEvents(
       const screenCaptureReporter = await deps.resolveActiveCallParticipant(userId, data.callId);
       if (!screenCaptureReporter) return;
 
+      // #16665 — un `kind` absent (client d'avant) se lit `recording`.
+      const kind = screenCaptureKindOf(data.kind);
       const alertEvent: CallScreenCaptureEvent = {
         callId: data.callId,
         participantId: screenCaptureReporter.participantId,
@@ -235,13 +244,30 @@ export function registerCallClientReportEvents(
         // match `participantId` alone (a Participant.id).
         userId: screenCaptureReporter.userId,
         isCapturing: data.isCapturing,
+        kind,
       };
       socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
+      (deps.screenshotEnd ?? screenshotEndRelay).observe({
+        callId: data.callId,
+        participantId: screenCaptureReporter.participantId,
+        kind,
+        isCapturing: data.isCapturing,
+        emitEnd: () => {
+          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, { ...alertEvent, isCapturing: false });
+        },
+      });
+
+      if (data.isCapturing) {
+        await deps.captureJournal
+          .screenCaptureStarted({ callId: data.callId, participantId: screenCaptureReporter.participantId, userId: screenCaptureReporter.userId, kind })
+          .catch((persistError: unknown) => logger.error('call:screen-capture journal write failed', { callId: data.callId, error: persistError }));
+      }
 
       logger.info('📞 Socket: call:screen-capture-detected relayed', {
         callId: data.callId,
         participantId: screenCaptureReporter.participantId,
         isCapturing: data.isCapturing,
+        kind,
         userId,
       });
     } catch (error) {

@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.RelationPersonSettings
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.relation.BringGateway
 import me.meeshy.sdk.relation.BringSendOutcome
 import org.junit.After
@@ -45,7 +46,11 @@ class ProfileBringViewModelTest {
             ringing.update { it - toUserId }
         }
         override suspend fun personSettings(userId: String): RelationPersonSettings? = null
-        override suspend fun setBringBlocked(userId: String, blocked: Boolean): RelationPersonSettings? = null
+        override suspend fun setReceptionBlocked(
+            userId: String,
+            setting: RelationReceptionSetting,
+            blocked: Boolean,
+        ): RelationPersonSettings? = null
     }
 
     private val sent = BringSent("b1", "u2", "2026-11-07T10:00:00Z", "2026-11-07T10:02:00Z", perDay = 3, remainingToday = 2)

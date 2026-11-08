@@ -2,7 +2,7 @@
 python-dotenv==1.2.4
 
 # Framework web
-fastapi==0.161.1
+fastapi==0.162.0
 uvicorn[standard]==0.54.0
 pydantic-settings==2.15.0
 pydantic==2.14.2
@@ -39,7 +39,7 @@ pydantic==2.14.2
 # and be validated with
 # `uv pip compile --python-version 3.11 services/translator/requirements.txt -o <tmp>`
 # (exit 0) before merge — uv only ever reports the FIRST unsatisfiable pin.
-grpcio==1.84.1
+grpcio==1.85.1
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
 protobuf==6.33.6
@@ -274,4 +274,4 @@ httpcore==0.17.3
 # 4.14.2 => OK. dependabot ignore désormais 4.15.0 exactement.
 # Le jour où Prisma permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en
 # propre et cette paire cesse d'être fragile.
-anyio==4.15.1
+anyio==4.16.0

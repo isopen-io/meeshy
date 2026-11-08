@@ -5,7 +5,7 @@ import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { CallPeerAlerts, CallQualityChip } from './call-quality';
+import { CallCaptureAlerts, CallPeerAlerts, CallQualityChip } from './call-quality';
 import { CallQualityDetail } from './call-quality-detail';
 import { CallScreen } from './call-screen';
 
@@ -146,17 +146,43 @@ describe('l’indicateur de qualité (#8047), dans la puce « Nom · durée » (
 
 describe('les alertes d’un pair (#8047)', () => {
   test('un lien instable est dit poliment ; une capture d’écran est une ALERTE', () => {
-    const html = renderToStaticMarkup(<CallPeerAlerts members={{ a: member({ weakNetwork: true }), b: member({ userId: 'u-b', name: 'Karim', capturing: true }) }} language="fr" />);
-    expect(html).toContain('La connexion de Nadia Benali est instable');
-    expect(html).toContain('Karim capture l’écran de l’appel');
-    expect(html).toMatch(/role="alert"[^>]*data-call-alert="capturing"|data-call-alert="capturing"[^>]*role="alert"/);
-    expect(html).toContain('aria-live="polite"');
+    const members = { a: member({ weakNetwork: true }), b: member({ userId: 'u-b', name: 'Karim', capturing: true }) };
+    const network = renderToStaticMarkup(<CallPeerAlerts members={members} language="fr" />);
+    const capture = renderToStaticMarkup(<CallCaptureAlerts members={members} language="fr" />);
+    expect(network).toContain('La connexion de Nadia Benali est instable');
+    expect(network).toContain('aria-live="polite"');
+    expect(capture).toContain('Karim capture l’écran de l’appel');
+    expect(capture).toMatch(/role="alert"[^>]*data-call-alert="capturing"|data-call-alert="capturing"[^>]*role="alert"/);
   });
 
   test('sans alerte, la région vivante reste montée mais vide', () => {
     const html = renderToStaticMarkup(<CallPeerAlerts members={{ a: member() }} language="fr" />);
     expect(html).toContain('aria-live="polite"');
     expect(html).not.toContain('data-call-alert=');
+  });
+
+  test('#16665 — R1 : une capsule rouge, un petit anneau blanc puis « Karim capture l’écran de l’appel »', () => {
+    const html = renderToStaticMarkup(<CallCaptureAlerts members={{ b: member({ userId: 'u-b', name: 'Karim', capturing: true }) }} language="fr" />);
+    expect(html).toMatch(/data-call-alert="capturing"[^>]*><span aria-hidden="true"[^>]*data-call-alert-dot=""[^>]*><\/span><span class="truncate">Karim capture l’écran de l’appel<\/span><\/span>/);
+    expect(html).toMatch(/class="inline-flex h-11 [^"]*px-3\.5 text-\[13px\]/);
+  });
+
+  test('#16665 — la capsule de capture se montre en audio comme en vidéo', () => {
+    for (const media of ['audio', 'video'] as const) {
+      const html = renderToStaticMarkup(<CallScreen call={call({ media, cameraOn: media === 'video', members: { 'u-peer': member({ capturing: true, cameraOn: media === 'video' }) } })} canShare={false} />);
+      expect(html).toContain('data-call-alert="capturing"');
+      expect(html.split('data-call-alert="capturing"')).toHaveLength(2);
+    }
+  });
+
+  test('#16665 — R1 : la capsule se pose sous l’en-tête, hors du fondu du chrome', () => {
+    const html = renderToStaticMarkup(<CallScreen call={call({ media: 'audio', members: { 'u-peer': member({ capturing: true }) } })} canShare={false} />);
+    const slot = html.indexOf('data-call-capture-slot');
+    expect(slot).toBeGreaterThan(-1);
+    expect(html.indexOf('data-call-plane')).toBeLessThan(slot);
+    const opening = html.lastIndexOf('<div', slot);
+    expect(html.slice(opening, slot)).not.toContain('invisible');
+    expect(html.slice(opening, slot)).not.toContain('aria-hidden');
   });
 
   test('l’écran d’appel les montre', () => {

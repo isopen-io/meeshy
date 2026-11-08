@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallErrorSignal
 import me.meeshy.sdk.model.call.CallEvent
@@ -384,6 +385,17 @@ class CallSignalManagerTest {
         assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
         assertThat(payload.captured.getString("participantId")).isEqualTo("me")
         assertThat(payload.captured.getBoolean("isCapturing")).isTrue()
+        assertThat(payload.captured.getString("kind")).isEqualTo("recording")
+    }
+
+    @Test
+    fun `emitScreenCaptureDetected names a screenshot on the wire`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitScreenCaptureDetected("call-9", participantId = "me", isCapturing = true, kind = CallCaptureKind.SCREENSHOT)
+        verify { socket.emit("call:screen-capture-detected", capture(payload)) }
+        assertThat(payload.captured.getString("kind")).isEqualTo("screenshot")
     }
 
     @Test

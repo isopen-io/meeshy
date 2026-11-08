@@ -27,6 +27,10 @@ const arCallCaptions = {
   'callTranscript.retry': 'إعادة المحاولة',
   'callTranscript.showOriginal': 'عرض الأصل',
   'callTranscript.showTranslated': 'عرض الترجمة',
+  'callJournal.capture.screenshot': 'التقط صورة للشاشة',
+  'callJournal.capture.recording': 'يسجّل الشاشة',
+  'callJournal.recording.started': 'بدأ تسجيل المكالمة',
+  'callJournal.recording.stopped': 'توقّف تسجيل المكالمة',
 } as const;
 
 export default arCallCaptions;

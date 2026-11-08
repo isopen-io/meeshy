@@ -100,9 +100,67 @@ final class CallTranscriptRemoteServiceTests: XCTestCase {
         }
 
         let transcript = try decoder.decode(APICallTranscript.self, from: json)
+        XCTAssertNil(transcript.captures, "a gateway without captures decodes them as absent")
         XCTAssertEqual(transcript.segments.count, 2)
         XCTAssertNil(transcript.segments[1].speakerDisplayName)
         XCTAssertNil(transcript.segments[1].confidence)
         XCTAssertTrue(transcript.segments[1].translations.isEmpty)
+    }
+
+    func test_transcriptDTO_decodesCapturesBesideSegments() throws {
+        let json = Data("""
+        {
+            "callId": "c1",
+            "conversationId": "v1",
+            "callStartedAt": "2026-11-07T12:00:00.000Z",
+            "segments": [],
+            "captures": [
+                {"id": "cap-1", "participantId": "p2", "userId": "u2", "displayName": "Awa", "kind": "screenshot", "offsetMs": 760000, "at": "2026-11-07T12:12:40.000Z"},
+                {"id": "cap-2", "participantId": "p3", "userId": null, "displayName": null, "kind": "call-recording-started", "offsetMs": 800000, "at": "2026-11-07T12:13:20.000Z"}
+            ]
+        }
+        """.utf8)
+        let decoder = JSONDecoder()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        decoder.dateDecodingStrategy = .custom { d in
+            let value = try d.singleValueContainer().decode(String.self)
+            guard let date = formatter.date(from: value) else {
+                throw DecodingError.dataCorrupted(.init(codingPath: d.codingPath, debugDescription: "bad date"))
+            }
+            return date
+        }
+
+        let transcript = try decoder.decode(APICallTranscript.self, from: json)
+
+        XCTAssertEqual(transcript.captures?.map(\.kind), ["screenshot", "call-recording-started"])
+        XCTAssertEqual(transcript.captures?.first?.displayName, "Awa")
+        XCTAssertEqual(transcript.captures?.first?.offsetMs, 760_000)
+        XCTAssertNil(transcript.captures?.last?.userId)
+    }
+
+    func test_transcriptDTO_unrequestedRecordingStop_keepsTheSegments() throws {
+        let json = Data("""
+        {
+            "callId": "c1",
+            "conversationId": "v1",
+            "callStartedAt": "2026-11-07T12:00:00Z",
+            "segments": [
+                {"id": "seg-1", "speakerId": "u2", "speakerDisplayName": "Awa", "text": "Bonjour", "language": "fr", "confidence": null, "capturedAtMs": 1765650000000, "translations": []}
+            ],
+            "captures": [
+                {"id": "cap-1", "participantId": null, "userId": null, "displayName": null, "kind": "call-recording-stopped", "offsetMs": 900000, "at": "2026-11-07T12:15:00Z"},
+                {"id": "cap-2", "kind": "screenshot"}
+            ]
+        }
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let transcript = try decoder.decode(APICallTranscript.self, from: json)
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["seg-1"])
+        XCTAssertEqual(transcript.captures?.map(\.id), ["cap-1"], "a malformed capture is skipped, never the whole transcript")
+        XCTAssertNil(transcript.captures?.first?.participantId)
     }
 }

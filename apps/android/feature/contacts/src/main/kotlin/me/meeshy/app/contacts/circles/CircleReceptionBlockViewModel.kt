@@ -10,11 +10,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.relation.BringGateway
 
 @Immutable
-data class CircleBringBlockState(
+data class CircleReceptionBlockState(
     val userId: String? = null,
+    val setting: RelationReceptionSetting? = null,
     val blocked: Boolean = false,
     val isSaving: Boolean = false,
     /** Vrai après un refus, le temps de le dire : l'interrupteur est déjà revenu à l'état d'avant. */
@@ -22,25 +24,28 @@ data class CircleBringBlockState(
 )
 
 /**
- * « Bloquer ses Bring », sur la fiche d'un lien (#16617) — iso `CircleBringBlockViewModel.swift`. Le Bring est ouvert par
- * défaut dès Ami : son réglage par personne est un BLOCAGE des Bring que JE reçois de cette personne, qui n'en est pas
- * prévenue (elle lit seulement « Bring indisponible »). Optimiste : basculé au geste, rendu à l'état d'avant sur un
- * refus, qui se dit.
+ * Une préférence de RÉCEPTION posée pour une personne, sur la fiche d'un lien — « Bloquer ses Bring » (#16617, dès Ami) et
+ * « Couper son talkie » (#16675, dès Proche) —, iso `CircleReceptionBlockViewModel.swift`. Ouverte par défaut : son
+ * réglage par personne est un BLOCAGE de ce que JE reçois de cette personne, qui n'en est pas prévenue. Optimiste :
+ * basculé au geste, rendu à l'état d'avant sur un refus, qui se dit.
  */
 @HiltViewModel
-class CircleBringBlockViewModel @Inject constructor(
+class CircleReceptionBlockViewModel @Inject constructor(
     private val gateway: BringGateway,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(CircleBringBlockState())
-    val state: StateFlow<CircleBringBlockState> = _state.asStateFlow()
+    private val _state = MutableStateFlow(CircleReceptionBlockState())
+    val state: StateFlow<CircleReceptionBlockState> = _state.asStateFlow()
 
-    fun load(userId: String) {
-        if (userId.isBlank() || _state.value.userId == userId) return
-        _state.value = CircleBringBlockState(userId = userId)
+    fun load(userId: String, setting: RelationReceptionSetting) {
+        val current = _state.value
+        if (userId.isBlank() || (current.userId == userId && current.setting == setting)) return
+        _state.value = CircleReceptionBlockState(userId = userId, setting = setting)
         viewModelScope.launch {
             val served = gateway.personSettings(userId) ?: return@launch
-            _state.update { if (it.userId == userId && !it.isSaving) it.copy(blocked = served.bringBlocked) else it }
+            _state.update {
+                if (it.userId == userId && it.setting == setting && !it.isSaving) it.copy(blocked = served.isBlocked(setting)) else it
+            }
         }
     }
 
@@ -48,15 +53,16 @@ class CircleBringBlockViewModel @Inject constructor(
     fun setBlocked(next: Boolean) {
         val before = _state.value
         val userId = before.userId ?: return
+        val setting = before.setting ?: return
         if (before.isSaving || next == before.blocked) return
         _state.value = before.copy(blocked = next, isSaving = true, failed = false)
         viewModelScope.launch {
-            val served = gateway.setBringBlocked(userId, next)
+            val served = gateway.setReceptionBlocked(userId, setting, next)
             _state.update {
                 if (served == null) {
                     it.copy(blocked = before.blocked, isSaving = false, failed = true)
                 } else {
-                    it.copy(blocked = served.bringBlocked, isSaving = false)
+                    it.copy(blocked = served.isBlocked(setting), isSaving = false)
                 }
             }
         }

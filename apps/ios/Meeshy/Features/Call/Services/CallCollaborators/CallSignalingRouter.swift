@@ -42,6 +42,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
         observeSocketReconnect(socket)
         observeAnsweredElsewhere(socket)
         observeRemoteMedia(socket)
+        observeCallRecordingJournal(socket)
         observeForcedLeave(socket)
         observeIceServerRefresh(socket)
         observeRemoteQuality(socket)
@@ -140,6 +141,9 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .sink { [weak self] event in
                 guard let call = self?.call, call.currentCallId == event.callId else { return }
                 guard let identity = event.userId ?? event.participantId else { return }
+                // #16665 — un pair parti en enregistrant son écran n'enverra
+                // jamais `isCapturing: false` : sa capsule s'éteint avec lui.
+                call.transcriptionService.captureJournal.record(.participantLeft(userId: identity, at: Date()))
                 guard call.listeningPeers.remove(identity) != nil else { return }
                 call.remoteTranscriptionActive = !call.listeningPeers.isEmpty
                 call.toggleTranscription()
@@ -392,8 +396,29 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .sink { [weak self] event in
                 guard let call = self?.call else { return }
                 guard event.callId == call.currentCallId else { return }
-                call.remoteMedia = call.remoteMedia.applying(.screenCapture(event.isCapturing))
-                Logger.calls.info("Remote screen capture \(event.isCapturing ? "started" : "stopped") (callId=\(event.callId))")
+                if event.captureKind == .recording {
+                    call.remoteMedia = call.remoteMedia.applying(.screenCapture(event.isCapturing))
+                }
+                let name = CallCaptureNames.displayName(
+                    for: event.capturerId,
+                    roster: GroupCallMeshCoordinator.shared.roster,
+                    fallback: call.remoteUsername
+                )
+                call.transcriptionService.captureJournal.record(.remote(event, displayName: name, at: Date()))
+                Logger.calls.info("Remote screen capture \(event.captureKind.rawValue) \(event.isCapturing ? "started" : "stopped") (callId=\(event.callId))")
+            }
+            .store(in: &cancellables)
+    }
+
+    /// #16665 — le début et la fin de l'enregistrement consenti de l'appel
+    /// entrent au journal, chez tous (loi 13).
+    private func observeCallRecordingJournal(_ socket: MessageSocketManager) {
+        socket.callRecordingEvents
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let call = self?.call, event.callId == call.currentCallId,
+                      let signal = CallCaptureSignal.callRecording(event, at: Date()) else { return }
+                call.transcriptionService.captureJournal.record(signal)
             }
             .store(in: &cancellables)
     }

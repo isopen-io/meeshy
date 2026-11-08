@@ -110,7 +110,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `/mnt/project-files/frames/07-audit-ui-ux-camera-appels.md` § B5, `tasks/routine-camera.md` CAM-4.
 
 ## OPUS-9 — Le bouton Camera Control des iPhone 16 et 17 ne règle rien dans Meeshy
-- Statut : à faire
+- Statut : en cours (#16818) — zoom et exposition livrés ; reste le sélecteur « Ambiance » (attend OPUS-2) et la recette sur iPhone 16
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : doc 08 § R7 (recherche état de l'art)
 - Constat : aucun `AVCaptureControl` n'est ajouté à la session (`grep AVCaptureSlider\|AVCaptureIndexPicker\|AVCaptureSystemZoomSlider` vide dans `apps/ios`) ; le bouton latéral ouvre au mieux l'app sans rien piloter.
@@ -121,7 +121,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : CAM-6 (boutons de volume, côté interface).
 
 ## OPUS-10 — Vidéo du viseur : stabilisation, cadence et basse lumière laissées au hasard
-- Statut : à faire
+- Statut : en cours (#16816) — stabilisation `standard` et basse lumière livrées ; restent les modes `cinematic` et la cadence 60 i/s, après recette sur iPhone
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : doc 08 § R9 et R10
 - Constat : ni `preferredVideoStabilizationMode`, ni cadence choisie (`activeVideoMinFrameDuration`), ni `isLowLightBoostEnabled` dans `Main/Components/` ; le système décide, souvent sans stabilisation en caméra avant.
@@ -132,7 +132,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : OPUS-1, #16482.
 
 ## OPUS-11 — Une vidéo interrompue (appel, arrière-plan, Siri) est jetée en entier
-- Statut : à faire
+- Statut : fait (#16807), recette iPhone à faire
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : audit 09 § S1
 - Constat : `CameraModel.handleSegmentFinished` jette TOUS les segments dès que `error != nil` (`Main/Components/CameraModel.swift:823-830`, `endRecordingWithoutOutput`). AVFoundation clôt pourtant la prise avec une erreur ET un fichier valide (`userInfo[AVErrorRecordingSuccessfullyFinishedKey] == true`) en cas d'appel entrant, de passage en arrière-plan, de Siri, de durée ou de taille maximale, de disque presque plein. Si l'assemblage de plusieurs segments échoue, seul le dernier est livré et les autres restent dans `tmp/` (`:892-903`). La photo sans données sort aussi en silence (`:948-951`).

@@ -62,6 +62,7 @@
     - Une puce rouge « X capture l'écran de l'appel » apparaît chez tous, en audio comme en vidéo.
     - Une ligne datée entre dans le journal et reste dans celui d'après l'appel.
     - L'enregistrement demande l'accord de tous, sur une carte qui ne se cache jamais, et le journal note son début et sa fin.
+    - **Contrat (#16665), rétrocompatible.** `call:screen-capture-detected` porte un `kind` optionnel, `recording` (enregistrement d'écran, `isCapturing` vrai puis faux) ou `screenshot` (capture ponctuelle, `isCapturing` vrai seul). Un `kind` absent se lit `recording`, ce qu'envoient les clients d'avant. La passerelle relaie `kind` dans `call:screen-capture-alert`. Elle persiste chaque DÉBUT (`isCapturing` vrai) dans `CallCaptureEvent` (`callSessionId`, `participantId`, `userId?`, `kind`, `offsetMs`, `createdAt`), au plus une ligne par participant, par sorte et par fenêtre de 5 s. L'enregistrement CONSENTI de l'appel (`call:recording-started` / `call:recording-stopped`, aucun fil client nouveau) s'y écrit aussi, par la passerelle là où elle diffuse ces deux événements : `kind` vaut `call-recording-started` (au nom de l'enregistreur) ou `call-recording-stopped` (seulement s'il avait commencé ; `participantId` et `userId` nuls quand personne ne l'a demandé : fin d'appel, délai, arrivée). `GET /calls/:callId/transcript` ajoute `captures: [{ id, participantId, userId, displayName, kind, offsetMs, at }]` à côté de `segments` (les trois champs d'auteur peuvent être nuls pour un arrêt d'enregistrement ; une sorte inconnue s'ignore). Les clients insèrent ces lignes à leur heure, dans le journal vivant comme dans celui d'après l'appel : « Awa a capturé l'écran » ou « Awa enregistre l'écran », « L'enregistrement de l'appel a commencé » ou « L'enregistrement de l'appel s'est arrêté », en encre secondaire, sans couleur d'auteur sur la phrase (le pseudo garde la sienne).
 14. **Options en surimpression.**
     - Une option à réglages (Enregistrer, Réagir) s'ouvre DANS la pilule, qui grandit vers le haut avec ‹ Retour et Fermer.
     - « Participants » et « Journal » s'ouvrent en feuille.
@@ -192,7 +193,7 @@ Ce tableau est un compte rendu daté. L'état vivant est dans les issues du mile
 | Couleur : pseudo toujours, phrase seulement traduite (loi 4) | livré (#16662) | livré (#16662) | livré (#16662) |
 | Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) | livré (#16663) | livré (#16663) |
 | Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) | livré (#16664) | livré (#16664) |
-| Capture visible chez tous et gardée au journal (loi 13) | puce seule, #16665 | enregistrement d'écran seul, puce en audio seulement, #16665 | à vérifier, #16665 |
+| Capture visible chez tous et gardée au journal (loi 13) | livré : puce audio et vidéo, ligne datée au journal vivant, au bandeau (R1) et au journal d'après l'appel (#16665) | enregistrement d'écran seul, puce en audio seulement, #16665 | à vérifier, #16665 |
 | Cadres en direct (loi 16) | absent | livré | à vérifier |
 | Journal en colonne sur grand écran (W1) | à faire | sans objet (iPad : à trancher) | sans objet |
 | Vidéo entrante avec aperçu et « Sans vidéo » (P17) | à vérifier | APP-6 | à vérifier |

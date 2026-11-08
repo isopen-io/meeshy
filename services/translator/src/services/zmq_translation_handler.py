@@ -95,6 +95,12 @@ class TranslationHandler:
         # 2026-07-04, tempête de retries).
         self._inflight_tasks: dict = {}
 
+        # #16781 — un lot refusé par une file pleine se dit à la passerelle,
+        # tâche par tâche, par la même erreur qu'un refus direct.
+        register_rejections = getattr(pool_manager, 'set_rejection_handler', None)
+        if callable(register_rejections):
+            register_rejections(self.publish_pool_full)
+
         # Cache Redis si disponible
         if CACHE_AVAILABLE:
             self.cache_service = get_translation_cache_service()
@@ -377,25 +383,42 @@ class TranslationHandler:
             success = await self.pool_manager.enqueue_task(task)
             
             if not success:
-                # Pool pleine, publier un message d'erreur vers la gateway
-                error_message = {
-                    'type': 'translation_error',
-                    'taskId': task.task_id,
-                    'messageId': task.message_id,
-                    'error': 'translation pool full',
-                    'conversationId': task.conversation_id
-                }
-                # Utiliser le socket PUB configuré pour envoyer l'erreur à la gateway
-                if self.pub_socket:
-                    await self.pub_socket.send(json.dumps(error_message).encode('utf-8'))
-                    logger.warning(f"Pool pleine, rejet de la tâche {task.task_id}")
-                else:
-                    logger.error("❌ Socket PUB non initialisé pour envoyer l'erreur")
+                await self.publish_pool_full([task])
             
         except json.JSONDecodeError as e:
             logger.error(f"Erreur de décodage JSON: {e}")
         except Exception as e:
             logger.error(f"Erreur lors du traitement de la requête: {e}")
+
+    @staticmethod
+    def _pool_full_error(task) -> dict:
+        return {
+            'type': 'translation_error',
+            'taskId': task.task_id,
+            'messageId': task.message_id,
+            'error': 'translation pool full',
+            'conversationId': task.conversation_id
+        }
+
+    def release_inflight(self, task_id: str) -> None:
+        """Libère la réserve d'une tâche qui ne tournera pas : sa relance
+        par la passerelle doit être réacceptée."""
+        self._inflight_tasks.pop(task_id, None)
+
+    async def publish_pool_full(self, tasks) -> None:
+        """Signale à la passerelle chaque tâche refusée par une file pleine,
+        directe ou en lot : UNE `translation_error` par tâche."""
+        for task in tasks:
+            self.release_inflight(task.task_id)
+        if not self.pub_socket:
+            logger.error("❌ Socket PUB non initialisé pour envoyer l'erreur")
+            return
+        for task in tasks:
+            try:
+                await self.pub_socket.send(json.dumps(self._pool_full_error(task)).encode('utf-8'))
+                logger.warning(f"Pool pleine, rejet de la tâche {task.task_id}")
+            except Exception as e:
+                logger.error(f"❌ Erreur « pool pleine » non publiée pour {task.task_id}: {type(e).__name__}")
 
     async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
         """Publie un résultat de traduction via PUB vers la gateway avec informations techniques complètes"""
