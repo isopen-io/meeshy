@@ -43,17 +43,44 @@ export interface ConversationViewingHandlerDependencies {
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
   userSockets: Map<string, Set<string>>;
+  /** Injectable pour les tests ; l'horloge murale en production (#16752). */
+  now?: () => number;
 }
 
 /**
- * `blockRelated` est lu à l'ouverture et retenu : `viewing:activity` arrive
- * toutes les deux secondes pendant qu'on défile ou qu'on écoute (#9061), et
- * ne relit pas la base à chaque fois.
+ * Le pas de rafraîchissement du filtre d'annonce (#16752).
+ *
+ * `viewing:activity` revient toutes les deux secondes pendant que l'écran reste
+ * ouvert (#9061, 90/min autorisés), et son filtre était écrit UNE fois par
+ * `viewing:start` puis jamais relu : quelqu'un qui bloquait un lecteur
+ * continuait de voir son point PULSER, sans aucune borne de temps — aussi
+ * longtemps que l'écran restait ouvert.
+ *
+ * Même pas que le jumeau de la position (`LocationHandler`), et pour la même
+ * raison : relire à chaque pouls mettrait la base sur le trajet d'un signal qui
+ * bat toutes les deux secondes. Le jumeau de la FRAPPE, lui, relit à chaque
+ * `typing:start` — il peut, parce qu'une frappe est bornée par la vitesse des
+ * doigts et par son propre étranglement de 3 s.
+ */
+const BLOCK_SET_REFRESH_MS = 60_000;
+
+/**
+ * `blockRelated` est le FILTRE D'ANNONCE de ce socket (#16752) : il gouverne
+ * `viewing:start`, l'instantané et `viewing:activity` — les trois émissions qui
+ * NOMMENT un lecteur — et rien d'autre. Les deux rétractations ne le lisent pas
+ * (une rétractation ne se filtre pas, cf. `retract`).
+ *
+ * Il est lu à l'ouverture et retenu, parce que `viewing:activity` arrive toutes
+ * les deux secondes (#9061) et ne doit pas relire la base à chaque pouls ; il se
+ * rafraîchit par pas de `BLOCK_SET_REFRESH_MS`, sans quoi un blocage POSTÉRIEUR
+ * à l'ouverture restait sans effet tant que l'écran demeurait ouvert.
  */
 type SocketViewing = {
   readonly userId: string;
   readonly conversationIds: ReadonlySet<string>;
   readonly blockRelated: ReadonlySet<string>;
+  /** L'instant de la dernière TENTATIVE de lecture — échouée comprise. */
+  readonly blockRelatedAt: number;
 };
 
 /** Ouvertures retenues au plus par socket en attente d'authentification (#9047). */
@@ -66,6 +93,7 @@ export class ConversationViewingHandler {
   private readonly connectedUsers: Map<string, SocketUser>;
   private readonly socketToUser: Map<string, string>;
   private readonly userSockets: Map<string, Set<string>>;
+  private readonly now: () => number;
   private readonly bySocket = new Map<string, SocketViewing>();
   private readonly byConversation = new Map<string, Map<string, Set<string>>>();
   /**
@@ -94,6 +122,7 @@ export class ConversationViewingHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
+    this.now = deps.now ?? (() => Date.now());
   }
 
   /**
@@ -187,20 +216,14 @@ export class ConversationViewingHandler {
       const socketIds = [...(this.byConversation.get(conversationId)?.get(userId) ?? [])];
       if (socketIds.length === 0) return;
 
-      // CAPTURÉ AVANT `untrack`, qui efface les entrées d'où il se lit : même
-      // règle que la rétractation ordinaire (#16752) — une rétractation exclut
-      // ceux qui avaient été exclus de l'annonce, et l'annonce de CHAQUE socket
-      // porte son propre ensemble prouvé. L'union est la posture la plus
-      // fermée des deux quand un appareil a annoncé avant un blocage et
-      // l'autre après.
-      const blockRelated = new Set<string>(
-        socketIds.flatMap(socketId => [...(this.bySocket.get(socketId)?.blockRelated ?? [])])
-      );
-
       socketIds.forEach(socketId => this.untrack(socketId, [conversationId]));
       if (this.isHere(userId, conversationId)) return;
 
-      this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId, conversationId }, blockRelated);
+      // Sans exclusion, comme toute rétractation (#16752, cf. `retract`). Elle
+      // ne lit donc plus la base — deux requêtes de moins sur un chemin dont le
+      // contrat est de NE JAMAIS REJETER, et une posture de moins à tenir
+      // juste.
+      this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId, conversationId }, new Set());
     } catch (error) {
       logger.error('viewing retraction for departed member failed', { error, conversationId, userId });
     }
@@ -344,8 +367,29 @@ export class ConversationViewingHandler {
       return;
     }
 
+    // LE FILTRE D'ANNONCE SE RAFRAÎCHIT (#16752). Il était écrit une fois par
+    // `viewing:start` et jamais relu, alors que ce pouls revient toutes les deux
+    // secondes pendant que l'écran reste ouvert : quelqu'un qui bloquait ce
+    // lecteur APRÈS son ouverture continuait de voir son point pulser, sans
+    // aucune borne de temps.
+    //
+    // Trois états, et ils se nomment : `undefined` = pas l'heure de relire ;
+    // `null` = relu et RIEN PROUVÉ ; un ensemble = prouvé. Les deux premiers
+    // conduisent à la même action — garder l'ensemble retenu, qui est lui aussi
+    // une preuve (`track` ne l'écrit que depuis un `start` fail-closed). On
+    // n'élargit JAMAIS l'audience d'une annonce sur un doute.
+    const dueForRefresh = this.now() - viewing.blockRelatedAt >= BLOCK_SET_REFRESH_MS;
+    const refreshed = dueForRefresh ? await this.blockRelatedOf(viewing.userId) : undefined;
+    const hidden = refreshed ?? viewing.blockRelated;
+    if (dueForRefresh) {
+      // L'horloge avance sur toute TENTATIVE, réussie ou non : une base en
+      // difficulté est interrogée une fois par minute, pas à chaque pouls.
+      const current = this.bySocket.get(socket.id);
+      if (current) this.bySocket.set(socket.id, { ...current, blockRelated: hidden, blockRelatedAt: this.now() });
+    }
+
     const focus = validation.data.focus === true ? { focus: true } : {};
-    this.broadcast(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: viewing.userId, conversationId, ...focus }, viewing.blockRelated);
+    this.broadcast(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: viewing.userId, conversationId, ...focus }, hidden);
   }
 
   private async appState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {
@@ -424,22 +468,26 @@ export class ConversationViewingHandler {
     const left = leaving.filter(id => !this.isHere(viewing.userId, id));
     if (left.length === 0) return;
 
-    // UNE RÉTRACTATION EXCLUT CEUX QUI AVAIENT ÉTÉ EXCLUS DE L'ANNONCE (#16752).
+    // UNE RÉTRACTATION NE SE FILTRE PAS (#16752), et c'est le MÊME arbitrage
+    // qu'au jumeau de la position.
     //
-    // Qui affiche le point « ici » de ce lecteur ? Exactement ceux à qui le
-    // `viewing:start` — ou l'instantané — est parvenu, c'est-à-dire la room
-    // MOINS l'ensemble bloqué AU MOMENT de l'annonce. Et le handler retient cet
-    // ensemble-là : `track` l'a écrit depuis un `start` fail-closed, donc c'est
-    // un ensemble PROUVÉ.
+    // Qui affiche le point « ici » de ce lecteur ? Ceux à qui un `viewing:start`
+    // ou un instantané est parvenu. Cet ensemble n'est PAS le complément du
+    // filtre d'annonce : il dépend de l'instant de chaque annonce, du nombre
+    // d'appareils de ce compte, d'un rafraîchissement arrivé entre-temps. Le
+    // serveur ne peut le connaître qu'en tenant une algèbre d'intersections à
+    // travers toutes les annonces — et une erreur, dans ce sens-là, laisse un
+    // point ALLUMÉ chez un pair bloqué pour toute sa session, sans recours.
     //
-    // Relire la base ici coûtait deux requêtes par déconnexion POUR OBTENIR UNE
-    // RÉPONSE MOINS JUSTE : un pair bloqué APRÈS l'annonce porte le point, et un
-    // ensemble frais l'exclurait du retrait — son point resterait allumé pour
-    // toute sa session. C'est la lecture, pas sa posture, qui était l'erreur ;
-    // la retirer ferme le fail-open par CONSTRUCTION plutôt que par un test de
-    // `null`.
+    // Le filtre inverse concède `{userId, conversationId}` à un CO-PARTICIPANT,
+    // une fois par fermeture d'écran. Entre les deux, le choix n'est pas serré.
+    //
+    // Une première version de ce lot excluait l'ensemble retenu et appelait
+    // l'UNION des ensembles de plusieurs appareils « la posture la plus
+    // fermée » : c'était faux dans le sens qui compte — « n'a RIEN reçu » est
+    // l'INTERSECTION, et l'union laissait donc le point allumé.
     for (const conversationId of left) {
-      this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId: viewing.userId, conversationId }, viewing.blockRelated);
+      this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId: viewing.userId, conversationId }, new Set());
     }
   }
 
@@ -498,7 +546,12 @@ export class ConversationViewingHandler {
 
   private track(socketId: string, userId: string, conversationId: string, blockRelated: ReadonlySet<string>): void {
     const current = this.bySocket.get(socketId)?.conversationIds ?? new Set<string>();
-    this.bySocket.set(socketId, { userId, conversationIds: new Set([...current, conversationId]), blockRelated });
+    this.bySocket.set(socketId, {
+      userId,
+      conversationIds: new Set([...current, conversationId]),
+      blockRelated,
+      blockRelatedAt: this.now(),
+    });
     const users = this.byConversation.get(conversationId) ?? new Map<string, Set<string>>();
     users.set(userId, new Set([...(users.get(userId) ?? []), socketId]));
     this.byConversation.set(conversationId, users);

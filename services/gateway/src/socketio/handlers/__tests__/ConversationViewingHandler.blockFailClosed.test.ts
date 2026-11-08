@@ -11,12 +11,16 @@
  * retraits avec. Une asymétrie interne est le signe d'un oubli, pas d'un
  * arbitrage.
  *
- * Et la seconde moitié du lot est une SUPPRESSION de lecture : une RÉTRACTION
- * exclut exactement ceux qui avaient été exclus de l'ANNONCE, et le handler
- * retient déjà cet ensemble (`SocketViewing.blockRelated`, écrit par un
- * `start` fail-closed, donc PROUVÉ). Relire la base à la rétractation coûtait
- * deux requêtes et ouvrait la seule porte par laquelle un fail-open pouvait
- * entrer.
+ * Et la seconde moitié du lot est une SUPPRESSION de lecture : `blockRelated`
+ * est un FILTRE D'ANNONCE — il gouverne `viewing:start`, l'instantané et
+ * `viewing:activity`, et rien d'autre. **Les deux rétractations partent sans
+ * exclusion**, parce que « qui porte le point » n'est pas le complément du
+ * filtre : cela dépend de l'instant de chaque annonce et du nombre d'appareils
+ * du compte, et une erreur dans ce sens-là laisse un point ALLUMÉ chez un pair
+ * bloqué pour toute sa session. Une première version de ce lot excluait
+ * l'ensemble retenu, et appelait l'UNION des ensembles de plusieurs appareils
+ * « la posture la plus fermée » : « n'a RIEN reçu » est l'INTERSECTION, donc
+ * l'union laissait le point allumé.
  *
  * @jest-environment node
  */
@@ -40,6 +44,7 @@ type Emission = { room: string; except: readonly string[]; event: string; data: 
 function makeWorld(blocks: Readonly<Record<string, readonly string[]>> = { [ALICE]: [BOB] }) {
   const emissions: Emission[] = [];
   let blockReadsBroken = false;
+  let clock = 1_762_000_000_000;
 
   const io = {
     to: (room: string) => ({
@@ -81,6 +86,7 @@ function makeWorld(blocks: Readonly<Record<string, readonly string[]>> = { [ALIC
     connectedUsers,
     socketToUser,
     userSockets,
+    now: () => clock,
   });
 
   const connect = (userId: string, socketId: string, rooms: readonly string[] = [CONV]) => {
@@ -103,6 +109,7 @@ function makeWorld(blocks: Readonly<Record<string, readonly string[]>> = { [ALIC
     connect,
     blockReads: { findMany, findUnique },
     breakBlockReads: () => { blockReadsBroken = true; },
+    advance: (ms: number) => { clock += ms; },
   };
 }
 
@@ -140,7 +147,13 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
       .toEqual([]);
   });
 
-  it('la rétractation exclut le pair bloqué SANS relire la base', async () => {
+  /**
+   * UNE RÉTRACTATION NE SE FILTRE PAS, et ne lit donc plus la base : c'est le
+   * seul chemin qui ÉTEINT le point, et l'exclure d'un pair qui en porte un le
+   * laisserait allumé pour toute sa session. Seul le lecteur lui-même est
+   * exclu, comme avant ce lot.
+   */
+  it('la rétractation part au salon sans exclusion de blocage, et SANS relire la base', async () => {
     const world = makeWorld();
     const alice = world.connect(ALICE, 'socket-alice');
     world.connect(BOB, 'socket-bob');
@@ -151,25 +164,12 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
 
     const stop = stops(world.emissions);
     expect(stop).toHaveLength(1);
-    expect(stop[0].except).toContain('socket-bob');
+    expect(stop[0].except).not.toContain('socket-bob');
+    expect(stop[0].except).toContain('socket-alice');
     expect(world.blockReads.findMany.mock.calls.length).toBe(readsAfterStart);
   });
 
-  it('la rétractation exclut encore le pair bloqué quand la base est TOMBÉE entre-temps', async () => {
-    const world = makeWorld();
-    const alice = world.connect(ALICE, 'socket-alice');
-    world.connect(BOB, 'socket-bob');
-    await world.handler.handleStart(alice.socket, { conversationId: CONV });
-
-    world.breakBlockReads();
-    await world.handler.handleSocketDisconnecting('socket-alice');
-
-    const stop = stops(world.emissions);
-    expect(stop).toHaveLength(1);
-    expect(stop[0].except).toContain('socket-bob');
-  });
-
-  it('la rétractation d\'un membre SORTI exclut le pair bloqué malgré une base tombée', async () => {
+  it('la rétractation d\'un membre SORTI part sans exclusion, même base tombée', async () => {
     const world = makeWorld();
     const alice = world.connect(ALICE, 'socket-alice');
     world.connect(BOB, 'socket-bob');
@@ -180,7 +180,75 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
 
     const stop = stops(world.emissions);
     expect(stop).toHaveLength(1);
-    expect(stop[0].except).toContain('socket-bob');
+    expect(stop[0].except).not.toContain('socket-bob');
+  });
+
+  /**
+   * DEUX APPAREILS, et la raison pour laquelle l'UNION était fausse : D1 a
+   * annoncé AVANT le blocage (le point de Bob s'est allumé), D2 après (rien).
+   * L'ensemble « n'a RIEN reçu » est l'INTERSECTION, donc vide — et l'union
+   * aurait exclu Bob du retrait, laissant son point allumé.
+   */
+  it('deux appareils, dont un a annoncé AVANT le blocage : le retrait atteint quand même le pair', async () => {
+    const blocks: Record<string, readonly string[]> = {};
+    const world = makeWorld(blocks);
+    const d1 = world.connect(ALICE, 'sock-alice-1');
+    world.connect(BOB, 'socket-bob');
+    await world.handler.handleStart(d1.socket, { conversationId: CONV });
+
+    blocks[ALICE] = [BOB];
+    const d2 = world.connect(ALICE, 'sock-alice-2');
+    await world.handler.handleStart(d2.socket, { conversationId: CONV });
+
+    await world.handler.handleSocketDisconnecting('sock-alice-1');
+    await world.handler.handleSocketDisconnecting('sock-alice-2');
+
+    const stop = stops(world.emissions);
+    expect(stop).toHaveLength(1);
+    expect(stop[0].except).not.toContain('socket-bob');
+  });
+
+  /**
+   * LE POULS D'ACTIVITÉ. `viewing:activity` revient toutes les deux secondes
+   * pendant que l'écran reste ouvert (#9061) et lisait un filtre écrit UNE fois
+   * par `viewing:start`, jamais relu : quelqu'un qui bloquait ce lecteur APRÈS
+   * son ouverture continuait de voir son point PULSER, sans aucune borne de
+   * temps. Trouvé par l'audit adversarial du lot.
+   */
+  it('le POULS d\'activité cesse d\'atteindre un pair qui bloque APRÈS l\'ouverture', async () => {
+    const blocks: Record<string, readonly string[]> = {};
+    const world = makeWorld(blocks);
+    const alice = world.connect(ALICE, 'socket-alice');
+    world.connect(BOB, 'socket-bob');
+    await world.handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await world.handler.handleActivity(alice.socket, { conversationId: CONV });
+    const avant = world.emissions.filter(e => e.event === SERVER_EVENTS.VIEWING_ACTIVITY);
+    expect(avant).toHaveLength(1);
+    expect(avant[0].except).not.toContain('socket-bob');
+
+    blocks[BOB] = [ALICE];
+    world.advance(61_000);
+    await world.handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    const apres = world.emissions.filter(e => e.event === SERVER_EVENTS.VIEWING_ACTIVITY);
+    expect(apres).toHaveLength(2);
+    expect(apres[1].except).toContain('socket-bob');
+  });
+
+  it('le POULS ne relit la base qu\'une fois par pas, pas à chaque battement', async () => {
+    const world = makeWorld();
+    const alice = world.connect(ALICE, 'socket-alice');
+    await world.handler.handleStart(alice.socket, { conversationId: CONV });
+
+    const apresDepart = world.blockReads.findMany.mock.calls.length;
+    for (let i = 0; i < 20; i += 1) {
+      world.advance(2_000);
+      await world.handler.handleActivity(alice.socket, { conversationId: CONV });
+    }
+
+    // 20 battements, 40 s d'horloge : aucun pas de 60 s franchi.
+    expect(world.blockReads.findMany.mock.calls.length).toBe(apresDepart);
   });
 
   it('un pair NON bloqué reste servi — la resserre ne coupe pas le cas nominal', async () => {

@@ -5,7 +5,19 @@
 **Branche** : `claude/exciting-planck-4nctmx`. **Milestone** : « Un blocage coupe
 TOUS les canaux temps réel, la position en direct comprise » (les deux issues y
 étaient déjà, posées par le cycle 142).
-**Issue ouverte en chemin** : #16791 (milestone #248).
+**Issues ouvertes en chemin** : #16791 (perf, milestone #248) · #16794, #16796,
+#16797 (suites de l'audit, milestone #248) · #16795, #16798 (décisions produit,
+milestone #249).
+
+## Ce cycle a été RÉÉCRIT par son propre audit, et c'est le fait principal
+
+Le lot a d'abord été livré, poussé, et ouvert en PR #16793. L'audit adversarial
+exigé par le `CLAUDE.md` pour un lot de contrôle d'accès a rendu **BLOQUANT**, et
+il avait raison sur son point central : **la première version ouvrait une porte
+neuve, pire sur son axe que le défaut qu'elle fermait.**
+
+Tout ce qui suit décrit la version RÉÉCRITE. Ce que la première version faisait
+est consigné, parce que c'est la partie instructive.
 
 ## Le périmètre, et pourquoi celui-là
 
@@ -28,23 +40,44 @@ nommant les quatre fichiers du lot.
 ## Les deux défauts étaient le même défaut, vu des deux bouts
 
 Les deux issues portaient sur le blocage dans un signal de salon, et toutes deux
-le posaient comme une question d'ANNONCE. Instruites ensemble, elles ont rendu
-une règle que ni l'une ni l'autre ne formulait, et qui contredit la correction
-que les deux proposaient pour leurs chemins de retrait :
+le posaient comme une question d'ANNONCE, en proposant pour les chemins de
+retrait de rejouer la même garde fraîchement. Instruites ensemble, elles ont
+rendu une règle que ni l'une ni l'autre ne formulait — et la première version du
+lot s'est trompée sur la FORME de cette règle avant que l'audit ne la corrige.
 
-> **Une rétractation exclut exactement ceux qui avaient été exclus de
-> l'annonce — et personne de plus.**
+**Première version (fausse) :** « une rétractation exclut exactement ceux qui
+avaient été exclus de l'annonce ». Elle exigeait de connaître l'ensemble « qui
+n'a RIEN reçu », tenu sur la session et rafraîchi, plus une **rétractation
+CIBLÉE** vers qui entrait dans l'ensemble en cours de route.
 
-Un pair bloqué APRÈS l'annonce a REÇU l'annonce : son interface porte le point
-« ici », ou l'épingle. L'exclure du retrait laisse ce point allumé — et pour la
-position, c'est une coordonnée GPS réelle, figée, d'apparence vivante, jusqu'à
-huit heures. **Relire le blocage à la rétractation, comme les deux issues le
-suggéraient, protège le blocage en publiant plus longtemps ce qu'il doit
-cacher.** Détail : `tasks/lessons/2026-11-08-une-retractation-exclut-ceux-qui-avaient-ete-exclus-de-l-annonce.md`.
+**Ce que l'audit a mesuré :** cet ensemble ne PEUT PAS être juste. Il l'était
+faux sur quatre chemins — un re-départ de partage (`_openSession` n'écrit aucune
+rétractation), un `live-stop` sans partage (l'exclusion vient d'une session
+absente), deux appareils du même compte (l'union au lieu de l'intersection), et
+une émission ciblée perdue (l'ensemble est écrit AVANT l'émission, sans
+rollback). *Qui porte l'épingle* dépend de l'instant de chaque annonce, du nombre
+d'appareils, d'un rafraîchissement arrivé entre-temps.
 
-L'ensemble voulu est déjà RETENU par les deux handlers, et c'est un ensemble
-PROUVÉ. Donc : aucune lecture, aucun fail-open possible, et deux requêtes de
-moins par rétractation.
+**Version retenue, et elle ne tient aucun état :**
+
+> **Les ANNONCES se filtrent. Les RÉTRACTATIONS non.**
+
+`started`, `updated`, `viewing:start`, l'instantané et `viewing:activity`
+excluent l'ensemble ; `stopped` et `viewing:stop` partent au salon. Une
+rétractation ne porte pas la donnée sensible (`{conversationId, userId,
+stoppedAt}`) et c'est le SEUL chemin qui retire ce qui est affiché :
+
+| posture du retrait | ce qu'elle coûte |
+|---|---|
+| filtré | une épingle sur une position RÉELLE, jusqu'à 8 h, chez un bloqué |
+| **non filtré** | un événement sans position, une fois par partage, à un membre du fil |
+
+Le gain n'est pas seulement le bon arbitrage : **plus rien à tenir à jour, rien à
+rejouer si une émission se perd, rien à recalculer au re-départ d'un partage, et
+rien à décider entre union et intersection.** Les quatre défauts ci-dessus
+disparaissent par construction, pas un par un.
+
+Détail : `tasks/lessons/2026-11-08-une-liste-d-exclusion-inversee-en-liste-de-destinataires-change-de-perimetre.md`.
 
 ## Lot B — la garde du regard échouait OUVERT (#16752)
 
@@ -91,12 +124,12 @@ invariant invite à le TENIR. De lui découle la posture de chaque porte :
 
 | porte | ce qu'elle fait |
 |---|---|
-| `live-started` | exclut l'ensemble ; une lecture qui ne conclut pas **REFUSE le partage** |
-| `live-updated` | exclut l'ensemble, rafraîchi par pas d'une minute |
-| `live-stopped` (×2 sites) | exclut l'ensemble RETENU ; session inconnue ⇒ **aucune exclusion** |
-| rattrapage à la jonction | lit l'ensemble de l'**ARRIVANT**, et ne rejoue rien s'il ne conclut pas |
+| `live-started` | ANNONCE — exclut l'ensemble ; une lecture qui ne conclut pas **refuse le partage** |
+| `live-updated` | ANNONCE — exclut l'ensemble, rafraîchi par pas d'une minute |
+| `live-stopped` (×2 sites) | RÉTRACTATION — part au salon, **sans exclusion** |
+| rattrapage à la jonction | ANNONCE — lit l'ensemble de l'**ARRIVANT**, et ne rejoue rien s'il ne conclut pas |
 
-Trois décisions valent d'être dites :
+Deux décisions valent d'être dites :
 
 - **Le rattrapage lit du côté de l'arrivant.** La question est par PAIRE, et
   l'ensemble bidirectionnel du joignant y répond pour TOUS les partageurs d'un
@@ -105,15 +138,42 @@ Trois décisions valent d'être dites :
   `ConversationHandler`, dont le commentaire affirmait « ne peut pas jeter,
   l'implémentation est synchrone et sans I/O ». Vrai quand il a été écrit ;
   **un commentaire d'impossibilité ne rougit jamais** (cycle 108), et ce lot l'a
-  périmé, donc réécrit.
-- **Un blocage posé EN COURS de partage produit une rétractation CIBLÉE.** Quand
-  le rafraîchissement découvre un pair entré dans l'ensemble, cesser de lui
-  parler ne suffit pas : son épingle resterait plantée sur une position réelle.
-  C'est ce geste qui tient l'invariant, et c'est lui qui rend l'exclusion du
-  retrait exacte.
-- **Une session INCONNUE diffuse son retrait au salon ENTIER.** Après un
-  redémarrage, le registre ne sait plus qui porte l'épingle : la seule erreur
-  coûteuse serait de la laisser plantée.
+  périmé, donc réécrit. Et parce qu'il devient asynchrone, il **revérifie
+  l'appartenance après son `await`** : `socket.emit` vise le SOCKET, pas la room,
+  donc une éviction concurrente ne le retiendrait pas (constat F12 de l'audit).
+- **L'UNIQUE composeur d'exclusion du fichier est `_fromSocketExcept`**, et il
+  n'a que deux appelants — les deux annonces. Son jumeau côté serveur
+  (`_roomExcept`) a été SUPPRIMÉ en même temps que la rétractation ciblée : il
+  n'existe plus aucune émission de ce handler qui filtre depuis `this.io`.
+
+### La porte que la première version ouvrait, et qui était PIRE
+
+`getBlockRelatedUserIds` rend l'ensemble bidirectionnel ENTIER du partageur,
+**à l'échelle du dépôt et sans notion de conversation**. Son doc-comment dit
+pourquoi c'est sans danger, et sa phrase porte sa propre condition :
+
+> « an id in this set that owns no socket contributes nothing to **AN EXCLUSION
+> LIST** »
+
+La rétractation ciblée INVERSAIT cet ensemble en liste de DESTINATAIRES, servie
+par `io.to(socketId)` — donc hors room et hors appartenance. **Dave, qui n'est
+pas dans le fil et n'a aucun lien avec Alice, apprenait par son propre blocage
+l'existence d'un identifiant de conversation auquel il n'a pas accès, le fait
+qu'Alice y tenait un partage de position, et l'instant** — répétable à ~1
+coup/minute en débloquant et rebloquant, soit une sonde d'activité GPS déclenchée
+par le bloqueur.
+
+> **Un ensemble a un périmètre, et ce périmètre dépend de l'usage qu'on en fait.
+> Soustraire tolère le large ; adresser ne le tolère pas.** C'est la leçon 275
+> retournée : on avait mesuré ce que la charge TRANSPORTE, pas à qui elle est
+> ADRESSÉE.
+
+**Aucun des deux cliquets du lot ne pouvait la voir.** Le témoin de comportement
+couvrait les cinq portes existantes ; le cliquet de source cherchait les
+émissions adressées à un SALON, donc par construction il ne regardait pas celle
+qui ne l'était pas. Le lot part désormais avec un témoin qui assert la propriété
+STRUCTURELLE — aucune émission de ce handler n'est adressée à un id de socket —
+et pas seulement le symptôme.
 
 ### La forme conditionnelle n'est pas cosmétique
 
@@ -129,12 +189,45 @@ n'obligeait à poser la question.** Chaque handler appliquait la règle chez lui
 avec son commentaire chez lui, et un fichier qui ne mentionne pas une règle ne
 peut pas la mentionner de travers — **le silence n'a pas de place où rougir.**
 
-Un témoin de comportement garde les cinq sites qui EXISTENT ; le cliquet garde
-le SIXIÈME. `socketio/__tests__/locationBlockExclusionSweep.ts` relève les
-émissions `LOCATION_LIVE_*` adressées à un SALON sans passer par un composeur
-d'exclusion. Son discriminant est la **CIBLE**, pas la méthode : il laisse
-passer l'émission à un socket nommé du rattrapage et la rétractation ciblée dont
-les destinataires SONT les bloqués.
+Un témoin de comportement garde les sites qui EXISTENT ; le cliquet garde le
+SUIVANT. `socketio/__tests__/locationBlockExclusionSweep.ts` relève les ANNONCES
+`LOCATION_LIVE_STARTED` / `LOCATION_LIVE_UPDATED` dont la chaîne ne passe pas par
+`_fromSocketExcept`. Il ne regarde pas les rétractations, et **ce silence est une
+DÉCISION** : s'il les exigeait filtrées, il pousserait le prochain lot à reposer
+le défaut qu'on vient de retirer.
+
+### La première version du cliquet n'en voyait qu'un SEPTIÈME, et l'audit l'a compté
+
+Elle exigeait `.to(` ET une cible matchant `/^ROOMS\./`. Elle était donc aveugle
+à six formes qui compilent, exécutées sur le vrai module :
+
+| forme | visible ? |
+|---|---|
+| `const room = ROOMS.conversation(id); io.to(room).emit(…)` | **non** |
+| `io.in(ROOMS.conversation(id)).emit(…)` — `.in()` est l'alias de `.to()` | **non** |
+| `this._roomAll(ROOMS.conversation(id)).emit(…)` — tout helper neuf | **non** |
+| `const ev = SERVER_EVENTS.LOCATION_LIVE_STARTED; io.to(…).emit(ev, …)` | **non** |
+| `io.to(…).volatile.emit(…)` — opérateur plausible sur un flux GPS | **non** |
+| `const { conversation } = ROOMS; io.to(conversation(id)).emit(…)` | **non** |
+| `io.to(ROOMS.conversation(id)).emit(…)` | oui |
+
+**La première ligne est l'idiome DOMINANT du répertoire** — 15 sites
+`const room = ROOMS.conversation(…)` en production, dont le jumeau de référence
+lui-même (`StatusHandler`) et `ConversationHandler`. Un cliquet posé pour
+attraper « le site qu'un lot futur ajoutera » ne voyait pas ce site s'il était
+écrit dans le style de la maison.
+
+> **Un cliquet se règle sur la forme CONFORME, dont il n'y a qu'une, et traite
+> tout le reste comme à instruire.** Chercher la forme FAUTIVE, c'est énumérer —
+> et une énumération est en retard par construction. Le discriminant est
+> désormais inversé : toute chaîne d'annonce qui n'est pas produite par le
+> composeur est signalée, et seules deux formes sont exemptées (l'émission à un
+> socket nommé, et l'ACK), chacune avec son témoin de non-régression.
+
+Et il balaye **tout `services/gateway/src`**, hors arbres de témoins — l'autre
+reproche de l'audit, que le dépôt avait déjà payé : « `server-emit-door-sweep`
+balaye `src/` ENTIER : la huitième copie vivait dans `utils/socket-broadcast.ts`,
+à deux répertoires de la septième ».
 
 **Ce qui n'a PAS été fait, et c'est délibéré** : un balayage « ce handler cite-t-il
 la loi de blocage ? » sur les trois familles. C'est exactement ce qui a rendu
@@ -172,22 +265,26 @@ Deux témoins existants ont demandé plus qu'un double :
 | gate | résultat |
 |---|---|
 | `tsc --noEmit` gateway | **EXIT=0**, 0 ligne (lu HORS pipe) |
-| les 8 suites `LocationHandler` | **116 témoins verts** |
-| les 3 suites du regard | **49 témoins verts** |
-| cliquet d'exclusion (#16745) | **11 verts** |
+| les 18 suites du périmètre (position, regard, jonction, cliquets) | **294 témoins verts** |
+| cliquet d'exclusion, réécrit | **15 verts** |
 | cliquets de taille (`gateway-file-size-budget`, variante tests) | **11 verts** |
-| suite gateway COMPLÈTE | **2 528 suites / 39 772 témoins verts** ; 6 suites rouges, **toutes étrangères au lot** |
+| cliquet d'entrée de journal | **18 verts** |
 | `server-emit-door-sweep`, `detached-promise-catch-sweep`, garde de présence | **21 verts** |
-| rouge prouvé, lot A | **9 des 11 témoins tombent** sans le correctif ; 2 verts des deux côtés |
-| rouge prouvé, lot B | **4 des 6 témoins tombent** sans le correctif ; 2 verts des deux côtés |
-| rouge prouvé, cliquet | tombe sur **3 sources fabriquées** et sur le fichier RÉEL (une seule porte revertie), en nommant la cible |
+| suite gateway COMPLÈTE | **2 528 suites / 39 772 témoins verts** ; 6 suites rouges, **toutes étrangères au lot** — mesurée sur la 1re version, et les 18 suites du périmètre revérifiées après réécriture |
+| **audit adversarial** | **BLOQUANT sur la 1re version** : 13 constats, 5 témoins rouges écrits contre elle |
+| rouge prouvé, lot A | **9 des 15 témoins tombent** sans le correctif ; 3 verts des deux côtés |
+| rouge prouvé, lot B | **5 des 8 témoins tombent** sans le correctif ; 3 verts des deux côtés |
+| rouge prouvé, le pouls du regard | tombe quand on fige son rafraîchissement |
+| rouge prouvé, cliquet | tombe sur **7 sources fabriquées** — dont les six formes que la 1re version ratait — et sur le fichier RÉEL muté **dans l'idiome de la maison**, en nommant fichier, ligne et forme |
 
-**Les quatre témoins verts des deux côtés sont le second gate du lot.** Côté A :
-« le rattrapage sert bien un partageur NON bloqué » et « sans blocage, aucune
-exclusion n'est posée ». Côté B : « `viewing:start` ne partait déjà rien sur une
-levée » (la posture préexistante, par accident de forme) et « un pair non bloqué
-reste servi ». Sans eux, rien n'aurait signalé qu'une resserre de confidentialité
-venait de couper le cas nominal.
+**Les six témoins verts des deux côtés sont le second gate du lot.** Côté A :
+« le rattrapage sert bien un partageur NON bloqué », « sans blocage, aucune
+exclusion n'est posée », et le bloqueur ÉTRANGER qui ne reçoit rien. Côté B :
+« `viewing:start` ne partait déjà rien sur une levée » (la posture préexistante,
+par accident de forme), « un pair non bloqué reste servi », et « le pouls ne
+relit la base qu'une fois par pas ». Sans eux, rien n'aurait signalé qu'une
+resserre de confidentialité venait de couper le cas nominal — ni qu'elle venait
+de mettre la base sur le trajet d'un signal qui bat toutes les deux secondes.
 
 `LocationHandler.ts` passe de 681 à 916 lignes — dans le budget (plafond dur
 1200, seuil de découpage 1000), mais il s'en approche, et la majeure partie de
@@ -214,26 +311,61 @@ rencontre forcément, donc il valait d'être nommé ici : la forme d'une entrée
 ## Dimensions
 
 **Mûres** : **1 (Sécurité / confidentialité)** — la troisième famille de signal
-de salon filtre enfin le blocage, et la garde de la deuxième ne s'éteint plus
-sur une panne ; **6 (Cohérence)** — même geste, même effet sur les trois signaux
-du même salon ; **11 (Maintenabilité)** — une posture unique par garde, deux
-requêtes de moins par rétractation, un cliquet qui garde la famille plutôt que
-ses membres ; **13 (Complétude)** — les cinq portes de la position, et les deux
-moments (annonce / rétractation) de chacune.
+de salon filtre enfin le blocage ; la garde de la deuxième ne s'éteint plus sur
+une panne ; son pouls d'activité cesse de nommer un lecteur à qui vient de le
+bloquer ; et aucune émission de ce lot n'est adressée hors du salon.
+**6 (Cohérence)** — même geste, même effet sur les trois signaux du même salon,
+et une règle unique annonce/rétractation partagée par les deux handlers.
+**11 (Maintenabilité)** — une posture par garde, deux requêtes de moins par
+rétractation, **aucun état ne porte le retrait** (c'est le gain structurel de la
+réécriture), et un cliquet réglé sur la forme conforme plutôt que sur une
+énumération. **13 (Complétude)** — les cinq portes de la position, les trois
+annonces du regard, et les deux moments de chacune.
 
-**Restantes, avec leur issue** : #16791 — une session dont la passerelle a perdu
-la trace relit la base à chaque point (jusqu'à 240 requêtes/minute/partageur).
-La MOITIÉ de ce coût est préexistante (`refusesMinorInConversation`, #9927) ;
-ce lot l'a doublée et chiffrée plutôt que d'élargir un lot de confidentialité à
-une question de performance.
+**Restantes, avec leur issue** :
 
-**Non tranché, et déposé comme tel** : l'« Optionnellement » de #16745 — éteindre
-un partage en cours au MOMENT du blocage, à l'image de `cutTalkiesOnBlock`. Ce
-lot y répond autrement, et à son échelle (la rétractation ciblée au
-rafraîchissement, bornée à une minute). Le faire depuis `routes/directory/blocks.ts`
-exigerait un canal inter-instances, comme le talkie en a un : le registre de
-position vit en mémoire d'un seul processus. C'est une question d'architecture,
-pas la complétion de celle-ci.
+| issue | sujet | d'où elle vient |
+|---|---|---|
+| #16791 | une session dont la passerelle a perdu la trace relit la base à chaque point | relevé par la session ; **moitié préexistante** |
+| #16794 | un blocage ne coupe pas un partage EN COURS — jusqu'à 120 points partent encore, et le registre est par processus | audit, F8 + le point multi-instances |
+| #16795 | `location.live` est déclarée **SANG + consentement rituel** et appliquée NULLE PART | audit, F9 — **préexistant, et le plus gros** |
+| #16796 | une socket est dans les rooms avant d'être dans `userSockets` : fenêtre sans exclusion pendant sa propre authentification | audit, F11 — préexistant, partagé par les trois signaux |
+| #16797 | `live-start` rend deux verdicts contradictoires au même client | audit, F13 — préexistant |
+| #16798 | un blocage garde les COMPTES, pas les PERSONNES : un bloqué revient par un lien partagé | audit, F10 — limite de MODÈLE |
+
+**#16795 mérite d'être nommée à part.** `location.live` est déclarée au seuil le
+plus haut du produit (`BLOOD`) et parmi les features à consentement rituel ; la
+passerelle n'a **aucun** site d'application, et `LocationHandler` ne cite même pas
+`pairAccessAmong`. Une coordonnée GPS vivante part donc à tout participant non
+bloqué, `PUBLIC` compris, pendant que la FRAPPE du même salon est gardée à
+`ACQUAINTANCE`. Vérifié ligne à ligne par la session. Et l'audit relève le coût
+caché de notre propre lot : **invoquer `StatusHandler` comme « le jumeau conforme
+de référence » en n'en reprenant que la moitié rend l'écart restant MOINS visible
+qu'avant**, parce que le fichier a désormais l'air gardé.
+
+## Ce que l'audit adversarial a coûté et rapporté
+
+Il a tourné ~13 minutes et rendu **13 constats**, dont 5 avec un témoin rouge
+écrit contre le code livré. Bilan honnête de sa précision, après re-vérification
+ligne à ligne par la session :
+
+| verdict | constats |
+|---|---|
+| réels et INTRODUITS par le lot | F1 (la porte neuve), F2, F3, F5, F7, F12 |
+| réels et PRÉEXISTANTS | F4 (le pouls, dans le périmètre — corrigé), F9, F10, F11, F13 |
+| justes mais déjà assumés et chiffrés par la session | F8 (la fenêtre de 60 s) |
+| défaut de l'OUTILLAGE du lot | F6 (le cliquet aveugle à six formes) |
+
+Aucun constat ne s'est révélé faux. C'est la première fois dans cette série
+qu'un audit rend un verdict BLOQUANT sur un lot qui avait déjà `tsc` à zéro,
+2 528 suites vertes et son rouge prouvé dans les deux sens — et il avait raison.
+
+> **Ce qu'un audit adversarial attrape, c'est ce que les gardes du lot ne peuvent
+> pas voir PAR CONSTRUCTION.** Le témoin de comportement couvrait les portes qui
+> existaient ; le cliquet cherchait les émissions adressées à un SALON, donc il
+> ne regardait pas celle qui ne l'était pas. Les deux étaient verts, et la fuite
+> était dans l'angle exact que leur forme leur interdisait de couvrir. Un lot de
+> confidentialité qui s'autovalide valide son propre angle mort.
 
 ## Ce qui reste du dépôt du cycle 142
 

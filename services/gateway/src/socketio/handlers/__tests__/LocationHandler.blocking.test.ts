@@ -16,14 +16,19 @@
  *
  * ─── Le principe que ce lot pose, et qu'il partage avec #16752 ──────────────
  *
- * `session.blockRelated` est l'ensemble des pairs **SANS ÉPINGLE**. Il est tenu
- * par deux gestes : l'exclusion au départ, et une retraction CIBLÉE envoyée à
- * qui le rejoint en cours de route. D'où la posture de chaque événement :
+ * `session.blockRelated` est un **FILTRE D'ANNONCE**, et rien d'autre :
  *
- * - `started` / `updated` RÉVÈLENT une position ⇒ ils excluent cet ensemble ;
- * - `stopped` est une RÉTRACTATION ⇒ il exclut exactement ceux qui n'ont rien
- *   reçu, et personne de plus : l'exclure plus largement figerait une épingle
- *   sur une position réelle, c'est-à-dire l'inverse de ce qu'on protège.
+ * - `started` / `updated` RÉVÈLENT une position ⇒ ils EXCLUENT cet ensemble ;
+ * - `stopped` est une RÉTRACTATION ⇒ elle part au salon, **sans exclusion**.
+ *
+ * Deux raisons, et la seconde a été trouvée en cassant la première version de
+ * ce lot. (1) Qui porte l'épingle n'est pas le complément du filtre : cela
+ * dépend de l'instant de chaque annonce, d'un redémarrage sur un second
+ * appareil, d'un rafraîchissement arrivé entre-temps — et une erreur dans ce
+ * sens-là LAISSE une position réelle plantée jusqu'à huit heures. (2) L'ensemble
+ * rendu par `getBlockRelatedUserIds` est GLOBAL au dépôt, sans notion de
+ * conversation : l'inverser en liste de DESTINATAIRES — ce que faisait une
+ * rétractation ciblée — adresse des gens qui ne sont pas dans le fil.
  *
  * @jest-environment node
  */
@@ -61,6 +66,9 @@ const BOB_SOCKET = 'socket-bob';
 const BOB = '507f1f77bcf86cd7994390b2';
 const CAROL_SOCKET = 'socket-carol';
 const CAROL = '507f1f77bcf86cd7994390c3';
+/** Connecté, mais PAS participant de ce fil — le cas de l'audit adversarial. */
+const DAVE_SOCKET = 'socket-dave';
+const DAVE = '507f1f77bcf86cd7994390d4';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
 const ROOM = ROOMS.conversation(CONV_ID);
@@ -68,7 +76,14 @@ const ROOM = ROOMS.conversation(CONV_ID);
 const PARIS = { latitude: 48.8566, longitude: 2.3522 };
 const LYON = { latitude: 45.764, longitude: 4.8357 };
 
-type Emission = { target: string; except: readonly string[]; event: string; data: unknown };
+type Emission = {
+  target: string;
+  except: readonly string[];
+  event: string;
+  data: unknown;
+  /** Vraie pour une émission passée par `io.to(...)` — pas par `socket.emit`. */
+  viaIo: boolean;
+};
 
 /**
  * Le monde : Alice, Bob et Carol connectés dans le même fil. `blocks` est la
@@ -82,12 +97,12 @@ function makeWorld({
   let blockReadsBroken = false;
   let clock = new Date('2026-11-08T10:00:00.000Z');
 
-  const record = (target: string, except: readonly string[]) => ({
-    emit: (event: string, data: unknown) => emissions.push({ target, except, event, data }),
-    except: (ids: string[]) => record(target, ids),
+  const record = (target: string, except: readonly string[], viaIo: boolean): any => ({
+    emit: (event: string, data: unknown) => emissions.push({ target, except, event, data, viaIo }),
+    except: (ids: string[]) => record(target, ids, viaIo),
   });
 
-  const io = { to: (target: string) => record(target, []) } as any;
+  const io = { to: (target: string) => record(target, [], true) } as any;
 
   const findMany = jest.fn<any>().mockImplementation(async ({ where }: any) => {
     if (blockReadsBroken) throw new Error('replica set election in progress');
@@ -110,16 +125,19 @@ function makeWorld({
     [ALICE, { id: ALICE, isAnonymous: false, displayName: 'Alice' }],
     [BOB, { id: BOB, isAnonymous: false, displayName: 'Bob' }],
     [CAROL, { id: CAROL, isAnonymous: false, displayName: 'Carol' }],
+    [DAVE, { id: DAVE, isAnonymous: false, displayName: 'Dave' }],
   ]);
   const socketToUser = new Map<string, string>([
     [ALICE_SOCKET, ALICE],
     [BOB_SOCKET, BOB],
     [CAROL_SOCKET, CAROL],
+    [DAVE_SOCKET, DAVE],
   ]);
   const userSockets = new Map<string, Set<string>>([
     [ALICE, new Set([ALICE_SOCKET])],
     [BOB, new Set([BOB_SOCKET])],
     [CAROL, new Set([CAROL_SOCKET])],
+    [DAVE, new Set([DAVE_SOCKET])],
   ]);
 
   const handler = new LocationHandler({
@@ -133,10 +151,12 @@ function makeWorld({
     now: () => clock,
   });
 
-  const makeSocket = (id: string): Socket => ({
+  const makeSocket = (id: string, rooms: readonly string[] = [ROOM]): Socket => ({
     id,
-    emit: (event: string, data: unknown) => emissions.push({ target: id, except: [], event, data }),
-    to: (target: string) => record(target, []),
+    rooms: new Set([id, ...rooms]),
+    emit: (event: string, data: unknown) =>
+      emissions.push({ target: id, except: [], event, data, viaIo: false }),
+    to: (target: string) => record(target, [], false),
   } as unknown as Socket);
 
   return {
@@ -242,11 +262,11 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
    * lirait la base qu'au départ laisserait Bob suivre Alice pendant les huit
    * heures restantes — c'est-à-dire le symptôme de l'issue, à un instant près.
    *
-   * Et l'épingle de Bob ne doit pas simplement se FIGER : la retraction ciblée
-   * est ce qui la retire. Une position réelle figée est ce que l'en-tête du
-   * handler appelle « un défaut de sécurité avant d'être un défaut d'affichage ».
+   * L'épingle de Bob se FIGE alors sur la dernière position reçue, et c'est
+   * l'arrêt — non filtré — qui la retire. Ce que ce témoin garde est la coupure
+   * du FLUX ; le témoin de l'arrêt garde le retrait.
    */
-  it('un blocage posé APRÈS le départ coupe les mises à jour et RETIRE l\'épingle', async () => {
+  it('un blocage posé APRÈS le départ coupe les mises à jour', async () => {
     const blocks: Record<string, readonly string[]> = {};
     const world = makeWorld({ blocks });
     const alice = world.makeSocket(ALICE_SOCKET);
@@ -258,16 +278,49 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
     await world.handler.handleLiveLocationUpdate(alice, { ...LYON, conversationId: CONV_ID });
 
     expect(updated(world.emissions)[0].except).toContain(BOB_SOCKET);
-    const targeted = stopped(world.emissions).filter(e => e.target === BOB_SOCKET);
-    expect(targeted).toHaveLength(1);
   });
 
   /**
-   * UNE RÉTRACTATION EXCLUT CEUX QUI N'ONT RIEN REÇU, ET PERSONNE DE PLUS.
-   * Bob était bloqué au départ : il n'a pas d'épingle, le retrait ne le
-   * concerne pas. Carol en a une : il doit lui parvenir.
+   * LA PORTE QU'UNE PREMIÈRE VERSION DE CE LOT AVAIT OUVERTE, et qui était PIRE
+   * que le défaut qu'elle fermait (trouvée par l'audit adversarial du lot).
+   *
+   * `getBlockRelatedUserIds` rend l'ensemble bidirectionnel ENTIER du
+   * partageur, à l'échelle du DÉPÔT et sans notion de conversation — son
+   * doc-comment le dit : « an id in this set that owns no socket contributes
+   * nothing to AN EXCLUSION LIST ». Une rétractation CIBLÉE l'inversait en liste
+   * de DESTINATAIRES, adressée par `io.to(socketId)`, donc hors room et hors
+   * appartenance : Dave, qui n'est pas dans « Rando » et n'a aucun lien avec
+   * Alice, apprenait — par son propre blocage, et à ~1 coup/minute — l'existence
+   * d'un identifiant de conversation et d'un partage de position d'Alice.
    */
-  it('l\'ARRÊT exclut le pair bloqué au départ et atteint les autres', async () => {
+  it('un bloqueur ÉTRANGER à la conversation ne reçoit RIEN, jamais', async () => {
+    const blocks: Record<string, readonly string[]> = {};
+    const world = makeWorld({ blocks });
+    const alice = world.makeSocket(ALICE_SOCKET);
+    await share(world, alice);
+
+    // Dave bloque Alice. Il n'est PAS participant de ce fil.
+    blocks[DAVE] = [ALICE];
+    world.advance(61_000);
+    await world.handler.handleLiveLocationUpdate(alice, { ...LYON, conversationId: CONV_ID });
+    await world.handler.handleLiveLocationStop(alice, { conversationId: CONV_ID });
+    world.handler.endSessionsForClosedConversation(CONV_ID);
+
+    expect(world.emissions.filter(e => e.target === DAVE_SOCKET)).toEqual([]);
+    // Et la propriété STRUCTURELLE qui le garantit : aucune émission de ce
+    // handler n'est adressée à un id de SOCKET. Tout part à un salon, ou au
+    // socket qui vient de rejoindre (le rattrapage, par `socket.emit`).
+    const socketIds = [ALICE_SOCKET, BOB_SOCKET, CAROL_SOCKET, DAVE_SOCKET];
+    expect(world.emissions.filter(e => socketIds.includes(e.target) && e.viaIo)).toEqual([]);
+  });
+
+  /**
+   * UNE RÉTRACTATION NE SE FILTRE PAS. Elle ne porte aucune position
+   * (`{conversationId, userId, stoppedAt}`), et c'est le seul chemin qui RETIRE
+   * une épingle : l'exclure d'un pair qui en porte une la laisserait plantée
+   * sur une position réelle jusqu'à huit heures.
+   */
+  it('l\'ARRÊT part au salon ENTIER, sans exclusion', async () => {
     const world = makeWorld({ blocks: { [ALICE]: [BOB] } });
     const alice = world.makeSocket(ALICE_SOCKET);
     await share(world, alice);
@@ -275,17 +328,54 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
 
     const stop = stopped(world.emissions).filter(e => e.target === ROOM);
     expect(stop).toHaveLength(1);
-    expect(stop[0].except).toContain(BOB_SOCKET);
+    expect(stop[0].except).toEqual([]);
   });
 
-  it('l\'EXPIRATION diffuse le retrait au salon en excluant le pair bloqué', async () => {
+  it('l\'EXPIRATION diffuse le retrait au salon entier, sans exclusion', async () => {
     const world = makeWorld({ blocks: { [ALICE]: [BOB] } });
     await share(world, world.makeSocket(ALICE_SOCKET), 30);
     world.handler.endSessionsForClosedConversation(CONV_ID);
 
     const stop = stopped(world.emissions).filter(e => e.target === ROOM);
     expect(stop).toHaveLength(1);
-    expect(stop[0].except).toContain(BOB_SOCKET);
+    expect(stop[0].except).toEqual([]);
+  });
+
+  /**
+   * UN `location:live-stop` SANS PARTAGE. Les quatre gardes de ce verbe sont
+   * Zod, le contexte, le débit et l'appartenance : rien n'exige qu'un partage
+   * ait jamais existé. Une première version de ce lot en tirait une exclusion
+   * depuis une session absente — c'est-à-dire aucune, servie comme si c'était
+   * une décision. La règle unique rend la question sans objet.
+   */
+  it('un ARRÊT sans partage en cours diffuse quand même au salon entier', async () => {
+    const world = makeWorld({ blocks: { [ALICE]: [BOB] } });
+    const alice = world.makeSocket(ALICE_SOCKET);
+    await world.handler.handleLiveLocationStop(alice, { conversationId: CONV_ID });
+
+    const stop = stopped(world.emissions).filter(e => e.target === ROOM);
+    expect(stop).toHaveLength(1);
+    expect(stop[0].except).toEqual([]);
+  });
+
+  /**
+   * UN RE-DÉPART (second appareil : « la propriété est au DERNIER qui démarre »)
+   * n'a plus rien à réconcilier. Sous la règle « la rétractation exclut
+   * l'ensemble retenu », le second départ écrasait l'entrée avec un ensemble
+   * frais et l'arrêt excluait donc un pair qui portait l'épingle du PREMIER
+   * départ. Plus aucun état ne porte le retrait.
+   */
+  it('un RE-DÉPART ne fait pas perdre le retrait au pair bloqué entre-temps', async () => {
+    const blocks: Record<string, readonly string[]> = {};
+    const world = makeWorld({ blocks });
+    const alice = world.makeSocket(ALICE_SOCKET);
+    await share(world, alice);
+    blocks[BOB] = [ALICE];
+    await share(world, alice);
+    await world.handler.handleLiveLocationStop(alice, { conversationId: CONV_ID });
+
+    const stop = stopped(world.emissions).filter(e => e.target === ROOM);
+    expect(stop[stop.length - 1].except).toEqual([]);
   });
 
   /**
@@ -294,34 +384,32 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
    * c'est ce qui laisse les cinq suites existantes du handler vertes.
    */
   /**
-   * LA MINUTERIE D'EXPIRATION RELIT LE REGISTRE, elle ne diffuse pas depuis la
-   * session qu'elle a CAPTURÉE au départ (#16745). Huit heures séparent les
-   * deux, et `blockRelated` a pu grandir entre-temps : diffuser depuis la
-   * capture enverrait le retrait aux pairs que le partage a cessé de servir.
+   * LA MINUTERIE D'EXPIRATION diffuse elle aussi sans exclusion — y compris
+   * vers un pair bloqué APRÈS le départ, qui est précisément celui dont
+   * l'épingle doit partir.
    */
-  it('le retrait à l\'expiration exclut un pair bloqué APRÈS le départ', async () => {
+  it('le retrait à l\'expiration part au salon entier, pair bloqué en cours de route compris', async () => {
     jest.useFakeTimers();
     try {
       const blocks: Record<string, readonly string[]> = {};
       const world = makeWorld({ blocks });
       const alice = world.makeSocket(ALICE_SOCKET);
-      // DEUX minutes, et pas une : la mise à jour qui déclenche le
-      // rafraîchissement arrive à 61 s, et la borne du terme
-      // (`now >= expiresAt`) la refuserait AVANT d'y arriver sur un partage
-      // d'une minute — le témoin passerait alors au vert pour la mauvaise
-      // raison, sans qu'aucun rafraîchissement ait eu lieu.
+      // DEUX minutes : la mise à jour qui déclenche le rafraîchissement arrive à
+      // 61 s, et la borne du terme la refuserait sur un partage d'une minute —
+      // le témoin passerait au vert sans qu'aucun rafraîchissement ait eu lieu.
       await share(world, alice, 2);
 
       blocks[ALICE] = [BOB];
       world.advance(61_000);
       await world.handler.handleLiveLocationUpdate(alice, { ...LYON, conversationId: CONV_ID });
+      expect(updated(world.emissions)[0].except).toContain(BOB_SOCKET);
 
       jest.advanceTimersByTime(130_000);
       await Promise.resolve();
 
       const roomStop = stopped(world.emissions).filter(e => e.target === ROOM);
       expect(roomStop).toHaveLength(1);
-      expect(roomStop[0].except).toContain(BOB_SOCKET);
+      expect(roomStop[0].except).toEqual([]);
     } finally {
       jest.useRealTimers();
     }

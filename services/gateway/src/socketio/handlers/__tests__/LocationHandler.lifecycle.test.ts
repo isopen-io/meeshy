@@ -65,6 +65,12 @@ function makeSocket(id: string): Socket {
   const toRoom = { emit: jest.fn() };
   return {
     id,
+    // `rooms` MANQUAIT au double (#16745) : le rattrapage revérifie
+    // l'appartenance APRÈS son `await`, et la room EST l'autorisation mise en
+    // cache de ce chemin. Un double qui ne sait pas dans quelles rooms il est
+    // ne peut attester aucun rejeu. Socket.IO y met l'id du socket et chaque
+    // room jointe ; le double aussi.
+    rooms: new Set([id, ROOMS.conversation(NORMALIZED_CONV_ID), ROOMS.conversation(OTHER_CONV_ID)]),
     emit: jest.fn(),
     to: jest.fn<any>().mockReturnValue(toRoom),
     _toRoom: toRoom,
