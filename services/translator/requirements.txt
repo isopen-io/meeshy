@@ -254,7 +254,7 @@ pytest-asyncio==0.26.0
 pytest-cov==7.1.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
 httpx==0.24.1
-httpcore==0.17.3
+httpcore==0.18.0
 # anyio 4.15.0 (publiée le 2026-09-02 à 21:46 UTC) fait passer ses SOUS-MODULES en
 # import paresseux : `anyio.abc` cesse d'être atteignable depuis un `import anyio`
 # seul. httpcore 0.17.3 — épinglé vieux juste au-dessus — annote
