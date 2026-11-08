@@ -1212,11 +1212,7 @@ final class ComposerDrawingWiringGuardTests: XCTestCase {
     }
 
     private func surfaceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneSurface.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
     }
 
     private func compact(_ t: String) -> String {
@@ -1452,11 +1448,7 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
     }
 
     private func surfaceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneSurface.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
     }
 
     private func compact(_ t: String) -> String {
