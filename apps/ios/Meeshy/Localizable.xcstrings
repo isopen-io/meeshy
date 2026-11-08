@@ -9732,6 +9732,53 @@
         }
       }
     },
+    "circles.settings.shareListening.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عندما يعمل Apple Music على هذا الـ iPhone ويكون Meeshy مفتوحًا، يرى هذا الشخص أنك تستمع إلى الموسيقى؛ والعنوان فقط إذا منحته إياه في طقس الدم. لا تتم مشاركة رسائلك الصوتية أبدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn Apple Music auf diesem iPhone läuft und Meeshy geöffnet ist, sieht diese Person, dass du Musik hörst; den Titel nur, wenn du ihn ihr im Blut-Ritual gewährt hast. Deine Sprachnachrichten werden nie geteilt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When Apple Music is playing on this iPhone and Meeshy is open, this person sees that you’re listening to music; the title only if you granted it to them in the Blood ritual. Your voice messages are never shared."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuando Apple Music suena en este iPhone y Meeshy está abierto, esta persona ve que escuchas música; el título, solo si se lo concediste en el ritual de Sangre. Tus mensajes de voz nunca se comparten."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand Apple Music joue sur cet iPhone et que Meeshy est ouvert, cette personne voit que vous écoutez de la musique ; le titre, seulement si vous le lui avez accordé au rituel du Sang. Vos messages vocaux ne sont jamais partagés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando Apple Music è in riproduzione su questo iPhone e Meeshy è aperta, questa persona vede che stai ascoltando musica; il titolo solo se gliel’hai concesso nel rituale del Sangue. I tuoi messaggi vocali non vengono mai condivisi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando o Apple Music está tocando neste iPhone e o Meeshy está aberto, essa pessoa vê que você está ouvindo música; o título, só se você concedeu no ritual de Sangue. Suas mensagens de voz nunca são compartilhadas."
+          }
+        }
+      }
+    },
     "circles.sheet.close": {
       "extractionState": "manual",
       "localizations": {
@@ -32252,6 +32299,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vê um vídeo"
+          }
+        }
+      }
+    },
+    "listening.share.accessDenied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسمح بالوصول إلى Apple Music من الإعدادات لمشاركة ما تستمع إليه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erlaube in den Einstellungen den Zugriff auf Apple Music, um zu teilen, was du hörst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow access to Apple Music in Settings to share what you’re listening to."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite el acceso a Apple Music en Ajustes para compartir lo que escuchas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisez l’accès à Apple Music dans Réglages pour partager ce que vous écoutez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consenti l’accesso ad Apple Music in Impostazioni per condividere cosa ascolti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permita o acesso ao Apple Music em Ajustes para compartilhar o que você está ouvindo."
           }
         }
       }
