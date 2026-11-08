@@ -51,7 +51,7 @@ public struct TagInputField: View {
     }
 
     private var chips: some View {
-        FlowLayout(spacing: MeeshySpacing.xs) {
+        FlowLayout(itemSpacing: 0, lineSpacing: MeeshySpacing.xs) {
             ForEach(selectedTags, id: \.self) { tag in
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(tag)

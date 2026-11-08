@@ -53,7 +53,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
     /// Une surface qui DOIT couvrir le canvas (le dessin) passe par
     /// `canvasOverlay`, le paramètre qui pose DANS la carte.
     func test_aucunRail_nEstMonteDansLeCalqueDeLaScene() throws {
-        let scene = try bloc("privatevarsceneLayer:someView{", jusqua: "privatevarchromeLayer:someView{")
+        let scene = try bloc("varsceneLayer:someView{", jusqua: "varchromeLayer:someView{")
         XCTAssertFalse(scene.isEmpty)
         for interdit in ["floatingRail", "ComposerTrailingRail(", "lowToolRow", ".overlay(alignment:"] {
             XCTAssertFalse(scene.contains(interdit),
@@ -77,7 +77,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
         XCTAssertTrue(code[debut.upperBound...].contains("composingFloors"), "La scène libre pose les étages du bas.")
         XCTAssertTrue(code[etages.upperBound...].contains(
             "HStack(alignment:isRoomy?.center:.bottom,spacing:0){Spacer(minLength:0)iftrailingRailIsShown{ComposerTrailingRail("))
-        let scene = try bloc("privatevarsceneLayer:someView{", jusqua: "privatevarchromeLayer:someView{")
+        let scene = try bloc("varsceneLayer:someView{", jusqua: "varchromeLayer:someView{")
         XCTAssertFalse(scene.contains("restChrome"), "le repos est monté dans le calque de la scène")
         XCTAssertFalse(scene.contains("railsLayer"), "les rails du grand écran sont montés dans le calque de la scène")
     }

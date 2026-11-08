@@ -270,9 +270,7 @@ public enum StoryExportIntro {
 
     /// First letter of up to two words, uppercased — mirrors `MeeshyAvatar`.
     static func makeInitials(_ name: String) -> String {
-        let words = name.split(separator: " ").prefix(2)
-        let letters = words.compactMap { $0.first }.map(String.init)
-        return letters.joined().uppercased()
+        NameInitials.of(name)
     }
 
     private static func drawCentredInRect(_ text: String,

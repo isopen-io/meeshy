@@ -440,6 +440,7 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
     /// mémoire : c'est ce compte-là que la file prouve contre sa base.
     func test_theNotificationReply_enqueuesItsComment_throughTheProvenEntry() throws {
         let code = try source("Features/Main/Services/NotificationActionHandler.swift")
+            + source("Features/Main/Services/NotificationActionHandler+SocialActions.swift")
         XCTAssertTrue(code.contains("guard let owner = NotificationReplyFailure.author(token: authTokenProvider(), userInfo: userInfo) else {"),
                       "L'auteur de la réponse ne vient plus du jeton.")
         XCTAssertTrue(code.contains("replyQueue.enqueueComment(comment, ownerId: owner)"))

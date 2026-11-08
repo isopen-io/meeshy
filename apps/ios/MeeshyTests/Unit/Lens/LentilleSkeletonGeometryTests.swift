@@ -134,8 +134,13 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
             "LentilleConversationRow.swift doit dimensionner l'anneau de son avatar avec LentilleMetrics.Avatar.size, même namespace que le placeholder du squelette"
         )
         XCTAssertTrue(
-            realRowCode.contains("context: LentilleMetrics.Avatar.context"),
-            "LentilleConversationRow.swift doit passer LentilleMetrics.Avatar.context à MeeshyAvatar — §0 : réutiliser .conversationHeaderCollapsed (44pt), jamais .custom(44)"
+            realRowCode.contains("style: .lentille"),
+            "LentilleConversationRow.swift doit monter l'avatar partagé en style .lentille"
+        )
+        let avatarCode = normalizedCode(try source(at: "Meeshy/Features/Main/Views/ConversationRowAvatar.swift"))
+        XCTAssertTrue(
+            avatarCode.contains("context: LentilleMetrics.Avatar.context"),
+            "ConversationRowAvatar.swift (style .lentille) doit passer LentilleMetrics.Avatar.context à MeeshyAvatar — §0 : réutiliser .conversationHeaderCollapsed (44pt), jamais .custom(44)"
         )
     }
 

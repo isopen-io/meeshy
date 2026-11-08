@@ -35,9 +35,17 @@ enum StoryExportLanguageResolver {
         return langs
     }
 
-    /// Première langue préférée de l'utilisateur qui figure parmi `available`.
+    /// Langue gravée par défaut : la descente UNIQUE du Prisme
+    /// (`PrismTranslationResolver`), la même que `StoryItem.resolvedContent`
+    /// — codes normalisés (`en-US` sert `en`, `FR` sert `fr`), langues vides
+    /// ignorées, et l'orthographe de `available` rendue telle quelle.
     /// `nil` = graver le texte original (aucune préférence ne correspond).
     static func defaultLanguage(available: [String], preferred: [String]) -> String? {
-        preferred.first { available.contains($0) }
+        PrismTranslationResolver.resolve(
+            originalLanguage: nil,
+            candidates: available.map { PrismCandidate(language: $0, value: $0) },
+            preferredLanguages: preferred,
+            isServable: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        )?.value
     }
 }

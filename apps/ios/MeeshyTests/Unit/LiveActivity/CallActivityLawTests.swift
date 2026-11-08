@@ -168,4 +168,8 @@ final class CallActivityLawTests: XCTestCase {
         XCTAssertEqual(CallActivityLaw.initials(of: "Jean Pierre Martin"), "JP")
         XCTAssertEqual(CallActivityLaw.initials(of: "  "), "")
     }
+
+    func test_initials_parenthesizedNickname_keepsOnlyLetters() {
+        XCTAssertEqual(CallActivityLaw.initials(of: "Théo (foot)"), "TF")
+    }
 }

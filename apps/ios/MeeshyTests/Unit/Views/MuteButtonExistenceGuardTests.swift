@@ -112,6 +112,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     private func reelsPlayerUnit() throws -> String {
         try [
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            "Meeshy/Features/Main/Views/ReelPageView.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift",
         ].map { try source($0) }.joined(separator: "\n")
     }
@@ -127,6 +128,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
             "Meeshy/Features/Main/Views/PostDetailView.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            "Meeshy/Features/Main/Views/ReelPageView.swift",
             // Le cluster vidéo vit ici depuis la découpe #4628 : une garde
             // NÉGATIVE qui ne le lit pas cesse silencieusement de protéger la
             // moitié de la surface qu'elle nomme.

@@ -360,11 +360,7 @@ public struct UserProfileSheet: View {
     // MARK: - Toast Helper
 
     func postToast(_ message: String, isSuccess: Bool) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": isSuccess]
-        )
+        FeedbackToastCenter.post(message, isSuccess: isSuccess)
     }
 
     // MARK: - Connection Actions
@@ -666,7 +662,7 @@ public struct UserProfileSheet: View {
     // MARK: - Helpers
 
     func formatRegistrationDate(_ date: Date) -> String {
-        date.formatted(.dateTime.year().month(.wide).day().locale(Locale(identifier: "fr_FR")))
+        date.formatted(.dateTime.year().month(.wide).day())
     }
 
     /// Sans image, rien ne s'ouvre : un plein écran de l'avatar à initiales n'a rien à montrer.

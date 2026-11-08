@@ -111,6 +111,9 @@ final class ComposerSceneReferencesTests: XCTestCase {
     // MARK: - Le pied est MONTÉ, et ALIMENTÉ
 
     private func source(_ chemin: String) throws -> String {
+        if chemin == "ComposerSceneSurface.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
