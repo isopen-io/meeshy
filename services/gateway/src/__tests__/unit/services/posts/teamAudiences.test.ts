@@ -96,7 +96,7 @@ describe('filterPostConsumers — un collègue de l\'équipe lit les cercles de 
   it.each(CIRCLES)('%s : admet les comptes de l\'équipe, jamais un utilisateur ordinaire, AUDIT, un compte parti ni un rôle inconnu', async (visibility) => {
     const admitted = await filterPostConsumers({ prisma: world(), authorId: AUTHOR, visibility, candidateUserIds: READERS });
     const expected = visibility === 'ACQUAINTANCES' ? [COLLEAGUE, ADMIN2, LINKED_FRIEND] : [COLLEAGUE, ADMIN2];
-    expect(admitted.filter((id) => id !== BLOCKER)).toEqual(expected);
+    expect(admitted).toEqual(expected);
   });
 
   it('le blocage d\'un collègue l\'écarte, dans le sens où il a bloqué l\'auteur', async () => {
@@ -164,6 +164,15 @@ describe('les énumérateurs d\'audience ajoutent les collègues aux liens réel
     expect(circles.close).not.toContain(LINKED_FRIEND);
   });
 
+  it('loadFeedCircles ne range pas un collègue mineur déclaré chez un lecteur adulte de l\'équipe', async () => {
+    const prisma = world([{ id: AUTHOR, role: 'ADMIN' }, { id: COLLEAGUE, role: 'MODERATOR', birthDate: CHILD }, { id: ADMIN2, role: 'BIGBOSS' }]);
+    const circles = await loadFeedCircles({ prisma, userId: AUTHOR });
+    for (const ring of [circles.acquaintance, circles.close, circles.blood]) {
+      expect(ring).toContain(ADMIN2);
+      expect(ring).not.toContain(COLLEAGUE);
+    }
+  });
+
   it('loadFeedCircles ne range aucun collègue pour un lecteur ordinaire', async () => {
     const circles = await loadFeedCircles({ prisma: world(), userId: ORDINARY });
     expect(circles).toEqual({ acquaintance: [], close: [], blood: [] });
@@ -175,6 +184,11 @@ describe('resolveEntourage — l\'entourage d\'un compte de l\'équipe comprend 
     const { ids } = await resolveEntourage(world(), { ownerId: AUTHOR, key: 'circlePublicationPost' });
     expect(ids).toEqual(expect.arrayContaining([COLLEAGUE, ADMIN2]));
     expect(ids).not.toEqual(expect.arrayContaining([ORDINARY, AUDITOR, GONE, UNKNOWN_ROLE, BLOCKER]));
+  });
+
+  it('un propriétaire mineur déclaré ne prévient aucun collègue adulte sans lien (le bouclier des mineurs tient)', async () => {
+    const prisma = world([{ id: AUTHOR, role: 'MODERATOR', birthDate: CHILD }, { id: COLLEAGUE, role: 'ADMIN' }, { id: ADMIN2, role: 'BIGBOSS' }]);
+    expect((await resolveEntourage(prisma, { ownerId: AUTHOR, key: 'circlePublicationPost' })).ids).toEqual([]);
   });
 
   it('« Personne » ferme l\'entourage même entre collègues', async () => {
