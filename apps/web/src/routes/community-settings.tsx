@@ -1,5 +1,5 @@
 import { useQuery, type InfiniteData } from '@tanstack/react-query';
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
@@ -119,7 +119,10 @@ export default function CommunitySettingsScreen() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [previews, setPreviews] = useState<Previews>({});
+  const [images, setImages] = useState<Readonly<Partial<Record<CommunityImageKind, string>>>>({});
   const inputs = useRef<Partial<Record<CommunityImageKind, HTMLInputElement | null>>>({});
+  const uploads = useRef<Partial<Record<CommunityImageKind, AbortController>>>({});
+  useEffect(() => () => Object.values(uploads.current).forEach((controller) => controller?.abort()), []);
   const [deps] = useState<CommunityActionDeps>(() => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine }));
 
   const detail = useQuery(
@@ -136,7 +139,10 @@ export default function CommunitySettingsScreen() {
   );
   const community = detail.data;
   const refused = detail.error instanceof ApiError && (detail.error.status === 403 || detail.error.status === 404);
-  const draft = edited ?? (community === undefined ? null : settingsDraftOf(community));
+  /* Une image téléversée est un PATCH, jamais un brouillon complet : posée sur la fiche
+     COURANTE au rendu, elle n'emporte pas un nom lu avant un renommage venu d'ailleurs. */
+  const base = edited ?? (community === undefined ? null : settingsDraftOf(community));
+  const draft = base === null ? null : { ...base, ...images };
   const changes = community === undefined || draft === null ? null : settingsChangesOf(community, draft);
   const changed = changes !== null && (!changes.ok || changes.body !== null);
 
@@ -151,13 +157,16 @@ export default function CommunitySettingsScreen() {
     event.currentTarget.value = '';
     if (file === undefined || community === undefined) return;
     const preview = URL.createObjectURL(file);
+    const controller = new AbortController();
+    uploads.current[kind]?.abort();
+    uploads.current = { ...uploads.current, [kind]: controller };
     setPreviews((current) => ({ ...current, [kind]: preview }));
     setNotice(null);
-    const outcome = await performCommunityImageUpload({ kind, file, deps });
-    URL.revokeObjectURL(preview);
+    const outcome = await performCommunityImageUpload({ kind, file, deps, signal: controller.signal }).finally(() => URL.revokeObjectURL(preview));
+    if (controller.signal.aborted) return;
     setPreviews((current) => withoutKind(current, kind));
     if (outcome.status === 'uploaded') {
-      edit({ [kind]: outcome.url });
+      setImages((current) => ({ ...current, [kind]: outcome.url }));
       setNotice({ key: UPLOADED[kind], tone: 'status', field: null });
       return;
     }
@@ -177,7 +186,10 @@ export default function CommunitySettingsScreen() {
     const outcome = await performUpdateCommunitySettings({ community, draft, deps });
     setSaving(false);
     setNotice(noticeOfSave(outcome));
-    if (outcome.status === 'saved' || outcome.status === 'unchanged') setEdited(null);
+    if (outcome.status === 'saved' || outcome.status === 'unchanged') {
+      setEdited(null);
+      setImages({});
+    }
   };
 
   const remove = async () => {
