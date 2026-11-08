@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withOrphanedSenderRepair } from './messaging/withOrphanedSenderRepair';
+import { applyPersonalHistoryHiding, NO_PERSONAL_HIDING, type PersonalHistoryHiding } from './personalHistoryFilter';
 
 interface ParticipantStatEntry {
   messageCount: number;
@@ -252,8 +253,23 @@ export class ConversationMessageStatsService {
    * lecteur borné ne lit JAMAIS dans celui d'un lecteur qui ne l'est pas — ce
    * serait la fuite de #17076 par le cache, qu'aucune garde de route ne verrait.
    */
-  private cacheKey(conversationId: string, historyFloor: Date | null): string {
-    return historyFloor ? `${conversationId}#${historyFloor.getTime()}` : conversationId;
+  private cacheKey(
+    conversationId: string,
+    historyFloor: Date | null,
+    hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
+  ): string {
+    if (!historyFloor) return conversationId;
+    // Le masquage PERSONNEL entre dans la clé : deux lecteurs de même plancher
+    // mais de masquages différents ne voient pas le même compte, et partager leur
+    // seau servirait à l'un ce que l'autre a effacé pour lui — la même fuite par
+    // le cache, d'un cran plus fin.
+    const mask = hiding.clearHistoryBefore
+      ? `${hiding.clearHistoryBefore.getTime()}`
+      : '0';
+    const hidden = hiding.hiddenMessageIds.length > 0
+      ? `:${[...hiding.hiddenMessageIds].sort().join(',')}`
+      : '';
+    return `${conversationId}#${historyFloor.getTime()}@${mask}${hidden}`;
   }
 
   private isValid(entry?: CacheEntry | null): entry is CacheEntry {
@@ -532,10 +548,17 @@ export class ConversationMessageStatsService {
   async getStats(
     prisma: PrismaClient,
     conversationId: string,
-    options?: { readonly historyFloor?: Date | null }
+    options?: {
+      readonly historyFloor?: Date | null;
+      /**
+       * Le masquage PERSONNEL du lecteur, qui n'a de sens que sur la passe
+       * BORNÉE — voir `aggregateFloored`. La ligne partagée ne le reçoit jamais.
+       */
+      readonly hiding?: PersonalHistoryHiding;
+    }
   ): Promise<Record<string, unknown>> {
     const historyFloor = options?.historyFloor ?? null;
-    const key = this.cacheKey(conversationId, historyFloor);
+    const key = this.cacheKey(conversationId, historyFloor, options?.hiding ?? NO_PERSONAL_HIDING);
 
     const cached = this.cache.get(key);
     if (this.isValid(cached)) {
@@ -543,7 +566,12 @@ export class ConversationMessageStatsService {
     }
 
     if (historyFloor) {
-      const shaped = await this.aggregateFloored(prisma, conversationId, historyFloor);
+      const shaped = await this.aggregateFloored(
+        prisma,
+        conversationId,
+        historyFloor,
+        options?.hiding ?? NO_PERSONAL_HIDING
+      );
       this.setCache(key, shaped);
       return shaped;
     }
@@ -572,11 +600,29 @@ export class ConversationMessageStatsService {
   private async aggregateFloored(
     prisma: PrismaClient,
     conversationId: string,
-    historyFloor: Date
+    historyFloor: Date,
+    hiding: PersonalHistoryHiding
   ): Promise<Record<string, unknown>> {
+    // Le masquage PERSONNEL s'applique ICI et nulle part ailleurs dans ce
+    // service, et l'asymétrie est la raison même du lot.
+    //
+    // `recompute()` écrit la ligne PARTAGÉE : y appliquer un masquage personnel
+    // poserait la vue d'un lecteur dans le compteur de tous. Son exemption est
+    // juste, et elle le dit — « une valeur stockée une fois et lue par tout le
+    // monde ». Cette passe-ci n'est ni stockée ni partagée : elle est calculée
+    // POUR UN LECTEUR, sur sa fenêtre, et jetée dans son seau. L'exemption ne la
+    // couvre donc pas, et un compte qui ne correspond pas au fil que ce lecteur
+    // peut dérouler serait un compte faux pour lui.
+    //
+    // `applyPersonalHistoryHiding` sait fusionner son plancher avec le nôtre
+    // (`mergeCreatedAtLowerBound`) : les deux bornes se composent, la plus haute
+    // gagne.
     const messages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
       prisma.message.findMany({
-        where: { conversationId, deletedAt: null, createdAt: { gte: historyFloor } },
+        where: applyPersonalHistoryHiding(
+          { conversationId, deletedAt: null, createdAt: { gte: historyFloor } },
+          hiding
+        ),
         select: AGGREGABLE_MESSAGE_SELECT,
       })
     );

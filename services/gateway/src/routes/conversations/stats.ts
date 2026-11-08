@@ -4,6 +4,7 @@ import { conversationMessageStatsService } from '../../services/ConversationMess
 import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { loadPersonalHistoryHiding, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -167,7 +168,25 @@ export function registerStatsRoutes(
         reader: historyReaderFromAuthContext(authContext),
       });
 
-      const stats = await conversationMessageStatsService.getStats(prisma, conversationId, { historyFloor });
+      // Le masquage PERSONNEL n'est chargé que si un plancher borne déjà ce
+      // lecteur, et l'asymétrie est voulue : sans plancher, la réponse est la
+      // ligne PARTAGÉE — « une valeur stockée une fois et lue par tout le
+      // monde », que le masquage d'un lecteur n'a pas à déplacer, et dont le
+      // seau de cache sert tout le monde. Sous plancher, la passe est déjà POUR
+      // UN LECTEUR : un compte qui ne correspond pas au fil qu'il peut dérouler
+      // serait un compte faux pour lui. Deux lectures de plus sur un chemin qui
+      // agrège déjà sa fenêtre entière.
+      const hiding = historyFloor
+        ? await loadPersonalHistoryHiding(prisma, {
+            userId: authContext.type === 'anonymous' ? null : authContext.userId,
+            conversationId,
+          })
+        : NO_PERSONAL_HIDING;
+
+      const stats = await conversationMessageStatsService.getStats(prisma, conversationId, {
+        historyFloor,
+        hiding,
+      });
 
       const participantStats = (stats.participantStats ?? {}) as Record<string, unknown>;
       const participantIds = Object.keys(participantStats);

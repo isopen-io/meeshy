@@ -204,7 +204,13 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
 /** `services/` — même règle, troisième racine. */
 const SERVICE_SURFACES: Record<string, Classification> = {
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 2 },
-  'ConversationMessageStatsService.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #17076 — DEUX lectures depuis que la vue d'un lecteur BORNÉ par son plancher
+  // d'historique ne peut plus passer par la ligne partagée : `recompute()`
+  // (toute la conversation, persistée) et `aggregateFloored()` (la fenêtre d'un
+  // lecteur, jamais persistée). Les deux réparent, et pour la même raison — un
+  // `sender` orphelin ferait compter un message sous un auteur inexistant, dans
+  // la ligne de tout le monde comme dans la vue d'un seul.
+  'ConversationMessageStatsService.ts': { kind: 'applies', reads: 2, applications: 2 },
   'messaging/copyAttachments.ts': { kind: 'applies', reads: 1, applications: 1 },
   // #6910 — la relecture de dédoublonnage a QUITTÉ `MessageProcessor.ts` pour
   // `messageDedupProjection.ts` : elle y sert désormais les DEUX gardes (la clé

@@ -64,6 +64,8 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439022';
 const OLD_TIMER_ID = '507f1f77bcf86cd799439033';
 const FLOOR = new Date('2026-11-08T00:00:00.000Z');
+const CLEARED_BEFORE = new Date('2026-11-08T06:00:00.000Z');
+const HIDDEN_MSG_ID = '507f1f77bcf86cd799439077';
 
 // ── 1. La ROUTE résout le plancher du lecteur ─────────────────────────────
 
@@ -72,6 +74,11 @@ function makeRoutePrisma(participantRow: Record<string, unknown> | null) {
     user: { findMany: jest.fn<any>().mockResolvedValue([]) },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(participantRow) },
     conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    // Les deux tables du masquage PERSONNEL — chargées SEULEMENT sous plancher.
+    userConversationPreferences: {
+      findFirst: jest.fn<any>().mockResolvedValue({ clearHistoryBefore: CLEARED_BEFORE }),
+    },
+    userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([{ messageId: HIDDEN_MSG_ID }]) },
   };
 }
 
@@ -119,7 +126,13 @@ describe('GET …/stats — la route passe le plancher du LECTEUR (#17076)', () 
 
     expect(res.statusCode).toBe(200);
     expect(mockGetStats).toHaveBeenCalledTimes(1);
-    expect(mockGetStats.mock.calls[0][2]).toEqual({ historyFloor: FLOOR });
+    expect(mockGetStats.mock.calls[0][2]).toEqual({
+      historyFloor: FLOOR,
+      // Sous plancher, la passe est déjà POUR UN LECTEUR : son masquage
+      // personnel y entre, sans quoi son compte ne correspondrait pas au fil
+      // qu'il peut dérouler.
+      hiding: { clearHistoryBefore: CLEARED_BEFORE, hiddenMessageIds: [HIDDEN_MSG_ID] },
+    });
     await app.close();
   });
 
@@ -141,7 +154,32 @@ describe('GET …/stats — la route passe le plancher du LECTEUR (#17076)', () 
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
 
     expect(res.statusCode).toBe(200);
-    expect(mockGetStats.mock.calls[0][2]).toEqual({ historyFloor: null });
+    expect(mockGetStats.mock.calls[0][2]).toEqual({
+      historyFloor: null,
+      hiding: { clearHistoryBefore: null, hiddenMessageIds: [] },
+    });
+    await app.close();
+  });
+
+  it('sans plancher, le masquage personnel n\'est même pas LU', async () => {
+    // L'asymétrie est voulue, et elle est une mesure : sans plancher la réponse
+    // est la ligne PARTAGÉE, dont le seau sert tout le monde — deux lectures de
+    // plus par appel sur le chemin nominal seraient un coût sans objet.
+    const prisma = makeRoutePrisma({
+      role: 'creator',
+      joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+      shareLinkId: null,
+      historyVisibleFrom: null,
+      permissions: null,
+      anonymousSession: null,
+      user: { role: 'USER' },
+    });
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
+
+    expect(prisma.userConversationPreferences.findFirst).not.toHaveBeenCalled();
+    expect(prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -169,8 +207,11 @@ describe('GET …/stats — la route passe le plancher du LECTEUR (#17076)', () 
  * agrégat « plafonné » servirait les deux et retrancherait un total ; celui-ci
  * ne doit JAMAIS avoir vu la première.
  */
+const NEWCOMER_HIDDEN_ID = '507f1f77bcf86cd799439088';
+
 const MESSAGES = [
   {
+    id: '507f1f77bcf86cd799439087',
     content: 'le secret de la fondation',
     senderId: 'p-old',
     createdAt: new Date('2026-03-04T09:00:00.000Z'),
@@ -180,6 +221,7 @@ const MESSAGES = [
     attachments: [],
   },
   {
+    id: NEWCOMER_HIDDEN_ID,
     content: 'bonjour, je viens d arriver',
     senderId: 'p-new',
     createdAt: new Date('2026-11-08T09:00:00.000Z'),
@@ -191,11 +233,16 @@ const MESSAGES = [
 ];
 
 function makeServicePrisma() {
+  // Le double applique les DEUX clauses que la production émet — la borne basse
+  // de `createdAt` et le `notIn` des ids masqués. Un double qui ignore une clause
+  // rend vert un filtre que la base n'aurait jamais appliqué.
   const findMany = jest.fn<any>().mockImplementation(({ where }: any) =>
     Promise.resolve(
       MESSAGES.filter((m) => {
         const gte = where?.createdAt?.gte as Date | undefined;
-        return !gte || m.createdAt >= gte;
+        const notIn = (where?.id?.notIn ?? []) as string[];
+        if (gte && m.createdAt < gte) return false;
+        return !notIn.includes(m.id);
       })
     )
   );
@@ -279,6 +326,46 @@ describe('ConversationMessageStatsService — agrégation BORNÉE par le planche
     // Et un lecteur SANS plancher ne lit pas dans le seau d'un lecteur borné.
     const full = await service.getStats(prisma, CONV_ID, { historyFloor: null });
     expect(full.totalMessages).toBe(2);
+  });
+
+  it('le masquage PERSONNEL du lecteur borne aussi sa fenêtre', async () => {
+    // Ce cliquet-ci est né d'un AUTRE : `personal-history-hiding-surface-guard`
+    // a refusé la passe bornée sous l'exemption de `recompute()`, dont la raison
+    // écrite — « une valeur stockée une fois et lue par tout le monde » — ne la
+    // décrit pas. Un compte qui ne correspond pas au fil que ce lecteur peut
+    // dérouler est un compte faux POUR LUI.
+    const service = new (ConversationMessageStatsService as any)();
+    const prisma = makeServicePrisma();
+
+    const stats = await service.getStats(prisma, CONV_ID, {
+      historyFloor: FLOOR,
+      hiding: { clearHistoryBefore: null, hiddenMessageIds: [NEWCOMER_HIDDEN_ID] },
+    });
+
+    expect(stats.totalMessages).toBe(0);
+    expect(prisma.message.findMany.mock.calls[0][0].where.id).toEqual({ notIn: [NEWCOMER_HIDDEN_ID] });
+    // Et la borne du plancher SURVIT à la fusion : les deux se composent.
+    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({ gte: FLOOR });
+  });
+
+  it('deux lecteurs de même plancher mais de MASQUAGES différents ne partagent pas de seau', async () => {
+    // Sinon le seau du premier servirait au second ce que le premier a effacé
+    // pour lui — la même fuite par le cache, d'un cran plus fin.
+    const service = new (ConversationMessageStatsService as any)();
+    const prisma = makeServicePrisma();
+
+    const open = await service.getStats(prisma, CONV_ID, {
+      historyFloor: FLOOR,
+      hiding: { clearHistoryBefore: null, hiddenMessageIds: [] },
+    });
+    const masked = await service.getStats(prisma, CONV_ID, {
+      historyFloor: FLOOR,
+      hiding: { clearHistoryBefore: null, hiddenMessageIds: [NEWCOMER_HIDDEN_ID] },
+    });
+
+    expect(open.totalMessages).toBe(1);
+    expect(masked.totalMessages).toBe(0);
+    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
   });
 
   it('invalider une conversation vide TOUS ses seaux, bornés compris', async () => {
