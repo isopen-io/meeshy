@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,7 @@ import me.meeshy.sdk.model.auth.MagicLinkCountdown
 import me.meeshy.ui.component.auth.AuthActionButton
 import me.meeshy.ui.component.auth.AuthContentType
 import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.component.auth.SpamFolderHint
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -241,7 +243,7 @@ private fun MagicLinkCountdownLine(countdown: MagicLinkCountdown?) {
     )
 }
 
-/** « Renvoyer » reste grisé tant que le lien vit ; le « Rien reçu ? » reste actif — c'est alors que les indésirables servent. */
+/** « Renvoyer » reste grisé tant que le lien vit ; la ligne « Rien reçu ? » reste visible — c'est alors que les indésirables servent. */
 @Composable
 private fun MagicLinkResend(state: MagicLinkUiState, onResend: () -> Unit) {
     val resendLabel = stringResource(R.string.auth_magic_resend)
@@ -257,9 +259,6 @@ private fun MagicLinkResend(state: MagicLinkUiState, onResend: () -> Unit) {
             }
         }
         AuthErrorMessage(text = state.errorMessage)
-        AuthInfoDisclosure(
-            label = stringResource(R.string.auth_magic_nothing_label),
-            text = stringResource(R.string.auth_magic_nothing_text),
-        )
+        SpamFolderHint(textAlign = TextAlign.Center, modifier = Modifier.padding(top = MeeshySpacing.xs))
     }
 }

@@ -36,8 +36,6 @@
     <string name="auth_magic_header">Deine E-Mail-Adresse</string>
     <string name="auth_magic_how_label">So funktioniert es</string>
     <string name="auth_magic_invalid">Ungültiger oder abgelaufener Link</string>
-    <string name="auth_magic_nothing_label">Nichts erhalten?</string>
-    <string name="auth_magic_nothing_text">Sieh in deinem Spam-Ordner nach: Die Nachricht könnte dort gelandet sein.</string>
     <string name="auth_magic_resend">Link erneut senden</string>
     <string name="auth_magic_resend_short">Erneut senden</string>
     <string name="auth_magic_send">Link erhalten</string>
@@ -67,7 +65,6 @@
     <string name="email_verification_error_resend_failed">Bestätigungscode konnte nicht erneut gesendet werden</string>
     <string name="email_verification_error_too_many_attempts">Zu viele Versuche. Versuche es in ein paar Minuten erneut.</string>
     <string name="email_verification_error_weak_password">Dieses Passwort ist zu schwach. Wähle ein sichereres.</string>
-    <string name="email_verification_inbox_hint">Öffne dein Postfach und sieh auch im Spam-Ordner nach.</string>
     <string name="email_verification_nav_close">Schließen</string>
     <string name="email_verification_nav_title">E-Mail-Verifizierung</string>
     <string name="email_verification_no_code">Code nicht erhalten?</string>

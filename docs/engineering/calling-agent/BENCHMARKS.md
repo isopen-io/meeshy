@@ -23,3 +23,23 @@ attendait donc la fin de ce délai.
 
 **Limite** : le temps d'inférence NLLB n'entre pas dans la mesure. Pour la chaîne complète, il
 faut lire `call_caption_translation_seconds` sur le staging.
+
+## Cycle 13 — 2026-11-08 — quota de voie rapide (#16782)
+
+- **Ce qu'on mesure** : la voie rapide est maintenue à 40 sous-titres pendant 2 s. Chaque tâche
+  coûte 2 ms de service simulé, sans modèle ML. 20 tâches normales attendent dès le départ.
+  « Avant » est le comportement d'avant le lot, l'ordre strict, simulé par une rafale de 10^9.
+  Deux passes par ligne.
+- **Script** : hors dépôt (`bench_fast_lane_quota.py`, scratchpad du cycle 13). Les témoins
+  `tests/test_fast_lane_quota*.py` en reprennent la propriété.
+
+| workers | quota | p50 / p95 sous-titre | régulières prises (sur 20) | 1ʳᵉ régulière | dernière régulière |
+|---|---|---|---|---|---|
+| 2 | aucun | 47,11 / 48,55 ms | **0** | jamais | – |
+| 2 | N=8 | 47,77 / 51,58 ms | **20** | 19,35 ms | 436,58 ms |
+| 4 | aucun | 23,19 / 24,13 ms | **0** | jamais | – |
+| 4 | N=8 | 23,27 / 25,53 ms | **20** | 19,39 ms | 153,78 ms |
+
+**Lecture** : sans quota, aucune tâche ordinaire n'est servie tant que la voie rapide est
+saturée. Avec N=8, toutes le sont. Côté sous-titre, cela coûte de 0 à 1 ms au p50 et de 1 à 3 ms
+au p95.

@@ -36,8 +36,6 @@
     <string name="auth_magic_header">Votre adresse e-mail</string>
     <string name="auth_magic_how_label">Comment ça marche</string>
     <string name="auth_magic_invalid">Lien invalide ou expiré</string>
-    <string name="auth_magic_nothing_label">Rien reçu ?</string>
-    <string name="auth_magic_nothing_text">Regardez vos indésirables (spam) : le message peut y être tombé.</string>
     <string name="auth_magic_resend">Renvoyer le lien</string>
     <string name="auth_magic_resend_short">Renvoyer</string>
     <string name="auth_magic_send">Recevoir le lien</string>
@@ -67,7 +65,6 @@
     <string name="email_verification_error_resend_failed">Impossible de renvoyer le code de vérification</string>
     <string name="email_verification_error_too_many_attempts">Trop de tentatives. Réessayez dans quelques minutes.</string>
     <string name="email_verification_error_weak_password">Ce mot de passe est trop faible. Choisissez-en un plus robuste.</string>
-    <string name="email_verification_inbox_hint">Ouvrez votre boîte mail, et pensez à regarder dans les indésirables.</string>
     <string name="email_verification_nav_close">Fermer</string>
     <string name="email_verification_nav_title">Vérification de l\'email</string>
     <string name="email_verification_no_code">Vous n\'avez pas reçu le code ?</string>
