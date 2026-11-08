@@ -925,7 +925,7 @@ export class MessageHandler {
       // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
       emitMentionCreated({
-        blockedReaders: editBlocked,
+        readership: editReaders,
         io: this.io,
         newlyMentionedUserIds: await withoutPendingMessageRequests(this.prisma, message.conversationId, editedMentions.newlyMentionedUserIds),
         messageId: message.id,

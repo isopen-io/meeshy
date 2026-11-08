@@ -308,6 +308,38 @@ describe('notifyNewlyMentioned — le PLANCHER D’HISTORIQUE écarte un nommé 
     expect(batch).toHaveBeenCalledTimes(1);
     expect(batch.mock.calls[0]?.[0]).toEqual([NEWCOMER_ID]);
   });
+
+  /**
+   * Et sur `'unknown'` — l'audience irrésolvable — la bannière se TAIT, comme
+   * `message:edited` au même instant. Lire l'ensemble de clés au lieu du
+   * verdict rendait ici un ensemble VIDE, donc poussait le texte à tous les
+   * nommés exactement quand l'autre sortie se fermait.
+   */
+  it('une audience IRRÉSOLVABLE retient la bannière, elle ne l’ouvre pas', async () => {
+    const createMentionNotificationsBatch = jest.fn().mockResolvedValue(1);
+    const prisma = prismaAvecPlancher(true);
+    // La loi lève : ni qui est bloqué, ni qui est autorisé.
+    prisma.participant.findMany = jest.fn(async () => {
+      throw new Error('mongo down');
+    });
+
+    await reconcileEditedMentions({
+      prisma,
+      mentionService: {
+        extractMentionsWithParticipants: jest.fn().mockReturnValue([]),
+        resolveUsernames: jest.fn().mockResolvedValue(new Map()),
+        validateMentionPermissions: jest.fn().mockResolvedValue({ validUserIds: [NEWCOMER_ID] }),
+        createMentions: jest.fn().mockResolvedValue(undefined),
+      } as any,
+      notificationService: { createMentionNotificationsBatch } as any,
+      message: { id: MSG_ID, conversationId: CONV_ID, senderId: 'part_author', expiresAt: null },
+      content: SECRET,
+      explicitMentionedUserIds: [NEWCOMER_ID],
+      editorUserId: AUTHOR_ID,
+    });
+
+    expect(createMentionNotificationsBatch).not.toHaveBeenCalled();
+  });
 });
 
 // ── Site 3 — la reproduction après édition ──────────────────────────────────

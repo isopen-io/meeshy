@@ -439,9 +439,15 @@ async function notifyNewlyMentioned(
     // Sur un message NEUF personne n'est sous plancher (son `createdAt` est
     // postérieur à tout plancher), donc la loi rend `{ kind: 'room' }` sans
     // restreindre : le chemin d'envoi ne paie qu'une requête qui ne rend rien.
-    const blocked = blockedEditKeys(
-      await editReadership(prisma, message.conversationId, message.id, onError),
-    );
+    const readership = await editReadership(prisma, message.conversationId, message.id, onError);
+    // `'unknown'` ⇒ on ne sait NI qui est bloqué, NI qui est autorisé, et la
+    // bannière est une sortie de CONTENU : elle se tait, comme `message:edited`
+    // au même instant. Lire l'ensemble de clés au lieu du verdict rendait ici
+    // un ensemble VIDE, donc poussait le texte à TOUS les nommés exactement
+    // quand l'autre sortie se fermait — une ignorance collapsée en affirmation
+    // (leçon `[]`-vs-`undefined`, cycle 116).
+    if (readership.kind === 'unknown') return;
+    const blocked = blockedEditKeys(readership);
     const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId));
     if (admitted.length === 0) return;
 
