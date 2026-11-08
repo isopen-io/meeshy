@@ -61,10 +61,6 @@ import {
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
-import {
-  filterMessagePayloadForLanguages,
-  groupSocketsByLanguage,
-} from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
 import { agentMayReadMessage, agentReadableMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
@@ -73,6 +69,7 @@ import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest }
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { safeBroadcast } from '../serverEmit';
 import { emitMessageNewBestEffort } from '../messageNewEmission';
+import { emitMessageNewByLanguage } from '../messageNewByLanguage';
 import { readerSignedPlanBestEffort, readerSignedPlanForMessageIdBestEffort } from '../readerSignedDelivery';
 import { editReadership, blockedEditKeys, emitEditedToReaders } from '../editedAudience';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
@@ -1415,6 +1412,11 @@ export class MessageHandler {
       // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
       // Émission et lecture de plan BEST-EFFORT : raison au site unique,
       // `safeBroadcast` (#17026).
+      // UN seul rapporteur de panne pour les deux chemins, et c'est le point
+      // (constat C3 de l'audit) : la délégation par langue posait le SIEN, qui
+      // ne connaît que la `room`. Le `messageId` ne vit qu'ici.
+      const onLiveEmissionError = (error: unknown, audience: string) =>
+        handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, audience, error });
       emitMessageNewBestEffort({
         io: this.io,
         room,
@@ -1426,14 +1428,14 @@ export class MessageHandler {
         hiddenKeys,
         payloadForKey,
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
-          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion, onLiveEmissionError)
           : null,
         readerSigned: await readerSignedPlanBestEffort(
           this.prisma,
           { conversationId: normalizedId, message, attachments: peerPayload.attachments },
           (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
         ),
-      }, (error) => handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
+      }, onLiveEmissionError);
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Offline delivery queue — parity with the REST send path
@@ -1599,74 +1601,28 @@ export class MessageHandler {
   }
 
   /**
-   * Phase B1 — emit `message:new` to a conversation room grouped by each peer's
-   * preferred language, sending a translation-trimmed payload once per distinct
-   * language set (delegating the pure grouping/trimming to unit-tested helpers).
-   * The sender's own sockets are excluded here; their cid-aware payload is sent
-   * separately by the caller.
+   * Phase B1 — `message:new` groupé PAR LANGUE, délégué au site unique
+   * `messageNewByLanguage.ts` (#17086). La doctrine multi-nœud, l'ordre des
+   * deux étapes et l'enrobage PAR AUDIENCE y sont écrits une fois ; cette
+   * méthode ne fournit que ce que SEUL ce porteur sait — ses cartes de sockets.
+   * Opt-in par `SOCKET_LANG_FILTER=true` (OFF par défaut).
    */
-  private _emitMessageNewByLanguage<P extends SocketIOMessage>(
+  private _emitMessageNewByLanguage(
     room: string,
-    payload: P,
-    opts: { excludeUserId?: string; excludeSocketId?: string }
+    payload: SocketIOMessage,
+    opts: { excludeUserId?: string; excludeSocketId?: string },
+    onEmissionError?: (error: unknown, label: string) => void
   ): void {
-    // `adapter.rooms` and the `connectedUsers`/`socketToUser` maps only ever see
-    // THIS node's sockets. On a multi-node deployment (the documented 100k+
-    // msg/s horizontal-scale topology runs the Socket.IO Redis adapter) a
-    // recipient connected to another gateway node is never enumerated here — so
-    // the per-language loop below, which can only resolve locally-connected
-    // sockets, would silently never deliver `message:new` to them. Broadcast the
-    // FULL, untrimmed payload to the room across the cluster FIRST (the Redis
-    // adapter propagates `io.to(room)`), excepting every LOCAL room socket —
-    // each of which the loop below serves with a language-trimmed copy — plus
-    // the sender. Remote sockets thus receive exactly one (unfiltered)
-    // `message:new`; local sockets receive exactly one trimmed copy. On a single
-    // node every room socket is local, so the except-set covers the whole room
-    // and this cross-node broadcast reaches nobody — behavior is unchanged. The
-    // bandwidth trim still applies to every socket whose language IS resolvable
-    // locally (the common co-located case).
-    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
-    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
-    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
-    if (opts.excludeSocketId) exceptForRemote.push(opts.excludeSocketId);
-    this.io.to(room).except(exceptForRemote).emit(SERVER_EVENTS.MESSAGE_NEW, payload);
-
-    if (!localSocketIds || localSocketIds.size === 0) return;
-
-    const originalLanguage = payload.originalLanguage || 'fr';
-    const groups = groupSocketsByLanguage({
-      socketIds: localSocketIds,
-      originalLanguage,
-      excludeUserId: opts.excludeUserId,
-      excludeSocketIds: opts.excludeSocketId ? new Set([opts.excludeSocketId]) : undefined,
+    emitMessageNewByLanguage({
+      io: this.io,
+      room,
+      payload,
+      exclusion: opts,
       socketToUser: (sid) => this.socketToUser.get(sid),
       resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
       userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+      onEmissionError,
     });
-
-    for (const group of groups) {
-      if (group.socketIds.length === 0) continue;
-      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
-      // 5.3 — mesure du gain bande passante (debug, gaté). Permet de prouver la
-      // réduction en staging avant un flip prod. Coût nul quand le flag est OFF.
-      if (process.env.SOCKET_LANG_FILTER === 'true') {
-        const fullBytes = JSON.stringify(payload).length;
-        const filteredBytes = JSON.stringify(filtered).length;
-        handlerLogger.debug('[lang-filter] payload reduced', {
-          fullBytes,
-          filteredBytes,
-          savedPct: fullBytes > 0 ? Math.round((1 - filteredBytes / fullBytes) * 100) : 0,
-          languages: group.languages,
-          originalLanguage,
-        });
-      }
-      // Chain `.to(socketId)` so a single emit fans out to exactly this group's
-      // sockets (mirrors the manager's per-language emit).
-      const [firstSid, ...restSids] = group.socketIds;
-      let emitter: ReturnType<MeeshyIOServer['to']> = this.io.to(firstSid);
-      for (const sid of restSids) emitter = emitter.to(sid);
-      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
-    }
   }
 
   /**

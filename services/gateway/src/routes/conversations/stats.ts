@@ -3,6 +3,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
+import { loadPersonalHistoryHiding, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -146,7 +149,57 @@ export function registerStatsRoutes(
         return refuserCommeIntrouvable(reply);
       }
 
-      const stats = await conversationMessageStatsService.getStats(prisma, conversationId);
+      // **LE PLANCHER DU LECTEUR BORNE L'AGRÉGAT** (#17076). La ligne
+      // `ConversationMessageStats` couvre toute la vie de la conversation ;
+      // servie telle quelle, elle disait à un inscrit entré par un lien
+      // `allowViewHistory: false` quand la conversation a commencé, qui a écrit
+      // combien, et le volume de chaque journée — l'historique exact que le
+      // fil, la recherche, les fils de réponses et les traductions partagées
+      // lui refusent tous, message par message.
+      //
+      // Fail-CLOSED : `loadReaderHistoryFloor` PROPAGE ses erreurs, et le
+      // `catch` de fin de route en fait un 500. C'est l'inverse de la posture
+      // de `personalHistoryFilter` (« cacher est une courtoisie, montrer est le
+      // produit »), et c'est voulu : ce plancher-ci n'est pas une courtoisie,
+      // c'est la confidentialité de l'historique. Une porte de confidentialité
+      // échoue en montrant moins.
+      const reader = historyReaderFromAuthContext(authContext);
+
+      // **LA PORTE, avant le PLANCHER** — le lien répond à DEUX questions sur
+      // la même ligne, et cette route n'en posait qu'une. Un lien ÉCHU ferme la
+      // lecture ; le fil, la recherche, les fils de réponses et les épinglés
+      // posent tous cette porte, avec ce helper et ce lecteur.
+      //
+      // Elle manquait ICI, et l'asymétrie qui rend ça exploitable est écrite
+      // dans `shareLinkGuestsWhere` : la révocation d'un lien ne touche que les
+      // participations ANONYMES (`type: 'anonymous'`). Un inscrit admis par un
+      // lien n'est donc jamais révoqué — sa ligne reste active, et seule la
+      // porte par route l'arrête. Sans elle, cette surface était la SEULE que
+      // l'expiration ne fermait pas : l'agrégat planchéisé y continuait de
+      // servir, indéfiniment, l'activité des jours POSTÉRIEURS à l'expiration.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader })) {
+        return refuseExpiredShareLink(reply);
+      }
+
+      const floor = await loadReaderHistoryFloor(prisma, { conversationId, reader });
+
+      // **Le masquage PERSONNEL ne concerne que la fenêtre par lecteur.** Le
+      // chemin non planchéisé sert une ligne PARTAGÉE, précalculée pour toute
+      // la conversation : rien n'y est par lecteur, donc il n'y a rien à y
+      // masquer — et c'est une asymétrie ASSUMÉE, pas un oubli. Elle ne cache
+      // ni ne révèle : `clear-history` et `delete-for-me` sont des gestes de
+      // CONFORT, dont le dépôt écrit que « cacher est une courtoisie, montrer
+      // est le produit ».
+      const hiding = floor
+        ? await loadPersonalHistoryHiding(prisma, {
+            userId: reader?.kind === 'user' ? reader.userId : null,
+            conversationId,
+          })
+        : NO_PERSONAL_HIDING;
+
+      const stats = floor
+        ? await conversationMessageStatsService.getStatsUnderFloor(prisma, conversationId, floor, hiding)
+        : await conversationMessageStatsService.getStats(prisma, conversationId);
 
       const participantStats = (stats.participantStats ?? {}) as Record<string, unknown>;
       const participantIds = Object.keys(participantStats);
