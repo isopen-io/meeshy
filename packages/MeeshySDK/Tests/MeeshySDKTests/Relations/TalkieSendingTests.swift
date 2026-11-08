@@ -85,13 +85,35 @@ struct TalkieSendingTests {
 
     @Test func unFragmentPart_desQuIlAtteintSaDuree() {
         var fragmenter = TalkieFragmenter()
-        let completed = (0..<12).flatMap { index in
+        let completed = (0..<6).flatMap { index in
             fragmenter.append(Data(repeating: UInt8(index), count: 10), duration: Self.frameDuration, at: Self.start.addingTimeInterval(Double(index)))
         }
         #expect(completed.count == 1)
-        #expect(completed.first?.data.count == 120)
+        #expect(completed.first?.data.count == 60)
         #expect(completed.first?.capturedAt == Self.start)
         #expect(fragmenter.flush() == nil)
+    }
+
+    /// #17094 : le premier fragment part après ~130 ms de voix, plus 250 — c'est autant de moins avant d'entendre.
+    @Test func lePremierFragment_partApresMoinsDe130MsDeVoix() {
+        var fragmenter = TalkieFragmenter()
+        let frames = (1...20).first { _ in
+            !fragmenter.append(Data(count: 10), duration: Self.frameDuration, at: Self.start).isEmpty
+        }
+        #expect(frames.map { Double($0) * Self.frameDuration }.map { $0 <= 0.13 } == true)
+    }
+
+    /// Une prise de parole entière — 30 s, et ce que le micro a capté avant l'accusé — reste sous le plafond du NOMBRE
+    /// de fragments, quelle que soit la fréquence du micro : la passerelle ne coupe jamais une voix trop découpée.
+    @Test(arguments: [48_000.0, 44_100, 32_000, 24_000, 22_050, 16_000])
+    func unePriseDeParoleEntiere_resteSousLePlafondDeFragments(sampleRate: Double) {
+        var fragmenter = TalkieFragmenter()
+        let frameDuration = 1024 / sampleRate
+        let frames = Int(((TalkieContract.maxDuration + 2) / frameDuration).rounded(.up))
+        let fragments = (0..<frames).reduce(0) { count, _ in
+            count + fragmenter.append(Data(count: 200), duration: frameDuration, at: Self.start).count
+        } + (fragmenter.flush() == nil ? 0 : 1)
+        #expect(fragments <= TalkieContract.maxChunks - 40)
     }
 
     @Test func unFragmentPart_avantDeDepasserLePlafondDOctets() {
@@ -137,5 +159,27 @@ struct TalkieSendingTests {
         #expect(SocketEvent.talkieStart.rawValue == "talkie:start")
         #expect(SocketEvent.talkieSendChunk.rawValue == "talkie:send-chunk")
         #expect(SocketEvent.talkieEnd.rawValue == "talkie:end")
+    }
+
+    // MARK: - Les temps d'une prise de parole (#17094)
+
+    @Test func lesTemps_seComptentDepuisLAppui_etLaPremiereMarqueCompte() {
+        var latency = TalkieLatency(pressedAt: Self.start)
+        latency.mark(.opened, at: Self.start.addingTimeInterval(0.1404))
+        latency.mark(.micReady, at: Self.start.addingTimeInterval(0.312))
+        latency.mark(.micReady, at: Self.start.addingTimeInterval(0.9))
+        latency.mark(.firstChunk, at: Self.start.addingTimeInterval(-1))
+
+        #expect(latency.milliseconds(.opened) == 140)
+        #expect(latency.milliseconds(.micReady) == 312)
+        #expect(latency.milliseconds(.firstChunk) == 0)
+        #expect(latency.summary == "micro 312 ms · accusé 140 ms · premier fragment 0 ms")
+    }
+
+    @Test func uneEtapeNonAtteinte_seLitUnTiret() {
+        var latency = TalkieLatency(pressedAt: Self.start)
+        latency.mark(.micReady, at: Self.start.addingTimeInterval(0.2))
+        #expect(latency.milliseconds(.opened) == nil)
+        #expect(latency.summary == "micro 200 ms · accusé — · premier fragment —")
     }
 }
