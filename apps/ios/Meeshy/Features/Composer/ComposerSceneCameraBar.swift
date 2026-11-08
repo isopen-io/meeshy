@@ -419,6 +419,8 @@ final class ComposerCaptureSelfTimer: ObservableObject {
         self.tick = tick
     }
 
+    nonisolated deinit {}
+
     var delay: ComposerCaptureSelfTimerDelay {
         ComposerCaptureSelfTimerDelay(stored: defaults.integer(forKey: ComposerCaptureSelfTimerDelay.storageKey))
     }
