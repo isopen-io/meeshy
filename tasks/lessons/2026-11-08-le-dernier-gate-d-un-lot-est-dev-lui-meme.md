@@ -1,8 +1,8 @@
-# Le dernier gate d'un lot est `dev` LUI-MÊME — « ma branche est seule sur ce fichier » se périme pendant que le lot se développe
+## Le dernier gate d'un lot est `dev` LUI-MÊME — « ma branche est seule sur ce fichier » se périme pendant que le lot se développe
 
-**2026-11-08 · #17077 · cycle 149**
+*2026-11-08 — #17077*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 J'ai cadré le lot J (#17077) contre `dev` vivant, vérifié qu'aucune branche
 poussée n'écrivait `messages-list.ts`, développé, prouvé le rouge, poussé, et
@@ -14,7 +14,7 @@ Les deux lots sont justes. Le second à arriver est du travail PERDU, et la
 perte ne vient pas d'une négligence de cadrage : **le relevé était vrai quand
 il a été fait.**
 
-## La doctrine de collision ne couvrait pas ce cas
+### La doctrine de collision ne couvrait pas ce cas
 
 Elle tranche par asymétrie d'investissement — « quand deux lots se disputent un
 fichier, celui qui n'a rien écrit cède ». Elle suppose deux branches VIVANTES
@@ -23,7 +23,7 @@ qui se voient. Ici, l'un des deux lots n'était plus une branche : il était
 qu'un lot qui attend un verdict de CI, et la résolution est totale, pas
 négociée.
 
-## La règle
+### La règle
 
 **Refetch `dev` et chercher le SITE juste avant d'ouvrir la PR, pas seulement au
 cadrage.** Le relevé de branches répond « qui écrit en ce moment ? » ; il ne
@@ -39,7 +39,7 @@ git log origin/dev --since='6 hours ago' -S'<le symbole que je retire>' -- <mes 
 Une ligne, et elle rend le commit jumeau par son CONTENU — pas par un titre
 d'issue, qu'une découverte indépendante n'aura pas.
 
-## Corollaire : céder, c'est résoudre vers `dev` EN ENTIER, pas garder « sa » moitié
+### Corollaire : céder, c'est résoudre vers `dev` EN ENTIER, pas garder « sa » moitié
 
 La tentation est de conserver ce que sa version portait de mieux. Elle laisse
 une jumelle divergente, c'est-à-dire la dette que le lot prétendait solder.
