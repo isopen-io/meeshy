@@ -44,10 +44,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
     /// Le jeton de la prise, de son départ à sa LIVRAISON — chaque fichier porte
     /// le sien (`segmentTokens`) : `capturedVideoId` à l'arrivée, `abandonedRecordingId` sans fichier.
-    private(set) var recordingId: String?
-    private(set) var segmentTokens: [URL: String] = [:]
+    var recordingId: String?
+    var segmentTokens: [URL: String] = [:]
     /// L'arrêt est demandé, le fichier pas encore livré : `isRecordingVideo` reste vrai jusqu'au délégué.
-    private(set) var stopIsRequested = false
+    var stopIsRequested = false
     @Published var abandonedRecordingId: String?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
