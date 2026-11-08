@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 import MeeshySDK
 import MeeshyUI
@@ -388,10 +389,13 @@ final class ComposerSceneFriseTests: XCTestCase {
         XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: .audio), .waveform)
     }
 
-    func test_texteStickerImageEtLieu_neMontrentQueLeurCouleur() {
-        for kind: SceneFriseTrack.Kind in [.text, .sticker, .image, .place] {
-            XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: kind), .none)
+    /// #17110 : plus aucune barre ne montre sa seule couleur — le texte, le
+    /// sticker et le lieu s'y écrivent, l'image y pose sa vignette.
+    func test_texteStickerImageEtLieu_montrentLeurContenu() {
+        for kind: SceneFriseTrack.Kind in [.text, .sticker, .place] {
+            XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: kind), .caption)
         }
+        XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: .image), .picture)
     }
 
     // MARK: - Retirer depuis la frise (#14215)
@@ -462,5 +466,123 @@ final class ComposerSceneFriseTests: XCTestCase {
         XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: 2...6, sourceDuration: 8), [3, 4, 5, 6])
         XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: nil, sourceDuration: 8), onde)
         XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: 2...6, sourceDuration: nil), onde)
+    }
+}
+
+/// **La frise premium et réactive** (#17110, planches S8, S9, I3) : un couloir
+/// d'icône par famille, le vrai contenu dans chaque barre, l'étiquette
+/// « aimanté · 9,0 s », l'invite « Pincer pour zoomer », la tête blanche à
+/// bouton, des pistes plus hautes aux couleurs du design system, et le mode
+/// plein écran « Quitter · Valider ».
+final class ComposerSceneFrisePremiumTests: XCTestCase {
+
+    private typealias W = ComposerSceneFriseMetrics.Window
+    private let familles: [SceneFriseTrack.Kind] = [.text, .sticker, .image, .video, .audio, .place]
+
+    // MARK: - Le vrai contenu dans chaque barre
+
+    func test_chaqueBarre_montreSonContenu_jamaisSaSeuleCouleur() {
+        XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: .video), .filmstrip)
+        XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: .audio), .waveform)
+        XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: .image), .picture)
+        for kind: SceneFriseTrack.Kind in [.text, .sticker, .place] {
+            XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: kind), .caption,
+                           "le texte, le sticker et le lieu s'écrivent dans leur barre")
+        }
+    }
+
+    // MARK: - Une famille, une icône, une couleur
+
+    func test_chaqueFamille_aSonIconeEtSaCouleur_distinctes() {
+        let icones = familles.map(ComposerSceneFriseMetrics.familySymbol(kind:))
+        XCTAssertEqual(Set(icones).count, familles.count, "une icône par famille")
+        XCTAssertFalse(icones.contains(""), "aucun couloir vide")
+        let teintes = familles.map(ComposerSceneFriseMetrics.familyColor(kind:))
+        XCTAssertEqual(Set(teintes).count, familles.count, "une couleur du design system par famille")
+    }
+
+    func test_lesPistes_sontPlusHautes_quuneCibleDeDoigt() {
+        XCTAssertGreaterThanOrEqual(ComposerSceneFriseMetrics.trackHeight, 40)
+        XCTAssertGreaterThanOrEqual(ComposerSceneFriseMetrics.trackHeight + 4, MeeshyControlSize.tapTarget)
+    }
+
+    // MARK: - « aimanté · 9,0 s »
+
+    func test_leBordAccroche_ditOuIlSAccroche() {
+        let geste = ComposerSceneFriseMetrics.dragged(W(start: 1, end: 3), grip: .end, by: 1.9, duration: 6,
+                                                      snapping: [SnapCandidate(kind: .playhead, time: 5)],
+                                                      tolerance: 0.25)
+        XCTAssertEqual(geste.snappedTime, 5)
+    }
+
+    func test_sansAccroche_aucuneEtiquette() {
+        let geste = ComposerSceneFriseMetrics.dragged(W(start: 1, end: 3), grip: .end, by: 1.5, duration: 6,
+                                                      snapping: [SnapCandidate(kind: .playhead, time: 5)],
+                                                      tolerance: 0.25)
+        XCTAssertNil(geste.snappedTime)
+        XCTAssertFalse(geste.isSnapped)
+    }
+
+    func test_laBarreGlissee_ditLeBordQuiSAccroche() {
+        let geste = ComposerSceneFriseMetrics.dragged(W(start: 1, end: 3), grip: .move, by: 0.9, duration: 6,
+                                                      snapping: [SnapCandidate(kind: .clipEnd, time: 4)],
+                                                      tolerance: 0.25)
+        XCTAssertEqual(geste.snappedTime ?? -1, 4, accuracy: 0.0001, "c'est la fin qui s'accroche à 4 s")
+    }
+
+    func test_lEtiquetteDAccroche_secritAuDixiemeDansLaLangue() {
+        let francais = ComposerSceneFriseMetrics.snapLabel(9, locale: Locale(identifier: "fr_FR"))
+        XCTAssertTrue(francais.contains("9,0"), francais)
+        XCTAssertTrue(francais.contains("·"), francais)
+        let anglais = ComposerSceneFriseMetrics.snapLabel(9, locale: Locale(identifier: "en_US"))
+        XCTAssertTrue(anglais.contains("9.0"), anglais)
+    }
+
+    // MARK: - Les mots de la frise vivent dans leur table
+
+    func test_lesMotsDeLaFrisePremium_sontServis() {
+        for mot in [ComposerTimeCopy.pinchHint, ComposerTimeCopy.quit, ComposerTimeCopy.validate,
+                    ComposerTimeCopy.expand, ComposerTimeCopy.snapped("9,0 s")] {
+            XCTAssertFalse(mot.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        XCTAssertTrue(ComposerTimeCopy.snapped("9,0 s").contains("9,0 s"))
+    }
+
+    // MARK: - Fluidité : rien ne se recalcule pendant le geste
+
+    func test_laFrise_neRelanceAucuneExtractionPendantLeGeste_etSaTeteSeule_suitLaLecture() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerSceneFrise.swift"))
+        XCTAssertTrue(code.contains("ComposerSceneFriseBarKey(url: url, window: window)"),
+                      "les vignettes et l'onde ne dépendent que du fichier et de la fenêtre de source")
+        XCTAssertFalse(code.contains("ComposerSceneFriseBarKey(url: url, window: enCours"),
+                       "la fenêtre en cours de geste ne relance aucune extraction")
+        XCTAssertTrue(code.contains("PlayheadTimeReader(clock: timeline.playhead)"),
+                      "seule la tête lit l'horloge, la frise ne se réévalue pas à chaque image")
+        XCTAssertTrue(code.contains(".fullScreenCover("), "le mode plein écran Quitter · Valider")
+        XCTAssertTrue(code.contains("repereDOuverture?.rewind(timeline)"), "Quitter défait ce que le plein écran a réglé")
+    }
+
+    // MARK: - Un seul « Rogner et régler » (garde de source, app)
+
+    func test_garde_unSeulRogneur_dansLApp() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let fichiers = try XCTUnwrap(FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+        XCTAssertFalse(fichiers.isEmpty, "la garde doit balayer quelque chose")
+        for fichier in fichiers {
+            let code = try String(contentsOf: fichier, encoding: .utf8)
+            XCTAssertFalse(code.contains("MeeshyAudioTrimmer("), "\(fichier.lastPathComponent) remonte l'ancien rogneur")
+            XCTAssertFalse(code.contains("ComposerTrimThumbnails"),
+                           "\(fichier.lastPathComponent) extrait ses vignettes hors de VideoFilmstrip")
+            let rogneurs = code.components(separatedBy: "\n").filter {
+                $0.range(of: #"(struct|class)\s+\w*(Trimmer|TrimStrip)\w*\s*[:<]"#, options: .regularExpression) != nil
+            }
+            XCTAssertTrue(rogneurs.isEmpty, "\(fichier.lastPathComponent) déclare un second rogneur : \(rogneurs)")
+        }
     }
 }

@@ -1,4 +1,5 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
+import { PLAN_UNAVAILABLE } from './planOutcome';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
@@ -108,7 +109,7 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
   // raison d'être du module. Un commentaire qui ÉNONCE une contrainte est une
   // AFFIRMATION, et se vérifie comme telle (cycle 94).
   try {
-    if (plan === 'unavailable') {
+    if (plan === PLAN_UNAVAILABLE) {
       // Rien en direct : voir `readerSignedPlanForMessageIdBestEffort`.
     } else if (plan) {
       for (const target of plan.targets) {

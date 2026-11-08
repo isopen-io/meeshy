@@ -18,9 +18,18 @@ extension StoryRenderer {
     /// L'horloge part de l'APPARITION du sticker (`startTime`), comme la pose
     /// d'une décoration animée (#4821) : c'est à cet instant que la scène monte
     /// la couche et lance son animation.
+    ///
+    /// **Le texte en feu suit la même horloge** (#17112) : ses flammes sont une
+    /// `CABasicAnimation` que `render(in:)` ignore aussi. Sans cette passe, la
+    /// vidéo exportée montrerait un feu FIGÉ sur sa première image là où la
+    /// scène et le lecteur le font monter.
     @MainActor
     public static func advanceAnimatedStickers(in tree: CALayer, at time: CMTime) {
         for layer in tree.sublayers ?? [] {
+            if let textLayer = layer as? StoryTextLayer {
+                textLayer.showFlameFrame(atElapsed: time.seconds)
+                continue
+            }
             guard let stickerLayer = layer as? StoryStickerLayer,
                   let sticker = stickerLayer.sticker else { continue }
             stickerLayer.showAnimatedFrame(atElapsed: time.seconds - (sticker.startTime ?? 0))

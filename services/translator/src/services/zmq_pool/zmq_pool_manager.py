@@ -184,9 +184,16 @@ class TranslationPoolManager:
         """
         return await self.connection_manager.enqueue_task(task)
 
-    def set_rejection_handler(self, handler: Optional[RejectedTasksHandler]) -> None:
-        """Branche le rappel des tâches d'un lot refusé par une file pleine (#16781)."""
+    def set_rejection_handler(
+        self,
+        handler: Optional[RejectedTasksHandler],
+        at_shutdown: Optional[RejectedTasksHandler] = None
+    ) -> None:
+        """Branche le rappel des tâches d'un lot refusé par une file pleine (#16781),
+        et celui des tâches refusées à l'entrée pendant l'arrêt (#17064), qui
+        retombe sur le premier quand il n'est pas donné."""
         self.connection_manager.on_tasks_rejected = handler
+        self.connection_manager.on_refused_at_shutdown = at_shutdown
 
     async def start_workers(self) -> List[asyncio.Task]:
         """Démarre tous les workers et services"""

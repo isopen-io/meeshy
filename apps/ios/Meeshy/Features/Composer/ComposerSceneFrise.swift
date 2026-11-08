@@ -26,11 +26,18 @@ struct ComposerSceneFrise: View {
     /// de la SCÈNE — un pas d'annulation, la copie sélectionnée —, puis
     /// recharge les pistes. `nil` ⇒ le jeton n'est pas servi.
     var onDuplicate: ((String) -> Void)?
+    /// **Le mode plein écran** (#17110, planche S9) : posé, la frise porte
+    /// « Quitter · Valider » au lieu de son bouton Agrandir.
+    var fullScreen: ComposerSceneFriseFullScreen?
+
+    /// La frise agrandie, et le repère d'annulation pris à son ouverture.
+    @State private var pleinEcran = false
+    @State private var repereDOuverture: TimelineUndoMark?
 
     /// **La fenêtre qu'un doigt est en train de régler** — l'aperçu du geste,
     /// jamais le projet : le projet ne reçoit la fenêtre qu'au lâcher, en UNE
     /// entrée d'annulation (un réglage par image en empilerait soixante).
-    @State private var enCours: (id: String, fenetre: ComposerSceneFriseMetrics.Window, accroche: Bool)?
+    @State private var enCours: (id: String, fenetre: ComposerSceneFriseMetrics.Window, accroche: Float?)?
 
     /// La tête qu'un doigt promène sur la règle : seek tolérant pendant le
     /// geste, précis au lâcher (`beginScrub` / `endScrub`), sinon chaque image
@@ -49,9 +56,13 @@ struct ComposerSceneFrise: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            if let fullScreen { enTetePleinEcran(fullScreen) }
             transport
             pistes
+            if vue == nil, !timeline.sceneFriseTracks.isEmpty { invitePincer }
+            if fullScreen != nil { Spacer(minLength: 0) }
         }
+        .fullScreenCover(isPresented: $pleinEcran) { friseAgrandie }
         .adaptiveOnChange(of: timeline.isPlaying) { _, _ in
             guard vue != nil else { return }
             vue = visible.showing(timeline.currentTime, duration: duree)
@@ -90,6 +101,14 @@ struct ComposerSceneFrise: View {
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold).monospacedDigit())
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if fullScreen == nil {
+                glyphe("arrow.up.left.and.arrow.down.right", libelle: ComposerTimeCopy.expand) {
+                    HapticFeedback.light()
+                    repereDOuverture = TimelineUndoMark.taken(on: timeline)
+                    pleinEcran = true
+                }
             }
 
             // Choisir une piste pendant la lecture est permis (retour porteur
@@ -287,13 +306,7 @@ struct ComposerSceneFrise: View {
             ? enCours!.fenetre
             : ComposerSceneFriseMetrics.Window(start: piste.start, end: piste.end)
         return HStack(spacing: MeeshySpacing.sm) {
-            Text(ComposerSceneFriseCopy.label(for: piste))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(width: ComposerSceneFriseMetrics.labelLane - 8, alignment: .leading)
-                .environment(\.layoutDirection, interfaceDirection)
+            nomDePiste(piste)
             GeometryReader { geo in
                 let largeur = geo.size.width
                 let debut = CGFloat(visible.fraction(fenetre.start)) * largeur
@@ -306,16 +319,7 @@ struct ComposerSceneFrise: View {
                             choisir(piste, a: temps(x: point.x, largeur: largeur))
                         }
                         .gesture(defiler(largeur: largeur))
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
-                        .fill(choisie ? MeeshyColors.brandPrimary : Color.white.opacity(0.35))
-                        .frame(width: max(4, fin - debut))
-                        .overlay {
-                            ComposerSceneFriseBarContent(kind: piste.kind,
-                                                         url: timeline.loadedURL(for: piste.id),
-                                                         publishedSamples: ondePubliee(piste),
-                                                         window: SceneFriseSourceWindow.of(piste.id, in: timeline))
-                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous))
-                        }
+                    barre(piste, choisie: choisie, largeur: max(4, fin - debut))
                         .padding(.vertical, MeeshySpacing.xs)
                         .contentShape(Rectangle())
                         .offset(x: debut)
@@ -328,11 +332,12 @@ struct ComposerSceneFrise: View {
                         poignee(piste, prise: .end, largeur: largeur).offset(x: fin - ComposerSceneFriseMetrics.handleHit / 2)
                     }
                 }
+                .overlay(alignment: .topLeading) { etiquetteDAccroche(piste, largeur: largeur) }
             }
-            .frame(height: 30)
+            .frame(height: ComposerSceneFriseMetrics.trackHeight)
             .clipped()
         }
-        .frame(minHeight: 34)
+        .frame(minHeight: ComposerSceneFriseMetrics.trackHeight + 4)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(ComposerSceneFriseCopy.label(for: piste)))
         .accessibilityValue(Text(ComposerSceneFriseMetrics.windowLabel(piste)))
@@ -362,6 +367,43 @@ struct ComposerSceneFrise: View {
         }
     }
 
+    /// **Le couloir d'icône et le nom** de la piste (planche S8), dans la
+    /// direction de l'interface.
+    private func nomDePiste(_ piste: SceneFriseTrack) -> some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: ComposerSceneFriseMetrics.familySymbol(kind: piste.kind))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .foregroundStyle(ComposerSceneFriseMetrics.familyColor(kind: piste.kind))
+                .frame(width: 16)
+                .accessibilityHidden(true)
+            Text(ComposerSceneFriseCopy.label(for: piste))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(width: ComposerSceneFriseMetrics.labelLane - 8, alignment: .leading)
+        .environment(\.layoutDirection, interfaceDirection)
+    }
+
+    /// **La barre et son VRAI contenu**, à la couleur de sa famille ; choisie,
+    /// elle s'opacifie et se cerne de blanc.
+    private func barre(_ piste: SceneFriseTrack, choisie: Bool, largeur: CGFloat) -> some View {
+        let forme = RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
+        return forme
+            .fill(ComposerSceneFriseMetrics.familyColor(kind: piste.kind).opacity(choisie ? 0.95 : 0.6))
+            .frame(width: largeur)
+            .overlay {
+                ComposerSceneFriseBarContent(kind: piste.kind,
+                                             url: timeline.loadedURL(for: piste.id),
+                                             publishedSamples: ondePubliee(piste),
+                                             window: SceneFriseSourceWindow.of(piste.id, in: timeline),
+                                             caption: ComposerSceneFriseCopy.label(for: piste))
+                    .clipShape(forme)
+            }
+            .overlay { forme.strokeBorder(Color.white.opacity(choisie ? 0.95 : 0), lineWidth: 2) }
+    }
+
     /// La poignée : un trait blanc de 4 pt dans une cible de 24 × 30 — assez
     /// pour le pouce sans recouvrir une barre courte.
     private func poignee(_ piste: SceneFriseTrack,
@@ -369,8 +411,8 @@ struct ComposerSceneFrise: View {
                          largeur: CGFloat) -> some View {
         Capsule()
             .fill(Color.white)
-            .frame(width: 4, height: 18)
-            .frame(width: ComposerSceneFriseMetrics.handleHit, height: 30)
+            .frame(width: 4, height: ComposerSceneFriseMetrics.trackHeight * 0.6)
+            .frame(width: ComposerSceneFriseMetrics.handleHit, height: ComposerSceneFriseMetrics.trackHeight)
             .contentShape(Rectangle())
             .gesture(glisser(piste, prise: prise, largeur: largeur))
             .accessibilityHidden(true)
@@ -396,8 +438,8 @@ struct ComposerSceneFrise: View {
                         tracks: timeline.sceneFriseTracks, excluding: piste.id,
                         playhead: timeline.currentTime, duration: duree),
                     tolerance: ComposerSceneFriseMetrics.snapTolerance(duration: visible.span, width: largeur))
-                if geste.isSnapped, enCours?.accroche != true { HapticFeedback.light() }
-                enCours = (piste.id, geste.window, geste.isSnapped)
+                if geste.isSnapped, enCours?.accroche == nil { HapticFeedback.light() }
+                enCours = (piste.id, geste.window, geste.snappedTime)
             }
             .onEnded { _ in
                 guard let fini = enCours, fini.id == piste.id else { return }
@@ -436,22 +478,95 @@ struct ComposerSceneFrise: View {
         timeline.scrub(to: secondes)
     }
 
-    /// La tête AMBRE (`#fbbf24` de la maquette) court sur la règle et les
-    /// pistes, sans jamais intercepter un toucher.
+    /// **La tête BLANCHE et son bouton** (planches S8, S9) court sur la règle et
+    /// les pistes, sans jamais intercepter un toucher. Seule elle lit l'horloge :
+    /// elle suit la lecture image par image sans réévaluer les pistes.
     private var tete: some View {
         PlayheadTimeReader(clock: timeline.playhead) { maintenant in
             GeometryReader { geo in
                 let piste = geo.size.width - ComposerSceneFriseMetrics.labelLane
                 let place = visible.fraction(maintenant)
-                Capsule()
-                    .fill(MeeshyColors.warning)
-                    .frame(width: 2, height: geo.size.height)
-                    .offset(x: ComposerSceneFriseMetrics.labelLane + CGFloat(place) * max(0, piste) - 1)
-                    .opacity(place >= 0 && place <= 1 ? 1 : 0)
+                VStack(spacing: 0) {
+                    Circle().fill(Color.white).frame(width: 11, height: 11)
+                    Capsule().fill(Color.white).frame(width: 2)
+                }
+                .frame(width: 11, height: geo.size.height)
+                .shadow(color: .black.opacity(0.45), radius: 1.5)
+                .offset(x: ComposerSceneFriseMetrics.labelLane + CGFloat(place) * max(0, piste) - 5.5)
+                .opacity(place >= 0 && place <= 1 ? 1 : 0)
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
+    }
+
+    // MARK: - Premium : accroche, invite, plein écran (#17110)
+
+    /// « aimanté · 9,0 s », posé sur le bord qui s'accroche pendant le geste.
+    @ViewBuilder
+    private func etiquetteDAccroche(_ piste: SceneFriseTrack, largeur: CGFloat) -> some View {
+        if let geste = enCours, geste.id == piste.id, let accroche = geste.accroche {
+            Text(ComposerSceneFriseMetrics.snapLabel(accroche))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold).monospacedDigit())
+                .foregroundStyle(Color.black)
+                .padding(.horizontal, MeeshySpacing.xs)
+                .background(Capsule().fill(Color.white))
+                .fixedSize()
+                .offset(x: min(max(0, CGFloat(visible.fraction(accroche)) * largeur - 30), max(0, largeur - 60)))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var invitePincer: some View {
+        Label(ComposerTimeCopy.pinchHint, systemImage: "arrow.left.and.right")
+            .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
+            .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityHidden(true)
+    }
+
+    private func enTetePleinEcran(_ actions: ComposerSceneFriseFullScreen) -> some View {
+        HStack {
+            jeton(ComposerTimeCopy.quit, action: actions.onQuit)
+            Spacer(minLength: 0)
+            Text(ComposerSceneFriseCopy.panel)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
+            Spacer(minLength: 0)
+            Button(action: actions.onValidate) {
+                Text(ComposerTimeCopy.validate)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
+                    .foregroundStyle(Color.black)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .frame(height: 32)
+                    .background(Capsule().fill(Color.white))
+                    .frame(minHeight: 44)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// La MÊME frise, sur tout l'écran : « Quitter » défait ce qu'elle a
+    /// réglé depuis l'ouverture (`TimelineUndoMark.rewind`), « Valider » le garde.
+    private var friseAgrandie: some View {
+        ComposerSceneFrise(timeline: timeline, plateauTint: plateauTint, onWindowEdited: onWindowEdited,
+                           onDuplicate: onDuplicate,
+                           fullScreen: ComposerSceneFriseFullScreen(
+                            onQuit: {
+                                HapticFeedback.light()
+                                repereDOuverture?.rewind(timeline)
+                                onWindowEdited()
+                                pleinEcran = false
+                            },
+                            onValidate: {
+                                HapticFeedback.light()
+                                onWindowEdited()
+                                pleinEcran = false
+                            }))
+            .padding(MeeshySpacing.md)
+            .background(Color.black.ignoresSafeArea())
     }
 
     // MARK: - Lecture du projet
@@ -517,7 +632,9 @@ nonisolated enum ComposerSceneFriseMetrics {
     /// Un glissé aimanté : la fenêtre, et si le bord qui bouge est accroché.
     struct Drag: Equatable {
         let window: Window
-        let isSnapped: Bool
+        /// L'instant où le bord qui bouge s'est accroché ; `nil`, libre.
+        let snappedTime: Float?
+        var isSnapped: Bool { snappedTime != nil }
     }
 
     /// **Le glissé AIMANTÉ** (#14210, miroir de `FriseBarDrag.resolve`
@@ -529,18 +646,31 @@ nonisolated enum ComposerSceneFriseMetrics {
         let pas = delta.isFinite ? delta : 0
         let aimant = SnapEngine(toleranceSeconds: tolerance)
         let corrige: Float?
+        let parLaFin: Bool
         switch grip {
         case .start:
             corrige = ecart(aimant.snap(rawTime: fenetre.start + pas, candidates: candidats), depuis: fenetre.start + pas)
+            parLaFin = false
         case .end:
             corrige = ecart(aimant.snap(rawTime: fenetre.end + pas, candidates: candidats), depuis: fenetre.end + pas)
+            parLaFin = true
         case .move:
             let tete = ecart(aimant.snap(rawTime: fenetre.start + pas, candidates: candidats), depuis: fenetre.start + pas)
             let queue = ecart(aimant.snap(rawTime: fenetre.end + pas, candidates: candidats), depuis: fenetre.end + pas)
             corrige = [tete, queue].compactMap { $0 }.min { abs($0) < abs($1) }
+            parLaFin = corrige != nil && corrige != tete
         }
-        return Drag(window: dragged(fenetre, grip: grip, by: pas + (corrige ?? 0), duration: duration),
-                    isSnapped: corrige != nil)
+        let resultat = dragged(fenetre, grip: grip, by: pas + (corrige ?? 0), duration: duration)
+        return Drag(window: resultat,
+                    snappedTime: corrige == nil ? nil : (parLaFin ? resultat.end : resultat.start))
+    }
+
+    /// **« aimanté · 9,0 s »** : l'instant de l'accroche, au dixième, dans la
+    /// langue de l'interface.
+    static func snapLabel(_ secondes: Float, locale: Locale = .current) -> String {
+        let valeur = Double(secondes.isFinite ? secondes : 0)
+            .formatted(.number.precision(.fractionLength(1)).locale(locale))
+        return ComposerTimeCopy.snapped("\(valeur) s")
     }
 
     private static func ecart(_ resultat: SnapResult, depuis brut: Float) -> Float? {
@@ -578,15 +708,45 @@ nonisolated enum ComposerSceneFriseMetrics {
     }
 
     /// Ce qu'une barre dessine en elle (#14214).
-    enum BarContent: Equatable { case filmstrip, waveform, none }
+    /// #17110 : aucune barre ne montre sa seule couleur — le texte, le
+    /// sticker et le lieu s'y écrivent, l'image y pose sa vignette.
+    enum BarContent: Equatable { case filmstrip, waveform, picture, caption }
 
     static func barContent(kind: SceneFriseTrack.Kind) -> BarContent {
         switch kind {
         case .video: return .filmstrip
         case .audio: return .waveform
-        case .text, .sticker, .image, .place: return .none
+        case .image: return .picture
+        case .text, .sticker, .place: return .caption
         }
     }
+
+    /// **Le couloir d'icône** de chaque famille (planche S8).
+    static func familySymbol(kind: SceneFriseTrack.Kind) -> String {
+        switch kind {
+        case .text: return "textformat"
+        case .sticker: return "face.smiling"
+        case .image: return "photo"
+        case .video: return "video.fill"
+        case .audio: return "waveform"
+        case .place: return "mappin.and.ellipse"
+        }
+    }
+
+    /// **La couleur de chaque famille**, prise au design system (`MeeshyColors`).
+    static func familyColor(kind: SceneFriseTrack.Kind) -> Color {
+        switch kind {
+        case .text: return MeeshyColors.brandPrimary
+        case .sticker: return MeeshyColors.amber500
+        case .image: return MeeshyColors.info
+        case .video: return MeeshyColors.purple500
+        case .audio: return MeeshyColors.success
+        case .place: return MeeshyColors.orange500
+        }
+    }
+
+    /// Des pistes plus hautes : le contenu s'y lit, le pouce s'y pose.
+    static let trackHeight: CGFloat = 40
 
     /// Six vignettes et soixante-quatre échantillons : assez pour reconnaître
     /// le plan et la voix dans une barre de frise, peu pour la mémoire.
@@ -857,8 +1017,11 @@ struct ComposerSceneFriseBarContent: View {
     /// La fenêtre de source que le clip JOUE (#14268) : un clip coupé ne
     /// montre que ses vignettes et son onde. `nil` ⇒ la source entière.
     var window: ClosedRange<Double>?
+    /// Ce que la barre ÉCRIT (#17110) : le texte, l'emoji, le lieu.
+    var caption: String = ""
 
     @State private var vignettes: [UIImage] = []
+    @State private var image: UIImage?
     @State private var mesure: [Float] = []
     @State private var duree: Double?
     @Environment(\.displayScale) private var echelle
@@ -867,8 +1030,48 @@ struct ComposerSceneFriseBarContent: View {
         switch ComposerSceneFriseMetrics.barContent(kind: kind) {
         case .filmstrip: filmstrip
         case .waveform: onde
-        case .none: EmptyView()
+        case .picture: vignette
+        case .caption: legende
         }
+    }
+
+    /// Le texte de l'objet, en clair dans sa barre.
+    private var legende: some View {
+        Text(caption)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    /// L'image posée, réduite UNE fois à la hauteur de la piste.
+    private var vignette: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: ComposerSceneFriseMetrics.trackHeight, height: ComposerSceneFriseMetrics.trackHeight)
+                    .clipped()
+            }
+            legende
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .task(id: url) {
+            guard let url, url.isFileURL else { return }
+            let cote = ComposerSceneFriseMetrics.trackHeight * echelle
+            image = await Self.decode(url, cote: cote)
+        }
+    }
+
+    @concurrent
+    private static func decode(_ url: URL, cote: CGFloat) async -> UIImage? {
+        SceneImageDownsampling.image(fileAt: url, maxPixelSize: cote)
     }
 
     private var filmstrip: some View {
@@ -890,10 +1093,11 @@ struct ComposerSceneFriseBarContent: View {
             guard let url else { return }
             if let window {
                 vignettes = await VideoFilmstrip.frames(url: url, count: ComposerSceneFriseMetrics.filmstripFrames,
-                                                        window: window, maxHeight: 22, scale: echelle)
+                                                        window: window,
+                                                        maxHeight: ComposerSceneFriseMetrics.trackHeight, scale: echelle)
             } else {
                 vignettes = await VideoFilmstrip.frames(url: url, count: ComposerSceneFriseMetrics.filmstripFrames,
-                                                        maxHeight: 22, scale: echelle)
+                                                        maxHeight: ComposerSceneFriseMetrics.trackHeight, scale: echelle)
             }
         }
     }
@@ -921,4 +1125,30 @@ struct ComposerSceneFriseBarContent: View {
 struct ComposerSceneFriseBarKey: Equatable {
     let url: URL?
     let window: ClosedRange<Double>?
+}
+
+/// Les deux sorties du mode plein écran de la frise (planche S9).
+struct ComposerSceneFriseFullScreen {
+    let onQuit: () -> Void
+    let onValidate: () -> Void
+}
+
+/// Les mots de la frise premium (#17110), dans leur table `ComposerTime`.
+nonisolated enum ComposerTimeCopy {
+    static var pinchHint: String {
+        String(localized: "composer.time.pinchHint", defaultValue: "Pincer pour zoomer", table: "ComposerTime", bundle: .main)
+    }
+    static var quit: String {
+        String(localized: "composer.time.quit", defaultValue: "Quitter", table: "ComposerTime", bundle: .main)
+    }
+    static var validate: String {
+        String(localized: "composer.time.validate", defaultValue: "Valider", table: "ComposerTime", bundle: .main)
+    }
+    static var expand: String {
+        String(localized: "composer.time.expand", defaultValue: "Agrandir la frise", table: "ComposerTime", bundle: .main)
+    }
+    static func snapped(_ instant: String) -> String {
+        String(format: String(localized: "composer.time.snapped", defaultValue: "aimanté · %@",
+                              table: "ComposerTime", bundle: .main), instant)
+    }
 }
