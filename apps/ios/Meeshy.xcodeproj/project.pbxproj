@@ -12022,6 +12022,7 @@
 				2C355E5F4B9B1A91A1E6E3D3 /* CallQualitySheet.swift */,
 				826B2D2514679E27FD703611 /* CallRecordingControls.swift */,
 				378CA9AF6C05CE29FF072006 /* CallScreenShareControls.swift */,
+				D8CA1A75A765B06CD3051D9F /* CallTileChrome.swift */,
 				464C01BEA5C6482B2A995D28 /* CallTopBannerStackView.swift */,
 				3E5590DED3422E152DC836E6 /* CallTranscriptSection.swift */,
 				488C8D4AD1A311AC55DC6BA7 /* CallView.swift */,
@@ -12047,7 +12048,6 @@
 				8A6C250F61A0F230FB2BBCC3 /* GroupCallStageView.swift */,
 				1473766FDE578C9332A22873 /* GroupCallStageView+Moderation.swift */,
 				D0209465D9D97518C6614136 /* IncomingCallView.swift */,
-				D8CA1A75A765B06CD3051D9F /* CallTileChrome.swift */,
 				9E2A5E45C050DB29F255411E /* IncomingPreAnswerBar.swift */,
 			);
 			path = Views;
