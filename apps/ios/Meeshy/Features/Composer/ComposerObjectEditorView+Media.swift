@@ -93,7 +93,8 @@ extension ComposerObjectEditorView {
                     }
                 }
                 section(ComposerObjectEditorCopy.mediaActions, .media(.actions)) {
-                    ComposerMediaActionRow(viewModel: viewModel, media: media)
+                    ComposerMediaActionRow(viewModel: viewModel, media: media,
+                                           offersMute: !objectHasTrimmableSource)
                 }
                 // **⌾ DÉCRIRE** (#4756) — l'atome du SDK, tel quel. Il porte
                 // déjà son étiquette, son invite et son indice VoiceOver dans
@@ -153,9 +154,11 @@ extension ComposerObjectEditorView {
 
     /// La bande PARTAGÉE avec la scène (`ComposerMediaTrimBand`, #8847) : le
     /// fond s'y rogne sous la scène avec la même bande que l'éditeur sert ici.
+    /// L'éditeur y monte Volume et Muet (« Rogner et régler », #17110) : la
+    /// rangée d'actions ne repose donc plus Muet à côté.
     private func trimBand(_ source: (url: URL, bounds: MediaTrimBounds,
                                      sourceDuration: Double, isVideo: Bool)) -> some View {
         ComposerMediaTrimBand(viewModel: viewModel, objectId: objectId,
-                              source: source, waveform: trimWaveform)
+                              source: source, waveform: trimWaveform, showsAdjustments: true)
     }
 }

@@ -352,10 +352,7 @@ private struct MyStoryButton: View {
                                 HapticFeedback.medium()
                             })
                         }
-                        items.append(AvatarContextMenuItem(label: StoryTrayCopy.addStory, icon: "plus.circle.fill") {
-                            viewModel.showStoryComposer = true
-                            HapticFeedback.medium()
-                        })
+                        items.append(contentsOf: StoryCameraFirstRule.createItems { viewModel.showStoryComposer = true })
                         items.append(AvatarContextMenuItem(label: StoryTrayCopy.changeMood, icon: "face.smiling.inverse") {
                             onAddStatus?()
                             HapticFeedback.medium()
@@ -833,12 +830,7 @@ struct PinnedStoryTrailBand: View {
                 }
                 HapticFeedback.medium()
             },
-            contextMenuItems: [
-                AvatarContextMenuItem(label: StoryTrayCopy.addStory, icon: "plus.circle.fill") {
-                    viewModel.showStoryComposer = true
-                    HapticFeedback.medium()
-                }
-            ]
+            contextMenuItems: StoryCameraFirstRule.createItems { viewModel.showStoryComposer = true }
         )
         // Le nom de la personne ne dit rien de la destination : l'annonce vient
         // de la même règle que le routage, comme sur la grande trail.

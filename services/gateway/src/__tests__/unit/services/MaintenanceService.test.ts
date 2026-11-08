@@ -54,6 +54,11 @@ jest.mock('../../../services/deactivateDeletedAccountCommunityMemberships', () =
 // ce fichier sur SA frontière : le balayage journalier l'appelle-t-il, et
 // absorbe-t-il son échec ? Son propre comportement (le filtre `expiresAt`,
 // le motif d'invalidation) est le témoin exhaustif de `SessionService.test.ts`.
+const cutTogetherWhere = jest.fn(async (_scope: unknown) => undefined);
+jest.mock('../../../services/together/togetherDeps', () => ({
+  cutTogetherWhere: (scope: unknown) => cutTogetherWhere(scope),
+}));
+
 jest.mock('../../../services/SessionService', () => ({
   cleanupExpiredSessions: jest.fn<any>().mockResolvedValue(0),
 }));
@@ -680,6 +685,20 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(revokeSessions).toHaveBeenNthCalledWith(1, 'user-a');
     expect(revokeSessions).toHaveBeenNthCalledWith(2, 'user-b');
     expect(order).toEqual(['written', 'revoked:user-a', 'written', 'revoked:user-b']);
+  });
+
+  it("#17022 — la fin de grâce coupe aussi les séances « ensemble » du compte, et seulement après l'écriture", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>()
+      .mockRejectedValueOnce(new Error('write conflict'))
+      .mockResolvedValueOnce([]);
+    cutTogetherWhere.mockClear();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sweepDeletions(sut);
+
+    expect(cutTogetherWhere.mock.calls).toEqual([[{ userId: 'user-b' }]]);
   });
 
   it("une transaction qui échoue ne révoque PAS ce compte — il n'est pas hors service — et n'arrête pas le lot", async () => {

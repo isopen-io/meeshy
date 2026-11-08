@@ -308,11 +308,12 @@ final class StoryTextAttributeCycleTests: XCTestCase {
     /// `["glow", "shadow", "relief", nil]` — les quatre effets de l'époque. La
     /// gamme est passée à quatorze, puis a gagné cinq néons : le témoin est
     /// tombé alors que le cycle faisait exactement son travail. Une liste
-    /// recopiée mesure la DATE du témoin, pas la règle ; `allCases` est déjà ce
-    /// que `advanceEffect` parcourt, et c'est donc la seule référence qui ne
-    /// puisse pas diverger de lui.
+    /// recopiée mesure la DATE du témoin, pas la règle ; `pickerChoices` est
+    /// ce que `advanceEffect` parcourt depuis que le sélecteur n'offre plus que
+    /// quatre effets (#17112), et c'est donc la seule référence qui ne puisse
+    /// pas diverger de lui.
     func test_effect_visitsEveryStepThenWrapsAround() {
-        let gamme = StoryTextEffect.allCases
+        let gamme = StoryTextEffect.pickerChoices
         // `rawValue`, jamais `gamme.first == StoryTextEffect.none` : sur un
         // Optional, `.none` se résout vers `Optional.none` et le témoin dirait
         // « la gamme est VIDE » en croyant dire « elle commence par aucun ».
@@ -329,7 +330,7 @@ final class StoryTextAttributeCycleTests: XCTestCase {
         var obj = text()
         // Le DERNIER de la gamme, pas un effet nommé : c'est lui qui précède le
         // retour à « aucun », et il change à chaque élargissement.
-        obj.textEffect = StoryTextEffect.allCases.last?.rawValue
+        obj.textEffect = StoryTextEffect.pickerChoices.last?.rawValue
         StoryTextAttributeCycle.advance(.effect, on: &obj)
         XCTAssertNil(obj.textEffect)
         XCTAssertEqual(obj.parsedTextEffect, StoryTextEffect.none)
@@ -341,7 +342,16 @@ final class StoryTextAttributeCycleTests: XCTestCase {
         var obj = text()
         obj.textEffect = "effect-from-the-future"
         StoryTextAttributeCycle.advance(.effect, on: &obj)
-        XCTAssertEqual(obj.textEffect, "glow")
+        XCTAssertEqual(obj.textEffect, "neon")
+    }
+
+    /// Un effet retiré du sélecteur (#17112) n'enferme pas la rotation : le
+    /// tap suivant repart vers le premier des quatre effets offerts.
+    func test_effect_fromALegacyEffect_movesIntoTheFourOfferedEffects() {
+        var obj = text()
+        obj.textEffect = "glow"
+        StoryTextAttributeCycle.advance(.effect, on: &obj)
+        XCTAssertEqual(obj.textEffect, "neon")
     }
 
     /// La bulle rend « Aa » AVEC l'effet courant — pas un pictogramme figé.

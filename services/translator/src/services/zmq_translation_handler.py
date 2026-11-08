@@ -100,7 +100,7 @@ class TranslationHandler:
         # tâche par tâche, par la même erreur qu'un refus direct.
         register_rejections = getattr(pool_manager, 'set_rejection_handler', None)
         if callable(register_rejections):
-            register_rejections(self.publish_pool_full)
+            register_rejections(self.publish_pool_full, at_shutdown=self.publish_refused_at_shutdown)
 
         # Cache Redis si disponible
         if CACHE_AVAILABLE:
@@ -412,6 +412,15 @@ class TranslationHandler:
 
         #17003 — le journal tient en lignes bornées, quel que soit le nombre de
         tâches : un résumé des refus, un résumé des envois ratés."""
+        await self._publish_pool_full(tasks, logging.WARNING)
+
+    async def publish_refused_at_shutdown(self, tasks) -> None:
+        """#17064 — même signalement qu'un refus de file pleine, mais une
+        tâche refusée à l'entrée pendant l'arrêt se journalise en DEBUG : le
+        gestionnaire de connexions en émet un unique résumé WARNING."""
+        await self._publish_pool_full(tasks, logging.DEBUG)
+
+    async def _publish_pool_full(self, tasks, refusal_level: int) -> None:
         tasks = list(tasks)
         for task in tasks:
             self.release_inflight(task.task_id)
@@ -424,7 +433,7 @@ class TranslationHandler:
                 await self.pub_socket.send(json.dumps(self._pool_full_error(task)).encode('utf-8'))
             except Exception as e:
                 failures.append((task, type(e).__name__))
-        logger.warning(f"[TRANSLATOR] Pool pleine, rejet de {summarize_task_ids(tasks)}")
+        logger.log(refusal_level, f"[TRANSLATOR] Pool pleine, rejet de {summarize_task_ids(tasks)}")
         if failures:
             error_types = sorted({name for _, name in failures})
             logger.error(
