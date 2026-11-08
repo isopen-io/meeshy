@@ -145,3 +145,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux sur la fusion : passerelle `src/__tests__/unit/routes` + `PostFeedService` 857/857 suites, `tsc --noEmit` vert ; web `bun test` 30 063 verts, 1 rouge (`act-leak-guard.test.ts`, connu en conteneur), typecheck vert, `measure-weight` vert (96,10 Ko / 97 ; `community_detail` 5,03, `community_posts` 2,01).
 - Le porteur a fusionné #16895 dans dev à 13:56 UTC (tête `2f3a4eac6`, avant l'intégration de dev). La CI de preuve lancée ensuite sur la branche (run 42487522146) est rouge pour une raison étrangère au lot : le cliquet `check-any-debt` lisait 490 usages pour une base de 492 (amélioration de dev non enregistrée), corrigé depuis sur dev (490/490, relancé localement). #6379 fermée.
 - Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), sinon #16878 (l'onglet Feed iOS lit enfin les publications) ou #6381.
+
+## 2026-11-08 — réveil 18
+
+- Lot : #10622 (web, maintenabilité). Les trois copies privées de l'interrupteur d'iOS (`routes/settings-sections.tsx`, `routes/communities-parts.tsx`, `routes/share-link-form.tsx`) consomment `components/ios-switch.tsx` ; le témoin `ios-switch-single-source.test.ts` refuse toute source qui redessine la pastille glissante hors du composant. Cliquet `check-animated-properties.mjs` abaissé de trois sites (10 → 7 fichiers tolérés).
+- Gates locaux : `type-check` vert ; `bun test` 30 095 verts, 2 rouges avant correction du cliquet (le cliquet lui-même, corrigé dans le lot ; `act-leak-guard.test.ts`, connu en conteneur) ; `measure-weight` vert ; navigateurs `check-communities`, `check-settings`, `check-links` verts. `check-design-harmony` rouge sur dev hors lot (27 violations dans 9 fichiers qu'il ne touche pas).
+- iOS/Android : rien à changer (le web rejoint le `Toggle` d'iOS).
+- Prochain lot recommandé : #16878 (l'onglet Feed iOS lit les publications), puis #16739 (décision à prendre) ; #6381 attend une session de staging.
