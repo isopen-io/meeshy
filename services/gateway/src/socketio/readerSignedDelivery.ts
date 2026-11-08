@@ -30,6 +30,9 @@ import {
 import { readerFileUrlSignerFromEnv, type ReaderFileUrlSigner } from '../services/attachments/readerFileSignature';
 import { ADMITTED_FILE_READER_WHERE, withoutExpiredShareLinks } from '../services/attachments/fileReaderAdmission';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ReaderSignedDelivery' });
 
 export type ReaderSignedTarget = {
   /** La room personnelle — `ROOMS.user(userId ?? id)`. */
@@ -176,10 +179,53 @@ const MESSAGE_PROTECTION_COLUMNS = {
 } as const;
 
 /**
+ * La protection RELUE, fail-closed sur les DEUX façons de ne rien savoir.
+ *
+ * `null` (ligne introuvable) et un `throw` (lecture tombée) disent la même
+ * chose à cette loi — « je n'ai aucune preuve » — et un `throw` en dit même
+ * MOINS. Les deux rendent donc `{}`, dont les cinq colonnes sont `undefined` :
+ * `contentExitLawOfSource` les lit comme une preuve manquante et ferme, la
+ * pièce est signée. Rendre l'erreur à l'appelant lui ferait perdre le plan
+ * ENTIER — et avec lui la seule remise que ses pairs EN LIGNE recevront jamais
+ * (#16965).
+ */
+async function protectionRowFailClosed(
+  prisma: Pick<PrismaClient, 'message'>,
+  messageId: string,
+): Promise<object> {
+  try {
+    return (await prisma.message.findUnique({ where: { id: messageId }, select: MESSAGE_PROTECTION_COLUMNS })) ?? {};
+  } catch (error) {
+    logger.warn('reader-signed plan: protection read failed — fail-closed, piece signed', { messageId, error });
+    return {};
+  }
+}
+
+/**
  * Le même plan quand l'émetteur ne tient pas la ligne entière (`message:edited`,
  * `message:attachment-updated`) : la protection est RELUE, cinq colonnes, et
  * seulement s'il y a une clé et une pièce à signer. Une ligne introuvable ne
  * prouve pas l'ordinaire — la loi ferme, la pièce est signée.
+ *
+ * ─── Les deux lectures ne s'arbitrent pas ensemble (#16965) ──────────────────
+ *
+ * Cette unité en fait DEUX, et une seule a une valeur de repli. Les enfermer
+ * dans un seul `try` chez l'appelant — ce que faisait `broadcastMessageMutation`
+ * — faisait disparaître `message:edited` pour tous les pairs EN LIGNE dès que
+ * l'une ou l'autre tombait, les HORS LIGNE étant seuls servis par la file.
+ *
+ * - **La PROTECTION** (`message.findUnique`) est récupérable : son absence a
+ *   déjà une valeur fail-closed déclarée (`{}`), et une lecture tombée y a
+ *   droit au même titre qu'une ligne absente. Voir
+ *   {@link protectionRowFailClosed} — la remise par lecteur a lieu, signée,
+ *   sans qu'aucune audience ne s'élargisse.
+ * - **Les DESTINATAIRES** (`participant.findMany` sous le prédicat
+ *   d'admission, dans `readerSignedTargets`) n'en ont AUCUNE : sans eux on ne
+ *   sait adresser personne, et `carriesReaderBoundAttachment` a déjà répondu
+ *   que la pièce est liée au lecteur. Retomber sur la room servirait l'adresse
+ *   nue d'une pièce établie comme protégée. L'erreur remonte donc, et
+ *   l'appelant se tait en direct — la décision écrite de la jumelle
+ *   `emitAttachmentUpdated`, et ici sa raison tient.
  */
 export async function readerSignedPlanForMessageId(
   prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>,
@@ -188,10 +234,9 @@ export async function readerSignedPlanForMessageId(
   const now = new Date();
   const signer = readerFileUrlSignerFromEnv(now);
   if (!signer || asAttachments(input.attachments).length === 0) return null;
-  const row = await prisma.message.findUnique({ where: { id: input.messageId }, select: MESSAGE_PROTECTION_COLUMNS });
   return planFor(prisma, {
     conversationId: input.conversationId,
-    protection: row ?? {},
+    protection: await protectionRowFailClosed(prisma, input.messageId),
     attachments: input.attachments,
     signer,
     now,

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import {
   sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendInternalError,
@@ -148,6 +149,10 @@ export async function bloquer(
   // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
   refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
+  // La séance « ensemble » (#17012) : rejugée, elle s'arrête chez les deux.
+  const ensemble = { ...ecoute, report: (error: unknown) => logError(fastify.log, '[BLOCKS] Together not cut after block', error) };
+  rejudgeTogetherAfter(ensemble, { userA: moi, userB: cibleId })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Together not cut after block', error));
   // #14924 — un blocage coupe le lien : les partages du rituel s'éteignent, rejoué même sur un blocage déjà posé.
   // Après les coupures et sans retenir la réponse : une panne ici ne rend pas 500 sur un blocage écrit, et le rejeu la solde.
   try {

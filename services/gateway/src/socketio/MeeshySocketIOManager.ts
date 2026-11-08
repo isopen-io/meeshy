@@ -114,7 +114,8 @@ import { emitServerEvent } from './serverEmit';
 import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
-import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import type { QueuedPayloadFor } from './queuedEventContract';
+import type { MessageMutationQueueParams } from './broadcastMessageMutation';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
@@ -1162,12 +1163,14 @@ export class MeeshySocketIOManager {
    * keeps only the entries `announcesMessageArrival` admits, and a pin is a
    * mutation of a message already arrived).
    */
-  async enqueueOfflineMessageMutation(params: {
-    conversationId: string;
-    actorUserId: string | null | undefined;
-    messageId: string;
-    resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
-  } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted' | 'expired'>): Promise<void> {
+  // Le type NOMMÉ, pas une recopie : c'est toute la raison de l'avoir créé
+  // (#16964 suite). Cette signature portait son propre littéral inline et ne
+  // déclarait PAS `excludedQueueKeys` — elle marchait par deux accidents
+  // (l'objet est relayé en bloc, et `strictFunctionTypes: false` rend un
+  // paramètre plus étroit assignable), donc elle MENTAIT sur un champ de
+  // confidentialité, et le premier refactor qui l'aurait destructurée perdait
+  // l'exclusion sans qu'un témoin tombe ni que `tsc` bronche.
+  async enqueueOfflineMessageMutation(params: MessageMutationQueueParams): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
 

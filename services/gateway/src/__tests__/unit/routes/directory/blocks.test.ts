@@ -36,6 +36,11 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn(async (args: any) => args.op()),
 }));
 
+const rejudgeTogetherAfter = jest.fn(async (_params: unknown, _pair: unknown) => undefined);
+jest.mock('../../../../services/together/togetherDeps', () => ({
+  rejudgeTogetherAfter: (params: unknown, pair: unknown) => rejudgeTogetherAfter(params, pair),
+}));
+
 import { directoryBlocksRoutes } from '../../../../routes/directory/blocks';
 
 const PREFIXE = '/api/v1/directory';
@@ -98,6 +103,16 @@ describe('PUT /directory/blocks/:userId est IDEMPOTENT', () => {
     // L'ensemble ne contient la cible QU'UNE fois : le second appel n'écrit
     // pas, sans quoi `push` la dupliquerait.
     expect(double.etat.bloques).toEqual([CIBLE]);
+    await app.close();
+  });
+
+  it('rejuge la séance « ensemble » de la paire (#17012)', async () => {
+    rejudgeTogetherAfter.mockClear();
+    const { app } = await monter();
+
+    await app.inject({ method: 'PUT', url: `${PREFIXE}/blocks/${CIBLE}` });
+
+    expect(rejudgeTogetherAfter).toHaveBeenCalledWith(expect.anything(), { userA: MOI, userB: CIBLE });
     await app.close();
   });
 
