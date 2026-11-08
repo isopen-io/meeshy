@@ -16,6 +16,11 @@ import { softDeleteMessage } from '../softDeleteMessage';
 const MSG_ID = '507f1f77bcf86cd799439044';
 const NOW = new Date('2026-11-08T19:00:00.000Z');
 
+/** La charge que l'appelant compose — voir le doc-comment de l'unité. */
+const DATA = { translations: null, deletedAt: NOW } as const;
+
+const client = (update: jest.Mock<any>) => ({ message: { update } });
+
 const missingRecord = () => {
   const error: Error & { code?: string } = new Error(
     'An operation failed because it depends on one or more records that were required but not found.',
@@ -27,20 +32,22 @@ const missingRecord = () => {
 describe('softDeleteMessage (#17079)', () => {
   it('écrit sous la garde optimiste, et vide les traductions dans la MÊME écriture', async () => {
     const update = jest.fn<any>().mockResolvedValue({});
-    const outcome = await softDeleteMessage({ message: { update } } as never, MSG_ID, NOW);
+    const outcome = await softDeleteMessage(client(update) as never, MSG_ID, DATA);
 
     expect(outcome).toBe('deleted');
-    expect(update).toHaveBeenCalledWith({
-      where: { id: MSG_ID, deletedAt: null },
-      data: { translations: null, deletedAt: NOW },
-    });
+    expect(update).toHaveBeenCalledWith({ where: { id: MSG_ID, deletedAt: null }, data: DATA });
   });
+
+  // #9899 — l'effacement des traductions PARTAGÉES n'est PAS ici, et c'est une
+  // décision : le littéral `translations: null` vit chez l'appelant, où
+  // l'effacement voisin est déjà appelé. Doubler l'effacement doublait un appel
+  // RÉSEAU au translator, ce qu'un témoin de comptage du dépôt a vu
+  // immédiatement. Cf. le doc-comment de l'unité.
 
   it('un perdant de course rend `already-deleted` au lieu de lever', async () => {
     const update = jest.fn<any>().mockRejectedValue(missingRecord());
 
-    await expect(softDeleteMessage({ message: { update } } as never, MSG_ID, NOW))
-      .resolves.toBe('already-deleted');
+    await expect(softDeleteMessage(client(update) as never, MSG_ID, DATA)).resolves.toBe('already-deleted');
   });
 
   // Le discriminant, et c'est lui qui compte : confondre une base en défaut
@@ -50,8 +57,7 @@ describe('softDeleteMessage (#17079)', () => {
   it('toute AUTRE erreur est relevée — une base en défaut n’est pas une course perdue', async () => {
     const update = jest.fn<any>().mockRejectedValue(new Error('connection reset'));
 
-    await expect(softDeleteMessage({ message: { update } } as never, MSG_ID, NOW))
-      .rejects.toThrow('connection reset');
+    await expect(softDeleteMessage(client(update) as never, MSG_ID, DATA)).rejects.toThrow('connection reset');
   });
 
   it('une erreur au code VOISIN n’est pas une course perdue non plus', async () => {
@@ -59,7 +65,7 @@ describe('softDeleteMessage (#17079)', () => {
     conflict.code = 'P2002';
     const update = jest.fn<any>().mockRejectedValue(conflict);
 
-    await expect(softDeleteMessage({ message: { update } } as never, MSG_ID, NOW)).rejects.toThrow('unique constraint');
+    await expect(softDeleteMessage(client(update) as never, MSG_ID, DATA)).rejects.toThrow('unique constraint');
   });
 });
 

@@ -165,143 +165,19 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 
 import { registerMessagesAdvancedRoutes } from '../../../routes/conversations/messages-advanced';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const CONV_ID = '507f1f77bcf86cd799439011';
-const USER_ID = '507f1f77bcf86cd799439022';
-const OTHER_USER_ID = '507f1f77bcf86cd799439033';
-const MSG_ID = '507f1f77bcf86cd799439044';
-const PART_ID = '507f1f77bcf86cd799439055';
-
-// ─── Factories ────────────────────────────────────────────────────────────────
-
-const makePrisma = (): any => ({
-  message: {
-    findFirst: jest.fn().mockResolvedValue(null),
-    findMany: jest.fn().mockResolvedValue([]),
-    update: jest.fn().mockResolvedValue({
-      id: MSG_ID,
-      content: 'hello',
-      validatedMentions: [],
-      translations: null,
-      createdAt: new Date(),
-    }),
-    delete: jest.fn(),
-  },
-  participant: {
-    findFirst: jest.fn().mockResolvedValue(null),
-    findMany: jest.fn().mockResolvedValue([]),
-  },
-  mention: {
-    findMany: jest.fn().mockResolvedValue([]),
-    deleteMany: jest.fn().mockResolvedValue({}),
-  },
-  user: {
-    findUnique: jest.fn().mockResolvedValue(null),
-  },
-  conversation: {
-    findUnique: jest.fn().mockResolvedValue(null),
-    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-  },
-  trackingLink: {
-    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-  },
-});
-
-const createMockFastify = () => {
-  const routes: Record<string, Record<string, Function>> = {};
-  const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
-  const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
-  const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
-  const mockGetManager = jest.fn().mockReturnValue({
-    getIO: mockGetIO,
-    enqueueOfflineMessageMutation: mockEnqueueOfflineMutation,
-  });
-
-  const fastify: any = {
-    get: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['GET'] = routes['GET'] || {})[path] = handler;
-    }),
-    post: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['POST'] = routes['POST'] || {})[path] = handler;
-    }),
-    put: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['PUT'] = routes['PUT'] || {})[path] = handler;
-    }),
-    delete: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['DELETE'] = routes['DELETE'] || {})[path] = handler;
-    }),
-    patch: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['PATCH'] = routes['PATCH'] || {})[path] = handler;
-    }),
-    socketIOHandler: {
-      getManager: mockGetManager,
-    },
-    notificationService: null,
-    mentionService: null,
-    translationService: {
-      retranslateMessageAsync: jest.fn().mockResolvedValue(undefined),
-    },
-    _routes: routes,
-    _mockTo: mockTo,
-    _mockEmit: mockEmit,
-    _mockGetManager: mockGetManager,
-    _mockEnqueueOfflineMutation: mockEnqueueOfflineMutation,
-  };
-  return fastify;
-};
-
-const getHandler = (fastify: any, method: string, pathFragment: string): Function => {
-  const methodRoutes = fastify._routes[method] || {};
-  const key = Object.keys(methodRoutes).find(k => k.includes(pathFragment));
-  if (!key) throw new Error(`No ${method} route matching '${pathFragment}'. Available: ${Object.keys(methodRoutes).join(', ')}`);
-  return methodRoutes[key];
-};
-
-const makeRequest = (overrides: any = {}): any => ({
-  authContext: {
-    isAuthenticated: true,
-    userId: USER_ID,
-    registeredUser: { id: USER_ID, role: 'USER' },
-    isAnonymous: false,
-    sessionToken: null,
-    participantId: PART_ID,
-  },
-  params: {},
-  query: {},
-  body: {},
-  headers: {},
-  ...overrides,
-});
-
-const makeReply = () => {
-  const reply: any = {
-    _body: null,
-    status: jest.fn().mockReturnThis(),
-    send: jest.fn((body?: any) => { if (body !== undefined) reply._body = body; return reply; }),
-    code: jest.fn().mockReturnThis(),
-    header: jest.fn().mockReturnThis(),
-  };
-  return reply;
-};
-
-const makeExistingMessage = (overrides: any = {}) => ({
-  id: MSG_ID,
-  conversationId: CONV_ID,
-  content: 'Original content',
-  createdAt: new Date(), // recent = within 24h
-  senderId: PART_ID,
-  deletedAt: null,
-  isEdited: false,
-  sender: {
-    id: PART_ID,
-    userId: USER_ID,
-    role: 'USER',
-  },
-  attachments: [],
-  ...overrides,
-});
+import {
+  CONV_ID,
+  USER_ID,
+  OTHER_USER_ID,
+  MSG_ID,
+  PART_ID,
+  makePrisma,
+  createMockFastify,
+  getHandler,
+  makeRequest,
+  makeReply,
+  makeExistingMessage,
+} from '../../helpers/messages-advanced-harness';
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -377,10 +253,9 @@ describe('registerMessagesAdvancedRoutes', () => {
      * NON idempotent. Les compteurs de `GET …/stats` dérivent alors vers le bas
      * de la valeur d'un message, définitivement.
      *
-     * Un témoin SÉQUENTIEL ne peut pas tomber : le second appel rend 404 avant
-     * d'écrire. La propriété ne se voit qu'en faisant ÉCHOUER l'écriture comme
-     * la base la ferait — `P2025`, « an operation failed because it depends on
-     * one or more records that were required but not found ».
+     * **Un témoin SÉQUENTIEL ne peut pas tomber** : le second appel rend 404
+     * avant d'écrire. La propriété ne se voit qu'en faisant ÉCHOUER l'écriture
+     * comme la base la ferait — `P2025`.
      */
     it("#17079 — l'écriture porte la garde optimiste `deletedAt: null`", async () => {
       prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), attachments: [] });
@@ -394,7 +269,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       );
     });
 
-    it("#17079 — une suppression concurrente ne décompte pas deux fois", async () => {
+    it('#17079 — une suppression concurrente ne décompte pas deux fois', async () => {
       prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), attachments: [] });
       const notFound: any = new Error('An operation failed because it depends on one or more records that were required but not found.');
       notFound.code = 'P2025';
