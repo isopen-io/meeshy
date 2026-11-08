@@ -122,11 +122,33 @@ public class AudioPlayerManager: ObservableObject {
         localPlayer = player
         player.prepareToPlay()
         duration = player.duration
-        player.play()
         isPlaying = true
         wantsPlayback = true
         lastError = nil
-        startLocalProgressTimer()
+        playLocalWhenSessionReady(player)
+    }
+
+    /// Le son part une fois la session `.playback` posée — hors du fil
+    /// principal (#17038) : sous le bouton silencieux, une lecture lancée
+    /// avant suivrait encore l'ancienne catégorie. Le tick de progression
+    /// part avec lui : lancé avant, il lirait un lecteur à l'arrêt comme une
+    /// lecture finie. Un arrêt, une pause ou une autre piste entre-temps
+    /// l'emportent.
+    private func playLocalWhenSessionReady(_ player: AVAudioPlayer) {
+        let token = ObjectIdentifier(player)
+        MediaSessionCoordinator.shared.whenSessionSettled { [weak self] in
+            guard let self, self.wantsPlayback, let player = self.localPlayer, ObjectIdentifier(player) == token else { return }
+            player.play()
+            self.startLocalProgressTimer()
+        }
+    }
+
+    private func playStreamWhenSessionReady(_ player: AVPlayer) {
+        let token = ObjectIdentifier(player)
+        MediaSessionCoordinator.shared.whenSessionSettled { [weak self] in
+            guard let self, self.wantsPlayback, let player = self.streamPlayer, ObjectIdentifier(player) == token else { return }
+            player.play()
+        }
     }
 
     private func playStream(url: URL, cacheKey: String) {
@@ -177,9 +199,9 @@ public class AudioPlayerManager: ObservableObject {
             }
         }
 
-        avPlayer.play()
         isPlaying = true
         wantsPlayback = true
+        playStreamWhenSessionReady(avPlayer)
 
         // Cache audio data in background for next time
         loadTask = Task {
@@ -288,12 +310,11 @@ public class AudioPlayerManager: ObservableObject {
         holdsPlaybackSession = true
         wantsPlayback = true
         if let localPlayer {
-            localPlayer.play()
             isPlaying = true
-            startLocalProgressTimer()
-        } else {
+            playLocalWhenSessionReady(localPlayer)
+        } else if let streamPlayer {
             // isPlaying suit l'observation du débit.
-            streamPlayer?.play()
+            playStreamWhenSessionReady(streamPlayer)
         }
     }
 

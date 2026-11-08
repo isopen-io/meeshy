@@ -3,10 +3,16 @@ import Foundation
 
 /// Ce que l'orchestrateur d'enregistrement demande à la session partagée.
 public protocol RecordingSessionControlling: Sendable {
-    /// Pose la session d'enregistrement. `holding` : un enregistrement est en
-    /// cours, et aucun lecteur de contenu ne doit la reconfigurer ni la rendre.
-    /// `false` ⇒ la session n'a pas pu être prise (appel VoIP en cours).
-    func configureRecordingSession(_ configuration: RecordingSessionConfiguration, holding: Bool) -> Bool
+    /// Pose la session d'enregistrement HORS du fil principal et rend son
+    /// issue à `completion`, sur le fil principal (#17038). `holding` : un
+    /// enregistrement est en cours, et aucun lecteur de contenu ne doit la
+    /// reconfigurer ni la rendre. `false` ⇒ la session n'a pas pu être prise
+    /// (appel VoIP en cours).
+    func configureRecordingSession(
+        _ configuration: RecordingSessionConfiguration,
+        holding: Bool,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    )
     func releaseRecordingHold()
     func handBackSession(_ handBack: RecordingSessionHandBack)
 }
@@ -26,7 +32,12 @@ public protocol RecordingSessionControlling: Sendable {
 ///   catégorie sous une capture qui tourne la reconfigurerait.
 ///
 /// Pendant un appel VoIP, rien ne se reconfigure : `begin` est refusé par la
-/// session, et aucun lecteur n'est touché.
+/// session, et le son baissé remonte.
+///
+/// La session se pose HORS du fil principal (#17038) : `begin` baisse le son
+/// tout de suite (retour instantané) et rend son verdict quand la session est
+/// prête. Un `finish` qui arrive entre-temps l'emporte : le verdict est alors
+/// `false`, et la prise est rendue à son rang, après la pose.
 @MainActor
 public final class MeeshyRecordingSession {
     nonisolated deinit {}
@@ -46,18 +57,44 @@ public final class MeeshyRecordingSession {
         self.ducker = ducker
     }
 
-    /// Un enregistrement commence. `false` ⇒ la session n'a pas pu être prise
-    /// (appel VoIP) : l'enregistreur ne démarre pas.
-    @discardableResult
-    public func begin(_ source: RecordingSource) -> Bool {
+    /// Chaque `begin` et chaque `finish` change d'époque : le verdict d'une
+    /// pose de session qui revient après un `finish` ne vaut plus.
+    private var recordingEpoch = 0
+
+    /// Un enregistrement commence : l'enregistreur démarre quand `whenReady`
+    /// reçoit `true`. `false` ⇒ la session n'a pas pu être prise (appel VoIP),
+    /// ou l'enregistrement a été arrêté avant qu'elle ne soit prête.
+    public func begin(
+        _ source: RecordingSource,
+        whenReady: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
         let configuration = RecordingSessionLaw.configuration(
             for: source, meeshySoundPlaying: ducker.hasAudiblePlayback
         )
-        guard session.configureRecordingSession(configuration, holding: true) else { return false }
+        recordingEpoch &+= 1
+        let epoch = recordingEpoch
+        let ownedBefore = ownsRecordingConfiguration
         isRecording = true
         ownsRecordingConfiguration = true
         ducker.duck()
-        return true
+        session.configureRecordingSession(configuration, holding: true) { [weak self] accepted in
+            guard let self, self.recordingEpoch == epoch, self.isRecording else { return whenReady(false) }
+            guard accepted else {
+                self.isRecording = false
+                self.ownsRecordingConfiguration = ownedBefore
+                self.ducker.restore()
+                return whenReady(false)
+            }
+            whenReady(true)
+        }
+    }
+
+    /// `begin`, attendu : rend quand la session est prête (ou refusée).
+    @discardableResult
+    public func begin(_ source: RecordingSource) async -> Bool {
+        await withCheckedContinuation { continuation in
+            begin(source) { continuation.resume(returning: $0) }
+        }
     }
 
     /// L'enregistrement se termine — envoi, annulation ou échec. Sans `begin`
@@ -65,6 +102,7 @@ public final class MeeshyRecordingSession {
     public func finish(handingBackSession: Bool) {
         guard isRecording else { return }
         isRecording = false
+        recordingEpoch &+= 1
         ducker.restore()
         session.releaseRecordingHold()
         guard handingBackSession else { return }
@@ -73,14 +111,16 @@ public final class MeeshyRecordingSession {
 
     /// La caméra arme son micro : la session devient capable d'enregistrer
     /// avant que la capture ne tourne, sans rien baisser ni rien tenir.
-    @discardableResult
-    public func prepare(_ source: RecordingSource) -> Bool {
+    public func prepare(_ source: RecordingSource) {
         let configuration = RecordingSessionLaw.configuration(
             for: source, meeshySoundPlaying: ducker.hasAudiblePlayback
         )
-        guard session.configureRecordingSession(configuration, holding: false) else { return false }
+        let ownedBefore = ownsRecordingConfiguration
         ownsRecordingConfiguration = true
-        return true
+        session.configureRecordingSession(configuration, holding: false) { [weak self] accepted in
+            guard !accepted, let self, !self.isRecording else { return }
+            self.ownsRecordingConfiguration = ownedBefore
+        }
     }
 
     /// Le viseur se ferme : un enregistrement encore en cours se termine, et

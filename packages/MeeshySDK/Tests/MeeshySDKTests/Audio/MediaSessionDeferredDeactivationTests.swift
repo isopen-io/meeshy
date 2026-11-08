@@ -49,7 +49,7 @@ struct MediaSessionDeferredDeactivationTests {
             .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         for signature in ["public nonisolated func activatePlaybackSync(",
-                          "public nonisolated func activateRecordingSync(",
+                          "public nonisolated func activateRecording(",
                           "public func request("] {
             let start = try #require(code.range(of: signature))
             let body = String(code[start.upperBound...].prefix(900))

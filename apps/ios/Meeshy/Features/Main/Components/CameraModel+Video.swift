@@ -49,8 +49,9 @@ extension CameraModel {
         recordingId = UUID().uuidString
         // Les sons extérieurs s'arrêtent, le son Meeshy qui joue BAISSE sans
         // s'arrêter. Refusé pendant un appel : la prise se fait sous
-        // la session de l'appel.
-        recordingSession.begin(.video)
+        // la session de l'appel. La session se pose hors du fil principal
+        // (#17038), armée d'avance par `prepare(.video)` quand le micro entre.
+        recordingSession.begin(.video) { _ in }
         guard startSegment() else {
             recordingSession.finish(handingBackSession: false)
             return closeRecordingToken(recordingId)

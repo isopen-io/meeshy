@@ -21,7 +21,7 @@ final class TalkieMicCapture: TalkieCapturing {
 
     func start(onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
         guard engine == nil, await DevicePermissions.requestMicrophone().isUsable else { return false }
-        guard MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
+        guard await MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
         holdsSession = true
         let engine = AVAudioEngine()
         let input = engine.inputNode
