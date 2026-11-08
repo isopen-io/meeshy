@@ -212,3 +212,6 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   catalogue Swift mort (son appelant existe).
 - Ce qui reste de l'écoute : ÉMETTRE depuis iOS (avec l'écran d'accord de la catégorie), Android, la rangée de liste,
   le fantôme.
+- PR #16757 vers `dev` ; projet Xcode régénéré par `[xcodegen]`, preuve iOS par `ios.yml` en `workflow_dispatch`.
+- Prochain lot recommandé : ÉMETTRE son écoute depuis iOS (source Meeshy d'abord, écran d'accord de la catégorie),
+  sinon la réception du talkie sur Android (#16675).
