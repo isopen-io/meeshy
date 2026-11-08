@@ -406,3 +406,14 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reprise : aucune PR de la routine ouverte ; `claude/cercles-16984-web` (carte des positions sur le web) est vivante
   et tenue par un autre réveil, ce réveil ne la touche pas. Issue #17097 ouverte sous #17011 (milestone #215), branche
   `claude/cercles-ensemble-ios` réservée avant toute écriture.
+- Lot : PR #17101 vers `dev`. SDK : contrat `together:*` lu en Swift (décodeurs stricts, accusés), loi de
+  synchronisation portée à l'identique du web (`TogetherSync`), état de séance en valeur (`TogetherState`), émetteur
+  socket, galerie des pièces lisibles ensemble (`TogetherService`). App : `TogetherCenter`, `TogetherPlaybackDriver`
+  (commandes de l'app seulement, pour qu'une correction du pilote ne se relise jamais comme un geste),
+  `TogetherAVSurface` (AVPlayer adopté par la politique média), bandeau, attente et lecteur flottant montés dans
+  `OverlayHost`, ligne sur la fiche d'un Proche. 27 libellés `together.*` en sept langues. Suivi Android : #17100.
+- Le bot `[xcodegen]` a été annulé deux fois sans obtenir de runner macOS (les dispatches iOS des autres branches
+  aussi) : les références du pbxproj sont posées à la main, gardes Linux vertes.
+- Gates locaux : `check_house_rules.sh` 33 règles tenues, `check_cohesion_budget.sh` code 0,
+  `check_localization.py`, `check_pbxproj_consistency.sh`, `check_test_registration.sh` verts. Swift ne compile pas
+  en conteneur : la preuve est la CI iOS et SDK dispatchée sur la PR.
