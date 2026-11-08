@@ -16,27 +16,44 @@ final class ComposerCaptureTopRowTests: XCTestCase {
                                     offersSizeToggle: size, offersSave: save)
     }
 
-    // MARK: - (1) La caméra à DROITE du flash
+    // MARK: - (A8, #17109) « Quitter · ✓ Valider », et la capsule centrée
 
-    func test_trailing_putsTheFlipRightOfTheFlash_atTheEdge() {
-        let droite = ComposerCaptureTopRow.trailing(Self.input())
-        XCTAssertEqual(droite, [.more, .flash, .flip])
-        XCTAssertEqual(droite.last, .flip, "le retournement touche le bord droit")
+    func test_armed_theHeaderIsQuitThenValidate() {
+        XCTAssertEqual(ComposerCaptureTopRow.leading(Self.input()), [.close])
+        XCTAssertEqual(ComposerCaptureTopRow.trailing(Self.input()), [.validate],
+                       "✓ Valider est là dans tous les états, prise ou non")
+        XCTAssertTrue(ComposerCaptureTopRow.showsHeader(Self.input()))
     }
 
-    func test_trailing_withoutSizeToggle_stillOffersTheMenu_forTheGrid() {
-        XCTAssertEqual(ComposerCaptureTopRow.trailing(Self.input(size: false)), [.more, .flash, .flip])
+    func test_armed_oneCentredCapsule_flashTimerLensMore() {
+        XCTAssertEqual(ComposerCaptureTopRow.capsule(Self.input()), [.flash, .selfTimer, .flip, .more])
+        XCTAssertEqual(ComposerCaptureTopRow.capsule(Self.input(size: false)), [.flash, .selfTimer, .flip, .more],
+                       "le viseur servi seul garde la même capsule")
     }
 
-    // MARK: - (5) `⋯` remplace `[ ]` au viseur (décision porteur 2026-11-07, OPUS-6)
+    func test_theHeader_neverCarriesTheCapsuleControls() {
+        let entete = ComposerCaptureTopRow.leading(Self.input()) + ComposerCaptureTopRow.trailing(Self.input())
+        for controle in [ComposerCaptureTopItem.flash, .selfTimer, .flip, .more] {
+            XCTAssertFalse(entete.contains(controle), "\(controle) vit dans la capsule, pas dans l'en-tête")
+        }
+    }
+
+    // MARK: - (5) La taille ne vit que dans ⋯, et seulement si elle s'offre
 
     func test_theViewfinder_neverShowsTheSizeToggleInTheRow_itLivesInTheMenu() {
         XCTAssertFalse(ComposerCaptureTopRow.trailing(Self.input()).contains(.size))
-        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: true), [.grid, .selfTimer, .size])
+        XCTAssertFalse(ComposerCaptureTopRow.capsule(Self.input()).contains(.size))
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: true), [.grid, .size])
     }
 
-    func test_theMenu_withoutACardToReturnTo_offersTheGridAndTheTimer() {
-        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: false), [.grid, .selfTimer])
+    func test_theMenu_withoutASizeToggle_offersTheGridOnly_theTimerIsInTheCapsule() {
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: false), [.grid])
+    }
+
+    func test_theTimerButton_cyclesOffThreeTenOff() {
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.off.next, .three)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.three.next, .ten)
+        XCTAssertEqual(ComposerCaptureSelfTimerDelay.ten.next, .off)
     }
 
     // MARK: - (7) Le retardateur (CAM-4)
@@ -133,27 +150,31 @@ final class ComposerCaptureTopRowTests: XCTestCase {
 
     // MARK: - (3) Les contrôleurs de segment à GAUCHE des deux boutons
 
-    func test_withPendingSegments_theSegmentControlsSitLeftOfFlashAndFlip() {
-        let droite = ComposerCaptureTopRow.trailing(Self.input(segments: 2))
-        XCTAssertEqual(droite, [.dropSegment, .validate, .flash, .flip])
-        let flash = droite.firstIndex(of: .flash) ?? 0
-        XCTAssertLessThan(droite.firstIndex(of: .dropSegment) ?? .max, flash)
-        XCTAssertLessThan(droite.firstIndex(of: .validate) ?? .max, flash)
-        XCTAssertFalse(droite.contains(.more), "sept contrôles tiennent sur un iPhone, pas huit : ⋯ cède")
+    func test_withPendingSegments_theDropControlSitsLeftOfValidate() {
+        XCTAssertEqual(ComposerCaptureTopRow.trailing(Self.input(segments: 2)), [.dropSegment, .validate])
+        XCTAssertEqual(ComposerCaptureTopRow.capsule(Self.input(segments: 2)), [.flash, .selfTimer, .flip, .more])
     }
 
-    func test_whileRecording_onlyTheCrossAndTheChronoRemain() {
+    /// A9 (#17109, révoque #8653) : en filmant, plus d'en-tête — seul le chrono,
+    /// centré ; la prise se clôt au déclencheur rouge.
+    func test_whileRecording_noHeader_noCapsule_onlyTheCentredChrono() {
         let enregistre = Self.input(stage: .recording, segments: 1)
-        XCTAssertEqual(ComposerCaptureTopRow.leading(enregistre), [.close, .chrono])
+        XCTAssertFalse(ComposerCaptureTopRow.showsHeader(enregistre))
+        XCTAssertEqual(ComposerCaptureTopRow.leading(enregistre), [])
         XCTAssertEqual(ComposerCaptureTopRow.trailing(enregistre), [], "rien d'autre ne se règle en filmant")
+        XCTAssertEqual(ComposerCaptureTopRow.capsule(enregistre), [])
+        XCTAssertTrue(ComposerCaptureTopRow.showsChrono(enregistre))
     }
 
-    // MARK: - (4) La puce du chrono à DROITE de (x)
+    // MARK: - (4) La puce du chrono, CENTRÉE (A9, #17109)
 
-    func test_theChrono_sitsRightOfTheCross_assoonAsAVideoIsBeingTaken() {
-        XCTAssertEqual(ComposerCaptureTopRow.leading(Self.input()), [.close], "sans vidéo, pas de chrono")
-        XCTAssertEqual(ComposerCaptureTopRow.leading(Self.input(segments: 1)), [.close, .chrono])
-        XCTAssertEqual(ComposerCaptureTopRow.leading(Self.input(stage: .recording)), [.close, .chrono])
+    func test_theChrono_isCentred_assoonAsAVideoIsBeingTaken() {
+        XCTAssertFalse(ComposerCaptureTopRow.showsChrono(Self.input()), "sans vidéo, pas de chrono")
+        XCTAssertTrue(ComposerCaptureTopRow.showsChrono(Self.input(segments: 1)))
+        XCTAssertTrue(ComposerCaptureTopRow.showsChrono(Self.input(stage: .recording)))
+        XCTAssertFalse(ComposerCaptureTopRow.showsChrono(Self.input(editing: true, segments: 1)), "pas en retouche")
+        XCTAssertFalse(ComposerCaptureTopRow.leading(Self.input(segments: 1)).contains(.chrono),
+                       "le chrono ne colle plus à la croix : il est au centre")
     }
 
     func test_theSegmentIndicator_countsTheSegmentBeingRecorded() {
@@ -199,17 +220,6 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         let retouche = Self.input(editing: true, segments: 0, size: false, save: true)
         XCTAssertEqual(ComposerCaptureTopRow.leading(retouche), [.close])
         XCTAssertEqual(ComposerCaptureTopRow.trailing(retouche), [.save, .done])
-    }
-
-    // MARK: - Le curseur sous le flash, où qu'il soit
-
-    func test_theFlashSlider_isInsetUnderTheFlash_byWhatSitsRightOfIt() {
-        let cible: CGFloat = 44
-        XCTAssertEqual(ComposerCaptureTopRow.flashSliderTrailingInset([.size, .flash, .flip], tapTarget: cible),
-                       cible + ComposerCaptureTopRow.spacing, "un contrôle — le retournement — à droite du flash")
-        XCTAssertEqual(ComposerCaptureTopRow.flashSliderTrailingInset([.flash], tapTarget: cible), 0)
-        XCTAssertEqual(ComposerCaptureTopRow.flashSliderTrailingInset([.done], tapTarget: cible), 0,
-                       "sans flash, rien à aligner")
     }
 
     // MARK: - (5) (x) pendant un enregistrement demande confirmation
@@ -268,8 +278,9 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCaptureDiscardRule.asksBeforeClosing("),
                       "la croix et le glissé consultent la règle qui connaît l'enregistrement")
-        XCTAssertFalse(chrome.contains("if session.stage != .recording {"),
-                       "la croix reste là pendant la prise : on peut la toucher")
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("ComposerCaptureTopRow.showsHeader(row)"),
+                      "l'en-tête se retire en filmant par sa loi (A9, #17109), jamais par un test d'étape en dur")
     }
 
     // MARK: - (2) Le curseur du flash s'efface après 2 s sans interaction
@@ -313,7 +324,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         XCTAssertTrue(barre.contains("ComposerFlashSliderTimer"), "la barre tient la minuterie")
         XCTAssertTrue(barre.contains(".task(id: sliderTimer.generation)"), "une seule échéance vit à la fois")
         XCTAssertTrue(barre.contains("ComposerCaptureTopRow.trailing("), "la disposition vient de la loi")
-        XCTAssertTrue(barre.contains("ComposerCaptureTopRow.flashSliderTrailingInset("))
+        XCTAssertTrue(barre.contains("ComposerCaptureTopRow.capsule("), "la capsule aussi")
         let curseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerFlashIntensitySlider.swift")
         XCTAssertTrue(curseur.contains("onInteraction"), "glisser ou régler à la voix est une interaction")
     }

@@ -89,6 +89,88 @@ nonisolated enum StoryTrayActionResolver {
     }
 }
 
+// MARK: - La caméra d'abord (#17109)
+
+extension Notification.Name {
+    /// **La caméra autonome du tray des stories** : elle arme plein écran, prend,
+    /// puis remet sa prise au composer. Toute entrée « caméra d'abord » la poste ;
+    /// le cover unique de la racine (`StoryComposerCover`) la présente.
+    static let openStoryCamera = Notification.Name("openStoryCamera")
+}
+
+/// **Ce que la caméra d'abord décide** — pur, éprouvé sans monter de vue.
+nonisolated enum StoryCameraFirstRule {
+    /// Elle ne s'ouvre jamais par-dessus le composer, ni deux fois.
+    static func opens(composerShown: Bool, cameraShown: Bool) -> Bool {
+        !composerShown && !cameraShown
+    }
+
+    /// Une prise remise ouvre la porte SEMÉE (la prise est le fond, la caméra
+    /// ne se réarme pas) ; sans prise, la porte du tray, comme avant.
+    static func intent(carriesTake: Bool) -> ComposerIntent {
+        carriesTake ? .cameraTake : ComposerIntent(origin: .storyTray)
+    }
+}
+
+extension StoryCameraFirstRule {
+    /// **Les deux façons de créer, au menu de l'avatar « Moi »**, sur les deux
+    /// trails : « Ajouter une story » ouvre le composer, « Caméra » arme la
+    /// caméra d'abord — le seul émetteur de `.openStoryCamera`, que le cover
+    /// racine présente.
+    @MainActor
+    static func createItems(openComposer: @escaping () -> Void) -> [AvatarContextMenuItem] {
+        [
+            AvatarContextMenuItem(label: StoryTrayCopy.addStory, icon: "plus.circle.fill") {
+                openComposer()
+                HapticFeedback.medium()
+            },
+            AvatarContextMenuItem(label: ComposerCameraCopy.openCamera, icon: "camera.fill") {
+                NotificationCenter.default.post(name: .openStoryCamera, object: nil)
+                HapticFeedback.medium()
+            }
+        ]
+    }
+}
+
+/// **La caméra d'abord** (A8–A10 hors du composer, #17109) : elle arme plein écran ; sa prise
+/// ouvre le composer, la prise en fond, sans réarmer la caméra. Quitter sans rien prendre ne
+/// laisse rien derrière.
+struct StoryCameraFirstCover: ViewModifier {
+    @Binding var composerShown: Bool
+    @Binding var takeSeed: StoryComposerSeed?
+    @State private var cameraFirst = false
+    /// La prise brute, tenue le temps que le viseur se retire : la graine (fichier
+    /// d'origine + bitmap réduit) se fabrique après, hors du geste.
+    @State private var take: CameraResult?
+
+    func body(content: Content) -> some View {
+        content
+            .fullScreenCover(isPresented: $cameraFirst, onDismiss: handOver) {
+                ComposerViewfinder(initialMode: .photo,
+                                   recordingBudget: ComposerCaptureRecordingBudget.maxDuration(for: .story)) { prise in
+                    take = prise
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openStoryCamera)) { _ in
+                guard StoryCameraFirstRule.opens(composerShown: composerShown, cameraShown: cameraFirst) else { return }
+                take = nil
+                takeSeed = nil
+                cameraFirst = true
+            }
+    }
+
+    /// Le viseur s'est retiré : une prise ouvre le composer semé, rien n'ouvre rien.
+    private func handOver() {
+        guard let prise = take else { return }
+        take = nil
+        Task { @MainActor in
+            guard let graine = await ComposerMediaSeeding.seed(forTake: prise), !composerShown else { return }
+            takeSeed = graine
+            composerShown = true
+        }
+    }
+}
+
 // MARK: - Chaînage déterministe de la sheet « Mes stories »
 
 /// Intention posée PENDANT qu'une sheet se ferme, exécutée à la fin réelle du
@@ -183,13 +265,18 @@ struct StoryComposerCover: ViewModifier {
     /// Aperçu monté DANS le cover du composer : il se superpose au composer et
     /// lui rend la main à la fermeture, sans démonter la session d'édition.
     @State private var previewAssets: StoryPreviewAssets?
+    /// La prise que la caméra autonome (#17109) remet au composer : elle en devient le
+    /// fond, et la porte s'ouvre semée (`ComposerIntent.cameraTake`).
+    @State private var takeSeed: StoryComposerSeed?
 
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
-            viewModel.pendingDraftId = nil
-        }) {
+        content.modifier(StoryCameraFirstCover(composerShown: $viewModel.showStoryComposer, takeSeed: $takeSeed))
+            .fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
+                viewModel.pendingDraftId = nil
+                takeSeed = nil
+            }) {
             MeeshyComposerHost(
-                intent: ComposerIntent(origin: .storyTray),
+                intent: StoryCameraFirstRule.intent(carriesTake: takeSeed != nil),
                 initialVisibility: viewModel.lastComposerVisibility,
                 draftId: viewModel.pendingDraftId,
                 onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
@@ -248,12 +335,8 @@ struct StoryComposerCover: ViewModifier {
                 // fait disparaître d'un site de republication, où son absence
                 // transformerait la republication en mood neuf, sans un mot.
                 moodSeed: nil,
-                // Ni média : la création part d'une ARDOISE. Ce que l'auteur y
-                // pose vient de la caméra, de la pellicule ou du presse-papier,
-                // par les fournisseurs que le meuble installe — jamais d'une
-                // graine. Écrit en toutes lettres, le paramètre n'ayant pas de
-                // défaut.
-                mediaSeed: nil,
+                // Une ARDOISE, sauf prise de la caméra autonome (#17109) ; écrit en toutes lettres, sans défaut.
+                mediaSeed: takeSeed,
                 onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
                     previewAssets = StoryPreviewAssets(
                         slides: slides,
