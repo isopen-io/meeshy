@@ -4,6 +4,7 @@ import MeeshySDK
 
 /// L'émission de mon écoute (#16803) : rien ne part sans mon choix, l'état part complet une fois par changement, la
 /// pause et l'arrière-plan l'effacent, et un envoi perdu se rejoue.
+@MainActor
 final class ListeningBroadcastLawTests: XCTestCase {
 
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)

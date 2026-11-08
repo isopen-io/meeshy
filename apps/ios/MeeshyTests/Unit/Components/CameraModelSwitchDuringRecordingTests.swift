@@ -258,6 +258,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 /// une erreur ET un fichier valide (`AVErrorRecordingSuccessfullyFinishedKey`).
 /// `handleSegmentFinished` jetait tout dès `error != nil` : 40 s de vidéo
 /// disparaissaient sans un mot.
+@MainActor
 final class CameraRecordingInterruptionTests: XCTestCase {
 
     private func erreur(fichierValide: Bool?) -> NSError {
