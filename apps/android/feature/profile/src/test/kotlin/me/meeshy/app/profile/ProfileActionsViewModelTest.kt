@@ -511,6 +511,41 @@ class ProfileActionsViewModelTest {
     }
 
     @Test
+    fun `retrograder le lien d'un collegue de l'equipe ne retire pas ses blocages pendant que la passerelle repond`() = runTest {
+        val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.FRIEND))))
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val reply = CompletableDeferred<NetworkResult<RelationLink>>()
+        circles.lowerReply = reply
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.lowerCircle()
+
+        assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.ACQUAINTANCE)
+        assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+        reply.complete(NetworkResult.Success(circleLink("u2", RelationLevel.ACQUAINTANCE)))
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `une relecture du niveau d'outils en panne garde les blocages deja peints`() = runTest {
+        val circles = ProfileCirclesFake()
+        circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)
+        val vm = viewModel(circles = circles)
+        vm.bind("u2", isAnonymous = false)
+
+        circles.gate = null
+        vm.bind("u2", isAnonymous = false, callsAvailable = true)
+
+        assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
+        assertThat(vm.state.value.receptionsOnProfile)
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
     fun `une retrogradation refusee rend aussi le niveau d'outils d'avant`() = runTest {
         val circles = ProfileCirclesFake(served = NetworkResult.Success(listOf(circleLink("u2", RelationLevel.FRIEND))))
         circles.gate = RelationRaiseGate(accessLevel = RelationLevel.BLOOD)

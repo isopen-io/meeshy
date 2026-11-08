@@ -167,7 +167,11 @@ class ProfileActionsViewModel @Inject constructor(
             val gate = quietly { circles.raiseGate(userId) }
             val blocked = gate?.blocks(System.currentTimeMillis()) ?: false
             val fresh = ProfileCircle.of(userId, served, sent)
-            applyCircle(userId, fresh?.copy(pending = fresh.pending ?: pendingNow, raiseBlocked = blocked), gate?.accessLevel)
+            applyCircle(
+                userId,
+                fresh?.copy(pending = fresh.pending ?: pendingNow, raiseBlocked = blocked),
+                gate?.accessLevel ?: _state.value.toolLevel,
+            )
         }
     }
 
@@ -182,7 +186,8 @@ class ProfileActionsViewModel @Inject constructor(
         if (lowerJob?.isActive == true) return@withTarget
         circleJob?.cancel()
         val toolBefore = _state.value.toolLevel
-        _state.update { it.copy(circle = before.lowered(), toolLevel = toolBefore?.let { level -> minOf(level, target) }) }
+        val toolAfter = toolBefore?.afterLowering(before.level, target)
+        _state.update { it.copy(circle = before.lowered(), toolLevel = toolAfter) }
         lowerJob = viewModelScope.launch {
             when (val result = quietly { circles.lower(id, target) }) {
                 is NetworkResult.Success -> applyCircle(
@@ -197,6 +202,13 @@ class ProfileActionsViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Le niveau d'outils attendu après une baisse, avant que la passerelle le relise : un niveau servi AU-DESSUS du lien ne
+     * vient pas du lien (un collègue de l'équipe) et ne bouge pas ; sinon il suit le cran visé (#16643).
+     */
+    private fun RelationLevel.afterLowering(linkLevel: RelationLevel, target: RelationLevel): RelationLevel =
+        if (this > linkLevel) this else minOf(this, target)
 
     /** Le cercle et le niveau d'outils en UNE écriture : la fiche ne peint jamais l'un sans l'autre (#16643). */
     private fun applyCircle(userId: String, circle: ProfileCircle?, toolLevel: RelationLevel? = _state.value.toolLevel) {
