@@ -31,6 +31,57 @@ extension ComposerCaptureCopy {
     static var savingToPhotos: String {
         String(localized: "composer.capture.savingToPhotos", defaultValue: "Enregistrement dans Photos…", bundle: .main)
     }
+
+    /// Le viseur ne s'est pas armé à temps : la photo ne part pas, et cela se dit (CAM-15).
+    static var cameraNotReady: String {
+        String(localized: "composer.capture.notReady", defaultValue: "La caméra n'est pas prête", bundle: .main)
+    }
+}
+
+/// **Un toucher qui n'aboutit pas se dit** (CAM-15) : l'attente du viseur
+/// tranche entre la photo, le silence (une attente annulée ne lègue rien) et
+/// l'aveu d'une caméra qui n'est pas prête.
+nonisolated enum ComposerCaptureReadiness: Equatable, Sendable {
+    case shoot
+    case silent
+    case notReady
+
+    static func outcome(ready: Bool, cancelled: Bool) -> ComposerCaptureReadiness {
+        guard !cancelled else { return .silent }
+        return ready ? .shoot : .notReady
+    }
+
+    @MainActor static func announceNotReady() {
+        HapticFeedback.error()
+        UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.cameraNotReady)
+        FeedbackToastManager.shared.showError(ComposerCaptureCopy.cameraNotReady)
+    }
+}
+
+/// **Un rendu impossible pour Photos se dit** (CAM-15) : le rendu manqué dit
+/// l'échec — la vidéo brute rejoint Photos à sa place plutôt que d'être
+/// effacée ; un refus de Photos, lui, s'est déjà dit (`reportPhotoLibraryRefusal`).
+nonisolated enum ComposerGallerySaveNotice: Equatable, Sendable {
+    case saved
+    case failed
+
+    static func notice(rendered: Bool, written: Bool) -> ComposerGallerySaveNotice? {
+        guard rendered else { return .failed }
+        return written ? .saved : nil
+    }
+
+    /// Ce qui rejoint Photos : le rendu, ou la prise brute quand il a manqué.
+    static func videoToWrite(rendered: URL?, raw: URL) -> URL {
+        rendered ?? raw
+    }
+
+    @MainActor static func show(rendered: Bool, written: Bool) {
+        switch notice(rendered: rendered, written: written) {
+        case .saved: FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
+        case .failed: FeedbackToastManager.shared.showError(ComposerCaptureCopy.saveToPhotosFailed)
+        case nil: break
+        }
+    }
 }
 
 /// **Les prises arrivent à la session, une fois** (#9351) — plus aux hôtes.
@@ -247,12 +298,11 @@ extension ComposerCaptureSession {
         galleryChain = Task { @MainActor [weak self] in
             defer { self?.endGallerySave() }
             await precedent?.value
-            guard await brut?.value ?? true,
-                  let octets = await ComposerCaptureSession.renderedPhotoBytes(data, fallback: repli, look: regard,
-                                                             aspect: proportions, person: auteur,
-                                                             date: date, scenes: cache),
-                  await galerie.saveImage(octets) else { return }
-            FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
+            guard await brut?.value ?? true else { return }
+            let octets = await ComposerCaptureSession.renderedPhotoBytes(data, fallback: repli, look: regard, aspect: proportions,
+                                                                         person: auteur, date: date, scenes: cache)
+            guard let octets else { return ComposerGallerySaveNotice.show(rendered: false, written: false) }
+            ComposerGallerySaveNotice.show(rendered: true, written: await galerie.saveImage(octets))
         }
     }
 
@@ -305,15 +355,13 @@ extension ComposerCaptureSession {
             let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: await ComposerTakeAspect.aspect(canvas: proportions, video: url),
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
-            guard let rendue = rendue?.gallery else { return }
-            let enregistree = await ComposerVideoGalleryCopy.write(rendue, original: url, originalInLibrary: brut != nil,
+            let fichier = ComposerGallerySaveNotice.videoToWrite(rendered: rendue?.gallery, raw: url)
+            let enregistree = await ComposerVideoGalleryCopy.write(fichier, original: url, originalInLibrary: brut != nil,
                                                                    gallery: galerie)
-            if rendue != url {
-                FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
-                                                      logger: .media)
+            if fichier != url {
+                FileManager.default.removeItemLogging(at: fichier, context: "rendu enregistré en galerie", logger: .media)
             }
-            guard enregistree else { return }
-            FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
+            ComposerGallerySaveNotice.show(rendered: rendue?.gallery != nil, written: enregistree)
         }
     }
 
