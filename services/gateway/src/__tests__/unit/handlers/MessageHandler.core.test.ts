@@ -2857,19 +2857,7 @@ describe('MessageHandler — coverage gap tests', () => {
     expect(mockConversationMessageStatsOnNewMessage).not.toHaveBeenCalled();
   });
 
-  /**
-   * #17058 — CE TÉMOIN A CHANGÉ DE SOURCE.
-   *
-   * Il donnait à la LIGNE aucun cid (`makeMockMessagingService({
-   * clientMessageId: undefined })`) et attendait un accusé sans cid : il
-   * dérivait donc le cid de l'accusé de la ligne, ce qui EST le défaut — sur un
-   * hit de déduplication la ligne est celle du PREMIER message.
-   *
-   * « Sans cid » doit se lire **sans cid SOUMIS**. Et le cas qu'il retirait à
-   * tort est précisément le cas nominal : le client a soumis son cid, la ligne
-   * n'en porte pas, et c'est l'accusé qui doit le lui rendre — sans quoi la
-   * réconciliation par cid ne promeut jamais la ligne optimiste.
-   */
+  // #17058 — « sans cid » = sans cid SOUMIS ; raison dans `message-ack-submitted-cid.test.ts`.
   it('#17058 — handleMessageSend: aucun cid SOUMIS → aucun cid dans l’accusé', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
@@ -2889,26 +2877,6 @@ describe('MessageHandler — coverage gap tests', () => {
     const cbArg: any = cb.mock.calls[0]?.[0] ?? {};
     expect(cbArg.success).toBe(true);
     expect(cbArg.data?.clientMessageId).toBeUndefined();
-  });
-
-  it('#17058 — handleMessageSend: cid SOUMIS rendu même quand la ligne n’en porte aucun', async () => {
-    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
-    const socket = makeSocket('socket-1');
-    const cb = jest.fn();
-    const data = makeValidSendData();
-    mockValidateSocketEvent.mockReturnValue({ success: true, data });
-
-    const messagingService = makeMockMessagingService({ clientMessageId: undefined });
-    const prisma = makeMockPrisma({
-      participant: { findMany: jest.fn(async () => []) },
-      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-    });
-
-    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, messagingService, prisma });
-    await handler.handleMessageSend(socket, data as any, cb);
-
-    const cbArg: any = cb.mock.calls[0]?.[0] ?? {};
-    expect(cbArg.data?.clientMessageId).toBe(VALID_CID);
   });
 
   it('handleMessageSend: _sendResponse when response.data is undefined → failure response', async () => {
