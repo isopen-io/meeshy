@@ -44,6 +44,8 @@ const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then(
 const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m) => ({ default: m.ProfileBringRow })));
 /* Le talkie (#16641) : son propre chunk, dès Proche — le niveau vient du cache des liens. */
 const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
+/* Regarder ou écouter ensemble (#17055) : son propre chunk, dès Proche, comme le talkie. */
+const ProfileTogetherRow = lazy(() => import('@/routes/user-profile-together').then((m) => ({ default: m.ProfileTogetherRow })));
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -309,11 +311,18 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                   }
                                 />
                                 {relation.kind === 'friend' ? (
-                                  <ProfileTalkieRow
-                                    language={language}
-                                    person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                    onNotice={(message) => announce(message, 'error')}
-                                  />
+                                  <>
+                                    <ProfileTalkieRow
+                                      language={language}
+                                      person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                      onNotice={(message) => announce(message, 'error')}
+                                    />
+                                    <ProfileTogetherRow
+                                      language={language}
+                                      person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                      onNotice={(message, failed) => announce(message, failed ? 'error' : 'neutral')}
+                                    />
+                                  </>
                                 ) : null}
                                 <ProfileBringRow
                                   language={language}

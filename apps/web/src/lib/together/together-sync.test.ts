@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { estimateClockOffset, playbackCorrection, servedPositionMs } from './together-sync';
+import { estimateClockOffset, localGestureEffect, playbackCorrection, servedPositionMs } from './together-sync';
 
 /**
  * LA LOI DE SYNCHRONISATION DE « ENSEMBLE » (#17055) — la position servie se lit à
@@ -58,5 +58,22 @@ describe('playbackCorrection', () => {
   test('en pause, tout écart sensible se règle par un saut, jamais par la vitesse', () => {
     expect(playbackCorrection({ localMs: 10_400, targetMs: 10_000, playing: false })).toEqual({ kind: 'seek', toMs: 10_000 });
     expect(playbackCorrection({ localMs: 10_050, targetMs: 10_000, playing: false })).toEqual({ kind: 'none' });
+  });
+});
+
+describe('localGestureEffect', () => {
+  test('un geste qui change l’état partagé part chez l’autre', () => {
+    expect(localGestureEffect({ gesture: 'pause', localMs: 10_000, targetMs: 10_000, sharedPlaying: true })).toBe('send');
+    expect(localGestureEffect({ gesture: 'play', localMs: 10_000, targetMs: 10_000, sharedPlaying: false })).toBe('send');
+    expect(localGestureEffect({ gesture: 'seek', localMs: 40_000, targetMs: 10_000, sharedPlaying: true })).toBe('send');
+  });
+
+  test('« lecture » pendant que la séance lit déjà réaligne ici, sans rien envoyer (lecture bloquée puis relancée)', () => {
+    expect(localGestureEffect({ gesture: 'play', localMs: 0, targetMs: 30_000, sharedPlaying: true })).toBe('align');
+    expect(localGestureEffect({ gesture: 'pause', localMs: 10_000, targetMs: 10_000, sharedPlaying: false })).toBe('align');
+  });
+
+  test('un petit déplacement (rattrapage, image clé) ne réveille personne', () => {
+    expect(localGestureEffect({ gesture: 'seek', localMs: 10_400, targetMs: 10_000, sharedPlaying: true })).toBe('align');
   });
 });

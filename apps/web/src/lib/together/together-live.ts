@@ -16,7 +16,8 @@ import { estimateClockOffset } from './together-sync';
  *   mes appareils) ; l'invitation s'éteint `TOGETHER_INVITE_TTL_SECONDS` après sa
  *   RÉCEPTION, comptés à l'horloge de l'onglet.
  * - `together:started` ouvre la séance chez l'hôte et l'invité, et elle seule ;
- *   l'accusé de `join` l'ouvre aussi, sans attendre l'événement.
+ *   l'accusé de `join` l'ouvre aussi, sans attendre l'événement (qui rejoint est
+ *   l'invité).
  * - `together:synced` fait suivre la lecture ; un `rev` déjà appliqué ne rejoue rien.
  * - `together:ended` ferme ; une séance close ne se rouvre pas sur un événement en
  *   retard (sa trace est gardée, bornée).
@@ -210,15 +211,7 @@ const refusalOf = (code: unknown): TogetherInviteOutcome => {
   return 'failed';
 };
 
-export function createTogetherClient({
-  socket,
-  store,
-  viewerId = () => null,
-}: {
-  readonly socket: () => SocketClient | null;
-  readonly store: TogetherStoreApi;
-  readonly viewerId?: () => string | null;
-}): TogetherClient {
+export function createTogetherClient({ socket, store }: { readonly socket: () => SocketClient | null; readonly store: TogetherStoreApi }): TogetherClient {
   const live = (): (SocketClient & Required<Pick<SocketClient, 'emitWithAck'>>) | null => {
     const current = socket();
     if (current === null || !current.connected || current.emitWithAck === undefined) return null;
@@ -258,8 +251,7 @@ export function createTogetherClient({
         return 'gone';
       }
       if (data === null) return 'failed';
-      const me = viewerId() ?? data.guestUserId;
-      store.getState().started(data, me);
+      store.getState().started(data, data.guestUserId);
       return 'joined';
     },
     decline: (sessionId) => leaveSession(sessionId),

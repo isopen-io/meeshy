@@ -42,3 +42,27 @@ export function playbackCorrection({ localMs, targetMs, playing }: { readonly lo
   if (distance >= NUDGE_FROM_MS) return { kind: 'rate', rate: drift < 0 ? 1 + NUDGE : 1 - NUDGE };
   return { kind: 'none' };
 }
+
+export type LocalGesture = 'play' | 'pause' | 'seek';
+
+/**
+ * Un geste fait ICI (commandes du lecteur) ne part chez l'autre que s'il CHANGE
+ * l'état partagé : lecture ↔ pause, ou un déplacement d'au moins une seconde. Sinon
+ * il ne fait que réaligner ce lecteur — une lecture refusée par le navigateur puis
+ * relancée à la main ne ramène pas l'autre au début.
+ */
+export function localGestureEffect({
+  gesture,
+  localMs,
+  targetMs,
+  sharedPlaying,
+}: {
+  readonly gesture: LocalGesture;
+  readonly localMs: number;
+  readonly targetMs: number;
+  readonly sharedPlaying: boolean;
+}): 'send' | 'align' {
+  if (gesture === 'play') return sharedPlaying ? 'align' : 'send';
+  if (gesture === 'pause') return sharedPlaying ? 'send' : 'align';
+  return Math.abs(localMs - targetMs) >= SEEK_FROM_MS ? 'send' : 'align';
+}
