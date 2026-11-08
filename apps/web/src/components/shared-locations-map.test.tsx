@@ -4,6 +4,7 @@ import { act } from 'react';
 import { SHARED_LOCATION_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/shared-location-event-names';
 
 import type { HttpRequest, HttpTransport } from '@/lib/api/http';
+import type { SharedLocation } from '@/lib/api/shared-locations';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { SocketClient } from '@/lib/net/socket';
@@ -40,7 +41,7 @@ afterEach(() => {
 
 const inFuture = (ms: number) => new Date(Date.now() + ms).toISOString();
 
-const served = (overrides: Readonly<Record<string, unknown>> = {}) => ({
+const served = (overrides: Partial<SharedLocation> = {}): SharedLocation => ({
   userId: 'u-ada',
   latitude: 48.85,
   longitude: 2.35,
@@ -92,13 +93,14 @@ describe('l’hôte de la carte', () => {
     const { element, requests } = host({ items: [served()] });
     const node = await mount(element);
     await settle();
-    expect(requests.map((req) => req.path)).toEqual([expect.stringMatching(/^\/api\/v1\/relations\/locations\?bbox=-?\d/)]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.path).toMatch(/^\/api\/v1\/relations\/locations\?bbox=-?\d/);
     expect(node.querySelector('[data-shared-location-row="u-ada"]')).not.toBeNull();
   });
 
   test('cache d’abord : un magasin non vide se peint SANS attendre le réseau', async () => {
     const store = createSharedLocationsStore();
-    store.getState().receive(served() as never);
+    store.getState().receive(served());
     const { element } = host({ store });
     const node = await mount(element);
     expect(node.querySelector('[data-shared-location-pin="u-ada"]')).not.toBeNull();
@@ -117,7 +119,7 @@ describe('l’hôte de la carte', () => {
 
   test('un partage échu disparaît à `expiresAt`, sans événement', async () => {
     const store = createSharedLocationsStore();
-    store.getState().receive(served({ expiresAt: inFuture(80) }) as never);
+    store.getState().receive(served({ expiresAt: inFuture(80) }));
     const { element } = host({ store });
     const node = await mount(element);
     expect(node.querySelector('[data-shared-location-row="u-ada"]')).not.toBeNull();
@@ -132,8 +134,8 @@ describe('l’hôte de la carte', () => {
       pages: [{ conversations: [{ participants: [{ user: { id: 'u-ada', username: 'ada', displayName: 'Ada Lovelace', isOnline: true } }] }] }],
     });
     const store = createSharedLocationsStore();
-    store.getState().receive(served() as never);
-    store.getState().receive(served({ userId: 'u-x', latitude: 48.86 }) as never);
+    store.getState().receive(served());
+    store.getState().receive(served({ userId: 'u-x', latitude: 48.86 }));
     const { element } = host({ store });
     const node = await mount(element);
     const text = node.textContent ?? '';

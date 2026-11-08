@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { SHARED_LOCATION_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/shared-location-event-names';
 
+import type { SharedLocation } from '@/lib/api/shared-locations';
 import type { SocketClient } from '@/lib/net/socket';
 
 import { bindSharedLocationsLive, createSharedLocationsStore, decodeSharedLocationEnded } from './shared-locations-live';
@@ -16,11 +17,11 @@ import { bindSharedLocationsLive, createSharedLocationsStore, decodeSharedLocati
 
 const NOW = Date.parse('2026-11-08T10:30:00.000Z');
 
-const position = (overrides: Readonly<Record<string, unknown>> = {}) => ({
+const position = (overrides: Partial<SharedLocation> = {}): SharedLocation => ({
   userId: 'ami',
   latitude: 48.85,
   longitude: 2.35,
-  precision: 'neighborhood',
+  precision: 'neighborhood' as const,
   radiusMeters: 800,
   updatedAt: '2026-11-08T10:00:00.000Z',
   expiresAt: '2026-11-08T11:00:00.000Z',

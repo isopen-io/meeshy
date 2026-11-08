@@ -2,7 +2,7 @@ import { useRef } from 'react';
 
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
-import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-catalog';
+import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SharedLocation } from '@/lib/api/shared-locations';
 import { metersToPixels, screenPoint, tilesCovering, TILE_SIZE, type MapView } from '@/lib/map/slippy';
@@ -45,14 +45,22 @@ export type SharedLocationsMapViewProps = {
 };
 
 const TILE_URL = (z: number, x: number, y: number): string => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+/** Les libellés SANS paramètre : `translateCircles` exige les siens, et une union de clés ne les lui donne pas. */
+type PlainKey = 'positions.offline' | 'positions.map.a11y' | 'positions.zoomIn' | 'positions.zoomOut' | 'positions.attribution' | 'positions.empty' | 'positions.list.title' | 'positions.cannotEmit';
 const PIN_SIZE = 40;
 /** Sous ce diamètre le cercle ne se voit pas : l'épingle suffit (position exacte). */
 const MIN_VISIBLE_BLUR = 16;
 const KEY_PAN_PIXELS = 80;
-const ROW_KEYS = { exact: 'positions.row.exact', neighborhood: 'positions.row.neighborhood', city: 'positions.row.city' } as const satisfies Record<SharedLocation['precision'], CirclesCatalogKey>;
 
-export const rowText = ({ language, location, person, formatTime }: { readonly language: InterfaceLanguage; readonly location: SharedLocation; readonly person: SharedLocationPerson; readonly formatTime: (iso: string) => string }): string =>
-  translateCircles(language, ROW_KEYS[location.precision], { name: person.name ?? translateCircles(language, 'positions.someone'), time: formatTime(location.expiresAt) });
+export function rowText({ language, location, person, formatTime }: { readonly language: InterfaceLanguage; readonly location: SharedLocation; readonly person: SharedLocationPerson; readonly formatTime: (iso: string) => string }): string {
+  const params = { name: person.name ?? translateCircles(language, 'positions.someone'), time: formatTime(location.expiresAt) };
+  const byPrecision = {
+    exact: () => translateCircles(language, 'positions.row.exact', params),
+    neighborhood: () => translateCircles(language, 'positions.row.neighborhood', params),
+    city: () => translateCircles(language, 'positions.row.city', params),
+  } as const satisfies Record<SharedLocation['precision'], () => string>;
+  return byPrecision[location.precision]();
+}
 
 function Pin({ location, text, person, view }: { readonly location: SharedLocation; readonly text: string; readonly person: SharedLocationPerson; readonly view: MapView }) {
   const at = screenPoint(location, view);
@@ -98,7 +106,7 @@ function Pin({ location, text, person, view }: { readonly location: SharedLocati
 }
 
 export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, onZoom, onPan }: SharedLocationsMapViewProps) {
-  const t = (key: CirclesCatalogKey): string => translateCircles(language, key);
+  const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
   const onKeyDown = (event: { readonly key: string; preventDefault(): void }): void => {
@@ -117,7 +125,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
     if (event.key === '+' || event.key === '=') onZoom(1);
     if (event.key === '-') onZoom(-1);
   };
-  const zoomButton = (delta: 1 | -1, label: CirclesCatalogKey, glyph: string) => (
+  const zoomButton = (delta: 1 | -1, label: PlainKey, glyph: string) => (
     <button
       type="button"
       aria-label={t(label)}
