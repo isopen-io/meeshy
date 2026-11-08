@@ -118,6 +118,7 @@ final class MessageAuthorRingTests: XCTestCase {
     /// `kind: .entity`, qui ne porte aucun contour) est COMPTÉ par fichier, et le compte ne
     /// dépasse jamais celui nommé ici avec sa raison — un registre EXACT : il ne fait que descendre, et une entrée qui ne compte plus rien rougit.
     private static let avatarsWithoutRing: [String: (count: Int, reason: String)] = [
+        "Bring/BringRingView.swift": (1, "Bring qui sonne — `bring:ring` et le push ne portent que l'identifiant, ni nom ni contour (#10957)"),
         "Contacts/BlockedTab.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
         "Settings/Views/BlockedUsersView.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
         "Contacts/CallDetailSheet.swift": (2, "journal d'appel — la charge de l'appel ne sert pas le contour (#10957)"),
