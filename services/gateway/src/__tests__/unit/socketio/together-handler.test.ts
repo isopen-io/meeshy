@@ -44,10 +44,10 @@ function socketAvec(deps: Partial<TogetherHandlerDeps> & { caller?: { userId: st
 }
 
 describe('la porte socket de « ensemble »', () => {
-  it('#17043 — un limiteur qui ne répond pas (null) ferme : TOGETHER_RATE_LIMITED, aucun relais atteint ; quitter reste libre', async () => {
+  it('#17043 — un limiteur qui ne répond pas (null) ferme en « indisponible », jamais en « trop de gestes » ; aucun relais atteint ; quitter reste libre', async () => {
     const s = socketAvec({ withinRate: async () => null });
     for (const event of [CLIENT_EVENTS.TOGETHER_INVITE, CLIENT_EVENTS.TOGETHER_JOIN, CLIENT_EVENTS.TOGETHER_SYNC]) {
-      expect(await s.emit(event, {})).toMatchObject({ success: false, code: TOGETHER_ERROR_CODES.RATE_LIMITED });
+      expect(await s.emit(event, {})).toMatchObject({ success: false, code: TOGETHER_ERROR_CODES.UNAVAILABLE });
     }
     expect(s.calls).toEqual([]);
     expect(await s.emit(CLIENT_EVENTS.TOGETHER_LEAVE, {})).toEqual({ success: true });

@@ -36,6 +36,7 @@ import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { judgeTogether, type TogetherGateDb, type TogetherVerdict } from './togetherGate';
 import {
   claimPairThroughCache,
+  extendPairThroughCache,
   clearTogether,
   indexTogetherUsers,
   isTogetherEnded,
@@ -46,6 +47,7 @@ import {
   storeTogether,
   togetherPairKey,
   type PairClaim,
+  type PairExtend,
   type TogetherCache,
   type TogetherSession,
 } from './togetherStore';
@@ -59,6 +61,8 @@ export type TogetherRelayDeps = {
   readonly now: () => number;
   /** La prise atomique de l'index de paire ; absente, le cache la simule (un seul processus). */
   readonly claimPair?: PairClaim;
+  /** La prolongation gardée de l'index de paire ; absente, le cache la simule. */
+  readonly extendPair?: PairExtend;
   readonly newSessionId?: () => string;
 };
 
@@ -97,13 +101,14 @@ const ttlOf = (session: TogetherSession): number => (session.joined ? TOGETHER_S
  * La durée de vie est PLAFONNÉE à `TOGETHER_SESSION_TTL_SECONDS` depuis la création : une
  * synchronisation prolonge la séance, jamais au-delà.
  */
-async function save(deps: TogetherRelayDeps, session: TogetherSession, options: { readonly pairClaimed?: boolean } = {}): Promise<TogetherSession | null> {
+async function save(deps: TogetherRelayDeps, session: TogetherSession): Promise<TogetherSession | null> {
   const now = deps.now();
   const expiresAt = Math.min(now + ttlOf(session) * 1000, session.createdAt + TOGETHER_SESSION_TTL_SECONDS * 1000);
   const ttl = Math.max(1, Math.ceil((expiresAt - now) / 1000));
   const kept = { ...session, expiresAt };
-  await storeTogether(deps.cache, kept, ttl, options);
-  if (options.pairClaimed) await indexTogetherUsers(deps.cache, kept, ttl);
+  await storeTogether(deps.cache, kept, ttl);
+  await (deps.extendPair ?? extendPairThroughCache(deps.cache))(togetherPairKey(kept.hostId, kept.guestId), kept.sessionId, ttl);
+  await indexTogetherUsers(deps.cache, kept, ttl);
   if (!(await isTogetherEnded(deps.cache, kept.sessionId))) return kept;
   await clearTogether(deps.cache, kept);
   return null;
@@ -171,19 +176,15 @@ export async function inviteTogether(deps: TogetherRelayDeps, hostId: string, da
     return UNAVAILABLE;
   }
 
-  const session = await save(
-    deps,
-    {
-      ...subject,
-      sessionId,
-      media: verdict.media,
-      joined: false,
-      playback: { playing: false, positionMs: 0, at: deps.now(), rev: 0, byUserId: hostId },
-      createdAt: deps.now(),
-      expiresAt: 0,
-    },
-    { pairClaimed: true },
-  );
+  const session = await save(deps, {
+    ...subject,
+    sessionId,
+    media: verdict.media,
+    joined: false,
+    playback: { playing: false, positionMs: 0, at: deps.now(), rev: 0, byUserId: hostId },
+    createdAt: deps.now(),
+    expiresAt: 0,
+  });
   if (!session) return UNAVAILABLE;
   /*
    * Une invitation concurrente a pu prendre l'index de la paire avant que celle-ci soit écrite :
@@ -244,6 +245,11 @@ export async function leaveTogether(deps: TogetherRelayDeps, userId: string, dat
   if (!session || !membersOf(session).includes(userId)) return NOT_FOUND;
   await end(deps, session, !session.joined && userId === session.guestId ? 'declined' : 'left');
   return { success: true };
+}
+
+/** Ce compte a-t-il une séance en cours ? Un seul GET, sans toucher aux rooms. */
+export async function hasTogether(deps: TogetherRelayDeps, userId: string): Promise<boolean> {
+  return (await readUserTogether(deps.cache, userId, deps.now())).length > 0;
 }
 
 /**

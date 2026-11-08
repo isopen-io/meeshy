@@ -11,7 +11,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { TOGETHER_ERROR_CODES, type TogetherErrorCode } from '@meeshy/shared/types/together';
 import { getCacheStore } from '../../services/CacheStore';
-import { endTogetherOf, inviteTogether, joinTogether, leaveTogether, syncTogether, type TogetherIo } from '../../services/together/togetherRelay';
+import { endTogetherOf, hasTogether, inviteTogether, joinTogether, leaveTogether, syncTogether, type TogetherIo } from '../../services/together/togetherRelay';
 import type { ServerEmitIOWithRooms } from '../serverEmit';
 import { togetherRelayDepsOf } from '../../services/together/togetherDeps';
 import { createCustomRateLimiter, rateLimitDisabled, type RateLimiter } from '../../utils/rate-limiter.js';
@@ -21,6 +21,14 @@ const logger = enhancedLogger.child({ module: 'TogetherHandler' });
 
 /** Soixante gestes par minute et par compte : on lit, on met en pause, on se déplace. */
 export const TOGETHER_RATE = { max: 60, windowMs: 60_000, keyPrefix: 'together:u' } as const;
+
+/** Un changement de réseau, un redéploiement ou l'arrière-plan vident la room quelques secondes : la fin attend. */
+export const TOGETHER_DISCONNECT_GRACE_MS = 20_000;
+
+const defaultWait = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms).unref?.();
+  });
 
 type TogetherSocket = {
   readonly id: string;
@@ -33,7 +41,8 @@ export type TogetherHandlerDeps = {
   readonly callerOf: (socketId: string) => { readonly userId: string; readonly isAnonymous: boolean } | null;
   /**
    * `true` dans le débit ; `false` au-delà ; `null` quand le limiteur ne sait pas juger — la
-   * porte FERME alors (une panne de Redis ne doit pas ouvrir six lectures Mongo par geste).
+   * porte FERME alors (une panne de Redis ne doit pas ouvrir six lectures Mongo par geste),
+   * dite « indisponible » : ce n'est pas un excès de gestes de l'utilisateur.
    * La désactivation volontaire par configuration est tranchée avant, dans `togetherHandlerDeps`.
    */
   readonly withinRate: (userId: string) => Promise<boolean | null>;
@@ -65,7 +74,7 @@ export function listenTogether(socket: TogetherSocket, deps: TogetherHandlerDeps
       if (!userId) return reply(NOT_ALLOWED);
       const within = limited ? deps.withinRate(userId) : Promise.resolve(true);
       within
-        .then((ok) => (ok !== true ? RATE_LIMITED : relayed(userId, data)))
+        .then((ok) => (ok === true ? relayed(userId, data) : ok === false ? RATE_LIMITED : UNAVAILABLE))
         .then(reply, (error: unknown) => {
           logger.error(`[${event}] Error`, { error: error instanceof Error ? error.message : 'unknown' });
           reply(UNAVAILABLE);
@@ -103,6 +112,8 @@ export function togetherHandlerDeps(params: {
   readonly io: TogetherIo & Pick<ServerEmitIOWithRooms, 'in'>;
   readonly socketToUser: ReadonlyMap<string, string>;
   readonly connectedUsers: ReadonlyMap<string, { readonly isAnonymous: boolean }>;
+  /** Pour les tests : l'attente de la grâce de déconnexion. */
+  readonly wait?: (ms: number) => Promise<void>;
 }): TogetherHandlerDeps {
   const relay = togetherRelayDepsOf(params);
   return {
@@ -112,14 +123,20 @@ export function togetherHandlerDeps(params: {
       return userId && user ? { userId, isAnonymous: user.isAnonymous } : null;
     },
     withinRate: async (userId) => {
+      const client = getCacheStore().getNativeClient();
+      if (client && client.status !== 'ready') return rateLimitDisabled() ? true : null;
       const info = await rateLimiter().consume(userId, 1);
       if (info !== null) return info.retryAfter === undefined;
       return rateLimitDisabled() ? true : null;
     },
     // À `disconnect`, socket.io a déjà fait quitter ses rooms à cette socket : la room `user:<id>`
-    // ne compte que les AUTRES appareils (de toutes les instances, par l'adaptateur).
+    // ne compte que les AUTRES appareils (de toutes les instances, par l'adaptateur). Un compte
+    // sans séance ne coûte qu'un GET ; la fin attend la grâce, puis relit la room.
     userGone: async (userId) => {
-      if ((await params.io.in(ROOMS.user(userId)).fetchSockets()).length === 0) await endTogetherOf(relay, userId);
+      const away = async (): Promise<boolean> => (await params.io.in(ROOMS.user(userId)).fetchSockets()).length === 0;
+      if (!(await hasTogether(relay, userId)) || !(await away())) return;
+      await (params.wait ?? defaultWait)(TOGETHER_DISCONNECT_GRACE_MS);
+      if (await away()) await endTogetherOf(relay, userId);
     },
     invite: (userId, data) => inviteTogether(relay, userId, data),
     join: (userId, data) => joinTogether(relay, userId, data),

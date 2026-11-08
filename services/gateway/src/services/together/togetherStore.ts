@@ -92,18 +92,13 @@ function parseSession(raw: string, sessionId: string): TogetherSession | null {
 }
 
 /**
- * Range la séance scellée et, sauf `pairClaimed`, son index de paire. Sans clé de scellement
- * dans un environnement servi, LÈVE. Une invitation a déjà pris l'index par {@link PairClaim} :
- * le réécrire ici effacerait la prise d'une invitation concurrente.
+ * Range la séance scellée. L'index de la paire n'y est JAMAIS écrit : il se prend d'un geste
+ * atomique ({@link PairClaim}) et ne se prolonge que s'il désigne encore cette séance
+ * ({@link PairExtend}) — une écriture en vol ne peut pas reprendre l'index d'une invitation
+ * plus récente. Sans clé de scellement dans un environnement servi, LÈVE.
  */
-export async function storeTogether(
-  cache: TogetherCache,
-  session: TogetherSession,
-  ttlSeconds: number,
-  options: { readonly pairClaimed?: boolean } = {},
-): Promise<void> {
+export async function storeTogether(cache: TogetherCache, session: TogetherSession, ttlSeconds: number): Promise<void> {
   const sealed = sealSecret(JSON.stringify(session), contextOf(session.sessionId));
-  if (!options.pairClaimed) await cache.set(togetherPairKey(session.hostId, session.guestId), session.sessionId, ttlSeconds);
   await cache.set(sessionKey(session.sessionId), sealed, ttlSeconds);
 }
 
@@ -115,6 +110,12 @@ export async function storeTogether(
  * instances.
  */
 export type PairClaim = (pairKey: string, sessionId: string, ttlSeconds: number) => Promise<string | null>;
+
+/**
+ * Prolonge l'index d'une paire SI ET SEULEMENT SI il désigne encore `sessionId` (en production,
+ * `EXPIRE` gardé par un script Lua sur le client Redis natif) ; sinon ne fait rien.
+ */
+export type PairExtend = (pairKey: string, sessionId: string, ttlSeconds: number) => Promise<void>;
 
 let exclusiveChain: Promise<unknown> = Promise.resolve();
 /** Sérialise, dans CE processus, une lecture-puis-écriture du cache (sans Redis : un seul processus). */
@@ -132,6 +133,14 @@ export const claimPairThroughCache =
       const previous = await cache.get(pairKey);
       await cache.set(pairKey, sessionId, ttlSeconds);
       return previous;
+    });
+
+/** La prolongation pour un cache sans commande atomique (développement et test, un seul processus). */
+export const extendPairThroughCache =
+  (cache: TogetherCache): PairExtend =>
+  (pairKey, sessionId, ttlSeconds) =>
+    exclusive(async () => {
+      if ((await cache.get(pairKey)) === sessionId) await cache.set(pairKey, sessionId, ttlSeconds);
     });
 
 const parseIds = (raw: string | null): readonly string[] => {
