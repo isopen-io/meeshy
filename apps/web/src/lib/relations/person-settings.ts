@@ -9,28 +9,30 @@ import type { ApiResult, HttpTransport } from '@/lib/api/http';
  *
  * Une seule lecture sert toute la fiche d'un lien : le Bring (#13936) et le
  * talkie (#16638) sont deux champs du même objet, actifs par défaut, que JE
- * coupe pour une personne. L'écriture est PARTIELLE et STRICTE (un champ à la
- * fois, jamais un champ inconnu) ; la réponse rend l'objet entier.
+ * coupe pour une personne ; la catégorie de mon écoute (#16831) est un ACCORD,
+ * refusé par défaut, que je donne ou retire. L'écriture est PARTIELLE et
+ * STRICTE (un champ à la fois, jamais un champ inconnu) ; la réponse rend
+ * l'objet entier.
  *
- * Décodé à la main, TOLÉRANT : un champ absent ou illisible se lit « non
- * coupé », la valeur par défaut du serveur.
+ * Décodé à la main, TOLÉRANT : un champ absent ou illisible se lit à sa valeur
+ * par défaut côté serveur — « non coupé », « non accordé ».
  */
 
 export type PersonSettingsDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
-export const RECEPTION_BLOCKS = ['bringBlocked', 'talkieBlocked'] as const;
+export const RECEPTION_BLOCKS = ['bringBlocked', 'talkieBlocked', 'listeningCategoryShared'] as const;
 export type ReceptionBlock = (typeof RECEPTION_BLOCKS)[number];
 
 export type ReceptionSettings = Readonly<Record<ReceptionBlock, boolean>>;
 
-const OPEN: ReceptionSettings = { bringBlocked: false, talkieBlocked: false };
+const OPEN: ReceptionSettings = { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: false };
 
 const objectOf = (raw: unknown): Readonly<Record<string, unknown>> | null =>
   typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Readonly<Record<string, unknown>>) : null;
 
 export function decodeReceptionSettings(raw: unknown): ReceptionSettings {
   const wire = objectOf(raw);
-  return { bringBlocked: wire?.bringBlocked === true, talkieBlocked: wire?.talkieBlocked === true };
+  return Object.fromEntries(RECEPTION_BLOCKS.map((field) => [field, wire?.[field] === true])) as ReceptionSettings;
 }
 
 export const personSettingsQueryKey = (userId: string) => ['relations', 'settings', userId] as const;

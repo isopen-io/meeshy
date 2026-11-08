@@ -103,6 +103,8 @@ const en = {
   'circles.settings.blockTalkie': 'Mute their talkie',
   'circles.settings.blockTalkie.detail': 'Their voice will no longer play directly on your device: it will arrive as a voice message. They are not notified.',
   'circles.settings.blockTalkie.failed': 'The setting could not be saved',
+  'circles.settings.shareListening.detail': 'When Apple Music is playing on your iPhone and Meeshy is open there, this person sees that you’re listening to music; the title only if you granted it to them in the Blood ritual. Your voice messages are never shared.',
+  'circles.settings.shareListening.failed': 'The share couldn’t be saved',
   'talkie.send.explain': 'Hold and talk: your voice plays directly on {name}’s side, no need to pick up.',
   'talkie.send.hold': 'Hold to talk',
   'talkie.send.hold.a11y': 'Hold to talk to {name} — on a keyboard, keep Space pressed',

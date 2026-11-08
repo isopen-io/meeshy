@@ -18,7 +18,7 @@ import { CircleReceptionBlockSwitch, receptionBlocksFor } from './circle-recepti
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click } = createActMounter();
+const { mount, unmountAll, click, settle } = createActMounter();
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
@@ -132,6 +132,76 @@ describe('Couper son talkie (#16638)', () => {
   test('les coupures offertes suivent le cercle', () => {
     expect(receptionBlocksFor('ACQUAINTANCE')).toEqual([]);
     expect(receptionBlocksFor('FRIEND')).toEqual(['bringBlocked']);
-    expect(receptionBlocksFor('CLOSE')).toEqual(['bringBlocked', 'talkieBlocked']);
+    expect(receptionBlocksFor('CLOSE')).toEqual(['bringBlocked', 'talkieBlocked', 'listeningCategoryShared']);
+    expect(receptionBlocksFor('BLOOD')).toEqual(['bringBlocked', 'talkieBlocked', 'listeningCategoryShared']);
+  });
+});
+
+describe('Accorder « Ce que j’écoute » (#16831)', () => {
+  const listening = (node: HTMLElement) => node.querySelector<HTMLInputElement>('[data-circle-setting="circles.settings.listening"]');
+
+  test('ABSENT sous Proche : un Ami ne voit jamais ce que j’écoute, il n’y a rien à accorder', async () => {
+    const { deps } = scripted(async () => ({ ok: true, data: {} }));
+    const node = await mount(<CircleReceptionBlockSwitch block="listeningCategoryShared" language="fr" userId="u-ada" level="FRIEND" deps={deps} onNotice={() => undefined} />);
+    expect(listening(node)).toBeNull();
+  });
+
+  test('ouvert dès Proche, REFUSÉ par défaut, et il dit ce qui part et ce qui ne part jamais', async () => {
+    const { deps } = scripted(async () => ({ ok: true, data: {} }));
+    const node = await mount(<CircleReceptionBlockSwitch block="listeningCategoryShared" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={() => undefined} />);
+    expect(listening(node)?.checked).toBe(false);
+    expect(listening(node)?.disabled).toBe(false);
+    expect(node.textContent).toContain('Ce que j’écoute');
+    expect(node.textContent).toContain('Apple Music');
+    expect(node.textContent).toContain('Vos messages vocaux ne sont jamais partagés');
+  });
+
+  test('un serveur qui ne connaît pas le champ se lit « non accordé »', async () => {
+    const { deps } = scripted(async () => ({ ok: true, data: { userId: 'u-ada', bringBlocked: false, talkieBlocked: false } }));
+    const node = await mount(<CircleReceptionBlockSwitch block="listeningCategoryShared" language="fr" userId="u-ada" level="BLOOD" deps={deps} onNotice={() => undefined} />);
+    expect(listening(node)?.checked).toBe(false);
+  });
+
+  test('un accord déjà posé se lit coché', async () => {
+    const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
+    transport.request = (async () => ({ ok: true, data: { userId: 'u-ada', bringBlocked: false, talkieBlocked: false, listeningCategoryShared: true } })) as HttpTransport['request'];
+    const node = await mount(<CircleReceptionBlockSwitch block="listeningCategoryShared" language="fr" userId="u-ada" level="CLOSE" deps={{ source: 'gateway', transport }} onNotice={() => undefined} />);
+    await settle();
+    expect(listening(node)?.checked).toBe(true);
+  });
+
+  test('accorder est OPTIMISTE, écrit `{ listeningCategoryShared: true }` SEUL, et ne touche ni au Bring ni au talkie', async () => {
+    const { deps, requests } = scripted(async () => ({ ok: true, data: { userId: 'u-ada', bringBlocked: false, talkieBlocked: false, listeningCategoryShared: true } }));
+    const node = await mount(
+      <>
+        <CircleReceptionBlockSwitch block="bringBlocked" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={() => undefined} />
+        <CircleReceptionBlockSwitch block="talkieBlocked" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={() => undefined} />
+        <CircleReceptionBlockSwitch block="listeningCategoryShared" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={() => undefined} />
+      </>,
+    );
+    await click(listening(node));
+    expect(listening(node)?.checked).toBe(true);
+    expect(toggle(node)?.checked).toBe(false);
+    expect(talkieToggle(node)?.checked).toBe(false);
+    expect(requests.filter((req) => req.method === 'PUT').map((req) => req.body)).toEqual([{ listeningCategoryShared: true }]);
+    expect(appQueryClient.getQueryData(personSettingsQueryKey('u-ada'))).toMatchObject({ listeningCategoryShared: true });
+  });
+
+  test('retirer l’accord écrit `{ listeningCategoryShared: false }`', async () => {
+    appQueryClient.setQueryData(personSettingsQueryKey('u-ada'), { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: true });
+    const { deps, requests } = scripted(async () => ({ ok: true, data: { userId: 'u-ada', listeningCategoryShared: false } }));
+    const node = await mount(<CircleReceptionBlockSwitch block="listeningCategoryShared" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={() => undefined} />);
+    await click(listening(node));
+    expect(listening(node)?.checked).toBe(false);
+    expect(requests.filter((req) => req.method === 'PUT').map((req) => req.body)).toEqual([{ listeningCategoryShared: false }]);
+  });
+
+  test('un refus REND l’état d’avant (refusé) et le dit', async () => {
+    const notices: string[] = [];
+    const { deps } = scripted(async () => ({ ok: false, status: 500, error: 'x' }));
+    const node = await mount(<CircleReceptionBlockSwitch block="listeningCategoryShared" language="fr" userId="u-ada" level="CLOSE" deps={deps} onNotice={(text) => notices.push(text)} />);
+    await click(listening(node));
+    expect(listening(node)?.checked).toBe(false);
+    expect(notices).toEqual(['Le partage n’a pas pu être enregistré']);
   });
 });
