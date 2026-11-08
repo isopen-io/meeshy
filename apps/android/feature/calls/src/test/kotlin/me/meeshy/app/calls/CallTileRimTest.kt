@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.call.CallSpeakerColor
+import me.meeshy.sdk.theme.DynamicColorGenerator
 import org.junit.Test
 
 /** Loi 4 (`docs/product/appels-vue-finale.md`, vue P1) : le liseré d'une vignette porte la couleur de qui elle montre. */
@@ -30,5 +31,11 @@ class CallTileRimTest {
     fun `sans identifiant connu, aucune couleur n'est inventee`() {
         assertThat(CallTileRim.duoSelfTile(selfUserId = "", peerUserId = "u-awa", showsPeer = false)).isNull()
         assertThat(CallTileRim.duoSelfTile(selfUserId = "u-me", peerUserId = " ", showsPeer = true)).isNull()
+    }
+
+    @Test
+    fun `l'avatar de l'appel reduit se teinte par l'identifiant du pair, le nom n'etant qu'un repli`() {
+        assertThat(CallTileRim.peerAvatar(peerUserId = "u-awa", peerName = "Awa")).isEqualTo(DynamicColorGenerator.colorForName("u-awa"))
+        assertThat(CallTileRim.peerAvatar(peerUserId = "", peerName = "Awa")).isEqualTo(DynamicColorGenerator.colorForName("Awa"))
     }
 }

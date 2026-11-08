@@ -359,6 +359,7 @@ private fun MinimizedCallPill(
     CallPill(
         state = callState,
         peerAvatarUrl = callPeerVisual.avatarUrl,
+        peerUserId = callViewModel.activeConfig.peerId,
         onClick = {
             navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
                 launchSingleTop = true

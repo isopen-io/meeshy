@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import me.meeshy.sdk.call.CallSpeakerColor
+import me.meeshy.sdk.theme.DynamicColorGenerator
 
 /**
  * Le liseré d'une vignette d'appel porte la couleur de la personne qu'elle MONTRE (`docs/product/appels-vue-finale.md`
@@ -15,4 +16,7 @@ internal object CallTileRim {
 
     /** Une vignette de la grille de groupe, « moi » compris : sa clé de couleur est l'identifiant du membre. */
     fun groupTile(colorKey: String): String = CallSpeakerColor.hex(colorKey)
+
+    /** Le fond d'avatar du pair hors de l'écran d'appel (l'appel réduit) : la couleur de son PROFIL, l'identifiant primant. */
+    fun peerAvatar(peerUserId: String, peerName: String): String = DynamicColorGenerator.profileAccentHex(peerUserId, peerName)
 }
