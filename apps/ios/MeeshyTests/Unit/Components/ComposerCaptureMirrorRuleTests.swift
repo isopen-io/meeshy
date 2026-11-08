@@ -75,9 +75,13 @@ final class ComposerCaptureMirrorRuleTests: XCTestCase {
     }
 
     func test_everyPhotoCamera_levelsTheConnectionAtTheShutter() throws {
-        for chemin in ["Meeshy/Features/Main/Components/CameraModel.swift",
-                       "Meeshy/Features/Game/Photo/GamePhotoCamera.swift"] {
-            let camera = try Self.code(chemin)
+        let unites = [
+            "Meeshy/Features/Main/Components/CameraModel.swift": ["Meeshy/Features/Main/Components/CameraModel.swift",
+                                                                  "Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift"],
+            "Meeshy/Features/Game/Photo/GamePhotoCamera.swift": ["Meeshy/Features/Game/Photo/GamePhotoCamera.swift"],
+        ]
+        for (chemin, fichiers) in unites {
+            let camera = try fichiers.map { try Self.code($0) }.joined(separator: "\n")
             XCTAssertTrue(camera.contains("horizon.follow("), "\(chemin) : l'horizon doit suivre l'objectif installé")
             let niveau = try XCTUnwrap(camera.range(of: "horizon.level("), "\(chemin) : la photo doit être mise à l'horizon")
             let prise = try XCTUnwrap(camera.range(of: ".capturePhoto(with:"), chemin)
