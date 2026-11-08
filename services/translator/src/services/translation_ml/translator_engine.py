@@ -319,9 +319,7 @@ class TranslatorEngine:
                 return new_pipeline, True
 
             except Exception as e:
-                logger.error(f"❌ Erreur création pipeline: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"❌ Erreur création pipeline: {e}", exc_info=True)
                 return None, False
 
     async def translate_text(

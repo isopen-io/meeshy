@@ -138,33 +138,33 @@ final class PerfectNegotiationRoleTests: XCTestCase {
     // The polite peer is the lexicographically-smaller userId. The rule MUST be
     // symmetric: whichever side we view it from, exactly one peer is polite.
     func test_isPolitePeer_smallerUserId_isPolite() {
-        XCTAssertTrue(CallManager.isPolitePeer(localUserId: "aaa", remoteUserId: "bbb"))
+        XCTAssertTrue(CallNegotiationRules.isPolitePeer(localUserId: "aaa", remoteUserId: "bbb"))
     }
 
     func test_isPolitePeer_largerUserId_isImpolite() {
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "bbb", remoteUserId: "aaa"))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "bbb", remoteUserId: "aaa"))
     }
 
     func test_isPolitePeer_symmetric_exactlyOnePolite() {
         let a = "507f1f77bcf86cd799439011"
         let b = "507f1f77bcf86cd799439012"
-        let aSeesItself = CallManager.isPolitePeer(localUserId: a, remoteUserId: b)
-        let bSeesItself = CallManager.isPolitePeer(localUserId: b, remoteUserId: a)
+        let aSeesItself = CallNegotiationRules.isPolitePeer(localUserId: a, remoteUserId: b)
+        let bSeesItself = CallNegotiationRules.isPolitePeer(localUserId: b, remoteUserId: a)
         XCTAssertNotEqual(aSeesItself, bSeesItself, "exactly one peer must be polite")
         XCTAssertTrue(aSeesItself, "smaller id (a) is polite")
     }
 
     func test_isPolitePeer_missingLocalId_isImpolite() {
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "", remoteUserId: "bbb"))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "", remoteUserId: "bbb"))
     }
 
     func test_isPolitePeer_missingRemoteId_isImpolite() {
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "aaa", remoteUserId: ""))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "aaa", remoteUserId: ""))
     }
 
     func test_isPolitePeer_identicalIds_isImpolite() {
         // Degenerate (should not happen in a 1:1 call) — never yield blindly.
-        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "same", remoteUserId: "same"))
+        XCTAssertFalse(CallNegotiationRules.isPolitePeer(localUserId: "same", remoteUserId: "same"))
     }
 }
 
@@ -173,21 +173,21 @@ final class PerfectNegotiationRoleTests: XCTestCase {
 @MainActor
 final class NegotiationEpochTests: XCTestCase {
     func test_isStale_olderGeneration_isStale() {
-        XCTAssertTrue(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 2))
+        XCTAssertTrue(CallNegotiationRules.isStaleNegotiation(incoming: 1, highWaterMark: 2))
     }
 
     func test_isStale_sameGeneration_isAccepted() {
         // Offer, its answer, and matching ICE all carry the same generation.
-        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 2, highWaterMark: 2))
+        XCTAssertFalse(CallNegotiationRules.isStaleNegotiation(incoming: 2, highWaterMark: 2))
     }
 
     func test_isStale_newerGeneration_isAccepted() {
-        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 3, highWaterMark: 2))
+        XCTAssertFalse(CallNegotiationRules.isStaleNegotiation(incoming: 3, highWaterMark: 2))
     }
 
     func test_isStale_firstSignal_isAccepted() {
         // Fresh call: high-water mark 0, first offer is generation 1.
-        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 0))
+        XCTAssertFalse(CallNegotiationRules.isStaleNegotiation(incoming: 1, highWaterMark: 0))
     }
 }
 
@@ -1442,7 +1442,7 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
 
 // MARK: - Prisme Linguistique: preferredCallLanguage (§Transcription Language Resolution)
 
-/// Behavioural tests for `CallManager.preferredCallLanguage(for:)`.
+/// Behavioural tests for `CallLanguagePreference.preferredCallLanguage(for:)`.
 /// Pure static function: no network, no singletons, no async.
 /// Full 5-level Prisme Linguistique chain:
 ///   1. systemLanguage > 2. regionalLanguage > 3. customDestinationLanguage > 4. deviceLocale > 5. "fr"
@@ -1465,12 +1465,12 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
     // MARK: Priority 5 — fallback
 
     func test_nilUser_returnsFrFallback() {
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: nil), "fr")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: nil), "fr")
     }
 
     func test_allNil_returnsFrFallback() {
         let user = makeUser()
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "fr")
     }
 
     // MARK: Priority 1 — systemLanguage
@@ -1478,47 +1478,47 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
     func test_systemLanguagePresent_returnsSystemLanguage() {
         let user = makeUser(systemLanguage: "en", regionalLanguage: "es",
                             customDestinationLanguage: "de", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "en")
     }
 
     func test_systemLanguagePrioritisedOverRegional() {
         let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "de")
     }
 
     func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
         let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "zh")
     }
 
     func test_onlySystemLanguage_noRegional_returnsSystem() {
         let user = makeUser(systemLanguage: "ar")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "ar")
     }
 
     // MARK: Priority 2 — regionalLanguage
 
     func test_systemLanguageNil_regionalPresent_returnsRegionalLanguage() {
         let user = makeUser(systemLanguage: nil, regionalLanguage: "es")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "es")
     }
 
     func test_regionalLanguagePrioritisedOverCustomDestination() {
         let user = makeUser(systemLanguage: nil, regionalLanguage: "it",
                             customDestinationLanguage: "de", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "it")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "it")
     }
 
     // MARK: Priority 3 — customDestinationLanguage
 
     func test_systemAndRegionalNil_customDestinationPresent_returnsCustom() {
         let user = makeUser(customDestinationLanguage: "pt")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "pt")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "pt")
     }
 
     func test_customDestinationPrioritisedOverDeviceLocale() {
         let user = makeUser(customDestinationLanguage: "ko", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ko")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "ko")
     }
 
     // MARK: Priority 4 — deviceLocale
@@ -1526,26 +1526,26 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
     func test_allNilExceptDeviceLocale_returnsNormalisedLocale() {
         // deviceLocale "fr_FR" normalises to "fr"
         let user = makeUser(deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "fr")
     }
 
     func test_deviceLocale_hyphenFormat_normalisedToISO639() {
         // "zh-Hant-HK" → normalised to "zh" by MeeshyUser.normalizeLanguageCode
         let user = makeUser(deviceLocale: "zh-Hant-HK")
-        let result = CallManager.preferredCallLanguage(for: user)
+        let result = CallLanguagePreference.preferredCallLanguage(for: user)
         XCTAssertFalse(result.isEmpty, "deviceLocale must yield a non-empty language code")
         XCTAssertEqual(result, MeeshyUser.normalizeLanguageCode("zh-Hant-HK") ?? "fr")
     }
 
     func test_deviceLocale_underscoreFormat_normalisedToISO639() {
         let user = makeUser(deviceLocale: "en_US")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "en")
     }
 
     func test_deviceLocale_notUsedWhenRegionalPresent() {
         // Prisme rule: priority 2 (regional) beats priority 4 (deviceLocale)
         let user = makeUser(regionalLanguage: "es", deviceLocale: "fr_FR")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
+        XCTAssertEqual(CallLanguagePreference.preferredCallLanguage(for: user), "es")
     }
 }
 

@@ -661,28 +661,28 @@ final class CallPreviewCoordinatorTests: XCTestCase {
     // MARK: - Lecture de l'appel
 
     func test_previewPhase_readsTheCallState() {
-        XCTAssertEqual(CallManager.previewPhase(of: .ringing(isOutgoing: false), ringsInApp: true), .incomingRinging)
-        XCTAssertEqual(CallManager.previewPhase(of: .ringing(isOutgoing: false), ringsInApp: false), .none)
-        XCTAssertEqual(CallManager.previewPhase(of: .ringing(isOutgoing: true), ringsInApp: false), .outgoingRinging)
-        XCTAssertEqual(CallManager.previewPhase(of: .offering, ringsInApp: false), .outgoingRinging)
-        XCTAssertEqual(CallManager.previewPhase(of: .connecting, ringsInApp: true), .answering)
-        XCTAssertEqual(CallManager.previewPhase(of: .reconnecting(attempt: 1), ringsInApp: true), .connected)
-        XCTAssertEqual(CallManager.previewPhase(of: .idle, ringsInApp: true), .none)
+        XCTAssertEqual(CallPreviewPhaseRule.phase(of: .ringing(isOutgoing: false), ringsInApp: true), .incomingRinging)
+        XCTAssertEqual(CallPreviewPhaseRule.phase(of: .ringing(isOutgoing: false), ringsInApp: false), .none)
+        XCTAssertEqual(CallPreviewPhaseRule.phase(of: .ringing(isOutgoing: true), ringsInApp: false), .outgoingRinging)
+        XCTAssertEqual(CallPreviewPhaseRule.phase(of: .offering, ringsInApp: false), .outgoingRinging)
+        XCTAssertEqual(CallPreviewPhaseRule.phase(of: .connecting, ringsInApp: true), .answering)
+        XCTAssertEqual(CallPreviewPhaseRule.phase(of: .reconnecting(attempt: 1), ringsInApp: true), .connected)
+        XCTAssertEqual(CallPreviewPhaseRule.phase(of: .idle, ringsInApp: true), .none)
     }
 
     /// #8627 — un appel signalé à CallKit sonne AUSSI dans l'app dès qu'elle
     /// est au premier plan : l'aperçu s'y montre.
     func test_previewRingsInApp_callKitWithTheAppActive_ringsInApp() {
-        XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: true, isAppActive: true))
+        XCTAssertTrue(CallPreviewPhaseRule.ringsInApp(usesCallKit: true, isAppActive: true))
     }
 
     func test_previewRingsInApp_callKitInTheBackground_doesNotRingInApp() {
-        XCTAssertFalse(CallManager.previewRingsInApp(usesCallKit: true, isAppActive: false))
+        XCTAssertFalse(CallPreviewPhaseRule.ringsInApp(usesCallKit: true, isAppActive: false))
     }
 
     func test_previewRingsInApp_withoutCallKit_alwaysRingsInApp() {
-        XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: false, isAppActive: false))
-        XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: false, isAppActive: true))
+        XCTAssertTrue(CallPreviewPhaseRule.ringsInApp(usesCallKit: false, isAppActive: false))
+        XCTAssertTrue(CallPreviewPhaseRule.ringsInApp(usesCallKit: false, isAppActive: true))
     }
 
     /// #8795 — le libellé dit ce que l'appelé reçoit, rien de plus.

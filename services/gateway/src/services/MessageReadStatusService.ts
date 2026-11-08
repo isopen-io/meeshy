@@ -722,6 +722,27 @@ export class MessageReadStatusService {
       // evaluated atomically inside the write, never on a snapshot read
       // earlier — see _advanceCursor. Never rolls the read cursor back to an
       // older message — that would resurrect already-read messages as unread.
+      // #16744 — la frontière de RATTRAPAGE se résout UNE fois, pour les deux
+      // modes. Elle alimentait le seul mode exact ; le mode hérité ne la lisait
+      // pas du tout, alors que c'est la SEULE forme que le web envoie sur son
+      // chemin de lecture nominal (`pushReadReceipt`, corps
+      // `{ type: 'read', caughtUpToMessageId }`, sans aucun `messageIds`).
+      //
+      // `createdAt` voyage avec, parce que la borne du gel est une position
+      // CHRONOLOGIQUE et non l'horloge murale : sans elle un accusé rejoué
+      // (file hors ligne) gravait `readAt` sur tout ce qui s'était dit depuis.
+      // La garde d'appartenance de #4179 reste la même, et sert les deux modes.
+      const caughtUpRequested = options?.caughtUpToMessageId !== undefined;
+      const caughtUpMessage = caughtUpRequested
+        ? await this.prisma.message.findUnique({
+            where: { id: options!.caughtUpToMessageId },
+            select: { conversationId: true, createdAt: true },
+          })
+        : null;
+      const caughtUpBelongs = caughtUpMessage?.conversationId === conversationId;
+      const caughtUpId = caughtUpBelongs ? options!.caughtUpToMessageId : undefined;
+      const caughtUpAt = caughtUpBelongs ? (caughtUpMessage?.createdAt ?? null) : null;
+
       let frozenCount = 0;
       if (exactMessageIds) {
         // MODE EXACT — l'ordre est inversé par rapport au mode hérité : on fige
@@ -789,17 +810,11 @@ export class MessageReadStatusService {
         // son cas nominal, et `POST …/mark-as-read` avec lui. Mesuré sur
         // staging le 2026-08-31 ; aucun témoin ne pouvait le voir, le double
         // de `message.findUnique` répondant quel que soit son `where`.
-        const caughtUpMessage = options.caughtUpToMessageId
-          ? await this.prisma.message.findUnique({
-              where: { id: options.caughtUpToMessageId },
-              select: { conversationId: true },
-            })
-          : null;
-        if (caughtUpMessage?.conversationId === conversationId) {
+        if (caughtUpId) {
           await this._advanceCursor({
             participantId,
             conversationId,
-            messageId: options.caughtUpToMessageId,
+            messageId: caughtUpId,
             now,
             cursorExists: cursorExists || cursorTarget != null,
             idField: "lastReadMessageId",
@@ -808,10 +823,27 @@ export class MessageReadStatusService {
           });
         }
       } else {
+        // #16744 — fail-CLOSED. Une frontière rapportée qui n'appartient PAS à
+        // cette conversation ne gouverne rien, et elle ne doit pas non plus
+        // faire retomber la lecture sur la forme héritée : celle-ci fait sauter
+        // le curseur au DERNIER message en base, c'est-à-dire exactement le
+        // dommage. Rien n'est acquitté. (Le mode exact, lui, garde son gel et
+        // son avance par préfixe — il a un ensemble affiché à honorer.)
+        if (caughtUpRequested && !caughtUpBelongs) {
+          logger.info(
+            `[MessageReadStatus] Ignoring catch-up receipt for a message outside conversation ${conversationId} (participant ${participantId})`
+          );
+          return 0;
+        }
+
+        // Le curseur se pose sur la frontière RAPPORTÉE, jamais sur le dernier
+        // message en base. Les deux diffèrent dès qu'un message arrive entre le
+        // calcul de la frontière et la requête — et de tout un arriéré quand
+        // l'accusé est rejoué depuis la file hors ligne du web.
         const advanced = await this._advanceCursor({
           participantId,
           conversationId,
-          messageId,
+          messageId: caughtUpId ?? messageId,
           now,
           cursorExists,
           idField: "lastReadMessageId",
@@ -837,6 +869,13 @@ export class MessageReadStatusService {
           since: prevReadAt,
           at: now,
           field: "readAt",
+          // Bornée sur la POSITION de la frontière rapportée. Le contrat
+          // l'exige — « sans élargir d'un seul message l'ensemble déclaré LU »
+          // (`MarkReadBodySchema.caughtUpToMessageId`) — et le gel est
+          // write-once : un message gravé lu à tort l'est pour toujours.
+          // `null` quand rien n'est rapporté : la fenêtre monte alors jusqu'à
+          // `now`, forme héritée intacte de « marquer la conversation lue ».
+          until: caughtUpAt,
           language: options?.language,
           messageLanguages: options?.messageLanguages,
         });

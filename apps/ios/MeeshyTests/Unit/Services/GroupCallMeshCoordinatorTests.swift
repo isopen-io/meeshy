@@ -380,7 +380,7 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         sut.handleParticipantJoined(joined("c"))
 
         let configuration = factory.link(to: "c")?.configuration
-        XCTAssertEqual(configuration?.isPolite, CallManager.isPolitePeer(localUserId: "me", remoteUserId: "c"))
+        XCTAssertEqual(configuration?.isPolite, CallNegotiationRules.isPolitePeer(localUserId: "me", remoteUserId: "c"))
         XCTAssertEqual(configuration?.sendsVideo, true)
         XCTAssertEqual(configuration?.sendsAudio, true)
     }

@@ -285,6 +285,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         Task { @MainActor in self.connectionState = .connecting }
 
+        // #16744 — le transport PÉRIMÉ qu'on remplace part par la porte de la
+        // loi, comme à `suspendTransport()`. Le garde-fou d'entrée ne couvre que
+        // `.connected || .connecting` : un socket coupé par la passerelle
+        // (expiration de JWT) arrive ici non-nil et `.disconnected`, avec ses
+        // `emitWithAck` EN VOL. Socket.IO n'en tient qu'une référence FAIBLE —
+        // le relâcher sans retraite, c'est ni réponse ni expiration, donc un
+        // envoi suspendu pour toujours et jamais replié sur REST.
+        transportRetirement.retire(manager)
         manager = makeTransport(url: url, token: token)
 
         socket = manager?.defaultSocket
@@ -804,33 +812,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public func emitAppForeground(_ foreground: Bool) {
         lastAppForeground = foreground
         socket?.emit("presence:app-state", ["foreground": foreground])
-    }
-
-    // MARK: - Friend request lifecycle
-
-    /// `friend-request:cancelled` ne porte que `{friendRequestId, cancelledBy}`
-    /// et ne dit PAS de quel cote se trouve le lecteur — l'evenement part a
-    /// l'user-room de l'AUTRE partie, donc `cancelledBy` est l'interlocuteur,
-    /// que la demande ait ete emise ou recue. On retire dans les DEUX sens :
-    /// chacune des deux methodes est un no-op quand la cle est absente.
-    ///
-    /// Muter `FriendshipCache` ne repeint PAS l'ecran Demandes : ses lignes
-    /// viennent de GRDB (`PersistenceKeys.receivedRequests` / `sentRequests`),
-    /// qui resterait `.fresh` avec la ligne retiree. D'ou l'invalidation
-    /// EXPLICITE — `notifyChange()` ne fait qu'incrementer `version`.
-    static func applyFriendRequestWithdrawal(otherUserId: String) async {
-        FriendshipCache.shared.didCancelRequest(to: otherUserId)
-        FriendshipCache.shared.didRejectRequest(from: otherUserId)
-        await FriendshipCache.shared.invalidatePersistedFriendCaches()
-    }
-
-    /// `friend-request:rejected` arrive chez l'EXPEDITEUR d'origine : sa demande
-    /// vit dans `_sentPending`, que `didCancelRequest(to:)` vide.
-    /// `didRejectRequest(from:)` viderait `_receivedPending` — mauvaise
-    /// direction, no-op garanti.
-    static func applyFriendRequestRejection(rejecterId: String) async {
-        FriendshipCache.shared.didCancelRequest(to: rejecterId)
-        await FriendshipCache.shared.invalidatePersistedFriendCaches()
     }
 
     // MARK: - Decode Helper
