@@ -367,6 +367,9 @@ struct SecurityView: View {
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
 
+            EmailSpamFolderHint()
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+
             Button {
                 HapticFeedback.light()
                 resendEmailVerification()

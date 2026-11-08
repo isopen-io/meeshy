@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover
 
 # Import des modules internes
 from .worker_pool import WorkerPool, configure_pytorch_threads, calculate_optimal_workers
-from .connection_manager import ConnectionManager, RejectedTasksHandler, take_next_task
+from .connection_manager import ConnectionManager, FastLaneBurst, RejectedTasksHandler, take_next_task
 
 # Import local
 from ..zmq_models import TranslationTask
@@ -227,6 +227,7 @@ class TranslationPoolManager:
     async def _normal_worker_loop(self, worker_name: str, worker_index: int = 0):
         """Boucle de travail pour les workers normaux"""
         logger.info(f"[WORKER] {worker_name} started")
+        burst = FastLaneBurst(self.connection_manager.fast_lane_burst)
 
         # `worker_index >= current_workers` est comment un worker excédentaire
         # se termine lui-même après un scale DOWN (#3664) — sans lui,
@@ -241,7 +242,8 @@ class TranslationPoolManager:
                 # Récupérer une tâche (priorité fast_pool d'abord)
                 task = await self._get_next_task(
                     self.connection_manager.fast_pool,
-                    self.connection_manager.normal_pool
+                    self.connection_manager.normal_pool,
+                    burst
                 )
 
                 if task is None:
@@ -262,6 +264,7 @@ class TranslationPoolManager:
     async def _any_worker_loop(self, worker_name: str, worker_index: int = 0):
         """Boucle de travail pour les workers any"""
         logger.info(f"[WORKER] {worker_name} started")
+        burst = FastLaneBurst(self.connection_manager.fast_lane_burst)
 
         while self.any_pool.workers_running and worker_index < self.any_pool.current_workers:
             try:
@@ -273,7 +276,8 @@ class TranslationPoolManager:
                 # Récupérer une tâche (priorité fast_pool d'abord)
                 task = await self._get_next_task(
                     self.connection_manager.fast_pool,
-                    self.connection_manager.any_pool
+                    self.connection_manager.any_pool,
+                    burst
                 )
 
                 if task is None:
@@ -294,7 +298,8 @@ class TranslationPoolManager:
     async def _get_next_task(
         self,
         fast_pool: asyncio.Queue,
-        regular_pool: asyncio.Queue
+        regular_pool: asyncio.Queue,
+        burst: Optional[FastLaneBurst] = None
     ) -> Optional[TranslationTask]:
         """
         Récupère la prochaine tâche (fast_pool en priorité)
@@ -302,6 +307,7 @@ class TranslationPoolManager:
         Args:
             fast_pool: Fast pool pour textes courts
             regular_pool: Pool régulière
+            burst: état de rafale du worker (#16782) ; sans lui, ordre strict
 
         Returns:
             TranslationTask ou None si rien n'arrive en 1 s (le worker
@@ -310,7 +316,8 @@ class TranslationPoolManager:
         return await take_next_task(
             (fast_pool, regular_pool),
             self.connection_manager.work_arrived,
-            timeout=1.0
+            timeout=1.0,
+            burst=burst
         )
 
     async def _process_task(self, task: TranslationTask, worker_name: str):

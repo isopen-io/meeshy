@@ -40,6 +40,7 @@ import me.meeshy.sdk.net.EmailGateReason
 import me.meeshy.ui.component.auth.AuthActionButton
 import me.meeshy.ui.component.auth.AuthContentType
 import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.component.auth.SpamFolderHint
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -156,6 +157,7 @@ private fun CodeStep(state: EmailGateUiState, focus: FocusRequester, viewModel: 
             style = MaterialTheme.typography.bodySmall,
             color = MeeshyTheme.tokens.textSecondary,
         )
+        SpamFolderHint()
         AuthTextField(
             value = state.code,
             onValueChange = viewModel::onCodeChange,
