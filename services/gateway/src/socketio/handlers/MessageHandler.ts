@@ -1145,7 +1145,7 @@ export class MessageHandler {
       // suppressions CONCURRENTES franchissaient toutes deux la lecture
       // d'amont et appliquaient toutes deux les effets du retrait, dont un
       // décompte NON idempotent.
-      if (await softDeleteMessage(this.prisma, validated.messageId) === 'already-deleted') {
+      if (await softDeleteMessage(this.prisma, validated.messageId, { translations: null, deletedAt: new Date() }) === 'already-deleted') {
         this._sendGenericError(callback, 'Message not found', socket);
         return;
       }

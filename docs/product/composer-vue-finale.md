@@ -51,7 +51,7 @@
    - L'en-tête devient Quitter (à gauche) et Valider (à droite) ; les réglages de l'outil vivent dans une plaque de verre en bas.
    - Quitter rend l'objet d'avant ; Valider garde et fait UN pas d'annulation.
    - Dans un mode, la scène reste manipulable au doigt : glisser, pincer, tourner l'objet modifié (#8535).
-10. **Écrire colle la barre au clavier : Aa · ● · ≡ · ▣ · OK.** La pilule et les rails disparaissent. Aa = police, taille, graisse, effet, langue du texte ; **quatre effets seulement, soignés : Néon, Or, Ombre et Flamme, où le texte brûle littéralement (flammes animées)** ; ● = couleur et contour ; ≡ = alignement ; ▣ = fond et cadre. Le panneau prend la hauteur du clavier.
+10. **Écrire colle la barre au clavier : Aa · ● · ≡ · ▣ · OK.** La pilule et les rails disparaissent. Aa = police, taille, graisse, effet, langue du texte ; **quatre effets seulement, soignés : Néon, Or, Ombre et Flamme, où les flammes animées montent des lettres elles-mêmes** ; ● = couleur et contour ; ≡ = alignement ; ▣ = fond et cadre. Le panneau prend la hauteur du clavier.
 11. **Importer plusieurs médias crée une scène par média** (#8533), jusqu'à 10. Le premier remplit la scène vierge. Chaque scène en cours d'ajout porte son fantôme (préparation, envoi, réessayer) ; le passage à l'adresse téléversée est imperceptible (#8534).
 12. **Un refus se dit sur place, jamais dans une alerte.** Un format indisponible reste visible et grisé dans le ▾, avec sa raison en une ligne (« Demande une vidéo, un son ou deux photos »). Un plafond atteint (10 scènes, 50 objets d'une famille, 1000 caractères, 2 h) se dit en une capsule au-dessus de la pilule, avec un retour haptique et une annonce VoiceOver.
 13. **Ce qui ne doit pas s'afficher ne s'affiche pas.**
@@ -171,6 +171,8 @@ Le tableau des vues et leurs captures est généré avec la planche (voir l'inde
 | Fond, Durée, Transitions dans la pilule | Feuilles ancrées « Fond », « Durée de la diapo » | S1, S5 |
 | Modifier en mode Quitter · Réglages · Valider | Rail Modifier dans la colonne, propriétés en plaque basse | O3 |
 | Rangée des scènes en surimpression ; double toucher duplique, appui long croix + glisser | Rangée dans un cadre ; `moveSlide` / `duplicateSlide` sans appelant | R5, R6 |
-| Quatre effets de texte, dont Flamme animée | 24 effets + Aucun (`StoryTextEffect`) | A2 |
+| Quatre effets de texte, dont Flamme animée sur les lettres | 24 effets + Aucun (`StoryTextEffect`) | A2 |
+| Une seule piste de rognage pour le son et la vidéo : onde ou vignettes, poignées, tête de lecture, volume, muet | Trois pistes voisines : `MediaTrimStrip`, `ComposerTrimTrack`, `MeeshyAudioTrimmer` | A15, O8, C2 |
+| Frise premium : contenu réel par piste (vignettes, texte, sticker, onde), pincer pour zoomer, aimantation avec retour haptique | Les pistes son et vidéo portent déjà leur onde (`WaveformStrip`) ; le reste est à relever dans le code | S8, S9 |
 | Rangé = scène plein écran, proportions gardées | Pas d'état rangé | R4 |
 | Verrouiller un objet depuis la pilule de l'objet | `isLocked` respecté, aucune bascule dans l'UI | O2 |
