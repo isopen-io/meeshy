@@ -53,10 +53,11 @@ async function withdrawOwnerShares(
 /**
  * Le lien est tombé sous le Sang par le geste de `actorId` : les partages du rituel
  * s'éteignent dans les DEUX sens — datés chez l'acteur, sans date chez l'autre.
+ * `at` nul : la chute n'est le geste de personne (course du rituel), aucun côté n'est daté.
  */
 export async function withdrawRitualSharesBetween(
   prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
-  params: { readonly actorId: string; readonly otherId: string; readonly at: Date },
+  params: { readonly actorId: string; readonly otherId: string; readonly at: Date | null },
 ): Promise<void> {
   await Promise.all([
     withdrawOwnerShares(prisma, { ownerId: params.actorId, otherId: params.otherId, at: params.at }),

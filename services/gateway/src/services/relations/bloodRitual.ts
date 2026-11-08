@@ -281,13 +281,18 @@ async function writeConsents(deps: RitualDeps, ownerId: string, otherId: string,
 }
 
 /**
- * #14924 — une baisse qui s'achève entre le scellement et l'écriture des consentements les
- * aurait lus sur un lien déjà tombé, puis laissés allumés : le niveau est relu APRÈS.
+ * #14924 — une baisse ou un blocage qui s'achève entre le scellement et l'écriture des
+ * consentements les aurait éteints AVANT qu'ils s'écrivent, puis laissés allumés : le
+ * niveau et le blocage sont relus APRÈS. Le retrait n'est le geste de personne : sans date.
  */
-async function withdrawIfSealLost(deps: RitualDeps, actorId: string, otherId: string, at: Date): Promise<void> {
+async function withdrawIfSealLost(deps: RitualDeps, actorId: string, otherId: string): Promise<void> {
   try {
-    if ((await niveauEffectif(deps.prisma, actorId, otherId)) === 'BLOOD') return;
-    await withdrawRitualSharesBetween(deps.prisma, { actorId, otherId, at });
+    const [level, blocked] = await Promise.all([
+      niveauEffectif(deps.prisma, actorId, otherId),
+      isBlockedBetween(deps.prisma, actorId, otherId),
+    ]);
+    if (level === 'BLOOD' && !blocked) return;
+    await withdrawRitualSharesBetween(deps.prisma, { actorId, otherId, at: null });
   } catch (error) {
     deps.reportAfterSeal(error);
   }
@@ -327,7 +332,7 @@ async function complete(deps: RitualDeps, key: string, state: RitualState, actor
   afterSeal.forEach((result) => {
     if (result.status === 'rejected') deps.reportAfterSeal(result.reason);
   });
-  await withdrawIfSealLost(deps, actorId, otherId, at);
+  await withdrawIfSealLost(deps, actorId, otherId);
 
   await deps.cache.del(key);
   await deps.forgetFriends([actorId, otherId]);
