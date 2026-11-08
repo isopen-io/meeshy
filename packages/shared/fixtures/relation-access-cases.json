@@ -689,6 +689,98 @@
       }
     },
     {
+      "id": "temporary-location-friend-shared",
+      "matrix": "Consentement",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "temporary-location-acquaintance-closed",
+      "matrix": "Niveau",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "temporary-location-friend-not-chosen",
+      "matrix": "Consentement",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "temporary-location-minor-friend-shared",
+      "matrix": "Mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "location.temporary",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
       "id": "close-has-no-live-location",
       "matrix": "Consentement",
       "input": {
@@ -2636,7 +2728,7 @@
       }
     },
     {
-      "id": "team-opens-no-close-audience",
+      "id": "team-opens-the-close-audience",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2652,6 +2744,52 @@
         "feature": "audience.close"
       },
       "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-opens-the-blood-audience-without-any-link",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "BIGBOSS",
+        "targetRole": "ADMIN",
+        "feature": "audience.blood"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-ordinary-user-sees-no-blood-audience-of-an-admin",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "targetRole": "ADMIN",
+        "feature": "audience.blood"
+      },
+      "expected": {
         "allowed": false,
         "effectiveLevel": "PUBLIC",
         "reason": "level",
@@ -2659,7 +2797,260 @@
       }
     },
     {
-      "id": "team-opens-no-blood-audience-over-a-real-close-link",
+      "id": "team-moderator-sees-no-blood-audience-of-an-ordinary-user",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "USER",
+        "feature": "audience.blood"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-unknown-target-role-sees-no-blood-audience",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "SUPERADMIN",
+        "feature": "audience.blood"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-does-not-cross-the-minor-shield-blood-audience",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "MODERATOR",
+        "targetRole": "ADMIN",
+        "feature": "audience.blood"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-minor-reader-sees-no-blood-audience-of-an-adult-colleague",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "ADMIN",
+        "feature": "audience.blood"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-minor-reader-sees-no-close-audience-of-an-adult-colleague",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "BIGBOSS",
+        "feature": "audience.close"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-minor-reader-sees-no-acquaintance-audience-of-an-adult-colleague",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "ADMIN",
+        "feature": "audience.acquaintances"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-minor-is-not-told-of-the-new-content-of-an-adult-colleague",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "ADMIN",
+        "feature": "notify.newContent"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-minor-is-not-relayed-the-commenters-of-an-adult-colleague",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "ADMIN",
+        "feature": "relay.commentersOnMyPosts"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-minor-is-not-relayed-the-comments-elsewhere-of-an-adult-colleague",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "ADMIN",
+        "feature": "relay.myCommentsElsewhere"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-adult-is-not-told-of-the-new-content-of-a-minor-colleague",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "ADMIN",
+        "targetRole": "MODERATOR",
+        "feature": "notify.newContent"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-two-minor-colleagues-keep-the-blood-audience",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "minor",
+        "viewerRole": "MODERATOR",
+        "targetRole": "MODERATOR",
+        "feature": "audience.blood"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-opens-the-blood-audience-over-a-real-close-link",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2675,14 +3066,14 @@
         "feature": "audience.blood"
       },
       "expected": {
-        "allowed": false,
-        "effectiveLevel": "CLOSE",
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
         "reason": "level",
         "requiresConsent": false
       }
     },
     {
-      "id": "team-opens-no-acquaintance-audience",
+      "id": "team-opens-the-acquaintance-audience",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2698,14 +3089,14 @@
         "feature": "audience.acquaintances"
       },
       "expected": {
-        "allowed": false,
-        "effectiveLevel": "PUBLIC",
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
         "reason": "level",
         "requiresConsent": false
       }
     },
     {
-      "id": "team-opens-no-new-content-notification",
+      "id": "team-opens-the-new-content-notification",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2721,14 +3112,14 @@
         "feature": "notify.newContent"
       },
       "expected": {
-        "allowed": false,
-        "effectiveLevel": "PUBLIC",
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
         "reason": "level",
         "requiresConsent": false
       }
     },
     {
-      "id": "team-opens-no-relay-of-commenters",
+      "id": "team-opens-the-relay-of-commenters",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2744,14 +3135,14 @@
         "feature": "relay.commentersOnMyPosts"
       },
       "expected": {
-        "allowed": false,
-        "effectiveLevel": "PUBLIC",
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
         "reason": "level",
         "requiresConsent": false
       }
     },
     {
-      "id": "team-opens-no-relay-of-my-comments",
+      "id": "team-opens-the-relay-of-my-comments",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2767,8 +3158,8 @@
         "feature": "relay.myCommentsElsewhere"
       },
       "expected": {
-        "allowed": false,
-        "effectiveLevel": "PUBLIC",
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
         "reason": "level",
         "requiresConsent": false
       }
@@ -2909,6 +3300,72 @@
         "allowed": false,
         "effectiveLevel": "PUBLIC",
         "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "close-watches-together-without-stored-consent",
+      "matrix": "Ensemble (#17012)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "together",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "friend-does-not-watch-together",
+      "matrix": "Ensemble (#17012)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "together",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "CLOSE"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "blocked-blood-does-not-watch-together",
+      "matrix": "Ensemble (#17012)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "sharesCommunity": false,
+        "blockedEitherWay": true,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "together",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "blocked",
         "requiresConsent": false
       }
     }

@@ -364,26 +364,12 @@ struct GroupCallTileView: View {
     }
 
     private var nameplate: some View {
-        HStack(spacing: MeeshySpacing.xs) {
-            if tile.isMicMuted {
-                Image(systemName: "mic.slash.fill")
-                    .foregroundStyle(MeeshyColors.error)
-            }
-            if tile.isScreenSharing {
-                Image(systemName: "rectangle.on.rectangle")
-            }
-            if tile.isReconnecting {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(MeeshyColors.warning)
-            }
-            Text(title ?? tile.displayName)
-                .lineLimit(1)
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(Color.white)
-        .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.vertical, MeeshySpacing.xs)
-        .background(.ultraThinMaterial, in: Capsule())
+        CallTileNameplate(
+            title: title ?? tile.displayName,
+            isMicMuted: tile.isMicMuted,
+            isScreenSharing: tile.isScreenSharing,
+            isReconnecting: tile.isReconnecting
+        )
     }
 
     private var accessibilityValue: String {

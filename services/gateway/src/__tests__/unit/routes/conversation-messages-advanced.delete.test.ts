@@ -364,6 +364,53 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(prisma.message.update).not.toHaveBeenCalled();
     });
 
+    /**
+     * **La garde OPTIMISTE du retrait** (#17079) — celle que ce même fichier de
+     * production attribue, dans son commentaire, à la route d'ÉDITION
+     * (`where: { id, deletedAt: null }`, quatre sites) et que les DEUX
+     * transports de suppression n'avaient pas.
+     *
+     * La lecture d'amont porte bien `deletedAt: null`, donc un rejeu
+     * SÉQUENTIEL rend 404. Mais deux requêtes CONCURRENTES la franchissent
+     * toutes les deux, écrivent toutes les deux, et appellent toutes les deux
+     * `applyMessageRemovalEffects` — dont `onMessageDeleted` est un DÉCOMPTE
+     * NON idempotent. Les compteurs de `GET …/stats` dérivent alors vers le bas
+     * de la valeur d'un message, définitivement.
+     *
+     * Un témoin SÉQUENTIEL ne peut pas tomber : le second appel rend 404 avant
+     * d'écrire. La propriété ne se voit qu'en faisant ÉCHOUER l'écriture comme
+     * la base la ferait — `P2025`, « an operation failed because it depends on
+     * one or more records that were required but not found ».
+     */
+    it("#17079 — l'écriture porte la garde optimiste `deletedAt: null`", async () => {
+      prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), attachments: [] });
+      prisma.message.update.mockClear();
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);
+
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: MSG_ID, deletedAt: null } }),
+      );
+    });
+
+    it("#17079 — une suppression concurrente ne décompte pas deux fois", async () => {
+      prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), attachments: [] });
+      const notFound: any = new Error('An operation failed because it depends on one or more records that were required but not found.');
+      notFound.code = 'P2025';
+      prisma.message.update.mockRejectedValue(notFound);
+      mockOnMessageDeleted.mockClear();
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);
+
+      // Le perdant de la course apprend ce que le rejeu séquentiel apprend
+      // déjà : le message n'est plus là. Et il n'applique AUCUN effet.
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
+      expect(mockOnMessageDeleted).not.toHaveBeenCalled();
+      expect(mockSendInternalError).not.toHaveBeenCalled();
+    });
+
     it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });

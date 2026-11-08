@@ -787,7 +787,23 @@ export function registerMessagesListRoute(
       // n'en dépend PAS. Déféré en fire-and-forget : l'awaiter ajoutait
       // 50-130ms à CHAQUE fetch de messages (l'endpoint le plus appelé).
       t0 = performance.now();
-      if (messages.length > 0 && !authRequest.authContext.isAnonymous && currentParticipantId) {
+      // #17077 — `isAnonymous` ne garde RIEN ici, et il retirait la population
+      // des invités de lien d'un des trois transports du même fait.
+      // `currentParticipantId` est résolu pour les DEUX identités vingt lignes
+      // plus haut (`isAnonymousUser ? authContext.participantId :
+      // currentParticipant?.id`), et `markMessagesAsReceived` prend un
+      // `Participant.id`, pas un `User.id` : la clé était déjà la bonne.
+      //
+      // C'est le cas de référence que le CLAUDE.md du gateway interdit
+      // nommément — « ne JAMAIS enterrer l'incomplétude sous un
+      // `if (!isAnonymous)` au site d'appel : le gate donne l'omission pour une
+      // règle produit » — et le cycle 61 l'a déjà payé sur la pastille de
+      // non-lus, pour la même population et sans recours côté iOS/Android.
+      //
+      // Ce qui restait découvert : l'invité qui lit l'historique par REST sans
+      // socket authentifiée vivante (page de lien avant l'authentification
+      // socket, coque en reprise). Son expéditeur restait à une seule coche.
+      if (messages.length > 0 && currentParticipantId) {
         const participantIdForReceipt = currentParticipantId;
         void (async () => {
           try {

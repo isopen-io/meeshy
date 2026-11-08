@@ -39,6 +39,8 @@ import { unsetOrNull } from '../../../utils/prisma-unset';
 import { comptesAuMoins, niveauxParmi } from '../../friendship';
 import { getCommunityCoMemberIdsBounded } from '../../posts/communityVisibility';
 import { linkedAmong, type ChosenLinkDb } from '../../posts/chosenRecipientLinks';
+import { peopleOf, type PairPerson } from '../../relations/pairAccess';
+import { teamPeerCandidates } from '../../relations/teamPeers';
 import { FANOUT_ROW_CAP } from './row-cap';
 
 export type EntourageDb = Pick<PrismaClient, 'friendRequest' | 'userRelation' | 'communityMember' | 'user' | 'userPreferences'>;
@@ -46,6 +48,8 @@ export type EntourageDb = Pick<PrismaClient, 'friendRequest' | 'userRelation' | 
 export type Entourage = { readonly ids: string[]; readonly truncated: boolean };
 
 const NOBODY: Entourage = { ids: [], truncated: false };
+
+const NO_PEOPLE: ReadonlyMap<string, PairPerson> = new Map();
 
 /**
  * La fenêtre de LECTURE de l'entourage (#14252) : deux fois la borne de diffusion.
@@ -188,14 +192,15 @@ async function readEntourage(prisma: EntourageDb, params: EntourageParams): Prom
   if (setting === 'NOBODY') return NOBODY;
 
   const plancher: RelationLevel = widensToCommunity(setting) ? 'ACQUAINTANCE' : setting;
-  const [comptes, coMembers] = await Promise.all([
+  const [comptes, coMembers, colleagues] = await Promise.all([
     comptesAuMoins(prisma, ownerId, plancher, { limit: LIVING_READ_WINDOW + 1 }),
     widensToCommunity(setting) ? getCommunityCoMemberIdsBounded(prisma, ownerId, LIVING_READ_WINDOW + 1) : Promise.resolve([]),
+    teamPeerCandidates(prisma, ownerId),
   ]);
 
   const excluded = new Set([ownerId, ...(params.excludeUserIds ?? [])]);
   const known = new Map(comptes.map((c) => [c.id, c.niveau]));
-  const read = [...new Set([...comptes.map((c) => c.id), ...coMembers])].filter((id) => !excluded.has(id));
+  const read = [...new Set([...comptes.map((c) => c.id), ...coMembers, ...colleagues])].filter((id) => !excluded.has(id));
   const ordered = read.slice(0, LIVING_READ_WINDOW);
   const alive = await livingAmong(prisma, [ownerId, ...mustBeAlive, ...ordered]);
   if (![ownerId, ...mustBeAlive].every((id) => alive.has(id))) return NOBODY;
@@ -209,14 +214,19 @@ async function readEntourage(prisma: EntourageDb, params: EntourageParams): Prom
 
   const coMemberSet = new Set(coMembers);
   const unknownLevels = candidates.filter((id) => !known.has(id));
-  const [levels, blocked] = await Promise.all([
+  const [levels, blocked, people] = await Promise.all([
     unknownLevels.length === 0 ? Promise.resolve(known) : niveauxParmi(prisma, ownerId, unknownLevels),
     getBlockedUserIdsAmong(prisma, ownerId, candidates),
+    colleagues.length === 0 ? Promise.resolve(NO_PEOPLE) : peopleOf(prisma, [ownerId, ...candidates], new Date()),
   ]);
 
   const levelOf = (id: string): RelationLevel => known.get(id) ?? levels.get(id) ?? 'PUBLIC';
   const feature = CIRCLE_NOTIFY_KEY_FEATURE[key];
   // Le niveau lu est déjà le MINIMUM des deux accords : le passer des deux côtés le rend tel quel.
+  // Le rôle et l'âge déclaré ne sont lus que pour un propriétaire de l'ÉQUIPE (#16623) : seul lui a des
+  // collègues à qui la loi ouvre l'entourage sans lien. Pour tout autre, la lecture serait sans effet.
+  const ageOf = (id: string) => people.get(id)?.age ?? 'unknown';
+  const roleOf = (id: string) => people.get(id)?.role ?? null;
   const ids = candidates.filter(
     (id) =>
       resolveRelationAccess({
@@ -226,10 +236,12 @@ async function readEntourage(prisma: EntourageDb, params: EntourageParams): Prom
         grantedByTarget: levelOf(id),
         sharesCommunity: coMemberSet.has(id),
         blockedEitherWay: blocked.has(id),
-        // L'âge ne garde aujourd'hui que la Connaissance AUTOMATIQUE (loi #13927) ;
-        // une garde d'âge ajoutée à une feature d'entourage exigera de le lire ici.
-        viewerMinor: 'unknown',
-        targetMinor: 'unknown',
+        // Âge et rôle ne sont lus que pour un propriétaire de l'équipe ; sinon `unknown` / aucun,
+        // et la loi ne juge que le lien (la Connaissance AUTOMATIQUE n'est pas une feature d'entourage).
+        viewerMinor: ageOf(id),
+        targetMinor: ageOf(ownerId),
+        viewerRole: roleOf(id),
+        targetRole: roleOf(ownerId),
         feature,
         ownerAudience: setting,
       }).allowed

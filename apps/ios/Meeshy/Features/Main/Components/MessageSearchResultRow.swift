@@ -40,7 +40,7 @@ struct MessageSearchResultRow: View, Equatable {
 
                     Text(RelativeTimeFormatter.shortString(for: result.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Text(result.senderName)
@@ -94,13 +94,10 @@ struct MessageSearchResultRow: View, Equatable {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
-                .redacted(reason: .placeholder)
-                .blur(radius: Self.veilBlurRadius)
+                .modifier(DiffuseVeil())
         }
         .accessibilityHidden(true)
     }
-
-    private static let veilBlurRadius: CGFloat = 8
 
     static var veiledLabel: String {
         String(localized: "search.messages.veiled", defaultValue: "Message flouté")

@@ -112,10 +112,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les cadres avec lesquels la prise en retouche est (ou part) dans Photos —
     /// l'état de la loi partagée ; `takeSaveState` en est la projection.
     @Published var takeSave = ComposerCaptureSession.noTakeSave
-    /// La dernière écriture vers Photos en cours (elles s'enchaînent) : détenue
-    /// ici, jamais par la vue, elle survit à ✕ et à la fermeture du viseur :
-    /// `nil` : rendu impossible, `false` : Photos a refusé (et l'a dit),
-    /// `true` : enregistrée.
+    /// La dernière écriture vers Photos, détenue ici : elle survit à ✕ et à la fermeture.
+    /// `nil` : rendu impossible, `false` : Photos a refusé (et l'a dit), `true` : enregistrée.
     @Published var takeWrite: Task<Bool?, Never>?
     /// L'écriture du BRUT de la prise en retouche vers Photos par la caméra —
     /// quand Réglages › Médias demande l'original, quelle que soit la zone ;
@@ -123,9 +121,8 @@ final class ComposerCaptureSession: ObservableObject {
     var editRawSave: Task<Bool, Never>?
     /// Ce que la capture écrit dans Photos — lu à chaque décision, jamais figé.
     let savePolicy: @MainActor () -> CaptureSavePolicy
-    /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
-    /// la MÊME dans leur cadre.
-    let lookDate = Date()
+    /// La date que le cadre écrit : le jour, figé pendant une prise (CAM-16).
+    @Published var lookDate = Date()
     /// La température de l'appareil, guettée tant que le viseur vit.
     let thermal: any ThermalStateMonitorProviding
     /// Ce que l'aperçu et la bande ont le droit de coûter maintenant.
@@ -256,6 +253,7 @@ final class ComposerCaptureSession: ObservableObject {
         openFamily = ComposerCaptureSession.openingFamily
         stage = .armed
         armedAt = Date()
+        followTheDay()
         watchThermalState()
         camera.configure(filming: mode != .photo)
     }
@@ -391,7 +389,7 @@ final class ComposerCaptureSession: ObservableObject {
         pendingSegmentDuration = camera.recordingDuration
         camera.stopRecording()
         extinguishFlash()
-        HapticFeedback.medium()
+        ComposerCaptureHaptic.play(.recordingEnded)
     }
 
     /// **Une vidéo s'ACCUMULE** : `✓` concatène.
@@ -411,11 +409,9 @@ final class ComposerCaptureSession: ObservableObject {
         HapticFeedback.light()
     }
 
-    /// **`✓` assemble les segments et ouvre la retouche** (spec § 3.2) :
-    /// rien ne part avant « Terminé ». Un segment unique EST le fichier — et son
-    /// brut, si la caméra l'a écrit (réglage activé), est déjà dans Photos ; un
-    /// assemblage qui échoue retombe sur le dernier segment plutôt que de perdre
-    /// la prise entière. Un viseur fermé entre-temps n'ouvre rien.
+    /// **`✓` assemble les segments et ouvre la retouche** (spec § 3.2) : rien ne part avant « Terminé ».
+    /// Un segment unique EST le fichier ; un assemblage qui échoue retombe sur le dernier
+    /// segment plutôt que de perdre la prise. Un viseur fermé entre-temps n'ouvre rien.
     func validateSegments() {
         let pris = segments
         guard ComposerCaptureSegments.canValidate(pris) else { return }
@@ -459,7 +455,7 @@ final class ComposerCaptureSession: ObservableObject {
         filmIntent = .edit
         let attend = controls.recordingIsPending
         awaitsPreviousTake = attend
-        if !attend { HapticFeedback.medium() }
+        if !attend { ComposerCaptureHaptic.play(.recordingStarted) }
         holdStartedAt = Date()
         holdPhase = .holding
         lockProgress = 0
@@ -469,7 +465,7 @@ final class ComposerCaptureSession: ObservableObject {
                   await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled,
                   holdStartedAt != nil || holdPhase == .locked else { return }
-            if attend { HapticFeedback.medium() }
+            if attend { ComposerCaptureHaptic.play(.recordingStarted) }
             startFilming()
         }
     }
@@ -486,7 +482,7 @@ final class ComposerCaptureSession: ObservableObject {
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
         lockProgress = 1
-        HapticFeedback.medium()
+        ComposerCaptureHaptic.play(.locked)
         UIAccessibility.post(notification: .announcement, argument: ComposerSceneCameraCopy.lockedAnnouncement)
         lockTake()
     }

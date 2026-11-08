@@ -142,11 +142,7 @@ final class TalkieVoicePlayer: TalkieSink {
     // MARK: - Sortie
 
     private func prepareOutput() {
-        let session = AVAudioSession.sharedInstance()
-        if session.category == .soloAmbient {
-            try? session.setCategory(.ambient)
-        }
-        try? session.setActive(true)
+        MediaSessionCoordinator.shared.activateMixableVoicePlayback()
         applyOutputPlan()
         observeOutputChanges()
     }
@@ -189,8 +185,7 @@ final class TalkieVoicePlayer: TalkieSink {
         engine.stop()
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
-        guard AVAudioSession.sharedInstance().category == .ambient else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        MediaSessionCoordinator.shared.releaseMixableVoicePlayback()
     }
 }
 

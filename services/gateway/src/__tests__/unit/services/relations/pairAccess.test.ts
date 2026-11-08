@@ -84,14 +84,21 @@ describe('pairAccessAmong — l\'équipe (#16623)', () => {
     expect([...verdicts.values()].map((v) => v.allowed)).toEqual([false, false, false]);
   });
 
-  it('une audience de contenu reste au lien réel : le rôle ne fait entrer personne', async () => {
-    const verdicts = await pairAccessAmong(db(equipe()), {
+  it('une audience de contenu s\'ouvre au niveau Sang sans lien (correction porteur 2026-11-08), la Connaissance automatique reste fermée', async () => {
+    const audience = await pairAccessAmong(db(equipe()), {
       feature: 'audience.close',
       subjectId: MODERATRICE,
       otherIds: [ADMINISTRATEUR],
       subjectIs: 'viewer',
     });
-    expect(verdicts.get(ADMINISTRATEUR)).toMatchObject({ allowed: false, effectiveLevel: 'PUBLIC' });
+    expect(audience.get(ADMINISTRATEUR)).toMatchObject({ allowed: true, effectiveLevel: 'BLOOD' });
+    const auto = await pairAccessAmong(db(equipe()), {
+      feature: 'acquaintance.auto',
+      subjectId: MODERATRICE,
+      otherIds: [ADMINISTRATEUR],
+      subjectIs: 'viewer',
+    });
+    expect(auto.get(ADMINISTRATEUR)).toMatchObject({ allowed: true, effectiveLevel: 'PUBLIC' });
   });
 
   it('un compte de l\'équipe supprimé, inactif ou désactivé n\'a plus le privilège, dans aucun sens', async () => {

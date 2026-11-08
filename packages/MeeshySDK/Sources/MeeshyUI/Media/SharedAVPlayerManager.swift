@@ -333,18 +333,39 @@ public final class SharedAVPlayerManager: ObservableObject {
         // Session de lecture via la loi UNIQUE (call-aware) : ne reconfigure
         // pas la session pendant un appel VoIP — la vidéo joue alors sous la
         // session de l'appel (micro préservé).
-        MediaSessionCoordinator.shared.activateContentPlayback(
-            Self.playbackAudibility(effectiveMuted: effectiveMuted)
-        )
+        let audibility = Self.playbackAudibility(effectiveMuted: effectiveMuted)
+        MediaSessionCoordinator.shared.activateContentPlayback(audibility)
         noteSessionSignal(.userStartedPlayback)
-        player.play()
-        player.rate = Float(playbackSpeed.rawValue)
         isPlaying = true
         wantsPlayback = true
+        startRate(of: player, audibility: audibility)
         if watchStartTime == nil { watchStartTime = Date() }
         if watchClockStart == nil { watchClockStart = Date() }
         stretchTracker.begin(positionMs)
         emitWatchSample()
+    }
+
+    /// UNE commande de débit, ou aucune (#17035) : chacune est un aller-retour
+    /// synchrone vers le serveur média sur la file du lecteur, que le fil
+    /// principal attend dès qu'AVFoundation y relit `loadedTimeRanges`. Jamais
+    /// `play()` puis `rate`. Une vidéo audible attend que sa session
+    /// `.playback` soit posée, hors du fil principal (#17038) ; sous bail, sans
+    /// écriture en file, le débit part tout de suite. Une pause ou un autre
+    /// lecteur entre-temps l'emportent.
+    private func startRate(of player: AVPlayer, audibility: ContentPlaybackAudibility) {
+        guard audibility == .audible else { return commandStartRate(of: player) }
+        let token = ObjectIdentifier(player)
+        MediaSessionCoordinator.shared.whenSessionSettled { [weak self] in
+            guard let self, self.wantsPlayback, let player = self.player, ObjectIdentifier(player) == token else { return }
+            self.commandStartRate(of: player)
+        }
+    }
+
+    private func commandStartRate(of player: AVPlayer) {
+        guard let rate = PlaybackStartRateLaw.rateToSet(
+            currentRate: player.rate, speed: Float(playbackSpeed.rawValue)
+        ) else { return }
+        player.rate = rate
     }
 
     /// **La pause du réel qu'on quitte, pendant le geste.**

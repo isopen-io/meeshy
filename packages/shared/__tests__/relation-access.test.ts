@@ -117,8 +117,10 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['listening.category', 'CLOSE'],
     ['listening.title', 'BLOOD'],
     ['talkie', 'CLOSE'],
+    ['together', 'CLOSE'],
     ['bring', 'FRIEND'],
     ['location.live', 'BLOOD'],
+    ['location.temporary', 'FRIEND'],
     ['location.history', 'BLOOD'],
     ['location.proximity', 'BLOOD'],
   ];
@@ -150,6 +152,7 @@ describe('resolveRelationAccess — soi et rôle', () => {
   it('refuse à soi-même une action dirigée vers un autre (bring, talkie)', () => {
     expect(access({ targetId: USER_A, feature: 'bring' })).toMatchObject({ allowed: false, reason: 'self' });
     expect(access({ targetId: USER_A, feature: 'talkie' })).toMatchObject({ allowed: false, reason: 'self' });
+    expect(access({ targetId: USER_A, feature: 'together' })).toMatchObject({ allowed: false, reason: 'self' });
   });
 
   it.each(['ADMIN', 'BIGBOSS'] as const)('%s lit la présence, et seulement la présence', (viewerRole) => {
@@ -193,20 +196,32 @@ describe('resolveRelationAccess — soi et rôle', () => {
 describe('resolveRelationAccess — l\'équipe (#16623)', () => {
   const team = { viewerRole: 'MODERATOR', targetRole: 'ADMIN', consent: 'granted' } as const;
 
-  it('ouvre à deux comptes de l\'équipe chaque outil de cercle, au niveau Sang, sans lien', () => {
-    const tools = RELATION_FEATURES.filter((feature) => !RELATION_TEAM_CLOSED_FEATURES.has(feature));
-    expect(tools.filter((feature) => !access({ ...team, feature }).allowed)).toEqual([]);
-    expect(new Set(tools.map((feature) => access({ ...team, feature }).effectiveLevel))).toEqual(new Set(['BLOOD']));
+  it('ouvre à deux comptes de l\'équipe TOUTE feature de cercle, au niveau Sang, sans lien : outils, audiences, notifications, relais', () => {
+    const opened = RELATION_FEATURES.filter((feature) => !RELATION_TEAM_CLOSED_FEATURES.has(feature));
+    expect(opened).toEqual(expect.arrayContaining(['audience.blood', 'audience.close', 'audience.acquaintances', 'notify.newContent', 'relay.commentersOnMyPosts', 'relay.myCommentsElsewhere', 'bring', 'talkie']));
+    expect(opened.filter((feature) => !access({ ...team, feature }).allowed)).toEqual([]);
+    expect(new Set(opened.map((feature) => access({ ...team, feature }).effectiveLevel))).toEqual(new Set(['BLOOD']));
   });
 
-  it('ne dit jamais `role` pour un outil ouvert par l\'équipe : un modérateur reste sous les préférences de la cible', () => {
+  it('ne laisse fermée que la Connaissance automatique : un rôle ne crée aucun lien', () => {
+    expect([...RELATION_TEAM_CLOSED_FEATURES]).toEqual(['acquaintance.auto']);
+    expect(access({ ...team, feature: 'acquaintance.auto' })).toMatchObject({ allowed: true, effectiveLevel: 'PUBLIC' });
+  });
+
+  it('ne dit jamais `role` pour une feature ouverte par l\'équipe : un modérateur reste sous les préférences de la cible', () => {
     expect(access({ ...team, feature: 'presence.online' }).reason).toBe('level');
   });
 
-  it('n\'ouvre aucune audience de contenu : ni publication, ni notification, ni relais', () => {
-    const closed = [...RELATION_TEAM_CLOSED_FEATURES].filter((feature) => feature !== 'acquaintance.auto');
-    expect(closed.filter((feature) => access({ ...team, feature }).allowed)).toEqual([]);
-    expect(new Set(closed.map((feature) => access({ ...team, ...both('FRIEND'), feature }).effectiveLevel))).toEqual(new Set(['FRIEND']));
+  it('un collègue voit la publication Sang d\'un collègue sans aucun lien ; un utilisateur ordinaire, non', () => {
+    expect(access({ ...team, feature: 'audience.blood' })).toMatchObject({ allowed: true, effectiveLevel: 'BLOOD' });
+    expect(access({ ...team, viewerRole: 'USER', feature: 'audience.blood' }).allowed).toBe(false);
+    expect(access({ ...team, targetRole: 'USER', feature: 'audience.blood' }).allowed).toBe(false);
+  });
+
+  it('la lecture du rôle est demandée pour toute feature de cercle sauf la Connaissance automatique', () => {
+    expect(relationAccessReads('audience.blood').role).toBe(true);
+    expect(relationAccessReads('notify.newContent').role).toBe(true);
+    expect(relationAccessReads('acquaintance.auto').role).toBe(false);
   });
 
   it('`NOBODY` ferme, même au rang Sang réel d\'une paire de l\'équipe', () => {
@@ -231,7 +246,7 @@ describe('resolveRelationAccess — les mineurs (décision porteur 2026-10-31)',
   const AGES: readonly RelationAgeClass[] = ['minor', 'adult', 'unknown'];
   const pairs = AGES.flatMap((viewerMinor) => AGES.map((targetMinor) => ({ viewerMinor, targetMinor })));
 
-  const CONSENT_FEATURES = ['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.history', 'location.proximity'] as const;
+  const CONSENT_FEATURES = ['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.temporary', 'location.history', 'location.proximity'] as const;
 
   it.each(CONSENT_FEATURES)('%s s\'ouvre à tout âge une fois le consentement DONNÉ, jamais derrière un refus d\'âge', (feature) => {
     pairs.forEach((ages) => {
@@ -415,10 +430,10 @@ describe('relation-levels — la config', () => {
 });
 
 describe('relationAccessReads — le rôle (#16623)', () => {
-  it('fait lire le rôle des deux côtés pour un outil, jamais pour une audience de contenu', () => {
+  it('fait lire le rôle des deux côtés pour toute feature que l\'équipe ouvre, audiences comprises', () => {
     expect(relationAccessReads('bring').role).toBe(true);
     expect(relationAccessReads('dm.typing').role).toBe(true);
-    expect(relationAccessReads('audience.close').role).toBe(false);
+    expect(relationAccessReads('audience.close').role).toBe(true);
     expect(relationAccessReads('acquaintance.auto').role).toBe(false);
   });
 });
@@ -427,7 +442,7 @@ describe('relationAccessReads — ce que l\'orchestrateur doit lire pour juger u
   it('lit l\'âge pour la Connaissance automatique et pour toute feature du bouclier', () => {
     expect(relationAccessReads('acquaintance.auto').age).toBe(true);
     expect(relationAccessReads('dm.request').age).toBe(true);
-    expect(relationAccessReads('audience.close').age).toBe(false);
+    expect(relationAccessReads('audience.close').age).toBe(true);
   });
 
   it('lit l\'âge partout où le rôle est lu : le privilège d\'équipe ne franchit pas le bouclier des mineurs (#16623)', () => {

@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
@@ -31,7 +30,6 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val GLYPH_DIAMETER = 40.dp
 private val CHIP_HEIGHT = 44.dp
-private const val CHIP_SCRIM_ALPHA = 0.35f
 
 /**
  * L'en-tête de l'écran d'appel (miroir de iOS `topChrome`) : le chevron « Réduire » et la porte vers
@@ -104,11 +102,12 @@ private fun CallDurationChip(state: CallUiState, onOpenQualityDetail: () -> Unit
     )
     val hint = stringResource(R.string.call_quality_open_hint)
     val warning = MeeshyTheme.tokens.warning
+    val glassTone = LocalCallGlassTone.current
     Row(
         modifier = Modifier
             .height(CHIP_HEIGHT)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = CHIP_SCRIM_ALPHA), CircleShape)
+            .background(glassTone.veil(glassTone.chipScrimAlpha), CircleShape)
             .clickable(role = Role.Button, onClick = onOpenQualityDetail)
             .padding(horizontal = MeeshySpacing.smPlus, vertical = MeeshySpacing.xs)
             .semantics(mergeDescendants = true) {

@@ -14,6 +14,14 @@ nonisolated enum ComposerTakeIntent: Equatable, Sendable {
     case gallery
 }
 
+/// La date du cadre (CAM-16) : elle ne change qu'au changement de jour — la
+/// même valeur garde les clés de scène stables — et jamais pendant une prise.
+nonisolated enum ComposerLookClock {
+    static func date(shown: Date, now: Date, frozen: Bool, calendar: Calendar = .current) -> Date {
+        frozen || calendar.isDate(shown, inSameDayAs: now) ? shown : now
+    }
+}
+
 extension ComposerCaptureCopy {
     static var savedToPhotos: String {
         String(localized: "composer.capture.savedToPhotos", defaultValue: "Enregistré dans Photos", bundle: .main)
@@ -94,9 +102,7 @@ nonisolated enum ComposerGallerySaveNotice: Equatable, Sendable {
 /// lui, par `reportPhotoLibraryRefusal`.
 extension ComposerCaptureSession {
 
-    /// Les IDENTIFIANTS, jamais les valeurs : deux prises identiques d'affilée
-    /// ne changeraient pas `capturedPhoto`. Un enregistrement qui ne rendra aucun
-    /// fichier libère son intention.
+    /// Les IDENTIFIANTS, jamais les valeurs (deux prises identiques ne changent pas `capturedPhoto`).
     func subscribeToTakes() {
         camera.savesOriginalSetting = { [weak self] in self?.savePolicy().savesOriginal ?? CaptureSavePolicy.stored().savesOriginal }
         camera.$capturedPhotoId.compactMap { $0 }
@@ -108,12 +114,18 @@ extension ComposerCaptureSession {
         camera.$abandonedRecordingId.compactMap { $0 }
             .sink { [weak self] id in self?.filmIntents[id] = nil }
             .store(in: &takeSubscriptions)
+        NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.followTheDay() }.store(in: &takeSubscriptions)
     }
 
-    /// Armer ou fermer le viseur oublie les demandes qui n'ont pas encore pris —
-    /// jamais une prise DÉJÀ partie vers Photos (#9684 : aucune prise ne se perd).
-    /// Un enregistrement a son jeton, et une fin sans fichier efface le sien ; une
-    /// photo en vol garde son intention jusqu'à son arrivée.
+    /// Le cadre suit le jour ; une prise garde celui de son déclenchement (CAM-16).
+    func followTheDay() {
+        let enPrise = stage != .armed || phase.isEditing || photoIsRamping || camera.isTakingPhoto
+        lookDate = ComposerLookClock.date(shown: lookDate, now: Date(), frozen: enPrise)
+    }
+
+    /// Armer ou fermer le viseur oublie les demandes qui n'ont pas pris — jamais une prise
+    /// DÉJÀ partie vers Photos (#9684) ; une photo en vol garde son intention.
     func resetIntents() {
         filmIntent = .edit
         if !camera.isTakingPhoto { photoInFlightIntent = .edit }
@@ -164,6 +176,7 @@ extension ComposerCaptureSession {
     func shootPhoto(intent: ComposerTakeIntent) {
         selfTimer.run { [weak self] in
             self?.camera.noteShutterPress()
+            ComposerCaptureHaptic.play(.photoTaken)
             self?.photographWhenReady(intent: intent)
         }
     }
@@ -250,11 +263,8 @@ extension ComposerCaptureSession {
         }
     }
 
-    /// Une vidéo arrivée APRÈS la fermeture ne devient pas un segment : son fichier
-    /// temporaire part (après le brut, si le réglage l'enregistre) — sauf si elle
-    /// était demandée en galerie, où elle part quand même (#9684). Le jeton est celui que l'éditeur
-    /// PUBLIE : `@Published` émet avant d'écrire, `camera.capturedVideoId` serait
-    /// encore l'ancien.
+    /// Une vidéo arrivée APRÈS la fermeture ne devient pas un segment (son fichier part), sauf
+    /// demandée en galerie (#9684). Le jeton est celui PUBLIÉ : `@Published` émet avant d'écrire.
     func videoArrived(_ id: String) {
         guard let url = camera.capturedVideoURL else { return }
         let intent = filmIntents.removeValue(forKey: id) ?? .edit

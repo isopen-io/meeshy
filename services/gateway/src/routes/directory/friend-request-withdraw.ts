@@ -15,6 +15,8 @@ import { forgetFriends } from '../../services/relations/relationCaches';
 import { refuserEnSilence, type DemandeARepondre } from './friend-request-answer';
 import type { Resultat } from './friend-request-parties';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
+import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 
 type DemandeRetirable = DemandeARepondre & { readonly status?: string };
@@ -58,6 +60,8 @@ async function rompreLien(
   const autre = demande.senderId === acteurId ? demande.receiverId : demande.senderId;
   const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not cleared after link withdrawal:', error) };
   const ecouteAvant = await captureNowPlayingBefore(ecoute, { userA: demande.senderId, userB: demande.receiverId });
+  const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Shared location not cleared after link withdrawal:', error) };
+  const positionAvant = await captureSharedLocationBefore(position, { userA: demande.senderId, userB: demande.receiverId });
   await lowerPair(fastify.prisma, {
     userA: demande.senderId,
     userB: demande.receiverId,
@@ -68,6 +72,10 @@ async function rompreLien(
   await forgetFriends(fastify, [demande.senderId, demande.receiverId]);
   // #13934 — le lien rompu : l'écoute s'efface chez qui la voyait.
   await refreshNowPlayingAfter(ecoute, { userA: demande.senderId, userB: demande.receiverId, before: ecouteAvant });
+  // #16980 — et la position partagée, sous Ami.
+  await refreshSharedLocationAfter(position, { userA: demande.senderId, userB: demande.receiverId, before: positionAvant });
+  // #17012 — le lien rompu : la séance « ensemble » de la paire est rejugée.
+  await rejudgeTogetherAfter(ecoute, { userA: demande.senderId, userB: demande.receiverId });
 }
 
 type DemandesDb = Pick<PrismaClient, 'friendRequest' | 'userRelation'>;

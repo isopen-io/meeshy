@@ -55,8 +55,17 @@ extension ListeningCenter {
     /// Le SDK lit ce flux depuis une tâche hors du MainActor : la demande y exécute les étapes, qui ne doivent donc
     /// hériter d'aucune isolation (#17069).
     func band(for userId: String) -> AnyPublisher<AvatarListening?, Never> {
-        $byUser
-            .map { @Sendable entries in entries[userId] }
+        Self.band(of: userId, in: $byUser.eraseToAnyPublisher())
+    }
+
+    /// Hors de tout acteur (#17042) : `.values` demande hors du fil principal, et le centre y remet sa valeur courante.
+    /// Un maillon isolé au MainActor y piège l'app (`dispatch_assert_queue`) dès qu'un avatar s'abonne.
+    nonisolated static func band(
+        of userId: String,
+        in entries: AnyPublisher<[String: ListeningEntry], Never>
+    ) -> AnyPublisher<AvatarListening?, Never> {
+        entries
+            .map { $0[userId] }
             .removeDuplicates()
             .map { @Sendable entry in ListeningBandText.band(for: entry) }
             .eraseToAnyPublisher()
@@ -83,6 +92,35 @@ struct HeaderPeerListening: ViewModifier {
             .overlay {
                 if let userId, !userId.isEmpty {
                     AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: ListeningCenter.shared.source)
+                }
+            }
+    }
+}
+
+/// Le pair dont la ligne de liste montre l'écoute (#16733) : celui d'un direct, personne d'autre.
+nonisolated enum ConversationRowListening {
+    static func userId(for conversation: MeeshyConversation) -> String? {
+        guard conversation.type == .direct, let peer = conversation.participantUserId, !peer.isEmpty else { return nil }
+        return peer
+    }
+}
+
+/// L'écoute du pair, dite par la ligne : le libellé de la ligne est posé en bloc, il écrase ce que l'avatar dit de
+/// lui-même — la phrase servie passe donc par la VALEUR de la ligne (#16733). Rien sans source ni sans écoute. Il pose aussi l'indice d'ouverture.
+struct ConversationRowListeningSpeech: ViewModifier {
+    let userId: String?
+    @Environment(\.avatarListeningSource) private var source
+    @State private var spoken: String?
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
+            .accessibilityValue(spoken ?? "")
+            .task(id: userId) {
+                spoken = nil
+                guard let source, let userId, !userId.isEmpty else { return }
+                for await band in source.band(userId).values {
+                    spoken = band?.spoken
                 }
             }
     }

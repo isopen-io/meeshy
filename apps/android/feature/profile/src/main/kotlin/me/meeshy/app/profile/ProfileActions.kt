@@ -55,7 +55,9 @@ import me.meeshy.sdk.model.profile.ProfileActionPlan
 import me.meeshy.sdk.model.profile.ProfileConnectionAction
 import me.meeshy.sdk.model.profile.ProfileContextBanner
 import me.meeshy.sdk.model.profile.ProfileLayout
+import me.meeshy.app.contacts.circles.ReceptionBlockSection
 import me.meeshy.sdk.model.relation.ProfileCircle
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -83,6 +85,9 @@ internal data class ProfileActionCallbacks(
     val onLower: () -> Unit = {},
 )
 
+/** Les blocages de réception que la fiche porte (#16643) : à qui, et ceux que le niveau d'outils servi ouvre au-delà du lien. */
+internal data class ProfileReceptionBlocks(val userId: String, val settings: List<RelationReceptionSetting>)
+
 /**
  * The action section of someone else's profile — mirror of `UserProfileSheet.actionButtons`
  * (iOS): « Envoyer un message » first, then the context of a pending request, the connection
@@ -95,6 +100,7 @@ internal fun ProfileActionsSection(
     isOpeningConversation: Boolean,
     callbacks: ProfileActionCallbacks,
     circle: ProfileCircle? = null,
+    receptions: ProfileReceptionBlocks? = null,
 ) {
     if (plan.layout == ProfileLayout.BLOCKED_BY_ME) {
         BlockedByMeCard(onUnblock = callbacks.onUnblock)
@@ -134,6 +140,7 @@ internal fun ProfileActionsSection(
                 } else if (group.showsConnected) {
                     ConnectedPill()
                 }
+                receptions?.let { ReceptionBlockSection(userId = it.userId, settings = it.settings) }
             }
         }
         if (plan.canBlock) {

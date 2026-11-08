@@ -186,6 +186,13 @@ class RelationAccessCasesTest {
     }
 
     @Test
+    fun `the team minor apart set is the one of the TypeScript table`() {
+        val apart = featureSet("RELATION_TEAM_MINOR_APART_FEATURES")
+        assertThat(apart).isNotEmpty()
+        assertThat(RelationFeature.entries.filter { it.isMinorApartForTeam }.map { it.wire }.toSet()).isEqualTo(apart)
+    }
+
+    @Test
     fun `the team is moderator, admin and bigboss, never audit nor analyst`() {
         assertThat(PlatformRole.entries.filter { it.isTeam })
             .containsExactly(PlatformRole.BIGBOSS, PlatformRole.ADMIN, PlatformRole.MODERATOR)

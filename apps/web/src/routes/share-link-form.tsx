@@ -5,6 +5,7 @@ import { Glyph } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
 import type { LinksGlyphName } from '@/components/glyphs-links';
 import { RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { IosSwitch } from '@/components/ios-switch';
 import { Sheet, SheetEmpty } from '@/components/sheet';
 import { MAX_USES_CEILING, SHARE_LINK_EXPIRATIONS, type ShareLinkDraft, type ShareLinkExpiration } from '@/lib/api/links';
 import { translate } from '@/lib/i18n-catalog';
@@ -109,20 +110,6 @@ export function FormSection({
   );
 }
 
-function Switch({ checked }: { readonly checked: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="relative block rounded-chip"
-      style={{ width: 51, height: 31, backgroundColor: checked ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 45%, transparent)', transition: 'background-color 160ms ease' }}
-    >
-      <span
-        className="absolute block rounded-chip"
-        style={{ top: 2, insetInlineStart: checked ? 22 : 2, width: 27, height: 27, backgroundColor: 'var(--color-ios-on-brand)', boxShadow: 'var(--shadow-sm)', transition: 'inset-inline-start 160ms ease' }}
-      />
-    </span>
-  );
-}
 
 export function RuleToggle({
   id,
@@ -167,7 +154,7 @@ export function RuleToggle({
         className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
         style={{ minWidth: 56, minHeight: 44, outlineColor: BRAND }}
       >
-        <Switch checked={checked} />
+        <IosSwitch checked={checked} />
       </button>
     </div>
   );

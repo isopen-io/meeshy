@@ -192,6 +192,27 @@ import type {
   NowPlayingUpdatePayload,
 } from '../now-playing.js';
 import type {
+  SharedLocationAck,
+  SharedLocationChangedEventData,
+  SharedLocationEndedEventData,
+  SharedLocationStartPayload,
+  SharedLocationStopAck,
+  SharedLocationUpdatePayload,
+} from '../shared-location.js';
+import type {
+  TogetherEndedEventData,
+  TogetherInviteAck,
+  TogetherInvitePayload,
+  TogetherInvitedEventData,
+  TogetherJoinAck,
+  TogetherLeaveAck,
+  TogetherSessionPayload,
+  TogetherStartedEventData,
+  TogetherSyncAck,
+  TogetherSyncPayload,
+  TogetherSyncedEventData,
+} from '../together.js';
+import type {
   LocationLiveStartData,
   LocationLiveStartedEventData,
   LocationLiveStopData,
@@ -360,6 +381,12 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.TALKIE_ENDED]: (data: TalkieEndedEventData) => void;
   [SERVER_EVENTS.NOW_PLAYING_CHANGED]: (data: NowPlayingChangedEventData) => void;
   [SERVER_EVENTS.NOW_PLAYING_CLEARED]: (data: NowPlayingClearedEventData) => void;
+  [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
+  [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
+  [SERVER_EVENTS.TOGETHER_INVITED]: (data: TogetherInvitedEventData) => void;
+  [SERVER_EVENTS.TOGETHER_STARTED]: (data: TogetherStartedEventData) => void;
+  [SERVER_EVENTS.TOGETHER_SYNCED]: (data: TogetherSyncedEventData) => void;
+  [SERVER_EVENTS.TOGETHER_ENDED]: (data: TogetherEndedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED]: (data: MessageViewOncePurgedEventData) => void;
@@ -528,6 +555,13 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TALKIE_END]: (data: TalkieEndPayload) => void;
   [CLIENT_EVENTS.NOW_PLAYING_UPDATE]: (data: NowPlayingUpdatePayload, callback?: (response: NowPlayingAck) => void) => void;
   [CLIENT_EVENTS.NOW_PLAYING_CLEAR]: (data: Record<string, never>, callback?: (response: NowPlayingClearAck) => void) => void;
+  [CLIENT_EVENTS.SHARED_LOCATION_START]: (data: SharedLocationStartPayload, callback?: (response: SharedLocationAck) => void) => void;
+  [CLIENT_EVENTS.SHARED_LOCATION_UPDATE]: (data: SharedLocationUpdatePayload, callback?: (response: SharedLocationAck) => void) => void;
+  [CLIENT_EVENTS.SHARED_LOCATION_STOP]: (data: Record<string, never>, callback?: (response: SharedLocationStopAck) => void) => void;
+  [CLIENT_EVENTS.TOGETHER_INVITE]: (data: TogetherInvitePayload, callback?: (response: TogetherInviteAck) => void) => void;
+  [CLIENT_EVENTS.TOGETHER_JOIN]: (data: TogetherSessionPayload, callback?: (response: TogetherJoinAck) => void) => void;
+  [CLIENT_EVENTS.TOGETHER_SYNC]: (data: TogetherSyncPayload, callback?: (response: TogetherSyncAck) => void) => void;
+  [CLIENT_EVENTS.TOGETHER_LEAVE]: (data: TogetherSessionPayload, callback?: (response: TogetherLeaveAck) => void) => void;
   [CLIENT_EVENTS.CONVERSATION_JOIN]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;

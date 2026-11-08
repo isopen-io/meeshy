@@ -129,6 +129,9 @@
     <string name="call_history_retry">Retry</string>
     <string name="call_history_title">Calls</string>
     <string name="call_history_yesterday">Yesterday</string>
+    <string name="call_incoming_answer_no_video">No video</string>
+    <string name="call_incoming_answer_no_video_hint">Answers with your camera off: the caller sees your avatar</string>
+    <string name="call_incoming_answer_no_video_label">Answer without video</string>
     <string name="call_invite_declined">%1$s declined</string>
     <string name="call_invite_failed">Couldn’t invite this person</string>
     <string name="call_invite_ringing">Ringing…</string>

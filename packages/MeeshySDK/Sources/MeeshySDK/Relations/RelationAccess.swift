@@ -61,8 +61,10 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case listeningCategory = "listening.category"
     case listeningTitle = "listening.title"
     case talkie
+    case together
     case bring
     case locationLive = "location.live"
+    case locationTemporary = "location.temporary"
     case locationHistory = "location.history"
     case locationProximity = "location.proximity"
     case acquaintanceAuto = "acquaintance.auto"
@@ -79,9 +81,9 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// automatique CRÉE le premier lien : sa seule garde est l'âge déclaré.
     public var minimumLevel: RelationLevel {
         switch self {
-        case .presenceOnline, .gameBasic, .bring: return .friend
+        case .presenceOnline, .gameBasic, .bring, .locationTemporary: return .friend
         case .presenceDetailed, .gameSparksGlory, .notifyNewContent, .relayCommentersOnMyPosts,
-             .audienceClose, .listeningCategory, .talkie: return .close
+             .audienceClose, .listeningCategory, .talkie, .together: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
@@ -95,7 +97,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     public var requiresConsent: Bool {
         switch self {
         case .bring, .talkie, .listeningCategory, .listeningTitle,
-             .locationLive, .locationHistory, .locationProximity: return true
+             .locationLive, .locationTemporary, .locationHistory, .locationProximity: return true
         default: return false
         }
     }
@@ -104,7 +106,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// (`RELATION_DIRECTED_FEATURES`).
     public var isDirected: Bool {
         switch self {
-        case .bring, .talkie, .acquaintanceAuto, .dmRequest, .callRing: return true
+        case .bring, .talkie, .together, .acquaintanceAuto, .dmRequest, .callRing: return true
         default: return false
         }
     }
@@ -132,12 +134,18 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         self == .presenceOnline || self == .presenceDetailed
     }
 
-    /// Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : une audience de
-    /// contenu, une notification d'entourage, la Connaissance automatique restent au lien réel.
+    /// Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : seule la
+    /// Connaissance automatique reste au lien réel, un rôle ne crée aucun lien.
     public var isClosedToTeam: Bool {
+        self == .acquaintanceAuto
+    }
+
+    /// Le privilège d'équipe s'éteint entre un mineur et un majeur déclarés, dans les deux sens
+    /// (`RELATION_TEAM_MINOR_APART_FEATURES`, #16623) : le viewer y est le lecteur ou le destinataire.
+    public var isMinorApartForTeam: Bool {
         switch self {
         case .notifyNewContent, .relayCommentersOnMyPosts, .relayMyCommentsElsewhere,
-             .audienceAcquaintances, .audienceClose, .audienceBlood, .acquaintanceAuto: return true
+             .audienceAcquaintances, .audienceClose, .audienceBlood: return true
         default: return false
         }
     }
@@ -240,7 +248,15 @@ public struct RelationAccess: Sendable, Equatable {
         input.viewerRole?.isTeam == true
             && input.targetRole?.isTeam == true
             && !input.feature.isClosedToTeam
-            && !(input.targetMinor == .minor && input.viewerMinor != .minor)
+            && !minorShieldsTeam(input)
+    }
+
+    /// Le bouclier des mineurs face au privilège d'équipe (`minorShieldsTeam`) : la cible d'un outil,
+    /// les deux côtés d'une audience ou d'une notification d'entourage.
+    static func minorShieldsTeam(_ input: RelationAccessInput) -> Bool {
+        input.feature.isMinorApartForTeam
+            ? (input.viewerMinor == .minor) != (input.targetMinor == .minor)
+            : input.targetMinor == .minor && input.viewerMinor != .minor
     }
 
     public static func resolve(_ input: RelationAccessInput) -> RelationAccess {

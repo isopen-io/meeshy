@@ -69,6 +69,8 @@ final class TalkieSender: ObservableObject {
             latency = TalkieLatency(pressedAt: pressedAt)
         }
 
+        nonisolated deinit {}
+
         var queuedBytes: Int { queue.reduce(0) { $0 + $1.data.count } }
     }
 

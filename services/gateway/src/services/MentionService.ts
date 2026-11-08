@@ -19,6 +19,10 @@ import { mentionableScope } from './mentions/mentionableScope';
 // est partiel. Le site unique de la règle est ici ; le barrel n'en est qu'un relais.
 import { MESSAGE_PROTECTION_SELECT } from '../routes/conversations/messageProtectionProjection';
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
+// Le prédicat PUR vit dans un module FEUILLE, et il est ré-exporté ici pour
+// ses importeurs historiques — voir `messaging/pendingMessageRequests.ts`
+// pour la raison, qui est un défaut mesuré, pas un goût d'architecture.
+export { pendingRequestUserIds } from './messaging/pendingMessageRequests';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });

@@ -317,9 +317,8 @@ struct ConversationPreviewLine: View {
             Text(preview.segments.map(\.text).joined(separator: Self.segmentSeparator))
                 .font(font)
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
-                .redacted(reason: .placeholder)
-                .blur(radius: 1.5)
-                .accessibilityHidden(true)
+                .lineLimit(1)
+                .modifier(DiffuseVeil())
         }
     }
 

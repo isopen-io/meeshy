@@ -582,6 +582,8 @@ const PENDING_CLIENT_ENTRIES = {
   'PublishersEndpoint.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique' },
   'PublishersEndpoint.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace de l’éditeur connecté' },
   'PublishersEndpoint.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web seulement' },
+  // Le partage temporaire de position par personne (#16980) : le serveur sert le rattrapage par emprise avant la carte iOS.
+  'RelationsEndpoint.locations': { issue: 16983, reason: 'GET /relations/locations?bbox= — les positions qu’on me partage, lues par la carte iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 329;

@@ -38,8 +38,10 @@ export const RELATION_FEATURES = [
   'listening.category',
   'listening.title',
   'talkie',
+  'together',
   'bring',
   'location.live',
+  'location.temporary',
   'location.history',
   'location.proximity',
   'acquaintance.auto',
@@ -73,8 +75,10 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   'listening.category': 'CLOSE',
   'listening.title': 'BLOOD',
   talkie: 'CLOSE',
+  together: 'CLOSE',
   bring: 'FRIEND',
   'location.live': 'BLOOD',
+  'location.temporary': 'FRIEND',
   'location.history': 'BLOOD',
   'location.proximity': 'BLOOD',
   'acquaintance.auto': 'PUBLIC',
@@ -95,6 +99,15 @@ export const POST_CIRCLE_AUDIENCE_FEATURE = {
 export type PostCircleVisibility = keyof typeof POST_CIRCLE_AUDIENCE_FEATURE;
 
 export const POST_CIRCLE_VISIBILITIES = Object.keys(POST_CIRCLE_AUDIENCE_FEATURE) as readonly PostCircleVisibility[];
+
+/**
+ * La feature de la matrice que juge une audience de cercle, `null` pour toute autre
+ * valeur (historique, inconnue, absente) : c'est elle qu'on passe à `resolveRelationAccess`.
+ */
+export const postCircleAudienceFeature = (visibility: unknown): RelationFeature | null =>
+  typeof visibility === 'string' && Object.prototype.hasOwnProperty.call(POST_CIRCLE_AUDIENCE_FEATURE, visibility)
+    ? POST_CIRCLE_AUDIENCE_FEATURE[visibility as PostCircleVisibility]
+    : null;
 
 /**
  * Le niveau EFFECTIF minimal qu'exige une audience de cercle, `null` pour toute
@@ -133,6 +146,7 @@ export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = n
   'listening.category',
   'listening.title',
   'location.live',
+  'location.temporary',
   'location.history',
   'location.proximity',
 ]);
@@ -148,6 +162,7 @@ export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<R
   'listening.category',
   'listening.title',
   'location.live',
+  'location.temporary',
   'location.history',
   'location.proximity',
 ]);
@@ -156,6 +171,7 @@ export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<R
 export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
   'bring',
   'talkie',
+  'together',
   'acquaintance.auto',
   'dm.request',
   'call.ring',
@@ -193,25 +209,40 @@ export const RELATION_PRESENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<
 ]);
 
 /**
- * CE QUE LE PRIVILÈGE D'ÉQUIPE N'OUVRE PAS (#16623). Entre deux comptes de l'équipe
- * (`isPlatformTeam`), le niveau effectif d'un OUTIL vaut Sang sans lien à construire.
- * Une AUDIENCE, elle, reste au lien réel : ces features diffusent du contenu ou font
- * naître un lien, et un rôle n'y fait entrer personne.
+ * CE QUE LE PRIVILÈGE D'ÉQUIPE N'OUVRE PAS (#16623, correction porteur 2026-11-08).
+ * Entre deux comptes de l'équipe (`isPlatformTeam`), le niveau effectif de TOUTE
+ * feature de cercle vaut Sang sans lien à construire : outils, audiences de contenu,
+ * notifications d'entourage et relais. Une seule reste fermée :
  *
- * - `audience.*` : une publication « Proches » ne part pas chez un collègue ;
- * - `notify.newContent`, `relay.*` : aucune notification d'entourage vers l'équipe ;
- * - `acquaintance.auto` : un rôle ne crée aucun lien.
+ * - `acquaintance.auto` : ce n'est pas une feature qu'on utilise, c'est la création
+ *   automatique d'un lien ; un rôle ne crée aucun lien.
+ *
+ * Le blocage, soi-même, `NOBODY`, le consentement et le bouclier des mineurs
+ * déclarés restent entiers, hors de ce privilège.
  *
  * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
  */
 export const RELATION_TEAM_CLOSED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
-  'notify.newContent',
-  'relay.commentersOnMyPosts',
-  'relay.myCommentsElsewhere',
+  'acquaintance.auto',
+]);
+
+/**
+ * LE PRIVILÈGE D'ÉQUIPE S'ÉTEINT ENTRE UN MINEUR ET UN MAJEUR DÉCLARÉS pour ces features
+ * (#16623, audit du 2026-11-08). Ailleurs, le bouclier des mineurs ne protège que la
+ * CIBLE ; ici, le viewer de la loi est le LECTEUR d'une publication ou le DESTINATAIRE
+ * d'une notification d'entourage : un collègue adulte sans lien ne pousse ni ses
+ * publications Connaissances, Proches ou Sang, ni son entourage vers un mineur déclaré,
+ * et l'inverse non plus. Deux mineurs, ou deux majeurs, gardent le privilège.
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
+export const RELATION_TEAM_MINOR_APART_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
   'audience.acquaintances',
   'audience.close',
   'audience.blood',
-  'acquaintance.auto',
+  'notify.newContent',
+  'relay.commentersOnMyPosts',
+  'relay.myCommentsElsewhere',
 ]);
 
 /**

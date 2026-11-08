@@ -169,7 +169,7 @@
     <string name="sync_pill_sending_sticker">Sticker wird gesendet</string>
     <string name="sync_pill_sending_video">Video wird gesendet</string>
     <string name="tab_calls">Anrufe</string>
-    <string name="tab_feed">Feed</string>
+    <string name="tab_feed">Beiträge</string>
     <string name="tab_profile">Profil</string>
     <string name="talkie_incoming_mute">Stumm</string>
     <string name="talkie_incoming_mute_named">Stimme von %1$s stummschalten</string>

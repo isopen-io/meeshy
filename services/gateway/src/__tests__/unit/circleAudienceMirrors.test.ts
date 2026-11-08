@@ -139,6 +139,7 @@ describe('la diffusion des traductions de story', () => {
           storyEffects: textDoc(),
         })),
       },
+      user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
       communityMember: { findMany: jest.fn<any>(async () => []) },
       $runCommandRaw: jest.fn<any>(async () => ({ ok: 1 })),
     };
@@ -167,6 +168,7 @@ describe('l\'atteignabilité d\'un signalement', () => {
     const prisma = {
       ...graph(),
       post: { findUnique: jest.fn<any>(async () => ({ authorId: AUTHOR, visibility, visibilityUserIds: [], deletedAt: null })) },
+      user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
     };
     return verifierCible({ prisma: prisma as never, signalant: { userId: reporter }, type: 'post', entityId: POST_ID });
   };

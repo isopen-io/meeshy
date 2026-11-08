@@ -280,6 +280,31 @@ function mostRecentlyJoined<T extends { joinedAt?: Date | null }>(rows: readonly
 export const REJOIN_PARTICIPANT_STATE = {
   isActive: true,
   leftAt: null,
+  // #17072 — la JUMELLE de `leftAt`, et elle manquait. `Participant` porte
+  // TROIS colonnes de départ, et le dépôt les lit ENSEMBLE à l'endroit qui en
+  // dépend : `routes/sync/conversations.ts` interroge
+  // `OR: [{leftAt:{gt}}, {bannedAt:{gt}}, {deletedForMe:{gt}}]` et sert un
+  // tombstone de conversation dès que l'une est postérieure au curseur.
+  //
+  // `delete-for-me` écrit `{ deletedForMe: now, isActive: false }` d'un seul
+  // geste ; `resolveConversationEntry` ne lit que la seconde, donc rentrer
+  // après avoir supprimé « pour soi » rendait `'rejoin'` et rallumait la ligne
+  // en laissant la première posée. L'appartenance redevenait VIVANTE pour tout
+  // le service — `PARTICIPATION_VIVANTE` est `isActive` + `bannedAt`, sans
+  // aucune mention de `deletedForMe` — donc messages reçus, écriture permise,
+  // présence au trombinoscope des autres ; et `GET /conversations` ne servait
+  // JAMAIS la conversation, que `core-list` filtre sur cette colonne. Elle
+  // restait de plus listée dans la CORBEILLE, et `/sync` en servait le
+  // tombstone. C'est le symptôme que `MessagingService` décrit déjà comme payé
+  // en production (« Participants invisibles, conversations DM disparues de la
+  // liste »).
+  //
+  // `bannedAt`, la troisième, n'est PAS ici et ne doit pas l'être : une rentrée
+  // ne débannit personne, et les trois portes refusent un banni en amont. Le
+  // verdict des trois colonnes est gardé par
+  // `__tests__/unit/rejoin-clears-departure-columns.test.ts`, qui les relève
+  // dans le source du flux plutôt que de les recopier.
+  deletedForMe: null,
   historyVisibleFrom: null,
   // #14107 (audit 3, M-b) — une demande d'un passage précédent ne survit pas au
   // retour. Les portes qui POSENT une demande répandent cet état AVANT leurs champs.

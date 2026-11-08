@@ -71,8 +71,10 @@ import { agentMayReadMessage, agentReadableMessage, notifyAgentOfMessage } from 
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
-import { emitMessageNew } from '../messageNewEmission';
-import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
+import { safeBroadcast } from '../serverEmit';
+import { emitMessageNewBestEffort } from '../messageNewEmission';
+import { readerSignedPlanBestEffort, readerSignedPlanForMessageIdBestEffort } from '../readerSignedDelivery';
+import { editReadership, blockedEditKeys, emitEditedToReaders } from '../editedAudience';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
@@ -107,6 +109,7 @@ import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmiss
 import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { softDeleteMessage } from '../../services/messaging/softDeleteMessage';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -132,6 +135,9 @@ import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+
+/** Ce transport ne résout aucune audience de citation scellée (#8562). */
+const NO_SEALED_EDIT: ReadonlyMap<string, Date> = new Map();
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -415,8 +421,9 @@ export class MessageHandler {
         resolvedParticipantId
       );
 
-      // Répondre au client
-      this._sendResponse(callback, response, socket);
+      // Répondre au client. Le cid SOUMIS voyage explicitement : celui de la
+      // ligne relue nomme un AUTRE message sur un hit de dédup (#17058).
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       // Broadcaster le message si succès — SAUF sur un dedup idempotent
       // (même clientMessageId renvoyé). Le message existe déjà et a déjà été
@@ -635,7 +642,7 @@ export class MessageHandler {
       // (Prisma read failure, connection drop) would silently skip the
       // callback and leave iOS / web waiting indefinitely → spurious
       // retry. Mirror the order used by `handleMessageSend` above.
-      this._sendResponse(callback, response, socket);
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
@@ -906,12 +913,22 @@ export class MessageHandler {
       this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
         .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
 
+      // QUI a le droit de LIRE ce message — résolu UNE fois, et partagé par les
+      // deux sorties qui portent le texte édité : la mention ci-dessous et
+      // `message:edited` plus bas. Les résoudre séparément serait deux lectures
+      // pour la même question, et surtout deux occasions de n'en garder qu'une.
+      const editReaders = await editReadership(this.prisma, message.conversationId, validated.messageId, (err) =>
+        handlerLogger.error('edit readership unresolvable — edit not delivered live nor queued', { messageId: validated.messageId, error: err }),
+      );
+      const editBlocked = blockedEditKeys(editReaders);
+
       // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL : quelqu'un
       // que l'édition vient de nommer n'est pas forcément dans
       // ROOMS.conversation(id), et `message:edited` ne fan que là. Parité avec
       // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
       emitMentionCreated({
+        readership: editReaders,
         io: this.io,
         newlyMentionedUserIds: await withoutPendingMessageRequests(this.prisma, message.conversationId, editedMentions.newlyMentionedUserIds),
         messageId: message.id,
@@ -946,11 +963,33 @@ export class MessageHandler {
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
-      // #9646 — un message protégé : par destinataire, adresses signées.
-      const room = ROOMS.conversation(message.conversationId);
-      const editPlan = await readerSignedPlanForMessageId(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
-      if (editPlan) for (const t of editPlan.targets) this.io.to(t.room).emit(SERVER_EVENTS.MESSAGE_EDITED, editPlan.signFor(editedPayload, t.participantId));
-      else this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      // #9646 — un message protégé : par destinataire, adresses signées. Et
+      // depuis le cycle 147, sous le PLANCHER D'HISTORIQUE : ce transport est le
+      // SECOND de l'édition, et la garde posée sur `broadcastMessageMutation` ne
+      // le couvrait pas — toute socket authentifiée pouvait donc servir le texte
+      // édité d'un message écrit avant l'arrivée d'un invité sans historique.
+      // Le site de la loi est UNIQUE (`editedAudience.ts`), partagé avec l'autre
+      // transport : une règle retapée à chaque site est une règle qu'un site
+      // finira par ne pas avoir.
+      // 5e site #17026 : l'édition est déjà PERSISTÉE ici, et le `catch` de fin
+      // de méthode rend en plus « échec » au client. Raison : `safeBroadcast`.
+      const editPlan = await readerSignedPlanForMessageIdBestEffort(
+        this.prisma,
+        { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments },
+        (error) => handlerLogger.error('reader-signed plan failed (socket edit) — no live per-reader delivery', { conversationId: message.conversationId, messageId: validated.messageId, error }),
+      );
+      if (editReaders.kind !== 'unknown') {
+        safeBroadcast('message:edited', () => emitEditedToReaders({
+          io: this.io,
+          conversationId: message.conversationId,
+          payload: editedPayload,
+          plan: editPlan,
+          sealed: NO_SEALED_EDIT,
+          blocked: editBlocked,
+          sealedVariant: (payload) => payload,
+          sealedForAll: (payload) => payload,
+        }), (error) => handlerLogger.error('message:edited live emission failed — offline replay unaffected', { conversationId: message.conversationId, messageId: validated.messageId, error }));
+      }
 
       // Fan a conversation:updated preview refresh to participants sitting on
       // the conversation list (in user:<id> but not conversation:<id>) so an
@@ -972,14 +1011,21 @@ export class MessageHandler {
       // seul exclu. `userId` est l'éditeur, et c'est un `User.id` réel :
       // l'anonyme est refusé en tête de ce handler. Jumeau du même correctif
       // dans `handleMessageDelete`.
-      this._enqueueOfflineEventForParticipants({
-        conversationId: message.conversationId,
-        actorUserId: userId,
-        eventType: 'edited',
-        messageId: validated.messageId,
-        payload: editedPayload,
-        atRest: queuedEventSealsAtRest(message),
-      }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+      // La file est la TROISIÈME sortie de la même charge, et elle PERSISTE
+      // 48 h : sans cette exclusion, le texte d'un message hors du plancher d'un
+      // invité l'attendait dans Redis sous sa clé. Sur `'unknown'` rien n'entre
+      // — on ne sait NI qui est bloqué, NI qui est autorisé.
+      if (editReaders.kind !== 'unknown') {
+        this._enqueueOfflineEventForParticipants({
+          conversationId: message.conversationId,
+          actorUserId: userId,
+          eventType: 'edited',
+          messageId: validated.messageId,
+          payload: editedPayload,
+          atRest: queuedEventSealsAtRest(message),
+          ...(editBlocked.size > 0 ? { excludedQueueKeys: editBlocked } : {}),
+        }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+      }
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
@@ -1093,11 +1139,16 @@ export class MessageHandler {
         );
       }
 
-      // Soft delete: atomically clear translations and set deletedAt in one write
-      await this.prisma.message.update({
-        where: { id: validated.messageId },
-        data: { translations: null, deletedAt: new Date() },
-      });
+      // #17079 — le retrait et sa garde OPTIMISTE, par leur site unique.
+      // L'audit ne nommait que le transport REST ; celui-ci portait le même
+      // trou, et c'est le transport que le dépôt appelle « primaire ». Deux
+      // suppressions CONCURRENTES franchissaient toutes deux la lecture
+      // d'amont et appliquaient toutes deux les effets du retrait, dont un
+      // décompte NON idempotent.
+      if (await softDeleteMessage(this.prisma, validated.messageId) === 'already-deleted') {
+        this._sendGenericError(callback, 'Message not found', socket);
+        return;
+      }
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
       // désactivation des `/l/<token>` que ce message emporte. La liste vit
@@ -1119,7 +1170,9 @@ export class MessageHandler {
         messageId: validated.messageId,
         conversationId: message.conversationId,
       };
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+      // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
+      safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
+        (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
 
       // Fan a conversation:updated preview refresh to list-screen participants
       // (in user:<id> but not conversation:<id>): deleting the latest message
@@ -1360,7 +1413,9 @@ export class MessageHandler {
       // (`SOCKET_LANG_FILTER`) ou, pour un message dont une pièce se lit par
       // lecteur, remise par destinataire avec ses adresses signées (#9646) —
       // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
-      emitMessageNew({
+      // Émission et lecture de plan BEST-EFFORT : raison au site unique,
+      // `safeBroadcast` (#17026).
+      emitMessageNewBestEffort({
         io: this.io,
         room,
         senderPayload,
@@ -1373,8 +1428,12 @@ export class MessageHandler {
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
           ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
           : null,
-        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: peerPayload.attachments }),
-      });
+        readerSigned: await readerSignedPlanBestEffort(
+          this.prisma,
+          { conversationId: normalizedId, message, attachments: peerPayload.attachments },
+          (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+        ),
+      }, (error) => handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Offline delivery queue — parity with the REST send path
@@ -1637,6 +1696,8 @@ export class MessageHandler {
     /** `User.id` de l'acteur. Les deux espaces d'id ne se croisent jamais. */
     actorUserId?: string | null;
     messageId: string;
+    /** Les clés que le plancher d'historique écarte (`editedAudience.ts`). */
+    excludedQueueKeys?: ReadonlySet<string>;
   } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
@@ -2163,7 +2224,9 @@ export class MessageHandler {
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
-    response: MessageResponse, socket?: MeeshySocket
+    response: MessageResponse, socket?: MeeshySocket,
+    /** Le cid SOUMIS — #17058. Jamais celui de la ligne relue. */
+    submittedClientMessageId?: string,
   ): void {
     const refusal = response.success ? null : messageRefusalEvent(response);
     if (refusal) socket?.emit(SERVER_EVENTS.ERROR, refusal);
@@ -2178,10 +2241,12 @@ export class MessageHandler {
         // `createdAt` is echoed too so the WS-first send path can stamp the
         // optimistic row with the authoritative server time without waiting
         // for the `message:new` broadcast.
-        const data = response.data as MessageAckSource;
         callback({
           success: true,
-          data: buildMessageAckData(data)
+          data: buildMessageAckData({
+            row: response.data as MessageAckSource,
+            ...(submittedClientMessageId ? { submittedClientMessageId } : {}),
+          }),
         });
       } else callback(buildMessageFailureAck(response));
     } catch (error) {

@@ -30,7 +30,7 @@ final class TalkieMicCapture: TalkieCapturing {
         let startedAt = Date()
         guard engine == nil, await DevicePermissions.requestMicrophone().isUsable else { return false }
         let permittedAt = Date()
-        guard MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
+        guard await MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
         let sessionAt = Date()
         holdsSession = true
         let engine = AVAudioEngine()

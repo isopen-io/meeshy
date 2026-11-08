@@ -11,9 +11,9 @@ import { doUsersShareCommunity } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
 import { verdictFor } from './referenceAccess';
 import { NOT_DELETED } from './softDelete';
-import { amitieAcceptee, niveauEffectif } from '../friendship';
-import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
-import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
+import { amitieAcceptee } from '../friendship';
+import { postCircleAudienceFeature } from '@meeshy/shared/utils/relation-levels';
+import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
 
 export type PostVisibilityRecord = {
   /**
@@ -49,7 +49,7 @@ export type PostVisibilityRecord = {
  */
 export type PostAclPrisma = Pick<
   PrismaClient,
-  'post' | 'postComment' | 'friendRequest' | 'userRelation' | 'communityMember' | 'participant' | 'postMention'
+  'post' | 'postComment' | 'friendRequest' | 'userRelation' | 'communityMember' | 'participant' | 'postMention' | 'user'
 >;
 
 /**
@@ -266,23 +266,23 @@ async function matchesPostAudience(
 }
 
 /**
- * Le niveau EFFECTIF de `viewerId` avec l'auteur atteint-il celui que l'audience de
- * cercle `visibility` exige ? Le seul verdict unitaire des cercles : lu par
- * `niveauEffectif` (le minimum des deux accords, RG-01), sans contact de message
- * direct, et sans comparaison de niveaux écrite ici (garde
- * `relation-access-single-site-guard`). Une valeur qui n'est pas un cercle, ou une
- * lecture en échec, ne donne jamais accès.
+ * La LOI (`resolveRelationAccess`) admet-elle `viewerId` à l'audience de cercle
+ * `visibility` de l'auteur ? Le seul verdict unitaire des cercles : le niveau effectif
+ * (le minimum des deux accords, RG-01), le blocage et, entre deux comptes de l'équipe,
+ * le privilège sans lien (#16623) y sont jugés ensemble, sans contact de message direct
+ * et sans comparaison de niveaux écrite ici (garde `relation-access-single-site-guard`).
+ * Une valeur qui n'est pas un cercle, ou une lecture en échec, ne donne jamais accès.
  */
 export async function circleAudienceAdmits(
-  prisma: Pick<PrismaClient, 'friendRequest' | 'userRelation'>,
+  prisma: PairAccessDb,
   authorId: string,
   viewerId: string,
   visibility: string
 ): Promise<boolean> {
-  const floor = postCircleAudienceFloor(visibility);
-  if (!floor) return false;
+  const feature = postCircleAudienceFeature(visibility);
+  if (!feature) return false;
   try {
-    return relationLevelIfAtLeast(await niveauEffectif(prisma, authorId, viewerId), floor) !== null;
+    return (await pairAccess(prisma, { feature, viewerId, targetId: authorId })).allowed;
   } catch {
     return false;
   }

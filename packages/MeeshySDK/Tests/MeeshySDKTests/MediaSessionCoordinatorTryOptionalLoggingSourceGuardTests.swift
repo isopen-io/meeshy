@@ -32,13 +32,13 @@ final class MediaSessionCoordinatorTryOptionalLoggingSourceGuardTests: XCTestCas
         let source = try coordinatorSource()
         let fn = try body(
             from: "public nonisolated func activatePlaybackSync(",
-            to: "public nonisolated func activateRecordingSync(",
+            to: "public nonisolated func activateRecording(",
             in: source,
         )
 
         XCTAssertFalse(fn.contains("try?"), "activatePlaybackSync must not swallow session errors via try?")
         XCTAssertTrue(fn.contains("setCategory"), "the setCategory call must still be present")
-        XCTAssertTrue(fn.contains("setActive(true)"), "the setActive(true) call must still be present")
+        XCTAssertTrue(fn.contains("setActive(true"), "the setActive(true) call must still be present")
         // Two independent do/catch blocks, not one wrapping both statements: a
         // setCategory failure must not skip the setActive attempt (that was the
         // try? behaviour — each statement always ran regardless of the other).

@@ -106,3 +106,23 @@ class RelationRaiseGateTest {
         assertThat(RelationRaiseGate(canRaise = true).blocks(now)).isFalse()
     }
 }
+
+/** Un collègue de l'équipe sans lien (#16643) : ce que la fiche laisse bloquer se lit sur `accessLevel`, jamais sur un cercle. */
+class ReceptionSettingsOfferedTest {
+
+    @Test
+    fun `le Bring se bloque des Ami, le talkie des Proche, rien en dessous`() {
+        assertThat(CirclePersonSetting.receptionAt(RelationLevel.ACQUAINTANCE)).isEmpty()
+        assertThat(CirclePersonSetting.receptionAt(RelationLevel.FRIEND)).containsExactly(RelationReceptionSetting.BRING)
+        assertThat(CirclePersonSetting.receptionAt(RelationLevel.CLOSE))
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+        assertThat(CirclePersonSetting.receptionAt(RelationLevel.BLOOD))
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+    }
+
+    @Test
+    fun `le verrou de remontee porte le niveau des outils quand la passerelle le sert`() {
+        assertThat(RelationRaiseGate().accessLevel).isNull()
+        assertThat(RelationRaiseGate(accessLevel = RelationLevel.BLOOD).accessLevel).isEqualTo(RelationLevel.BLOOD)
+    }
+}

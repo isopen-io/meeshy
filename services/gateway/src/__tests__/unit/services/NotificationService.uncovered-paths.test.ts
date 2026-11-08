@@ -739,10 +739,10 @@ describe('NotificationService — Uncovered Paths', () => {
   });
 
   // ==============================================
-  // shouldCreateMentionNotification — map overflow
+  // consumeMentionBudget — map overflow
   // ==============================================
 
-  describe('shouldCreateMentionNotification — map overflow eviction', () => {
+  describe('consumeMentionBudget — map overflow eviction', () => {
     it('should evict oldest entry when MAX_MENTION_MAP_ENTRIES exceeded', () => {
       const recentMentions = (service as any).recentMentions as Map<string, number[]>;
       const MAX_ENTRIES = (service as any).MAX_MENTION_MAP_ENTRIES as number;
@@ -753,7 +753,7 @@ describe('NotificationService — Uncovered Paths', () => {
       expect(recentMentions.size).toBe(MAX_ENTRIES);
 
       const firstKey = recentMentions.keys().next().value;
-      (service as any).shouldCreateMentionNotification('new-sender', 'new-recipient');
+      (service as any).consumeMentionBudget('new-sender', 'new-recipient');
 
       expect(recentMentions.size).toBe(MAX_ENTRIES);
       expect(recentMentions.has(firstKey)).toBe(false);
