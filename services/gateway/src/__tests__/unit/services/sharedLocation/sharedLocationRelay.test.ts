@@ -167,8 +167,8 @@ describe('la projection — la précision donnée, rien de plus riche à côté'
   });
 
   it('quartier et ville : le centre de la maille et le rayon du flou, ni la position ni la précision réelles', () => {
-    expect(projectSharedLocation(EMETTEUR, state, 'neighborhood')).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 800 });
-    expect(projectSharedLocation(EMETTEUR, state, 'city')).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 8000 });
+    expect(projectSharedLocation(EMETTEUR, state, 'neighborhood')).toMatchObject({ latitude: 48.855, longitude: 2.355, precision: 'neighborhood', radiusMeters: 1200 });
+    expect(projectSharedLocation(EMETTEUR, state, 'city')).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city', radiusMeters: 12000 });
     expect(JSON.stringify(projectSharedLocation(EMETTEUR, state, 'city'))).not.toMatch(/8566|3522|accuracy|recipients/);
   });
 
@@ -898,5 +898,37 @@ describe('contre-audit a1e903a — le cercle de flou contient toujours la positi
     expect(servi).toBeDefined();
     const distance = metres({ latitude: servi!.latitude, longitude: servi!.longitude }, DANS_LA_MARGE);
     expect(distance).toBeLessThanOrEqual(servi!.radiusMeters);
+  });
+
+  it('en précision ville aussi, la maille retenue reste dans le cercle servi', async () => {
+    const m = monde();
+    await demarrer(m);
+    const DANS_LA_MARGE = { latitude: 48.9249, longitude: 2.4249, accuracy: 4 } as const;
+    await updateSharedLocation(m.deps, EMETTEUR, DANS_LA_MARGE);
+
+    const servi = (await sharedLocationSnapshotFor(m.deps, SANG, {})).items[0];
+    expect(servi).toMatchObject({ latitude: 48.85, longitude: 2.35, precision: 'city' });
+    expect(metres({ latitude: servi!.latitude, longitude: servi!.longitude }, DANS_LA_MARGE)).toBeLessThanOrEqual(servi!.radiusMeters);
+  });
+
+  it('à l\'équateur, où le degré de longitude est le plus long, le coin de la retenue reste dans le cercle', () => {
+    const position = { latitude: 0.0124, longitude: 0.0124, accuracy: 4 };
+    const state = {
+      position,
+      updatedAt: new Date(T0).toISOString(),
+      expiresAt: new Date(T0 + HEURE).toISOString(),
+      recipients: [
+        { userId: PROCHE, precision: 'neighborhood' as const, cell: { latitude: 0.005, longitude: 0.005 } },
+        { userId: SANG, precision: 'city' as const, cell: { latitude: 0.05, longitude: 0.05 } },
+      ],
+    };
+    const coinVille = { ...position, latitude: 0.1249, longitude: 0.1249 };
+    const quartier = projectSharedLocation(EMETTEUR, state, 'neighborhood', PROCHE)!;
+    const ville = projectSharedLocation(EMETTEUR, { ...state, position: coinVille }, 'city', SANG)!;
+
+    expect(quartier).toMatchObject({ latitude: 0.005, longitude: 0.005 });
+    expect(metres(quartier, position)).toBeLessThanOrEqual(quartier.radiusMeters);
+    expect(ville).toMatchObject({ latitude: 0.05, longitude: 0.05 });
+    expect(metres(ville, coinVille)).toBeLessThanOrEqual(ville.radiusMeters);
   });
 });

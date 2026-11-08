@@ -25,6 +25,7 @@
  */
 import {
   SHARED_LOCATION_BLUR_RADIUS_METERS,
+  SHARED_LOCATION_CELL_HOLD_MARGIN,
   SHARED_LOCATION_DEFAULT_PRECISION,
   SHARED_LOCATION_ERROR_CODES,
   SHARED_LOCATION_EXACT_MIN_RADIUS_METERS,
@@ -97,12 +98,6 @@ const round = (value: number): number => Math.round(value * DECIMALS) / DECIMALS
 const snap = (value: number, step: number, bound: number): number =>
   round(Math.min(bound, Math.max(-bound, (Math.floor(value / step) + 0.5) * step)));
 
-/**
- * La marge au-delà de la ligne de maille avant de changer de maille, en fraction du pas :
- * le va-et-vient du bruit GPS près d'une ligne ne la révèle pas (#16987).
- */
-const CELL_HOLD_MARGIN = 0.25;
-
 /** Un lecteur flouté n'a pas d'horloge fine : l'heure servie tombe sur le quart d'heure. */
 const BLUR_CLOCK_BUCKET_MS = 15 * 60_000;
 
@@ -115,7 +110,7 @@ const cellOf = (position: Pick<SharedLocationState['position'], 'latitude' | 'lo
 
 /** La maille servie après un pas : la retenue tant que la position reste dans la maille élargie de la marge, sinon la nouvelle. */
 const heldCell = (position: Pick<SharedLocationState['position'], 'latitude' | 'longitude'>, step: number, held: SharedLocationCell): SharedLocationCell => {
-  const reach = step * (0.5 + CELL_HOLD_MARGIN);
+  const reach = step * (0.5 + SHARED_LOCATION_CELL_HOLD_MARGIN);
   return Math.abs(position.latitude - held.latitude) <= reach && Math.abs(position.longitude - held.longitude) <= reach ? held : cellOf(position, step);
 };
 
