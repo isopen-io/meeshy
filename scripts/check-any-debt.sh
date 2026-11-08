@@ -372,7 +372,12 @@ readonly SHARED_BASELINE=0
 # Seule l'ATTRIBUTION a survécu de ce côté-ci, et c'est elle qui manquait : la
 # convention de ce fichier veut qu'une baisse dise QUEL lot l'a gagnée, sans quoi le
 # prochain à la relire ne peut pas vérifier qu'elle était méritée.
-readonly GATEWAY_BASELINE=492
+#
+# 492 → 491 (#16751 : la traduction d'une story compte les LANGUES, jamais les
+# événements) : `(this.prisma as any).$runCommandRaw` a quitté
+# `triggerStoryTextTranslation` avec la réécriture de l'écouteur. Le lot a
+# fusionné sans baisser cette ligne, et `dev` rougissait ici à 491 contre 492.
+readonly GATEWAY_BASELINE=491
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
