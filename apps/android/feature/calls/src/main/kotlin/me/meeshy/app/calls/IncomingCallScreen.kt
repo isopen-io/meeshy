@@ -31,11 +31,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -263,74 +258,64 @@ private fun DeclineWithMessageButton(onClick: () -> Unit) {
     }
 }
 
-/** Un bouton de l'écran entrant, tel que la règle le nomme : Refuser (rouge), Sans vidéo (verre neutre, glyphe vert), Répondre. */
+/** Un bouton de l'écran entrant, tel que la règle le nomme ; son aspect vient de [IncomingChoiceLooks] (vue P17). */
 @Composable
 private fun IncomingChoice(action: IncomingCallAction, isVideoCall: Boolean, compact: Boolean, onPerform: () -> Unit) {
-    // Trois boutons doivent tenir sur 320 dp, même en très grande police : chaque légende tient alors sur une ligne bornée.
-    val width = if (compact) Modifier.widthIn(max = COMPACT_ACTION_MAX_WIDTH) else Modifier
-    when (action) {
-        IncomingCallAction.Decline -> IncomingAction(
-            icon = Icons.Filled.CallEnd,
-            tint = CallPalette.Decline,
-            caption = stringResource(R.string.call_incoming_decline),
-            description = stringResource(R.string.call_action_decline),
-            hint = stringResource(R.string.call_incoming_decline_hint),
-            onClick = onPerform,
-            modifier = width,
+    val look = IncomingChoiceLooks.of(action, isVideoCall)
+    val (caption, description, hint) = when (action) {
+        IncomingCallAction.Decline -> Triple(R.string.call_incoming_decline, R.string.call_action_decline, R.string.call_incoming_decline_hint)
+        IncomingCallAction.AnswerWithoutVideo -> Triple(
+            R.string.call_incoming_answer_no_video,
+            R.string.call_incoming_answer_no_video_label,
+            R.string.call_incoming_answer_no_video_hint,
         )
-        IncomingCallAction.AnswerWithoutVideo -> IncomingAction(
-            icon = Icons.Filled.VideocamOff,
-            tint = CallPalette.Accept,
-            caption = stringResource(R.string.call_incoming_answer_no_video),
-            description = stringResource(R.string.call_incoming_answer_no_video_label),
-            hint = stringResource(R.string.call_incoming_answer_no_video_hint),
-            onClick = onPerform,
-            prominent = false,
-            modifier = width,
-        )
-        IncomingCallAction.Accept -> IncomingAction(
-            icon = if (isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-            tint = CallPalette.Accept,
-            caption = stringResource(R.string.call_incoming_accept),
-            description = stringResource(R.string.call_action_accept),
-            hint = stringResource(R.string.call_incoming_accept_hint),
-            onClick = onPerform,
-            modifier = width,
-        )
+        IncomingCallAction.Accept -> Triple(R.string.call_incoming_accept, R.string.call_action_accept, R.string.call_incoming_accept_hint)
     }
+    IncomingAction(
+        look = look,
+        caption = stringResource(caption),
+        description = stringResource(description),
+        hint = stringResource(hint),
+        onClick = onPerform,
+        compact = compact,
+    )
 }
 
+/**
+ * Un disque et sa légende. Trois boutons doivent tenir sur 320 dp, même en très grande police : en [compact], la largeur
+ * se borne et la légende passe sur deux lignes centrées au plus ; à deux boutons, la légende garde toute sa place.
+ */
 @Composable
 private fun IncomingAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: androidx.compose.ui.graphics.Color,
+    look: IncomingChoiceLook,
     caption: String,
     description: String,
     hint: String,
     onClick: () -> Unit,
-    prominent: Boolean = true,
-    modifier: Modifier = Modifier,
+    compact: Boolean,
 ) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        // Non proéminent : un verre neutre teinté par son seul glyphe, pour se lire comme une variante de Répondre.
+    val width = if (compact) Modifier.widthIn(max = COMPACT_ACTION_MAX_WIDTH) else Modifier
+    Column(width, horizontalAlignment = Alignment.CenterHorizontally) {
         CallCircleButton(
-            icon = icon,
-            background = if (prominent) tint else CallGlassTone.OverPicture.neutralFill,
+            icon = look.icon,
+            background = look.fill,
             contentDescription = "$description. $hint",
             onClick = onClick,
-            glyph = if (prominent) Color.White else tint,
+            glyph = look.glyph,
         )
         Spacer(Modifier.height(MeeshySpacing.smPlus))
         Text(
             text = caption,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            color = look.caption,
+            textAlign = TextAlign.Center,
+            maxLines = if (compact) COMPACT_CAPTION_MAX_LINES else Int.MAX_VALUE,
+            overflow = if (compact) TextOverflow.Ellipsis else TextOverflow.Clip,
             modifier = Modifier.clearAndSetSemantics { },
         )
     }
 }
 
 private val COMPACT_ACTION_MAX_WIDTH = 80.dp
+private const val COMPACT_CAPTION_MAX_LINES = 2

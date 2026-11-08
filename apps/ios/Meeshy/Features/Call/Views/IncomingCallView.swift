@@ -303,8 +303,8 @@ struct IncomingCallView: View {
             ) { callManager.rejectCall() }
         case .answerWithoutVideo:
             roundButton(
-                systemImage: "video.slash.fill",
-                tint: MeeshyColors.success,
+                systemImage: "phone.fill",
+                tint: Color.white,
                 caption: String(localized: "call.incoming.answerNoVideo", defaultValue: "Sans vidéo", bundle: .main),
                 label: String(localized: "call.incoming.answerNoVideo.label", defaultValue: "Répondre sans vidéo", bundle: .main),
                 hint: String(localized: "call.incoming.answerNoVideo.hint", defaultValue: "Décroche caméra coupée : l'appelant voit votre avatar", bundle: .main),
@@ -321,9 +321,9 @@ struct IncomingCallView: View {
         }
     }
 
-    /// Un bouton rond de 70 pt et sa légende. `prominent: false` — verre neutre
-    /// teinté seulement par le glyphe, pour que « Sans vidéo » se lise comme
-    /// une variante d'Accepter, pas comme un troisième choix aussi fort.
+    /// Un bouton rond de 70 pt et sa légende. `prominent: false` — verre neutre,
+    /// glyphe et légende à la teinte donnée (blancs pour « Sans vidéo », vue P17),
+    /// pour se lire comme une variante d'Accepter, pas comme un troisième choix aussi fort.
     private func roundButton(
         systemImage: String,
         tint: Color,

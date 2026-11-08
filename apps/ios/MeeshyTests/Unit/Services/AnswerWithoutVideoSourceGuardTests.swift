@@ -102,4 +102,14 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
         XCTAssertTrue(fn.contains("callManager.endCall()"))
         XCTAssertFalse(fn.contains("ensureCamera"), "Répondre sans vidéo ne demande jamais la caméra.")
     }
+
+    /// Vue P17 de `docs/product/appels-vue-finale/planche.html` : « Sans vidéo » est un combiné BLANC sur un verre neutre,
+    /// légende blanche — jamais la caméra barrée verte d'avant la planche.
+    func test_answerWithoutVideo_isAWhiteHandsetOnNeutralGlass() {
+        guard let button = slice(Self.view, from: "case .answerWithoutVideo:", to: "case .accept:") else { return }
+        XCTAssertTrue(button.contains("systemImage: \"phone.fill\""))
+        XCTAssertTrue(button.contains("tint: Color.white"))
+        XCTAssertTrue(button.contains("prominent: false"))
+        XCTAssertFalse(button.contains("video.slash"))
+    }
 }
