@@ -401,7 +401,6 @@ struct HeaderFlameDecoration: ViewModifier {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel(ConversationEngagementPill.accessibilityText(for: shown))
         .accessibilityHint(String(
             localized: "conversation.header.flame.hint",

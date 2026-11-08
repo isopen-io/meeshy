@@ -51,6 +51,9 @@ extension ListeningCenter {
     }
 
     /// Le bandeau d'UNE personne puis chacun de ses changements — rien de plus fin que l'écoute de cette personne.
+    ///
+    /// Le SDK lit ce flux depuis une tâche hors du MainActor : la demande y exécute les étapes, qui ne doivent donc
+    /// hériter d'aucune isolation (#17069).
     func band(for userId: String) -> AnyPublisher<AvatarListening?, Never> {
         Self.band(of: userId, in: $byUser.eraseToAnyPublisher())
     }
@@ -64,7 +67,7 @@ extension ListeningCenter {
         entries
             .map { $0[userId] }
             .removeDuplicates()
-            .map(ListeningBandText.band(for:))
+            .map { @Sendable entry in ListeningBandText.band(for: entry) }
             .eraseToAnyPublisher()
     }
 

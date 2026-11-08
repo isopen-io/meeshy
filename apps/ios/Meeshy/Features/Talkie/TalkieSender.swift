@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 import MeeshySDK
+import os
+
+private extension Logger {
+    nonisolated static let talkieSender = MeeshyLog.logger(.audioRecorder)
+}
 
 /// Le micro du talkie : rend des trames AAC ADTS une à une. Le vrai micro est `TalkieMicCapture` ; un double le remplace
 /// dans les tests.
@@ -20,7 +25,10 @@ typealias TalkieDeadlineScheduler = @MainActor (TimeInterval, @escaping @MainAct
 ///
 /// - **Appuyer** ouvre `talkie:start` ET le micro EN MÊME TEMPS : ce qui est capté avant l'accusé est gardé (borné par
 ///   le plafond d'une prise de parole) et part dès l'ouverture — le premier mot n'est jamais mangé par l'aller-retour.
-/// - Chaque trame rejoint un fragment de ~250 ms (`TalkieFragmenter`) ; un fragment part dès qu'il est plein :
+///   `talkie:start` part AVANT l'ouverture du micro (#17094) : celle-ci tient l'acteur principal (session audio,
+///   moteur), et l'aller-retour court pendant ce temps au lieu de l'attendre.
+/// - Les temps de la prise de parole (`TalkieLatency`) s'écrivent au journal dès le premier fragment parti.
+/// - Chaque trame rejoint un fragment de ~120 ms (`TalkieFragmenter`) ; un fragment part dès qu'il est plein :
 ///   `talkie:send-chunk`, `seq` croissant (`TalkieBudget`), `capturedAt` pour mesurer la latence.
 /// - **Relâcher** arrête le micro, vide ce qui reste, puis `talkie:end`.
 /// - La durée maximale SERVIE ferme seule ; les plafonds d'octets et de fragments aussi, AVANT que le serveur ne coupe.
@@ -38,6 +46,8 @@ final class TalkieSender: ObservableObject {
     @Published private(set) var phase: Phase = .idle
     /// Ce qu'il faut dire d'une prise de parole qui n'a pas abouti ; l'écran le remet à `nil` une fois dit.
     @Published var notice: TalkieSendOutcome?
+    /// Les temps de la dernière prise de parole dont un fragment est parti.
+    private(set) var lastLatency: TalkieLatency?
 
     /// Une prise de parole, de l'appui à sa fin.
     @MainActor
@@ -52,9 +62,11 @@ final class TalkieSender: ObservableObject {
         var fragmenter = TalkieFragmenter()
         var budget = TalkieBudget()
         var cancelDeadline: (() -> Void)?
+        var latency: TalkieLatency
 
-        init(toUserId: String) {
+        init(toUserId: String, pressedAt: Date) {
             self.toUserId = toUserId
+            latency = TalkieLatency(pressedAt: pressedAt)
         }
 
         nonisolated deinit {}
@@ -111,14 +123,18 @@ final class TalkieSender: ObservableObject {
             notice = .offline
             return
         }
-        let current = Session(toUserId: toUserId)
+        let current = Session(toUserId: toUserId, pressedAt: now())
         session = current
         phase = .starting(toUserId: toUserId)
-        let mic = Task { await self.openMic(current) }
-        Task {
+        let verdict = Task { () -> TalkieStartVerdict in
             let verdict = await self.emitter.start(toUserId: toUserId)
-            let micReady = await mic.value
-            await self.conclude(current, verdict: verdict, micReady: micReady)
+            current.latency.mark(.opened, at: self.now())
+            return verdict
+        }
+        Task {
+            await Task.yield()
+            let micReady = await self.openMic(current)
+            await self.conclude(current, verdict: await verdict.value, micReady: micReady)
         }
     }
 
@@ -149,6 +165,7 @@ final class TalkieSender: ObservableObject {
     private func openMic(_ current: Session) async -> Bool {
         let ready = await capture.start { [weak self] data, duration in self?.frame(current, data, duration) }
         guard ready else { return false }
+        current.latency.mark(.micReady, at: now())
         if current.finishing || current.released {
             current.accepting = false
             await capture.stop()
@@ -208,7 +225,14 @@ final class TalkieSender: ObservableObject {
         guard let opened = current.opened, !fragment.data.isEmpty else { return true }
         guard let seq = current.budget.admit(bytes: fragment.data.count) else { return false }
         emitter.sendChunk(talkieId: opened.talkieId, seq: seq, capturedAt: fragment.capturedAt, data: fragment.data)
+        if seq == 0 { record(current) }
         return true
+    }
+
+    private func record(_ current: Session) {
+        current.latency.mark(.firstChunk, at: now())
+        lastLatency = current.latency
+        Logger.talkieSender.info("talkie · émission · \(current.latency.summary, privacy: .public)")
     }
 
     private func stopMic(_ current: Session) async {

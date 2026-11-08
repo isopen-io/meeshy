@@ -322,6 +322,7 @@ describe('linkRefusalOf — le CODE d’abord', () => {
     [403, 'BANNED', 'banned'],
     [403, 'REGION_NOT_ALLOWED', 'region'],
     [403, 'ACCOUNT_REQUIRED', 'account-required'],
+    [403, 'COMMUNITY_MEMBERS_ONLY', 'members-only'],
     [0, 'JOINED_AS_GUEST', 'session-expired'],
     [404, undefined, 'not-found'],
     [429, undefined, 'rate-limited'],

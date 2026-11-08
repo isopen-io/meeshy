@@ -698,7 +698,7 @@ struct ConversationView: View {
             favoriteEmoji: conversation?.userState.reaction,
             avatarURL: liveConversation?.avatar,
             accentColor: accentColor, secondaryColor: secondaryColor,
-            guestLinkId: anonymousSession?.linkId, titleColor: theme.textPrimary, mutedColor: theme.textMuted
+            guestLinkId: anonymousSession?.linkId, titleColor: theme.textPrimary
         ) { dismiss() }
     }
 
