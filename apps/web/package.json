@@ -101,7 +101,7 @@
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.14.5",
     "@meeshy/design-tokens": "workspace:*",
-    "@tailwindcss/vite": "4.3.3",
+    "@tailwindcss/vite": "4.3.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "fflate": "0.8.3",
@@ -110,9 +110,9 @@
     "preact-render-to-string": "6.8.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "tailwindcss": "4.3.3",
+    "tailwindcss": "4.3.4",
     "typescript": "^6.0.3",
-    "vite": "8.3.5",
+    "vite": "8.3.6",
     "vite-plugin-pwa": "2.0.0"
   },
   "optionalDependencies": {
