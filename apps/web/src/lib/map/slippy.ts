@@ -110,3 +110,13 @@ export function screenPoint(point: GeoPoint, view: MapView): { readonly x: numbe
   const target = worldPixel(point, view.zoom);
   return { x: target.x - centre.x + view.width / 2, y: target.y - centre.y + view.height / 2 };
 }
+
+/** Déplace le CENTRE de `dx`, `dy` pixels (glisser vers la droite = `dx` négatif), sans sortir de la projection. */
+export function panView(view: MapView, dx: number, dy: number): MapView {
+  const centre = worldPixel(view.center, view.zoom);
+  const size = worldSize(view.zoom);
+  const moved = geoOfWorldPixel({ x: centre.x + dx, y: clamp(centre.y + dy, 0, size) }, view.zoom);
+  return { ...view, center: { latitude: clamp(moved.latitude, -MAX_MERCATOR_LATITUDE, MAX_MERCATOR_LATITUDE), longitude: ((((moved.longitude + 180) % 360) + 360) % 360) - 180 } };
+}
+
+export const zoomView = (view: MapView, delta: 1 | -1): MapView => ({ ...view, zoom: clamp(view.zoom + delta, MIN_ZOOM, MAX_ZOOM) });

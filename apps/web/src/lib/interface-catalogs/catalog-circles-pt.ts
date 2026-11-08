@@ -144,6 +144,19 @@ const pt = {
   'together.outcome.rateLimited': 'Convites demais: tente de novo em instantes.',
   'together.outcome.offline': 'Sem conexão: o convite não foi enviado.',
   'together.outcome.failed': 'O convite não foi enviado. Tente de novo.',
+  'positions.title': 'Localizações compartilhadas',
+  'positions.empty': 'Ninguém está compartilhando a localização com você agora.',
+  'positions.cannotEmit': 'A web não compartilha sua localização: abra o app Meeshy no celular para compartilhar a sua.',
+  'positions.map.a11y': 'Mapa das localizações compartilhadas com você',
+  'positions.list.title': 'Lista de localizações',
+  'positions.row.exact': '{name} · localização exata · até {time}',
+  'positions.row.neighborhood': '{name} · no nível do bairro · até {time}',
+  'positions.row.city': '{name} · no nível da cidade · até {time}',
+  'positions.someone': 'Alguém',
+  'positions.offline': 'Sem conexão: as localizações exibidas podem estar desatualizadas.',
+  'positions.attribution': '© colaboradores do OpenStreetMap',
+  'positions.zoomIn': 'Aproximar o mapa',
+  'positions.zoomOut': 'Afastar o mapa',
 } as const satisfies CirclesCatalog;
 
 export default pt;

@@ -144,6 +144,19 @@ const ar = {
   'together.outcome.rateLimited': 'دعوات كثيرة: أعد المحاولة بعد قليل.',
   'together.outcome.offline': 'غير متصل: لم تُرسل الدعوة.',
   'together.outcome.failed': 'لم تُرسل الدعوة. أعد المحاولة.',
+  'positions.title': 'المواقع المشتركة',
+  'positions.empty': 'لا أحد يشارك موقعه معك الآن.',
+  'positions.cannotEmit': 'لا يشارك الويب موقعك: افتح تطبيق Meeshy على هاتفك لمشاركة موقعك.',
+  'positions.map.a11y': 'خريطة المواقع المشتركة معك',
+  'positions.list.title': 'قائمة المواقع',
+  'positions.row.exact': '{name} · الموقع بدقة · حتى {time}',
+  'positions.row.neighborhood': '{name} · بدقة الحي · حتى {time}',
+  'positions.row.city': '{name} · بدقة المدينة · حتى {time}',
+  'positions.someone': 'شخص ما',
+  'positions.offline': 'غير متصل: قد تكون المواقع المعروضة قديمة.',
+  'positions.attribution': '© مساهمو OpenStreetMap',
+  'positions.zoomIn': 'تكبير الخريطة',
+  'positions.zoomOut': 'تصغير الخريطة',
 } as const satisfies CirclesCatalog;
 
 export default ar;

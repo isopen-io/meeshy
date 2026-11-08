@@ -144,6 +144,19 @@ const en = {
   'together.outcome.rateLimited': 'Too many invitations: try again in a moment.',
   'together.outcome.offline': 'Offline: the invitation wasn’t sent.',
   'together.outcome.failed': 'The invitation wasn’t sent. Try again.',
+  'positions.title': 'Shared locations',
+  'positions.empty': 'Nobody is sharing their location with you right now.',
+  'positions.cannotEmit': 'The web can’t share your location: open the Meeshy app on your phone to share yours.',
+  'positions.map.a11y': 'Map of the locations shared with you',
+  'positions.list.title': 'Locations list',
+  'positions.row.exact': '{name} · exact location · until {time}',
+  'positions.row.neighborhood': '{name} · to the neighborhood · until {time}',
+  'positions.row.city': '{name} · to the city · until {time}',
+  'positions.someone': 'Someone',
+  'positions.offline': 'Offline: the locations shown may be out of date.',
+  'positions.attribution': '© OpenStreetMap contributors',
+  'positions.zoomIn': 'Zoom in',
+  'positions.zoomOut': 'Zoom out',
 } as const satisfies CirclesCatalog;
 
 export default en;

@@ -537,8 +537,6 @@ const PENDING_CLIENT_ENTRIES = {
   'publishers.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web' },
   // La page éditeur (#16433) : iOS la lit d'abord ; la boutique web la lira avec sa page éditeur.
   'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
-  // Le partage temporaire de position par personne (#16980) : le serveur sert le rattrapage par emprise avant la carte web.
-  'relations.locations': { issue: 16984, reason: 'GET /relations/locations?bbox= — les positions qu’on me partage, lues par la carte web' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { TILE_SIZE, bboxQuery, fitView, metersToPixels, tilesCovering, viewBbox, worldPixel } from './slippy';
+import { MAX_ZOOM, MIN_ZOOM, TILE_SIZE, bboxQuery, fitView, metersToPixels, panView, screenPoint, tilesCovering, viewBbox, worldPixel, zoomView } from './slippy';
 
 /**
  * **LA CARTE À TUILES, SES MATHS (#16984)** — miroir de `SlippyMap.kt` (Android,
@@ -99,5 +99,27 @@ describe('tilesCovering', () => {
     expect(new Set(tiles.map((tile) => `${tile.left},${tile.top}`)).size).toBe(tiles.length);
     expect(tiles.some((tile) => tile.x === 7)).toBe(true);
     expect(tiles.some((tile) => tile.x === 0)).toBe(true);
+  });
+});
+
+describe('panView et zoomView', () => {
+  const view = { center: { latitude: 48.85, longitude: 2.35 }, zoom: 10, width: 400, height: 600 };
+
+  test('déplacer le centre de +100 px vers la droite pose le même point 100 px plus à gauche', () => {
+    const point = { latitude: 48.9, longitude: 2.5 };
+    const before = screenPoint(point, view);
+    const after = screenPoint(point, panView(view, 100, 0));
+    expect(after.x).toBeCloseTo(before.x - 100, 3);
+    expect(after.y).toBeCloseTo(before.y, 3);
+  });
+
+  test('ne quitte jamais le monde : la latitude reste dans la projection', () => {
+    expect(Math.abs(panView(view, 0, -1e9).center.latitude)).toBeLessThanOrEqual(85.06);
+  });
+
+  test('le zoom reste dans [MIN_ZOOM, MAX_ZOOM]', () => {
+    expect(zoomView({ ...view, zoom: MAX_ZOOM }, 1).zoom).toBe(MAX_ZOOM);
+    expect(zoomView({ ...view, zoom: MIN_ZOOM }, -1).zoom).toBe(MIN_ZOOM);
+    expect(zoomView(view, 1).zoom).toBe(11);
   });
 });

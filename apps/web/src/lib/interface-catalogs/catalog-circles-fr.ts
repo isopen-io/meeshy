@@ -146,6 +146,19 @@ const fr = {
   'together.outcome.rateLimited': 'Trop d’invitations : réessayez dans un instant.',
   'together.outcome.offline': 'Hors ligne : l’invitation n’est pas partie.',
   'together.outcome.failed': 'L’invitation n’est pas partie. Réessayez.',
+  'positions.title': 'Positions partagées',
+  'positions.empty': 'Personne ne partage sa position avec vous pour le moment.',
+  'positions.cannotEmit': 'Le web ne partage pas votre position : ouvrez l’application Meeshy sur votre téléphone pour partager la vôtre.',
+  'positions.map.a11y': 'Carte des positions partagées avec vous',
+  'positions.list.title': 'Liste des positions',
+  'positions.row.exact': '{name} · position exacte · jusqu’à {time}',
+  'positions.row.neighborhood': '{name} · à un quartier près · jusqu’à {time}',
+  'positions.row.city': '{name} · à la ville près · jusqu’à {time}',
+  'positions.someone': 'Quelqu’un',
+  'positions.offline': 'Hors ligne : les positions affichées peuvent être dépassées.',
+  'positions.attribution': '© contributeurs OpenStreetMap',
+  'positions.zoomIn': 'Agrandir la carte',
+  'positions.zoomOut': 'Éloigner la carte',
 } as const;
 
 export default fr;

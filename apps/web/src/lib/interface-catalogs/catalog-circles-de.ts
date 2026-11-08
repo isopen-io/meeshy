@@ -144,6 +144,19 @@ const de = {
   'together.outcome.rateLimited': 'Zu viele Einladungen: versuch es gleich noch einmal.',
   'together.outcome.offline': 'Offline: Die Einladung wurde nicht gesendet.',
   'together.outcome.failed': 'Die Einladung wurde nicht gesendet. Versuch es noch einmal.',
+  'positions.title': 'Geteilte Standorte',
+  'positions.empty': 'Niemand teilt gerade seinen Standort mit dir.',
+  'positions.cannotEmit': 'Das Web teilt deinen Standort nicht: Öffne die Meeshy-App auf deinem Handy, um deinen zu teilen.',
+  'positions.map.a11y': 'Karte der mit dir geteilten Standorte',
+  'positions.list.title': 'Liste der Standorte',
+  'positions.row.exact': '{name} · genauer Standort · bis {time}',
+  'positions.row.neighborhood': '{name} · auf das Viertel genau · bis {time}',
+  'positions.row.city': '{name} · auf die Stadt genau · bis {time}',
+  'positions.someone': 'Jemand',
+  'positions.offline': 'Offline: Die angezeigten Standorte sind möglicherweise veraltet.',
+  'positions.attribution': '© OpenStreetMap-Mitwirkende',
+  'positions.zoomIn': 'Karte vergrößern',
+  'positions.zoomOut': 'Karte verkleinern',
 } as const satisfies CirclesCatalog;
 
 export default de;
