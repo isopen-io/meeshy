@@ -573,6 +573,10 @@ socket jusqu'au client.
   - **Vert** : 82/82 sur le lot, la voie rapide, le quota et le refus de lot, relancé par moi.
   - **Suites voisines** (QA) : 327 passés, 4 sautés et 6 erreurs, contre 319 passés et les mêmes 6 erreurs sur `origin/dev`. Les erreurs sont préexistantes : `sacrebleu` et `soundfile` absents du venv, et `TestBatchTranslateEndpoint`.
   - **Mutations QA** : 4 sur 5 tuées. Le mutant survivant, qui inverse l'ordre flush/vidange, est quasi équivalent et va dans #17002.
+- **CI** : le run `workflow_dispatch` 42491615899 est rouge sur `Qualité TS`, au budget du chunk web « zod » (18,86 Ko pour 9 Ko). Ce rouge est celui de `dev` : je l'ai reproduit sur `origin/dev` pur. → #17014. Comme les jobs traducteur dépendent de `quality`, ils ont été sautés. J'ai donc relancé moi-même la commande de `test-python` en local, sur toute la suite :
+  - **branche** : 2257 passés ;
+  - **`dev`** : 2240 passés ;
+  - 38 échecs et 95 erreurs, identiques des deux côtés (modules ML absents, sans torch).
 - **QA** : favorable avec réserves. R1 et R5 → #17002, R2 → #17003, R3 → #17004, R4 → #17005.
 
 ### Limites connues
@@ -587,5 +591,6 @@ socket jusqu'au client.
 
 1. #17002 : refuser l'enfilement une fois l'arrêt lancé (petit lot, même site), avec #17003 si le temps le permet.
 2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
-3. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
+3. #17014 : tant que `Qualité TS` est rouge sur `dev`, aucune PR traducteur n'a sa preuve CI. Vérifier son état d'abord.
+4. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
