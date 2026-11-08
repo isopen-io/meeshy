@@ -49,8 +49,9 @@ with 2840-/2400-LOC god objects.
 14 `:feature:*` + `:app` + `:core:navigation` + `:core:common`. Per the SOTA
 review (§6.1) the data SDK is **split** so it is not a module-level monolith:
 `:core:network`, `:core:database`, `:core:datastore`, `:core:crypto`.
-Dependency rules enforced by a `build-logic/` convention plugin; no
-feature→feature edges (except the four listed in ADR-033); `:core:crypto` isolated as a small audit surface.
+No feature→feature edges except the four listed in ADR-033, enforced by
+`scripts/check-feature-edges.sh` (no `build-logic/` convention plugin exists);
+`:core:crypto` isolated as a small audit surface.
 
 **Rejected.** (a) Single `:app` module — re-creates the god-object problem,
 slow incremental builds. (b) Pure Clean-Architecture 3-module-per-feature —
@@ -935,3 +936,7 @@ design system. Le graphe doit rester acyclique. Les arêtes admises :
 `scripts/check-feature-edges.sh` (témoins : `check-feature-edges.test.sh`, job « Graphe des modules » d'`android.yml`)
 rejette une arête hors de `scripts/feature-edges-allowlist.txt`, une arête admise absente du graphe ou de cette ADR, et
 tout cycle. Admettre une cinquième arête = l'écrire ici ET dans la liste, dans le même commit.
+La garde lit une arête hors commentaires, sous ses trois écritures (`project(":feature:x")`,
+`project(path = ":feature:x")`, `projects.feature.x`). Elle est un script et non un plugin `build-logic/` (que
+l'ADR-003 annonçait et que le dépôt n'a jamais porté) : elle tourne en secondes, sans SDK Android, donc aussi dans
+les conteneurs où Gradle ne démarre pas.
