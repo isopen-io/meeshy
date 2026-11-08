@@ -65,13 +65,14 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
         let names = swiftSources().map(\.lastPathComponent)
         XCTAssertTrue(names.contains("PhotoCaptureProcessor.swift"), "Le balayage doit voir le SDK, sinon la garde ne garde rien.")
         XCTAssertTrue(names.contains("CameraModel.swift"))
+        XCTAssertTrue(names.contains("CameraModel+PhotoCapture.swift"))
     }
 
     func test_photoCaptureSites_allGoThroughTheSingleProcessor() {
         let offenders = swiftSources().compactMap { url -> String? in
             guard let code = code(of: url),
                   Self.captureMarkers.contains(where: code.contains),
-                  !code.contains(Self.processorName) else { return nil }
+                  !code.contains(Self.processorName), !code.contains("photoProcessor.process(") else { return nil }
             return url.lastPathComponent
         }
         XCTAssertEqual(offenders, [], "Une prise photo qui n'appelle pas \(Self.processorName) envoie une photo non traitée.")
@@ -82,12 +83,12 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
             code(of: url).map { code in Self.captureMarkers.contains(where: code.contains) } ?? false
         }
         // Le viseur de l'app et la caméra avant du moment photo du jeu (#9382, qui n'enregistre rien dans Photos).
-        XCTAssertEqual(Set(sites.map(\.lastPathComponent)), ["CameraModel.swift", "GamePhotoCamera.swift"],
+        XCTAssertEqual(Set(sites.map(\.lastPathComponent)), ["CameraModel.swift", "CameraModel+PhotoCapture.swift", "GamePhotoCamera.swift"],
                        "Un NOUVEAU site de prise photo : le brancher sur \(Self.processorName), puis mettre cette liste à jour.")
     }
 
     func test_cameraDelegate_publishesTheProcessedPhoto() throws {
-        let url = try XCTUnwrap(swiftSources().first { $0.lastPathComponent == "CameraModel.swift" })
+        let url = try XCTUnwrap(swiftSources().first { $0.lastPathComponent == "CameraModel+PhotoCapture.swift" })
         let code = try XCTUnwrap(code(of: url))
         let start = try XCTUnwrap(code.range(of: "didFinishProcessingPhoto"))
         let body = String(code[start.upperBound...].prefix(1500))

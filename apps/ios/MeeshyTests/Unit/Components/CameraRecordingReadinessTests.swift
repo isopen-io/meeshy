@@ -78,13 +78,13 @@ final class CameraRecordingReadinessTests: XCTestCase {
 
     // MARK: - Le CÂBLAGE, faute de pouvoir monter une caméra en test
 
-    private func cameraViewSource() throws -> String {
+    private func cameraViewSource(_ fichier: String = "CameraModel.swift") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/\(fichier)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -143,7 +143,7 @@ final class CameraRecordingReadinessTests: XCTestCase {
 
     /// **Le seul appel à `capturePhoto(with:` est gardé DANS `takePhoto`.**
     func test_leSeulAppelACapturePhoto_estGardeParLaRegle() throws {
-        let source = try cameraViewSource()
+        let source = try cameraViewSource("CameraModel+PhotoCapture.swift")
         let appels = source.components(separatedBy: "photoOutput.capturePhoto(with:").count - 1
         XCTAssertEqual(appels, 1,
                        "Un second site d'appel devrait porter sa propre garde — la garde suit l'appel, pas la fonction.")

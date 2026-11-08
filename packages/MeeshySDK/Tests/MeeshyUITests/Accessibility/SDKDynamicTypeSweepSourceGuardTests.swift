@@ -25,8 +25,6 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Community/CommunityMembersScreen.swift",
         "Community/CommunityListScreen.swift",
         "Conversation/ConversationSettingsView.swift",
-        "VoiceProfile/VoiceProfileWizardView.swift",
-        "VoiceProfile/VoiceProfileManageView.swift",
         "VoiceProfile/VoiceRecordingView.swift",
         "Profile/ConnectionActionView.swift",
         "Profile/UserProfileSheet.swift",

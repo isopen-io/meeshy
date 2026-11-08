@@ -33,6 +33,10 @@ final class RiverBubbleLayoutTests: XCTestCase {
         XCTAssertEqual(RiverBubbleLayout.initials(for: "   "), "?")
     }
 
+    func test_initials_parenthesizedNickname_keepsOnlyLetters() {
+        XCTAssertEqual(RiverBubbleLayout.initials(for: "Théo (foot)"), "TF")
+    }
+
     func test_initials_toi_isTreatedAsAnyOtherWord_noSpecialCase() {
         // Le SENS de « Toi » (résolution `isViewer`) est une affaire de
         // l'appelant, jamais de ce calcul purement typographique.

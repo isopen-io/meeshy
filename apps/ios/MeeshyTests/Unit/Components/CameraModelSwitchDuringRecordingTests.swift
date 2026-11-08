@@ -97,7 +97,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_handleSegmentFinished_onlyMergesWhenMoreThanOneSegment() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "private func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
+        let fn = try body(from: "func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
         XCTAssertTrue(
             fn.contains("segments.count > 1 ? await Self.mergeSegments(segments) : segments.first"),
             "The fast path (no camera switch occurred, exactly one segment) must " +
@@ -109,7 +109,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_handleSegmentFinished_midSwitch_neverTogglesIsRecordingVideoFalse() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "private func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
+        let fn = try body(from: "func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
         guard let switchBranchStart = fn.range(of: "if isSwitchingCameraDuringRecording {") else {
             XCTFail("Could not locate the mid-switch branch in handleSegmentFinished"); return
         }
@@ -307,7 +307,7 @@ final class CameraRecordingInterruptionTests: XCTestCase {
 
     func test_laFinDeSegmentLitLErreurAuLieuDeLaJeter() throws {
         let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
-        let fn = corps(modele, de: "private func handleSegmentFinished", a: "private func resumeRecordingAfterSwitch")
+        let fn = corps(modele, de: "func handleSegmentFinished", a: "private func resumeRecordingAfterSwitch")
         XCTAssertFalse(fn.isEmpty)
         XCTAssertFalse(fn.contains("guard error == nil"),
                        "Une erreur n'est pas une perte : AVFoundation livre un fichier valide après une interruption.")
@@ -325,7 +325,7 @@ final class CameraRecordingInterruptionTests: XCTestCase {
 
     /// Une photo sans données ne sort plus en silence.
     func test_unePhotoSansDonnees_seDit() throws {
-        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift")
         let fn = corps(modele, de: "didFinishProcessingPhoto photo:", a: "let nom = ComposerPhotoEncoding")
         XCTAssertEqual(fn.components(separatedBy: "self.photoWasLost()").count - 1, 2)
         let perte = corps(modele, de: "func photoWasLost()", a: "/// Le tic du cadre")

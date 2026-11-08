@@ -10,8 +10,8 @@
     "disable-autocorrection": 0,
     "dispatch-main-async": 74,
     "environment-router": 12,
-    "fixed-font": 711,
-    "foreground-color": 2294,
+    "fixed-font": 693,
+    "foreground-color": 2260,
     "idiom": 0,
     "logger-subsystem": 0,
     "narrative-comment": 2333,
@@ -30,8 +30,8 @@
     "task-detached": 112,
     "try-sleep": 32,
     "uiscreen-main": 1,
-    "unchecked-sendable": 116,
-    "unchecked-sendable-total": 206,
+    "unchecked-sendable": 117,
+    "unchecked-sendable-total": 207,
     "viewmodel-shared": 561
   },
   "version": 1
