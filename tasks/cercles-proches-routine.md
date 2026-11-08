@@ -196,3 +196,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Ce qui reste de l'écoute : `proche-sang-ecoute@ios` (émettre + afficher le même bandeau sur `MeeshyAvatar`),
   Android, la rangée de liste (avatar < 40 px : une autre forme à décider), le fantôme.
 - Prochain lot recommandé : `proche-sang-ecoute@ios`, sinon l'émission du talkie sur iOS.
+
+## 2026-11-08 — réveil 12 : l'écoute d'un Proche ou d'un Sang défile sur son avatar, iOS (#16755 ⊂ #13934)
+
+- Reprise : #16732 (écoute reçue sur le web) fusionnée dans `dev` ; aucune PR de la routine ouverte, aucune branche
+  vivante n'écrit `now-playing` côté iOS. Issue #16755 ouverte sous #13934 (milestone #215), branche
+  `claude/cercles-ecoute-ios` réservée avant toute écriture.
+- Lot : la RÉCEPTION iOS, iso du web. SDK : `Relations/NowPlaying.swift` (décodage borné au contrat : catégorie
+  connue, titre ≤ 200, origine ≤ 60, origine sans titre jetée, durée bornée au TTL ; un élément illisible du
+  rattrapage est écarté sans faire tomber le reste), routes `now-playing:changed|cleared`, `RelationsProviding.nowPlaying()`.
+  MeeshyUI : `AvatarListeningBand` (bandeau sur le bas du cercle, défilement de `AudioChipMarquee` RÉUTILISÉ, statique
+  sous Réduire les animations, rien sous 40 pt, dit à VoiceOver) et `AvatarListeningSource` (source opaque posée par
+  l'app, abonnée par personne, sans `AnyView`). App : `ListeningCenter` (iso `listening-live.ts`), posé sur la fiche
+  d'une personne et l'en-tête d'un direct (déplié et replié). `RelationsEndpoint.nowPlaying` sort des exceptions du
+  catalogue Swift mort (son appelant existe).
+- Ce qui reste de l'écoute : ÉMETTRE depuis iOS (avec l'écran d'accord de la catégorie), Android, la rangée de liste,
+  le fantôme.

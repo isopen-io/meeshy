@@ -10,6 +10,7 @@ struct OverlayHost: ViewModifier {
             .ageGateOverlay()
             .modifier(TalkieOverlay(center: .shared))
             .bringRingOverlay()
+            .onAppear { ListeningCenter.start() }
             .sheet(isPresented: $isCrashSheetPresented) {
                 CrashReportSheet(reports: crashReports)
             }
