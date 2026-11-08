@@ -286,3 +286,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   arrière-plan iOS, Android (émettre + recevoir), rangée de liste (#16733, autre session), fantôme.
 - Prochain lot recommandé : accorder « Ce que j'écoute » depuis Android (fiche d'un lien, `RelationReceptionSetting`),
   sinon l'émission du talkie sur iOS.
+- Issue : PR #16835 fusionnée dans `dev` à 16387ee par la fusion automatique, sur la CI de PR gelée. Le run complet
+  `ci.yml` de cette tête était rouge pour deux raisons extérieures au lot : Trivy (504 au téléchargement) et
+  Playwright tranche 4 (`bun.lock` au format 3 que bun 1.3.14 ne lit pas, plus la gate `media-16 … obtenu flow-end`).
+  Lockfiles réparés dans la PR #16873 (#16872).
