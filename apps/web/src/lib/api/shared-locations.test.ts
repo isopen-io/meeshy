@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import { decodeSharedLocation, loadSharedLocations, sharedLocationsQueryOptions } from './shared-locations';
-import { estClefNonPersistable } from './souverain';
+import { estClefNonPersistable, estClefSouveraine } from './souverain';
 import { apiResponseMayBeCached } from '@/lib/net/api-runtime-cache';
 import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
 
@@ -98,6 +98,11 @@ describe('sharedLocationsQueryOptions', () => {
   test('les positions de mes liens ne touchent jamais le disque du navigateur (le cache de requêtes y est déshydraté)', () => {
     const { transport } = fakeTransport({ ok: true, data: { items: [] } });
     expect(estClefNonPersistable(sharedLocationsQueryOptions({ source: 'gateway', transport }, bbox).queryKey)).toBe(true);
+  });
+
+  test('elles ne se rangent pas sous la clé de l’administration souveraine : leur exclusion dit son intention', () => {
+    const { transport } = fakeTransport({ ok: true, data: { items: [] } });
+    expect(estClefSouveraine(sharedLocationsQueryOptions({ source: 'gateway', transport }, bbox).queryKey)).toBe(false);
   });
 
   test('le rattrapage dit SON emprise et l’instant où il est parti : c’est ce qui le rend souverain dans cette emprise', async () => {

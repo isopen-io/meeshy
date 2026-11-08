@@ -5,7 +5,7 @@ import type { SharedLocationChangedEventData } from '@meeshy/shared/types/shared
 import { bboxQuery, type GeoBbox } from '@/lib/map/slippy';
 
 import { unwrap } from './client';
-import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
+import { HORS_DISQUE_PREFIXE } from './souverain';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -62,11 +62,12 @@ export async function loadSharedLocations(deps: SharedLocationDeps & { readonly 
 }
 
 /**
- * Sous le préfixe qui ne touche pas le disque (`souverain.ts`, comme les sessions du
- * compte) : le cache de requêtes est déshydraté dans `localStorage`, et la position d'un
- * lien n'a rien à y survivre — ni à la session, ni au partage, ni à un blocage.
+ * Sous le préfixe qui ne touche pas le disque (`souverain.ts`) : le cache de requêtes est
+ * déshydraté dans `localStorage`, et la position d'un lien n'a rien à y survivre — ni à la
+ * session, ni au partage, ni à un blocage. Le seau `api` du service worker l'exclut aussi
+ * (`net/api-runtime-cache.ts`) : sans cela, sa copie disque était rejouée hors réseau.
  */
-export const SHARED_LOCATIONS_QUERY_KEY = [ADMIN_SOUVERAIN_PREFIXE, 'relations', 'locations'] as const;
+export const SHARED_LOCATIONS_QUERY_KEY = [HORS_DISQUE_PREFIXE, 'relations', 'locations'] as const;
 
 /** Un rattrapage dit SON emprise et l'instant (horloge locale) où il est parti : il fait foi dans cette emprise, à cet instant. */
 export type SharedLocationsSnapshot = { readonly items: readonly SharedLocation[]; readonly bbox: GeoBbox; readonly requestedAt: number };
