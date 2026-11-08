@@ -687,11 +687,12 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * marqueurs de `IN_MEMORY_HIDING_SURFACES` ci-dessous en sont la preuve.
    */
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
-  // #14619 — la recherche de la liste des conversations : ses deux lectures
-  // partagent la MÊME disjonction par conversation, où chaque conversation
-  // bornée reçoit `applyPersonalHistoryHiding` — une application pour deux
-  // lectures, comme `conversations/messages-search.ts`.
-  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #14619 — la recherche de la liste des conversations : ses trois lectures
+  // (contenu, traductions, et transcriptions depuis #16958) partagent la MÊME
+  // disjonction par conversation, où chaque conversation bornée reçoit
+  // `applyPersonalHistoryHiding` — une application pour trois lectures, comme
+  // `conversations/messages-search.ts`.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
 
   /**
    * #10006 — le retrait du seed World Wide (`removeWorldSeed`,
