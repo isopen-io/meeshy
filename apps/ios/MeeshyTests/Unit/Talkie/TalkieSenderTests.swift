@@ -10,6 +10,8 @@ import MeeshySDK
 final class TalkieSenderTests: XCTestCase {
 
     private static let frameDuration: TimeInterval = 1024.0 / 48_000
+    /// Les trames de 48 kHz qu'il faut pour remplir un fragment du contrat.
+    private static let framesPerFragment = Int((TalkieContract.fragmentDuration / frameDuration).rounded(.up))
     private static let opened = TalkieOpened(talkieId: "aaaaaaaaaaaaaaaaaaaaaaaa", maxDuration: 30, maxChunkBytes: 16_384)
 
     final class FakeEmitter: TalkieEmitting, @unchecked Sendable {
@@ -49,9 +51,11 @@ final class TalkieSenderTests: XCTestCase {
     final class FakeCapture: TalkieCapturing {
         var allow = true
         var stops = 0
+        var onStart: (() -> Void)?
         private var onFrame: (@MainActor @Sendable (Data, TimeInterval) -> Void)?
 
         func start(onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
+            onStart?()
             guard allow else { return false }
             self.onFrame = onFrame
             return true
@@ -81,7 +85,11 @@ final class TalkieSenderTests: XCTestCase {
         let ended: PassthroughSubject<TalkieEnded, Never>
     }
 
-    private func makeRig() -> Rig {
+    final class Clock: @unchecked Sendable {
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+    }
+
+    private func makeRig(clock: Clock = Clock()) -> Rig {
         let emitter = FakeEmitter()
         let capture = FakeCapture()
         let deadline = FakeDeadline()
@@ -90,7 +98,7 @@ final class TalkieSenderTests: XCTestCase {
             emitter: emitter,
             capture: capture,
             endedEvents: ended.eraseToAnyPublisher(),
-            now: { Date(timeIntervalSince1970: 1_800_000_000) },
+            now: { clock.now },
             schedule: { delay, run in
                 deadline.delays.append(delay)
                 deadline.run = run
@@ -110,24 +118,59 @@ final class TalkieSenderTests: XCTestCase {
         await settle()
         XCTAssertEqual(rig.sut.phase, .starting(toUserId: "bob"))
 
-        rig.capture.speak(frames: 12)
+        let fragmentBytes = Self.framesPerFragment * 10
+        rig.capture.speak(frames: Self.framesPerFragment)
         XCTAssertTrue(rig.emitter.chunks.isEmpty)
 
         rig.emitter.resolve(.opened(Self.opened))
         await settle()
         XCTAssertEqual(rig.sut.phase, .talking(toUserId: "bob", talkieId: Self.opened.talkieId))
-        XCTAssertEqual(rig.emitter.chunks, [FakeEmitter.Chunk(talkieId: Self.opened.talkieId, seq: 0, bytes: 120)])
+        XCTAssertEqual(rig.emitter.chunks, [FakeEmitter.Chunk(talkieId: Self.opened.talkieId, seq: 0, bytes: fragmentBytes)])
         XCTAssertEqual(rig.deadline.delays, [30])
 
-        rig.capture.speak(frames: 13)
+        rig.capture.speak(frames: Self.framesPerFragment * 2 + 1)
         await rig.sut.release()
 
-        XCTAssertEqual(rig.emitter.chunks.map(\.seq), [0, 1, 2])
-        XCTAssertEqual(rig.emitter.chunks.map(\.bytes), [120, 120, 10])
+        XCTAssertEqual(rig.emitter.chunks.map(\.seq), [0, 1, 2, 3])
+        XCTAssertEqual(rig.emitter.chunks.map(\.bytes), [fragmentBytes, fragmentBytes, fragmentBytes, 10])
         XCTAssertEqual(rig.emitter.ends, [Self.opened.talkieId])
         XCTAssertEqual(rig.capture.stops, 1)
         XCTAssertEqual(rig.sut.phase, .idle)
         XCTAssertNil(rig.sut.notice)
+    }
+
+    /// #17094 : ouvrir le micro tient l'acteur principal ; `talkie:start` doit être déjà parti, sinon l'aller-retour
+    /// s'ajoute à l'ouverture au lieu de courir pendant.
+    func test_talkieStart_leavesBeforeTheMicrophoneOpens() async {
+        let rig = makeRig()
+        var startsSeenByTheMicrophone: [Int] = []
+        rig.capture.onStart = { startsSeenByTheMicrophone.append(rig.emitter.startCalls.count) }
+
+        rig.sut.press(toUserId: "bob")
+        await settle()
+
+        XCTAssertEqual(startsSeenByTheMicrophone, [1])
+    }
+
+    func test_theTimesOfATalk_areMeasuredFromThePress_untilItsFirstChunkLeaves() async {
+        let clock = Clock()
+        let pressedAt = clock.now
+        let rig = makeRig(clock: clock)
+
+        rig.sut.press(toUserId: "bob")
+        clock.now = pressedAt.addingTimeInterval(0.2)
+        await settle()
+        clock.now = pressedAt.addingTimeInterval(0.35)
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+        XCTAssertNil(rig.sut.lastLatency)
+
+        clock.now = pressedAt.addingTimeInterval(0.5)
+        rig.capture.speak(frames: Self.framesPerFragment)
+
+        XCTAssertEqual(rig.sut.lastLatency?.milliseconds(.micReady), 200)
+        XCTAssertEqual(rig.sut.lastLatency?.milliseconds(.opened), 350)
+        XCTAssertEqual(rig.sut.lastLatency?.milliseconds(.firstChunk), 500)
     }
 
     func test_releasingBeforeTheAck_sendsTheWholeTalkOnceOpened_thenCloses() async {

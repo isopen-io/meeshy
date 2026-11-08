@@ -3,7 +3,7 @@ import Foundation
 import MeeshySDK
 
 /// Ce qu'écoute une personne, CHEZ MOI : tel que servi, et jusqu'à quand au plus (horloge de l'appareil).
-nonisolated struct ListeningEntry: Equatable {
+nonisolated struct ListeningEntry: Equatable, Sendable {
     let category: NowPlayingCategory
     let title: String?
     let source: String?

@@ -13,6 +13,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-07 | Retiré ou parti d'une communauté privée, on ne lit plus ses salons (passerelle) | #16710 | #16704 | voir réveil 8 |
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web) et ne se lisent ou publient que par qui en a le droit (passerelle) | #16895 | #6379 | fusionnée dans dev (réveil 17) |
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web), et la passerelle ne les sert qu'à qui peut les lire | voir réveil 15 | #6379 | voir réveil 15 |
+| 2026-11-08 | L'onglet Publications du détail lit les publications (iOS) | #17061 | #16878 | fusionnée dans dev (réveil 20) |
+| 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | voir réveil 20 |
 
 ## 2026-11-07 — lot 1
 
@@ -162,3 +164,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Reste : l'onglet ouvert pendant une adhésion garde sa page de visiteur jusqu'au prochain affichage ; Android → #16879.
 - État en fin de run : PR #17061 ouverte, NON fusionnée. Gardes iOS texte vertes en local sur la tête (`check_test_registration`, `check_pbxproj_*`, `check_house_rules`, `check_cohesion_budget`, catalogue Swift, ViewBuilder). Les trois fichiers sont inscrits au pbxproj À LA MAIN : la régénération `[xcodegen]` (macOS) a été annulée deux fois, et le `ios.yml` de preuve aussi — « canceled by @jcnm » en moins d'une minute, comme toutes les runs iOS des branches `claude/*` de ce créneau (file Mac saturée). Le prochain réveil relance `ios.yml` sur la tête et fusionne au vert.
 - Gotcha : un fichier Swift ajouté sous `apps/ios` doit entrer au pbxproj COMMITÉ (garde `check_test_registration`) ; sans Mac, l'inscrire à la main en clonant les quatre lignes d'un voisin (PBXBuildFile, PBXFileReference, groupe, phase Sources). Règles maison : un ViewModel ne nomme aucun `.shared` (la vue les injecte), une vue lit `routerCommands` plutôt que `@EnvironmentObject Router`, pas de `Task.detached`.
+
+## 2026-11-08 — réveil 20
+
+- Début du run : #17061 (#16878) fusionnée par le porteur à 19:04 UTC ; un correctif de suite est passé sur dev (`8e4f6651d`, lecture du cache par `await` sur l'acteur `CacheCoordinator`) et Android a suivi le renommage `tab_feed`.
+- Lot : #7816 (iOS + web). iOS : le détail ne rend plus le message brut du serveur ; `CommunityLoadFailure` (SDK, `MeeshyUI/Community/`) dit refusée / réseau / serveur, classée par `ContentFetchFailure.classify` dans le ViewModel ; 403 et 404 se disent pareils (comme le web, D-6) et n'offrent que « Retour aux communautés ». Sept clés au catalogue SDK. Web : `COMMUNITY_MEMBERS_ONLY` à la jonction par lien se lit « réservée aux membres de sa communauté » et retire « Rejoindre » (il tombait dans « indisponible », refus passager).
+- Pas de revue adversariale : ni authentification, ni permission, ni migration (copie et classement d'erreurs côté clients).
+- Suivi ouvert : #17104 (Android : même cause dite, sans réessayer).
+- Gotcha : `Localizable.xcstrings` du SDK se réécrit à l'identique par `json.dumps(indent=2, ensure_ascii=False)` + saut de ligne final, mais SANS `sort_keys` (l'ordre Xcode n'est pas l'ordre Python) : insérer les clés nouvelles à leur place.
+- Prochain lot recommandé : #6380 (emoji de création iOS sans effet) ou #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 (index de `CommunityMember`) demandent une session de staging.

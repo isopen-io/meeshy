@@ -3,11 +3,12 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
-/// #8287 — le choix du serveur n'existe qu'au simulateur. La décision se prend
-/// à la COMPILATION : un binaire d'appareil ne contient pas la branche.
+/// #8287, #17050 — le choix du serveur existe au simulateur et dans toute build
+/// Debug, y compris sur un vrai iPhone. La décision se prend à la COMPILATION :
+/// un binaire Release ne contient pas la branche.
 enum LoginServerPicker {
     static var isAvailable: Bool {
-        #if targetEnvironment(simulator)
+        #if targetEnvironment(simulator) || DEBUG
         return true
         #else
         return false
