@@ -1,12 +1,14 @@
 import XCTest
 @testable import Meeshy
 
-/// **Le choix du serveur n'existe qu'au simulateur (#8287).**
+/// **Le choix du serveur existe au simulateur et dans toute build Debug, jamais en Release (#8287, #17050).**
 ///
 /// Il était gouverné par une variable d'ENVIRONNEMENT lue à l'exécution
 /// (`SIMULATOR_DEVICE_NAME`), qu'un lancement d'appareil ne pose pas mais
 /// qu'aucun compilateur ne garantit. La décision se prend désormais à la
-/// COMPILATION : un binaire d'appareil ne contient pas la branche.
+/// COMPILATION : un binaire Release (App Store, TestFlight) ne contient pas la
+/// branche. Une build Debug installée sur un vrai iPhone la contient, pour que
+/// l'équipe y choisisse le staging (directive porteur 2026-11-08).
 ///
 /// Le binaire de test tourne au simulateur : le comportement ne peut y montrer
 /// que la moitié « présent ». La moitié « absent sur appareil » se lit dans la
@@ -33,8 +35,8 @@ final class LoginServerPickerTests: XCTestCase {
         let start = try XCTUnwrap(source.range(of: "enum LoginServerPicker {"))
         let body = source[start.lowerBound...].prefix(400)
 
-        XCTAssertTrue(body.contains("#if targetEnvironment(simulator)"),
-                      "Le sélecteur doit être retranché du binaire d'appareil par le compilateur.")
+        XCTAssertTrue(body.contains("#if targetEnvironment(simulator) || DEBUG"),
+                      "Le sélecteur vit au simulateur et en Debug ; le compilateur le retranche du binaire Release.")
     }
 
     func test_theSelectorIsMountedOnlyBehindTheCompileTimeGate() throws {

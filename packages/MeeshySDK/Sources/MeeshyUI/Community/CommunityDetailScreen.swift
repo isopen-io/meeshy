@@ -87,15 +87,27 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 .tint(MeeshyColors.brandPrimary)
         } else if let community = viewModel.community {
             loadedContent(community)
-        } else if let error = viewModel.errorMessage {
-            EmptyStateView(
-                icon: "exclamationmark.triangle",
-                title: String(localized: "common.error", defaultValue: "Erreur", bundle: .module),
-                subtitle: error,
-                actionLabel: String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module),
-                onAction: { Task { await viewModel.load() } }
-            )
+        } else if let failure = viewModel.loadFailure {
+            loadFailureState(failure)
         }
+    }
+
+    /// #7816 — la cause, dans la langue du lecteur ; « Réessayer » seulement
+    /// là où réessayer peut aboutir, sinon le retour.
+    private func loadFailureState(_ failure: CommunityLoadFailure) -> some View {
+        EmptyStateView(
+            icon: failure.symbolName,
+            title: failure.title,
+            subtitle: failure.message,
+            actionLabel: failure.actionLabel,
+            onAction: {
+                if failure.offersRetry {
+                    Task { await viewModel.load() }
+                } else {
+                    dismissHost()
+                }
+            }
+        )
     }
 
     @ViewBuilder

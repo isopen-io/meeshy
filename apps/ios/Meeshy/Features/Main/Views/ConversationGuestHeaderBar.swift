@@ -101,8 +101,8 @@ enum GuestViewerAccess {
 // MARK: - Le bouton « Partager » de l'en-tête (#10206)
 
 /// Le partage natif de l'adresse publique, posé à côté de l'avatar. Même
-/// gabarit que le bouton d'appel voisin : cercle de verre de 28 pt, cible de
-/// 44 pt.
+/// gabarit que le bouton d'appel voisin (`ConversationHeaderGlassGlyph`) :
+/// cercle de verre interactif de 28 pt, cible de 44 pt.
 struct ConversationShareLinkButton: View {
     let url: URL
     let accentColor: String
@@ -110,17 +110,7 @@ struct ConversationShareLinkButton: View {
 
     var body: some View {
         ShareLink(item: url) {
-            Image(systemName: "square.and.arrow.up")
-                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
-                .meeshyTapTarget()
+            ConversationHeaderGlassGlyph(systemName: "square.and.arrow.up", accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(String(localized: "conversation.header.share", defaultValue: "Partager la conversation", bundle: .main))
         .accessibilityIdentifier("conversation.header.share")
@@ -144,7 +134,6 @@ struct ConversationGuestHeaderBar: View {
     let secondaryColor: String
     let guestLinkId: String?
     let titleColor: Color
-    let mutedColor: Color
     let onClose: () -> Void
 
     var body: some View {
@@ -176,11 +165,7 @@ struct ConversationGuestHeaderBar: View {
                 HapticFeedback.light()
                 onClose()
             } label: {
-                Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(mutedColor)
-                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                    .background(Circle().fill(mutedColor.opacity(MeeshyOpacity.light)))
+                ConversationHeaderGlassGlyph(systemName: "xmark", accentColor: accentColor, secondaryColor: secondaryColor)
             }
             .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
         }

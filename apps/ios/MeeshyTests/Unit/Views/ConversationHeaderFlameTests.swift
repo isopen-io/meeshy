@@ -144,7 +144,7 @@ final class ConversationHeaderFlameTests: XCTestCase {
 
     func test_headerCallButtons_doNotCarryTheEngagementPill() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
-        let cluster = try XCTUnwrap(source.range(of: "var headerCallButtons: ConversationHeaderCallSlot {"))
+        let cluster = try XCTUnwrap(source.range(of: "var headerCallButtons: ConversationHeaderCallCluster {"))
         let end = try XCTUnwrap(source.range(of: "private func headerCalleeName", range: cluster.upperBound..<source.endIndex))
         XCTAssertFalse(source[cluster.upperBound..<end.lowerBound].contains("headerEngagementBadge"),
                        "repliée ou en aperçu, la pastille ne s'affiche pas")

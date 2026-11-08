@@ -82,8 +82,9 @@ export type UserManagementServiceDeps = {
   readonly notifyPasswordReset?: PasswordResetNotifier;
   /**
    * Oublie les cercles de l'équipe après une écriture qui change ce que la loi d'accès
-   * lit d'un compte — rôle, actif, désactivé, supprimé (#16623) : sans lui, un rôle
-   * retiré garde le privilège d'équipe le temps des caches (5 min).
+   * lit d'un compte — rôle, actif, désactivé, supprimé, date de naissance (#16623) : sans
+   * lui, un rôle retiré ou un mineur déclaré garde le privilège d'équipe le temps des
+   * caches (5 min).
    */
   readonly forgetTeamCircles?: (userId: string) => Promise<void>;
 };
@@ -342,6 +343,8 @@ export class UserManagementService {
         })
       : this.prisma.user.update(write)
     ).catch(rethrowIdentifierTaken);
+
+    if (data.birthDate !== undefined) await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
   }

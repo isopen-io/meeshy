@@ -4,8 +4,8 @@ import MeeshyUI
 /// P2 du chantier Focal (spec Magnificence 2026-08-17) — LE chip de mode,
 /// seule affordance du header : **tap = cycle** des modes disponibles
 /// (préférence collante via le contrôleur gelé F-080), **appui long = menu**
-/// natif listant tous les modes (`.contextMenu`, rendu Liquid Glass sur
-/// iOS 26). Le bouton « Aa » et la feuille Lentille ont disparu avec ce lot —
+/// natif listant tous les modes (`Menu` à action primaire, comme le bouton
+/// d'appel de l'en-tête — #17095). Le bouton « Aa » et la feuille Lentille ont disparu avec ce lot —
 /// le catalogue (`ReadingModeLensCatalog`) reste la seule source des
 /// libellés et des lignes.
 ///
@@ -58,28 +58,17 @@ struct ReadingModeChip: View {
     let onAuto: () -> Void
 
     var body: some View {
-        Button(action: onCycle) {
-            HStack(spacing: MeeshySpacing.xs) {
-                if model.isAuto {
-                    Text(String(localized: "reading_mode.chip.auto_prefix", defaultValue: "AUTO", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .heavy))
-                        .foregroundColor(labelColor.opacity(0.65))
-                        .fixedSize()
-                }
-                Text(model.label)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(labelColor)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(Color(hex: model.accentHex).opacity(0.28)))
-            .overlay(Capsule().strokeBorder(Color(hex: model.accentHex).opacity(0.5), lineWidth: MeeshyBorder.hairline))
-            .contentShape(Rectangle())
+        // Un `Menu` à action primaire, comme le bouton d'appel (#17095) : le
+        // toucher fait défiler les modes, l'appui long ancre le menu à la puce
+        // — la surbrillance et le verre interactif répondent dès le toucher, sans
+        // l'aperçu soulevé ni le délai d'un `.contextMenu`.
+        Menu {
+            menuContent
+        } label: {
+            chipLabel
+        } primaryAction: {
+            onCycle()
         }
-        .buttonStyle(.plain)
-        .contextMenu { menuContent }
         .meeshyTapTarget()
         .accessibilityLabel(
             String(
@@ -96,6 +85,28 @@ struct ReadingModeChip: View {
             defaultValue: "Passe au mode suivant. Appui long pour la liste des modes.",
             bundle: .main
         ))
+    }
+
+    /// La capsule de la puce : le verre interactif teinté de l'en-tête
+    /// (`ConversationHeaderGlassGlyph`), dans la forme d'une capsule.
+    private var chipLabel: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            if model.isAuto {
+                Text(String(localized: "reading_mode.chip.auto_prefix", defaultValue: "AUTO", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .heavy))
+                    .foregroundColor(labelColor.opacity(0.65))
+                    .fixedSize()
+            }
+            Text(model.label)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundColor(labelColor)
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
+        .adaptiveGlass(in: Capsule(), tint: Color(hex: model.accentHex).opacity(ConversationHeaderGlassGlyph.glassTintOpacity), interactive: ConversationHeaderGlassGlyph.isGlassInteractive)
+        .contentShape(Capsule())
     }
 
     /// Un mode indisponible reste LISTÉ mais désactivé — jamais retiré

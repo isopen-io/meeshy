@@ -1,11 +1,18 @@
 import Combine
 import Foundation
 import MeeshySDK
+import os
+
+private extension Logger {
+    nonisolated static let talkieCenter = MeeshyLog.logger(.audioPlayback)
+}
 
 /// Ce qui fait (et cesse de faire) sortir la voix d'un talkie. Le vrai son est `TalkieVoicePlayer` ; un double le
 /// remplace dans les tests.
 @MainActor
 protocol TalkieSink: AnyObject {
+    /// Une prise de parole est annoncée : la sortie se prépare, pour que le premier fragment sonne sans l'attendre.
+    func prepare(_ talkieId: String)
     /// Un fragment, à jouer À LA SUITE du précédent de la même prise de parole.
     func play(_ talkieId: String, _ data: Data)
     /// `cut`, ou « Couper » : se taire sur-le-champ.
@@ -33,7 +40,8 @@ struct TalkieSpeaker: Equatable, Identifiable {
 /// LE TALKIE SUR iOS, côté RÉCEPTION (#16673, sous-lot `proche-talkie@ios`, iso du web #16638) — les prises de parole
 /// reçues, app ouverte, pour toute la durée de l'app.
 ///
-/// - `talkie:incoming` ouvre ; il ne porte aucun nom : les caches nomment l'émetteur.
+/// - `talkie:incoming` ouvre et prépare la sortie (#17094) ; il ne porte aucun nom : les caches nomment l'émetteur.
+/// - Le délai entre l'annonce et le premier fragment s'écrit au journal (`firstChunkDelay`).
 /// - `talkie:chunk` se JOUE dès son arrivée, dans l'ordre des `seq` : un doublon, un fragment en retard, un fragment
 ///   d'un émetteur autre que celui annoncé ne jouent rien.
 /// - `talkie:ended` ferme : `sender` / `limit` laissent finir la file, `cut` (blocage, réglage, appel) fait taire.
@@ -49,6 +57,8 @@ final class TalkieCenter: ObservableObject {
     private static let closedCap = 64
 
     @Published private(set) var active: [TalkieSpeaker] = []
+    /// Le délai, à l'horloge de l'appareil, entre l'annonce de la dernière prise de parole et son premier fragment.
+    private(set) var firstChunkDelay: TimeInterval?
 
     private let sink: TalkieSink
     private let people: CirclePeopleResolving
@@ -103,6 +113,7 @@ final class TalkieCenter: ObservableObject {
         )
         lastSeq[incoming.talkieId] = -1
         active.append(speaker)
+        sink.prepare(incoming.talkieId)
         schedule(speaker)
         Task { await self.hydrate(speaker) }
     }
@@ -111,6 +122,7 @@ final class TalkieCenter: ObservableObject {
         guard let speaker = active.first(where: { $0.talkieId == chunk.talkieId }),
               speaker.fromUserId == chunk.fromUserId,
               let last = lastSeq[chunk.talkieId], chunk.seq > last else { return }
+        if last < 0 { measureFirstChunk(of: speaker) }
         lastSeq[chunk.talkieId] = chunk.seq
         sink.play(chunk.talkieId, chunk.data)
     }
@@ -141,6 +153,12 @@ final class TalkieCenter: ObservableObject {
     }
 
     // MARK: - Interne
+
+    private func measureFirstChunk(of speaker: TalkieSpeaker) {
+        let delay = max(0, now().timeIntervalSince(speaker.openedAt))
+        firstChunkDelay = delay
+        Logger.talkieCenter.info("talkie · réception · premier fragment \(Int((delay * 1000).rounded())) ms après l'annonce")
+    }
 
     private func close(_ talkieId: String) {
         timers.removeValue(forKey: talkieId)?.cancel()

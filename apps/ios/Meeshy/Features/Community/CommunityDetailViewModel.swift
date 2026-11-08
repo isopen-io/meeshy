@@ -18,6 +18,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     @Published var currentUserRole: MemberRole = .member
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published private(set) var loadFailure: CommunityLoadFailure?
 
     let communityId: String
     private let service: CommunityServiceProviding
@@ -44,12 +45,23 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
             let apiCommunity = try await service.get(communityId: communityId)
             community = apiCommunity.toCommunity()
             applyMembership(of: apiCommunity)
+            loadFailure = nil
 
             if isMember {
                 conversations = try await service.getConversations(communityId: communityId)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            loadFailure = Self.loadFailure(for: error)
+        }
+    }
+
+    /// #7816 — la cause d'un échec se lit par la loi unique de l'app
+    /// (`ContentFetchFailure.classify`), jamais par le message brut du serveur.
+    nonisolated static func loadFailure(for error: Error) -> CommunityLoadFailure {
+        switch ContentFetchFailure.classify(error) {
+        case .forbidden, .notFound: return .refused
+        case .network: return .network
+        case .server: return .server
         }
     }
 

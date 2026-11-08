@@ -16,8 +16,9 @@ public enum TalkieContract {
     public static let maxTotalBytes = 512_000
     /// `TALKIE_MAX_CHUNKS` : le plafond du NOMBRE de fragments d'une prise de parole.
     public static let maxChunks = 300
-    /// Un fragment part toutes les ~250 ms : assez court pour la voix « en direct », assez long pour peu d'événements.
-    public static let fragmentDuration: TimeInterval = 0.25
+    /// Un fragment part toutes les ~120 ms (#17094) : la voix s'entend d'autant plus tôt qu'un fragment est court — le
+    /// récepteur ne joue qu'un fragment ENTIER — et 30 s restent sous `maxChunks` à toute fréquence du micro.
+    public static let fragmentDuration: TimeInterval = 0.12
 }
 
 /// `talkie:incoming` — une prise de parole commence. Aucun nom ne voyage : l'écran l'hydrate par ses caches. Un

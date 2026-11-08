@@ -157,6 +157,7 @@ export type LinkRefusal =
   | 'banned'
   | 'region'
   | 'account-required'
+  | 'members-only'
   | 'session-expired'
   | 'rate-limited'
   | 'offline'
@@ -620,6 +621,7 @@ const REFUSAL_BY_CODE: ReadonlyMap<string, LinkRefusal> = new Map<string, LinkRe
   ['BANNED', 'banned'],
   ['REGION_NOT_ALLOWED', 'region'],
   ['ACCOUNT_REQUIRED', 'account-required'],
+  ['COMMUNITY_MEMBERS_ONLY', 'members-only'],
   [JOINED_AS_GUEST, 'session-expired'],
 ]);
 

@@ -200,21 +200,14 @@ extension ConversationView {
     // MARK: - Header Call Buttons (audio + video)
 
     /// Frontière NOMINALE du bouton d'appel : l'emplacement lit un instantané
-    /// `Equatable` de l'état d'appel (`CallHeaderSnapshotStore`) et ne construit
-    /// pas la pile d'appel.
-    var headerCallButtons: ConversationHeaderCallSlot {
-        let entry = HeaderCallEntry.resolve(
-            conversation: conversation,
-            viewerPlatformRole: AuthManager.shared.currentUser?.role,
-            viewerIsGuest: anonymousSession != nil
-        )
-        return ConversationHeaderCallSlot(
-            entry: entry,
-            conversationId: conversation?.id ?? "",
-            calleeName: headerCalleeName(for: entry),
-            accentColor: accentColor,
-            secondaryColor: secondaryColor,
-            engagementConversationId: liveConversation?.id
+    /// `Equatable` de l'état d'appel et ne construit pas la pile d'appel ; le
+    /// talkie se pose à côté dans un direct (#17093).
+    var headerCallButtons: ConversationHeaderCallCluster {
+        let entry = HeaderCallEntry.resolve(conversation: conversation, viewerPlatformRole: AuthManager.shared.currentUser?.role, viewerIsGuest: anonymousSession != nil)
+        return ConversationHeaderCallCluster(
+            entry: entry, conversationId: conversation?.id ?? "", calleeName: headerCalleeName(for: entry),
+            peerName: resolvedCalleeName, talkieAllowed: !previewMode, encryptionMode: liveConversation?.encryptionMode,
+            accentColor: accentColor, secondaryColor: secondaryColor, engagementConversationId: liveConversation?.id
         )
     }
 
@@ -628,21 +621,6 @@ struct ConversationHeaderAvatarView: View {
                 onDismiss: onDismissFlame
             ))
         }
-    }
-}
-
-/// Le disque de verre de la porte de l'aperçu — la forme de la loupe
-/// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
-struct HeaderOpenFullGlyph: View {
-    let accentColor: String
-
-    var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(Color(hex: accentColor))
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
-            .meeshyTapTarget()
     }
 }
 

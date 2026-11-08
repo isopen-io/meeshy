@@ -88,6 +88,7 @@ const ar = {
   'invite.refusal.banned': 'لم يعد بإمكانك الانضمام إلى هذه المحادثة.',
   'invite.refusal.region': 'هذه الدعوة غير متاحة من شبكتك.',
   'invite.refusal.account-required': 'يلزم حساب على Meeshy للانضمام إلى هذه المحادثة.',
+  'invite.refusal.members-only': 'هذه المحادثة مخصّصة لأعضاء مجتمعها فقط.',
   'invite.refusal.session-expired': 'انتهت جلستك. سجّل الدخول مجددًا للانضمام.',
   'invite.refusal.rate-limited': 'محاولات كثيرة جدًا. أعد المحاولة بعد قليل.',
   'invite.refusal.offline': 'أنت غير متصل. ستظهر الدعوة عند عودة الشبكة.',
