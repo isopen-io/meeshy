@@ -38,6 +38,8 @@ const pt = {
   'callControls.incoming.heardBy': '{name} ouvirá você ao atender',
   'callControls.incoming.silent': 'Microfone e câmera desligados ao atender',
   'callControls.incoming.noVideo': 'Sem vídeo',
+  'callControls.incoming.answer': 'Atender',
+  'callControls.incoming.me': 'eu',
   'callControls.error.invite': 'Não foi possível convidar {name}',
   'callControls.error.mute': 'Não foi possível silenciar {name}',
   'callControls.error.remove': 'Não foi possível remover {name}',

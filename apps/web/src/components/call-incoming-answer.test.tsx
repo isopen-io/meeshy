@@ -101,7 +101,7 @@ const answer = (call: ActiveCall, selfPreview: SelfPreviewDeps<MediaStream> = ne
 describe('la barre de ce qui part en décrochant', () => {
   test('« Awa Diallo vous verra en décrochant », micro et caméra allumés', () => {
     const view = answer(ringing());
-    expect(view.find('[data-call-incoming-consent]')?.textContent).toContain('Awa Diallo vous verra en décrochant');
+    expect(view.find('[data-call-incoming-consent]')?.textContent).toContain('Awa vous verra en décrochant');
     expect(view.find('[data-call-incoming-consent]')?.className.split(' ')).toContain('glass-call-prominent');
     expect(view.find('[data-call-incoming-mic]')?.getAttribute('aria-pressed')).toBe('true');
     expect(view.find('[data-call-incoming-mic]')?.getAttribute('aria-label')).toBe('Couper le micro');
@@ -113,7 +113,7 @@ describe('la barre de ce qui part en décrochant', () => {
   test('caméra coupée : « vous entendra », et Accepter décroche sans vidéo ; tout coupé, la barre le dit', () => {
     const view = answer(ringing());
     view.press('[data-call-incoming-camera]');
-    expect(view.find('[data-call-incoming-consent]')?.textContent).toContain('Awa Diallo vous entendra en décrochant');
+    expect(view.find('[data-call-incoming-consent]')?.textContent).toContain('Awa vous entendra en décrochant');
     expect(view.find('[data-call-incoming-camera]')?.getAttribute('aria-label')).toBe('Activer la caméra');
     view.press('[data-call-incoming-accept]');
     expect(view.accepted).toEqual([{ audioOnly: true, micMuted: false }]);
@@ -134,6 +134,12 @@ describe('la barre de ce qui part en décrochant', () => {
     view.done();
   });
 
+  test('la barre nomme l’appelant par son prénom : elle tient sur une ligne', () => {
+    const view = answer(ringing({ title: '  Awa   Diallo ' }));
+    expect(view.find('[data-call-incoming-consent] p')?.textContent).toBe('Awa vous verra en décrochant');
+    view.done();
+  });
+
   test('un appel VOCAL : ni barre ni vignette, Refuser et Accepter seulement', () => {
     const view = answer(ringing({ media: 'audio' }));
     expect(view.find('[data-call-incoming-consent]')).toBeNull();
@@ -145,6 +151,16 @@ describe('la barre de ce qui part en décrochant', () => {
 });
 
 describe('les trois réponses', () => {
+  test('en vidéo : Refuser, Sans vidéo, Répondre ; un appel vocal garde « Accepter »', () => {
+    const view = answer(ringing());
+    expect(view.find('[data-call-incoming-accept]')?.parentElement?.textContent).toBe('Répondre');
+    expect(view.find('[data-call-incoming-accept]')?.getAttribute('aria-label')).toBe('Répondre');
+    view.done();
+    const voice = answer(ringing({ media: 'audio' }));
+    expect(voice.find('[data-call-incoming-accept]')?.parentElement?.textContent).toBe('Accepter');
+    voice.done();
+  });
+
   test('« Sans vidéo » en légende, la phrase entière pour le lecteur d’écran ; Refuser et le message gardent leur effet', () => {
     const view = answer(ringing());
     const audioOnly = view.find('[data-call-incoming-audio-only]');
@@ -170,6 +186,7 @@ describe('ma vignette pendant la sonnerie', () => {
     expect(tile).not.toBeNull();
     expect(tile?.getAttribute('aria-hidden')).toBe('true');
     expect(tile?.style.borderColor).not.toBe('');
+    expect(tile?.querySelector('[data-call-incoming-self-label]')?.textContent).toBe('moi');
     view.press('[data-call-incoming-camera]');
     expect(view.find('[data-call-incoming-self]')).toBeNull();
     expect(camera.readyState).toBe('ended');
@@ -183,12 +200,14 @@ describe('ma vignette pendant la sonnerie', () => {
     view.done();
   });
 
-  test('décrocher éteint l’aperçu : le moteur ouvre sa propre caméra', async () => {
+  test('décrocher éteint l’aperçu AVANT que le moteur ouvre sa propre caméra : jamais deux ouvertures à la fois', async () => {
     const camera = track('video');
-    const view = answer(ringing(), granted(camera));
+    const seen: string[] = [];
+    const view = mount(<CallIncomingAnswer call={ringing()} language="fr" selfPreview={granted(camera)} onAccept={() => void seen.push(camera.readyState)} onDecline={() => undefined} onDeclineMessage={() => undefined} />);
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(view.find('[data-call-incoming-self]')).not.toBeNull();
     view.press('[data-call-incoming-accept]');
-    expect(camera.readyState).toBe('ended');
+    expect(seen).toEqual(['ended']);
     view.done();
   });
 });

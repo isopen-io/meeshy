@@ -38,6 +38,8 @@ const ar = {
   'callControls.incoming.heardBy': 'سيسمعك {name} عند الرد',
   'callControls.incoming.silent': 'الميكروفون والكاميرا مغلقان عند الرد',
   'callControls.incoming.noVideo': 'بدون فيديو',
+  'callControls.incoming.answer': 'رد',
+  'callControls.incoming.me': 'أنا',
   'callControls.error.invite': 'تعذّرت دعوة {name}',
   'callControls.error.mute': 'تعذّر كتم ميكروفون {name}',
   'callControls.error.remove': 'تعذّرت إزالة {name}',

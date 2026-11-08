@@ -74,3 +74,8 @@ export function incomingConsentKey(choice: IncomingChoice): IncomingConsentKey {
 export function incomingAcceptOptions(choice: IncomingChoice): Required<AcceptOptions> {
   return { audioOnly: !choice.cameraOn, micMuted: !choice.micOn };
 }
+
+/** Le prénom de l'appelant, pour la barre (« Awa vous verra… ») : le premier mot de son nom. */
+export function callerFirstName(title: string): string {
+  return title.trim().split(/\s+/u)[0] ?? '';
+}

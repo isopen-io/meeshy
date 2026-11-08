@@ -38,6 +38,8 @@ const es = {
   'callControls.incoming.heardBy': '{name} te oirá al contestar',
   'callControls.incoming.silent': 'Micrófono y cámara apagados al contestar',
   'callControls.incoming.noVideo': 'Sin vídeo',
+  'callControls.incoming.answer': 'Responder',
+  'callControls.incoming.me': 'yo',
   'callControls.error.invite': 'No se pudo invitar a {name}',
   'callControls.error.mute': 'No se pudo silenciar a {name}',
   'callControls.error.remove': 'No se pudo quitar a {name}',
