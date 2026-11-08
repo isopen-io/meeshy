@@ -153,15 +153,13 @@ class RootIntentOverlay @Inject constructor(
 
     /**
      * Ouvrir B alors que A est affichee REMPLACE la pile (retour a la liste puis B) : la vue de A
-     * est detruite, son ViewModel vide son brouillon, et B recoit une vue neuve.
+     * est detruite, son ViewModel vide son brouillon, et B recoit une vue neuve. Le Flux, lui, est mis de cote avec
+     * son etat ([setFeedAside], #16676).
      */
     private fun navigateReplacingStack(navController: NavHostController, route: String, displayedId: String?) {
         val targetId = route.removePrefix("chat/").substringBefore('?')
         val plan = ConversationSwitch.plan(displayedId, targetId)
         if (plan.reusesCurrentScreen && !route.contains('?')) return
-        navController.navigate(route) {
-            popUpTo(Routes.CONVERSATIONS) { inclusive = false }
-            launchSingleTop = true
-        }
+        navController.navigateOverConversations(route)
     }
 }

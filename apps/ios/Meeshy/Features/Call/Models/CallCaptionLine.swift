@@ -37,6 +37,11 @@ struct CallCaptionLine: Equatable, Identifiable {
     let capturedAt: Date
     let isShowingOriginal: Bool
     let canRevealOriginal: Bool
+    /// #16665 — une ligne d'ÉVÉNEMENT (capture, borne d'enregistrement) :
+    /// « Karim · a capturé l'écran · 12:40 », pseudo à sa couleur, la phrase
+    /// en encre secondaire, jamais colorée.
+    var isEvent: Bool = false
+    var timeLabel: String?
 
     var speakerColorHex: String { CallSpeakerColor.hex(for: speakerId) }
 
@@ -44,13 +49,33 @@ struct CallCaptionLine: Equatable, Identifiable {
     /// TRADUCTION, `nil` (encre de l'écran d'appel) pour un original, ma
     /// parole comprise — le nom, lui, porte toujours la couleur
     /// (`docs/product/appels-vue-finale.md` loi 4).
-    var textColorHex: String? { isShowingOriginal ? nil : speakerColorHex }
+    var textColorHex: String? { isShowingOriginal || isEvent ? nil : speakerColorHex }
 
     /// Ce que VoiceOver lit : la phrase FINALE seulement — une révision
     /// partielle, remplacée quelques centaines de millisecondes plus tard,
     /// n'a rien à annoncer.
     var announcement: String? {
-        isFinal ? "\(speakerName) : \(text)" : nil
+        guard isFinal else { return nil }
+        guard isEvent else { return "\(speakerName) : \(text)" }
+        return [speakerName, text, timeLabel ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    /// #16665 — la ligne datée d'une capture. Une borne de l'enregistrement
+    /// de l'appel ne nomme personne : sa phrase est entière.
+    static func capture(_ capture: CallTranscriptCapture, displayName: String, phrase: String, timeLabel: String) -> CallCaptionLine {
+        CallCaptionLine(
+            id: UUID(uuidString: capture.id) ?? UUID(),
+            speakerId: capture.userId,
+            speakerName: capture.kind.namesCapturer ? displayName : "",
+            text: phrase,
+            languageTag: nil,
+            isFinal: true,
+            capturedAt: capture.capturedAt,
+            isShowingOriginal: true,
+            canRevealOriginal: false,
+            isEvent: true,
+            timeLabel: timeLabel
+        )
     }
 
     static func make(

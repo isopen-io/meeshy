@@ -205,10 +205,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "circles_settings_talkie",
-          "status": "android-only"
-        },
-        {
           "androidName": "circles_sheet_close",
           "status": "android-only"
         },

@@ -4,7 +4,8 @@ import UIKit
 import MeeshySDK
 import os
 
-/// La vie de l'application pendant un appel : capture d'écran, passage en
+/// La vie de l'application pendant un appel : capture et enregistrement
+/// d'écran (`kind`, #16665), passage en
 /// arrière-plan et retour au premier plan. Le collaborateur possède ses trois
 /// observateurs, idempotents (chaque démarrage retire le précédent), et tient
 /// l'appel faiblement (#11522). Les événements partent sur le fil comme avant :
@@ -15,10 +16,11 @@ final class CallAppStateObserver: CallAppStateObserverProviding {
 
     private weak var call: CallManager?
     private var screenCaptureObserver: NSObjectProtocol?
+    private var screenshotObserver: NSObjectProtocol?
     private var backgroundObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
 
-    var isObservingScreenCapture: Bool { screenCaptureObserver != nil }
+    var isObservingScreenCapture: Bool { screenCaptureObserver != nil && screenshotObserver != nil }
     var isObservingBackground: Bool { backgroundObserver != nil && foregroundObserver != nil }
 
     func attach(to call: CallManager) {
@@ -45,22 +47,52 @@ final class CallAppStateObserver: CallAppStateObserverProviding {
                     .compactMap { $0 as? UIWindowScene }
                     .contains { $0.screen.isCaptured }
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
-                if let callId = call.currentCallId {
-                    let userId = AuthManager.shared.currentUser?.id ?? ""
-                    MessageSocketManager.shared.emitCallScreenCaptureDetected(
-                        callId: callId,
-                        participantId: userId,
-                        isCapturing: isCapturing
-                    )
-                }
+                self?.report(.recording, isCapturing: isCapturing, in: call)
             }
         }
+        // #16665 — une capture ponctuelle part avec `isCapturing` vrai seul.
+        screenshotObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.userDidTakeScreenshotNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let call = self?.call else { return }
+                Logger.calls.info("Screenshot taken during the call")
+                self?.report(.screenshot, isCapturing: true, in: call)
+            }
+        }
+    }
+
+    /// Le fil prévient les autres ; mon propre journal garde la ligne, comme
+    /// celui que la passerelle rendra après l'appel.
+    private func report(_ kind: CallScreenCaptureKind, isCapturing: Bool, in call: CallManager) {
+        guard let callId = call.currentCallId else { return }
+        let user = AuthManager.shared.currentUser
+        let userId = user?.id ?? ""
+        MessageSocketManager.shared.emitCallScreenCaptureDetected(
+            callId: callId,
+            participantId: userId,
+            isCapturing: isCapturing,
+            kind: kind
+        )
+        call.transcriptionService.captureJournal.record(.local(
+            userId: userId,
+            displayName: user?.displayName ?? user?.username ?? "",
+            kind: kind,
+            isCapturing: isCapturing,
+            at: Date()
+        ))
     }
 
     func stopScreenCaptureMonitoring() {
         if let observer = screenCaptureObserver {
             NotificationCenter.default.removeObserver(observer)
             screenCaptureObserver = nil
+        }
+        if let observer = screenshotObserver {
+            NotificationCenter.default.removeObserver(observer)
+            screenshotObserver = nil
         }
     }
 

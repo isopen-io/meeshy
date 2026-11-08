@@ -1,5 +1,5 @@
 import { useQuery, type InfiniteData } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
@@ -12,10 +12,12 @@ import { COMMUNITIES_QUERY_PREFIX, communityQueryOptions, type CommunityPage } f
 import type { CommunityActionDeps } from '@/lib/api/community-actions';
 import {
   canEditSettingsOf,
+  performCommunityImageUpload,
   performDeleteCommunity,
   performUpdateCommunitySettings,
   settingsChangesOf,
   settingsDraftOf,
+  type CommunityImageKind,
   type CommunitySettingsDraft,
   type CommunitySettingsField,
   type DeleteCommunityOutcome,
@@ -29,9 +31,10 @@ import { translate } from '@/lib/i18n-catalog';
 import { translateCommunitySettings, type CommunitySettingsCatalogKey } from '@/lib/i18n-community-settings-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { useParams } from '@/lib/router';
 import { COMMUNITIES_HEADER_HEIGHT, CommunitiesOfflineNotice, CommunityDetailSkeleton, CommunityRefused, PrivacyToggle } from '@/routes/communities-parts';
-import { SettingsCreatorOnly, SettingsDangerZone, SettingsSaveButton } from '@/routes/community-settings-parts';
+import { SettingsCreatorOnly, SettingsDangerZone, SettingsImages, SettingsSaveButton, type UploadingImages } from '@/routes/community-settings-parts';
 import { href, Link, navigate } from '@/routes/route-table';
 
 /**
@@ -50,9 +53,11 @@ import { href, Link, navigate } from '@/routes/route-table';
  * (`community-settings.ts`). Supprimer ramène à la liste, où la carte a déjà
  * disparu.
  *
- * Ce que l'écran ne montre pas encore : l'avatar et la bannière (seconde
- * moitié de #6377). L'emoji et la couleur d'iOS ne quittent pas l'appareil :
- * aucun champ serveur ne les porte, le web ne les imite pas.
+ * **L'avatar et la bannière** (miroir `visualSection`) : l'image choisie
+ * s'affiche AUSSITÔT sous un voile, est recompressée et montée par le chemin du
+ * profil, puis entre dans le brouillon — elle part avec « Enregistrer », comme
+ * sur iOS. L'emoji et la couleur d'iOS ne quittent pas l'appareil : aucun
+ * champ serveur ne les porte, le web ne les imite pas.
  */
 
 const FIELD_TINT = 'var(--color-ios-brand)';
@@ -60,6 +65,15 @@ const ERROR_INK = 'var(--color-error)';
 
 type NoticeKey = Exclude<CommunitySettingsCatalogKey, 'community.settings.delete.confirm.title'>;
 type Notice = { readonly key: NoticeKey; readonly tone: 'status' | 'alert'; readonly field: CommunitySettingsField | null };
+type Previews = Readonly<Partial<Record<CommunityImageKind, string>>>;
+
+const UPLOADED: Readonly<Record<CommunityImageKind, NoticeKey>> = {
+  avatar: 'community.settings.avatar.uploaded',
+  banner: 'community.settings.banner.uploaded',
+};
+
+const withoutKind = (previews: Previews, kind: CommunityImageKind): Previews =>
+  Object.fromEntries(Object.entries(previews).filter(([key]) => key !== kind));
 
 const FIELD_ERRORS: Readonly<Record<CommunitySettingsField, NoticeKey>> = {
   name: 'community.settings.error.name',
@@ -104,6 +118,11 @@ export default function CommunitySettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [previews, setPreviews] = useState<Previews>({});
+  const [images, setImages] = useState<Readonly<Partial<Record<CommunityImageKind, string>>>>({});
+  const inputs = useRef<Partial<Record<CommunityImageKind, HTMLInputElement | null>>>({});
+  const uploads = useRef<Partial<Record<CommunityImageKind, AbortController>>>({});
+  useEffect(() => () => Object.values(uploads.current).forEach((controller) => controller?.abort()), []);
   const [deps] = useState<CommunityActionDeps>(() => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine }));
 
   const detail = useQuery(
@@ -120,14 +139,43 @@ export default function CommunitySettingsScreen() {
   );
   const community = detail.data;
   const refused = detail.error instanceof ApiError && (detail.error.status === 403 || detail.error.status === 404);
-  const draft = edited ?? (community === undefined ? null : settingsDraftOf(community));
+  /* Une image téléversée est un PATCH, jamais un brouillon complet : posée sur la fiche
+     COURANTE au rendu, elle n'emporte pas un nom lu avant un renommage venu d'ailleurs. */
+  const base = edited ?? (community === undefined ? null : settingsDraftOf(community));
+  const draft = base === null ? null : { ...base, ...images };
   const changes = community === undefined || draft === null ? null : settingsChangesOf(community, draft);
   const changed = changes !== null && (!changes.ok || changes.body !== null);
 
   const edit = (patch: Partial<CommunitySettingsDraft>) => {
-    if (draft === null) return;
-    setEdited({ ...draft, ...patch });
+    if (community === undefined) return;
+    setEdited((current) => ({ ...(current ?? settingsDraftOf(community)), ...patch }));
     setNotice(null);
+  };
+
+  const uploadImage = async (kind: CommunityImageKind, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file === undefined || community === undefined) return;
+    const preview = URL.createObjectURL(file);
+    const controller = new AbortController();
+    uploads.current[kind]?.abort();
+    uploads.current = { ...uploads.current, [kind]: controller };
+    setPreviews((current) => ({ ...current, [kind]: preview }));
+    setNotice(null);
+    const outcome = await performCommunityImageUpload({ kind, file, deps, signal: controller.signal }).finally(() => URL.revokeObjectURL(preview));
+    if (controller.signal.aborted) return;
+    setPreviews((current) => withoutKind(current, kind));
+    if (outcome.status === 'uploaded') {
+      setImages((current) => ({ ...current, [kind]: outcome.url }));
+      setNotice({ key: UPLOADED[kind], tone: 'status', field: null });
+      return;
+    }
+    if (outcome.status === 'cancelled') return;
+    setNotice(
+      outcome.status === 'offline'
+        ? { key: 'community.settings.error.offline', tone: 'status', field: null }
+        : { key: 'community.settings.image.error', tone: 'alert', field: null },
+    );
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -138,7 +186,10 @@ export default function CommunitySettingsScreen() {
     const outcome = await performUpdateCommunitySettings({ community, draft, deps });
     setSaving(false);
     setNotice(noticeOfSave(outcome));
-    if (outcome.status === 'saved' || outcome.status === 'unchanged') setEdited(null);
+    if (outcome.status === 'saved' || outcome.status === 'unchanged') {
+      setEdited(null);
+      setImages({});
+    }
   };
 
   const remove = async () => {
@@ -158,7 +209,11 @@ export default function CommunitySettingsScreen() {
   const fieldError = (field: CommunitySettingsField) =>
     notice !== null && notice.field === field ? translateCommunitySettings(language, notice.key) : undefined;
   const general = notice !== null && notice.field === null ? notice : null;
-  const busy = saving || deleting;
+  const uploading: UploadingImages = {
+    ...(previews.avatar === undefined ? {} : { avatar: true }),
+    ...(previews.banner === undefined ? {} : { banner: true }),
+  };
+  const busy = saving || deleting || previews.avatar !== undefined || previews.banner !== undefined;
 
   const body =
     community === undefined || draft === null ? (
@@ -168,6 +223,14 @@ export default function CommunitySettingsScreen() {
     ) : (
       <>
         <form noValidate onSubmit={(event) => void save(event)} className="grid gap-6">
+          <SettingsImages
+            language={language}
+            name={draft.name.trim() === '' ? community.name : draft.name}
+            shown={{ avatar: previews.avatar ?? draft.avatar, banner: previews.banner ?? draft.banner }}
+            uploading={uploading}
+            disabled={saving || deleting || !online}
+            onPick={(kind) => inputs.current[kind]?.click()}
+          />
           <GroupedSection id="community-settings-info" title={translateCommunitySettings(language, 'community.settings.section.info')} icon={<Glyph name="users" size={14} />} card={false}>
             <div className="grid gap-4">
               <Field
@@ -270,6 +333,21 @@ export default function CommunitySettingsScreen() {
           </p>
         </div>
       </main>
+      {(['avatar', 'banner'] as const).map((kind) => (
+        <input
+          key={kind}
+          ref={(element) => {
+            inputs.current = { ...inputs.current, [kind]: element };
+          }}
+          type="file"
+          accept={PROFILE_IMAGE_ACCEPT}
+          data-community-settings-file={kind}
+          tabIndex={-1}
+          aria-hidden="true"
+          hidden
+          onChange={(event) => void uploadImage(kind, event)}
+        />
+      ))}
       {confirmingDelete && community !== undefined ? (
         <ConfirmDialog
           name="community-delete"

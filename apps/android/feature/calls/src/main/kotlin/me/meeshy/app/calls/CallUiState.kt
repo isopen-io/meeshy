@@ -138,6 +138,8 @@ data class CallUiState(
      * `isRemoteScreenCapturing` parity). Never leaks past the call's media phases.
      */
     val isPeerScreenCapturing: Boolean = false,
+    /** #16665 — who the capsule names: the capturer in a group, the call's name in a duo. */
+    val peerScreenCapturerName: String = "",
     /**
      * The latest live caption from the remote speaker (`call:translated-segment`),
      * preferring the server-side translation over the original text — `null` when
@@ -162,6 +164,8 @@ data class CallUiState(
      * `isRemoteSharing`: their stream shows even with their camera off, and the banner says so (#13332).
      */
     val isPeerScreenSharing: Boolean = false,
+    /** #16665 — the captures of the call in progress, dated, for the live journal and the captions band (loi 13). */
+    val liveCaptures: List<CallLiveCapture> = emptyList(),
     /**
      * `true` while the app itself froze the outgoing video to keep a poor link
      * alive ([CallVideoHealth]) — the user did NOT turn the camera off, so the
@@ -263,6 +267,7 @@ object CallPresenter {
         mediaEstablished: Boolean = false,
         peerScreenSharing: Boolean = false,
         videoNotice: CallVideoNotice = CallVideoNotice.None,
+        liveCaptures: List<CallLiveCapture> = emptyList(),
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -290,6 +295,7 @@ object CallPresenter {
             // A shared screen travels on the video sender: it shows even with the camera off (iOS `isRemoteVideoVisible`).
             isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled && !peerScreenSharing,
             isPeerScreenSharing = onMediaPhase && peerScreenSharing,
+            liveCaptures = if (onMediaPhase) liveCaptures else emptyList(),
             isVideoAutoPaused = onMediaPhase && config.isVideo && videoAutoPaused,
             videoNotice = if (onMediaPhase && config.isVideo && media.isCameraOn) videoNotice else CallVideoNotice.None,
             showsConnectedLayout = CallConnectedLayoutLaw.showsConnectedLayout(state, mediaEstablished),

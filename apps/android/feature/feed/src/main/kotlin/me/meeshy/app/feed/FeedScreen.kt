@@ -80,6 +80,8 @@ fun FeedScreen(
     var commentsPostId by remember { mutableStateOf<String?>(null) }
     var commentsReplyTo by remember { mutableStateOf<String?>(null) }
     FeedMediaPrefetchEffect(listState = listState, posts = state.posts)
+    // Loin du haut ou hors de l'écran, ce qui arrive en tête attend la bannière : le post lu ne bouge pas (#16676).
+    FeedHeadHoldEffect(listState = listState, headItems = FeedListLayout.HEAD_ITEMS + pending.size, onHolding = viewModel::holdHead)
     // Une seule scène joue dans le fil, la plus visible ; les autres sont une image fixe sans lecteur (#13663).
     val sceneCoordinator = remember { FeedSceneCoordinator() }
     val sceneIds = remember(state.posts) { feedSceneIds(state.posts) }

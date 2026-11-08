@@ -167,27 +167,37 @@ public enum BringSendOutcome: Sendable, Equatable {
     }
 }
 
-/// `GET|PUT /relations/:userId/settings` — les réglages que JE pose pour l'autre. Seules les deux préférences de
-/// RÉCEPTION sont lues à ce jour (`bringBlocked`, #13936 ; `talkieBlocked`, #13935) ; les autres réglages arrivent
-/// avec leur lot, et un champ absent vaut sa valeur par défaut (ouvert).
+/// `GET|PUT /relations/:userId/settings` — les réglages que JE pose pour l'autre. Deux familles sont lues : les
+/// préférences de RÉCEPTION (`bringBlocked`, #13936 ; `talkieBlocked`, #13935), ouvertes par défaut, et les partages
+/// de MON écoute (`listeningCategoryShared`, accordé dès Proche ; `listeningTitleShared`, accordé au rituel du Sang),
+/// REFUSÉS par défaut (#16803). Un champ absent (serveur plus ancien) vaut sa valeur par défaut.
 public struct RelationPersonSettings: Decodable, Sendable, Equatable {
     public let userId: String
     public let bringBlocked: Bool
     public let talkieBlocked: Bool
+    public let listeningCategoryShared: Bool
+    public let listeningTitleShared: Bool
 
-    public init(userId: String, bringBlocked: Bool, talkieBlocked: Bool = false) {
+    public init(userId: String, bringBlocked: Bool, talkieBlocked: Bool = false,
+                listeningCategoryShared: Bool = false, listeningTitleShared: Bool = false) {
         self.userId = userId
         self.bringBlocked = bringBlocked
         self.talkieBlocked = talkieBlocked
+        self.listeningCategoryShared = listeningCategoryShared
+        self.listeningTitleShared = listeningTitleShared
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, bringBlocked, talkieBlocked }
+    private enum CodingKeys: String, CodingKey {
+        case userId, bringBlocked, talkieBlocked, listeningCategoryShared, listeningTitleShared
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userId = try c.decode(String.self, forKey: .userId)
         bringBlocked = (try? c.decodeIfPresent(Bool.self, forKey: .bringBlocked)) ?? false
         talkieBlocked = (try? c.decodeIfPresent(Bool.self, forKey: .talkieBlocked)) ?? false
+        listeningCategoryShared = (try? c.decodeIfPresent(Bool.self, forKey: .listeningCategoryShared)) ?? false
+        listeningTitleShared = (try? c.decodeIfPresent(Bool.self, forKey: .listeningTitleShared)) ?? false
     }
 
     public func isBlocked(_ setting: RelationReceptionSetting) -> Bool {
@@ -196,6 +206,20 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
         case .talkie: return talkieBlocked
         }
     }
+
+    public func isGranted(_ grant: RelationShareGrant) -> Bool {
+        switch grant {
+        case .listeningCategory: return listeningCategoryShared
+        }
+    }
+}
+
+/// Un partage de MON activité que J'ACCORDE à une personne, hors rituel : refusé par défaut, accordé et retiré ici, un
+/// geste, sans que l'autre en soit prévenu (#16803). `rawValue` est le champ du corps de
+/// `PUT /relations/:userId/settings`, écrit seul (corps strict). Le titre de l'écoute n'y figure pas : il ne s'accorde
+/// qu'au rituel du Sang.
+public enum RelationShareGrant: String, Sendable, Equatable, CaseIterable {
+    case listeningCategory = "listeningCategoryShared"
 }
 
 /// Une préférence de RÉCEPTION posée pour une personne : ouverte par défaut, coupée par un blocage que l'autre ne

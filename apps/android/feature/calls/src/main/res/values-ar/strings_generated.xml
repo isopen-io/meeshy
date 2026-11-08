@@ -15,6 +15,10 @@
     <string name="call_capture_faces">كل وجه</string>
     <string name="call_capture_faces_saved">تم حفظ %1$d وجوه</string>
     <string name="call_capture_failed">تعذّر حفظ اللقطة</string>
+    <string name="call_capture_journal_call_recording_started">بدأ تسجيل المكالمة</string>
+    <string name="call_capture_journal_call_recording_stopped">توقّف تسجيل المكالمة</string>
+    <string name="call_capture_journal_recording">يسجّل الشاشة</string>
+    <string name="call_capture_journal_screenshot">التقط صورة للشاشة</string>
     <string name="call_capture_no_video">لا توجد صورة لالتقاطها بعد</string>
     <string name="call_capture_preview">معاينة التركيب</string>
     <string name="call_capture_saved">تم حفظ اللقطة</string>
@@ -167,6 +171,7 @@
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_panel_back">العودة إلى الإجراءات</string>
     <string name="call_participants_more">%1$s +%2$d</string>
+    <string name="call_peer_screen_capturing">%1$s يلتقط شاشة المكالمة</string>
     <string name="call_preview_camera_a11y">الكاميرا قبل الرد</string>
     <string name="call_preview_camera_hint">يحدد ما إذا كان %1$s يراك قبل الرد</string>
     <string name="call_preview_heard_and_seen_by">يسمعك %1$s ويراك قبل الرد</string>

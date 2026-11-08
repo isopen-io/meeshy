@@ -9,6 +9,7 @@ import CoreGraphics
 nonisolated enum CallTopBanner: Int, CaseIterable, Sendable {
     case screenShare
     case recording
+    case capture
     case liveFrame
 }
 
@@ -24,7 +25,7 @@ nonisolated enum CallTopBannerStack {
     }
 
     /// Ordre fixe, quel que soit l'ordre d'arrivée : partage → enregistrement
-    /// → cadre. Une bannière absente ne laisse pas de trou.
+    /// → capture (R1, #16665) → cadre. Une bannière absente ne laisse pas de trou.
     static func ordered(_ present: Set<CallTopBanner>) -> [CallTopBanner] {
         CallTopBanner.allCases.filter(present.contains)
     }

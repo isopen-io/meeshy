@@ -13,6 +13,7 @@ import { LocationHandler } from '../../../socketio/handlers/LocationHandler';
 import type { LocationHandlerDependencies } from '../../../socketio/handlers/LocationHandler';
 import type { SocketUser } from '../../../socketio/utils/socket-helpers';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
+import { noBlocksUserSurface } from '../../../socketio/__tests__/helpers/no-blocks';
 
 // ===== MOCKS =====
 
@@ -31,6 +32,7 @@ function createMockPrisma() {
     conversation: {
       findUnique: jest.fn().mockResolvedValue({ isActive: true, closedAt: null }),
     },
+    user: noBlocksUserSurface(),
   } as any;
 }
 
@@ -134,6 +136,7 @@ describe('LocationHandler', () => {
       io: mockIO as any,
       prisma: mockPrisma,
       connectedUsers,
+      userSockets: new Map(),
       socketToUser,
       normalizeConversationId,
     });

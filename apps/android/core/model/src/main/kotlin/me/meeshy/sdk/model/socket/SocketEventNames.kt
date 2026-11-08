@@ -198,6 +198,11 @@ object SocketEventNames {
     const val RELATION_RITUAL_COMPLETED = "relation:ritual-completed"
     const val BRING_STOPPED = "bring:stopped"
 
+    // talkie (#13935, #16675) : serveur -> client, sur la room `user:<id>` ; le fragment voyage en binaire natif
+    const val TALKIE_INCOMING = "talkie:incoming"
+    const val TALKIE_CHUNK = "talkie:chunk"
+    const val TALKIE_ENDED = "talkie:ended"
+
     // status
     const val STATUS_CREATED = "status:created"
     const val STATUS_DELETED = "status:deleted"
@@ -411,6 +416,9 @@ object SocketEventNames {
         RELATION_RITUAL_PROGRESS,
         RELATION_RITUAL_COMPLETED,
         BRING_STOPPED,
+        TALKIE_INCOMING,
+        TALKIE_CHUNK,
+        TALKIE_ENDED,
         STATUS_CREATED,
         STATUS_DELETED,
         STATUS_REACTED,

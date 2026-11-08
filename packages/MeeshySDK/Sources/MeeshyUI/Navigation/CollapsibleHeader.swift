@@ -167,6 +167,11 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// away with the scroll and land on top of their own title.
     let titleAccessory: (() -> AnyView)?
 
+    /// Ce que le disque de tête DIT : revenir dans une pile, ou fermer une
+    /// feuille (#16676). Un écran présenté en feuille ne remonte nulle part ;
+    /// un chevron « Retour » y promettrait une pile qui n'existe pas.
+    var leadingGlyph: CollapsibleHeaderBackGlyph = .back
+
     public static var expandedHeight: CGFloat { 64 }
     public static var collapsedHeight: CGFloat { 44 }
 
@@ -480,7 +485,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             HapticFeedback.light()
             onBack?()
         } label: {
-            Image(systemName: "chevron.backward")
+            Image(systemName: leadingGlyph.systemImage)
                 .font(.system(size: backArrowSize, weight: .semibold))
                 .foregroundColor(backArrowColor)
                 .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
@@ -491,7 +496,36 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         .buttonStyle(.plain)
         .padding(.leading, CollapsibleHeaderMetrics.leadingBackInset)
         .padding(.trailing, CollapsibleHeaderMetrics.titleActionsGap)
-        .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .module))
+        .accessibilityLabel(leadingGlyph.accessibilityLabel)
+    }
+
+    /// Le même en-tête, dont le disque de tête FERME au lieu de revenir.
+    public func backGlyph(_ glyph: CollapsibleHeaderBackGlyph) -> Self {
+        var header = self
+        header.leadingGlyph = glyph
+        return header
+    }
+}
+
+/// Le geste que porte le disque de tête d'un `CollapsibleHeader`.
+public enum CollapsibleHeaderBackGlyph: Equatable {
+    /// Revenir à l'écran d'en dessous, dans une pile de navigation.
+    case back
+    /// Fermer la feuille que l'écran occupe.
+    case close
+
+    public var systemImage: String {
+        switch self {
+        case .back: return "chevron.backward"
+        case .close: return "xmark"
+        }
+    }
+
+    public var accessibilityLabel: String {
+        switch self {
+        case .back: return String(localized: "common.back", defaultValue: "Retour", bundle: .module)
+        case .close: return String(localized: "common.close", defaultValue: "Fermer", bundle: .module)
+        }
     }
 }
 

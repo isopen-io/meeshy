@@ -6,7 +6,7 @@ import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
-import { CallPeerAlerts } from '@/components/call-quality';
+import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
@@ -477,7 +477,18 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     </>
   ) : null;
 
+  const captureShown = live && someoneCaptures(call.members);
+  /* R1 : la capsule de capture se pose UNE fois sous l'en-tête, en audio comme
+     en vidéo, et ne suit jamais le chrome — ni son fondu, ni un mode, ni un
+     panneau : une capture ne se cache pas. */
+  const captureRow = captureShown ? (
+    <div className="relative z-30 flex justify-center" data-call-capture-slot="">
+      <CallCaptureAlerts members={call.members} language={language} />
+    </div>
+  ) : null;
+
   const self: SelfView = {
+    topInset: captureShown ? CALL_CAPTURE_ROW_CLEARANCE : 0,
     full: selfFull,
     onToggle: () => setSelfFull((full) => !full),
     controls: chrome.selfControls,
@@ -564,7 +575,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
      cadre de la pilule déployée, ils en sortent quand elle s'efface, et
      restent lus (et annoncés) au-dessus de sa place. */
   const captionsFramed = expanded && !hidden && chrome.panel !== 'journal';
-  const colorOf = (caption: CallCaption): string => speakerColor(caption.speakerId, caption.speakerName);
+  const colorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(who.speakerId, who.speakerName);
   const captions =
     call.captionsMode === 'off' || !live || chrome.panel === 'journal' ? null : (
       <Suspense fallback={null}>
@@ -585,7 +596,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       case 'record':
         return <CallRecordChoice {...base} onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel} />;
       case 'journal':
-        return <CallJournalPanel {...base} captions={call.captions} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />;
+        return <CallJournalPanel {...base} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />;
       case 'people':
         return <CallPeopleSheet {...base} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
     }
@@ -657,6 +668,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} />
           </div>
         ) : null}
+        {captureRow}
         {layout === 'grid' ? (
           <>
             {immersive || chrome.mode !== null ? null : (

@@ -53,8 +53,14 @@ export interface ConversationHandlerDependencies {
    *
    * Optionnelle : un `ConversationHandler` construit sans elle joint
    * normalement, il ne rattrape simplement rien.
+   *
+   * ASYNCHRONE depuis #16745 : le rattrapage lit le blocage bidirectionnel de
+   * l'arrivant avant de lui servir la position d'un partageur. Le site d'appel
+   * l'ATTEND — un rejeu détaché partirait après la suite de la jonction, et un
+   * rejet détaché n'aurait aucun écouteur (§ « `void p` exige toujours
+   * `p.catch` »).
    */
-  replayLiveLocations?: (socket: Socket, conversationId: string) => void;
+  replayLiveLocations?: (socket: Socket, conversationId: string) => void | Promise<void>;
   /**
    * Le LECTEUR des statistiques, avec son VRAI rôle —
    * `MeeshySocketIOManager._presenceViewer` en pratique. Ni `SocketUser` ni le
@@ -82,7 +88,7 @@ export class ConversationHandler {
   private socketToUser: Map<string, string>;
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount' | 'getLatestMessageSummary'>;
   private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
-  private replayLiveLocations?: (socket: Socket, conversationId: string) => void;
+  private replayLiveLocations?: (socket: Socket, conversationId: string) => void | Promise<void>;
   private presenceViewer: (userId: string) => Promise<PresenceViewer>;
   private presenceVisibility: Pick<PresenceVisibilityService, 'resolveForPresenceEvent'>;
   private rateLimiter = getSocketRateLimiter();
@@ -213,11 +219,17 @@ export class ConversationHandler {
       // Rattrapage AVANT les accusés ci-dessous, et hors du gate
       // `participationId` : l'appartenance vient d'être contrôlée, et un invité
       // de lien partagé a autant besoin de voir l'épingle d'un pair que le
-      // membre inscrit. Ne peut pas jeter — l'implémentation est synchrone et
-      // sans I/O — mais un rejeu perdu ne doit de toute façon jamais faire
-      // échouer une jonction.
+      // membre inscrit.
+      //
+      // L'implémentation LIT LA BASE depuis #16745 (le blocage bidirectionnel
+      // de l'arrivant) : elle peut donc jeter, et c'est pour cela qu'elle est
+      // ATTENDUE sous ce `try`. La phrase précédente — « ne peut pas jeter,
+      // l'implémentation est synchrone et sans I/O » — était vraie quand elle a
+      // été écrite et ne l'est plus : un commentaire d'impossibilité ne rougit
+      // jamais, il se relit comme une raison de ne pas s'en occuper. Un rejeu
+      // perdu, lui, ne doit toujours jamais faire échouer une jonction.
       try {
-        this.replayLiveLocations?.(socket, normalizedId);
+        await this.replayLiveLocations?.(socket, normalizedId);
       } catch (err) {
         logger.warn('live location replay failed on join (non-blocking)', { conversationId: normalizedId, error: err });
       }

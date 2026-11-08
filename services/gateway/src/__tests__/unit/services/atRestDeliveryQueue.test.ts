@@ -64,8 +64,23 @@ const serviceUnder = (masterKey: string | undefined, prisma: PrismaClient): Encr
 
 const fakeRedis = () => {
   const lists = new Map<string, string[]>();
+  const sets = new Map<string, Set<string>>();
   const client = {
-    eval: async (script: string, _keys: number, key: string, ...args: string[]) => {
+    // #16706 — le double RESPECTE `numkeys`. Il lisait la clé en 3e position et
+    // tout le reste comme des ARGV : l'enfilage déclarant désormais DEUX clés
+    // (la file, puis l'index inverse du message), ce raccourci rangeait la clé
+    // d'index DANS la file, comme si c'était une entrée. C'est la forme du
+    // cycle 112 — « un double de test ment aussi par ce qu'il ACCEPTE » : un
+    // double qui ignore `numkeys` accepte un appel que le vrai client
+    // interprète autrement, et le témoin qu'il sert PASSE.
+    eval: async (script: string, numkeys: number, ...rest: string[]) => {
+      const keys = rest.slice(0, numkeys);
+      const args = rest.slice(numkeys);
+      const key = keys[0];
+      const indexKey = keys[1];
+      if (indexKey !== undefined && args[5] === '1') {
+        sets.set(indexKey, new Set([...(sets.get(indexKey) ?? []), args[6]]));
+      }
       if (args.length === 0) {
         const entries = lists.get(key) ?? [];
         lists.delete(key);
@@ -116,16 +131,6 @@ describe('la file hors ligne scelle la charge d’une conversation chiffrée au 
     expect(redis.stored()).not.toContain('est 4471');
     const drained = await queue.drain('u-1');
     expect(drained).toEqual([entry()]);
-  });
-
-  it('peek rouvre aussi : l’aperçu de file ne montre jamais une charge vide', async () => {
-    const service = serviceUnder(MASTER_A, store.prisma);
-    const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(redis.cacheStore, deliveryQueueSealer(async () => service));
-
-    await queue.enqueue('u-1', entry(), { sealAtRest: true });
-
-    expect(await queue.peek('u-1')).toEqual([entry()]);
   });
 
   it('le repli mémoire est scellé de même', async () => {

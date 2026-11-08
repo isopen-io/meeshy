@@ -6,9 +6,15 @@ import {
   resolveUserLanguagesOrdered,
 } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { QueuedEventVariant } from './queuedEventContract';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
+import { carriesMessageText } from './queuedEventContract';
+import {
+  MESSAGE_LIVENESS_SELECT,
+  messageLivenessOf,
+} from '../services/messages/message-liveness';
 
 const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
 
@@ -32,7 +38,15 @@ export interface OfflineParticipantQueueDeps {
   deliveryQueue: {
     enqueue(userId: string, entry: QueuedMessagePayload, options?: { readonly sealAtRest?: boolean }): Promise<void>;
   } | null | undefined;
-  prisma: Pick<PrismaClient, 'participant'>;
+  // `'message'` a rejoint cette projection avec la garde d'admission (#16706,
+  // cycle 143 bis). L'élargir est DÉLIBÉRÉ et c'est le compilateur qui en fait
+  // la preuve : la leçon que `message-liveness.ts` écrit sur sa propre loi — « le
+  // `select` est la seule des conditions qu'aucun témoin de verdict ne peut
+  // voir » — vaut un cran plus haut, sur la PROJECTION du client. Un
+  // `Pick<…,'participant'>` laissait la garde indisponible en aval sans qu'un
+  // seul témoin rougisse ; ici, tout appelant qui ne peut pas la servir ne
+  // compile plus.
+  prisma: Pick<PrismaClient, 'participant' | 'message'>;
   /**
    * #16687 — la porte de joignabilité. `has` répond « cette clé a-t-elle une
    * socket ? » ; `get` pose la question JUSTE : « cette socket est-elle
@@ -226,6 +240,78 @@ const SEAL_AT_REST = { sealAtRest: true } as const;
  * already been committed by the time this runs; a queue failure must not turn a
  * successful write into a 500 or flip an already-sent ACK to failure.
  */
+/**
+ * La garde d'ADMISSION : ce message a-t-il encore un contenu à garder ? (#16706,
+ * cycle 143 bis)
+ *
+ * ## Pourquoi au seuil, et pas seulement au balayage
+ *
+ * Le lot #16706 a posé une purge PONCTUELLE, au moment de la destruction. Elle
+ * est juste, et elle ne suffit pas : **trois des cinq producteurs d'entrées
+ * porteuses de texte sont ASYNCHRONES** et n'interrogeaient la vivacité
+ * d'aucune façon —
+ * `deliverTextTranslation` (réponse NLLB, de 100 ms à plusieurs secondes) et
+ * `emitAttachmentUpdated` (Whisper + NLLB + TTS, des dizaines de secondes à des
+ * minutes). Leur `select` ne portait ni `deletedAt`, ni `expiresAt`, ni
+ * `viewOnceBurnedAt`.
+ *
+ * Une traduction encore en vol quand la purge passe REDÉPOSE donc le clair après
+ * elle, et **plus aucune purge ne tournera jamais** pour ce message. Le clair
+ * repart pour 48 h dans Redis, persistance AOF comprise — c'est-à-dire
+ * exactement l'invariant que #16706 revendiquait d'avoir fermé.
+ *
+ * > **Une purge est un BALAYAGE ; une garde d'admission est un INVARIANT.** Un
+ * > balayage ne vaut que pour ce qui est déjà là, et il n'a aucune prise sur ce
+ * > qui arrive après lui. Le dépôt l'écrit déjà deux fois — « une garde
+ * > d'admission se pose sur CHAQUE chemin » et « une compensation en aval ne
+ * > remplace pas une garde d'admission quand l'effet qu'elle compense est
+ * > IRRÉVERSIBLE ». Écrire un clair dans Redis est irréversible : on ne le
+ * > reprend pas, on en ajoute seulement le retrait.
+ *
+ * Et c'est le site JUSTE parce que c'est le seul que les cinq producteurs
+ * traversent. Posée chez eux, la règle serait à retaper à chaque nouveau
+ * producteur — « une règle qui doit être retapée à chaque site est une règle
+ * qu'un site finira par ne pas avoir ».
+ *
+ * ## Son cadrage, et ses deux replis
+ *
+ * Elle ne s'applique qu'aux familles que `carriesMessageText` déclare : le MÊME
+ * cadrage que la garde de remise et que l'index de purge. Une annonce de mort
+ * (`deleted` / `expired`) doit passer — c'est son objet.
+ *
+ * Fail-CLOSED sur la PREUVE (`gone` ⇒ rien n'est enfilé), fail-OPEN sur
+ * l'absence de preuve (ligne absente, lecture en échec ⇒ on enfile). C'est
+ * l'arbitrage du drain, pour la raison qu'il écrit : « un message manqué se
+ * rattrape, un secret remis non » vaut dans les deux sens, et c'est le second
+ * qui décide quand la preuve est là.
+ */
+async function messageStillHasTextToKeep(
+  prisma: Pick<PrismaClient, 'message'>,
+  messageId: string,
+  eventType: QueuedMessagePayload['eventType'],
+): Promise<boolean> {
+  if (!carriesMessageText(eventType)) return true;
+  if (!isValidObjectId(messageId)) return true;
+  try {
+    const row = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: MESSAGE_LIVENESS_SELECT,
+    });
+    const verdict = messageLivenessOf(row);
+    if (verdict.liveness !== 'gone') return true;
+    logger.info('Offline entry NOT queued: the message no longer has content to keep', {
+      messageId, eventType: eventType ?? 'new', cause: verdict.cause,
+    });
+    return false;
+  } catch (error) {
+    // Pas de preuve ⇒ on enfile. Une tempête de reconnexions est exactement le
+    // moment où la base est sous pression, et refuser ici perdrait un message
+    // vivant sans recours.
+    logger.warn('Message liveness read failed on enqueue — queueing anyway', { messageId, error });
+    return true;
+  }
+}
+
 export async function enqueueForOfflineParticipants(
   deps: OfflineParticipantQueueDeps,
   params: OfflineParticipantQueueParams
@@ -249,6 +335,27 @@ export async function enqueueForOfflineParticipants(
   const restrictToLanguage = params.restrictToReadersOfLanguage
     ? normalizeLanguageForDedup(params.restrictToReadersOfLanguage)
     : null;
+  // La garde d'ADMISSION, UNE fois pour tout l'éventail : la vivacité est une
+  // propriété du MESSAGE, pas du destinataire, donc la demander par participant
+  // serait N lectures pour un seul verdict.
+  //
+  // Elle part EN PARALLÈLE de la liste des participants, et ce n'est pas une
+  // micro-optimisation : les deux lectures sont indépendantes, et les sérialiser
+  // ajoutait un TOUR DE BOUCLE DE MICRO-TÂCHES avant la première écriture. Or les
+  // deux appelants de `MessageHandler` lancent cette unité SANS l'attendre
+  // (`_enqueueOfflineEventForParticipants`, lignes 975 et 1169) : ce que leurs
+  // témoins observent dépend donc du nombre de tours écoulés pendant leur propre
+  // `await`, et un tour de plus suffisait à faire passer l'enfilage APRÈS
+  // l'assertion — sur TOUTES les familles, y compris celles que la garde ne
+  // regarde même pas.
+  //
+  // > **Un `await` ajouté en amont d'un canal « fire-and-forget » en change la
+  // > sémantique observable.** Le défaut ne se lit pas dans la garde, qui est
+  // > juste, mais dans la PROFONDEUR D'ATTENTE qu'elle introduit chez des
+  // > appelants qui n'attendent pas. Avant d'ajouter une lecture à une unité,
+  // > demander : qui l'appelle sans l'attendre ?
+  const livenessProbe = messageStillHasTextToKeep(prisma, messageId, eventType);
+
   try {
     // La restriction par langue exige les préférences du lecteur, que la
     // projection nominale ne porte pas — et qu'aucun appelant restreint ne
@@ -278,6 +385,11 @@ export async function enqueueForOfflineParticipants(
           where: { conversationId, ...PARTICIPATION_VIVANTE },
           select: { id: true, userId: true },
         }));
+    // Le verdict est consommé ICI, après que la liste soit là : les deux attentes
+    // se recouvrent, donc la profondeur d'attente est celle d'AVANT ce lot.
+    if (!(await livenessProbe)) return;
+
+    const queued: Promise<void>[] = [];
     for (const p of participants) {
       // Queue key mirrors the presence-key convention: userId for registered
       // users, participant id for anonymous. `connectedUsers` and `ROOMS.user`
@@ -312,12 +424,26 @@ export async function enqueueForOfflineParticipants(
         eventType,
         ...(dedupKey ? { dedupKey } : {}),
       };
-      const queued = params.atRest === true || declaresAtRest(body)
-        ? deliveryQueue.enqueue(queueKey, entry, SEAL_AT_REST)
-        : deliveryQueue.enqueue(queueKey, entry);
-      queued
-        .catch((err) => logger.warn('Failed to enqueue offline event', { userId: queueKey, eventType, error: err }));
+      // #16706 (cycle 143 bis) — l'enfilage est ATTENDU. Il ne l'était pas, et
+      // ce n'était pas un détail : `await enqueueForOfflineParticipants(...)`
+      // rendait la main AVANT que la moindre entrée soit écrite, si bien que
+      // toute purge déclenchée juste après une destruction immédiate (rappel,
+      // éphémère très court) balayait une file où le clair n'était pas encore
+      // arrivé — et il y arrivait ensuite, pour 48 h, sans qu'aucune purge ne
+      // repasse. « Best-effort » qualifie le droit d'ÉCHOUER, jamais celui de
+      // n'être pas ORDONNÉ.
+      //
+      // `allSettled` et non `all` : un destinataire dont l'enfilage échoue ne
+      // doit pas priver les autres du leur, et c'est ce que le `.catch` par
+      // entrée disait déjà.
+      queued.push(
+        (params.atRest === true || declaresAtRest(body)
+          ? deliveryQueue.enqueue(queueKey, entry, SEAL_AT_REST)
+          : deliveryQueue.enqueue(queueKey, entry)
+        ).catch((err) => logger.warn('Failed to enqueue offline event', { userId: queueKey, eventType, error: err })),
+      );
     }
+    await Promise.allSettled(queued);
   } catch (err) {
     logger.warn('Failed to fetch participants for offline enqueue', { conversationId, eventType, error: err });
   }

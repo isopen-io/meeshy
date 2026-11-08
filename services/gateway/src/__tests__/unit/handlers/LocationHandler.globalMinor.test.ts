@@ -15,6 +15,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { LocationHandler } from '../../../socketio/handlers/LocationHandler';
 import type { SocketUser } from '../../../socketio/utils/socket-helpers';
+import { noBlocksUserSurface } from '../../../socketio/__tests__/helpers/no-blocks';
 
 const USER_ID = 'user-teen';
 const SOCKET_ID = 'socket-teen';
@@ -26,7 +27,15 @@ function setup(params: { readonly type: string; readonly birthDate: Date | null 
   const prisma = {
     participant: { findFirst: jest.fn(async () => ({ id: 'participant-teen' })) },
     conversation: { findUnique: jest.fn(async () => ({ isActive: true, closedAt: null, type: params.type })) },
-    user: { findUnique: jest.fn(async () => ({ birthDate: account.birthDate })) },
+    // UN SEUL `user`, DEUX QUESTIONS : la date de naissance (règle 5, #9927)
+    // et le voisinage de blocage (#16745) passent par la MÊME méthode Prisma
+    // sous deux `select`. Le double rend les deux colonnes — un double qui n'en
+    // rendrait qu'une ferait échouer la porte de l'autre, et le refus sortirait
+    // sous le nom de celle-ci.
+    user: {
+      findMany: noBlocksUserSurface().findMany,
+      findUnique: jest.fn(async () => ({ birthDate: account.birthDate, blockedUserIds: [] as string[] })),
+    },
   };
   const user: SocketUser = {
     id: USER_ID,
@@ -42,6 +51,7 @@ function setup(params: { readonly type: string; readonly birthDate: Date | null 
     io: { to: jest.fn(() => ({ emit: ioEmit })) } as never,
     prisma: prisma as never,
     connectedUsers: new Map([[USER_ID, user]]),
+    userSockets: new Map(),
     socketToUser: new Map([[SOCKET_ID, USER_ID]]),
     normalizeConversationId: async (id: string) => id,
     engagement: null,
@@ -91,7 +101,17 @@ describe('LocationHandler — la position partagée d’un mineur ne paraît pas
     await handler.handleLiveLocationStart(socket as never, start as never, callback);
 
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    // ASSERT SUR LE `select`, PAS SUR LA MÉTHODE (#16745). Ce témoin comptait
+    // les appels à `user.findUnique`, et c'était un proxy valide tant que la
+    // date de naissance était la seule question posée à cette table. Le
+    // voisinage de blocage y passe désormais aussi : compter les appels ferait
+    // rougir ce témoin sur une lecture qui n'est pas son sujet, et — pire —
+    // retirer la règle 5 le laisserait VERT dès qu'une autre lecture occupe le
+    // compteur. Nommer la colonne est ce qui rend le témoin capable de tomber
+    // pour la seule raison qu'il annonce.
+    const birthDateReads = (prisma.user.findUnique as jest.Mock).mock.calls
+      .filter(([args]: [any]) => args?.select?.birthDate === true);
+    expect(birthDateReads).toHaveLength(0);
   });
 
   it('une session CONNUE relaie ses mises à jour sans relire la base', async () => {

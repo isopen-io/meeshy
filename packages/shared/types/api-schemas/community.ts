@@ -120,8 +120,8 @@ export const updateCommunityRequestSchema = {
   properties: {
     name: { type: 'string', minLength: 1, maxLength: 100 },
     description: { type: 'string', maxLength: 500 },
-    avatar: { type: 'string', format: 'uri' },
-    banner: { type: 'string', format: 'uri' },
+    avatar: { type: 'string', minLength: 1, maxLength: 2048, description: 'Identity image reference (isProfileImageReference)' },
+    banner: { type: 'string', minLength: 1, maxLength: 2048, description: 'Identity image reference (isProfileImageReference)' },
     isPrivate: { type: 'boolean' }
   }
 } as const;

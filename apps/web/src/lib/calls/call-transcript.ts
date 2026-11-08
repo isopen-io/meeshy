@@ -1,5 +1,6 @@
 import * as z from 'zod/mini';
 import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
+import { isCallCaptureEventKind, type CallCaptureEventKind } from '@meeshy/shared/types/call-capture';
 
 import type { CallsDeps } from '@/lib/api/calls';
 import type { ApiResult } from '@/lib/api/http';
@@ -17,6 +18,9 @@ import { served } from '@/lib/api/prism';
  * La ligne d'un autre descend le PRISME du lecteur (`served`, la descente de
  * `resolvePrismTranslation`) : rang par rang, traduction ou original déjà dans
  * la langue — jamais `translations[0]`. Ma parole reste la mienne.
+ *
+ * Les captures d'écran et les moments de l'enregistrement consenti voyagent à
+ * côté des segments (`captures`, #16665) : la première page les porte toutes.
  */
 
 const WireTranslation = z.object({ targetLanguage: z.string(), translatedText: z.string() });
@@ -35,11 +39,32 @@ const WireTranscript = z.object({
   callId: z.string(),
   callStartedAt: z.optional(z.nullable(z.string())),
   segments: z.array(z.unknown()),
+  captures: z.optional(z.nullable(z.array(z.unknown()))),
 });
+
+const WireCapture = z.object({
+  id: z.string(),
+  userId: z.optional(z.nullable(z.string())),
+  displayName: z.optional(z.nullable(z.string())),
+  kind: z.string(),
+  offsetMs: z.number(),
+});
+
+export type TranscriptCapture = { readonly id: string; readonly kind: CallCaptureEventKind; readonly userId: string | null; readonly name: string | null; readonly offsetMs: number };
+
+/** Une capture du journal d'après l'appel, datée comme les lignes (secondes depuis le début de l'appel). */
+export type TranscriptNote = { readonly id: string; readonly kind: CallCaptureEventKind; readonly userId: string | null; readonly name: string | null; readonly offsetSec: number };
 
 export type TranscriptSegment = z.infer<typeof WireSegment>;
 
-export type CallTranscript = { readonly callId: string; readonly startedAtMs: number | null; readonly segments: readonly TranscriptSegment[] };
+export type CallTranscript = { readonly callId: string; readonly startedAtMs: number | null; readonly segments: readonly TranscriptSegment[]; readonly captures: readonly TranscriptCapture[] };
+
+const decodeCapture = (entry: unknown): readonly TranscriptCapture[] => {
+  const capture = WireCapture.safeParse(entry);
+  if (!capture.success || !isCallCaptureEventKind(capture.data.kind)) return [];
+  const { id, kind, offsetMs } = capture.data;
+  return [{ id, kind, offsetMs, userId: capture.data.userId ?? null, name: capture.data.displayName ?? null }];
+};
 
 export type TranscriptLine = {
   readonly id: string;
@@ -67,7 +92,14 @@ export function decodeCallTranscript(raw: unknown): CallTranscript | null {
       const segment = WireSegment.safeParse(entry);
       return segment.success && segment.data.text.trim() !== '' ? [segment.data] : [];
     }),
+    captures: (parsed.data.captures ?? []).flatMap(decodeCapture),
   };
+}
+
+export function transcriptNotes(transcript: CallTranscript): readonly TranscriptNote[] {
+  return [...transcript.captures]
+    .sort((left, right) => left.offsetMs - right.offsetMs)
+    .map(({ id, kind, userId, name, offsetMs }) => ({ id, kind, userId, name, offsetSec: Math.max(0, Math.floor(offsetMs / 1000)) }));
 }
 
 export function transcriptLines(transcript: CallTranscript, reader: { readonly viewerId: string; readonly languages: readonly string[] }): readonly TranscriptLine[] {

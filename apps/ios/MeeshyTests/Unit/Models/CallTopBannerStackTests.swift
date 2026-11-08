@@ -2,7 +2,7 @@ import XCTest
 @testable import Meeshy
 
 /// APP-1 — une seule pile de bannières sous l'en-tête de l'appel, ordre fixe
-/// partage → enregistrement → cadre, sans trou ni chevauchement du chevron.
+/// partage → enregistrement → capture → cadre, sans trou ni chevauchement du chevron.
 @MainActor
 final class CallTopBannerStackTests: XCTestCase {
 
@@ -11,6 +11,19 @@ final class CallTopBannerStackTests: XCTestCase {
             CallTopBannerStack.ordered([.liveFrame, .screenShare, .recording]),
             [.screenShare, .recording, .liveFrame]
         )
+    }
+
+    /// #16665 R1 — la capsule de capture se range sous l'enregistrement R3,
+    /// au-dessus du cadre : elle ne couvre jamais une autre bannière.
+    func test_ordered_capture_sitsBelowRecordingAboveFrame() {
+        XCTAssertEqual(
+            CallTopBannerStack.ordered([.liveFrame, .capture, .screenShare, .recording]),
+            [.screenShare, .recording, .capture, .liveFrame]
+        )
+    }
+
+    func test_ordered_captureAlone_isRightUnderTheHeader() {
+        XCTAssertEqual(CallTopBannerStack.ordered([.capture]), [.capture])
     }
 
     func test_ordered_missingMiddle_leavesNoGap() {

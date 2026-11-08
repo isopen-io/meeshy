@@ -17,6 +17,8 @@ public protocol BringProviding: Sendable {
     func personSettings(userId: String) async throws -> RelationPersonSettings
     /// `PUT /relations/:userId/settings { bringBlocked | talkieBlocked }` — corps strict, un seul réglage.
     func setReceptionBlocked(_ setting: RelationReceptionSetting, userId: String, blocked: Bool) async throws -> RelationPersonSettings
+    /// `PUT /relations/:userId/settings { listeningCategoryShared }` — accorder ou retirer un partage (#16803).
+    func setShareGranted(_ grant: RelationShareGrant, userId: String, granted: Bool) async throws -> RelationPersonSettings
 }
 
 public extension BringProviding {
@@ -66,6 +68,13 @@ public final class BringService: BringProviding, Sendable {
     public func setReceptionBlocked(_ setting: RelationReceptionSetting, userId: String, blocked: Bool) async throws -> RelationPersonSettings {
         let response: APIResponse<RelationPersonSettings> = try await api.put(
             RelationsEndpoint.byUserIdSettings(userId: userId), body: [setting.rawValue: blocked]
+        )
+        return response.data
+    }
+
+    public func setShareGranted(_ grant: RelationShareGrant, userId: String, granted: Bool) async throws -> RelationPersonSettings {
+        let response: APIResponse<RelationPersonSettings> = try await api.put(
+            RelationsEndpoint.byUserIdSettings(userId: userId), body: [grant.rawValue: granted]
         )
         return response.data
     }

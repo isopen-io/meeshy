@@ -81,6 +81,20 @@ final class ImagerWandPlacementTests: XCTestCase {
         XCTAssertTrue(card.contains("onImager: imagerAction"), "la baguette et le menu ⋯ lisent la même action")
     }
 
+    /// #16676 — la carte d'un réel dans le fil porte la baguette, comme celle
+    /// d'un post : dernière action de la rangée, après « Enregistrer », et la
+    /// même action que l'entrée « Imager » de son menu.
+    func test_reelFeedCardRow_endsWithTheWand_afterSave() throws {
+        let card = try source("Meeshy/Features/Main/Views/ReelFeedCard.swift")
+        let row = try XCTUnwrap(card.range(of: "private var actionsRow: some View"))
+        let save = try XCTUnwrap(card.range(of: "\"a11y.feed.post.save.hint\"", range: row.upperBound..<card.endIndex))
+        let wand = try XCTUnwrap(card.range(of: "ImagerWandButton(", range: save.upperBound..<card.endIndex))
+        let menu = try XCTUnwrap(card.range(of: "private var moreOptionsMenuContent"))
+        XCTAssertLessThan(wand.lowerBound, menu.lowerBound, "la baguette est dans la rangée, pas dans le menu")
+        XCTAssertTrue(card.contains("if let imagerAction"), "rien à imager ⇒ pas de baguette")
+        XCTAssertTrue(card.contains("PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator)"))
+    }
+
     func test_postDetailRow_endsWithTheWand_underTheSameLaw() throws {
         let detail = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
         XCTAssertTrue(detail.contains("detailImagerButton"))
