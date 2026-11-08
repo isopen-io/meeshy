@@ -96,7 +96,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `tasks/routine-camera.md` CAM-3, OPUS-1.
 
 ## OPUS-8 — Pas de retardateur pour une photo posée ou de groupe
-- Statut : rendu à la routine caméra (CAM-4), décision prise
+- Statut : fait (#16760)
 - Signalé par : routine caméra, le 2026-11-07
 - Point d'origine : CAM-4 (audit B5)
 - Constat : aucun retardateur au viseur. La rangée haute ne peut pas prendre de huitième contrôle (`Meeshy/Features/Composer/ComposerCaptureTopRow.swift:36-38`, `:56-63`) et l'audit laisse deux emplacements possibles (« sous le flash ou dans un appui long »).
