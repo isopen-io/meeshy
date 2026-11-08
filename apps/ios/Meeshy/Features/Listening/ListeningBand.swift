@@ -86,7 +86,7 @@ struct HeaderPeerListening: ViewModifier {
 }
 
 /// Le pair dont la ligne de liste montre l'écoute (#16733) : celui d'un direct, personne d'autre.
-enum ConversationRowListening {
+nonisolated enum ConversationRowListening {
     static func userId(for conversation: MeeshyConversation) -> String? {
         guard conversation.type == .direct, let peer = conversation.participantUserId, !peer.isEmpty else { return nil }
         return peer
