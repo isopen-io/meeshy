@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import CoreMedia
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -219,6 +220,22 @@ final class StoryFlameTextRendererTests: XCTestCase {
             (0..<Int(size.width)).map { pixels.at(x: $0, y: y) }
         }
         XCTAssertTrue(band.contains { $0.a > 0 }, "des flammes au-dessus des lettres")
+    }
+
+    /// **L'export fait monter le feu** : `layer.render(in:)` ne joue aucune
+    /// animation, la passe des rendus « en un coup » pose donc la phase de
+    /// l'image sur la calque modèle — horloge partant de l'apparition du texte.
+    func test_oneShotRender_advancesTheFire_fromTheTextAppearance() throws {
+        var text = fireText()
+        text.startTime = 0.1
+        let layer = StoryTextLayer()
+        layer.configure(with: text, geometry: geometry, mode: .play, renderScale: 1)
+        let tree = CALayer()
+        tree.addSublayer(layer)
+        let elapsed = 0.1 + StoryFlameTextRenderer.cycleDuration * 0.25
+        StoryRenderer.advanceAnimatedStickers(in: tree, at: CMTime(seconds: elapsed, preferredTimescale: 600))
+        let window = try XCTUnwrap(try XCTUnwrap(layer.flameLayer).riseWindow)
+        XCTAssertEqual(window.minY, StoryFlameLayer.window(phase: 0.25).minY, accuracy: 1e-6)
     }
 
     // MARK: - L'éditeur en ligne

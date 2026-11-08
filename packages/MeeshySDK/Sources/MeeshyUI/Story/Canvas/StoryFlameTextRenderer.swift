@@ -362,6 +362,10 @@ public final class StoryFlameLayer: CALayer {
     private var silhouetteKey: StoryFlameGlyphKey?
     public var isAnimating: Bool { riseNappe?.animation(forKey: Self.riseKey) != nil }
 
+    /// La fenêtre de texture que la nappe montante montre sur la calque MODÈLE
+    /// — ce que peint `layer.render(in:)`.
+    var riseWindow: CGRect? { riseNappe?.contentsRect }
+
     static let riseKey = "flame.rise"
     static let swayKey = "flame.sway"
     static let flickerKey = "flame.flicker"
@@ -435,8 +439,8 @@ public final class StoryFlameLayer: CALayer {
         gradient.startPoint = CGPoint(x: 0.5, y: 0)
         gradient.endPoint = CGPoint(x: 0.5, y: 1)
         let nappes = CALayer()
-        let rise = Self.nappe(seed: StoryFlameTextRenderer.riseSeed, opacity: 1)
-        let sway = Self.nappe(seed: StoryFlameTextRenderer.swaySeed,
+        let rise = Self.nappe(texture: Self.riseTexture, opacity: 1)
+        let sway = Self.nappe(texture: Self.swayTexture,
                               opacity: Float(StoryFlameTextRenderer.swayOpacity))
         nappes.addSublayer(rise)
         nappes.addSublayer(sway)
@@ -463,16 +467,26 @@ public final class StoryFlameLayer: CALayer {
         silhouetteMask?.frame = bounds
     }
 
+    /// Les deux textures de feu, DÉTERMINISTES : cuites une fois pour toute la
+    /// vie de l'app. L'export reconstruit l'arbre à chaque image — sans ce
+    /// partage, chaque image recalculerait deux nappes de bruit.
+    private static let riseTexture = texture(seed: StoryFlameTextRenderer.riseSeed)
+    private static let swayTexture = texture(seed: StoryFlameTextRenderer.swaySeed)
+
+    private static func texture(seed: UInt32) -> CGImage? {
+        StoryFlameTextRenderer.alphaImage(.init(
+            bytes: StoryFlameTextRenderer.textureAlpha(seed: seed),
+            width: StoryFlameTextRenderer.textureWidth,
+            height: StoryFlameTextRenderer.texturePeriod * 2))
+    }
+
     @MainActor
-    private static func nappe(seed: UInt32, opacity: Float) -> CALayer {
+    private static func nappe(texture: CGImage?, opacity: Float) -> CALayer {
         let layer = CALayer()
         layer.contentsGravity = .resize
         layer.contentsRect = window(phase: 0)
         layer.opacity = opacity
-        layer.contents = StoryFlameTextRenderer.alphaImage(.init(
-            bytes: StoryFlameTextRenderer.textureAlpha(seed: seed),
-            width: StoryFlameTextRenderer.textureWidth,
-            height: StoryFlameTextRenderer.texturePeriod * 2))
+        layer.contents = texture
         return layer
     }
 
