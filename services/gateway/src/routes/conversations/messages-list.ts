@@ -787,7 +787,25 @@ export function registerMessagesListRoute(
       // n'en dépend PAS. Déféré en fire-and-forget : l'awaiter ajoutait
       // 50-130ms à CHAQUE fetch de messages (l'endpoint le plus appelé).
       t0 = performance.now();
-      if (messages.length > 0 && !authRequest.authContext.isAnonymous && currentParticipantId) {
+      // #17077 — la condition ne porte PLUS `!isAnonymous`, et le gate ne
+      // protégeait rien : `currentParticipantId` est résolu pour les DEUX
+      // identités une trentaine de lignes plus haut, et `markMessagesAsReceived`
+      // prend un `Participant.id` — jamais un `User.id`, que l'invité de lien
+      // n'a pas. Le gate retirait donc cette population d'un des trois
+      // transports du même fait, sans une ligne pour le justifier.
+      //
+      // C'est le cas que le `CLAUDE.md` de ce service interdit nommément : « Ne
+      // JAMAIS enterrer l'incomplétude sous un `if (!isAnonymous)` au site
+      // d'appel : le gate donne l'omission pour une règle produit. » Son cas de
+      // référence, `_emitUnreadCountsSnapshot` (cycle 61), a privé de pastille
+      // exacte toute cette population pendant des mois.
+      //
+      // Ce qui restait découvert : l'invité qui lit l'historique par REST sans
+      // socket authentifiée vivante — page de lien avant l'authentification
+      // socket, coque en reprise. L'expéditeur restait à une seule coche pour
+      // lui, et les deux chemins socket (`autoDeliverToOnlineRecipients`, le
+      // drain de reconnexion) ne le rattrapaient pas.
+      if (messages.length > 0 && currentParticipantId) {
         const participantIdForReceipt = currentParticipantId;
         void (async () => {
           try {
