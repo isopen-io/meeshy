@@ -109,7 +109,7 @@ export async function createCommentMentionNotificationsBatch(
     // #14318 — la SYNTHÈSE du commentaire, dans la langue de cadrage du destinataire.
     const content = textSynthesis(lang, params.commentExcerpt);
 
-    if (!deps.shouldCreateMentionNotification(params.commenterId, userId)) {
+    if (!deps.consumeMentionBudget(params.commenterId, userId)) {
       notificationLogger.info('Comment mention notification blocked (rate limit)', {
         commenterId: params.commenterId,
         recipientId: userId,

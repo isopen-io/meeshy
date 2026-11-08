@@ -43,11 +43,20 @@ const MESSAGE_ID = '507f1f77bcf86cd799439033';
 type Conversation = { type: string; isActive?: boolean; closedAt?: Date | null; isAnnouncementChannel?: boolean; defaultWriteRole?: string | null };
 type Pinner = { role: string; user: { role: string; birthDate?: Date | null } | null; permissions?: unknown; anonymousSession?: unknown } | null;
 
-async function buildApp(options: { conversation: Conversation; pinner: Pinner }) {
+/**
+ * `pinnedAt` est la PRÉ-CONDITION du geste, et elle est l'état OPPOSÉ de
+ * celui qu'il produit (#17031) : un `PUT` ne transite que depuis « non
+ * épinglé », un `DELETE` que depuis « épinglé ». La fixture portait `null`
+ * pour les deux, donc le `DELETE` y décrivait un REJEU — un état où la route
+ * n'écrit, n'annonce et ne diffuse désormais plus rien, par décision. Un
+ * témoin de DROIT D'ÉCRIRE posé sur un rejeu ne peut plus voir le droit qu'il
+ * garde : c'est l'absence d'effet qui le satisferait, pas le refus.
+ */
+async function buildApp(options: { conversation: Conversation; pinner: Pinner; pinnedAt?: Date | null }) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const prisma = {
     message: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: MESSAGE_ID, pinnedAt: null, conversation: options.conversation }),
+      findFirst: jest.fn<any>().mockResolvedValue({ id: MESSAGE_ID, pinnedAt: options.pinnedAt ?? null, pinnedBy: null, conversation: options.conversation }),
       update: jest.fn<any>().mockResolvedValue({}),
     },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(options.pinner) },
@@ -71,8 +80,12 @@ describe('épingler exige le droit d’écrire (#11219)', () => {
     mockCanAccessConversation.mockResolvedValue(true);
   });
 
+  /** L'état depuis lequel le geste TRANSITE — l'opposé de celui qu'il produit. */
+  const precondition = (method: 'PUT' | 'DELETE'): Date | null =>
+    method === 'DELETE' ? new Date('2026-11-01T08:30:00.000Z') : null;
+
   it.each(['PUT', 'DELETE'] as const)('%s : un simple abonné d’un canal d’annonces est refusé (403), rien n’est écrit', async (method) => {
-    const { app, prisma } = await buildApp({ conversation: announcements, pinner: subscriber });
+    const { app, prisma } = await buildApp({ conversation: announcements, pinner: subscriber, pinnedAt: precondition(method) });
     try {
       const res = await app.inject({ method, url });
       expect(res.statusCode).toBe(403);
@@ -83,7 +96,7 @@ describe('épingler exige le droit d’écrire (#11219)', () => {
   });
 
   it.each(['PUT', 'DELETE'] as const)('%s : l’administrateur du canal épingle', async (method) => {
-    const { app, prisma } = await buildApp({ conversation: announcements, pinner: { role: 'admin', user: { role: 'USER' } } });
+    const { app, prisma } = await buildApp({ conversation: announcements, pinner: { role: 'admin', user: { role: 'USER' } }, pinnedAt: precondition(method) });
     try {
       const res = await app.inject({ method, url });
       expect(res.statusCode).toBe(200);
@@ -95,7 +108,7 @@ describe('épingler exige le droit d’écrire (#11219)', () => {
 
   it.each(['PUT', 'DELETE'] as const)('%s : une conversation close refuse en 410, même au créateur', async (method) => {
     const closed: Conversation = { type: 'group', isActive: true, closedAt: new Date('2026-10-19T00:00:00.000Z'), isAnnouncementChannel: false, defaultWriteRole: 'everyone' };
-    const { app, prisma } = await buildApp({ conversation: closed, pinner: { role: 'creator', user: { role: 'BIGBOSS' } } });
+    const { app, prisma } = await buildApp({ conversation: closed, pinner: { role: 'creator', user: { role: 'BIGBOSS' } }, pinnedAt: precondition(method) });
     try {
       const res = await app.inject({ method, url });
       expect(res.statusCode).toBe(410);

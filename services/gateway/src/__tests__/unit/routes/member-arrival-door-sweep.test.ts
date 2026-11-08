@@ -112,12 +112,38 @@ describe('inventaire des portes d\'arrivée (#16837)', () => {
     expect(unaccounted).toEqual([]);
   });
 
-  it('chaque porte d\'arrivée appelle le site UNIQUE de l\'éventail', () => {
-    const silent = ARRIVAL_DOORS.filter(
-      (door) => !readFileSync(join(SRC, door), 'utf8').includes('announceMemberArrival('),
-    );
+  /**
+   * Le verbe peut être appelé par DÉLÉGATION, et c'est ce que #17032 a fait :
+   * les deux portes dont l'arrivant est un TIERS passent désormais par
+   * `announceMembershipAdmission`, le site unique des TROIS diffusions
+   * d'adhésion, dont l'arrivée n'est qu'une.
+   *
+   * Ce balayage a rougi sur cette extraction, et c'était son rôle : il
+   * énumère ses sites par le NOM de l'appel, et le noyau du geste venait de
+   * déménager. Il exige donc la déclaration du nouveau chemin — **plus la
+   * vérification que l'unité déléguée appelle bien le verbe**, sans quoi une
+   * délégation déclarée vers un module qui n'annonce rien serait une exemption
+   * déguisée.
+   */
+  const DELEGATES: Record<string, string> = {
+    'announceMembershipAdmission(': 'routes/conversations/membershipAdmissionFanOut.ts',
+  };
+
+  const announcesArrival = (source: string): boolean =>
+    source.includes('announceMemberArrival(')
+    || Object.entries(DELEGATES).some(([call, delegate]) =>
+      source.includes(call) && readFileSync(join(SRC, delegate), 'utf8').includes('announceMemberArrival('));
+
+  it('chaque porte d\'arrivée appelle le site UNIQUE de l\'éventail, directement ou par délégation', () => {
+    const silent = ARRIVAL_DOORS.filter((door) => !announcesArrival(readFileSync(join(SRC, door), 'utf8')));
 
     expect(silent).toEqual([]);
+  });
+
+  it('une délégation déclarée pointe un module qui appelle VRAIMENT le verbe', () => {
+    Object.values(DELEGATES).forEach((delegate) => {
+      expect(readFileSync(join(SRC, delegate), 'utf8')).toContain('announceMemberArrival(');
+    });
   });
 
   it('l\'inventaire des non-portes ne porte aucune entrée MORTE', () => {

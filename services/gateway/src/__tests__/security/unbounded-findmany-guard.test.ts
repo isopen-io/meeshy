@@ -313,8 +313,17 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // déjà gelées ici : un éventail qui s'arrête à N destinataires ne prévient
   // pas les autres, et un `take` y serait un défaut de livraison, pas une
   // protection. La borne qui compte est l'appartenance à UNE conversation.
-  'conversations/participants-writes.ts': 2,
+  //
+  // 2 -> 1 + 1 : #17032 a emporté dans `membershipAdmissionFanOut.ts` la
+  // lecture des `userId` ACTIFS que `conversation:new` sert à l'arrivant, parce
+  // que les deux portes dont l'arrivant est un TIERS doivent la partager et
+  // qu'une seule l'émettait. Le compte total est inchangé — MIGRATION, comme
+  // celles de #4176, #4284, #4713 et #16837 au-dessus, et pour la même raison
+  // qu'elle reste non bornée : une ligne de liste qui ne nomme que N membres
+  // sur N+1 est fausse, pas plus sûre.
+  'conversations/participants-writes.ts': 1,
   'conversations/memberArrivalFanOut.ts': 1,
+  'conversations/membershipAdmissionFanOut.ts': 1,
   'conversations/participant-removal.ts': 2,
   'conversations/search.ts': 1,
   'conversations/sharing.ts': 2,

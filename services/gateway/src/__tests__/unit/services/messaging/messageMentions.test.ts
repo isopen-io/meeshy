@@ -118,6 +118,28 @@ describe('resolveMessageMentions — court-circuit', () => {
     expect(candidates).not.toContain('u-50');
   });
 
+  // Le plafond compte des PERSONNES, comme son nom le dit (#17073). L'autre
+  // source de la même donnée ne peut PAS porter deux fois la même personne :
+  // l'extraction passe par une carte `username → user`. La liste explicite,
+  // elle, pouvait — et `slice(0, 50)` bornait alors cinquante COPIES, si bien
+  // qu'une charge `[victime ×50]` consommait tout le plafond pour un seul
+  // destinataire. Le témoin du plafond ci-dessus ne pouvait pas le voir : ses
+  // soixante entrées sont toutes distinctes.
+  it('le plafond compte des personnes, pas des occurrences', async () => {
+    const explicit = [...Array.from({ length: 60 }, () => 'u-victime'), 'u-autre'];
+    const prisma = makePrisma({ user: { findMany: jest.fn<any>().mockResolvedValue([]) } });
+    const mentionService = makeMentionService({
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [] }),
+    });
+
+    await resolveMessageMentions({
+      prisma, mentionService, message: MESSAGE,
+      content: 'sans arobase', explicitMentionedUserIds: explicit,
+    });
+
+    expect(mentionService.validateMentionPermissions.mock.calls[0][1]).toEqual(['u-victime', 'u-autre']);
+  });
+
   it('rend le lot vide sans service de mentions câblé', async () => {
     const prisma = makePrisma();
 

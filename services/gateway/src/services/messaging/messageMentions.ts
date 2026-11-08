@@ -542,7 +542,14 @@ async function computeValidatedMentions(
     // deux sources décrivent la même intention, et un message ne doit pas
     // échouer pour avoir nommé trop de monde là où l'autre chemin se contente
     // d'en retenir cinquante.
-    candidateUserIds = Array.from(explicit).slice(0, MAX_MENTIONS_PER_MESSAGE);
+    // DÉDOUBLONNÉE AVANT la troncature (#17073) : l'autre source de la même
+    // donnée — l'extraction depuis le contenu — passe par une carte
+    // `username → user`, donc elle ne peut pas porter deux fois la même
+    // personne. La liste explicite, elle, pouvait : `slice(0, 50)` bornait
+    // alors cinquante COPIES au lieu de cinquante personnes, et une charge
+    // `[victime ×50]` consommait tout le plafond pour un seul destinataire.
+    // Le plafond compte des PERSONNES, comme son nom le dit.
+    candidateUserIds = [...new Set(explicit)].slice(0, MAX_MENTIONS_PER_MESSAGE);
   } else {
     const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
     const extracted = mentionService.extractMentionsWithParticipants(content, participants);
