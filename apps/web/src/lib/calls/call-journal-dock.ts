@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 
 import { useMediaFlag } from '@/lib/use-media-flag';
 
-import type { CallLayerEvent, CallPanelKind } from './call-screen-layer';
+import { callActions } from './call-actions';
+import type { CallLayerEvent, CallPanelKind, CallPanels } from './call-screen-layer';
 
 /**
  * **LE JOURNAL EN COLONNE SUR GRAND ÉCRAN** (#16942, vues W1 et W2 de
@@ -76,4 +77,55 @@ export function useJournalColumn({ docks, available, panel, send }: JournalColum
     send({ type: 'close' });
   }, [docks, panel]);
   return { shown: docks && docked && available, toggle: () => setDocked((open) => !open), close: () => setDocked(false) };
+}
+
+type JournalDockParams = {
+  /** Imposé par les témoins ; sinon la fenêtre décide. */
+  readonly wide: boolean | undefined;
+  readonly available: boolean;
+  readonly panel: CallPanelKind | null;
+  readonly send: (event: CallLayerEvent) => void;
+};
+
+export type JournalDock = {
+  readonly docks: boolean;
+  readonly column: JournalColumn;
+  readonly panels: CallPanels;
+  /** Ce que la colonne retire à la scène, à la bande du bas et au milieu — jamais à l'en-tête. */
+  readonly reserve: Readonly<Record<`data-${string}`, string>>;
+  readonly reserveEnd: { readonly paddingInlineEnd?: number };
+  /** La largeur rendue à la colonne : la scène en duo s'y prolonge en flou (W1). */
+  readonly bleedEnd: number;
+};
+
+/** Le câblage de la colonne du journal dans l'écran d'appel : la place, la colonne, les panneaux de la pilule et la réserve. */
+export function useJournalDock({ wide, available, panel, send }: JournalDockParams): JournalDock {
+  const docks = useJournalDocks(wide);
+  const column = useJournalColumn({ docks, available, panel, send });
+  return {
+    docks,
+    column,
+    panels: {
+      open: panel ?? (column.shown ? 'journal' : null),
+      toggle: (next) => (next === 'journal' && docks ? column.toggle() : send({ type: 'open-panel', panel: next })),
+      enter: (mode) => send({ type: 'enter-mode', mode }),
+    },
+    reserve: column.shown ? { 'data-call-journal-reserve': '' } : {},
+    reserveEnd: column.shown ? { paddingInlineEnd: JOURNAL_COLUMN_RESERVE } : {},
+    bleedEnd: column.shown ? JOURNAL_COLUMN_RESERVE : 0,
+  };
+}
+
+/** Échap replie d'abord le panneau, puis la colonne du journal ; rien d'ouvert, il réduit l'appel. */
+export function useEscapeFolds({ live, panelOpen, column, send }: { readonly live: boolean; readonly panelOpen: boolean; readonly column: JournalColumn; readonly send: (event: CallLayerEvent) => void }): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !live) return;
+      if (panelOpen) send({ type: 'close' });
+      else if (column.shown) column.close();
+      else callActions.minimize();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [live, panelOpen, column.shown]);
 }

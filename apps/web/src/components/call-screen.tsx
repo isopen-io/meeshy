@@ -21,10 +21,10 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
-import { JOURNAL_COLUMN_RESERVE, useJournalColumn, useJournalDocks } from '@/lib/calls/call-journal-dock';
+import { useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
-import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
+import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
@@ -354,16 +354,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     focusNext.current = focusTarget(shown, next);
     setLayer(next);
   };
-  const docks = useJournalDocks(wide);
-  const column = useJournalColumn({ docks, available: live && offer.journal && chrome.mode === null, panel: chrome.panel, send });
-  const panels: CallPanels = {
-    open: chrome.panel ?? (column.shown ? 'journal' : null),
-    toggle: (panel) => (panel === 'journal' && docks ? column.toggle() : send({ type: 'open-panel', panel })),
-    enter: (mode) => send({ type: 'enter-mode', mode }),
-  };
-  /* Ce que la colonne du journal retire à la scène, à la bande du bas et au milieu — jamais à l'en-tête. */
-  const reserve = column.shown ? { 'data-call-journal-reserve': '' } : {};
-  const reserveEnd = column.shown ? { paddingInlineEnd: JOURNAL_COLUMN_RESERVE } : {};
+  const { docks, column, panels, reserve, reserveEnd, bleedEnd } = useJournalDock({ wide, available: live && offer.journal && chrome.mode === null, panel: chrome.panel, send });
   const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
   const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
   const expanded = shown.kind === 'menu' || shown.kind === 'panel';
@@ -388,16 +379,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     if (selector !== null) root.current?.querySelector<HTMLElement>(selector)?.focus();
   });
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !live) return;
-      if (chrome.panel !== null) send({ type: 'close' });
-      else if (column.shown) column.close();
-      else callActions.minimize();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [live, chrome.panel, column.shown]);
+  useEscapeFolds({ live, panelOpen: chrome.panel !== null, column, send });
 
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">
@@ -505,7 +487,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       self={self}
       chromeVisible={visibility === 'shown'}
       onRevealChrome={revealChrome}
-      bleedEnd={column.shown ? JOURNAL_COLUMN_RESERVE : 0}
+      bleedEnd={bleedEnd}
     />
   );
 
@@ -613,7 +595,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         </Suspense>
       )}
       {overlayVideo ? (
-        <div ref={stageRef} className="absolute inset-0" style={column.shown ? { insetInlineEnd: JOURNAL_COLUMN_RESERVE } : undefined} data-call-stage-surface="" {...reserve}>
+        <div ref={stageRef} className="absolute inset-0" style={bleedEnd === 0 ? undefined : { insetInlineEnd: bleedEnd }} data-call-stage-surface="" {...reserve}>
           {stage}
         </div>
       ) : null}
