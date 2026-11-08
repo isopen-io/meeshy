@@ -631,21 +631,6 @@ struct ConversationHeaderAvatarView: View {
     }
 }
 
-/// Le disque de verre de la porte de l'aperçu — la forme de la loupe
-/// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
-struct HeaderOpenFullGlyph: View {
-    let accentColor: String
-
-    var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(Color(hex: accentColor))
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
-            .meeshyTapTarget()
-    }
-}
-
 // MARK: - Le fond de la conversation, en type NOMINAL
 
 /// Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair d'un
