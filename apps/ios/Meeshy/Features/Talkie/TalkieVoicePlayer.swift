@@ -30,6 +30,7 @@ final class TalkieVoicePlayer: TalkieSink {
     private struct Voice {
         let node: AVAudioPlayerNode
         let decoder: TalkieAdtsStreamDecoder
+        let format: AVAudioFormat
         var pending = 0
         /// Rien de plus n'arrivera : la file finit de sonner, puis se libère.
         var released = false
@@ -70,7 +71,7 @@ final class TalkieVoicePlayer: TalkieSink {
         let wasWarm = !isIdle && engine.isRunning
         if isIdle { prepareOutput() }
         var voice = voices[talkieId] ?? attachVoice(format: buffer.format, decoder: decoder)
-        guard !voice.released, startEngineIfNeeded() else { return }
+        guard !voice.released, Self.mayPlay(buffer.format, on: voice.format), startEngineIfNeeded() else { return }
         voice.pending += 1
         voices[talkieId] = voice
         announced.remove(talkieId)
@@ -109,7 +110,13 @@ final class TalkieVoicePlayer: TalkieSink {
         let node = AVAudioPlayerNode()
         engine.attach(node)
         engine.connect(node, to: voicesMixer, format: format)
-        return Voice(node: node, decoder: decoder)
+        return Voice(node: node, decoder: decoder, format: format)
+    }
+
+    /// Un nœud ne joue que le format auquel il est relié : un fragment qui change de format en pleine prise de parole
+    /// lèverait une exception d'AVAudioPlayerNode — il est ignoré.
+    nonisolated static func mayPlay(_ format: AVAudioFormat, on connected: AVAudioFormat) -> Bool {
+        format == connected
     }
 
     private func finished(_ talkieId: String) {

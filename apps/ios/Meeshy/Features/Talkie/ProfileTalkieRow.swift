@@ -40,7 +40,6 @@ struct ProfileTalkieRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             }
         }
-        .onDisappear { stopHolding() }
         .adaptiveOnChange(of: sender.notice) { _, new in
             guard let new else { return }
             sender.notice = nil
@@ -61,7 +60,7 @@ struct ProfileTalkieRow: View {
     }
 
     private var holdButton: some View {
-        let live = sender.isActive
+        let live = holding || sender.isActive
         return HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: live ? "waveform" : "mic.fill")
                 .accessibilityHidden(true)
@@ -75,30 +74,13 @@ struct ProfileTalkieRow: View {
         )
         .overlay(Capsule().stroke(MeeshyColors.brandPrimary, lineWidth: 1.5))
         .contentShape(Capsule())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in startHolding() }
-                .onEnded { _ in stopHolding() }
-        )
+        .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ProfileTalkieWording.holdA11y(name: displayName))
         .accessibilityValue(live ? label : "")
         .accessibilityHint(ProfileTalkieWording.holdHint)
         .accessibilityAddTraits([.isButton, .updatesFrequently])
         .accessibilityIdentifier("talkie.send")
-    }
-
-    private func startHolding() {
-        guard !holding else { return }
-        holding = true
-        HapticFeedback.medium()
-        sender.press(toUserId: userId)
-    }
-
-    private func stopHolding() {
-        guard holding else { return }
-        holding = false
-        Task { await sender.release() }
     }
 }
 

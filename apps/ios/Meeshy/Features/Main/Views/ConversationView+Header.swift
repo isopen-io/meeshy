@@ -200,21 +200,14 @@ extension ConversationView {
     // MARK: - Header Call Buttons (audio + video)
 
     /// Frontière NOMINALE du bouton d'appel : l'emplacement lit un instantané
-    /// `Equatable` de l'état d'appel (`CallHeaderSnapshotStore`) et ne construit
-    /// pas la pile d'appel.
-    var headerCallButtons: ConversationHeaderCallSlot {
-        let entry = HeaderCallEntry.resolve(
-            conversation: conversation,
-            viewerPlatformRole: AuthManager.shared.currentUser?.role,
-            viewerIsGuest: anonymousSession != nil
-        )
-        return ConversationHeaderCallSlot(
-            entry: entry,
-            conversationId: conversation?.id ?? "",
-            calleeName: headerCalleeName(for: entry),
-            accentColor: accentColor,
-            secondaryColor: secondaryColor,
-            engagementConversationId: liveConversation?.id
+    /// `Equatable` de l'état d'appel et ne construit pas la pile d'appel ; le
+    /// talkie se pose à côté dans un direct (#17093).
+    var headerCallButtons: ConversationHeaderCallCluster {
+        let entry = HeaderCallEntry.resolve(conversation: conversation, viewerPlatformRole: AuthManager.shared.currentUser?.role, viewerIsGuest: anonymousSession != nil)
+        return ConversationHeaderCallCluster(
+            entry: entry, conversationId: conversation?.id ?? "", calleeName: headerCalleeName(for: entry),
+            peerName: resolvedCalleeName, talkieAllowed: !previewMode, encryptionMode: liveConversation?.encryptionMode,
+            accentColor: accentColor, secondaryColor: secondaryColor, engagementConversationId: liveConversation?.id
         )
     }
 
