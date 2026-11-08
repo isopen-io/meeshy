@@ -43,6 +43,7 @@
 import { NotificationService } from '../../../../services/notifications/NotificationService';
 import { reproduceEditedMessageNotifications } from '../../../../services/messaging/reproduceEditedMessageNotifications';
 import { reconcileEditedMentions } from '../../../../services/messaging/messageMentions';
+import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   notificationLogger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -211,6 +212,101 @@ describe('notifyNewlyMentioned — un ENTRANT nommé par édition ne reçoit pas
     const commonData = await runEdit();
 
     expect(commonData?.previewBasis).toEqual({ kind: 'protected-placeholder' });
+  });
+});
+
+/**
+ * La DIMENSION voisine, sur la MÊME fonction : le PLANCHER D'HISTORIQUE.
+ *
+ * `loadMessageProtection` couvre la vue unique, le flou, l'éphémère et le
+ * chiffré — jamais le plancher. Un INSCRIT entré par un lien sans historique
+ * recevait donc sur son écran verrouillé le texte intégral d'un message écrit
+ * avant son arrivée, dès qu'une édition l'y nommait, pendant que
+ * `GET …/messages` et `/sync` le lui refusent. Le message n'a même pas besoin
+ * d'être protégé : c'est sa DATE qui le met hors de portée du lecteur.
+ *
+ * Exactement le raisonnement du cycle 123 bis, écrit sur place pour l'autre
+ * dimension — « ce sont des TIERS » —, et la garde se relit ICI plutôt que de
+ * descendre par les paramètres, pour la raison que le même doc-comment donne :
+ * « une garde de confidentialité qui dépend du câblage de l'appelant échoue en
+ * montrant PLUS ».
+ *
+ * Le double de participants ÉVALUE le `where` : la requête des lecteurs TARDIFS
+ * doit pouvoir ne rien rendre, sans quoi tout le monde est tenu pour suspect.
+ */
+describe('notifyNewlyMentioned — le PLANCHER D’HISTORIQUE écarte un nommé qui ne peut pas lire le message', () => {
+  const ECRIT = new Date('2026-10-08T10:00:00Z');
+
+  const ligne = (over: MongoDocument): MongoDocument => ({
+    conversationId: CONV_ID, isActive: true, role: 'member',
+    shareLinkId: null, historyVisibleFrom: null, permissions: null,
+    anonymousSession: null, user: { role: 'USER' }, ...over,
+  });
+
+  /** `tardif` : l'entrant est arrivé APRÈS le message, par un lien fermé. */
+  const prismaAvecPlancher = (tardif: boolean) => {
+    const rows: MongoDocument[] = [
+      ligne({ id: 'part_author', userId: AUTHOR_ID, joinedAt: new Date(ECRIT.getTime() - 86_400_000), role: 'creator' }),
+      ligne({
+        id: 'part_newcomer', userId: NEWCOMER_ID,
+        joinedAt: tardif ? new Date(ECRIT.getTime() + 60_000) : new Date(ECRIT.getTime() - 3_600_000),
+        shareLinkId: 'lnk-ferme',
+      }),
+    ];
+    return {
+      ...makeMentionPrisma(),
+      message: {
+        findUnique: jest.fn().mockResolvedValue({ ...plainMessage, createdAt: ECRIT }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      participant: {
+        findMany: jest.fn(async (args: any) => rows.filter((row) => matchesMongoWhere(row, args?.where ?? {}))),
+        findUnique: jest.fn().mockResolvedValue({ userId: AUTHOR_ID, isActive: true, conversationId: CONV_ID }),
+      },
+      conversationShareLink: {
+        findMany: jest.fn(async () => [
+          { id: 'lnk-ferme', allowViewHistory: false },
+          { id: 'lnk-ouvert', allowViewHistory: true },
+        ]),
+      },
+    } as any;
+  };
+
+  const runEdit = async (tardif: boolean) => {
+    const createMentionNotificationsBatch = jest.fn().mockResolvedValue(1);
+    await reconcileEditedMentions({
+      prisma: prismaAvecPlancher(tardif),
+      mentionService: {
+        extractMentionsWithParticipants: jest.fn().mockReturnValue([]),
+        resolveUsernames: jest.fn().mockResolvedValue(new Map()),
+        validateMentionPermissions: jest.fn().mockResolvedValue({ validUserIds: [NEWCOMER_ID] }),
+        createMentions: jest.fn().mockResolvedValue(undefined),
+      } as any,
+      notificationService: { createMentionNotificationsBatch } as any,
+      message: { id: MSG_ID, conversationId: CONV_ID, senderId: 'part_author', expiresAt: null },
+      content: SECRET,
+      explicitMentionedUserIds: [NEWCOMER_ID],
+      editorUserId: AUTHOR_ID,
+    });
+    return createMentionNotificationsBatch;
+  };
+
+  it('aucune bannière ne part vers un nommé entré APRÈS le message, par un lien sans historique', async () => {
+    const batch = await runEdit(true);
+
+    expect(batch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * NON-RÉGRESSION, et elle porte tout le poids du témoin ci-dessus : sans
+   * elle, « aucune bannière » ne distingue pas « écarté à raison » de « cette
+   * fonction ne pousse plus rien ».
+   */
+  it('un nommé entré AVANT le message reçoit bien sa bannière', async () => {
+    const batch = await runEdit(false);
+
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(batch.mock.calls[0]?.[0]).toEqual([NEWCOMER_ID]);
   });
 });
 
