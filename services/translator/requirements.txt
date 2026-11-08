@@ -5,7 +5,7 @@ python-dotenv==1.2.4
 fastapi==0.162.0
 uvicorn[standard]==0.54.0
 pydantic-settings==2.15.0
-pydantic==2.14.2
+pydantic==2.14.3
 
 # Communication gRPC et ZeroMQ
 # PIN EXACT lockstep (verified against PyPI metadata + `uv pip install --dry-run`).
@@ -79,7 +79,7 @@ pyarrow==25.0.1
 # insoluble ("No solution found... huggingface-hub>=0.25.0,<2.0" vs "==2.1.1") et
 # casse le job Docker "Build translator" (#10035). NE PAS bumper au-delà de 1.x
 # tant que datasets reste sur 5.0.1 — revalider avec `uv pip compile` si l'un bouge.
-huggingface_hub==1.32.0
+huggingface_hub==1.33.0
 safetensors==0.8.0
 peft==0.21.2
 # PIN EXACT — comme toute lib ML de ce fichier. Le service tourne SCIEMMENT sur
@@ -249,7 +249,7 @@ prometheus-client==0.26.0
 # renames asyncio_mode semantics). Dependabot's bump to 1.4.0 (PR #2081) made the
 # set unsatisfiable — same recurrence as the pytest 9.1.1 revert in ded481979.
 # Reject future pytest-asyncio 1.x PRs unless pytest itself moves off 8.3.4.
-pytest==8.3.4
+pytest==8.4.2
 pytest-asyncio==0.26.0
 pytest-cov==7.1.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
