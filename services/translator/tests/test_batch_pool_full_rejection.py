@@ -246,3 +246,55 @@ async def test_each_rejected_task_reaches_the_gateway_exactly_once(caplog):
     assert all(set(e) == {'type', 'taskId', 'messageId', 'error', 'conversationId'} for e in errors)
     assert pool.get_stats()['pool_full_rejections'] == 3
     _assert_no_text_logged(caplog)
+
+
+def _counting_enqueues(pool):
+    reached: list = []
+    original = pool.enqueue_task
+
+    async def counting(task):
+        reached.append(task.task_id)
+        return await original(task)
+
+    pool.enqueue_task = counting
+    return reached
+
+
+@pytest.mark.unit
+async def test_direct_refusal_releases_inflight_so_the_gateway_retry_is_accepted():
+    pool, handler, pub_socket = _pool_and_handler()
+    pool.connection_manager.enable_batching = False
+    reached = _counting_enqueues(pool)
+
+    await handler._handle_translation_request(_request("t1"))
+    await handler._handle_translation_request(_request("t1"))
+
+    assert reached == ["t1", "t1"], "la relance après refus doit atteindre enqueue_task"
+    assert [e['taskId'] for e in _sent_errors(pub_socket)] == ["t1", "t1"]
+
+
+@pytest.mark.unit
+async def test_batch_refusal_releases_inflight_so_the_gateway_retry_is_accepted():
+    pool, handler, pub_socket = _pool_and_handler()
+    pool.connection_manager.batch_max_size = 1
+    reached = _counting_enqueues(pool)
+
+    await handler._handle_translation_request(_request("t1"))
+    await handler._handle_translation_request(_request("t1"))
+
+    assert reached == ["t1", "t1"], "la relance après lot refusé doit atteindre enqueue_task"
+    assert [e['taskId'] for e in _sent_errors(pub_socket)] == ["t1", "t1"]
+
+
+@pytest.mark.unit
+async def test_accepted_task_keeps_its_inflight_claim():
+    pool, handler, pub_socket = _pool_and_handler()
+    pool.connection_manager.normal_pool.get_nowait()
+    pool.connection_manager.batch_max_size = 1
+    reached = _counting_enqueues(pool)
+
+    await handler._handle_translation_request(_request("t1"))
+    await handler._handle_translation_request(_request("t1"))
+
+    assert reached == ["t1"], "un re-push d'une tâche acceptée reste ignoré"
+    assert _sent_errors(pub_socket) == []
