@@ -137,9 +137,6 @@ export async function bloquer(
   // justement ce que fait quelqu'un dont le premier n'a « rien fait ».
   try { await getCacheStore().del(blockCacheKey(moi, cibleId)); } catch { /* best-effort */ }
 
-  // #14924 — un blocage coupe le lien : les partages du rituel s'éteignent, rejoué même sur un blocage déjà posé.
-  await withdrawRitualSharesBetween(fastify.prisma, { actorId: moi, otherId: cibleId, at: new Date() });
-
   // Les cercles (#13932) : un blocage annule la Connaissance née toute seule.
   cancelAutoAcquaintanceOnBlock(fastify.prisma, { blockerId: moi, blockedId: cibleId });
 
@@ -151,6 +148,13 @@ export async function bloquer(
   // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
   refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
+  // #14924 — un blocage coupe le lien : les partages du rituel s'éteignent, rejoué même sur un blocage déjà posé.
+  // Après les coupures et sans retenir la réponse : une panne ici ne rend pas 500 sur un blocage écrit, et le rejeu la solde.
+  try {
+    await withdrawRitualSharesBetween(fastify.prisma, { actorId: moi, otherId: cibleId, at: new Date() });
+  } catch (error: unknown) {
+    logError(fastify.log, '[BLOCKS] Ritual shares not withdrawn after block', error);
+  }
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une
