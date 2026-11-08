@@ -206,6 +206,57 @@ describe('broadcastReadStatus — un résumé PAR message figé (G-5, #7347)', (
   });
 
   /**
+   * #16961 — la résolution par message a TROIS issues et une seule a le droit
+   * de faire taire la diffusion. `getConversationReadStatuses` journalise et
+   * RELÈVE sur une panne de lecture : la levée remontait jusqu'au `try`
+   * best-effort de l'appelant, qui la journalise et passe, si bien qu'AUCUN
+   * `read-status:updated` ne partait. L'expéditeur n'apprenait rien du tout,
+   * là où l'agrégat lui aurait au moins servi l'état du fil. Sur un verdict de
+   * LIVRAISON, l'absence de preuve échoue OUVERT (cycle 127).
+   *
+   * Le défaut PRÉEXISTE à #16961, sur `read`, depuis G-5 — il n'y avait
+   * simplement aucun témoin pour le voir.
+   */
+  it('une lecture par message qui LÈVE retombe sur l’agrégat, elle ne se tait pas', async () => {
+    const { io, deps } = makeHarness();
+    deps.readStatusService.getConversationReadStatuses = jest
+      .fn<any>()
+      .mockRejectedValue(new Error('mongo down'));
+
+    await broadcastReadStatus(deps as any, readArgs({ messageIds: [M1, M2, M3] }));
+
+    const fanOut = io._sendsFor(READ_STATUS_UPDATED).filter((s: any) => s.rooms.length > 1);
+    expect(fanOut).toHaveLength(1);
+    expect(fanOut[0].payload.summary).toEqual({ totalMembers: 2, deliveredCount: 2, readCount: 2 });
+  });
+
+  it('une carte VIDE ne prouve rien non plus — même repli', async () => {
+    const { io, deps } = makeHarness({ perMessage: new Map() });
+
+    await broadcastReadStatus(deps as any, readArgs({ messageIds: [M1, M2, M3] }));
+
+    const fanOut = io._sendsFor(READ_STATUS_UPDATED).filter((s: any) => s.rooms.length > 1);
+    expect(fanOut).toHaveLength(1);
+  });
+
+  /**
+   * La moitié qu'il ne faut PAS confondre avec les deux ci-dessus : une carte
+   * INCOMPLÈTE a prouvé quelque chose, et la règle d'origine tient — un message
+   * que le moteur ne rend pas n'a pas de résumé, et lui inventer des compteurs
+   * à zéro ferait régresser ses coches.
+   */
+  it('une carte INCOMPLÈTE sert les messages rendus, et eux seuls', async () => {
+    const { io, deps } = makeHarness({
+      perMessage: new Map([[M2, { totalMembers: 2, receivedCount: 2, readCount: 1, readByAllAt: null }]]),
+    });
+
+    await broadcastReadStatus(deps as any, readArgs({ messageIds: [M1, M2, M3] }));
+
+    const fanOut = io._sendsFor(READ_STATUS_UPDATED).filter((s: any) => s.rooms.length > 1);
+    expect(fanOut.map((s: any) => s.payload.summary.messageId)).toEqual([M2]);
+  });
+
+  /**
    * Et la moitié qui SURVIT sans condition : un accusé qui ne déclare aucun lot
    * — la fenêtre, ou `received` — retombe sur l'agrégat. C'est le repli legacy,
    * intact, et c'est lui qui rend le silence de l'appelant exploitable.

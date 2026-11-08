@@ -9,6 +9,10 @@ import {
 } from './emitToConversationParticipants.js';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'BroadcastReadStatus' });
+
 /**
  * Les deux lectures dont la diffusion a besoin, nommées par ce qu'elles
  * répondent plutôt que par la classe qui les porte. `MessageReadStatusService`
@@ -356,14 +360,42 @@ export async function broadcastReadStatus(
     if (!exactMessageIds || !readStatusService.getConversationReadStatuses) {
       return [await readStatusService.getLatestMessageSummary(args.conversationId)];
     }
-    const perMessage = await readStatusService.getConversationReadStatuses(
-      args.conversationId,
-      [...exactMessageIds],
-      null
-    );
+    // #16961 — la résolution par message a TROIS issues, pas deux, et seule la
+    // deuxième a le droit de faire taire la diffusion.
+    //
+    // | issue | ce qu'elle prouve | verdict |
+    // |---|---|---|
+    // | carte NON vide | l'état de ces messages | un résumé par message |
+    // | carte INCOMPLÈTE | l'état des messages rendus | les rendus seulement |
+    // | carte VIDE, ou lecture qui LÈVE | **rien** | repli agrégé |
+    //
+    // La troisième est `unknown` (cycle 127), pas « ces messages n'ont pas de
+    // résumé » : `getConversationReadStatuses` journalise et RELÈVE sur une
+    // panne de lecture, et rend une carte vide quand la conversation ne porte
+    // aucun des ids. Dans les deux cas la boucle ci-dessous n'émettait AUCUN
+    // événement — la levée remontait jusqu'au `try` best-effort de l'appelant,
+    // qui la journalise et passe. L'expéditeur n'apprenait donc RIEN, là où le
+    // repli agrégé lui aurait au moins servi l'état du fil. Sur un verdict de
+    // LIVRAISON, l'absence de preuve échoue OUVERT : on retombe sur l'agrégat
+    // plutôt que de se taire.
+    //
+    // Cette issue existait AVANT ce lot, sur `read`, depuis G-5 — elle n'y
+    // avait simplement aucun témoin. Elle est fermée pour les deux.
+    const perMessage = await readStatusService
+      .getConversationReadStatuses(args.conversationId, [...exactMessageIds], null)
+      .catch((error: unknown) => {
+        logger.warn('per-message read statuses unavailable — aggregate fallback', {
+          conversationId: args.conversationId,
+          error,
+        });
+        return new Map<string, never>();
+      });
+    if (perMessage.size === 0) {
+      return [await readStatusService.getLatestMessageSummary(args.conversationId)];
+    }
     // Un message que le moteur ne rend pas (supprimé entre le gel et la
-    // diffusion, ou lecture tombée) n'a pas de résumé : lui inventer des
-    // compteurs à zéro ferait régresser ses coches chez l'expéditeur.
+    // diffusion) n'a pas de résumé : lui inventer des compteurs à zéro ferait
+    // régresser ses coches chez l'expéditeur.
     return exactMessageIds.flatMap((messageId) => {
       const row = perMessage.get(messageId);
       if (!row) return [];
