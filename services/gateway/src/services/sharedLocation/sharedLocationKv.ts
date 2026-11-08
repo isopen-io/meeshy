@@ -28,6 +28,8 @@ export type SharedLocationKv = {
   mget(keys: readonly string[]): Promise<readonly (string | null)[]>;
   set(key: string, value: string, ttlSeconds: number): Promise<void>;
   del(key: string): Promise<void>;
+  /** Pose un terme à une clé existante, sans toucher sa valeur. */
+  expire(key: string, ttlSeconds: number): Promise<void>;
   /** Pose `session` comme pointeur si la génération vaut `generation` ; rend la session REMPLACÉE (aussi rangée « à retirer »). */
   claim(keys: PointerKeys, args: { readonly generation: string; readonly session: string; readonly ttlSeconds: number }): Promise<{ readonly claimed: boolean; readonly displaced: string | null }>;
   /** Écrit `value` sous `state` si le pointeur désigne encore `session`. */
@@ -84,6 +86,9 @@ export function redisSharedLocationKv(redis: Redis): SharedLocationKv {
     del: async (key) => {
       await redis.del(key);
     },
+    expire: async (key, ttlSeconds) => {
+      await redis.expire(key, ttlSeconds);
+    },
     claim: async (keys, args) => {
       const [claimed, displaced] = (await redis.eval(CLAIM, 3, keys.generation, keys.pointer, keys.retiring, args.generation, args.session, String(args.ttlSeconds), String(RETIRING_TTL_SECONDS))) as [number, string];
       return { claimed: claimed === 1, displaced: orNull(displaced) };
@@ -118,6 +123,7 @@ export const UNAVAILABLE_SHARED_LOCATION_KV: SharedLocationKv = {
   mget: () => Promise.reject(new Error('shared location store unavailable')),
   set: () => Promise.reject(new Error('shared location store unavailable')),
   del: () => Promise.reject(new Error('shared location store unavailable')),
+  expire: () => Promise.reject(new Error('shared location store unavailable')),
   claim: () => Promise.reject(new Error('shared location store unavailable')),
   setIfCurrent: () => Promise.reject(new Error('shared location store unavailable')),
   advance: () => Promise.reject(new Error('shared location store unavailable')),

@@ -824,13 +824,30 @@ describe('un compte qui part ne partage plus (#16987)', () => {
     expect(m.emissions).toEqual([]);
   });
 
-  it('la purge efface aussi la génération et l\'ensemble « à retirer » : plus aucune clé du compte', async () => {
+  it('la purge ne laisse aucune clé du compte sans terme, et plus aucune passé le plus long partage', async () => {
     const m = monde();
     await demarrer(m);
     await endSharedLocationOfAccount(m.deps, EMETTEUR, { forget: true });
 
-    const clés = [...m.cache.entries.keys(), ...m.cache.sets.keys()];
-    expect(clés.filter((key) => key.includes(EMETTEUR))).toEqual([]);
+    const restantes = [...m.cache.entries].filter(([key]) => key.includes(EMETTEUR));
+    expect(restantes.filter(([, entry]) => entry.until === undefined)).toEqual([]);
+    expect([...m.cache.sets.keys()].filter((key) => key.includes(EMETTEUR))).toEqual([]);
+
+    m.avancer(8 * HEURE);
+    expect(await m.cache.mget(restantes.map(([key]) => key))).toEqual(restantes.map(() => null));
+  });
+
+  it('un démarrage en vol pendant la purge d\'un compte qui n\'a jamais partagé ne prend pas : la génération ne repart pas de zéro', async () => {
+    const m = monde();
+    m.cache.suspendreProchaineEcriture('claim');
+    const enVol = demarrer(m);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(await endSharedLocationOfAccount(m.deps, EMETTEUR, { forget: true })).toEqual({ success: true });
+    m.cache.relacher();
+
+    expect(await enVol).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.NOT_SHARING });
+    expect(m.cache.pointeurDe(EMETTEUR)).toBeNull();
+    expect(m.cache.etatsDe(EMETTEUR)).toEqual([]);
   });
 
   it('une panne du magasin ne dit pas « fini » et ne purge rien', async () => {

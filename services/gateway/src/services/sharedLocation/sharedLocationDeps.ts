@@ -32,6 +32,7 @@ const lazyCache: SharedLocationRelayDeps['cache'] = {
   mget: (keys) => kv().mget(keys),
   set: (key, value, ttlSeconds) => kv().set(key, value, ttlSeconds),
   del: (key) => kv().del(key),
+  expire: (key, ttlSeconds) => kv().expire(key, ttlSeconds),
   claim: (keys, args) => kv().claim(keys, args),
   setIfCurrent: (keys, args) => kv().setIfCurrent(keys, args),
   advance: (keys) => kv().advance(keys),

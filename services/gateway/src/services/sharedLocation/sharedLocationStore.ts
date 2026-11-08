@@ -18,7 +18,7 @@ import {
   type SharedLocationPrecision,
 } from '@meeshy/shared/types/shared-location';
 import { createHmac } from 'node:crypto';
-import type { SharedLocationKv } from './sharedLocationKv';
+import { RETIRING_TTL_SECONDS, type SharedLocationKv } from './sharedLocationKv';
 import { readerKeySecret } from '../posts/readerKey';
 import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
 
@@ -41,7 +41,7 @@ export type SharedLocationCache = SharedLocationKv;
 const tagOf = (userId: string): string => `{${userId.toLowerCase()}}`;
 const keyOf = (userId: string, sessionId: string): string => `shared-location:${tagOf(userId)}:${sessionId}`;
 const pointerKeyOf = (userId: string): string => `shared-location-current:${tagOf(userId)}`;
-/** Sans durée de vie : une génération ne revient jamais en arrière (une par compte). */
+/** Sans durée de vie tant que le compte vit : une génération ne revient jamais en arrière (une par compte). */
 const generationKeyOf = (userId: string): string => `shared-location-gen:${tagOf(userId)}`;
 const retiringKeyOf = (userId: string): string => `shared-location-retiring:${tagOf(userId)}`;
 const seenKeyOf = (userId: string, sessionId: string): string => `shared-location-seen:${tagOf(userId)}:${sessionId}`;
@@ -170,9 +170,14 @@ export async function unmarkSharedLocationSeen(cache: SharedLocationCache, userI
   await cache.unmarkSeen(seenKeyOf(userId, sessionId), readerIds.map((id) => seenMemberOf(sessionId, id)));
 }
 
-/** La purge d'un compte : sa génération (sans durée de vie) et son ensemble « à retirer » ne survivent pas à lui. */
+/**
+ * La purge d'un compte : son ensemble « à retirer » part, et sa génération reçoit un terme
+ * au lieu d'être effacée. Effacée, elle se relirait « 0 » : un démarrage en vol qui a lu
+ * « 0 » avant l'arrêt reprendrait le pointeur (ABA). Elle vit donc encore le plus long
+ * partage, puis disparaît.
+ */
 export async function purgeSharedLocationKeys(cache: SharedLocationCache, userId: string): Promise<void> {
-  await cache.del(generationKeyOf(userId));
+  await cache.expire(generationKeyOf(userId), RETIRING_TTL_SECONDS);
   await cache.del(retiringKeyOf(userId));
 }
 

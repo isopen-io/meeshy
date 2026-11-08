@@ -70,6 +70,11 @@ export function sharedLocationKvEnMemoire(options: { readonly horloge?: () => nu
       entries.delete(key);
       sets.delete(key);
     },
+    expire: async (key, ttl) => {
+      panne();
+      const entry = vivante(key);
+      if (entry) poser(key, entry.value, ttl);
+    },
     claim: async (keys, args) => {
       await ecriture('claim');
       if ((vivante(keys.generation)?.value ?? '0') !== args.generation) return { claimed: false, displaced: null };
