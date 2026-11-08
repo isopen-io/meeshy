@@ -105,3 +105,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : sous happy-dom, un champ texte se lit par `onInput` (convention du dépôt, `list-toolbar.tsx`) ; `onChange` n'y est jamais rappelé.
 - iOS et Android : rien à changer (iOS sert déjà l'écran ; Android : suivi #16153 et suivants).
 - Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), puis #6377 (réglages du créateur, web).
+
+## 2026-11-08 — réveil 13
+
+- Lot en cours : #6377, première moitié (web) — le créateur règle nom, description et confidentialité, et supprime sa communauté. Squelette.
