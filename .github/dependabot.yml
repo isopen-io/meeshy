@@ -194,6 +194,10 @@ updates:
       # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Épinglés à la main, jamais par Dependabot : numpy<1.24.0 (ESPnet 202412 +
+      # chatterbox-tts, voir espnet ci-dessous) et httpcore 0.17.3 (Prisma Python).
+      - dependency-name: "numpy"
+      - dependency-name: "httpcore"
       # espnet 202509+/202511 exigent numpy>=2.0, incompatible avec le pin
       # numpy<1.24.0 (ESPnet 202412 + chatterbox-tts). Un bump casse le build
       # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
