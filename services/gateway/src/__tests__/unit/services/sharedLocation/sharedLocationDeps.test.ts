@@ -24,7 +24,7 @@ jest.mock('../../../../services/CacheStore', () => ({
   }),
 }));
 
-import { sharedLocationRelayDepsOf } from '../../../../services/sharedLocation/sharedLocationDeps';
+import { endSharedLocationAfter, sharedLocationRelayDepsOf } from '../../../../services/sharedLocation/sharedLocationDeps';
 import { startSharedLocation, stopSharedLocation, updateSharedLocation } from '../../../../services/sharedLocation/sharedLocationRelay';
 import { messagingWorld } from '../../../helpers/messaging-circle-world';
 
@@ -46,5 +46,14 @@ describe('sans Redis, le partage est indisponible — jamais rangé dans la mém
     expect(await stopSharedLocation(deps, MOI)).toMatchObject(indisponible);
     expect(repli.size).toBe(0);
     expect(emissions).toEqual([]);
+  });
+});
+
+describe('un compte qui part sans Redis (#16987)', () => {
+  it('l\'extinction ne lève jamais : la panne est rapportée, une fois', async () => {
+    const world = messagingWorld({ users: [{ id: MOI }], links: [] });
+    const report = jest.fn();
+    await expect(endSharedLocationAfter({ prisma: world.prisma as unknown as PrismaClient, io: undefined, report }, MOI, { forget: true })).resolves.toBeUndefined();
+    expect(report).toHaveBeenCalledTimes(1);
   });
 });

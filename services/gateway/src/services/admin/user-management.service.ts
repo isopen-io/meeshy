@@ -87,6 +87,12 @@ export type UserManagementServiceDeps = {
    * caches (5 min).
    */
   readonly forgetTeamCircles?: (userId: string) => Promise<void>;
+  /**
+   * Éteint le partage de position d'un compte désactivé ou supprimé et prévient ceux qui le
+   * voyaient (#16987) : sans lui, l'état scellé court jusqu'à son terme et les lecteurs
+   * gardent un point qui ne bougera plus.
+   */
+  readonly endSharedLocation?: (userId: string) => Promise<void>;
 };
 
 /**
@@ -472,10 +478,24 @@ export class UserManagementService {
       },
     });
 
-    if (!data.isActive) await this.revokeSessionsBestEffort(userId, 'deactivation');
+    if (!data.isActive) {
+      await this.revokeSessionsBestEffort(userId, 'deactivation');
+      await this.endSharedLocationBestEffort(userId);
+    }
     await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
+  }
+
+  /** Best-effort, après l'écriture : un partage qui ne s'éteint pas ne défait pas la désactivation. */
+  private async endSharedLocationBestEffort(userId: string): Promise<void> {
+    const end = this.deps.endSharedLocation;
+    if (!end) return;
+    try {
+      await end(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Shared location was not ended after the departure of user ${userId}`, error);
+    }
   }
 
   /** Best-effort, après l'écriture : un cache qui ne s'oublie pas ne rend pas l'opération. */
@@ -593,6 +613,7 @@ export class UserManagementService {
     });
 
     await this.revokeSessionsBestEffort(userId, 'deletion');
+    await this.endSharedLocationBestEffort(userId);
     await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;

@@ -16,6 +16,7 @@ import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeService';
+import { endSharedLocationAfter } from './sharedLocation/sharedLocationDeps';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
 import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
 import { cleanupExpiredData as sweepExpiredData, type ShareLinkRevocationLive } from './cleanupExpiredData';
@@ -749,7 +750,11 @@ export class MaintenanceService {
    * action que l'utilisateur doit encore déclencher lui-même.
    */
   private purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
-    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId, { shareLinkLive: this.shareLinkRevocationLive }));
+    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId, {
+      shareLinkLive: this.shareLinkRevocationLive,
+      endSharedLocation: (id) =>
+        endSharedLocationAfter({ prisma: this.prisma, io: this.shareLinkRevocationLive?.resolveIO?.() ?? undefined, report: (error) => logger.warn(`[DELETION] shared location not ended user=${id}`, error) }, id, { forget: true }),
+    }));
   }
 
   /**

@@ -24,6 +24,8 @@ type PointerKeys = { readonly generation: string; readonly pointer: string; read
 
 export type SharedLocationKv = {
   get(key: string): Promise<string | null>;
+  /** Une lecture groupée, dans l'ordre des clés. */
+  mget(keys: readonly string[]): Promise<readonly (string | null)[]>;
   set(key: string, value: string, ttlSeconds: number): Promise<void>;
   del(key: string): Promise<void>;
   /** Pose `session` comme pointeur si la génération vaut `generation` ; rend la session REMPLACÉE (aussi rangée « à retirer »). */
@@ -75,6 +77,7 @@ const orNull = (value: unknown): string | null => (typeof value === 'string' && 
 export function redisSharedLocationKv(redis: Redis): SharedLocationKv {
   return {
     get: (key) => redis.get(key),
+    mget: async (keys) => (keys.length === 0 ? [] : redis.mget(...keys)),
     set: async (key, value, ttlSeconds) => {
       await redis.set(key, value, 'EX', ttlSeconds);
     },
@@ -112,6 +115,7 @@ export function redisSharedLocationKv(redis: Redis): SharedLocationKv {
 /** Sans Redis, le partage est indisponible : aucune donnée ne se range ailleurs. */
 export const UNAVAILABLE_SHARED_LOCATION_KV: SharedLocationKv = {
   get: () => Promise.reject(new Error('shared location store unavailable')),
+  mget: () => Promise.reject(new Error('shared location store unavailable')),
   set: () => Promise.reject(new Error('shared location store unavailable')),
   del: () => Promise.reject(new Error('shared location store unavailable')),
   claim: () => Promise.reject(new Error('shared location store unavailable')),

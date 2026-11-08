@@ -57,6 +57,10 @@ export function sharedLocationKvEnMemoire(options: { readonly horloge?: () => nu
       panne();
       return vivante(key)?.value ?? null;
     },
+    mget: async (keys) => {
+      panne();
+      return keys.map((key) => vivante(key)?.value ?? null);
+    },
     set: async (key, value, ttl) => {
       await ecriture('set');
       poser(key, value, ttl);

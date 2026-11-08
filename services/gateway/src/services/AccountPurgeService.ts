@@ -65,6 +65,12 @@ export type AccountPurgeOptions = {
    * en base et dans les caches (#10492).
    */
   readonly shareLinkLive?: ShareLinkRevocationLive;
+  /**
+   * Éteint son partage de position et efface ses clés sans durée de vie (#16987) : le
+   * point que ses amis voyaient ne court pas jusqu'à son terme dans un compte effacé.
+   * Best-effort chez l'appelant (`endSharedLocationAfter`) ; absent, rien n'est fait.
+   */
+  readonly endSharedLocation?: (userId: string) => Promise<void>;
 };
 
 /**
@@ -158,6 +164,7 @@ export async function purgeAccountIsolatedData(
       eraseReadingTelemetryOf(prisma, userId),
       eraseCallTelemetryOf(prisma, userId),
       eraseE2EEDataOfUser(prisma, userId),
+      options.endSharedLocation?.(userId),
     ]);
 
   const summary: AccountPurgeSummary = {

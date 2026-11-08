@@ -10,6 +10,7 @@ import { getCacheStore } from '../CacheStore';
 import { redisSharedLocationKv, UNAVAILABLE_SHARED_LOCATION_KV, type SharedLocationKv } from './sharedLocationKv';
 import {
   captureSharedLocationAccess,
+  endSharedLocationOfAccount,
   refreshSharedLocationBetween,
   type SharedLocationIo,
   type SharedLocationPairAccess,
@@ -28,6 +29,7 @@ const kv = (): SharedLocationKv => {
 
 const lazyCache: SharedLocationRelayDeps['cache'] = {
   get: (key) => kv().get(key),
+  mget: (keys) => kv().mget(keys),
   set: (key, value, ttlSeconds) => kv().set(key, value, ttlSeconds),
   del: (key) => kv().del(key),
   claim: (keys, args) => kv().claim(keys, args),
@@ -66,6 +68,21 @@ export async function refreshSharedLocationAfter(
 ): Promise<void> {
   try {
     await refreshSharedLocationBetween(sharedLocationRelayDepsOf(params), pair);
+  } catch (error) {
+    params.report(error);
+  }
+}
+
+/**
+ * Un compte désactivé, supprimé ou purgé ne partage plus (#16987) : son partage s'arrête
+ * et ceux qui le voyaient reçoivent la fin. Avec `forget` (la purge), ses clés sans durée
+ * de vie partent aussi. À appeler APRÈS l'écriture du compte ; un échec n'arrête jamais le
+ * geste, il est journalisé (le partage échoit de lui-même à son terme, au plus 8 h).
+ */
+export async function endSharedLocationAfter(params: RefreshParams, accountId: string, options: { readonly forget: boolean }): Promise<void> {
+  try {
+    const ack = await endSharedLocationOfAccount(sharedLocationRelayDepsOf(params), accountId, options);
+    if (!ack.success) params.report(new Error(`shared location of ${accountId} not ended`));
   } catch (error) {
     params.report(error);
   }

@@ -40,15 +40,19 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
+import { teamPeerCandidates } from '../relations/teamPeers';
 import { randomUUID } from 'node:crypto';
 import {
   advanceSharedLocationGeneration,
   claimSharedLocation,
   currentSharedLocationSession,
+  currentSharedLocationSessions,
   dropSharedLocationSession,
   forgetRetiredSharedLocationSession,
   markSharedLocationSeen,
+  purgeSharedLocationKeys,
   readSharedLocation,
+  readSharedLocations,
   readSharedLocationSession,
   retiringSharedLocationSessions,
   sharedLocationGeneration,
@@ -57,6 +61,7 @@ import {
   storeSharedLocationIfCurrent,
   unmarkSharedLocationSeen,
   type SharedLocationCache,
+  type SharedLocationCell,
   type SharedLocationState,
 } from './sharedLocationStore';
 
@@ -90,26 +95,62 @@ const round = (value: number): number => Math.round(value * DECIMALS) / DECIMALS
 const snap = (value: number, step: number, bound: number): number =>
   round(Math.min(bound, Math.max(-bound, (Math.floor(value / step) + 0.5) * step)));
 
-/** La projection d'UN destinataire : la position à sa précision, le rayon de son flou, rien d'autre. */
+/**
+ * La marge au-delà de la ligne de maille avant de changer de maille, en fraction du pas :
+ * le va-et-vient du bruit GPS près d'une ligne ne la révèle pas (#16987).
+ */
+const CELL_HOLD_MARGIN = 0.25;
+
+/** Un lecteur flouté n'a pas d'horloge fine : l'heure servie tombe sur le quart d'heure. */
+const BLUR_CLOCK_BUCKET_MS = 15 * 60_000;
+
+const roundedClock = (iso: string): string => new Date(Math.floor(Date.parse(iso) / BLUR_CLOCK_BUCKET_MS) * BLUR_CLOCK_BUCKET_MS).toISOString();
+
+const cellOf = (position: Pick<SharedLocationState['position'], 'latitude' | 'longitude'>, step: number): SharedLocationCell => ({
+  latitude: snap(position.latitude, step, 90),
+  longitude: snap(position.longitude, step, 180),
+});
+
+/** La maille servie après un pas : la retenue tant que la position reste dans la maille élargie de la marge, sinon la nouvelle. */
+const heldCell = (position: Pick<SharedLocationState['position'], 'latitude' | 'longitude'>, step: number, held: SharedLocationCell): SharedLocationCell => {
+  const reach = step * (0.5 + CELL_HOLD_MARGIN);
+  return Math.abs(position.latitude - held.latitude) <= reach && Math.abs(position.longitude - held.longitude) <= reach ? held : cellOf(position, step);
+};
+
+/** Les destinataires d'une position qui bouge : chacun garde sa maille retenue, sauf si l'émetteur s'en est éloigné. */
+const withHeldCells = (current: SharedLocationState, position: SharedLocationState['position']): SharedLocationState['recipients'] =>
+  current.recipients.map((recipient) => {
+    if (recipient.precision === 'exact') return recipient;
+    const step = SHARED_LOCATION_GRID_DEGREES[recipient.precision];
+    return { ...recipient, cell: heldCell(position, step, recipient.cell ?? cellOf(current.position, step)) };
+  });
+
+/**
+ * La projection d'UN destinataire : la position à sa précision, le rayon de son flou, rien
+ * d'autre. Un lecteur flouté reçoit la maille que `state` retient pour lui (`readerId`) et
+ * une heure arrondie.
+ */
 export function projectSharedLocation(
   userId: string,
-  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt'>,
+  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt' | 'recipients'>,
   access: SharedLocationReaderAccess,
+  readerId?: string,
 ): SharedLocationChangedEventData | null {
   if (access === 'none') return null;
-  const times = { updatedAt: state.updatedAt, expiresAt: state.expiresAt };
   if (access === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
-    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...times };
+    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, updatedAt: state.updatedAt, expiresAt: state.expiresAt };
   }
-  const step = SHARED_LOCATION_GRID_DEGREES[access];
+  const held = readerId === undefined ? undefined : state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.cell;
+  const cell = held ?? cellOf(state.position, SHARED_LOCATION_GRID_DEGREES[access]);
   return {
     userId,
-    latitude: snap(state.position.latitude, step, 90),
-    longitude: snap(state.position.longitude, step, 180),
+    latitude: cell.latitude,
+    longitude: cell.longitude,
     precision: access,
     radiusMeters: SHARED_LOCATION_BLUR_RADIUS_METERS[access],
-    ...times,
+    updatedAt: roundedClock(state.updatedAt),
+    expiresAt: state.expiresAt,
   };
 }
 
@@ -188,9 +229,9 @@ async function fanOut(
 ): Promise<{ readonly access: ReadonlyMap<string, SharedLocationReaderAccess>; readonly served: readonly string[] }> {
   const access = await accessOf(deps, emitterId, state, recipientIdsOf(state));
   const deliveries = [...access].flatMap(([readerId, readerAccess]) => {
-    const projection = projectSharedLocation(emitterId, state, readerAccess);
+    const projection = projectSharedLocation(emitterId, state, readerAccess, readerId);
     if (!projection) return [];
-    if (previous && sameServed(projection, projectSharedLocation(emitterId, previous, readerAccess))) return [];
+    if (previous && sameServed(projection, projectSharedLocation(emitterId, previous, readerAccess, readerId))) return [];
     return [{ readerId, projection }];
   });
   await markSharedLocationSeen(deps.cache, emitterId, state, deliveries.map((delivery) => delivery.readerId), deps.now());
@@ -209,7 +250,7 @@ async function reconcile(deps: SharedLocationRelayDeps, emitterId: string, reade
   const now = deps.now();
   const current = await readSharedLocation(deps.cache, emitterId, now);
   const access = current ? await accessOf(deps, emitterId, current, readers) : new Map<string, SharedLocationReaderAccess>();
-  const deliveries = readers.map((readerId) => ({ readerId, projection: current ? projectSharedLocation(emitterId, current, access.get(readerId) ?? 'none') : null }));
+  const deliveries = readers.map((readerId) => ({ readerId, projection: current ? projectSharedLocation(emitterId, current, access.get(readerId) ?? 'none', readerId) : null }));
   const ended = deliveries.filter((delivery) => delivery.projection === null).map((delivery) => delivery.readerId);
   if (current) await markSharedLocationSeen(deps.cache, emitterId, current, deliveries.filter((delivery) => delivery.projection !== null).map((delivery) => delivery.readerId), now);
   deliveries.forEach((delivery) => (delivery.projection ? serve(deps.io, delivery.readerId, delivery.projection) : unserve(deps.io, delivery.readerId, emitterId)));
@@ -295,7 +336,7 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
   try {
     current = await readSharedLocation(deps.cache, emitterId, now);
     if (!current) return failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
-    state = { ...current, position: parsed.data, updatedAt: new Date(now).toISOString() };
+    state = { ...current, recipients: withHeldCells(current, parsed.data), position: parsed.data, updatedAt: new Date(now).toISOString() };
     if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
   } catch {
     return UNAVAILABLE;
@@ -370,7 +411,7 @@ export async function refreshSharedLocationBetween(
     if (!state) continue;
     const after = (await accessOf(deps, emitterId, state, [readerId])).get(readerId) ?? 'none';
     const before = params.before?.get(directionKey(emitterId, readerId)) ?? 'none';
-    const served = projectSharedLocation(emitterId, state, after);
+    const served = projectSharedLocation(emitterId, state, after, readerId);
     if (served && after !== before) {
       await markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now);
       serve(deps.io, readerId, served);
@@ -391,8 +432,40 @@ const within = (item: SharedLocationChangedEventData, bbox: SharedLocationBbox |
     item.longitude <= bbox.maxLongitude);
 
 /**
- * Ce que `readerId` voit : les partages en cours de ses liens qui lui sont destinés,
- * tronqués, filtrés par l'emprise sur la position SERVIE — jamais sur la réelle.
+ * Termine le partage d'un compte qui part (désactivé, supprimé, purgé) : il s'arrête et
+ * ceux qu'il servait reçoivent la fin, comme à `location:share-stop`. Avec `forget` (la
+ * purge), la génération et l'ensemble « à retirer », sans durée de vie, partent aussi —
+ * jamais avant que l'arrêt ait pris. Une panne rend `UNAVAILABLE` : on rejoue.
+ */
+export async function endSharedLocationOfAccount(
+  deps: SharedLocationRelayDeps,
+  accountId: string,
+  options: { readonly forget: boolean },
+): Promise<SharedLocationStopAck> {
+  const stopped = await stopSharedLocation(deps, accountId);
+  if (!stopped.success || !options.forget) return stopped;
+  try {
+    await purgeSharedLocationKeys(deps.cache, accountId);
+  } catch {
+    return UNAVAILABLE;
+  }
+  return stopped;
+}
+
+/** Les émetteurs à lire : les liens du lecteur dès Ami, et les collègues de l'équipe (la loi les ouvre sans lien). */
+async function snapshotCandidates(deps: SharedLocationRelayDeps, readerId: string): Promise<readonly string[]> {
+  const [linked, peers] = await Promise.all([
+    comptesAuMoins(deps.prisma, readerId, 'FRIEND', { limit: SNAPSHOT_LINK_LIMIT }),
+    teamPeerCandidates(deps.prisma, readerId),
+  ]);
+  return [...new Set([...linked.map((link) => link.id), ...peers])];
+}
+
+/**
+ * Ce que `readerId` voit : les partages en cours de ses liens et de ses collègues qui lui
+ * sont destinés, tronqués, filtrés par l'emprise sur la position SERVIE — jamais sur la
+ * réelle. Lectures GROUPÉES : un `MGET` des pointeurs, un des états, une loi
+ * (`pairAccessAmong`) pour tous les émetteurs, qui suit la même loi d'équipe que le direct.
  */
 export async function sharedLocationSnapshotFor(
   deps: SharedLocationRelayDeps,
@@ -400,18 +473,23 @@ export async function sharedLocationSnapshotFor(
   options: { readonly bbox?: SharedLocationBbox },
 ): Promise<SharedLocationSnapshot> {
   const now = deps.now();
-  const linked = await comptesAuMoins(deps.prisma, readerId, 'FRIEND', { limit: SNAPSHOT_LINK_LIMIT });
-  const states = await Promise.all(linked.map(async (link) => [link.id, await readSharedLocation(deps.cache, link.id, now)] as const));
-  const served = await Promise.all(
-    states.map(async ([emitterId, state]) => {
-      if (!state) return null;
-      const access = (await accessOf(deps, emitterId, state, [readerId])).get(readerId) ?? 'none';
-      const projection = projectSharedLocation(emitterId, state, access);
-      if (!projection) return null;
-      await markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now);
-      return (await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId ? projection : null;
-    }),
-  );
-  return { items: served.filter((item): item is SharedLocationChangedEventData => item !== null && within(item, options.bbox)) };
-}
+  const states = await readSharedLocations(deps.cache, await snapshotCandidates(deps, readerId), now);
+  const addressed = [...states].filter(([, state]) => state.recipients.some((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase()));
+  if (addressed.length === 0) return { items: [] };
 
+  const emitterIds = addressed.map(([emitterId]) => emitterId);
+  const [law, usable] = await Promise.all([
+    pairAccessAmong(deps.prisma, { feature: 'location.temporary', subjectId: readerId, otherIds: emitterIds, subjectIs: 'viewer', now: new Date(now), consentOf: () => 'granted' }),
+    usableAccounts(deps.prisma, [readerId, ...emitterIds]),
+  ]);
+  const opened = addressed.flatMap(([emitterId, state]) => {
+    const chosen = state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.precision ?? 'none';
+    const access: SharedLocationReaderAccess = usable.has(readerId) && usable.has(emitterId) && law.get(emitterId)?.allowed === true ? chosen : 'none';
+    const projection = projectSharedLocation(emitterId, state, access, readerId);
+    return projection ? [{ emitterId, state, projection }] : [];
+  });
+  await Promise.all(opened.map(({ emitterId, state }) => markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now)));
+  const current = await currentSharedLocationSessions(deps.cache, opened.map(({ emitterId }) => emitterId));
+  const items = opened.filter(({ emitterId, state }) => current.get(emitterId) === state.sessionId).map(({ projection }) => projection);
+  return { items: items.filter((item) => within(item, options.bbox)) };
+}

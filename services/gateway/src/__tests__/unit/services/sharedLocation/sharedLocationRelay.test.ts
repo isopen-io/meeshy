@@ -235,7 +235,8 @@ describe('mettre à jour et arrêter', () => {
 
     expect(ack).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
     expect(m.vers(AMI).map((e) => [e.data.latitude, e.data.radiusMeters, e.data.updatedAt])).toEqual([[48.8738, 12, new Date(T0 + 60_000).toISOString()]]);
-    expect(m.vers(SANG).map((e) => [e.data.latitude, e.data.longitude])).toEqual([[48.85, 2.25]]);
+    expect(m.vers(PROCHE).map((e) => [e.data.latitude, e.data.longitude])).toEqual([[48.875, 2.295]]);
+    expect(m.vers(SANG)).toEqual([]);
   });
 
   it('une mise à jour sans partage en cours, ou après son terme, est refusée et ne part nulle part', async () => {
