@@ -101,6 +101,10 @@ export const EXEMPT_PATHS = [
     reason: "les illustrations de Mee et Meo (#9034) : la palette des PERSONNAGES, peinte dans le SVG du sticker et filmée pour iOS — un dessin, jamais un rôle de chrome",
   },
   {
+    prefix: 'components/screen-wait-art',
+    reason: "le SVG BAKÉ du sticker « On danse » de Mee et Meo (généré par scripts/generate-screen-wait-art.ts, « ne pas modifier à la main », byte-identique à lib/mee/screen-wait-art-source déjà exempté) : la palette des PERSONNAGES, jamais un rôle de chrome",
+  },
+  {
     prefix: 'lib/accent.ts',
     reason: "l'accent d'une conversation est DÉRIVÉ de ses métadonnées (langue, type, thème) — une couleur calculée, jamais un rôle de chrome",
   },
