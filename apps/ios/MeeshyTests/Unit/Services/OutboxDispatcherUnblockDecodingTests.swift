@@ -87,8 +87,8 @@ final class OutboxDispatcherUnblockDecodingTests: XCTestCase {
     func test_bothDispatchers_expectTheSameResponseType() throws {
         let source = try dispatcherSource()
 
-        let block = try XCTUnwrap(body(of: "private func dispatchBlockUser", in: source))
-        let unblock = try XCTUnwrap(body(of: "private func dispatchUnblockUser", in: source))
+        let block = try XCTUnwrap(body(of: "func dispatchBlockUser", in: source))
+        let unblock = try XCTUnwrap(body(of: "func dispatchUnblockUser", in: source))
 
         XCTAssertTrue(
             block.contains("APIResponse<BlockActionResponse>"),
@@ -112,7 +112,7 @@ final class OutboxDispatcherUnblockDecodingTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/OutboxDispatcher.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Services/OutboxDispatcher+Social.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
