@@ -392,9 +392,23 @@ export async function applyReceipt(
         // G-5 (#7347, G-8) — le lot RÉELLEMENT figé par CETTE écriture (le
         // VETTÉ de `vetReportedMessages`, jamais le lot brut rapporté par le
         // client) : `broadcastReadStatus` en tire un résumé PAR message.
-        // Réservé à `read` — `received`/`delivered` gardent leur repli
-        // agrégé, cf. sa doc-comment.
-        messageIds: params.type === 'read' ? targeted : undefined,
+        //
+        // #16961 — la forme suit l'ÉCRITURE, pas le mot de l'accusé, et c'est
+        // `markFor` juste en dessous qui la décide. `read` et `delivered`
+        // figent les ids vettés (le second un par un) : ils les déclarent.
+        // `received` fige TOUT le préfixe du fil en une passe
+        // (`markMessagesAsReceived` sans messageId) : lui passer les seuls ids
+        // rapportés ferait diffuser MOINS que ce qu'on vient d'écrire, donc il
+        // garde le repli agrégé — décision, pas reste.
+        //
+        // Avant ce lot, `delivered` était du mauvais côté de cette ligne : son
+        // écriture bouclait par message et sa diffusion décrivait le DERNIER
+        // message du fil. L'expéditeur ne voyait donc jamais avancer en direct
+        // son ✓✓ sur un message qui n'était pas le dernier — c'est-à-dire
+        // chaque fois que plusieurs messages arrivent pendant que le
+        // destinataire est hors ligne, le cas même que l'extension de
+        // notification iOS acquitte.
+        messageIds: params.type === 'received' ? undefined : targeted,
       }
     );
   } catch (error) {

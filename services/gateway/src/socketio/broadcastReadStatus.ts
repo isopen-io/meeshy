@@ -100,12 +100,32 @@ export interface ReadStatusBroadcastArgs {
   /**
    * G-5 (#7347) — le lot FIGÉ par CETTE écriture (`applyReceipt`'s `targeted`,
    * le résultat VETTÉ de `vetReportedMessages`), jamais un lot simplement
-   * RAPPORTÉ. Présent ET non vide UNIQUEMENT sur `type: 'read'` en mode exact
-   * — en son absence (repli legacy, ou `type: 'received'`), le comportement
-   * D'AVANT ce lot est intact : un seul résumé agrégé sur le dernier message.
-   * Sa présence fait émettre UN `read-status:updated` PAR message, dans
-   * L'ORDRE fourni — jamais un agrégat qui rétrograderait au silence les
-   * messages qui ne sont pas le dernier de la conversation.
+   * RAPPORTÉ. Sa présence fait émettre UN `read-status:updated` PAR message,
+   * dans L'ORDRE fourni — jamais un agrégat qui rétrograderait au silence les
+   * messages qui ne sont pas le dernier de la conversation. En son absence,
+   * repli LEGACY : un seul résumé agrégé sur le dernier message du fil.
+   *
+   * **Le champ ne dépend PAS du `type`, et c'est le lot #16961 qui l'a tranché**
+   * (il était réservé à `read`, si bien qu'un accusé de REMISE diffusait le
+   * résumé du dernier message du fil au lieu de celui qu'il venait
+   * d'acquitter — l'écriture étant, elle, déjà par message).
+   *
+   * Ce qu'il veut dire est donc : **le lot exact que cette écriture a figé**,
+   * et le site qui a COMPOSÉ l'écriture est le seul à le savoir. C'est lui qui
+   * remplit le champ ; cette unité le croit. D'où la répartition réelle, qui
+   * suit la forme de l'ÉCRITURE et non le mot de l'accusé (`markFor`,
+   * `routes/conversations/receipts.ts`) :
+   *
+   * | `type` | ce que l'écriture fige | ce champ |
+   * |---|---|---|
+   * | `read` | les ids vettés (mode exact) ou la fenêtre | le lot, ou rien |
+   * | `delivered` | les ids vettés, un par un | le lot |
+   * | `received` | TOUT le préfixe, en une passe | rien — voir ci-dessous |
+   *
+   * `received` garde le repli agrégé parce que son écriture n'est pas par
+   * message : `markMessagesAsReceived(participant, conversation)` avance un
+   * curseur sur tout le fil, et servir les seuls ids rapportés décrirait MOINS
+   * que ce que l'appel a figé. C'est une décision, pas un reste.
    */
   messageIds?: readonly string[];
 }
@@ -318,13 +338,19 @@ export async function broadcastReadStatus(
     return;
   }
 
-  // G-5 (#7347) — le lot EXACT gouverne la forme : présent (et non vide) sur un
-  // `read`, avec un collaborateur qui sait le résoudre par message, il fait
-  // rendre UN résumé PAR messageId, dans l'ordre fourni. Sinon, repli LEGACY —
-  // le comportement d'avant ce lot, intact : un seul résumé agrégé sur le
-  // dernier message de la conversation.
-  const exactMessageIds =
-    args.type === 'read' && args.messageIds && args.messageIds.length > 0 ? args.messageIds : null;
+  // G-5 (#7347) — le lot EXACT gouverne la forme : présent (et non vide), avec
+  // un collaborateur qui sait le résoudre par message, il fait rendre UN résumé
+  // PAR messageId, dans l'ordre fourni. Sinon, repli LEGACY — le comportement
+  // d'avant ce lot, intact : un seul résumé agrégé sur le dernier message de la
+  // conversation.
+  //
+  // #16961 — la condition ne regarde PLUS `args.type`. Elle le faisait, et
+  // c'était un report (écrit dans le doc-comment du champ, donc incapable de
+  // rougir) qui coûtait au seul chemin produisant ces accusés : l'extension de
+  // notification iOS, qui poste un reçu `delivered` PAR push. Le TYPE ne dit
+  // pas ce que l'écriture a figé — seul l'appelant le sait, et c'est ce qu'il
+  // déclare en remplissant ou non ce champ.
+  const exactMessageIds = args.messageIds && args.messageIds.length > 0 ? args.messageIds : null;
 
   const buildSummaries = async (): Promise<readonly ReadStatusSummary[]> => {
     if (!exactMessageIds || !readStatusService.getConversationReadStatuses) {

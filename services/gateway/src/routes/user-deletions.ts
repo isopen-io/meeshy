@@ -477,6 +477,46 @@ export default async function userDeletionsRoutes(
         // pour le même verbe côté message — jamais un `Server` nu de
         // socket.io, et jamais un échec de diffusion ne fait échouer cette
         // route (best-effort, comme documenté sur `broadcastToUser`).
+        // #16964 — l'INVERSE exact de ce que `delete-for-me` a fait. La route
+        // canonique appelle `endConversationMembership`, qui sort TOUTES les
+        // sockets du compte de `conversation:<id>` ; rien ne les y remettait,
+        // ni ici ni ailleurs, tant que l'appareil ne se reconnectait pas
+        // (`AuthHandler._joinUserConversations`) ou qu'un client n'émettait pas
+        // de lui-même `conversation:join`. La ligne redevenait active et
+        // l'appareil restait dans l'état le plus défavorable qui soit — et
+        // c'est le raisonnement que `participant-ban-core.ts` écrit déjà pour
+        // sa jumelle, le débannissement : `connectedUsers` le rapporte EN
+        // LIGNE, donc tout expéditeur saute la file de remise hors ligne pour
+        // lui, pendant qu'aucun événement de room ne l'atteint. Messages,
+        // réactions, éditions et accusés émis entre-temps sont perdus
+        // OUTRIGHT, pas rejoués à la reconnexion.
+        //
+        // Conditionné à la restauration EFFECTIVE : on n'arrive ici qu'après
+        // le refus d'une ligne non supprimée (`!participant.deletedForMe`),
+        // d'un banni, d'une conversation close et d'un salon interdit, puis
+        // après une écriture dont le `where` a tenu. Même condition que
+        // `membershipRestored` chez la jumelle — rebrancher les sockets de
+        // quelqu'un qui n'avait rien à défaire le ferait entrer dans un fil
+        // qu'il avait quitté.
+        //
+        // AVANT la diffusion, comme chez la jumelle : rebrancher d'abord,
+        // c'est s'assurer qu'aucun événement de room émis entre les deux ne
+        // manque à l'appareil. Un échec est journalisé, jamais fatal — le
+        // geste est déjà persisté, et rendre 500 ferait croire à l'appelant
+        // que sa restauration n'a pas eu lieu.
+        const restoreManager = fastify.socketIOHandler?.getManager();
+        if (restoreManager) {
+          try {
+            await restoreManager.joinUserToConversationRoom(userId, conversationId);
+          } catch (err) {
+            logger.error('Failed to re-join restored conversation room', {
+              userId,
+              conversationId,
+              err,
+            });
+          }
+        }
+
         const restoredPayload: ConversationRestoredEventData = { userId, conversationId };
         broadcastToUser(fastify, userId, SERVER_EVENTS.CONVERSATION_RESTORED, restoredPayload);
 
