@@ -6,6 +6,15 @@ import MeeshyUI
 // feuilles : elles reçoivent des `CallCaptionLine` déjà résolues (Prisme,
 // couleur, étiquette) et ne lisent aucun singleton.
 
+/// La couleur d'une personne sur le verre d'appel, en `Color` (loi 4) : le
+/// site UNIQUE où sa graine devient une teinte, pour sa ligne de sous-titres
+/// comme pour le liseré de ma vignette à l'appel entrant.
+extension CallSpeakerColor {
+    static func color(for userId: String) -> Color {
+        Color(hex: hex(for: userId))
+    }
+}
+
 enum CallCaptionsCopy {
     static var journal: String {
         String(localized: "call.captions.journal", defaultValue: "Journal", bundle: .main)
@@ -64,7 +73,7 @@ struct CallCaptionRow: View {
     var showsTime: Bool = false
     let onToggleOriginal: () -> Void
 
-    private var speakerColor: Color { Color(hex: line.speakerColorHex) }
+    private var speakerColor: Color { CallSpeakerColor.color(for: line.speakerId) }
 
     var body: some View {
         if line.isEvent {

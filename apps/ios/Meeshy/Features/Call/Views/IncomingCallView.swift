@@ -22,6 +22,18 @@ struct IncomingCallView: View {
     @State private var ringOpacity: Double = 1.0
     @State private var avatarBounce: Bool = false
     @State private var isDeclineSheetPresented: Bool = false
+    /// Vue P17 (#16945) — micro et caméra choisis AVANT de décrocher : un
+    /// état local de l'écran, rien n'en part au pair avant la réponse.
+    @State private var preAnswer = IncomingPreAnswer()
+
+    /// Le micro coupé dans la barre d'avant le décroché se pose juste après la
+    /// réponse, par le même chemin que la pilule : la piste qui naît pendant la
+    /// connexion respecte la coupure (#8434). Sans effet si la réponse n'est
+    /// pas partie (micro refusé, appel déjà fini).
+    private func applyMicrophoneChoice() {
+        guard preAnswer.answersMuted, !callManager.isMuted, callManager.callState == .connecting else { return }
+        callManager.toggleMute()
+    }
 
     /// Tranche les permissions AVANT de laisser `CallManager` répondre.
     ///
@@ -37,10 +49,16 @@ struct IncomingCallView: View {
                 callManager.endCall()
                 return
             }
-            if callManager.isVideoEnabled {
-                await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false)
+            switch preAnswer.route(isVideoCall: callManager.isVideoEnabled) {
+            case .asOffered:
+                if callManager.isVideoEnabled {
+                    await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false)
+                }
+                callManager.answerCall()
+            case .withoutVideo:
+                CallAnswerWithoutVideo(call: callManager).answer()
             }
-            callManager.answerCall()
+            applyMicrophoneChoice()
         }
     }
 
@@ -54,6 +72,7 @@ struct IncomingCallView: View {
                 return
             }
             CallAnswerWithoutVideo(call: callManager).answer()
+            applyMicrophoneChoice()
         }
     }
 
@@ -84,13 +103,16 @@ struct IncomingCallView: View {
 
             // Call type badge
             callTypeBadge
-                .padding(.bottom, 60)
+                .padding(.bottom, MeeshySpacing.lg)
+
+            // #8480 — entendre l'appelant avant de décrocher, sous son nom
+            // comme sur la vue P17
+            CallPreviewSoundButton(preview: .shared)
+                .padding(.bottom, MeeshySpacing.xxxl)
 
             Spacer()
 
-            // #8480 — entendre l'appelant avant de décrocher
-            CallPreviewSoundButton(preview: .shared)
-                .padding(.bottom, MeeshySpacing.xxl)
+            preAnswerBar
 
             // Accept / Reject buttons
             actionButtons
@@ -236,6 +258,28 @@ struct IncomingCallView: View {
         .accessibilityHint(String(localized: "call.decline.open.hint", defaultValue: "Propose des réponses rapides qui refusent l'appel", bundle: .main))
     }
 
+    // MARK: - Pre-Answer Bar
+
+    /// Vue P17 (#16945) — ce que l'autre verra, mon micro, ma caméra.
+    @ViewBuilder
+    private var preAnswerBar: some View {
+        if IncomingCallChoices.showsPreAnswerBar(isVideoCall: callManager.isVideoEnabled) {
+            IncomingPreAnswerBar(
+                peerName: callManager.remoteUsername
+                    ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main),
+                choice: preAnswer,
+                exposure: preAnswer.exposure(
+                    isVideoCall: callManager.isVideoEnabled,
+                    hasLocalVideoTrack: callManager.hasLocalVideoTrack
+                ),
+                onToggleMicrophone: { preAnswer = preAnswer.togglingMicrophone() },
+                onToggleCamera: { preAnswer = preAnswer.togglingCamera() }
+            )
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.xxl)
+        }
+    }
+
     // MARK: - Self Preview
 
     /// OPUS-5 — la vignette de ma propre caméra, en haut à droite comme la
@@ -247,7 +291,8 @@ struct IncomingCallView: View {
     private var selfPreview: some View {
         let shows = IncomingCallChoices.showsSelfPreview(
             isVideoCall: callManager.isVideoEnabled,
-            hasLocalVideoTrack: callManager.hasLocalVideoTrack
+            hasLocalVideoTrack: callManager.hasLocalVideoTrack,
+            cameraChosen: preAnswer.cameraOn
         )
         ZStack {
             if shows {
@@ -259,10 +304,14 @@ struct IncomingCallView: View {
                 )
                 .frame(width: size.width, height: size.height)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // Loi 4 — le liseré de MA vignette porte MA couleur, la même
+                // que ma tuile de groupe et mes sous-titres ; la plaque dit
+                // « Vous » comme ma tuile de groupe.
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                        .stroke(selfTileStroke, lineWidth: 2)
                 )
+                .overlay(alignment: .bottom) { selfTileNameplate }
                 .shadow(color: Color.black.opacity(0.35), radius: 10, y: 4)
                 .padding(.top, MeeshySpacing.lg)
                 .padding(.trailing, MeeshySpacing.lg)
@@ -272,6 +321,25 @@ struct IncomingCallView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: shows)
+    }
+
+    private var selfTileStroke: Color {
+        guard let key = IncomingCallChoices.selfColorKey(userId: AuthManager.shared.currentUser?.id) else {
+            return Color.white.opacity(0.25)
+        }
+        return CallSpeakerColor.color(for: key)
+    }
+
+    private var selfTileNameplate: some View {
+        Text(String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main))
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(Color.white)
+            .lineLimit(1)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xxs)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(.bottom, MeeshySpacing.xsPlus)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Action Buttons
@@ -364,5 +432,96 @@ struct IncomingCallView: View {
         .pressable()
         .accessibilityLabel(label)
         .accessibilityHint(hint)
+    }
+}
+
+// MARK: - Pre-Answer Bar
+
+/// Vue P17 (#16945) — avant de décrocher : ce que l'autre verra, et mes
+/// bascules Micro et Caméra. Les boutons sont ceux de la pilule (disque plat
+/// dans le verre, actif = disque blanc plein, loi 1) : le micro s'allume quand
+/// il est COUPÉ, la caméra quand elle filme, comme dans l'appel établi.
+struct IncomingPreAnswerBar: View {
+    let peerName: String
+    let choice: IncomingPreAnswer
+    let exposure: IncomingPreAnswer.Exposure
+    let onToggleMicrophone: () -> Void
+    let onToggleCamera: () -> Void
+
+    private static let glyphDiameter: CGFloat = 40
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Text(IncomingPreAnswerCopy.exposure(exposure, peerName: peerName))
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Color.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            microphoneButton
+            cameraButton
+        }
+        .padding(.leading, MeeshySpacing.lg)
+        .padding(.trailing, MeeshySpacing.xs)
+        .padding(.vertical, MeeshySpacing.xxs)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+
+    private var microphoneButton: some View {
+        let isMuted = !choice.microphoneOn
+        return CallPillButton(
+            symbol: isMuted ? "mic.slash.fill" : "mic.fill",
+            kind: isMuted ? .active : .normal,
+            label: isMuted
+                ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main)
+                : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main),
+            hint: IncomingPreAnswerCopy.microphoneHint(peerName: peerName),
+            toggleState: isMuted,
+            diameter: Self.glyphDiameter
+        ) {
+            HapticFeedback.light()
+            onToggleMicrophone()
+        }
+    }
+
+    private var cameraButton: some View {
+        CallPillButton(
+            symbol: choice.cameraOn ? "video.fill" : "video.slash.fill",
+            kind: choice.cameraOn ? .active : .normal,
+            label: choice.cameraOn
+                ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main)
+                : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main),
+            hint: IncomingPreAnswerCopy.cameraHint(peerName: peerName),
+            toggleState: choice.cameraOn,
+            diameter: Self.glyphDiameter
+        ) {
+            HapticFeedback.light()
+            onToggleCamera()
+        }
+    }
+}
+
+/// Les phrases de la barre d'avant le décroché (vue P17).
+enum IncomingPreAnswerCopy {
+    static func exposure(_ exposure: IncomingPreAnswer.Exposure, peerName: String) -> String {
+        switch exposure {
+        case .seenAndHeard:
+            return String(format: String(localized: "call.incoming.preAnswer.seenAndHeard", defaultValue: "%@ vous verra en décrochant", bundle: .main), peerName)
+        case .heardOnly:
+            return String(format: String(localized: "call.incoming.preAnswer.heardOnly", defaultValue: "%@ vous entendra sans vous voir", bundle: .main), peerName)
+        case .seenMuted:
+            return String(format: String(localized: "call.incoming.preAnswer.seenMuted", defaultValue: "%@ vous verra, micro coupé", bundle: .main), peerName)
+        case .neither:
+            return String(format: String(localized: "call.incoming.preAnswer.neither", defaultValue: "%@ ne vous verra ni ne vous entendra", bundle: .main), peerName)
+        }
+    }
+
+    static func microphoneHint(peerName: String) -> String {
+        String(format: String(localized: "call.incoming.preAnswer.mic.hint", defaultValue: "Décide si %@ vous entend en décrochant", bundle: .main), peerName)
+    }
+
+    static func cameraHint(peerName: String) -> String {
+        String(format: String(localized: "call.incoming.preAnswer.camera.hint", defaultValue: "Décide si %@ vous voit en décrochant", bundle: .main), peerName)
     }
 }
