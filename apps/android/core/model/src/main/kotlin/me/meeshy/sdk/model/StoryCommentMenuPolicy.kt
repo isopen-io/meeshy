@@ -6,7 +6,8 @@ enum class StoryCommentMenuAction { COPY, EDIT, REPORT, DELETE, REMOVE }
 /**
  * **Quelles actions pour ce commentaire de story et ce lecteur** — miroir de `CommentMenuPolicy.actions` (iOS, #8709).
  * L'auteur modifie et supprime, les autres signalent, la modération de la plateforme retire avec un motif (#11151) ;
- * un commentaire protégé (flou, éphémère, vue unique) ne se copie jamais.
+ * un commentaire protégé (flou, éphémère, vue unique) ne se copie jamais. Sur un fil FERMÉ (#16930), l'auteur ne
+ * modifie plus — la même loi que [CommentMenuPolicy].
  */
 object StoryCommentMenuPolicy {
 
@@ -25,6 +26,7 @@ object StoryCommentMenuPolicy {
         editable: Boolean = true,
         deletable: Boolean = true,
         removable: Boolean = true,
+        commentsClosed: Boolean = false,
     ): List<StoryCommentMenuAction> {
         val mine = isAuthor(authorId, viewerId)
         val known = !viewerId.isNullOrEmpty()
@@ -32,7 +34,7 @@ object StoryCommentMenuPolicy {
         val moderates = ContentRemovalPolicy.mayRemovePublication(authoredByViewer = mine, platformRole = platformRole)
         return listOf(
             StoryCommentMenuAction.COPY to copyable,
-            StoryCommentMenuAction.EDIT to (mine && editable),
+            StoryCommentMenuAction.EDIT to (mine && editable && !commentsClosed),
             StoryCommentMenuAction.REPORT to (known && !mine),
             StoryCommentMenuAction.DELETE to (mine && deletable),
             StoryCommentMenuAction.REMOVE to (known && !mine && removable && moderates),

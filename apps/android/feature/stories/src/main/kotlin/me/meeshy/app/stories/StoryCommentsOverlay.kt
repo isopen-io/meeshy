@@ -212,13 +212,14 @@ private fun StoryCommentThreadBlock(state: StoryCommentsUiState, root: StoryComm
 @Composable
 private fun StoryOverlayRow(state: StoryCommentsUiState, comment: StoryComment, actions: StoryCommentsOverlayActions) {
     val showOriginal = comment.id in state.showingOriginal
-    val menu = remember(comment.id, comment.content, comment.effectFlags, state.viewerId, state.viewerRole, showOriginal) {
+    val menu = remember(comment.id, comment.content, comment.effectFlags, state.viewerId, state.viewerRole, state.commentsClosed, showOriginal) {
         StoryCommentMenuPolicy.actions(
             authorId = comment.authorId,
             viewerId = state.viewerId,
             platformRole = state.viewerRole,
             servedText = comment.displayedText(showOriginal),
             effectFlags = comment.effectFlags,
+            commentsClosed = state.commentsClosed,
         )
     }
     StoryCommentRow(comment = comment, showOriginal = showOriginal, menu = menu, callbacks = actions.row)

@@ -33,11 +33,13 @@ final class CommentMenuPolicyTests: XCTestCase {
         viewerId: String? = me,
         editable: Bool = true,
         deletable: Bool = false,
-        removable: Bool = false
+        removable: Bool = false,
+        commentsClosed: Bool = false
     ) -> [CommentMenuAction] {
         CommentMenuPolicy.actions(
             for: comment, viewerId: viewerId, servedText: comment.displayContent,
-            editable: editable, deletable: deletable, removable: removable
+            editable: editable, deletable: deletable, removable: removable,
+            commentsClosed: commentsClosed
         )
     }
 
@@ -61,6 +63,26 @@ final class CommentMenuPolicyTests: XCTestCase {
     func test_actions_forAnUnknownReader_offerNeitherEditNorReport() {
         XCTAssertEqual(Self.actions(Self.comment(authorId: ""), viewerId: ""), [.copy])
         XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), viewerId: nil), [.copy])
+    }
+
+    // MARK: - Fil fermé (#16930)
+
+    /// Règle porteur 2026-11-08 : sur une publication aux commentaires fermés,
+    /// on ne MODIFIE plus un commentaire — la passerelle refuse le PATCH — mais
+    /// l'auteur le supprime toujours, et les autres le signalent toujours.
+    func test_actions_onAClosedThread_theAuthorLosesEditButKeepsDelete() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertEqual(Self.actions(mine, deletable: true, commentsClosed: true), [.copy, .delete])
+    }
+
+    func test_actions_onAClosedThread_anotherReaderKeepsReportAndRemove() {
+        let theirs = Self.comment(authorId: "u-other")
+        XCTAssertEqual(Self.actions(theirs, removable: true, commentsClosed: true), [.copy, .report, .remove])
+    }
+
+    func test_actions_onAnOpenThread_theAuthorStillEdits() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertEqual(Self.actions(mine, deletable: true, commentsClosed: false), [.copy, .edit, .delete])
     }
 
     // MARK: - Retrait par la modération (#11151)
@@ -173,6 +195,43 @@ final class StoryCommentRemovalTests: XCTestCase {
         XCTAssertEqual(thread.comments.map(\.id), ["a"])
         XCTAssertEqual(thread.replies["a"]?.map(\.id), ["r1"])
         XCTAssertEqual(thread.count, 2)
+    }
+
+    // MARK: - Éditer sur un fil fermé (#16930)
+
+    private static let closedRefusal = MeeshyError.forbidden(
+        reason: "Les commentaires sont désactivés",
+        body: Data(#"{"success":false,"error":"Les commentaires sont désactivés","code":"COMMENTS_DISABLED"}"#.utf8))
+
+    private static func closingWriter(_ thread: Thread, service: MockPostService, onCommentsClosed: @escaping () -> Void) -> StoryCommentThreadWriter {
+        var built = Self.writer(thread, service: service)
+        built.onCommentsClosed = onCommentsClosed
+        return built
+    }
+
+    func test_edit_refusedBecauseCommentsAreClosed_restoresTheTextAndClosesTheStory() async {
+        let service = MockPostService()
+        service.updateCommentResult = .failure(Self.closedRefusal)
+        let thread = Thread(comments: [Self.comment(id: "a")], replies: [:], count: 1)
+        var closed = 0
+
+        await Self.closingWriter(thread, service: service) { closed += 1 }.edit(Self.comment(id: "a"), content: "Bonsoir")
+
+        XCTAssertEqual(service.updateCommentCallCount, 1)
+        XCTAssertEqual(thread.comments.first?.content, "Bonjour", "le refus défait l'édition optimiste")
+        XCTAssertEqual(closed, 1, "la story se ferme localement, sans attendre story:updated")
+    }
+
+    func test_edit_refusedForAnotherReason_restoresTheText_andLeavesTheStoryOpen() async {
+        let service = MockPostService()
+        service.updateCommentResult = .failure(MeeshyError.forbidden(reason: nil, body: nil))
+        let thread = Thread(comments: [Self.comment(id: "a")], replies: [:], count: 1)
+        var closed = 0
+
+        await Self.closingWriter(thread, service: service) { closed += 1 }.edit(Self.comment(id: "a"), content: "Bonsoir")
+
+        XCTAssertEqual(thread.comments.first?.content, "Bonjour")
+        XCTAssertEqual(closed, 0)
     }
 
     func test_commentOffer_platformModeratorOnAnothersComment_isOffered_neverOnTheirOwn() {

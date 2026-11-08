@@ -33,6 +33,8 @@ struct StoryCommentRowView: View, Equatable {
     var onCommitEdit: ((String) -> Void)? = nil
     /// #11159 — la modération retire ce commentaire d'un autre ; reçoit le motif.
     var onRemove: ((String) -> Void)? = nil
+    /// Les commentaires de la story sont fermés : « Modifier » quitte le menu (#16930).
+    var commentsClosed: Bool = false
     /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
     @State private var rowFullscreenPlace: BubbleFullscreenPlace?
     /// Édition en place (#8709) : le texte remplace la ligne le temps de la saisie.
@@ -56,6 +58,7 @@ struct StoryCommentRowView: View, Equatable {
         // qu'« Imager » emporte font partie de ce que la ligne montre.
         (lhs.onCommitEdit == nil) == (rhs.onCommitEdit == nil) &&
         (lhs.onRemove == nil) == (rhs.onRemove == nil) &&
+        lhs.commentsClosed == rhs.commentsClosed &&
         lhs.root?.id == rhs.root?.id &&
         lhs.root?.displayContent == rhs.root?.displayContent &&
         lhs.loadedReplies.map(\.id) == rhs.loadedReplies.map(\.id) &&
@@ -261,7 +264,7 @@ struct StoryCommentRowView: View, Equatable {
                 servedText: displayContent,
                 showOriginal: showOriginal,
                 accentColor: comment.authorColor,
-                onEdit: onCommitEdit == nil ? nil : { beginEditing() }, onRemove: onRemove,
+                onEdit: onCommitEdit == nil ? nil : { beginEditing() }, onRemove: onRemove, commentsClosed: commentsClosed,
                 glyphSize: 13,
                 glyphColor: overlayColor.opacity(MeeshyOpacity.intense)
             )
