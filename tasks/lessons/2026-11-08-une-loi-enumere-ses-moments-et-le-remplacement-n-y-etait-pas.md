@@ -1,6 +1,9 @@
-# Une loi ÉNUMÈRE ses moments, et le REMPLACEMENT n'y était pas (2026-11-08, cycle 142)
+## 2026-11-08 — Une loi ÉNUMÈRE ses moments, et le REMPLACEMENT n'y était pas
 
-## Le fait
+**Date** : 2026-11-08. **Cycle** : 142, lots #16744 et #16753.
+**Famille** : leçon 261 portée d'un inventaire d'audit au doc-comment d'une loi.
+
+### Le fait
 
 `SocketTransportRetirement` (SDK iOS) existe parce que Socket.IO arme
 l'expiration d'un `emitWithAck` avec une référence **faible** au client. Son
@@ -21,7 +24,7 @@ Conséquence utilisateur : `sendAsync` ne rend jamais la main, donc jamais le
 `nil` qui déclenche le repli REST/outbox. Le message reste sur l'horloge pour
 toute la session.
 
-## La règle
+### La règle
 
 C'est la **leçon 261** — *une énumération de sites porte deux affirmations :
 « ces sites appliquent la règle » (vérifiable) et « ce sont les sites où elle
@@ -38,7 +41,7 @@ L'inventaire refait proprement : 3 sites de construction, **1 déjà couvert**
 (`connectAnonymous`, qui passe par `suspendTransport()` et dont le commentaire
 montre que son auteur avait instruit la question), 2 non couverts.
 
-## Le corollaire, trouvé dans le même cycle et plus coûteux
+### Le corollaire, trouvé dans le même cycle et plus coûteux
 
 Un volet d'audit du même cycle a rendu, avec une évidence par ligne, que le badge
 d'icône restait à zéro sur une lecture partielle. **Faux** : la passerelle émet
@@ -63,7 +66,7 @@ nombreuses, ni les mieux citées : celle dont la fausseté suffirait à annuler 
 conclusion. Et quand cette étape est « le serveur n'envoie jamais X », l'ouvrir
 chez le SERVEUR.
 
-## Et le choix de l'outil de garde
+### Et le choix de l'outil de garde
 
 `transportRetirement` est `private let` sur deux **singletons**, sans point
 d'injection : aucune surface publique ne rend la retraite observable, et la

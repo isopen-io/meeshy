@@ -1,6 +1,9 @@
-# Un drapeau nommé `exact` calculé sur un champ, et la branche choisie sur un AUTRE (2026-11-08, cycle 142)
+## 2026-11-08 — Un drapeau nommé `exact` calculé sur un champ, et la branche choisie sur un AUTRE
 
-## Le fait
+**Date** : 2026-11-08. **Cycle** : 142, lot #16746.
+**Famille** : un mode décidé par l'appelant, une branche choisie par le gestionnaire.
+
+### Le fait
 
 `POST /conversations/:id/receipts` avec `{ type: 'read', caughtUpToMessageId }` —
 la **seule** forme que `apps/web` envoie sur son chemin de lecture nominal —
@@ -23,7 +26,7 @@ if (exactMessageIds) { /* mode exact */ } else { /* mode hérité, aveugle à la
 `exact` est vrai, l'objet d'options part, et `messageIds` y est `undefined` :
 le gestionnaire conclut « aucune précision rapportée ».
 
-## La règle
+### La règle
 
 **Quand un appelant calcule un drapeau de MODE et que le gestionnaire choisit sa
 branche sur un CHAMP, les deux peuvent diverger sans qu'aucun des deux ne soit
@@ -41,7 +44,7 @@ Si la réponse est non, l'une des deux réparations, jamais une troisième :
 - ou le mode est porté par un type SOMME que l'appelant construit, de sorte
   qu'« exact sans ids » ne soit pas représentable.
 
-## Ce qui la rend invisible
+### Ce qui la rend invisible
 
 Le nom. `exactMessageIds` se lit comme *« les ids du mode exact »*, donc son
 absence se lit comme *« pas en mode exact »* — une inférence que rien ne
@@ -56,7 +59,7 @@ Même famille que « une garde conditionnée à la présence de ce qu'elle garde
 un no-op » (cycle 96), avec l'inversion : ici la garde est conditionnée à la
 présence de ce qu'elle N'A PAS reçu.
 
-## Le corollaire de correctif, et il valait la moitié du lot
+### Le corollaire de correctif, et il valait la moitié du lot
 
 Le contrat du champ dit « sans élargir d'un seul message l'ensemble déclaré LU ».
 Sa lecture LITTÉRALE conduit à ne rien figer sur ce chemin — et c'eût été un
@@ -74,7 +77,7 @@ Le témoin qui garde cela n'est pas celui qui prouve le défaut : c'est celui qu
 reste VERT des deux côtés (« marquer comme lu sans frontière »). Sans lui, rien
 n'aurait signalé que la resserre venait de casser le geste voisin.
 
-## Et le discriminant d'un témoin se trouve dans l'ÉCHEC du premier jet
+### Et le discriminant d'un témoin se trouve dans l'ÉCHEC du premier jet
 
 La première version du témoin de borne assertait sur TOUS les appels de
 `message.findMany` portant `senderId` et `createdAt`. Elle est tombée — sur le
