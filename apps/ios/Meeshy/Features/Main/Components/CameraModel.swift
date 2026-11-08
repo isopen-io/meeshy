@@ -281,7 +281,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             let installe = CameraInputInstaller.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
                                                   prepared: self.preparedInputs,
                                                   previewWanted: self.previewMirroring.isWanted,
-                                                  photoPlan: { CameraPhotoTuning.adopt(for: $0, on: self.photoOutput) })
+                                                  photoPlan: { self.adoptLens($0) })
             let audio = micro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
             if let device = installe?.device { CameraPhotoTuning.confirm(self.photoOutput, in: self.session, for: device) }
@@ -537,9 +537,19 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         let installe = CameraInputInstaller.installVideoInput(in: session, position: position, outputs: orientedOutputs,
                                                   prepared: preparedInputs,
                                                   previewWanted: previewMirroring.isWanted,
-                                                  photoPlan: { CameraPhotoTuning.adopt(for: $0, on: self.photoOutput) })
+                                                  photoPlan: { self.adoptLens($0) })
         if let device = installe?.device { CameraPhotoTuning.confirm(photoOutput, in: session, for: device) }
         return installe
+    }
+
+    /// Ce que reçoit chaque objectif installé, dans sa transaction : le plan
+    /// photo, et les curseurs du bouton Camera Control (OPUS-9).
+    nonisolated private func adoptLens(_ device: AVCaptureDevice) {
+        CameraPhotoTuning.adopt(for: device, on: photoOutput)
+        CameraSystemControlsHost.install(in: session, for: device) { [weak self] facteur in
+            guard let self else { return }
+            self.zoomFactor = self.zoomScale.displayed(facteur)
+        }
     }
 
     private func publishLens(_ installe: CameraInputInstaller.InstalledCamera?) {

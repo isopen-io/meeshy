@@ -110,7 +110,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `/mnt/project-files/frames/07-audit-ui-ux-camera-appels.md` § B5, `tasks/routine-camera.md` CAM-4.
 
 ## OPUS-9 — Le bouton Camera Control des iPhone 16 et 17 ne règle rien dans Meeshy
-- Statut : à faire
+- Statut : en cours (#16818) — zoom et exposition livrés ; reste le sélecteur « Ambiance » (attend OPUS-2) et la recette sur iPhone 16
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : doc 08 § R7 (recherche état de l'art)
 - Constat : aucun `AVCaptureControl` n'est ajouté à la session (`grep AVCaptureSlider\|AVCaptureIndexPicker\|AVCaptureSystemZoomSlider` vide dans `apps/ios`) ; le bouton latéral ouvre au mieux l'app sans rien piloter.
