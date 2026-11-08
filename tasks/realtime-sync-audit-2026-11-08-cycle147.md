@@ -453,3 +453,334 @@ une édition en vol produit des échecs qui n'appartiennent à aucune révision.
 > deux fois : le temps de la passe, et le temps de disculper les faux rouges.
 > La suite complète se lance sur un arbre GELÉ — après le dernier commit, pas
 > pendant le prochain.
+
+---
+
+## Cinquième tour — lot H : une émission vivante NUE en amont d'un enfilage DURABLE (#17026)
+
+Lot pris après la fusion de #17048. L'issue venait du même audit : **les deux
+auditeurs l'avaient trouvée indépendamment, par deux périmètres disjoints** —
+le signal le plus fort du cycle.
+
+### Le défaut, et pourquoi la règle écrite ne l'a pas couvert
+
+`io.to(room).emit(...)` LÈVE quand l'adaptateur ou l'encodeur est en défaut.
+C'est une affirmation du dépôt, écrite là où il s'en garde
+(`socketio/utils/emitWithSeq.ts` : « la cause est réelle et pas hypothétique »).
+Sept unités plaçaient cet appel — ou une lecture non gardée — en amont d'une
+mise en file hors ligne, **dans le même `try`**, sous un `catch` de fin de
+méthode. Une diffusion tombée annulait donc le rejeu de TOUS les absents, sur
+un contenu déjà persisté et déjà acquitté « envoyé ».
+
+La règle était écrite, **deux fois, aux deux meilleurs endroits** : le
+§ « Sa PLACE fait partie de la garantie » de `MessageHandler.broadcastNewMessage`
+et son jumeau de `postMessageSyncFanOut`. Les deux citent `emitWithSeq`. Les
+deux nomment ce qui vient **après** l'enfilage (les synchros cosmétiques), et
+aucun ne tire la conséquence sur ce qui vient **avant** — l'émission vivante,
+trois lignes au-dessus, dans le même bloc.
+
+L'angle mort est mécanique : le cycle 116 a formulé la règle comme un ORDRE
+(*charger → enfiler → diffuser la cosmétique*), et un ordre se vérifie vers le
+BAS. L'émission vivante est plus haut, et elle n'est pas « cosmétique ».
+
+### Les sept sites, et par quoi chacun a été trouvé
+
+| # | site | ce que l'absent perdait | trouvé par |
+|---|---|---|---|
+| 1 | `deliverTextTranslation` (émission) | la traduction, définitivement — le `message:new` enfilé à l'envoi porte `translations: []` | l'issue |
+| 2 | `emitAttachmentUpdated` (deux branches) | la pièce ENRICHIE : transcription, piste TTS — la raison d'être du module | l'issue |
+| 3 | `MessageHandler.broadcastNewMessage` (`readerSignedPlan`) | le message ENTIER | l'issue |
+| 4 | `MeeshySocketIOManager._broadcastNewMessage` (idem) | le message ENTIER | l'issue |
+| 5 | `MessageHandler.handleMessageEdit` (plan + émission) | l'édition, **et** l'éditeur lisait « échec » sur un geste réussi | relecture de l'import partagé |
+| 6 | `MeeshySocketIOManager` — résumé d'appel édité | l'édition | **le cliquet** |
+| 7 | `MessageHandler.handleMessageDelete` | la suppression (la bulle reste visible) | **le cliquet** |
+
+Les deux derniers vivaient dans des fichiers que l'issue NOMMAIT, à quelques
+dizaines de lignes de sites qu'elle énumérait. Ni l'issue, ni ma relecture ne
+les a vus. **4 annoncés, 7 réels** — la leçon 261 avec son chiffre.
+
+Les sites 3 et 4 étaient des **pièges armés devenant panne dès qu'une clé de
+signature existe** : `readerSignedPlan` ne fait aucune requête sans signeur ni
+pièce liée au lecteur. `ATTACHMENT_URL_SIGNING_KEY` est vide dans
+`.env.example` mais le gabarit de staging la pose — la précondition est donc
+clé posée + message portant une pièce à vue unique / éphémère / floutée /
+scellée, soit exactement la population dont la perte coûte le plus cher.
+
+### Les quatre pièces du correctif
+
+1. **`socketio/emitLiveBestEffort.ts`** — site unique, `onError` REQUIS (une
+   panne d'adaptateur sans trace est la même panne, simplement
+   indiagnosticable). `emitMessageNewBestEffort` y délègue.
+2. **`ReaderSignedPlanOutcome`** (`readerSignedDelivery.ts`) — un verdict à
+   TROIS valeurs, parce qu'il y a trois choses à dire : un plan (« voici les
+   destinataires »), `null` (« la question ne se pose pas » ⇒ room), et
+   `'unavailable'` (« je ne sais pas adresser » ⇒ RIEN en direct, et la suite a
+   lieu). `'unavailable'` n'est pas `null` : collapser les deux rendrait la
+   diffusion de room sur une pièce établie comme liée au lecteur. C'est la
+   leçon `[]`-vs-`undefined` du cycle 116 portée au plan signé.
+   `emitMessageNew` et `emitEditedToReaders` acceptent la troisième valeur ; la
+   copie privée du wrapper qui vivait dans `emitAttachmentUpdated` est
+   consolidée ici, avec sa jumelle.
+3. **`deliverTextTranslation`** — la loi du plancher rend sa troisième réponse
+   (`translationReadersOrUnknown`), et l'émission vivante est enrobée.
+4. **Le cliquet** — `__tests__/live-emission-before-enqueue-sweep.ts`,
+   inventaire VIDE.
+
+### Ce que le cliquet a appris de lui-même
+
+| version | constats | verdict |
+|---|---|---|
+| 1 | 4 | **2 faux positifs** : la DÉCLARATION `private async _enqueueOfflineEventForParticipants(params: {` matchait comme un appel, et l'unité calculée depuis elle enjambait la méthode précédente |
+| 2 | 2 | les deux réels — sites 6 et 7 |
+| 2, relancée après correction | **2** | les mêmes : l'émission vivait désormais dans une fermeture passée à `emitLiveBestEffort`, qui n'est pas un `try` textuel |
+| 3 | **0** | l'enrobage est reconnu comme ce qu'il est — la réparation |
+
+> Un cliquet qui ne connaît pas la forme du correctif **désigne le correctif
+> comme le défaut**, et enseigne l'inverse de sa règle. Le relancer sur l'arbre
+> RÉPARÉ, pas seulement sur l'arbre fautif : son vert est une assertion autant
+> que son rouge.
+
+Et il prouve d'abord qu'il BALAIE (≥ 10 unités d'enfilage atteintes) : une garde
+négative dont le balayage rend `[]` reste verte.
+
+### Deux honnêtetés, écrites parce qu'elles coûtent
+
+**Le guard d'audience de `deliverTextTranslation` ne sauve AUCUN enfilage.** Sur
+`'unknown'` on retient les deux canaux à dessein (`excludedQueueKeys` nomme les
+lecteurs SOUS le plancher ; enfiler sans cette liste déposerait le texte traduit
+48 h dans Redis sous la clé d'un invité qu'aucune route n'autorise à le lire), et
+c'est déjà ce que la panne produisait par le `catch`. Ce qui change est le
+DIAGNOSTIC : une décision nommée au lieu d'une exception anonyme, et pas de
+`stats.errors++`. La première version de mon commentaire de site se lisait comme
+un correctif de durabilité ; elle a été réécrite. Le témoin pré-existant
+(« une lecture des participants qui tombe n'émet RIEN ») était vert des deux
+côtés — il ne pouvait pas distinguer « retenu à dessein » de « la méthode a
+explosé », et il ne faut pas lui faire dire la première chose.
+
+**Une mutation de preuve RED peut être fausse.** Ma première mutation du site du
+plan signé a produit `await (async () => {…})()(this.prisma, …)` — un appel sur
+une Promise, donc un `TypeError` SYNCHRONE inconditionnel. Les cinq témoins sont
+tombés, et aucune de ces chutes ne prouvait quoi que ce soit. La mutation juste
+porte sur la GARDE elle-même (le wrapper relaisse remonter), et elle fait tomber
+exactement les trois témoins du plan. **Une preuve de rouge se lit comme un
+résultat de mesure : vérifier que le rouge vient du mécanisme nommé.**
+
+Elle a aussi révélé qu'un de mes témoins (« rien ne part en direct ») passait au
+VERT sous l'explosion — donc sous la régression même qu'il prétendait garder. Il
+assert désormais les deux moitiés ensemble (rien en direct ET l'absent servi).
+
+### Preuve
+
+- `tsc --noEmit` gateway : **EXIT=0**, 0 ligne
+- rouge prouvé, quatre mutations distinctes :
+  - l'enrobage de `message:new` retiré ⇒ les 2 témoins de producteur tombent
+  - `readerSignedPlanBestEffort` relaisse remonter ⇒ les 3 témoins de plan tombent
+  - le guard d'audience + l'enrobage de `deliverTextTranslation` retirés ⇒ ses 2 témoins neufs tombent, les 8 pré-existants verts des deux côtés
+  - le `try` d'`emitAttachmentUpdated` retiré ⇒ ses 2 témoins tombent, les 13 pré-existants verts
+  - le `try` du 5e site retiré ⇒ ses 2 témoins tombent, les 9 pré-existants verts
+  - l'enrobage du site 6 ou 7 retiré ⇒ **le cliquet tombe en NOMMANT le fichier et l'expression**
+- un témoin de coverage INVERSÉ avec sa raison (`stats.errors` sur une émission
+  tombée), et la couverture du `catch` extérieur reprise sur un chemin qui y mène
+  vraiment
+
+### Post-scriptum du lot H — la leçon du cliquet de budget s'est rejouée sur son auteur
+
+Deux lots plus tôt, ce cycle a écrit `tasks/lessons/2026-11-08-un-cliquet-de-budget-demande-ou-pas-si.md` :
+*un cliquet de budget ne demande pas « ton lot est-il juste ? » mais « est-il à
+sa PLACE ? », et la réponse n'est presque jamais dans le lot.*
+
+Le lot H l'a rejouée, à l'identique, sur le cliquet des SUITES cette fois :
+
+```
+socketio/__tests__/MeeshySocketIOManager.test.ts : 8158 → 8192
+```
+
+Et le premier réflexe a de nouveau été de raboter — compter les lignes de
+commentaire du témoin inversé pour repasser sous la barre. La réponse juste
+était la même que la première fois, et elle était écrite : **un fichier déjà
+hors budget est interdit d'ajout, on extrait d'abord.** Les deux témoins vivent
+désormais dans `deliverTextTranslation-outer-catch.test.ts`, sur le harnais
+PARTAGÉ — et le fichier d'origine a PERDU 51 lignes au lieu d'en gagner 34.
+
+Ce qui vaut d'être noté n'est pas la récidive, c'est **ce qui l'a produite** :
+l'extraction n'était pas visible depuis le lot. Elle demandait de savoir qu'un
+harnais partagé existe (`helpers/message-new-parity-mocks`), c'est-à-dire une
+information qui vit dans un AUTRE fichier que celui qu'on édite. La leçon
+disait déjà « la réponse est dans le fichier d'à côté qui n'existe pas encore » ;
+ici il existait, et ça n'a pas suffi à le voir.
+
+Corollaire opérationnel, à essayer au prochain lot qui ajoute des témoins :
+**lancer les deux cliquets de budget AVANT d'écrire le témoin, pas après.** Ils
+coûtent quelques secondes et répondent à la question « ce fichier a-t-il le
+droit de grossir ? » — laquelle ne se pose jamais spontanément quand on a un
+témoin à écrire.
+
+### Sixième tour — l'audit adversarial du lot H, et ce qu'il a trouvé de mon cliquet
+
+Verdict reçu : **BLOQUANT**, deux constats bloquants, tous deux prouvés par
+exécution. L'auditeur a aussi mesuré quatre angles sans rien y trouver, et
+c'est de l'information : `'unavailable'` n'est collapsé nulle part, aucune
+exception avalée ne portait d'information nécessaire, le guard d'audience est
+bien fail-closed, et le témoin inversé a du mordant.
+
+#### Le huitième site, puis le neuvième
+
+`AttachmentReactionHandler.ts` : `emitServerEvent(io.to(room), …)` cinq lignes
+au-dessus de `_enqueueOfflineAttachmentReactionEvent`, même `try`. Ce qui se
+perdait est le `reactionSummary` par pièce jointe d'un absent, que seul un
+rechargement complet répare — son propre doc-comment le dit.
+
+Et **la règle était écrite vingt lignes plus bas, dans le même `try`**, pour
+l'autre canal latéral : « ni emporter l'entrée de file hors ligne qui la
+précède ». Troisième fois dans ce cycle qu'une règle garde l'exemplaire où elle
+est écrite et pas son voisin immédiat.
+
+En renforçant le cliquet, un **neuvième** est apparu : le `senderSocket.emit`
+de `MeeshySocketIOManager`. Piège armé, pas panne — aucun appelant de
+production ne passe `senderSocket` — enrobé quand même (cycle 84).
+
+#### Le constat qui compte : mon cliquet certifiait propres les sites du lot
+
+Mesuré par l'auditeur, en annulant un site à la fois :
+
+| version du cliquet | sites vus |
+|---|---|
+| celle que j'ai livrée | **3 sur 7** |
+| après correction | **9 sur 9** |
+
+Trois causes, et la première est la chère :
+
+1. **L'émission par HELPER était invisible.** Le balayage ne cherchait que
+   `.emit(` TEXTUEL, et `emitServerEvent` / `emitMessageNew` /
+   `emitEditedToReaders` / `emitToConversationParticipants` n'en portent aucun
+   au site d'appel — c'est **l'idiome dominant du dépôt**. Mon doc-comment
+   déclarait bien une limite, et elle ne parlait que de l'ENFILAGE. *La limite
+   la plus coûteuse n'était pas écrite.*
+2. **`unitStart` s'arrêtait à l'accolade englobante**, pas à une frontière de
+   fonction : un enfilage dans un `if (…) {}` voyait sa fenêtre commencer à
+   l'accolade du `if`, et l'émission au-dessus du `if` sortait du périmètre.
+3. **`ENQUEUE_CALLS` affirmait « les quatre du dépôt ».** Il y en a onze —
+   relevé mécaniquement. Leçon 261 appliquée à mon propre cliquet, dans le
+   cycle qui publiait cette leçon.
+
+> **Un cliquet qui SURDÉCLARE sa portée coûte plus qu'un cliquet absent**,
+> parce qu'on cesse de chercher. Et la mesure qui l'attrape n'est pas « est-il
+> vert sur l'arbre réparé ? » mais **« tombe-t-il sur chaque site, un à la
+> fois ? »**. Je n'avais fait la première.
+
+Corollaire de méthode, appliqué : le témoin de couverture a été réécrit pour
+interroger le balayage LUI-MÊME (`sweepReach`). Le précédent utilisait une
+autre regex, un autre prédicat de fichier et ne dépouillait pas les
+commentaires — il comptait sept fichiers où le nom n'apparaît que dans un
+commentaire, et ne pouvait donc pas tomber quand le balayage cesse d'atteindre
+quoi que ce soit. **Exactement le piège dont il se prévalait.**
+
+#### Et j'avais écrit une JUMELLE
+
+`socketio/serverEmit.ts` portait déjà `safeBroadcast(label, emit)` — même
+corps, six appelants de production, né d'un incident de 2026-08-25. J'ai écrit
+`emitLiveBestEffort` sans la voir. Les deux raisons (protéger la RÉPONSE de
+l'appelant / protéger ce qui SUIT dans l'unité) n'ont jamais justifié deux
+helpers, et un cliquet qui doit reconnaître deux noms d'enrobage en manquera
+un. `emitLiveBestEffort` est supprimé ; `safeBroadcast` gagne un `onError`
+optionnel et la seconde raison dans son doc-comment.
+
+> « Cette entité a-t-elle une JUMELLE ? » se pose **au moment où l'on écrit**.
+> Je l'ai posée sur les sites que je corrigeais et pas sur le helper que je
+> créais.
+
+#### Les deux correctifs de GRANULARITÉ, que je n'avais pas instruits
+
+- **Par CIBLE, pas autour de la boucle.** Les trois boucles de remise par
+  lecteur étaient enrobées en bloc : une cible qui lève privait toutes les
+  suivantes, et la file ne les compense pas (elle saute les CONNECTÉS). Or la
+  charge DIFFÈRE par lecteur (`signFor`, `payloadForKey`), donc un encodeur en
+  défaut échoue par cible. J'avais instruit l'ORDRE et pas la granularité.
+- **`onError` REQUIS.** Les deux wrappers de plan le déclaraient optionnel, et
+  le compilateur a nommé **quatre** appelants qui l'omettaient — deux de plus
+  que l'audit n'en avait trouvés. *Rendre un paramètre obligatoire est un
+  meilleur inventaire qu'une relecture.*
+
+#### Un compteur qui s'est mis à mentir
+
+`stats.translations_sent += clientCount` s'exécutait désormais même quand
+l'émission avait levé : le `catch` de fin de méthode l'en empêchait par
+accident, et court-circuiter ce `catch` me rendait ce compteur à charge. Il
+n'est incrémenté que si l'émission a eu lieu.
+
+#### Suivis ouverts plutôt que bâclés
+
+#17066 (l'accusé qui passe de `false` à `true` retire un retry — à MESURER
+chez les trois clients avant de décider), #17067 (les deux fichiers hors
+budget grossissent sous la marge de leur dette : +15 et +17 après avoir
+déplacé la justification au site unique, et c'est du code, pas du
+commentaire), #17068 (les trois pièges armés du balayage textuel).
+
+### Septième tour — second passage de l'audit : NON BLOQUANT, et une correction d'un token
+
+Verdict : **fusionnable en l'état**. L'auditeur a refait sa mesure site par site
+avec sa PROPRE boucle de mutations — pas la mienne — et confirmé **9 sur 9** (dix
+mutations, dix constats). Il a re-dérivé `ENQUEUE_CALLS` mécaniquement et le
+trouve juste, vérifié que `broadcastToUser` et `safely()` sont bien auto-gardés
+(mes exclusions tenaient), et cherché un dixième site sous une AUTRE définition
+de « durable » — le push APNs/FCM — où il précède toute émission sur les deux
+chemins. Rien à trouver.
+
+#### La seule chose qu'il a demandée dans le lot, et elle était juste
+
+`emitPerReader` : `base` — donc `payloadForKey` — était calculé **une ligne
+au-dessus** de la garde que mon propre commentaire justifiait *par lui*. Prouvé
+par exécution : trois cibles dont une masquée, un `payloadForKey` qui lève pour
+elle ⇒ `servis = ["user:r1"]`, la troisième perdue, l'exception hors de la
+boucle. Le lecteur concerné est celui d'un transfert refusé ou d'une citation
+d'éphémère scellée (#8562) — la population la plus protégée du chemin.
+
+> Un commentaire qui ÉNONCE une contrainte est une AFFIRMATION, et celui-ci
+> disait faux de la ligne juste au-dessus de lui. Le déplacement coûte un token.
+
+#### Les deux défauts LATENTS de mon cliquet, prouvés sur jumelles et corrigés
+
+| | ce qui se passait | fixture |
+|---|---|---|
+| **`exitsBeforeEnqueue`** testait `return`/`throw` sur le corps ENTIER du bloc | un `return` dans une branche IMBRIQUÉE masquait une émission dont le flot retombe pourtant sur l'enfilage | `fx/a` rendait 0 au lieu de 1 |
+| **`BLOCK_KEYWORD`** exigeait `\([^()]*\)` | il échouait sur `if (rows.filter((r) => r).length > 0) {`, après quoi `FUNCTION_HEAD` matchait le `)` de la CONDITION et `unitStart` s'arrêtait sur l'accolade du `if` — **la panne même que ce lot venait de corriger**, réintroduite pour toute condition non triviale | `fx/c` rendait 0 au lieu de 1 |
+
+Corrigés (`exitsAtOwnLevel`, `headBeforeBrace`), et vérifiés contre les cinq
+fixtures de l'auditeur : `a` et `c` passent de 0 à **1**, les contrôles `b` et
+`d` restent à 1. La cinquième (`e`, le faux positif de fermeture) reste à 1 —
+c'est une limite, pas un défaut, et elle est désormais ÉCRITE.
+
+#### Les limites du cliquet sont écrites AVEC LEUR CHIFFRE
+
+`EMIT_HELPERS` couvre **4 des 24** helpers qui émettent sans se garder (40
+fonctions exportées émettent, 24 ne portent ni `try`, ni `safeBroadcast`, ni
+`safely`). Les vingt autres n'apparaissent dans aucune fenêtre d'enfilage
+aujourd'hui, donc aucun site n'échappe — mais le rapport est d'un sixième, et
+**ce n'est pas réparable par un meilleur inventaire : c'est la limite de
+l'outil.**
+
+> « Un inventaire à la main » sans ordre de grandeur ne dit pas s'il manque un
+> nom ou vingt. C'est l'omission de cette limite — la première version ne
+> déclarait que celle de l'ENFILAGE — qui a fait certifier propres quatre des
+> sept sites du lot.
+
+Et le témoin de couverture assert désormais l'**ÉCART** entre le balayage et sa
+version aveugle aux helpers (`sweepReach(dir, { helpersBlind: true })`), pas un
+plancher absolu : avec helpers 14 candidats, sans 9. La marge du plancher était
+d'UNE unité et fortuite — le premier `.emit(` direct ajouté ailleurs l'aurait
+restaurée en silence. L'écart, lui, tombe quand on retire un helper de
+l'inventaire : prouvé (`>= 4` reçoit 3).
+
+#### Ce qui part en issue plutôt que d'être bâclé
+
+**#17086** — le chemin NOMINAL de `message:new` porte QUATRE émissions
+indépendantes sous un seul enrobage, et la diffusion de room qui lève emporte la
+bulle de l'expéditeur (seule charge à porter `clientMessageId`) et tous les
+lecteurs masqués (qui n'ont QUE leur room personnelle). Mesuré :
+`servis = []`. J'avais appliqué le raisonnement par cible au chemin par LECTEUR
+et pas au plus fréquenté des deux.
+
+Et ce que l'auditeur signale sans que ce soit un défaut : passer `onError`
+SUPPRIME le `[broadcast] …` par défaut, donc sur `deliverTextTranslation` la
+sévérité du signal a baissé deux fois (ERROR + `stats.errors++` → WARN). C'est
+cohérent avec mon arbitrage de diagnostic, et ça se dit.

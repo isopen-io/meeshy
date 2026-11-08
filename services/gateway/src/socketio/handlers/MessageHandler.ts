@@ -71,8 +71,9 @@ import { agentMayReadMessage, agentReadableMessage, notifyAgentOfMessage } from 
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
-import { emitMessageNew } from '../messageNewEmission';
-import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
+import { safeBroadcast } from '../serverEmit';
+import { emitMessageNewBestEffort } from '../messageNewEmission';
+import { readerSignedPlanBestEffort, readerSignedPlanForMessageIdBestEffort } from '../readerSignedDelivery';
 import { editReadership, blockedEditKeys, emitEditedToReaders } from '../editedAudience';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
@@ -968,9 +969,15 @@ export class MessageHandler {
       // Le site de la loi est UNIQUE (`editedAudience.ts`), partagé avec l'autre
       // transport : une règle retapée à chaque site est une règle qu'un site
       // finira par ne pas avoir.
-      const editPlan = await readerSignedPlanForMessageId(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
+      // 5e site #17026 : l'édition est déjà PERSISTÉE ici, et le `catch` de fin
+      // de méthode rend en plus « échec » au client. Raison : `safeBroadcast`.
+      const editPlan = await readerSignedPlanForMessageIdBestEffort(
+        this.prisma,
+        { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments },
+        (error) => handlerLogger.error('reader-signed plan failed (socket edit) — no live per-reader delivery', { conversationId: message.conversationId, messageId: validated.messageId, error }),
+      );
       if (editReaders.kind !== 'unknown') {
-        emitEditedToReaders({
+        safeBroadcast('message:edited', () => emitEditedToReaders({
           io: this.io,
           conversationId: message.conversationId,
           payload: editedPayload,
@@ -979,7 +986,7 @@ export class MessageHandler {
           blocked: editBlocked,
           sealedVariant: (payload) => payload,
           sealedForAll: (payload) => payload,
-        });
+        }), (error) => handlerLogger.error('message:edited live emission failed — offline replay unaffected', { conversationId: message.conversationId, messageId: validated.messageId, error }));
       }
 
       // Fan a conversation:updated preview refresh to participants sitting on
@@ -1156,7 +1163,9 @@ export class MessageHandler {
         messageId: validated.messageId,
         conversationId: message.conversationId,
       };
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+      // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
+      safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
+        (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
 
       // Fan a conversation:updated preview refresh to list-screen participants
       // (in user:<id> but not conversation:<id>): deleting the latest message
@@ -1397,7 +1406,9 @@ export class MessageHandler {
       // (`SOCKET_LANG_FILTER`) ou, pour un message dont une pièce se lit par
       // lecteur, remise par destinataire avec ses adresses signées (#9646) —
       // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
-      emitMessageNew({
+      // Émission et lecture de plan BEST-EFFORT : raison au site unique,
+      // `safeBroadcast` (#17026).
+      emitMessageNewBestEffort({
         io: this.io,
         room,
         senderPayload,
@@ -1410,8 +1421,12 @@ export class MessageHandler {
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
           ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
           : null,
-        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: peerPayload.attachments }),
-      });
+        readerSigned: await readerSignedPlanBestEffort(
+          this.prisma,
+          { conversationId: normalizedId, message, attachments: peerPayload.attachments },
+          (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+        ),
+      }, (error) => handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Offline delivery queue — parity with the REST send path

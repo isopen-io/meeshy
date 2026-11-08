@@ -42,8 +42,14 @@ function monde(options: {
   messageCreatedAt?: Date | null;
   liensIllisibles?: boolean;
   participantsEnPanne?: boolean;
+  /** `io.to(...).emit(...)` LÈVE — adaptateur ou encodeur en défaut (#17026). */
+  emissionEnPanne?: boolean;
 }) {
-  const emit = jest.fn();
+  const stats = { translations_sent: 0, errors: 0 };
+  const emit = jest.fn((event: string) => {
+    if (options.emissionEnPanne && event === SERVER_EVENTS.MESSAGE_TRANSLATION) throw new Error('adapter down');
+    return undefined;
+  });
   const to = jest.fn((_rooms: string | string[]) => ({ emit }));
   const enfile: OfflineParticipantQueueParams[] = [];
   const prisma = {
@@ -75,7 +81,7 @@ function monde(options: {
         io: { to, sockets: { adapter: { rooms: new Map() } } } as never,
         normalizeConversationId: async (id) => id,
         enqueueForOfflineParticipants: async (params) => { enfile.push(params); },
-        stats: { translations_sent: 0, errors: 0 },
+        stats,
       },
       {
         taskId: 't-1',
@@ -84,7 +90,7 @@ function monde(options: {
       },
     );
   const traductionsEmises = () => emit.mock.calls.filter(([event]) => event === SERVER_EVENTS.MESSAGE_TRANSLATION).length;
-  return { to, emit, enfile, livrer, traductionsEmises };
+  return { to, emit, enfile, livrer, traductionsEmises, stats };
 }
 
 describe('la traduction d’un message ne part qu’à ceux qui peuvent le lire', () => {
@@ -165,5 +171,41 @@ describe('la traduction d’un message ne part qu’à ceux qui peuvent le lire'
 
     expect(m.traductionsEmises()).toBe(0);
     expect(m.enfile).toEqual([]);
+  });
+
+  /**
+   * #17026 — le témoin ci-dessus était vert AVANT le guard d'audience comme
+   * APRÈS : la panne sortait alors par le `catch` de fin de méthode, dont
+   * l'effet observable est le même (rien émis, rien enfilé). Il ne pouvait donc
+   * pas distinguer « retenu à dessein » de « la méthode a explosé » — et il ne
+   * faut pas lui faire dire la première chose.
+   *
+   * Ce qui les sépare est le COMPTEUR : une décision ne passe pas par le
+   * `catch`, donc n'incrémente pas `stats.errors`. C'est la seule assertion de
+   * ce fichier qui tombe sous le retrait du guard.
+   */
+  it('#17026 — une audience irrésolvable est une DÉCISION, pas une erreur attrapée en fin de méthode', async () => {
+    const m = monde({ participants: [hote, invite()], participantsEnPanne: true });
+
+    await m.livrer();
+
+    expect(m.stats.errors).toBe(0);
+  });
+
+  /**
+   * Et la moitié qui porte la DURABILITÉ : l'émission vivante précédait
+   * l'enfilage dans le même `try`, donc une diffusion tombée emportait la
+   * traduction des ABSENTS — définitivement, puisque le `message:new` enfilé à
+   * l'envoi porte `translations: []` et qu'aucun client ne refetch de lui-même
+   * tant qu'il n'ouvre pas la conversation.
+   */
+  it('#17026 — une émission vivante qui LÈVE n’emporte pas l’enfilage des absents', async () => {
+    const m = monde({ participants: [hote, invite({ joinedAt: new Date('2026-10-02T00:00:00Z') })], emissionEnPanne: true });
+
+    await m.livrer();
+
+    expect(m.enfile[0]).toEqual(
+      expect.objectContaining({ eventType: 'translation', messageId: MSG, restrictToReadersOfLanguage: 'en' }),
+    );
   });
 });

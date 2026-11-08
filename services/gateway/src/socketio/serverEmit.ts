@@ -212,12 +212,37 @@ export function emitServerEvent(
  * synchrones ne l'avaient pas. Cette porte la leur donne EXPRÈS, et surtout
  * elle JOURNALISE : une émission perdue en silence est ce qui a laissé la panne
  * de `emitServerEvent` vivre sans témoin.
+ *
+ * ─── La SECONDE raison, et c'est le même geste (#17026) ──────────────────────
+ *
+ * Celle ci-dessus protège la RÉPONSE de l'appelant. Il y en a une autre, de
+ * mécanisme identique et de portée différente : **protéger ce qui SUIT
+ * l'émission dans la même unité.** Sept unités plaçaient un `emit` en amont
+ * d'une mise en file hors ligne, dans le même `try`, sous un `catch` de fin de
+ * méthode — une diffusion tombée annulait le rejeu de TOUS les absents, sur un
+ * contenu déjà persisté et déjà acquitté. Rien ne rejoue, et aucun client ne
+ * refetch de lui-même.
+ *
+ * Les deux raisons n'ont jamais justifié deux helpers. Un second — nommé
+ * `emitLiveBestEffort` — a été écrit pour #17026 avant qu'on remarque cette
+ * porte, puis supprimé : la question « cette entité a-t-elle une JUMELLE ? » se
+ * pose au moment où l'on écrit, pas des cycles plus tard, et un cliquet qui
+ * doit reconnaître DEUX noms d'enrobage en manquera un.
+ *
+ * ─── `onError` : l'appelant nomme la panne CHEZ LUI ──────────────────────────
+ *
+ * Le journal par défaut est celui de ce module. Pour la seconde raison il ne
+ * suffit pas : une édition définitivement perdue pour les absents ne laisserait
+ * qu'un `[broadcast] …` d'un module que la route ne regarde pas — c'est
+ * exactement ce que `editedAudience.ts` écrit de son propre `onError`. Un
+ * appelant qui a un contexte (conversation, message, destinataire) le passe.
  */
-export function safeBroadcast(label: string, emit: () => void): void {
+export function safeBroadcast(label: string, emit: () => void, onError?: (error: unknown) => void): void {
   try {
     emit();
   } catch (error) {
-    enhancedLogger.error(`[broadcast] ${label}`, error);
+    if (onError) onError(error);
+    else enhancedLogger.error(`[broadcast] ${label}`, error);
   }
 }
 
