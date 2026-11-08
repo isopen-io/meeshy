@@ -29,13 +29,6 @@ final class CallResumeLedger {
 
 extension CallManager {
 
-    /// #9111 — un lien NEUF compte depuis 1 : la première offre d'un pair revenu
-    /// (rechargé, relancé) fait converger la marque au lieu d'être jetée comme
-    /// périmée par un compteur resté haut sur l'ancien lien.
-    nonisolated static func isFreshLinkOffer(incoming: Int, highWaterMark: Int, isOffer: Bool) -> Bool {
-        isOffer && incoming <= 1 && incoming < highWaterMark
-    }
-
     /// Ce que la passerelle apprend quand cet appareil renonce à l'appel en
     /// cours — `call:end` seulement pour un appel jamais décroché (#9111).
     /// Une reprise dont la liaison ne s'est pas encore rétablie.
