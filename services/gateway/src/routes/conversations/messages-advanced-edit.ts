@@ -43,6 +43,7 @@ import {
   EMPTY_EDIT_REFUSAL_MESSAGE,
 } from '../../services/messaging/messageEditContent';
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
+import { editReadership } from '../../socketio/editedAudience';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
@@ -423,7 +424,17 @@ export function registerEditMessagePutRoute(
       // CONVERSATION-scopée de l'édition ; le client iOS, lui, emploie
       // `PUT /messages/:messageId` (`routes/messages.ts`) — que les cycles
       // précédents ont désigné ici par erreur, et qui a reçu le même câblage.
+      // Le PLANCHER D'HISTORIQUE sur la charge de la mention, qui porte le
+      // texte édité (leçon 275 : la garde retient la chaîne de
+      // `message:edited`, et l'objet voisin la laisse partir). Résolu ici
+      // plutôt que dérivé de `broadcastMessageMutation` : cette émission
+      // PRÉCÈDE la diffusion, et une audience lue après coup ne garde pas ce
+      // qui est déjà parti. Le coût est une lecture de plus par édition, sur un
+      // chemin qui n'est pas chaud ; le cas nominal ne rend rien.
       emitMentionCreated({
+        readership: await editReadership(prisma, conversationId, messageId, (err) =>
+          logger.error('Edit - edit readership unresolvable, mention withheld', err as Error),
+        ),
         io: socketIOHandler?.getManager()?.getIO(),
         newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
         messageId,
@@ -838,7 +849,17 @@ export function registerEditMessagePatchRoute(
 
       // `mention:created` aux seuls ENTRANTS, dans leur salon PERSONNEL : la
       // diffusion qui suit ne fan qu'à `conversation:<id>`.
+      // Le PLANCHER D'HISTORIQUE sur la charge de la mention, qui porte le
+      // texte édité (leçon 275 : la garde retient la chaîne de
+      // `message:edited`, et l'objet voisin la laisse partir). Résolu ici
+      // plutôt que dérivé de `broadcastMessageMutation` : cette émission
+      // PRÉCÈDE la diffusion, et une audience lue après coup ne garde pas ce
+      // qui est déjà parti. Le coût est une lecture de plus par édition, sur un
+      // chemin qui n'est pas chaud ; le cas nominal ne rend rien.
       emitMentionCreated({
+        readership: await editReadership(prisma, message.conversationId, messageId, (err) =>
+          logger.error('Patch edit - edit readership unresolvable, mention withheld', err as Error),
+        ),
         io: socketIOHandler?.getManager()?.getIO(),
         newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
         messageId,

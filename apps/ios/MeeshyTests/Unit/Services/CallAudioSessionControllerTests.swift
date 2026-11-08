@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// `CallAudioSessionController` possède la file sérielle de la session audio et
@@ -8,10 +9,13 @@ import XCTest
 @MainActor
 final class CallAudioSessionControllerTests: XCTestCase {
 
-    func test_theQueue_keepsItsLabel() {
+    /// #17038 — une seule file pour toute la session audio : celle du
+    /// coordinateur média. Un appel et un lecteur n'écrivent plus la session
+    /// en parallèle, et leurs écritures passent dans l'ordre de leurs demandes.
+    func test_theQueue_isTheMediaSessionQueue() {
         let controller = CallAudioSessionController()
 
-        XCTAssertEqual(controller.audioSessionQueue.label, "me.meeshy.callmanager.audiosession")
+        XCTAssertTrue(controller.audioSessionQueue === MediaSessionCoordinator.shared.sessionQueue)
     }
 
     func test_theManagerQueue_isTheControllerQueue_onEveryRead() {

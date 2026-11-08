@@ -3,17 +3,20 @@ import AVFoundation
 import Foundation
 
 /// La session d'enregistrement, vue de `MeeshyRecordingSession` (#11042).
+/// Tout passe par `sessionQueue`, à son rang (#17038) : une prise rendue juste
+/// après sa demande passe APRÈS la pose de la session, jamais avant.
 extension MediaSessionCoordinator: RecordingSessionControlling {
 
     public nonisolated func configureRecordingSession(
         _ configuration: RecordingSessionConfiguration,
-        holding: Bool
-    ) -> Bool {
-        activateRecordingSync(configuration, holding: holding)
+        holding: Bool,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
+        activateRecording(configuration, holding: holding, completion: completion)
     }
 
     public nonisolated func releaseRecordingHold() {
-        recordingHoldsSession = false
+        onSessionQueue { [self] in recordingHoldsSession = false }
     }
 
     /// Un son Meeshy qui joue encore retrouve sa session de lecture (le micro
@@ -25,9 +28,10 @@ extension MediaSessionCoordinator: RecordingSessionControlling {
         case .returnToContentPlayback:
             activateContentPlayback(.audible)
         case .releaseSession:
-            let category = AVAudioSession.sharedInstance().category
-            guard RecordingSessionLaw.mayReleaseSession(currentCategory: category) else { return }
-            deactivatePlaybackSync()
+            onSessionQueue { [self] in
+                guard RecordingSessionLaw.mayReleaseSession(currentCategory: audioSession.category) else { return }
+                performPlaybackDeactivation()
+            }
         }
     }
 }

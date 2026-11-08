@@ -720,6 +720,123 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
     );
   });
 
+  /**
+   * #17026 — l'émission vivante de `message:new` elle-même.
+   *
+   * Les deux témoins ci-dessus font lever `conversation:updated`, la synchro
+   * COSMÉTIQUE qui SUIT l'enfilage : ils prouvent que la place de l'enfilage le
+   * protège de ce qui vient après. Ils ne pouvaient rien dire de ce qui vient
+   * AVANT — et l'émission vivante vient avant, dans le même `try`, sous le même
+   * `catch` de fin de méthode. Le commentaire « Sa PLACE fait partie de la
+   * garantie » nommait les deux synchros d'aval et pas la diffusion d'amont.
+   */
+  it('#17026 — le producteur REST/ZMQ enfile même quand `message:new` LÈVE', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.MESSAGE_NEW) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    // Le pair EN LIGNE a perdu sa remise directe — il n'y a rien à y faire, la
+    // diffusion est le seul canal vivant. L'ABSENT, lui, a sa file, et c'est la
+    // SEULE voie par laquelle il apprendra jamais ce message.
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it('#17026 — le producteur WS enfile même quand `message:new` LÈVE', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.MESSAGE_NEW) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  /**
+   * Et la LECTURE du plan signé, l'autre moitié du même site.
+   *
+   * `readerSignedPlan` n'ouvre ses requêtes que s'il y a une clé de signature
+   * ET une pièce liée au lecteur : sans l'une des deux, il rend `null` sans
+   * rien demander, et la panne est inatteignable. Les deux témoins ci-dessous
+   * posent donc la clé et un message à VUE UNIQUE portant une pièce — la
+   * précondition exacte que l'issue nomme : « piège armé devenant panne dès
+   * qu'une clé de signature existe », sur la population dont la perte coûte le
+   * plus cher.
+   */
+  describe('#17026 — la lecture du plan par lecteur, sur les deux producteurs', () => {
+    const SIGNED_KEY = Buffer.alloc(32, 7).toString('base64');
+
+    /** Un message protégé portant une pièce : le chemin du plan signé. */
+    function protectedMessage(): unknown {
+      return makeContractMessage({
+        isViewOnce: true,
+        attachments: [makeAttachmentRow()],
+      });
+    }
+
+    beforeEach(() => {
+      process.env.ATTACHMENT_URL_SIGNING_KEY = SIGNED_KEY;
+      // La requête du plan est celle du prédicat d'ADMISSION (`isActive`,
+      // jamais banni, lien non échu) : elle demande `shareLinkId`, que ni la
+      // requête SUPERSET de la ligne de liste ni celle de la file ne demandent.
+      // C'est ce discriminant qui permet de ne faire tomber QUE le plan.
+      (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
+        if (args?.select?.shareLinkId) throw new Error('admitted-reader select unavailable');
+        return [
+          { id: 'sender-participantId', userId: 'sender-userId' },
+          { id: 'peer-participantId', userId: 'peer-userId' },
+        ];
+      });
+    });
+
+    afterEach(() => {
+      delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+    });
+
+    it('le producteur REST/ZMQ enfile même quand la lecture du plan TOMBE', async () => {
+      await manager.broadcastMessage(protectedMessage() as any, CONVERSATION_ID);
+
+      expect(queuedFor('peer-userId')).toEqual(
+        expect.objectContaining({ messageId: 'msg-123456789012' })
+      );
+    });
+
+    it('le producteur WS enfile même quand la lecture du plan TOMBE', async () => {
+      await messageHandler.broadcastNewMessage(protectedMessage() as any, CONVERSATION_ID);
+
+      expect(queuedFor('peer-userId')).toEqual(
+        expect.objectContaining({ messageId: 'msg-123456789012' })
+      );
+    });
+
+    /**
+     * Les DEUX moitiés dans le MÊME témoin, et c'est délibéré : séparées, la
+     * moitié « rien en direct » passe au vert dès que la méthode EXPLOSE, donc
+     * sous la régression même qu'elle prétend garder. Un témoin qui ne peut
+     * tomber que du bon côté n'atteste rien.
+     */
+    it("rien en direct ET l'absent servi : `'unavailable'` n'est pas `null`", async () => {
+      await manager.broadcastMessage(protectedMessage() as any, CONVERSATION_ID);
+
+      // Collapser `'unavailable'` sur `null` rendrait la diffusion de room sur
+      // une pièce établie comme liée au lecteur — l'adresse nue d'un secret.
+      const live = (ioState.toEmit.mock.calls as any[]).filter((c) => c[0] === SERVER_EVENTS.MESSAGE_NEW);
+      expect(live).toEqual([]);
+      // Et c'est bien le SILENCE choisi, pas la méthode tombée : la file est
+      // servie dans le même passage.
+      expect(queuedFor('peer-userId')).toEqual(
+        expect.objectContaining({ messageId: 'msg-123456789012' })
+      );
+    });
+  });
+
   it("aucun producteur n'enfile pour l'EXPÉDITEUR", async () => {
     await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
     expect(queuedFor('sender-userId')).toBeUndefined();

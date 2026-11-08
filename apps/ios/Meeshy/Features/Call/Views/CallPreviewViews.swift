@@ -26,6 +26,24 @@ struct CallPreviewBackdrop: View {
     }
 }
 
+/// Chez l'appelé : le disque de l'appelant s'efface dès que sa vidéo joue
+/// derrière la sonnerie — son visage le remplace (vue P17).
+struct CallPreviewCallerDisc<Disc: View>: View {
+    @ObservedObject var preview: CallPreviewCoordinator
+    @ViewBuilder let disc: () -> Disc
+
+    var body: some View {
+        let playsVideo = preview.previewVideoTrack != nil
+        ZStack {
+            if IncomingCallChoices.showsCallerDisc(previewPlaysVideo: playsVideo) {
+                disc()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: playsVideo)
+    }
+}
+
 /// Chez l'appelé : entendre l'appelant avant de décrocher. Proposé dès que
 /// l'appel 1:1 sonne (#8627) : un bouton plein, qu'on ne peut pas manquer,
 /// tant que le son est coupé ; le choix s'applique dès que l'appelant arrive.

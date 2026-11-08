@@ -19,6 +19,9 @@ final class ComposerSelectionChromeTests: XCTestCase {
     }
 
     private func source(_ nom: String) throws -> String {
+        if nom == "ComposerSceneSurface.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()

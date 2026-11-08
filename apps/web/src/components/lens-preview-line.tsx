@@ -1,12 +1,18 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { plainTextOf } from '@meeshy/shared/utils/text-plain';
 
 import {
   renderConversationPreviewText,
   type ConversationPreview,
+  type PreviewEffect,
+  type PreviewFinish,
   type PreviewIcon,
   type PreviewTone,
 } from '@meeshy/shared/utils/conversation-preview';
+
+import { BLUR_RADIUS_PX } from '@/lib/reading-mode/protection';
+import { entranceAnimation, shouldPlayEntrance } from '@/lib/view/preview-entrance';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import type { GlyphName } from './glyphs';
@@ -83,6 +89,62 @@ function langOf(
   return preview.kind === 'message' && originalLanguage !== undefined && originalLanguage !== '' ? { lang: originalLanguage } : {};
 }
 
+/**
+ * L'EFFET PEINT FIGÉ (#16975) — une liste ne fait tourner AUCUNE animation en
+ * boucle : la lueur est une ombre douce à l'accent, l'arc-en-ciel un dégradé
+ * posé sur le texte, les paillettes et la pulsation teintent l'icône. Seul le
+ * TEXTE servi porte le fini, jamais les libellés du catalogue.
+ */
+const FINISH_TEXT: Readonly<Record<PreviewFinish, (accent: string) => CSSProperties | undefined>> = {
+  glow: (accent) => ({ textShadow: `0 0 6px color-mix(in srgb, ${accent} 70%, transparent)` }),
+  rainbow: () => ({
+    backgroundImage: 'linear-gradient(90deg, #f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7)',
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    color: 'transparent',
+  }),
+  sparkle: () => undefined,
+  pulse: () => undefined,
+};
+
+const finishTints = (effect: PreviewEffect | undefined): boolean => effect?.finish === 'sparkle' || effect?.finish === 'pulse';
+
+const VEIL_STYLE: CSSProperties = { filter: `blur(${BLUR_RADIUS_PX / 4}px)`, userSelect: 'none' };
+
+const onScreen = (element: HTMLElement): boolean => {
+  const box = element.getBoundingClientRect();
+  return box.bottom > 0 && box.top < window.innerHeight && box.width > 0;
+};
+
+/**
+ * L'APPARITION, JOUÉE UNE FOIS (#16975) — quand le dernier message de la ligne
+ * CHANGE, jamais au premier rendu. Elle anime le BLOC de la ligne 2 (une
+ * transformation ne s'applique pas à une boîte en ligne, et le bloc garde sa
+ * troncature) ; `element.animate` la compose sur le GPU et s'arrête seule.
+ */
+function useEntrance(effect: PreviewEffect | undefined, key: string | null) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const previous = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const previousKey = previous.current;
+    previous.current = key;
+    const element = ref.current?.closest<HTMLElement>('[data-line2]') ?? ref.current;
+    const entrance = effect?.entrance ?? null;
+    if (element === null || entrance === null || typeof element.animate !== 'function') return;
+    const play = shouldPlayEntrance({
+      previousKey,
+      currentKey: key,
+      reducedMotion: prefersReducedMotion(),
+      hidden: document.visibilityState === 'hidden',
+      onScreen: onScreen(element),
+    });
+    if (!play) return;
+    const { keyframes, options } = entranceAnimation(entrance);
+    element.animate(keyframes, options);
+  }, [key, effect?.entrance]);
+  return ref;
+}
+
 const DIRECTION_GLYPH = {
   incoming: LENS_PREVIEW_GLYPHS.arrowDownLeft,
   outgoing: LENS_PREVIEW_GLYPHS.arrowUpRight,
@@ -108,13 +170,31 @@ export function LensPreviewLine({
   interfaceLanguage,
   accent,
   originalLanguage,
+  entranceKey,
 }: {
   readonly preview: ConversationPreview;
   readonly interfaceLanguage: string;
   readonly accent: string;
   /** Langue d'origine du dernier message — celle d'un segment servi en ORIGINAL (`language: null`). */
   readonly originalLanguage?: string | undefined;
+  /** L'identité du dernier message : son CHANGEMENT joue l'apparition (#16975). */
+  readonly entranceKey?: string | null;
 }) {
+  const effect = preview.effect;
+  const entranceRef = useEntrance(effect, entranceKey ?? null);
+  const textStyle = effect?.finish ? FINISH_TEXT[effect.finish](accent) : undefined;
+  const segments = preview.segments.map((segment, index) => (
+    <span key={index} {...langOf(segment, preview, originalLanguage)}>
+      {index === 0 ? '' : ' · '}
+      {segment.kind === 'text' && textStyle !== undefined ? (
+        <span data-preview-text style={textStyle}>
+          {plainTextOf(segment.text)}
+        </span>
+      ) : (
+        plainTextOf(segment.text)
+      )}
+    </span>
+  ));
   const ink = TONE_INK[preview.tone];
   const italic = preview.kind === 'typing' || preview.kind === 'system' || preview.kind === 'empty';
   const authorColor = preview.author?.kind === 'draft' ? accent : undefined;
@@ -126,7 +206,15 @@ export function LensPreviewLine({
       <span data-line2-label className="sr-only">
         {flat}
       </span>
-      <span data-line2-visible aria-hidden="true" style={{ color: ink }} className={italic ? 'italic' : undefined}>
+      <span
+        ref={entranceRef}
+        data-line2-visible
+        aria-hidden="true"
+        style={{ color: ink }}
+        className={italic ? 'italic' : undefined}
+        {...(effect?.veil === true ? { 'data-preview-veil': '' } : {})}
+        {...(effect?.finish ? { 'data-preview-finish': effect.finish } : {})}
+      >
         {preview.author === null ? null : (
           <span className={authorColor === undefined ? undefined : 'font-semibold'} style={authorColor === undefined ? undefined : { color: authorColor }}>
             {authorOnly}
@@ -136,14 +224,15 @@ export function LensPreviewLine({
           <GlyphSvg glyph={DIRECTION_GLYPH[preview.direction]} size={11} className={ICON_STYLE} />
         )}
         {preview.icon === null ? null : (
-          <PreviewGlyph icon={preview.icon} {...(preview.tone === 'accent' ? { style: { color: accent } } : {})} />
+          <PreviewGlyph icon={preview.icon} {...(preview.tone === 'accent' || finishTints(effect) ? { style: { color: accent } } : {})} />
         )}
-        {preview.segments.map((segment, index) => (
-          <span key={index} {...langOf(segment, preview, originalLanguage)}>
-            {index === 0 ? '' : ' · '}
-            {plainTextOf(segment.text)}
+        {effect?.veil === true ? (
+          <span data-preview-veiled style={VEIL_STYLE}>
+            {segments}
           </span>
-        ))}
+        ) : (
+          segments
+        )}
         {preview.kind === 'typing' ? <TypingDots color={accent} className="ms-1" /> : null}
       </span>
     </>

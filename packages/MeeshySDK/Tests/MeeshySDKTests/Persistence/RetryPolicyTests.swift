@@ -45,3 +45,17 @@ final class RetryPolicyTests: XCTestCase {
         XCTAssertEqual(RetryPolicy.stateSync.delay(afterFailure: -3, jitterSample: 0), 10)
     }
 }
+
+final class RetryPolicyDoublingScheduleTests: XCTestCase {
+
+    func test_delay_withoutJitter_doublesFromFirstDelayUpToTheCap() {
+        let policy = RetryPolicy(maxAttempts: nil, firstDelay: 30, maxDelay: 3_600)
+        let schedule = (1...10).map { policy.delay(afterFailure: $0, jitterSample: 0.9) }
+        XCTAssertEqual(schedule, [30, 60, 120, 240, 480, 960, 1_920, 3_600, 3_600, 3_600])
+    }
+
+    func test_delay_withoutJitter_neverExceedsTheCapOnHugeFailureCounts() {
+        let policy = RetryPolicy(maxAttempts: nil, firstDelay: 60, maxDelay: 900)
+        XCTAssertEqual(policy.delay(afterFailure: 10_000, jitterSample: 0), 900)
+    }
+}

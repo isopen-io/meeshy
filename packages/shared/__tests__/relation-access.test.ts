@@ -117,8 +117,10 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['listening.category', 'CLOSE'],
     ['listening.title', 'BLOOD'],
     ['talkie', 'CLOSE'],
+    ['together', 'CLOSE'],
     ['bring', 'FRIEND'],
     ['location.live', 'BLOOD'],
+    ['location.temporary', 'FRIEND'],
     ['location.history', 'BLOOD'],
     ['location.proximity', 'BLOOD'],
   ];
@@ -150,6 +152,7 @@ describe('resolveRelationAccess — soi et rôle', () => {
   it('refuse à soi-même une action dirigée vers un autre (bring, talkie)', () => {
     expect(access({ targetId: USER_A, feature: 'bring' })).toMatchObject({ allowed: false, reason: 'self' });
     expect(access({ targetId: USER_A, feature: 'talkie' })).toMatchObject({ allowed: false, reason: 'self' });
+    expect(access({ targetId: USER_A, feature: 'together' })).toMatchObject({ allowed: false, reason: 'self' });
   });
 
   it.each(['ADMIN', 'BIGBOSS'] as const)('%s lit la présence, et seulement la présence', (viewerRole) => {
@@ -243,7 +246,7 @@ describe('resolveRelationAccess — les mineurs (décision porteur 2026-10-31)',
   const AGES: readonly RelationAgeClass[] = ['minor', 'adult', 'unknown'];
   const pairs = AGES.flatMap((viewerMinor) => AGES.map((targetMinor) => ({ viewerMinor, targetMinor })));
 
-  const CONSENT_FEATURES = ['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.history', 'location.proximity'] as const;
+  const CONSENT_FEATURES = ['bring', 'talkie', 'listening.category', 'listening.title', 'location.live', 'location.temporary', 'location.history', 'location.proximity'] as const;
 
   it.each(CONSENT_FEATURES)('%s s\'ouvre à tout âge une fois le consentement DONNÉ, jamais derrière un refus d\'âge', (feature) => {
     pairs.forEach((ages) => {

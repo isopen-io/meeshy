@@ -131,4 +131,22 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertEqual(CallSelfTileScale.resting(.x3, isChromeVisible: true), .x3)
         XCTAssertEqual(CallSelfTileScale.resting(.x1, isChromeVisible: true), .x1)
     }
+    // MARK: - Loi 4 — le liseré porte la couleur de qui est DANS la vignette
+
+    func test_strokeKey_myImageInTheTile_isMyId() {
+        XCTAssertEqual(CallSelfTileStroke.colorKey(showsLocal: true, myId: "me0000000000000000000001", peerId: "pe0000000000000000000002"), "me0000000000000000000001")
+    }
+
+    func test_strokeKey_streamsSwapped_isThePeerId() {
+        XCTAssertEqual(CallSelfTileStroke.colorKey(showsLocal: false, myId: "me0000000000000000000001", peerId: "pe0000000000000000000002"), "pe0000000000000000000002")
+    }
+
+    func test_strokeKey_withoutAnId_inventsNoColor() {
+        XCTAssertNil(CallSelfTileStroke.colorKey(showsLocal: true, myId: nil, peerId: "pe0000000000000000000002"))
+        XCTAssertNil(CallSelfTileStroke.colorKey(showsLocal: false, myId: "me0000000000000000000001", peerId: ""))
+    }
+
+    func test_strokeWidth_isTheTwoPointsOfThePlanche() {
+        XCTAssertEqual(CallSelfTileStroke.lineWidth, 2)
+    }
 }

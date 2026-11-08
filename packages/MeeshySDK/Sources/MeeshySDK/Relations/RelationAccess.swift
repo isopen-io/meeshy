@@ -61,8 +61,10 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case listeningCategory = "listening.category"
     case listeningTitle = "listening.title"
     case talkie
+    case together
     case bring
     case locationLive = "location.live"
+    case locationTemporary = "location.temporary"
     case locationHistory = "location.history"
     case locationProximity = "location.proximity"
     case acquaintanceAuto = "acquaintance.auto"
@@ -79,9 +81,9 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// automatique CRÉE le premier lien : sa seule garde est l'âge déclaré.
     public var minimumLevel: RelationLevel {
         switch self {
-        case .presenceOnline, .gameBasic, .bring: return .friend
+        case .presenceOnline, .gameBasic, .bring, .locationTemporary: return .friend
         case .presenceDetailed, .gameSparksGlory, .notifyNewContent, .relayCommentersOnMyPosts,
-             .audienceClose, .listeningCategory, .talkie: return .close
+             .audienceClose, .listeningCategory, .talkie, .together: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
@@ -95,7 +97,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     public var requiresConsent: Bool {
         switch self {
         case .bring, .talkie, .listeningCategory, .listeningTitle,
-             .locationLive, .locationHistory, .locationProximity: return true
+             .locationLive, .locationTemporary, .locationHistory, .locationProximity: return true
         default: return false
         }
     }
@@ -104,7 +106,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// (`RELATION_DIRECTED_FEATURES`).
     public var isDirected: Bool {
         switch self {
-        case .bring, .talkie, .acquaintanceAuto, .dmRequest, .callRing: return true
+        case .bring, .talkie, .together, .acquaintanceAuto, .dmRequest, .callRing: return true
         default: return false
         }
     }

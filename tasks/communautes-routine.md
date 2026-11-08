@@ -11,6 +11,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-07 | Créer une conversation dans une communauté n'y fait plus entrer que ce que l'appelant peut admettre (passerelle) | #16697 | #16639 | fusionnée dans dev |
 | 2026-11-07 | Un salon d'une communauté privée n'accueille que ce que la communauté admet — inviter, ajouter, lien (passerelle) | #16705 | #16695 | fusionnée dans dev |
 | 2026-11-07 | Retiré ou parti d'une communauté privée, on ne lit plus ses salons (passerelle) | #16710 | #16704 | voir réveil 8 |
+| 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web) et ne se lisent ou publient que par qui en a le droit (passerelle) | #16895 | #6379 | fusionnée dans dev (réveil 17) |
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web), et la passerelle ne les sert qu'à qui peut les lire | voir réveil 15 | #6379 | voir réveil 15 |
 
 ## 2026-11-07 — lot 1
@@ -137,3 +138,17 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suite : même ramené à zéro (le panneau d'onglet est posé par `community.tsx`, l'onglet paresseux n'importe plus `community-tabs.tsx`, et l'index est identique octet pour octet à celui de dev), la PR reste rouge parce que **dev lui-même dépasse** : 96,07 Ko en CI depuis `@tanstack/react-query` 5.106.1 (+0,10 Ko dans `core`). Les mesures locales qui disaient 95,94 venaient d'un `node_modules` antérieur à la vague dependabot : **refaire `bun install --ignore-scripts` après tout `fetch` qui touche `bun.lock` avant de mesurer**, puis restaurer `bun.lock` (bun 1.4.4 le réécrit au format 3). Décision demandée au porteur, issue #16931 (épingler react-query, ou remesurer le plafond).
 - iOS : l'onglet « Feed » est un état vide FIXE (aucune lecture) → #16878. Android → #16879.
 - Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités — décision à prendre), sinon #6381 (vérification connectée sur staging) ou #16878.
+
+## 2026-11-08 — réveil 17
+
+- Run consacré à mener #16895 (#6379) à la fusion. Le blocage de la première peinture est levé sur `dev` (`2ef0031a6` : plafond 96 → 97 Ko, #16931). `origin/dev` intégré sans conflit (56 fichiers, chemins disjoints).
+- Gates locaux sur la fusion : passerelle `src/__tests__/unit/routes` + `PostFeedService` 857/857 suites, `tsc --noEmit` vert ; web `bun test` 30 063 verts, 1 rouge (`act-leak-guard.test.ts`, connu en conteneur), typecheck vert, `measure-weight` vert (96,10 Ko / 97 ; `community_detail` 5,03, `community_posts` 2,01).
+- Le porteur a fusionné #16895 dans dev à 13:56 UTC (tête `2f3a4eac6`, avant l'intégration de dev). La CI de preuve lancée ensuite sur la branche (run 42487522146) est rouge pour une raison étrangère au lot : le cliquet `check-any-debt` lisait 490 usages pour une base de 492 (amélioration de dev non enregistrée), corrigé depuis sur dev (490/490, relancé localement). #6379 fermée.
+- Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), sinon #16878 (l'onglet Feed iOS lit enfin les publications) ou #6381.
+
+## 2026-11-08 — réveil 18
+
+- Lot : #10622 (web, maintenabilité). Les trois copies privées de l'interrupteur d'iOS (`routes/settings-sections.tsx`, `routes/communities-parts.tsx`, `routes/share-link-form.tsx`) consomment `components/ios-switch.tsx` ; le témoin `ios-switch-single-source.test.ts` refuse toute source qui redessine la pastille glissante hors du composant. Cliquet `check-animated-properties.mjs` abaissé de trois sites (10 → 7 fichiers tolérés).
+- Gates locaux : `type-check` vert ; `bun test` 30 095 verts, 2 rouges avant correction du cliquet (le cliquet lui-même, corrigé dans le lot ; `act-leak-guard.test.ts`, connu en conteneur) ; `measure-weight` vert ; navigateurs `check-communities`, `check-settings`, `check-links` verts. `check-design-harmony` rouge sur dev hors lot (27 violations dans 9 fichiers qu'il ne touche pas).
+- iOS/Android : rien à changer (le web rejoint le `Toggle` d'iOS).
+- Prochain lot recommandé : #16878 (l'onglet Feed iOS lit les publications), puis #16739 (décision à prendre) ; #6381 attend une session de staging.

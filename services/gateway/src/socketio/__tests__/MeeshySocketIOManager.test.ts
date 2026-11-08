@@ -6339,25 +6339,10 @@ describe('MeeshySocketIOManager', () => {
   // 65. _handleTextTranslationReady - outer catch (covers 957-959)
   // -------------------------------------------------------------------------
 
-  describe('_handleTextTranslationReady - outer catch', () => {
-    it('increments stats.errors when io.to.emit throws', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
-      prisma.conversation.findUnique.mockResolvedValue(null);
-
-      // Make io.to().emit throw to trigger outer catch
-      ioState.toEmit.mockImplementationOnce(() => { throw new Error('socket emit crashed in textTranslation'); });
-
-      const data = {
-        taskId: 'task-txt-outer',
-        result: { messageId: 'msg-txt-outer', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
-        targetLanguage: 'fr',
-      };
-
-      const before = manager.getStats().errors;
-      await (manager as any)._handleTextTranslationReady(data);
-      expect(manager.getStats().errors).toBe(before + 1);
-    });
-  });
+  // Les deux témoins de ce chemin vivent désormais dans
+  //   `deliverTextTranslation-outer-catch.test.ts`
+  // — ce fichier est hors budget (dette héritée 8158), et un fichier hors
+  // budget est interdit d'ajout : on extrait d'abord (#4531, #17026).
 
   // -------------------------------------------------------------------------
   // 66. getConversationParticipantsForMention — parti dans agent-response-bridge.ts

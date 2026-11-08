@@ -21,14 +21,21 @@ import XCTest
 @MainActor
 final class SocialAudioSurfaceWiringGuardTests: XCTestCase {
 
+    private static let reelPlayerCompanions = [
+        "Meeshy/Features/Main/Views/ReelPageView.swift",
+        "Meeshy/Features/Main/Views/ReelAudioLanguageResolver.swift",
+    ]
+
     private func source(_ relativePath: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Unit/Models
             .deletingLastPathComponent()   // Unit
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        let companions = relativePath == Self.files[.reel] ? Self.reelPlayerCompanions : []
+        return try ([relativePath] + companions)
+            .map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// Le fichier qui MONTE le lecteur audio de chaque surface.

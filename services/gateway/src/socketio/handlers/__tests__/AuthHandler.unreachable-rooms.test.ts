@@ -134,6 +134,58 @@ describe('AuthHandler — joignabilité par conversation (#16687)', () => {
   });
 
   /**
+   * #16687 a fermé l'échec d'une JONCTION et laissé ouvert, juste à côté,
+   * l'échec de la LECTURE qui la précède — le seul `throw` que le `try` de
+   * `_joinUserConversations` puisse attraper, `Promise.allSettled` ne rejetant
+   * pas. Son `catch` rendait `[]`, et `[]` AFFIRME « aucune room n'a échoué »
+   * quand la vérité est « je n'ai rejoint AUCUNE room, je ne sais même pas
+   * lesquelles ». La socket entrait donc dans `connectedUsers` sans aucun
+   * marqueur, dans zéro room de conversation : la file la tenait pour
+   * joignable et n'enfilait RIEN, pendant que `io.to(ROOMS.conversation(...))`
+   * n'atteignait personne. Pour TOUTE la vie de cette socket, et sans recours
+   * — ce qui n'a pas été enfilé n'existe nulle part, donc la reconnexion
+   * suivante n'a rien à rejouer.
+   *
+   * La jumelle porte la leçon mot pour mot (`participant-superset.ts`) :
+   * « Elle rend `undefined` — jamais `[]` — quand elle tombe. Les deux formes
+   * se lisent pareil au site d'appel et ne disent pas la même chose : `[]`
+   * AFFIRME …, `undefined` avoue qu'on ne sait pas. »
+   *
+   * Un ensemble de rooms ne peut pas dire « toutes, dont je ne connais pas la
+   * liste » : c'est `allConversationRoomsUnreachable` qui le dit, et la file
+   * le lit comme injoignable pour n'importe quelle conversation.
+   */
+  it('avoue_son_ignorance_quand_la_LECTURE_des_conversations_tombe', async () => {
+    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+      id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
+      regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+    } as any);
+    jest
+      .spyOn((mockPrisma as any).participant, 'findMany')
+      .mockRejectedValue(new Error('mongo down'));
+
+    const join = jest.fn<any>().mockResolvedValue(undefined);
+    await authHandler.handleTokenAuthentication(
+      createMockSocket({ handshake: { auth: { token: 'valid-jwt-token' } }, join }),
+    );
+
+    // Toujours inscrite, pour la même raison que #16687 : c'est elle qui porte
+    // la présence et le nettoyage à la déconnexion.
+    expect(connectedUsers.size).toBe(1);
+    // Aucune room de conversation n'a été rejointe — la lecture est tombée
+    // AVANT la jonction.
+    expect(join.mock.calls.filter(([room]) => String(room).startsWith('conversation:'))).toEqual([]);
+    // Et la socket le DIT, au lieu d'affirmer que tout va bien.
+    expect([...connectedUsers.values()][0]?.allConversationRoomsUnreachable).toBe(true);
+  });
+
+  it('ne_pretend_pas_tout_injoignable_quand_la_lecture_reussit', async () => {
+    await registered(jest.fn<any>().mockResolvedValue(undefined));
+
+    expect([...connectedUsers.values()][0]?.allConversationRoomsUnreachable).toBeUndefined();
+  });
+
+  /**
    * L'invité de lien n'a qu'UNE conversation : « une room échouée » vaut la
    * TOTALITÉ de sa livraison temps réel, et la file est son seul recours.
    */

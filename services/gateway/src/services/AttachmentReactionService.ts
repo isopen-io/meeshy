@@ -4,6 +4,7 @@ import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { CLOSED_CONVERSATION_REACTION_ERROR } from './ReactionService.js';
 import { conversationRefusesPlainSignal, E2eeSignalChannelRequiredError } from './e2ee/e2ee-signal-channel';
+import { recordConversationActivity } from './conversations/conversationActivity';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;
@@ -27,7 +28,39 @@ export interface RemoveAttachmentReactionOptions {
 export class AttachmentReactionService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addAttachmentReaction(o: AddAttachmentReactionOptions): Promise<{ changed: boolean }> {
+  /**
+   * #9026 — réagir est une ACTIVITÉ, et cette porte-ci ne l'enregistrait pas.
+   *
+   * La jumelle (`ReactionService.addReaction`) appelle
+   * `recordConversationActivity` juste après son `upsert`, sous le commentaire
+   * qui énonce la directive : « une réaction posée est une ACTIVITÉ : la
+   * conversation remonte en tête pour TOUS ses participants, au rechargement
+   * comme en direct ». Le rang de la liste est
+   * max(`lastMessageAt`, `lastActivityAt`) — ni l'un ni l'autre ne bougeait
+   * ici, donc réagir à la PHOTO d'un message ne remontait AUCUNE liste, quand
+   * réagir au message lui-même les remontait toutes.
+   *
+   * Ce qui l'a tenu invisible est une phrase VRAIE : `announceConversationActivity`
+   * documente « Pour les activités dont aucun autre événement de liste ne porte
+   * le rang : appel, épingle. La réaction, elle, le porte avec `lastReaction` ».
+   * C'est exact de la réaction de MESSAGE — `lastReaction` se résout par
+   * `prisma.reaction.findUnique` — et faux d'une réaction de pièce jointe, qui
+   * n'a aucune ligne dans cette table. Elle appartient donc à la première
+   * catégorie, celle de l'appel et de l'épingle, et c'est le gestionnaire qui
+   * sert son rang (`rank: true`).
+   *
+   * > **Un lot ferme une classe dans SA langue.** #9026 a fermé « une réaction
+   * > posée » ; la réaction de pièce jointe en est une, dans une autre table,
+   * > et n'est dans aucune des deux énumérations qui décident du rang.
+   *
+   * La date rendue est celle de la LIGNE, pas `new Date()` : c'est elle que le
+   * rang durable porte, donc c'est elle que le gestionnaire doit servir, sans
+   * quoi les deux moitiés annonceraient deux rangs.
+   *
+   * Le RETRAIT n'enregistre rien — la directive dit « une réaction POSÉE », et
+   * la jumelle ne le fait pas davantage (elle n'y OUBLIE que `lastReaction`).
+   */
+  async addAttachmentReaction(o: AddAttachmentReactionOptions): Promise<{ changed: boolean; at?: Date }> {
     // Miroir EXACT de `ReactionService.addReaction` (la jumelle) : `sanitizeEmoji`
     // rend `null` pour un non-emoji, et `null` est la seule preuve d'invalidité —
     // le repasser à `isValidEmoji(emoji: string)` faisait `null.trim()`, donc un
@@ -68,7 +101,11 @@ export class AttachmentReactionService {
     // et le § 3 du témoin.
     const host = await this.prisma.message.findUnique({
       where: { id: o.messageId },
-      select: { conversation: { select: { isActive: true, closedAt: true, encryptionMode: true } } },
+      // `conversationId` rejoint une lecture qui existait déjà : le rang durable
+      // s'écrit sur la conversation, et le service n'avait aucun autre chemin
+      // vers son id. Une colonne de plus sur une requête en vol, jamais un
+      // aller-retour supplémentaire.
+      select: { conversationId: true, conversation: { select: { isActive: true, closedAt: true, encryptionMode: true } } },
     });
     if (isConversationClosed(host?.conversation)) {
       throw new Error(CLOSED_CONVERSATION_REACTION_ERROR);
@@ -118,7 +155,7 @@ export class AttachmentReactionService {
     // deux adds concurrents du MÊME emoji convergent sur le même document,
     // deux emojis différents créent chacun le leur (voulu). Le toggle vit
     // chez les clients (remove sur un emoji déjà posé).
-    await this.prisma.attachmentReaction.upsert({
+    const reaction = await this.prisma.attachmentReaction.upsert({
       where: {
         attachment_participant_reaction: {
           attachmentId: o.attachmentId,
@@ -134,7 +171,16 @@ export class AttachmentReactionService {
       },
       update: {},
     });
-    return { changed: true };
+
+    // Le rang DURABLE, dans le service plutôt que chez le gestionnaire : c'est
+    // le seul point d'écriture de cette famille, et une règle posée au
+    // transport est une règle qu'un second transport finira par ne pas avoir.
+    // `recordConversationActivity` est MONOTONE et ne lève jamais.
+    const at = reaction.createdAt;
+    if (host?.conversationId) {
+      await recordConversationActivity({ prisma: this.prisma, conversationId: host.conversationId, at });
+    }
+    return { changed: true, at };
   }
 
   async removeAttachmentReaction(o: RemoveAttachmentReactionOptions): Promise<boolean> {

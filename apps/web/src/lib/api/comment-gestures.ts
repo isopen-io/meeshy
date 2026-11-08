@@ -8,8 +8,10 @@ import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { commentRepliesQueryKey } from './comment-replies';
+import { writeCommentsDisabled } from './comment-settings';
 import {
   COMMENT_MAX_LENGTH,
+  commentsClosedBy,
   commentsQueryKey,
   shiftCommentCount,
   shiftReplyCount,
@@ -48,7 +50,8 @@ import {
  *    `UpdateCommentSchema` (`types.ts:466`) : `content` ≤ 2000, `effectFlags`,
  *    `originalLanguage`, avec un `.refine` « Nothing to update ». Rend le
  *    commentaire SERVI (auteur + média + `postId`). 403 `FORBIDDEN` hors
- *    auteur, 400 `EMPTY_CONTENT` sur un texte blanc. Idempotent par
+ *    auteur, 403 `COMMENTS_DISABLED` sur un fil fermé (#16930), 400
+ *    `EMPTY_CONTENT` sur un texte blanc. Idempotent par
  *    `X-Client-Mutation-Id` (`replayCost: 'converges'`).
  *  - `DELETE posts.byPostIdCommentsByCommentId` (`:853`) — rend
  *    `{ deleted: true }`, idempotent par `X-Client-Mutation-Id`. Ni le PATCH
@@ -108,10 +111,13 @@ export type CommentGestureMessageKey =
   | 'comment.edit.error'
   | 'comment.delete.error'
   | 'comment.gesture.pending'
-  | 'comment.gesture.unconfirmed';
+  | 'comment.gesture.unconfirmed'
+  | 'comments.closed';
 
 export const COMMENT_LIKE_FAILED_MESSAGE: CommentGestureMessageKey = 'comment.like.error';
 export const COMMENT_EDIT_FAILED_MESSAGE: CommentGestureMessageKey = 'comment.edit.error';
+/** LA MODIFICATION REFUSÉE PARCE QUE LE FIL S'EST FERMÉ (#16930) — `403 COMMENTS_DISABLED` : la rangée le DIT, pas un échec indistinct. */
+export const COMMENT_EDIT_CLOSED_MESSAGE: CommentGestureMessageKey = 'comments.closed';
 export const COMMENT_DELETE_FAILED_MESSAGE: CommentGestureMessageKey = 'comment.delete.error';
 export const COMMENT_GESTURE_PENDING_MESSAGE: CommentGestureMessageKey = 'comment.gesture.pending';
 export const COMMENT_GESTURE_UNCONFIRMED_MESSAGE: CommentGestureMessageKey = 'comment.gesture.unconfirmed';
@@ -460,6 +466,13 @@ export async function performCommentEdit(
 
     restore(deps, params, commentId, site.comment);
     if (outcomeOf(result) !== 'permanent') return notConfirmed(result);
+    /* LE FIL S'EST FERMÉ ENTRE-TEMPS (#16930) — la publication passe fermée
+       dans chaque caisse, comme sur un envoi refusé : « Modifier » quitte le
+       menu, et la rangée nomme la cause au lieu de « Réessayer ». */
+    if (commentsClosedBy(result)) {
+      writeCommentsDisabled(deps.queryClient, postId, true);
+      return refused(COMMENT_EDIT_CLOSED_MESSAGE);
+    }
     return refusalOf(result.status, COMMENT_EDIT_FAILED_MESSAGE);
   } finally {
     inFlight.delete(flightKey);

@@ -129,6 +129,9 @@
     <string name="call_history_retry">Réessayer</string>
     <string name="call_history_title">Appels</string>
     <string name="call_history_yesterday">Hier</string>
+    <string name="call_incoming_answer_no_video">Sans vidéo</string>
+    <string name="call_incoming_answer_no_video_hint">Décroche caméra coupée : l\'appelant voit votre avatar</string>
+    <string name="call_incoming_answer_no_video_label">Répondre sans vidéo</string>
     <string name="call_invite_declined">%1$s a refusé</string>
     <string name="call_invite_failed">Impossible d’inviter cette personne</string>
     <string name="call_invite_ringing">Sonne…</string>

@@ -27,7 +27,9 @@ type Reactivation = { readonly file: string; readonly marker: string };
 
 const GUARDED: ReadonlyArray<Reactivation & { readonly guard: string }> = [
   {
-    file: 'routes/user-deletions.ts',
+    // Vivait dans `routes/user-deletions.ts` jusqu'à #16964, qui a extrait le
+    // noyau du geste — ce fichier était au seuil de 1000 lignes.
+    file: 'routes/conversations/restore-for-me.ts',
     marker: 'isActive: true',
     guard: 'refuse un banni (403 BANNED) et porte unsetOrNull(bannedAt) dans le where (#10436)',
   },
@@ -123,7 +125,7 @@ describe('les écritures qui rallument une participation sont toutes inventorié
   });
 
   it('restore-for-me ne rallume que sous unsetOrNull(bannedAt)', () => {
-    const source = readFileSync(join(SRC, 'routes/user-deletions.ts'), 'utf8');
+    const source = readFileSync(join(SRC, 'routes/conversations/restore-for-me.ts'), 'utf8');
     const restore = callBodies(source).filter((body) => writtenPart(body).includes('isActive: true'));
     expect(restore).toHaveLength(1);
     expect(restore[0]).toContain("unsetOrNull('bannedAt')");

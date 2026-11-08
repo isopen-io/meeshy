@@ -61,7 +61,8 @@ struct CommentsSheetView: View {
     @State private var didConsumeInitialReplyTarget = false
     /// Commentaires fermés (#16541) : la barre cède la place à la ligne
     /// « Les commentaires sont désactivés ». Relue à chaque `post:updated`.
-    @State private var closure: CommentsClosureState
+    /// Interne, pas `private` : l'édition (`+CommentEdit`) y note un refus (#16930).
+    @State var closure: CommentsClosureState
     /// Le fil — racines, réponses, dépliage, pagination et compteur — tenu
     /// par le view model partagé avec le détail et la story (#13133).
     @StateObject var thread: CommentThreadViewModel
@@ -253,7 +254,7 @@ struct CommentsSheetView: View {
                                     replies: repliesMap[comment.id] ?? [],
                                     isExpanded: expandedThreads.contains(comment.id),
                                     isLoadingReplies: loadingReplies.contains(comment.id),
-                                    accentColor: accentColor, post: post,
+                                    accentColor: accentColor, post: post, commentsClosed: closure.isClosed,
                                     hearts: hearts,
                                     onReply: { target in
                                         beginReply(to: target)

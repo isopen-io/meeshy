@@ -74,6 +74,9 @@ import type { LinkState, OutgoingSignal, PeerLink, PeerLinkDeps } from './peer-l
 export const OUTGOING_RING_TIMEOUT_MS = 45_000;
 export const INCOMING_RING_SAFETY_MS = 70_000;
 export const ACK_TIMEOUT_MS = 10_000;
+
+/** Décrocher (P17) : caméra coupée (« Sans vidéo »), micro coupé — choisis AVANT de décrocher, rien ne part avant. */
+export type AcceptOptions = { readonly audioOnly?: boolean; readonly micMuted?: boolean };
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 export const ENDED_SCREEN_MS = 2_500;
 export const ENDED_RETRY_SCREEN_MS = 8_000;
@@ -143,7 +146,7 @@ export type CallEngineDeps = {
 export type CallEngine = {
   readonly start: (request: StartCallRequest) => Promise<void>;
   readonly join: (request: JoinCallRequest) => Promise<void>;
-  readonly accept: (options?: { readonly audioOnly?: boolean }) => Promise<void>;
+  readonly accept: (options?: AcceptOptions) => Promise<void>;
   readonly decline: () => void;
   readonly hangup: () => void;
   readonly toggleMic: () => void;
@@ -682,7 +685,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }, INCOMING_RING_SAFETY_MS);
   };
 
-  const accept = async (options?: { readonly audioOnly?: boolean }): Promise<void> => {
+  const accept = async (options?: AcceptOptions): Promise<void> => {
     deps.tones.prime();
     const call = read();
     if (call === null || call.phase.kind !== 'incoming' || call.callId === null) return;
@@ -691,7 +694,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     incomingTimer = clear(incomingTimer);
     const token = generation;
     session.telemetry = markNegotiating(session.telemetry, deps.now());
-    write({ ...call, phase: { kind: 'connecting' } });
+    write({ ...call, phase: { kind: 'connecting' }, micMuted: options?.micMuted === true });
     const video = call.media === 'video' && options?.audioOnly !== true;
     const stream = await acquire(video, 'user');
     if (stream === null) {

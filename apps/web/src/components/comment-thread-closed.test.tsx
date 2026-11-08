@@ -94,3 +94,45 @@ describe('un fil aux commentaires fermés', () => {
     expect(composer(host)).not.toBe(null);
   });
 });
+
+/**
+ * **FERMÉS, ON AIME ET ON SIGNALE ENCORE — ON NE RÉÉCRIT PLUS** (#16930,
+ * décision porteur 2026-11-08). La passerelle refuse la modification d'un
+ * commentaire sur un fil fermé : « Modifier » quitte le « … », le cœur et
+ * « Signaler » restent.
+ */
+describe('les gestes d’une rangée quand les commentaires sont fermés (#16930)', () => {
+  const menuOf = async (host: HTMLElement, rowId: string) => {
+    const more = () => host.querySelector<HTMLButtonElement>(`[data-comment-row="${rowId}"] [data-comment-gesture="more"]`);
+    await act(async () => more()?.click());
+    const found = [...document.querySelectorAll('[data-comment-menu] [role="menuitem"]')].map((element) => element.getAttribute('data-comment-gesture'));
+    await act(async () => more()?.click());
+    return found;
+  };
+
+  test('le sien : plus « Modifier », « Supprimer » reste', async () => {
+    seed(true);
+    const host = await mountThread();
+    expect(await menuOf(host, 'cm-r2-0')).toEqual(['copy', 'delete']);
+  });
+
+  test('celui d’un autre : « Signaler » reste offert', async () => {
+    seed(true);
+    const host = await mountThread();
+    expect(await menuOf(host, 'cm-r2-3')).toContain('report');
+  });
+
+  test('le cœur reste sur chaque rangée', async () => {
+    seed(true);
+    const host = await mountThread();
+    const rows = [...host.querySelectorAll('[data-comment-row]')];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.querySelector('[data-comment-gesture="like"]') !== null)).toBe(true);
+  });
+
+  test('ouverts, « Modifier » est de retour', async () => {
+    seed(false);
+    const host = await mountThread();
+    expect(await menuOf(host, 'cm-r2-0')).toEqual(['copy', 'edit', 'delete']);
+  });
+});

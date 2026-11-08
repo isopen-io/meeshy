@@ -73,6 +73,13 @@ nonisolated enum CallVideoLowLight {
 
 nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
     case natural, warm, cool, vivid, muted
+    case golden, film, softNight, bright, velvet, sky, monochrome
+
+    /// **Les huit ambiances Meeshy** (OPUS-2, choisies par Jacques) : ce
+    /// que proposent le viseur et l'appel, dans cet ordre.
+    /// Les quatre teintes d'avant restent lisibles (un brouillon ou un appel en
+    /// cours qui en porte une la garde), mais ne sont plus proposées.
+    static let catalog: [VideoFilterPreset] = [.natural, .golden, .film, .softNight, .bright, .velvet, .sky, .monochrome]
 
     var config: VideoFilterConfig {
         var c = VideoFilterConfig()
@@ -98,6 +105,41 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
             c.contrast = 0.9
             c.saturation = 0.7
             c.exposure = -0.1
+        case .golden:
+            c.temperature = 6900
+            c.tint = 3
+            c.contrast = 1.04
+            c.saturation = 1.04
+        case .film:
+            c.temperature = 6600
+            c.tint = 1
+            c.contrast = 1.08
+            c.saturation = 0.86
+        case .softNight:
+            c.temperature = 6100
+            c.tint = -2
+            c.contrast = 0.94
+            c.saturation = 0.9
+            c.exposure = 0.1
+        case .bright:
+            c.temperature = 6600
+            c.contrast = 0.96
+            c.saturation = 0.82
+            c.exposure = 0.15
+        case .velvet:
+            c.temperature = 6800
+            c.tint = 2
+            c.contrast = 1.12
+            c.saturation = 1.08
+            c.exposure = -0.05
+        case .sky:
+            c.temperature = 6200
+            c.tint = -1
+            c.contrast = 1.08
+            c.saturation = 1.12
+        case .monochrome:
+            c.contrast = 1.1
+            c.saturation = 0
         }
         return c
     }
@@ -110,13 +152,12 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
     /// advanced-filter fields. `isEnabled` is intentionally ignored so the
     /// "Reset" affordance (which sets `.natural`'s colorimetry but flips
     /// `isEnabled` back to `false`) still resolves to `.natural`. The advanced
-    /// fields are ignored because `presetChip` deliberately carries the
-    /// caller's own `backgroundBlurEnabled`/`skinSmoothingEnabled` across a
-    /// preset switch (see `VideoFiltersPanel.presetChip`) — they are
-    /// orthogonal to which colorimetry preset is active.
+    /// fields are ignored because a preset switch deliberately carries the
+    /// caller's own `backgroundBlurEnabled`/`skinSmoothingEnabled` across —
+    /// they are orthogonal to which colorimetry preset is active.
     ///
     /// Returns `nil` when no preset's colorimetry matches — e.g. the user
-    /// hand-tuned a slider in `VideoFilterControlView`, which is a legitimate
+    /// hand-tuned a slider in the effects mode, which is a legitimate
     /// "no preset selected" state, not a bug.
     static func matching(_ config: VideoFilterConfig) -> VideoFilterPreset? {
         allCases.first { preset in
@@ -207,13 +248,13 @@ protocol VideoFilterPipelineProviding {
 // chaque méthode/property serait @MainActor et trap au premier frame livré.
 
 nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unchecked Sendable {
-    // `config` is written from the MainActor (slider drags in VideoFiltersPanel,
+    // `config` is written from the MainActor (slider drags in the effects mode,
     // CallManager toggles) and read from WebRTC's serial capture queue inside
     // `process(_:averageBrightness:)` at ~30Hz. Without a lock, a write racing a
     // read can tear the struct — e.g. pairing a new `backgroundBlurEnabled` with
     // a stale `backgroundBlurRadius` — producing a visibly glitchy frame.
     // `isAutoDegraded`/`lastFrameProcessingTime` have the same MainActor-reads/
-    // capture-queue-writes shape (VideoFiltersPanel reads `isAutoDegraded`), so
+    // capture-queue-writes shape, so
     // they share the same lock.
     private let stateLock = NSLock()
 

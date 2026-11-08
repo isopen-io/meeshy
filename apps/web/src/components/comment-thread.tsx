@@ -105,7 +105,7 @@ export function CommentThread({
   const query = useComments(postId, { enabled });
   /**
    * **LES COMMENTAIRES FERMÉS** (#16541) — ce que les caisses en savent (servi,
-   * réglé, diffusé), ou ce qu'un envoi vient d'apprendre (`403
+   * réglé, diffusé), ou ce qu'un envoi ou une modification vient d'apprendre (`403
    * COMMENTS_DISABLED`) pour une publication qu'aucune caisse ne tient. Le fil
    * reste LISIBLE ; seule l'écriture se retire, et la surface le DIT.
    */
@@ -373,6 +373,8 @@ export function CommentThread({
       try {
         const result = await commentGestureAction(request);
         if (result.ok) return;
+        /* Une modification refusée parce que le fil s'est fermé (#16930) le ferme ICI aussi, caisse ou pas. */
+        if (result.message === 'comments.closed') setRefusedFor(request.postId);
         setFailures((current) => new Map(current).set(request.commentId, { failure: result, request }));
       } finally {
         setBusy((current) => {
@@ -423,6 +425,7 @@ export function CommentThread({
                 originalLanguage: language,
                 ...(parentId === undefined ? {} : { parentId }),
               }),
+            commentsClosed: closed,
             ...(closed ? {} : { onReply: setReplyTarget }),
             onImage: (comment, servedText, options) => {
               const post = composingPost;

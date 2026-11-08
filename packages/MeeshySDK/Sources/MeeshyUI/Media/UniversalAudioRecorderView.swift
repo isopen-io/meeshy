@@ -198,7 +198,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
     private var durationDisplay: some View {
         VStack(spacing: MeeshySpacing.xs) {
-            Text(formatDuration(recorder.duration))
+            Text(MediaFormat.duration(recorder.duration))
                 .font(.system(size: 48, weight: .light, design: .monospaced))
                 .foregroundColor(.white)
                 .contentTransition(.numericText())
@@ -356,8 +356,4 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     }
 
     // MARK: - Helpers
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        MediaFormat.duration(seconds)
-    }
 }

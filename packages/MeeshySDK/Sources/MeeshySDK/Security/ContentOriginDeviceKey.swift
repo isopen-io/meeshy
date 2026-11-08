@@ -162,8 +162,8 @@ final class ContentOriginKeyHolder: Sendable {
     /// Le délai avant la prochaine relecture, après `failedRetries` relectures
     /// restées fermées.
     func retryDelay(afterFailedRetries failedRetries: Int) -> TimeInterval {
-        let doublings = Double(min(failedRetries, 32))
-        return min(retryInterval * pow(2, doublings), maxRetryInterval)
+        RetryPolicy(maxAttempts: nil, firstDelay: retryInterval, maxDelay: maxRetryInterval)
+            .delay(afterFailure: min(max(failedRetries, 0), 32) + 1, jitterSample: 0)
     }
 
     private func access() -> Access {

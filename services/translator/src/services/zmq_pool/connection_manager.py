@@ -149,6 +149,15 @@ async def take_next_task(
             pass
 
 
+def _drain(queue: asyncio.Queue) -> List[TranslationTask]:
+    items: List[TranslationTask] = []
+    while True:
+        try:
+            items.append(queue.get_nowait())
+        except asyncio.QueueEmpty:
+            return items
+
+
 class ConnectionManager:
     """
     Gestionnaire des connexions et queues de traduction
@@ -217,7 +226,8 @@ class ConnectionManager:
             'pool_full_rejections': 0,
             'batches_created': 0,
             'fast_track_count': 0,
-            'caption_fast_lane_overflow': 0
+            'caption_fast_lane_overflow': 0,
+            'shutdown_rejections': 0
         }
 
         logger.info(
@@ -252,6 +262,32 @@ class ConnectionManager:
         # Flush final des batches en attente
         await self._flush_batches()
         logger.info("[CONNECTION] Connection manager stopped")
+
+    async def reject_pending_at_shutdown(self) -> int:
+        """
+        #16819 — appelé une fois les workers arrêtés : chaque tâche restée dans
+        l'accumulateur ou dans une file est remise au rappel de rejet, un lot
+        déplié en ses tâches d'origine. Aucune ne disparaît en silence.
+        """
+        async with self._batch_lock:
+            accumulated = [t for tasks in self._batch_accumulator.values() for t in tasks]
+            self._batch_accumulator.clear()
+        queued = [
+            original
+            for queue in (self.fast_pool, self.normal_pool, self.any_pool)
+            for item in _drain(queue)
+            for original in (getattr(item, '_batch_tasks', None) or [item])
+        ]
+        pending = accumulated + queued
+        if not pending:
+            return 0
+        self.stats['shutdown_rejections'] += len(pending)
+        logger.warning(
+            f"[TRANSLATOR] Shutdown: signaling {len(pending)} unprocessed tasks: "
+            f"{[t.task_id for t in pending]}"
+        )
+        await self._report_rejected(pending)
+        return len(pending)
 
     async def enqueue_task(self, task: TranslationTask) -> bool:
         """
@@ -427,9 +463,12 @@ class ConnectionManager:
         Returns:
             Clé unique pour ce type de tâche
         """
-        # Clé: source_lang + target_langs (triées) + model_type
+        # Clé: file (any | normal) + source_lang + target_langs (triées) + model_type.
+        # #16820 — la file d'un lot se lit sur sa première tâche : la clé sépare
+        # donc « any » des conversations ordinaires, sans fragmenter par conversation.
+        lane = "any" if task.conversation_id == "any" else "normal"
         target_key = "_".join(sorted(task.target_languages))
-        return f"{task.source_language}_{target_key}_{task.model_type}"
+        return f"{lane}_{task.source_language}_{target_key}_{task.model_type}"
 
     async def _batch_flush_loop(self):
         """Boucle qui flush les batches accumulés périodiquement"""

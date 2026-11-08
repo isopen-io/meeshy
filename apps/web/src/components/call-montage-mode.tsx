@@ -16,6 +16,7 @@ import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-ca
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
+import { LiveFrameHoldOption, type LiveFrameHold } from './call-live-frame-hold-option';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
 import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader, type ShelfLoader } from './use-montage-frames';
@@ -93,7 +94,11 @@ type ModeProps = {
   readonly circleOf?: CircleOf;
   /** Les ambiances installées (#10169) : seules leurs puces se proposent. */
   readonly loadShelf?: ShelfLoader;
+  /** L'interrupteur « Cadre » du cadre en direct (#16943, loi 16) : sans lui, le Montage ne fait que capturer. */
+  readonly hold?: LiveFrameHold;
 };
+
+export type { LiveFrameHold };
 
 const NO_AUDIO = (): readonly MediaStream[] => [];
 
@@ -126,7 +131,7 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
   const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });
@@ -340,7 +345,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
         <CallModeBar
           quit={{ label: t(language, 'callStudio.mode.quit'), glyph: quitGlyph, onPress: onExit, data: { 'data-call-mode-quit': '' } }}
           center={<KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />}
-          options={<ModeOption label={t(language, 'callStudio.capture.facesLabel')} glyph={facesGlyph} onPress={() => void faces()} data={{ 'data-call-capture-faces': '' }} />}
+          options={<><LiveFrameHoldOption hold={hold} frame={frame} frames={frames} language={language} /><ModeOption label={t(language, 'callStudio.capture.facesLabel')} glyph={facesGlyph} onPress={() => void faces()} data={{ 'data-call-capture-faces': '' }} /></>}
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}

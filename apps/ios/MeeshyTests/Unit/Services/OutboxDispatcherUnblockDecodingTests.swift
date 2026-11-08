@@ -87,8 +87,8 @@ final class OutboxDispatcherUnblockDecodingTests: XCTestCase {
     func test_bothDispatchers_expectTheSameResponseType() throws {
         let source = try dispatcherSource()
 
-        let block = try XCTUnwrap(body(of: "private func dispatchBlockUser", in: source))
-        let unblock = try XCTUnwrap(body(of: "private func dispatchUnblockUser", in: source))
+        let block = try XCTUnwrap(body(of: "func dispatchBlockUser(", in: source))
+        let unblock = try XCTUnwrap(body(of: "func dispatchUnblockUser(", in: source))
 
         XCTAssertTrue(
             block.contains("APIResponse<BlockActionResponse>"),
@@ -107,13 +107,19 @@ final class OutboxDispatcherUnblockDecodingTests: XCTestCase {
     // MARK: - Lecture
 
     private func dispatcherSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let directory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/OutboxDispatcher.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main/Services")
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix("OutboxDispatcher") && $0.hasSuffix(".swift") }
+            .sorted()
+        XCTAssertFalse(files.isEmpty, "aucun fichier OutboxDispatcher*.swift — la garde ne mesurerait rien")
+        return try files
+            .map { try String(contentsOf: directory.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func body(of anchor: String, in source: String) -> String? {

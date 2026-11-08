@@ -1,6 +1,7 @@
 import AVFoundation
 import SwiftUI
 import UIKit
+import MeeshyUI
 
 /// La caméra qui lit un QR (`AVCaptureMetadataOutput` sur `.qr`) et rend son
 /// texte, une fois par code nouveau. En pause, la session tourne toujours mais
@@ -65,7 +66,7 @@ final class QRCodeCameraController: UIViewController {
         guard !isPaused else { return }
         if let lastCode, lastCode.text == code, Date().timeIntervalSince(lastCode.at) < Self.repeatDelay { return }
         lastCode = (code, Date())
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        HapticFeedback.success()
         onCode?(code)
     }
 }

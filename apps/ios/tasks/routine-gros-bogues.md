@@ -34,7 +34,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Relu le 2026-11-08 (audit 09) : la recette de #16506 doit aussi couvrir OPUS-14 (effets de visage en paysage), une vidéo qui change de tenue entre deux segments (mise en bandes sur la toile du premier, `CameraSegmentOrientation.swift:44-60`) et, pour #16505, l'écart de teinte d'un même look entre l'aperçu (trames vidéo) et la photo (traitement photo).
 
 ## OPUS-2 — Le catalogue de filtres est trop mince pour dépasser le marché
-- Statut : décision attendue
+- Statut : en cours (#17000, #17001) — les huit ambiances (Naturel, Doré, Pellicule, Nuit douce, Clair, Velours, Ciel, Noir et blanc) livrées en cube 3D au viseur et en appel ; restent le pavé 2D chaleur/contraste, le curseur d'intensité et la recette sur peaux claires et foncées sur iPhone
 - Signalé par : audit, le 2026-11-06
 - Point d'origine : audit B3
 - Constat : `VideoFilterPreset` (`Main/Services/VideoFilterPipeline.swift:74`) n'a que 5 couleurs (Naturel, Chaud, Froid, Vif, Doux) partagées par l'appel et le viseur ; `CallFaceEffect` 4 effets stylisés.
@@ -110,7 +110,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `/mnt/project-files/frames/07-audit-ui-ux-camera-appels.md` § B5, `tasks/routine-camera.md` CAM-4.
 
 ## OPUS-9 — Le bouton Camera Control des iPhone 16 et 17 ne règle rien dans Meeshy
-- Statut : en cours (#16818) — zoom et exposition livrés ; reste le sélecteur « Ambiance » (attend OPUS-2) et la recette sur iPhone 16
+- Statut : en cours (#16818, #16821) — zoom et exposition livrés, tests verts (`CameraSystemControlsTests`) ; restent le sélecteur « Ambiance » au Camera Control (les huit ambiances existent depuis #17001) et la recette sur iPhone 16
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : doc 08 § R7 (recherche état de l'art)
 - Constat : aucun `AVCaptureControl` n'est ajouté à la session (`grep AVCaptureSlider\|AVCaptureIndexPicker\|AVCaptureSystemZoomSlider` vide dans `apps/ios`) ; le bouton latéral ouvre au mieux l'app sans rien piloter.
@@ -121,7 +121,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : CAM-6 (boutons de volume, côté interface).
 
 ## OPUS-10 — Vidéo du viseur : stabilisation, cadence et basse lumière laissées au hasard
-- Statut : en cours (#16816) — stabilisation `standard` et basse lumière livrées ; restent les modes `cinematic` et la cadence 60 i/s, après recette sur iPhone
+- Statut : en cours (#16816, #16817) — stabilisation `standard` et basse lumière livrées, tests verts (`ComposerCaptureMirrorRuleTests`) ; restent les modes `cinematic` et la cadence 60 i/s, après recette sur iPhone
 - Signalé par : audit, le 2026-11-08
 - Point d'origine : doc 08 § R9 et R10
 - Constat : ni `preferredVideoStabilizationMode`, ni cadence choisie (`activeVideoMinFrameDuration`), ni `isLowLightBoostEnabled` dans `Main/Components/` ; le système décide, souvent sans stabilisation en caméra avant.

@@ -15,7 +15,8 @@ import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
-import { emitServerEvent } from '../serverEmit';
+import { emitServerEvent, safeBroadcast } from '../serverEmit';
+import { emitConversationActivityUpdate, type ActivityPrisma } from '../emitConversationActivityUpdate';
 import type { QueuedPayloadFor } from '../queuedEventContract';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
@@ -130,8 +131,9 @@ export class AttachmentReactionHandler {
         return;
       }
 
+      let activityAt: Date | undefined;
       if (action === 'add') {
-        const { changed } = await this.deps.service.addAttachmentReaction({
+        const { changed, at } = await this.deps.service.addAttachmentReaction({
           attachmentId: validated.attachmentId, messageId: validated.messageId,
           participantId: resolved.participantId, emoji: validated.emoji,
         });
@@ -145,6 +147,7 @@ export class AttachmentReactionHandler {
           callback?.({ success: true });
           return;
         }
+        activityAt = at;
       } else {
         const removed = await this.deps.service.removeAttachmentReaction({
           attachmentId: validated.attachmentId, participantId: resolved.participantId, emoji: validated.emoji,
@@ -161,6 +164,59 @@ export class AttachmentReactionHandler {
         }
       }
 
+      // #16951 — L'ACCUSÉ PART ICI, avant tout `await` de plus. La réaction est
+      // PERSISTÉE depuis le bloc ci-dessus ; tout ce qui suit — la lecture du
+      // résumé, la diffusion de room, la file hors ligne, le rang de liste —
+      // est un effet d'APRÈS-SUCCÈS.
+      //
+      // La jumelle `ReactionHandler` écrit la règle en toutes lettres : « A
+      // transient failure in those reads must NOT flip the ACK to failure —
+      // that would make the client roll back a reaction already committed to
+      // the DB ». Ici l'accusé était la DERNIÈRE instruction du `try` dont le
+      // `catch` répond `{ success: false }`. Une levée de `getReactionSummary`
+      // (lecture Mongo) ou d'`emitServerEvent` — le dépôt écrit lui-même qu'un
+      // `io.to(room).emit(...)` LÈVE quand l'adaptateur ou l'encodeur est en
+      // défaut — produisait TROIS choses d'un coup : accusé d'ÉCHEC sur une
+      // écriture réussie (le client annule son optimiste et ré-affiche
+      // l'absence d'une réaction qui EST en base), aucune diffusion, et aucune
+      // entrée de file hors ligne — la seule garantie DURABLE du chemin,
+      // sautée par la levée.
+      //
+      // C'est la forme littérale du cycle 130 bis, rejouée sur la famille
+      // jumelle : « l'émission de room n'était pas gardée … la levée ayant
+      // sauté la suite, l'entrée de file hors ligne n'était jamais posée ».
+      callback?.({ success: true });
+
+      await this._afterApplied(action, conversationId, resolved, validated, activityAt);
+    } catch (error: unknown) {
+      logger.error('attachment reaction failed', { action, error });
+      callback?.({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed',
+        ...(error instanceof E2eeSignalChannelRequiredError ? { code: error.code } : {}),
+      });
+    }
+  }
+
+  /**
+   * Ce qui suit l'accusé : résumé, diffusion de room, file hors ligne, rang de
+   * liste.
+   *
+   * Unité SÉPARÉE, et pas seulement pour la lisibilité — c'est ce qui rend
+   * impossible qu'une levée d'ici atteigne le `catch` d'`_apply`, lequel
+   * rappellerait le callback avec un échec APRÈS le succès déjà envoyé. La
+   * jumelle obtient la même propriété par un `try` imbriqué ; ici le
+   * gestionnaire était déjà au budget, et une unité nommée dit mieux ce qu'elle
+   * garantit.
+   */
+  private async _afterApplied(
+    action: 'add' | 'remove',
+    conversationId: string,
+    resolved: { readonly participantId: string; readonly userId: string; readonly isAnonymous: boolean },
+    validated: { readonly attachmentId: string; readonly messageId: string; readonly emoji: string },
+    activityAt: Date | undefined,
+  ): Promise<void> {
+    try {
       const reactionSummary = await this.deps.service.getReactionSummary(validated.attachmentId);
       const event = action === 'add'
         ? SERVER_EVENTS.ATTACHMENT_REACTION_ADDED
@@ -175,7 +231,24 @@ export class AttachmentReactionHandler {
         reactionSummary,
         timestamp: new Date().toISOString(),
       };
-      emitServerEvent(this.deps.io.to(ROOMS.conversation(conversationId)), event, payload);
+      // HUITIÈME site de la famille #17026, trouvé par l'audit adversarial — ni
+      // par l'issue, ni par ma relecture, ni par le cliquet, qui est AVEUGLE à
+      // l'émission par helper (`emitServerEvent` ne porte aucun `.emit(`
+      // textuel ici). L'enfilage durable est cinq lignes plus bas, dans le même
+      // `try`, dont le `catch` journalise « post-success side-effects failed ».
+      //
+      // Et la règle est écrite VINGT LIGNES PLUS BAS, dans ce même `try`, pour
+      // l'autre canal latéral : « ni emporter l'entrée de file hors ligne qui la
+      // précède ». Elle valait déjà pour celui-ci.
+      //
+      // Ce qui se perdait, définitivement : le `reactionSummary` par pièce
+      // jointe d'un participant hors ligne — que seul un rechargement complet
+      // de la conversation répare, comme le dit le doc-comment de l'enfilage.
+      safeBroadcast(
+        'attachment-reaction',
+        () => emitServerEvent(this.deps.io.to(ROOMS.conversation(conversationId)), event, payload),
+        (error) => logger.error('attachment reaction live emission failed — offline replay unaffected', { conversationId, error }),
+      );
 
       void this._enqueueOfflineAttachmentReactionEvent(
         conversationId,
@@ -187,13 +260,39 @@ export class AttachmentReactionHandler {
         logger.error('attachment reaction offline enqueue rejected', { conversationId, error })
       );
 
-      callback?.({ success: true });
-    } catch (error: unknown) {
-      logger.error('attachment reaction failed', { action, error });
-      callback?.({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed',
-        ...(error instanceof E2eeSignalChannelRequiredError ? { code: error.code } : {}),
+      // #9026 — le rang SERVI, la seconde moitié de ce que le service vient
+      // d'écrire. Sans elle, la conversation ne remonte en tête qu'au prochain
+      // `GET /conversations` : l'écriture est durable, la liste ne l'est pas.
+      //
+      // `rank: true`, JAMAIS `reaction: true` : ce second drapeau fait résoudre
+      // `Conversation.lastReactionId` par `prisma.reaction.findUnique`, la table
+      // des réactions de MESSAGE, où cette réaction-ci n'a pas de ligne. La
+      // réaction de pièce jointe est donc rangée avec l'appel et l'épingle —
+      // une activité dont aucun autre événement de liste ne porte le rang.
+      //
+      // La clé d'acteur suit la loi du dépôt (`userId ?? id`) : un invité de
+      // lien partagé n'a pas de ligne `User`, et c'est son `Participant.id` qui
+      // nomme sa room personnelle.
+      //
+      // Isolé dans son propre `.catch`, et APRÈS l'accusé du client : une
+      // lecture de liste qui tombe ne doit ni faire échouer une réaction déjà
+      // écrite, ni emporter l'entrée de file hors ligne qui la précède.
+      if (activityAt) {
+        void emitConversationActivityUpdate(this.deps.prisma as ActivityPrisma, this.deps.io, {
+          conversationId,
+          updatedByUserId: resolved.isAnonymous ? resolved.participantId : resolved.userId,
+          rank: true,
+        }).catch((error: unknown) =>
+          logger.error('attachment reaction list rank update rejected', { conversationId, error })
+        );
+      }
+    } catch (sideEffectError: unknown) {
+      // La réaction est écrite et le client a déjà son accusé. Les pairs se
+      // réconcilient à la prochaine synchronisation, et l'absent par la file —
+      // quand elle a pu être écrite.
+      logger.error('attachment reaction post-success side-effects failed', {
+        conversationId,
+        error: sideEffectError,
       });
     }
   }

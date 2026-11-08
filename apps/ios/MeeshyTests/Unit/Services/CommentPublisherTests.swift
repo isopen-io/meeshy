@@ -243,7 +243,7 @@ final class CommentPublisherIsTheOnlyDoorGuardTests: XCTestCase {
     }
 
     func test_theNotificationReply_sendsThroughThePublisher() throws {
-        XCTAssertTrue(try source("Features/Main/Services/NotificationActionHandler.swift")
+        XCTAssertTrue(try source("Features/Main/Services/NotificationActionHandler+SocialActions.swift")
             .contains("commentPublisher.publish(comment, pieces: [])"))
     }
 

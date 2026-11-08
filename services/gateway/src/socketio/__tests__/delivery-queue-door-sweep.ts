@@ -43,15 +43,38 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 /**
- * L'unique enfilage LÉGITIME du dépôt : l'unité partagée elle-même.
+ * Les enfilages LÉGITIMES du dépôt : les PORTES PARTAGÉES elles-mêmes.
  *
- * Elle n'est pas une exception au cliquet, elle en est le SUJET — c'est
- * l'endroit où le couple `(eventType, payload)` est tenu au contrat de fil
- * (`QueuedEventVariant`), où l'exclusion de l'acteur porte sur les DEUX
- * identités, où la clé de file suit `userId ?? id`, et où chaque échec est
- * rattrapé par entrée.
+ * Elles ne sont pas des exceptions au cliquet, elles en sont le SUJET. Ce que
+ * ce balayage interdit est qu'un TRANSPORT enfile pour son compte ; une porte
+ * partagée est l'inverse d'un transport — c'est l'unité où le couple
+ * `(eventType, payload)` est tenu au contrat de fil, où la clé de file suit
+ * `userId ?? id`, et où chaque échec est rattrapé par entrée.
+ *
+ * **Il y en a DEUX, et la seconde ne pouvait pas passer par la première**
+ * (#16688). Le discriminant n'est pas le nom de l'unité mais l'AUDIENCE dont
+ * elle décide :
+ *
+ * | porte | audience | comment elle la décide |
+ * |---|---|---|
+ * | `offlineParticipantQueue.ts` | les participants d'une CONVERSATION | `connectedUsers.has(queueKey)` — qui, des membres, est absent |
+ * | `enqueuePersonalMessageMark.ts` | les autres APPAREILS d'un compte | inconditionnel : l'acteur EST le compte, donc la joignabilité ne dit rien |
+ *
+ * Faire passer la seconde par la première n'aurait pas été une délégation mais
+ * un défaut : le prédicat de joignabilité reçoit toujours OUI quand c'est
+ * l'appareil acteur qui le renseigne, si bien qu'aucune entrée n'était jamais
+ * écrite pour l'appareil resté éteint. C'est la raison d'être de la seconde
+ * porte, et elle est écrite dans son préambule.
+ *
+ * **Ajouter une TROISIÈME entrée ici est une DÉCISION**, et le témoin
+ * `delivery-queue-door-sweep.test.ts` l'exige en figeant cet ensemble : une
+ * porte de plus doit nommer l'audience qu'aucune des deux ne sait servir. Ce
+ * qui n'est pas une audience neuve est un transport, et un transport délègue.
  */
-const SHARED_UNIT = 'socketio/offlineParticipantQueue.ts';
+export const SHARED_UNITS: ReadonlyArray<string> = [
+  'socketio/offlineParticipantQueue.ts',
+  'socketio/enqueuePersonalMessageMark.ts',
+];
 
 /**
  * Balaye `src/` ENTIER — pas seulement `src/socketio/`.
@@ -71,7 +94,7 @@ export function sweepDirectEnqueueCalls(srcDir: string): DirectEnqueueCall[] {
     // Les témoins ont le droit d'appeler la file directement : ils DOUBLENT le
     // collaborateur. Ce qu'on garde ici, c'est la PRODUCTION.
     if (relative.includes('__tests__') || relative.endsWith('.test.ts')) continue;
-    if (relative === SHARED_UNIT) continue;
+    if (SHARED_UNITS.includes(relative)) continue;
 
     for (const line of stripComments(readFileSync(file, 'utf8')).split('\n')) {
       if (!DIRECT_ENQUEUE.test(line)) continue;

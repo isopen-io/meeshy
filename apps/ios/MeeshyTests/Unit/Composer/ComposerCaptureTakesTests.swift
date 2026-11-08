@@ -644,6 +644,71 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
+    /// CAM-15 : un rendu impossible se dit, et la prise brute rejoint Photos au lieu d'être effacée.
+    func test_saveRenderedVideo_unrenderable_savesTheRawTake_andSaysTheFailure() async throws {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.look = ComposerPhotoLook(filter: .warm)
+        let url = try Self.tempFile()
+        session.saveRenderedVideo(url)
+        await Self.waitUntil { session.pendingGallerySaves == 0 }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "la vidéo brute part plutôt que de se perdre")
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.saveToPhotosFailed)
+    }
+
+    func test_gallerySaveNotice_saysEachOutcomeOnce() {
+        XCTAssertEqual(ComposerGallerySaveNotice.notice(rendered: true, written: true), .saved)
+        XCTAssertEqual(ComposerGallerySaveNotice.notice(rendered: false, written: true), .failed,
+                       "la brute est en galerie, mais le rendu a manqué : cela se dit")
+        XCTAssertEqual(ComposerGallerySaveNotice.notice(rendered: false, written: false), .failed)
+        XCTAssertNil(ComposerGallerySaveNotice.notice(rendered: true, written: false),
+                     "un refus de Photos s'est déjà dit")
+    }
+
+    func test_gallerySaveNotice_videoToWrite_fallsBackToTheRawTake() {
+        let brut = URL(fileURLWithPath: "/tmp/brut.mov")
+        let rendu = URL(fileURLWithPath: "/tmp/rendu.mov")
+        XCTAssertEqual(ComposerGallerySaveNotice.videoToWrite(rendered: rendu, raw: brut), rendu)
+        XCTAssertEqual(ComposerGallerySaveNotice.videoToWrite(rendered: nil, raw: brut), brut)
+    }
+
+    func test_captureReadiness_onlyATimeoutSaysTheCameraIsNotReady() {
+        XCTAssertEqual(ComposerCaptureReadiness.outcome(ready: true, cancelled: false), .shoot)
+        XCTAssertEqual(ComposerCaptureReadiness.outcome(ready: false, cancelled: false), .notReady)
+        XCTAssertEqual(ComposerCaptureReadiness.outcome(ready: false, cancelled: true), .silent,
+                       "une attente annulée ne lègue rien")
+        XCTAssertEqual(ComposerCaptureReadiness.outcome(ready: true, cancelled: true), .silent)
+        XCTAssertFalse(ComposerCaptureCopy.cameraNotReady.isEmpty)
+    }
+
+    /// CAM-16 : le cadre écrit le jour du déclenchement, pas celui de l'ouverture du viseur.
+    func test_lookClock_followsTheDay_butNeverDuringATake() {
+        let calendrier = Calendar(identifier: .gregorian)
+        let hier = Date(timeIntervalSince1970: 1_700_000_000)
+        let plusTard = hier.addingTimeInterval(3600)
+        let demain = hier.addingTimeInterval(86_400)
+        XCTAssertEqual(ComposerLookClock.date(shown: hier, now: plusTard, frozen: false, calendar: calendrier), hier,
+                       "le même jour garde la même date : les clés de scène restent stables")
+        XCTAssertEqual(ComposerLookClock.date(shown: hier, now: demain, frozen: false, calendar: calendrier), demain)
+        XCTAssertEqual(ComposerLookClock.date(shown: hier, now: demain, frozen: true, calendar: calendrier), hier,
+                       "une prise en cours garde le jour de son déclenchement")
+    }
+
+    func test_followTheDay_armedViewfinderOpenedYesterday_writesToday() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.lookDate = Date().addingTimeInterval(-2 * 86_400)
+        session.followTheDay()
+        XCTAssertTrue(Calendar.current.isDateInToday(session.lookDate))
+    }
+
+    func test_followTheDay_whileRecording_keepsTheDayTheTakeStarted() {
+        let session = ComposerCaptureSession(stage: .recording)
+        let debut = Date().addingTimeInterval(-2 * 86_400)
+        session.lookDate = debut
+        session.followTheDay()
+        XCTAssertEqual(session.lookDate, debut)
+    }
+
     /// R2 : la file retient les OCTETS de la prise, décodés au moment de peindre.
     func test_saveRenderedPhoto_fromTheTakeBytes_savesTheRendered() async {
         let galerie = MockComposerGallery()

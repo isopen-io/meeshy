@@ -5,6 +5,7 @@ import { ListeningMount } from './listening-mount';
 import { PublicationImageHost } from './publication-image-host';
 import { SceneExportTray } from './scene-export-tray';
 import { TalkieMount } from './talkie-mount';
+import { TogetherMount } from './together-mount';
 
 /**
  * LE CHROME DIFFÉRÉ DE LA COQUILLE (W4 #7221, #10174) — ce qui vaut sur TOUTES les routes sans peindre le premier
@@ -12,7 +13,8 @@ import { TalkieMount } from './talkie-mount';
  * immortaliser, armé au repos (`game-photo-alert-mount.tsx`), et le bandeau des exports de publication en cours
  * (`scene-export-tray.tsx`, #13873), et l'atelier de carte d'« Imager » une publication
  * (`publication-image-host.tsx`, #16393), et l'écran de sonnerie du Bring (`bring-ring-mount.tsx`, #13936), et la voix d'un Proche qui parle
- * (`talkie-mount.tsx`, #16638), et ce qu'écoutent mes Proches et mes Sangs (`listening-mount.tsx`, #16729).
+ * (`talkie-mount.tsx`, #16638), et ce qu'écoutent mes Proches et mes Sangs (`listening-mount.tsx`, #16729), et la séance « ensemble »
+ * (`together-mount.tsx`, #17055).
  * L'entrée n'en connaît qu'un nom.
  */
 export function DeferredChrome({ routeKey, signedIn }: { readonly routeKey: string; readonly signedIn: boolean }) {
@@ -25,6 +27,7 @@ export function DeferredChrome({ routeKey, signedIn }: { readonly routeKey: stri
       <BringRingMount signedIn={signedIn} />
       <TalkieMount signedIn={signedIn} />
       <ListeningMount signedIn={signedIn} />
+      <TogetherMount signedIn={signedIn} />
     </>
   );
 }

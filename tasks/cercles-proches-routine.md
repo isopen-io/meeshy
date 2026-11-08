@@ -290,3 +290,113 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `ci.yml` de cette tête était rouge pour deux raisons extérieures au lot : Trivy (504 au téléchargement) et
   Playwright tranche 4 (`bun.lock` au format 3 que bun 1.3.14 ne lit pas, plus la gate `media-16 … obtenu flow-end`).
   Lockfiles réparés dans la PR #16873 (#16872).
+
+## 2026-11-08 — réveil 17 : émettre le talkie depuis iOS (#16927 ⊂ #13935)
+
+- Reprise : aucune PR de la routine ouverte ; #16835 (accorder « Ce que j'écoute » depuis le web) fusionnée. Le lot
+  recommandé, l'accord de l'écoute sur Android, touche `CircleReceptionBlockSection.kt` / `CircleLinkSheet.kt` qu'une
+  branche vivante (`claude/cercles-16643-android`) écrit déjà : ce réveil cède et prend l'émission du talkie sur iOS,
+  que personne n'écrivait. Issue #16927 ouverte sous #13935 (milestone #215), branche
+  `claude/cercles-talkie-ios-emettre` réservée avant toute écriture.
+- Lot : SDK — `TalkieSending.swift` (verdict de `talkie:start` et refus codés, blocage et repli rendus par la même issue
+  `voice` ; en-tête ADTS ; `TalkieFragmenter` ~250 ms sous le plafond d'octets ; `TalkieBudget` en octets et en nombre),
+  `TalkieSocketEmitter` (les trois événements client, fragment en binaire natif, hors de `MessageSocketManager`),
+  `talkieStart` / `talkieSendChunk` / `talkieEnd` dans `SocketEvent`. App — `TalkieSender` (iso `createTalkieSender` :
+  appui = accusé ET micro en même temps, capté avant l'accusé envoyé après, relâcher vide puis ferme, durée servie,
+  `talkie:ended` de MA prise de parole), `TalkieMicCapture` (AVAudioEngine → AAC-LC mono 64 kb/s → trames ADTS, session
+  par `MeeshyRecordingSession` comme les vocaux), « Maintenir pour parler » sur la fiche dès Proche
+  (`ProfileTalkieRow`, retirée sur `TALKIE_NOT_ALLOWED`). Treize libellés `talkie.send.*` en sept langues.
+- Ce qui reste du talkie : copie en message vocal (#16698 web, iOS à suivre), émission Android, arrière-plan iOS
+  (PushToTalk) et Android, Safari/Firefox (#16699).
+- PR #16928, fusionnée dans `dev` par Jacques le 2026-11-08 à 15:15 (9e7aa1b10), #16927 fermée. Gates locaux verts
+  (règles maison, cohésion, localisation, couleurs en dur, parité `SocketEvent`, inscription des témoins 1909/1909,
+  cliquet `any`). Quatre rouges hérités de `dev` levés en chemin : cliquet `any` et `LocationHandler.blocking` par
+  refusion de `dev` ; `.foregroundColor(` (2299 > 2294) et `Color(hex:)` sur variable inconnue (476 > 475) corrigés au
+  site fautif (`RainbowLetters.palette(isDark:)`), sans relever de référence. Les runs iOS, SDK et CI dispatchés sur le
+  dernier commit ont été annulés par la fusion : la preuve de compilation iOS/SDK se lit sur les runs `push` de `dev`.
+- Prochain lot recommandé : accorder « Ce que j'écoute » depuis Android quand #16643 aura fusionné, sinon l'émission du
+  talkie sur Android.
+
+## 2026-11-08 — réveil 18 : le partage temporaire de position, côté serveur (#16980 ⊂ #14109)
+
+- Reprise : #16928 (talkie émis depuis iOS) est ouverte, et le réveil 17 la mène encore (il a poussé une fusion de
+  `dev` à 13:43 pendant ce réveil) : ce réveil ne l'a pas touchée. L'accord de l'écoute sur Android (#16836) attend
+  `claude/cercles-16643-android`, vivante. Ce réveil prend donc le lot suivant du jalon 2 dans l'ordre de la spec, la
+  position temporaire (#14109), par son socle serveur. Issue #16980 ouverte, branche
+  `claude/cercles-position-temporaire-serveur` réservée avant toute écriture.
+- Lot : aucune voie ne partageait une position À DES PERSONNES ni ne la tronquait par lecteur. Livré dans la PR :
+  loi `location.temporary` (dès Ami, consentement de l'émetteur = la liste de ses destinataires et son terme), miroirs
+  Swift et Kotlin, quatre cas communs ; contrat additif `location:share-start|update|stop` →
+  `location:share-changed|ended` (le partage en conversation garde `location:live-*`, inchangé) ;
+  `services/sharedLocation/` sur le patron de l'écoute (état complet scellé, TTL = temps restant, projection exacte /
+  quartier / ville au centre d'une maille fixe, rayon de flou) ; `GET /relations/locations?bbox=` filtré sur la
+  position SERVIE ; recalcul à la baisse, au blocage, au retrait de lien et à l'acceptation.
+- Audit avant fusion (porteur, deux passes « non fusionnable ») : la mise à jour écrivait sans condition, l'arrêt
+  dépendait de l'horloge, le limiteur muet laissait passer. Premier correctif par sessions + pointeur + génération,
+  sur `CacheStore` ; le contre-audit a montré que ce schéma supposait un magasin unique (A : `CacheStore` se replie en
+  mémoire d'instance, un arrêt pendant une coupure Redis répondait `success` puis le partage revenait), une génération
+  à durée de vie (B : retour à l'état initial au bout de 8 h) et une prise non atomique (C : un destinataire retiré
+  sans `ended`). Réponse : `sharedLocationKv.ts`, magasin Redis STRICT sur le client natif, sans repli (panne ⇒
+  `UNAVAILABLE`), trois scripts Lua (prise sous condition de génération rendant la session réellement remplacée,
+  écriture sous condition de session courante, arrêt par `INCR` sans TTL), clés étiquetées `{id}`. Le repli de débit
+  ne s'applique plus quand la limitation est coupée hors production et s'élague par la tête.
+- Contre-audit adversarial de cette réponse (non fusionnable, trois défauts prouvés) : la fin partait vers un
+  destinataire désigné qui n'avait jamais rien vu (un blocage répété révélait le partage), une fin était perdue si
+  l'arrêt échouait après avoir pris, et un démarrage était annoncé en échec alors qu'il courait. Réponse : chaque
+  session tient l'ensemble de ceux qu'elle a SERVIS (empreintes HMAC salées par la session, notées avant l'envoi,
+  rattrapage compris) et la fin ne part qu'à eux, une fois ; une session remplacée ou arrêtée entre, dans le même
+  script Lua, dans un ensemble « à retirer » qu'un nouvel essai vide ; l'accusé dit l'état réel après la prise.
+  Résiduels consignés dans #16987 : course entre la loi lue par une position et une baisse concurrente, comptes
+  désactivés ou supprimés pendant un partage, purge de la génération à la suppression du compte.
+- Leçon : un schéma de concurrence se juge sur la cohérence du MAGASIN qu'il suppose, pas seulement sur l'ordre des
+  gestes ; un cache à repli silencieux n'est pas une source de vérité pour un arrêt.
+- Gates locaux : voir la PR.
+- Ce qui reste de la position temporaire : iOS (#16983, émetteur + carte), web (#16984, carte en lecture), Android
+  (#16985) ; « jusqu'à l'arrivée » (ETA, Live Activity, Live Update), fantôme (LOC-12), précision par niveau (RG-15).
+- Prochain lot recommandé : #16983 (iOS, la référence), sinon #16984 (web, prouvable en conteneur).
+
+## 2026-11-08 — réveil 19 : regarder ou écouter ensemble, côté serveur (#17012 ⊂ #17011)
+
+- Reprise : #16928 (talkie émis depuis iOS) est menée par le réveil 17, qui attend sa CI ; #16986 (position temporaire,
+  serveur) par le réveil 18, encore actif. Ce réveil ne touche ni l'une ni l'autre.
+- Deux demandes de Jacques n'avaient AUCUNE issue : la lecture synchronisée « regarder/écouter ensemble » (#17011, et son
+  sous-lot serveur #17012) et l'icône de position par cercle sur la carte (#17013, qui attend les clients de la position
+  temporaire #16983–#16985). Toutes trois au milestone #215, sous l'épopée #13925.
+- Lot : le sous-lot SERVEUR de « ensemble », PR #17021 vers `dev`. Contrat `together:invite|join|sync|leave` →
+  `invited|started|synced|ended` ; feature `together` (dès Proche, adressée, l'invitation acceptée tient lieu de
+  consentement) et ses miroirs Swift/Kotlin ; porte (loi par `pairAccess`, pièce audio/vidéo non protégée d'une
+  conversation où les deux sont membres actifs, refus indistincts) ; relais scellé (`secret-at-rest`, une séance par
+  paire, TTL 2 min puis 4 h), horloge serveur, rejugement à chaque geste, coupure après blocage, baisse ou retrait.
+- Revue adversariale : bloquante sur deux points, corrigés dans le lot — une coupure se disait `cut` au bloqué (elle se
+  dit désormais `left` aux deux, et `join`/`sync` rendent `NOT_FOUND`), et une acceptation ou une synchronisation jugée
+  avant un blocage pouvait réécrire la séance après lui (pierre tombale posée par la fin, relue après chaque écriture).
+  Corrigés aussi : l'index de paire est un HMAC (plus d'identifiants en clair dans les clés), une séance en clair n'est
+  jamais lue quand la clé est posée, témoins de route (blocage, baisse, retrait) et de porte (banni, désactivé, vue
+  unique du message). Ouverts en suivi : les autres chemins de coupure (#17022) et la préférence de réception avec un
+  plafond par paire (#17023).
+- Gates locaux : témoins « ensemble » et routes touchées 297/297 ; shared 9506/9506 ; `tsc` passerelle et web verts ; cliquet `any` 490 ; catalogue
+  TS mort 270/270. Rouge préexistant sur `dev`, hors lot : `orphaned-sender-repair-surface-guard` (globalMessageSearch).
+- Décision ouverte pour Jacques (dans #17011) : la séance reste ouverte dans une conversation E2EE (le serveur ne voit que
+  des identifiants et une position) — à confirmer par `crypto-e2ee`.
+- Prochain lot recommandé : « ensemble » sur le web (inviter depuis une vidéo/un audio, accepter, lecteur synchronisé),
+  puis iOS ; l'icône par cercle (#17013) quand les clients de la position temporaire auront fusionné.
+
+## 2026-11-08 — réveil 20 : regarder ou écouter ensemble sur le web (#17055 ⊂ #17011)
+
+- Reprise : #16986 (position temporaire, serveur) est menée par le réveil 18, encore actif après deux contre-audits ;
+  ce réveil ne la touche pas. #17043 (réserves de l'audit d'« ensemble ») est fusionnée. Aucune branche n'écrivait le
+  web d'« ensemble » : issue #17055 ouverte sous #17011 (milestone #215), branche `claude/cercles-ensemble-web` réservée
+  avant toute écriture.
+- Lot : PR #17060 vers `dev`. Loi pure de synchronisation (`together-sync.ts` : position à l'horloge du serveur, écart
+  d'horloge par le plus grand `at − local`, vitesse ±5 % dès 150 ms puis saut dès 1 s, un geste local ne part que s'il
+  change l'état partagé) ; séance sur l'onglet (`together-live.ts` : décodeurs, store, `rev`, séance close jamais
+  rouverte, gestes avec accusé) ; hôte du chrome différé (bandeau d'invitation non modal, attente annulable, lecteur
+  flottant aux commandes natives) ; invitation depuis la fiche d'un Proche ou d'un Sang, par la galerie servie de la
+  conversation directe (`GET /conversations/:id/attachments`, référence des entrées TS mortes 270 → 269, l'index des
+  médias devant rester `import()` seulement). Libellés `together.*` en sept langues.
+- Gates locaux : 42 témoins du lot verts, `tsc` web vert, `vite build` et `measure-weight` verts, catalogue TS conforme.
+  Les gates Playwright ne tournent pas en conteneur (navigateur absent).
+- Ce qui reste d'« ensemble » : iOS (référence), Android, inviter depuis la visionneuse et dans un groupe, coupures
+  manquantes côté serveur (#17022), préférence de réception (#17023), décision E2EE ouverte (#17011).
+- Prochain lot recommandé : « ensemble » sur iOS (recevoir, rejoindre, lecteur synchronisé, inviter depuis la fiche),
+  sinon l'icône de position par cercle (#17013) quand les clients de la position temporaire auront fusionné.

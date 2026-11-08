@@ -283,6 +283,7 @@ final class MediaChromeRailTests: XCTestCase {
     /// portent la décision par glyphe.
     func test_lesDeuxRails_sontCablesSurLaDecisionParGlyphe() throws {
         let page = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+            + source("Meeshy/Features/Main/Views/ReelPageView.swift")
         XCTAssertTrue(page.contains("MediaChromeVeil.reelPlayer.gradient"))
         XCTAssertTrue(page.contains(".mediaChromeRail(for: .reel(reel, visibleMediaId: visibleCarouselMediaId), stage: .reelPlayer)"))
 

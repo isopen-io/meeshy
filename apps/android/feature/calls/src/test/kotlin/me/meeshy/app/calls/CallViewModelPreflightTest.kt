@@ -73,6 +73,7 @@ class CallViewModelPreflightTest {
     private val outgoing = CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val otherOutgoing = CallConfig(peerId = "u2", peerName = "Bob", isVideo = false, isOutgoing = true, conversationId = "conv-2")
     private val incoming = CallConfig(peerId = "u3", peerName = "Carol", isVideo = false, isOutgoing = false, callId = "call-9")
+    private val incomingVideo = incoming.copy(isVideo = true)
 
     @Before
     fun setUp() {
@@ -229,5 +230,41 @@ class CallViewModelPreflightTest {
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
         assertThat(vm.state.value.endReason).isEqualTo(CallEndReason.Missed)
         verify { signalManager.emitEnd("call-1") }
+    }
+
+    @Test
+    fun `answering a video call without video opens no camera, keeps the video screen and tells the peer`() {
+        val vm = vm()
+        vm.start(incomingVideo)
+
+        vm.acceptWithoutVideo()
+
+        verify { coordinator.startIncoming(any(), "call-9", any(), "u3", "me", false, any(), any(), any(), any()) }
+        verify(exactly = 0) { coordinator.startIncoming(any(), any(), any(), any(), any(), true, any(), any(), any(), any()) }
+        verify { signalManager.emitToggleVideo("call-9", enabled = false) }
+        assertThat(vm.state.value.isCameraOn).isFalse()
+        assertThat(vm.state.value.isVideoCall).isTrue()
+    }
+
+    @Test
+    fun `answering a video call normally opens the camera`() {
+        val vm = vm()
+        vm.start(incomingVideo)
+
+        vm.accept()
+
+        verify { coordinator.startIncoming(any(), "call-9", any(), "u3", "me", true, any(), any(), any(), any()) }
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `without video on an audio call is a plain answer`() {
+        val vm = vm()
+        vm.start(incoming)
+
+        vm.acceptWithoutVideo()
+
+        verify { coordinator.startIncoming(any(), "call-9", any(), "u3", "me", false, any(), any(), any(), any()) }
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
     }
 }

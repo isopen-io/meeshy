@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 /// **Aucune page du jeu ne glisse de côté** (#9564, amendement n° 3 ; étendu à TOUTES les pages et fiches du jeu par
 /// l'épopée, § 3.3, #11180) — ni la page, ni une rangée à l'intérieur. Trois instruments, parce qu'aucun ne voit tout :
