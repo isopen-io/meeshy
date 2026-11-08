@@ -597,3 +597,34 @@ socket jusqu'au client.
 3. #17014 : tant que `Qualité TS` est rouge sur `dev`, aucune PR traducteur n'a sa preuve CI. Vérifier son état d'abord.
 4. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
 5. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 15 — 2026-11-08
+
+- **Base** : `origin/dev` @ `341b14db2`. La PR #17006 du cycle 14 y est fusionnée, et #17014 est fermé.
+- **Branche** : `claude/determined-volta-cl1cqc`.
+- **Objectif** : #17002 et #17003, pistes 1 du cycle 14. Une traduction reçue pendant l'arrêt est refusée et signalée, et un refus en masse est journalisé en lignes bornées.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni le JSON publié) :
+  - **Drapeau `ConnectionManager._shutting_down`** : il est levé en première instruction de `stop()`. Ensuite, toute tâche passée à `enqueue_task` est refusée sur toutes les voies (lot, voie rapide, sous-titre, directe, any) par `_refuse_at_shutdown`. Ce refus incrémente `shutdown_rejections` et passe par `_report_rejected` puis `publish_pool_full`, qui libère la réserve en vol. Il rend `True`, pour ne pas signaler deux fois.
+  - **Course** : aucun `await` entre le test du drapeau et le dépôt en file. Le drapeau est aussi relu sous `_batch_lock`, une défense en profondeur dont la mutation qui la retire est équivalente.
+  - **PULL n'est pas fermé avant `stop_workers`** : la fermeture pendant `recv_multipart` provoquerait un double `stop()`. Le drapeau suffit.
+  - **`summarize_task_ids`** : le total plus au plus 20 task_id par ligne. `publish_pool_full` écrit une ligne de résumé (deux si des envois ratent), au lieu d'une ligne par tâche. Le JSON du PUB est identique octet pour octet, vérifié par la QA.
+- **Tests** : `tests/test_shutdown_ingress_and_bounded_logs.py` (13 tests) et `..._qa.py` (QA : 15 tests et 1 `xfail(strict)`).
+  - **Rouge sur le code d'avant** : 12 sur 12, puis 13 tests QA rouges sur 15 sur `dev`.
+  - **Vert** : relancé par moi, `45 passed, 1 xfailed` sur les 4 fichiers d'arrêt.
+  - **Suites voisines** (QA, `-k "zmq_pool or translation_processor or call_caption or batch or shutdown or pool or zmq or handler"`, sans `TestBatchTranslateEndpoint`) : 552 passés, 7 sautés et 7 erreurs sur la branche, contre 539 passés et les mêmes 7 erreurs sur `dev` (sacrebleu et soundfile absents, `TestRealTranslatorIntegration`).
+  - **Mutations** : 12 sur 15 tuées, dont celle qui inverse « flush final puis vidange » (R5 de #17002). Les 3 survivantes sont équivalentes.
+- **QA** : favorable avec réserves. R1 → #17063, R2 → #17064. R3 (deux gardes sans effet observable aujourd'hui), R4 (le témoin « handler » du lot recopie la logique du handler, et la QA ajoute le vrai chemin) et R5 (la longueur des identifiants n'est pas bornée, ce qui est sans effet avec des UUID) sont consignées ici sans issue.
+
+### Limites connues
+
+- Un lot refusé pendant que `stop()` annule la boucle de flush est perdu. Ce défaut est antérieur au lot. → #17063 (xfail strict).
+- Les arrivées pendant l'arrêt donnent encore une ligne WARNING par tâche. → #17064.
+- Les tâches **en cours**, annulées par le délai de 30 s de `zmq_server_core`, ne sont toujours pas signalées.
+
+### Cycle suivant : par où reprendre
+
+1. #17063 et #17064 : petits lots sur le même site (`connection_manager.py`), à grouper.
+2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
+3. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
+4. #17005 : mesurer la livraison PUB à l'arrêt.
+5. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
