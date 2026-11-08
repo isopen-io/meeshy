@@ -67,7 +67,9 @@ class FastLaneBurst:
     #16782 — l'état de rafale d'UN worker : combien de tâches rapides il a
     prises d'affilée pendant que ses files régulières attendaient. À `limit`,
     sa prochaine prise sert d'abord les files régulières. Propre au worker,
-    donc jamais disputé.
+    donc jamais disputé. La borne est par worker : K workers servant la même
+    file régulière y laissent passer au plus K × `limit` prises rapides
+    d'affilée avant qu'une tâche régulière ne soit prise.
     """
 
     def __init__(self, limit: int):
@@ -321,7 +323,9 @@ class ConnectionManager:
         #16780 — un sous-titre d'appel se lit pendant qu'on parle : voie rapide
         quelle que soit sa longueur, sans `utils.performance`, jamais en lot.
         Voie rapide pleine : la file régulière directe, dont le refus se dit,
-        et le débordement se compte (#16783).
+        et le débordement se compte (#16783) — y compris quand la file
+        régulière, pleine elle aussi, le refuse (il compte alors aussi dans
+        `pool_full_rejections`).
         """
         if self.fast_pool.full():
             self.stats['caption_fast_lane_overflow'] += 1

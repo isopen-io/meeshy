@@ -523,3 +523,33 @@ socket jusqu'au client.
 1. #16782 avec #16783 : quota de la voie rapide et compteur de débordement des sous-titres (même site, `connection_manager.py`).
 2. #16819 et #16820 : petits lots du même fichier, à grouper.
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 13 — 2026-11-08
+
+- **Base** : `origin/dev` @ `ba11708dc`. Le cycle 12 (#16824) y est fusionné.
+- **Branche** : `claude/determined-volta-6kbp55`.
+- **Objectif** : #16782 et #16783, piste 1 du cycle 12. Sous une rafale de sous-titres, une traduction ordinaire est prise dans un délai borné, et un sous-titre qui déborde de la voie rapide se compte.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni la forme des résultats) :
+  - `FastLaneBurst` donne à chaque worker un état de rafale propre. Après `TRANSLATOR_FAST_LANE_BURST` tâches rapides d'affilée (8 par défaut, une valeur invalide retombe sur 8), si sa file régulière attend, la prise suivante la sert. Le compteur repart à zéro dès qu'une tâche régulière est prise ou que la file régulière est vide.
+  - La borne : K workers sur une même file régulière laissent passer au plus K × N prises rapides. Les sous-titres gardent au moins N/(N+1) de la capacité, soit environ 89 %.
+  - `take_next_task(..., burst=None)` : sans `burst`, l'ordre reste strict comme avant. Les invariants de #16780 sont intacts.
+  - `stats['caption_fast_lane_overflow']` est exposé par `get_stats()`, puis par `health_check`. Il compte aussi un sous-titre qui déborde vers une file régulière pleine et y est refusé. Le journal est en debug et ne porte que le task_id.
+- **Tests** : `tests/test_fast_lane_quota.py` (23) et `tests/test_fast_lane_quota_qa.py` (10, QA).
+  - **Rouge sur le code d'avant** : 21 sur 23. Les 2 verts sont la rétrocompatibilité et la vie privée.
+  - **Vert** : 33/33 sur le lot, plus 55 passés sur les suites voisines du lot, relancés par moi. La QA a mesuré 224 passés et 6 sautés sur les suites ciblées, et 419 passés, 6 sautés et 5 erreurs sur les suites voisines. Les 5 erreurs sont préexistantes sur `origin/dev` : `test_zmq_integration_gateway_translator.py::TestRealTranslatorIntegration`, attribut `TRANSCRIPTION_SERVICE_AVAILABLE`.
+  - **Mutations QA** : 5 sur 5 tuées.
+- **Mesure** (`BENCHMARKS.md`) : voie rapide saturée, 2 et 4 workers. Sans quota, **0 tâche régulière sur 20** est servie. Avec N=8, **20 sur 20**, la dernière à 437 ms (2 workers) et à 154 ms (4 workers). Le coût pour les sous-titres est de +0 à 1 ms au p50 et de +1 à 3 ms au p95.
+- **QA** : favorable avec réserves. R1 (ce que compte le compteur) et R2 (la borne à K workers) sont désormais écrites dans les docstrings. R3, mineure : le témoin d'intégration d'origine dépose ses sous-titres d'avance, et le témoin QA couvre le flux continu.
+- **Intégration** : l'orchestrateur a fait lui-même la PR et la fusion. Le lot ne touche qu'un service et n'a aucun conflit, donc pas de 3e sous-agent.
+
+### Limites connues
+
+- Il n'y a pas de métrique Prometheus des stats du pool, donc pas d'alerte possible sur `caption_fast_lane_overflow`. `prometheus_client` ne sert qu'au pipeline audio. → issue ouverte ce cycle.
+- Une tâche régulière prise au titre du quota peut être un lot de 10 traductions. Elle retarde alors un sous-titre de la durée de ce lot. N est réglable par l'environnement.
+- `TestRealTranslatorIntegration` est rouge sur `dev`, hors lot. → issue ouverte ce cycle.
+
+### Cycle suivant : par où reprendre
+
+1. #16819 et #16820 : flush final de `stop()` vers des workers arrêtés, et clé de lot sans `conversation_id`. Ce sont des petits lots sur `connection_manager.py`, à grouper.
+2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
