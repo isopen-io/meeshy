@@ -15,7 +15,7 @@ from typing import List, Callable, Optional, Any
 
 # Import local
 from ..zmq_models import TranslationTask
-from services.task_privacy import is_live_call_caption, task_scope
+from services.task_privacy import batch_scope, is_live_call_caption, shown, task_scope
 from config.settings import LANGUAGE_MAPPINGS
 
 logger = logging.getLogger(__name__)
@@ -129,22 +129,22 @@ async def process_single_translation(
     """
     results = []
 
-    try:
-        # Une langue à la fois : l'inférence ML est sérialisée par le lock
-        # modèle (model_loader.get_model_inference_lock), un fan-out
-        # concurrent ne parallélise rien mais fait courir le budget de
-        # CHAQUE langue pendant l'attente des autres — un texte long
-        # multi-langues expirait alors toutes ses langues d'un coup.
-        for target_language in task.target_languages:
-            refused = unsupported_language(task.source_language, target_language)
-            if refused is not None:
-                if refusal_is_understood(task):
-                    await publish_func(
-                        task.task_id, _create_unsupported_result(task, target_language, refused), target_language
-                    )
-                continue
-            try:
-                with task_scope(_is_at_rest(task), task.message_id):
+    with task_scope(_is_at_rest(task), task.message_id):
+        try:
+            # Une langue à la fois : l'inférence ML est sérialisée par le lock
+            # modèle (model_loader.get_model_inference_lock), un fan-out
+            # concurrent ne parallélise rien mais fait courir le budget de
+            # CHAQUE langue pendant l'attente des autres — un texte long
+            # multi-langues expirait alors toutes ses langues d'un coup.
+            for target_language in task.target_languages:
+                refused = unsupported_language(task.source_language, target_language)
+                if refused is not None:
+                    if refusal_is_understood(task):
+                        await publish_func(
+                            task.task_id, _create_unsupported_result(task, target_language, refused), target_language
+                        )
+                    continue
+                try:
                     result = await _translate_single_language(
                         task=task,
                         target_language=target_language,
@@ -153,24 +153,21 @@ async def process_single_translation(
                         translation_cache=translation_cache
                     )
 
-                # Ajouter métadonnées
-                result['poolType'] = 'any' if task.conversation_id == 'any' else 'normal'
-                result['created_at'] = task.created_at
+                    result['poolType'] = 'any' if task.conversation_id == 'any' else 'normal'
+                    result['created_at'] = task.created_at
 
-                # Publier le résultat
-                await publish_func(task.task_id, result, target_language)
-                results.append(result)
+                    await publish_func(task.task_id, result, target_language)
+                    results.append(result)
 
-            except Exception as e:
-                logger.error(
-                    f"Translation error for {target_language} in {task.task_id}: {e}"
-                )
-                # Publier un résultat d'erreur
-                error_result = _create_error_result(task, target_language, str(e))
-                await publish_func(task.task_id, error_result, target_language)
+                except Exception as e:
+                    logger.error(
+                        f"Translation error for {target_language} in {task.task_id}: {shown(str(e))}"
+                    )
+                    error_result = _create_error_result(task, target_language, str(e))
+                    await publish_func(task.task_id, error_result, target_language)
 
-    except Exception as e:
-        logger.error(f"Error processing single task {task.task_id}: {e}")
+        except Exception as e:
+            logger.error(f"Error processing single task {task.task_id}: {shown(str(e))}")
 
     return results
 
@@ -198,6 +195,21 @@ async def process_batch_translation(
     if not tasks:
         return 0
 
+    with batch_scope((_is_at_rest(task), task.message_id) for task in tasks):
+        return await _process_batch(tasks, worker_name, translation_service, publish_func)
+
+
+async def _publish_under_task_regime(publish_func: Callable, task: Any, result: dict, target_language: str):
+    with task_scope(_is_at_rest(task), task.message_id):
+        await publish_func(task.task_id, result, target_language)
+
+
+async def _process_batch(
+    tasks: List[TranslationTask],
+    worker_name: str,
+    translation_service: Any,
+    publish_func: Callable
+) -> int:
     batch_start = time.time()
     translations_completed = 0
 
@@ -221,8 +233,8 @@ async def process_batch_translation(
             refused = unsupported_language(source_lang, target_lang)
             if refused is not None:
                 for task in filter(refusal_is_understood, tasks):
-                    await publish_func(
-                        task.task_id, _create_unsupported_result(task, target_lang, refused), target_lang
+                    await _publish_under_task_regime(
+                        publish_func, task, _create_unsupported_result(task, target_lang, refused), target_lang
                     )
                 continue
             try:
@@ -296,15 +308,14 @@ async def process_batch_translation(
                         **({'error': 'ML translation unavailable — served original'} if failed else {})
                     }
 
-                    await publish_func(task.task_id, result, target_lang)
+                    await _publish_under_task_regime(publish_func, task, result, target_lang)
                     translations_completed += 1
 
             except Exception as e:
-                logger.error(f"[BATCH] Translation error for {target_lang}: {e}")
-                # Publier des erreurs pour chaque tâche
+                logger.error(f"[BATCH] Translation error for {target_lang}: {shown(str(e))}")
                 for task in tasks:
                     error_result = _create_error_result(task, target_lang, str(e))
-                    await publish_func(task.task_id, error_result, target_lang)
+                    await _publish_under_task_regime(publish_func, task, error_result, target_lang)
 
         batch_time = (time.time() - batch_start) * 1000
         logger.info(
@@ -313,7 +324,7 @@ async def process_batch_translation(
         )
 
     except Exception as e:  # pragma: no cover
-        logger.error(f"[BATCH] General batch error: {e}")
+        logger.error(f"[BATCH] General batch error: {shown(str(e))}")
 
     return translations_completed
 
@@ -462,7 +473,7 @@ async def _translate_single_language(
             }
 
     except Exception as e:
-        logger.error(f"Translation error in {worker_name}: {e}")
+        logger.error(f"Translation error in {worker_name}: {shown(str(e))}")
         # Échec explicite : le client reçoit l'ORIGINAL, jamais un texte-témoin
         # `[XX] …` qui ressemblerait à une traduction valide (#3663).
         processing_time = time.time() - start_time

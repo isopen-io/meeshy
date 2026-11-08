@@ -39,7 +39,7 @@ except ImportError:
 
 # Import de la configuration des limites
 from config.message_limits import can_translate_message
-from services.task_privacy import under_declared_regime
+from services.task_privacy import shown, text_may_be_logged, under_declared_regime
 
 # Import des constantes de disponibilité des pipelines
 try:
@@ -520,9 +520,10 @@ class TranslationHandler:
                 logger.error("❌ Socket PUB non initialisé")
             
         except Exception as e:
-            logger.error(f"Erreur lors de la publication du résultat enrichi: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(
+                f"Erreur lors de la publication du résultat enrichi: {shown(str(e))}",
+                exc_info=text_may_be_logged()
+            )
     
     async def _publish_unsupported_language(self, task_id: str, result: dict, target_language: str):
         """Refus TERMINAL d'une langue sans code NLLB-200 : la passerelle solde
