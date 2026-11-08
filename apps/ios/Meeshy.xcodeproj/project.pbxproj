@@ -3294,6 +3294,7 @@
 		BCEADE32AE60B150D6D11F20 /* ConversationListViewModel+Subscriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 166EA3E08490E5F104EAF93E /* ConversationListViewModel+Subscriptions.swift */; };
 		BCEF31B40A7397C0892C91C3 /* MessageViewsSendAttemptsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EE8BB23103A29116AEFEE7 /* MessageViewsSendAttemptsCard.swift */; };
 		BCF4EB64D589B5F7FA6D0A2A /* StoryTrayActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7859D683C4E1DB8F8C07A1A /* StoryTrayActions.swift */; };
+		BCF5B73A35B9ED9D859DD157 /* ComposerCameraHardwareShutter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 177F473D335B6DAD86EAD393 /* ComposerCameraHardwareShutter.swift */; };
 		BCFB6025AF5C8DBEB59F74EF /* CallLiveFrameCompositorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0A6F443DC8F68B01704D63 /* CallLiveFrameCompositorTests.swift */; };
 		BD2A81DBF732B9C3F964D52A /* VitrineJeuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */; };
 		BD2D6AAB563E84FB51D17DC3 /* AgentAssistContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4687E144491E6A3A5A7766E1 /* AgentAssistContracts.swift */; };
@@ -4962,6 +4963,7 @@
 		1767CE8B7365D4D5FF283090 /* VoiceProfileManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageView.swift; sourceTree = "<group>"; };
 		177B53EB7A687A37263FD7C9 /* CommentMoreMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentMoreMenu.swift; sourceTree = "<group>"; };
 		177B9E4AA64878EA26F8AE65 /* StoryViewerView+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Navigation.swift"; sourceTree = "<group>"; };
+		177F473D335B6DAD86EAD393 /* ComposerCameraHardwareShutter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCameraHardwareShutter.swift; sourceTree = "<group>"; };
 		17A05CE9A04D93083527BA0C /* BundleVersionVariableGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleVersionVariableGuardTests.swift; sourceTree = "<group>"; };
 		17C113ABEF2601E98448BDB5 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		17C5DB1304EF19C0CD8E2E5B /* GameBannerBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameBannerBadge.swift; sourceTree = "<group>"; };
@@ -12589,6 +12591,7 @@
 				E376F672983DFA1DBDC62041 /* ComposerBounceButtonStyle.swift */,
 				B0837962438333E841A967BC /* ComposerCameraFeed.swift */,
 				2107900075492A122AC739A5 /* ComposerCameraFlash.swift */,
+				177F473D335B6DAD86EAD393 /* ComposerCameraHardwareShutter.swift */,
 				84BBAF9F8B79182CF61DCEE0 /* ComposerCameraSwitchVeil.swift */,
 				0A65C01585298C54EDC4649C /* ComposerCameraSwitchVeilStyle.swift */,
 				04456F7B6A19685C157EEE3D /* ComposerCaptureBottomRow.swift */,
@@ -14952,7 +14955,6 @@
 				};
 			};
 			buildConfigurationList = 147F4A57130170E66816D782 /* Build configuration list for PBXProject "Meeshy" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -14974,17 +14976,18 @@
 				F7615CB1707FC23CDBA090B5 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = F121C0AAA9428DB850C5DC59 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				9999AD8C50CACBF85DF613CF /* Meeshy */,
-				E7C89FACA2B11B7B4A7A8C67 /* MeeshyBroadcastExtension */,
-				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
-				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
-				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
-				0D382A685B3389715FC2687F /* MeeshyTests */,
-				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
 				A81DD135F37B0F4BDF5F33A8 /* MeeshyWidgets */,
+				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
+				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
+				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
+				E7C89FACA2B11B7B4A7A8C67 /* MeeshyBroadcastExtension */,
+				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
+				0D382A685B3389715FC2687F /* MeeshyTests */,
 			);
 		};
 /* End PBXProject section */
@@ -15750,6 +15753,7 @@
 				E31EACD0E88FE15989A4333A /* ComposerCameraFeed.swift in Sources */,
 				FF97D1C1474075FD82E36C65 /* ComposerCameraFirstFrameClock.swift in Sources */,
 				4436FC0FFBC754C56591816E /* ComposerCameraFlash.swift in Sources */,
+				BCF5B73A35B9ED9D859DD157 /* ComposerCameraHardwareShutter.swift in Sources */,
 				9F0412033781365B965857F5 /* ComposerCameraInputSwap.swift in Sources */,
 				741B854F4B81AC25A70ED239 /* ComposerCameraPreparedInputs.swift in Sources */,
 				B642A67D22467434CE6E88F7 /* ComposerCameraSwitch.swift in Sources */,
