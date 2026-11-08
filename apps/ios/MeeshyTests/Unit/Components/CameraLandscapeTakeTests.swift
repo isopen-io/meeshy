@@ -68,7 +68,7 @@ final class CameraLandscapeTakeTests: XCTestCase {
     // MARK: - La vidéo
 
     func test_startSegment_levelsTheMovieConnection_beforeRecording() throws {
-        let code = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let code = try source("Meeshy/Features/Main/Components/CameraModel+Video.swift")
         let debut = try XCTUnwrap(code.range(of: "private func startSegment()"))
         let depart = try XCTUnwrap(code.range(of: "videoOutput.startRecording", range: debut.upperBound..<code.endIndex))
         XCTAssertTrue(code[debut.upperBound..<depart.lowerBound].contains("horizon.level(videoOutput.connection(with: .video))"),

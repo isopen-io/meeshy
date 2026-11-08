@@ -85,7 +85,9 @@ final class CameraRecordingReadinessTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Components/\(fichier)")
-        return try String(contentsOf: url, encoding: .utf8)
+        let video = url.deletingLastPathComponent().appendingPathComponent("CameraModel+Video.swift")
+        let suite = fichier == "CameraModel.swift" ? "\n" + (try String(contentsOf: video, encoding: .utf8)) : ""
+        return try String(contentsOf: url, encoding: .utf8) + suite
     }
 
     /// **La règle est CONSULTÉE, et le seul appel à `startRecording(to:` en

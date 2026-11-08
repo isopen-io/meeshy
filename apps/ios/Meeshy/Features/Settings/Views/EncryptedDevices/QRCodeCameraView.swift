@@ -1,6 +1,7 @@
 import AVFoundation
 import SwiftUI
 import UIKit
+import MeeshyUI
 
 /// La caméra qui lit un QR (`AVCaptureMetadataOutput` sur `.qr`) et rend son
 /// texte, une fois par code nouveau. En pause, la session tourne toujours mais
