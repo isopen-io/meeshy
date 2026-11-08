@@ -1,6 +1,11 @@
 import * as messagesEndpoints from '@meeshy/shared/api/endpoints/messages';
 import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
-import type { MessageSearchHit } from '@meeshy/shared/types/global-search';
+import {
+  GLOBAL_SEARCH_CAPS_HEADER,
+  GLOBAL_SEARCH_PROTECTION_CAPS,
+  messageSearchTranscriptSchema,
+  type MessageSearchHit,
+} from '@meeshy/shared/types/global-search';
 
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, type FeedPost } from './feed-pages';
@@ -20,6 +25,12 @@ import type { ApiResult, HttpTransport } from './http';
  * `GET /posts/search` sert la forme des listes du fil, sous la loi d'audience
  * du fil (`buildFeedVisibilityFilter`) ; son texte se résout chez le client
  * par la famille posts du Prisme (`resolveFeedText`).
+ *
+ * **LE VOILE VOYAGE AVEC LE RÉSULTAT** (#16957) : ce port déclare
+ * `X-Search-Caps` — il sait voiler un flouté et peindre une transcription
+ * (#16958). Sans cette déclaration la passerelle ne lui servirait aucun flouté.
+ * Un résultat d'une passerelle ancienne arrive sans voile ni transcription,
+ * jamais avec un champ indéfini.
  *
  * **LE CURSEUR EST OPAQUE** — rendu tel quel. Une page peut être COURTE avec
  * `hasMore: true` (la passerelle borne sa fenêtre de balayage) : seule
@@ -63,9 +74,27 @@ const searchString = (entries: Record<string, string | null | undefined>): strin
     Object.entries(entries).flatMap(([key, value]) => (value === null || value === undefined ? [] : [[key, value]])),
   ).toString();
 
-const isHit = (raw: unknown): raw is MessageSearchHit => {
-  const row = raw as Partial<MessageSearchHit> | null;
+const SEARCH_CAPS_HEADERS: Readonly<Record<string, string>> = { [GLOBAL_SEARCH_CAPS_HEADER]: String(GLOBAL_SEARCH_PROTECTION_CAPS) };
+
+type RawHit = Omit<MessageSearchHit, 'isBlurred' | 'match' | 'transcript'> & {
+  readonly isBlurred?: unknown;
+  readonly match?: unknown;
+  readonly transcript?: unknown;
+};
+
+const isHit = (raw: unknown): raw is RawHit => {
+  const row = raw as Partial<RawHit> | null;
   return typeof row?.id === 'string' && typeof row.conversationId === 'string' && typeof row.content === 'string';
+};
+
+const normalizedHit = (row: RawHit): MessageSearchHit => {
+  const transcript = messageSearchTranscriptSchema.safeParse(row.transcript);
+  return {
+    ...row,
+    isBlurred: row.isBlurred === true,
+    match: transcript.success && row.match === 'transcript' ? 'transcript' : 'content',
+    transcript: transcript.success ? transcript.data : null,
+  };
 };
 
 const isPost = (raw: unknown): raw is FeedPost => {
@@ -78,11 +107,12 @@ export async function searchEverywhereMessages(params: SearchParams): Promise<Ap
   const result = await params.transport.request<readonly unknown[]>({
     method: 'GET',
     path: `${messagesEndpoints.search}?${searchString({ q: params.query.trim(), limit: String(GLOBAL_SEARCH_LIMIT), cursor: params.cursor })}`,
+    headers: SEARCH_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
   const rows = Array.isArray(result.data) ? result.data : [];
-  return { ...result, data: { hits: rows.filter(isHit), nextCursor: nextCursorOf(result.pagination) } };
+  return { ...result, data: { hits: rows.filter(isHit).map(normalizedHit), nextCursor: nextCursorOf(result.pagination) } };
 }
 
 export async function searchEverywherePosts(params: SearchParams): Promise<ApiResult<PostSearchResults>> {

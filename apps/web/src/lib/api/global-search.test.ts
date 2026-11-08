@@ -10,12 +10,13 @@ import type { HttpTransport, HttpRequest } from './http';
  * écartée, et une page qui n'annonce pas de suite s'arrête.
  */
 
-type Seen = { path?: string };
+type Seen = { path?: string; headers?: Readonly<Record<string, string>> };
 
 const transportRendant = (data: unknown, pagination: unknown, seen: Seen = {}): HttpTransport =>
   ({
     request: async (request: HttpRequest) => {
       seen.path = request.path;
+      if (request.headers !== undefined) seen.headers = request.headers;
       return { ok: true, status: 200, data, pagination };
     },
   }) as unknown as HttpTransport;
@@ -43,11 +44,30 @@ describe('searchEverywhereMessages', () => {
       cursor: 'prev',
     });
     expect(seen.path).toBe('/api/v1/messages/search?q=plage&limit=20&cursor=prev');
+    expect(seen.headers).toMatchObject({ 'X-Search-Caps': '1' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.hits.map((h) => h.id)).toEqual(['m1']);
     expect(result.data.hits[0]?.content).toBe('on se voit à la plage');
     expect(result.data.nextCursor).toBe('abc');
+  });
+
+  test('#16957 — un résultat d’une passerelle ancienne arrive sans voile ni transcription, jamais indéfini', async () => {
+    const result = await searchEverywhereMessages({ source: 'gateway', transport: transportRendant([hit('m1')], {}), query: 'plage' });
+    expect(result.ok && result.data.hits[0]).toMatchObject({ isBlurred: false, match: 'content', transcript: null });
+  });
+
+  test('#16957 — le voile et la transcription servis traversent le port', async () => {
+    const transcript = { attachmentId: 'a1', mediaKind: 'audio', text: 'plage', servedLanguage: null, durationMs: 1200 };
+    const result = await searchEverywhereMessages({
+      source: 'gateway',
+      transport: transportRendant([{ ...hit('m1'), isBlurred: true, match: 'transcript', transcript }, { ...hit('m2'), transcript: { mediaKind: 'hologram' } }], {}),
+      query: 'plage',
+    });
+    expect(result.ok && result.data.hits.map((h) => [h.isBlurred, h.match, h.transcript])).toEqual([
+      [true, 'transcript', transcript],
+      [false, 'content', null],
+    ]);
   });
 
   test('une page sans suite annoncée s’arrête', async () => {

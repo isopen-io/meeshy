@@ -20,15 +20,24 @@ public data class ListMessageHit(
     val conversationTitle: String = "",
     /** La photo servie avec ce titre (élue par la passerelle avec lui), quand la conversation n'est pas dans le cache. */
     val conversationAvatar: String? = null,
-)
+    /** Flouté (#16957) : trouvé, mais voilé ; [text] est alors vide. */
+    val isVeiled: Boolean = false,
+    /** Le média dont la transcription a répondu (#16958), `null` quand c'est le texte du message. */
+    val transcriptMedia: SearchMediaKind? = null,
+) {
+    val excerpt: SearchExcerpt get() = SearchExcerpt.of(text, isVeiled, transcriptMedia)
+}
 
 /**
  * La loi de la section « Messages » de la recherche de la liste des conversations (#14619).
  *
  * - une requête compte à partir de deux caractères, espaces exclus ;
- * - un message protégé (chiffré, éphémère, à vue unique, flouté, supprimé, sans texte) n'est
- *   JAMAIS un résultat, même si une source l'a rendu : la garde est celle de l'index local
+ * - un message protégé (chiffré, éphémère, à vue unique, supprimé, sans texte) n'est JAMAIS un
+ *   résultat, même si une source l'a rendu : la garde est celle de l'index local
  *   ([MessageEncryptionGuard.searchableText]), fail-closed ;
+ * - un message flouté est un résultat VOILÉ (#16957, #16474) : il se trouve, mais son texte ne
+ *   quitte pas ce modèle ([ListMessageHit.isVeiled], [ListMessageHit.text] vide) ;
+ * - un résultat trouvé par une transcription (#16958) peint la transcription et l'icône du média ;
  * - le texte affiché est celui du Prisme ([PrismTranslationResolver]) ; aucune traduction
  *   chiffrée n'est servie ;
  * - le serveur n'est jamais interrogé sur une conversation chiffrée de bout en bout ;
@@ -46,26 +55,33 @@ public object ListMessageSearch {
 
     public fun hitOf(message: ApiMessage, readerPrism: List<String>): ListMessageHit? {
         MessageEncryptionGuard.searchableText(message) ?: return null
+        val veiled = MessageEncryptionGuard.isVeiled(message)
         return ListMessageHit(
             messageId = message.id,
             conversationId = message.conversationId,
             createdAtMillis = isoToEpochMillis(message.createdAt),
-            text = servedText(message, readerPrism),
+            text = if (veiled) "" else servedText(message, readerPrism),
             senderName = message.sender?.name.orEmpty(),
+            isVeiled = veiled,
         )
     }
 
-    /** Un résultat déjà servi par le serveur ; un texte blanc n'est pas un résultat. */
+    /** Un résultat déjà servi par le serveur : l'extrait est `transcript?.text ?: content` ; un extrait blanc n'est pas un résultat. */
     public fun hitOf(served: GlobalMessageSearchHit): ListMessageHit? {
-        val text = served.content.ifBlank { served.originalContent }.takeIf { it.isNotBlank() } ?: return null
+        val transcript = served.transcript?.takeIf { it.text.isNotBlank() }
+        val text = transcript?.text
+            ?: served.content.ifBlank { served.originalContent }.takeIf { it.isNotBlank() }
+            ?: return null
         return ListMessageHit(
             messageId = served.id,
             conversationId = served.conversationId,
             createdAtMillis = isoToEpochMillis(served.createdAt),
-            text = text,
+            text = if (served.isBlurred) "" else text,
             senderName = served.sender?.displayName?.takeIf { it.isNotBlank() } ?: served.sender?.username.orEmpty(),
             conversationTitle = served.conversation?.title.orEmpty(),
             conversationAvatar = served.conversation?.avatar?.takeIf { it.isNotBlank() },
+            isVeiled = served.isBlurred,
+            transcriptMedia = transcript?.let { SearchMediaKind.of(it.mediaKind) },
         )
     }
 

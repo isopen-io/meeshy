@@ -25,6 +25,7 @@ const pt = {
   'type.reel': 'Reel',
   'type.story': 'História',
   'translated': 'Traduzido',
+  'message.blurred': 'Mensagem desfocada',
 } as const satisfies GlobalSearchCatalog;
 
 export default pt;

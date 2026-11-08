@@ -1,5 +1,6 @@
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
+import { contentExitLaw } from '@meeshy/shared/utils/content-exit-law';
 import type { Message } from '@/lib/api/types';
 
 /**
@@ -45,7 +46,13 @@ export type ThreadSearchHit = {
    * s'il ne lit pas la langue d'origine (même choix qu'iOS). */
   readonly matchedIn: 'content' | 'translation';
   readonly snippet: SearchSnippet;
+  /** #16957 — vrai ⇒ l'extrait est VIDE et se peint en substitut de
+   * `veilLength` caractères : le texte d'un flouté n'entre pas dans le DOM. */
+  readonly veiled: boolean;
+  readonly veilLength: number;
 };
+
+const EMPTY_SNIPPET: SearchSnippet = { before: '', match: '', after: '' };
 
 /** Le contexte gardé de part et d'autre de l'occurrence : assez pour la
  * reconnaître sur deux lignes d'un téléphone, jamais le message entier. */
@@ -82,11 +89,17 @@ export function snippetOf(text: string, needle: string): SearchSnippet {
  * affiche) ; sinon la première traduction qui contient le mot.
  */
 export function searchHitOf(message: Message, query: string): ThreadSearchHit {
+  const hit = unveiledHitOf(message, query);
+  if (contentExitLaw(message).exportable) return hit;
+  return { ...hit, snippet: EMPTY_SNIPPET, veiled: true, veilLength: (message.content ?? '').length };
+}
+
+function unveiledHitOf(message: Message, query: string): ThreadSearchHit {
   const needle = query.trim();
   const lowered = needle.toLocaleLowerCase();
   const sender = message.sender;
   const senderName = sender?.displayName || sender?.user?.displayName || sender?.user?.username || '';
-  const base = { messageId: message.id, senderName, createdAt: new Date(message.createdAt) };
+  const base = { messageId: message.id, senderName, createdAt: new Date(message.createdAt), veiled: false, veilLength: 0 };
   const content = message.content ?? '';
   if (content.toLocaleLowerCase().includes(lowered)) {
     return { ...base, matchedIn: 'content', snippet: snippetOf(content, needle) };
