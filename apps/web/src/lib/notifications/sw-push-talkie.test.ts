@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { TALKIE_AUDIO_PARAM, TALKIE_PARAM, TALKIE_WAKE_MESSAGE } from '@/lib/talkie/talkie-wake-intent';
+import { TALKIE_PARAM, TALKIE_WAKE_MESSAGE } from '@/lib/talkie/talkie-wake-intent';
 import { CODE, mount, push, windowClient } from '@/test-support/sw-push-harness';
+
+import type { DeliveryReceiptCredential } from './delivery-receipt-credential';
 
 /**
  * LE TALKIE D'URGENCE, ONGLET FERMÉ (#17144) — `talkie_incoming` dit « X vous
@@ -13,6 +15,7 @@ import { CODE, mount, push, windowClient } from '@/test-support/sw-push-harness'
 const TALKIE_ID = 'c'.repeat(24);
 const AUDIO = 'https://gate.meeshy.me/talkie/c.aac';
 const LISTEN = 'talkie-listen';
+const registered: DeliveryReceiptCredential = { credential: { kind: 'registered', token: 'jwt-1' }, apiBase: 'https://gate.meeshy.me' };
 
 const incoming = (overrides: Record<string, unknown> = {}) => ({
   data: { type: 'talkie_incoming', talkieId: TALKIE_ID, fromUserId: 'u-ada', fromName: 'Ada', title: 'Ada vous parle', ...overrides },
@@ -22,7 +25,7 @@ const click = (data: Record<string, unknown>, action = '') => ({ action, notific
 
 describe('un talkie d’urgence s’annonce quand personne ne regarde', () => {
   test('la notification dit qui parle, reste, et porte « Écouter »', async () => {
-    const worker = mount();
+    const worker = mount({ credential: registered });
     await worker.dispatch('push', push(incoming({ audioUrl: AUDIO })));
     expect(worker.shown).toHaveLength(1);
     expect(worker.shown[0]?.title).toBe('Ada vous parle');
@@ -40,10 +43,17 @@ describe('un talkie d’urgence s’annonce quand personne ne regarde', () => {
     expect(worker.shown[0]?.title.startsWith('Ada')).toBe(true);
   });
 
-  test('un audio qui n’est pas en HTTPS ne voyage pas avec la notification', async () => {
+  test('un audio d’une autre origine que la passerelle ne voyage pas avec la notification', async () => {
+    const worker = mount({ credential: registered });
+    await worker.dispatch('push', push(incoming({ audioUrl: 'https://attaquant.example/faux.aac' })));
+    await worker.dispatch('push', push(incoming({ talkieId: 'd'.repeat(24), audioUrl: 'http://gate.meeshy.me/talkie/c.aac' })));
+    expect(worker.shown.map((shown) => (shown.options['data'] as { audioUrl: string }).audioUrl)).toEqual(['', '']);
+  });
+
+  test('sans passerelle connue, aucun audio ne voyage (fail-closed)', async () => {
     const worker = mount();
-    await worker.dispatch('push', push(incoming({ audioUrl: 'http://evil.example/a.aac' })));
-    expect(worker.shown[0]?.options['data']).toEqual({ type: 'talkie_incoming', talkieId: TALKIE_ID, audioUrl: '' });
+    await worker.dispatch('push', push(incoming({ audioUrl: AUDIO })));
+    expect((worker.shown[0]?.options['data'] as { audioUrl: string }).audioUrl).toBe('');
   });
 
   test('un onglet visible l’entend déjà : aucune notification (D-11)', async () => {
@@ -83,10 +93,10 @@ describe('toucher la notification du talkie', () => {
     expect(client.messages).toEqual([{ type: TALKIE_WAKE_MESSAGE, talkieId: TALKIE_ID, audioUrl: AUDIO }]);
   });
 
-  test('« Écouter » sans onglet ouvre l’app avec l’audio du push', async () => {
+  test('« Écouter » sans onglet ouvre l’app sur le talkie, SANS audio dans l’adresse de la page', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', click({ type: 'talkie_incoming', talkieId: TALKIE_ID, audioUrl: AUDIO }, LISTEN));
-    expect(worker.opened).toEqual([`/notifications?${TALKIE_PARAM}=${TALKIE_ID}&${TALKIE_AUDIO_PARAM}=${encodeURIComponent(AUDIO)}`]);
+    expect(worker.opened).toEqual([`/notifications?${TALKIE_PARAM}=${TALKIE_ID}`]);
   });
 });
 

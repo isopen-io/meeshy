@@ -734,9 +734,8 @@ async function afficher(payload) {
 const TALKIE_PUSH_TYPE = 'talkie_incoming';
 const TALKIE_TAG_PREFIX = 'talkie:';
 const TALKIE_LISTEN_ACTION = 'talkie-listen';
-/** JUMEAUX de `TALKIE_PARAM`, `TALKIE_AUDIO_PARAM` et `TALKIE_WAKE_MESSAGE` (`src/lib/talkie/talkie-wake-intent.ts`). */
+/** JUMEAUX de `TALKIE_PARAM` et `TALKIE_WAKE_MESSAGE` (`src/lib/talkie/talkie-wake-intent.ts`). */
 const TALKIE_PARAM = 'talkie';
-const TALKIE_AUDIO_PARAM = 'talkieAudio';
 const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
 /** Le libellé d'« Écouter » quand la passerelle n'en sert pas : le worker ne charge aucun catalogue. */
 const TALKIE_LISTEN_LABELS = { fr: 'Écouter', en: 'Listen', es: 'Escuchar', de: 'Anhören', it: 'Ascolta', pt: 'Ouvir', ar: 'استماع' };
@@ -747,9 +746,20 @@ function langueDuNavigateur() {
   return Object.prototype.hasOwnProperty.call(TALKIE_LISTEN_LABELS, langue) ? langue : 'en';
 }
 
-function audioDuTalkie(valeur) {
-  const brute = texte(valeur);
-  return brute.indexOf('https://') === 0 ? brute : '';
+/**
+ * L'audio porté par le push ne voyage que s'il vient de la PASSERELLE
+ * configurée (`apiBase` posé par la page avec le crédential) : une autre
+ * origine ferait jouer une fausse voix d'urgence et partir une requête
+ * arbitraire. Sans passerelle connue, rien ne voyage (fail-closed).
+ */
+function audioDuTalkie(valeur, apiBase) {
+  try {
+    const passerelle = new URL(texte(apiBase));
+    const audio = new URL(texte(valeur));
+    return audio.protocol === 'https:' && audio.origin === passerelle.origin ? audio.href : '';
+  } catch {
+    return '';
+  }
 }
 
 async function annoncerTalkie(data) {
@@ -761,6 +771,7 @@ async function annoncerTalkie(data) {
 
   const ouvertes = await fenetres();
   if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+  const stocke = await lireCredential();
 
   await self.registration.showNotification(titre, {
     body: texte(data.body),
@@ -770,7 +781,7 @@ async function annoncerTalkie(data) {
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
     actions: [{ action: TALKIE_LISTEN_ACTION, title: texte(data.listenLabel) || TALKIE_LISTEN_LABELS[langue] }],
-    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(data.audioUrl) },
+    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(data.audioUrl, stocke && stocke.apiBase) },
   });
 }
 
@@ -778,14 +789,14 @@ async function ouvrirTalkie(data, action) {
   const talkieId = texte(data.talkieId);
   if (talkieId === '') return;
   const ecouter = action === TALKIE_LISTEN_ACTION;
-  const audioUrl = ecouter ? audioDuTalkie(data.audioUrl) : '';
+  const audioUrl = ecouter ? texte(data.audioUrl) : '';
   const ouvertes = await fenetres();
   const client = ouvertes[0];
   if (client === undefined) {
-    const query = new URLSearchParams();
-    query.set(TALKIE_PARAM, talkieId);
-    if (audioUrl !== '') query.set(TALKIE_AUDIO_PARAM, audioUrl);
-    await self.clients.openWindow(PUSH_ROUTE_PATTERNS.notifications + '?' + query.toString());
+    /* L'adresse d'un onglet neuf ne porte QUE la prise de parole : jamais
+       d'audio dans l'URL de la page (un lien forgé ferait jouer une fausse
+       voix). L'onglet rattrape par `talkie:join`. */
+    await self.clients.openWindow(PUSH_ROUTE_PATTERNS.notifications + '?' + TALKIE_PARAM + '=' + encodeURIComponent(talkieId));
     return;
   }
   if (!ecouter) {

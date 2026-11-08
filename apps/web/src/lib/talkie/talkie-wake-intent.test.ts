@@ -4,10 +4,13 @@ import type { SocketClient } from '@/lib/net/socket';
 
 import type { TalkieSink } from './talkie-player';
 import {
+  TALKIE_AUDIO_MAX_BYTES,
   TALKIE_JOIN_EVENT,
   TALKIE_WAKE_TTL_MS,
   bindTalkieWake,
   createTalkieWakeIntents,
+  fetchTalkieAudio,
+  gatewayOrigin,
   talkieWakeFromMessage,
   talkieWakeFromSearch,
 } from './talkie-wake-intent';
@@ -20,6 +23,7 @@ import {
 
 const TALKIE_ID = 'b'.repeat(24);
 const AUDIO = 'https://gate.meeshy.me/talkie/b.aac';
+const GATEWAY = 'https://gate.meeshy.me';
 
 function fakeSocket() {
   const emitted: { event: string; payload: unknown }[] = [];
@@ -49,17 +53,26 @@ function fakeSink() {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('l’intention venue de la notification', () => {
-  test('l’adresse d’un onglet neuf porte la prise de parole, et l’audio seulement en HTTPS', () => {
+  test('l’adresse d’un onglet neuf ne porte QUE la prise de parole : un audio dans l’URL est ignoré', () => {
     expect(talkieWakeFromSearch(`?talkie=${TALKIE_ID}`)).toEqual({ talkieId: TALKIE_ID, audioUrl: null });
-    expect(talkieWakeFromSearch(`?talkie=${TALKIE_ID}&talkieAudio=${encodeURIComponent(AUDIO)}`)).toEqual({ talkieId: TALKIE_ID, audioUrl: AUDIO });
-    expect(talkieWakeFromSearch(`?talkie=${TALKIE_ID}&talkieAudio=${encodeURIComponent('javascript:alert(1)')}`)).toEqual({ talkieId: TALKIE_ID, audioUrl: null });
+    for (const name of ['talkieAudio', 'audio', 'audioUrl']) {
+      expect(talkieWakeFromSearch(`?talkie=${TALKIE_ID}&${name}=${encodeURIComponent('https://attaquant.example/faux.aac')}`)).toEqual({ talkieId: TALKIE_ID, audioUrl: null });
+      expect(talkieWakeFromSearch(`?talkie=${TALKIE_ID}&${name}=${encodeURIComponent(AUDIO)}`)).toEqual({ talkieId: TALKIE_ID, audioUrl: null });
+    }
     expect(talkieWakeFromSearch('?talkie=pas-un-id')).toBeNull();
   });
 
-  test('seul le message du réveil du talkie est lu', () => {
-    expect(talkieWakeFromMessage({ type: 'TALKIE_WAKE', talkieId: TALKIE_ID, audioUrl: AUDIO })).toEqual({ talkieId: TALKIE_ID, audioUrl: AUDIO });
-    expect(talkieWakeFromMessage({ type: 'NOTIFICATION_CLICKED', talkieId: TALKIE_ID })).toBeNull();
-    expect(talkieWakeFromMessage(null)).toBeNull();
+  test('seul le message du réveil du talkie est lu, et son audio seulement depuis la passerelle', () => {
+    expect(talkieWakeFromMessage({ type: 'TALKIE_WAKE', talkieId: TALKIE_ID, audioUrl: AUDIO }, GATEWAY)).toEqual({ talkieId: TALKIE_ID, audioUrl: AUDIO });
+    expect(talkieWakeFromMessage({ type: 'TALKIE_WAKE', talkieId: TALKIE_ID, audioUrl: 'https://attaquant.example/faux.aac' }, GATEWAY)).toEqual({ talkieId: TALKIE_ID, audioUrl: null });
+    expect(talkieWakeFromMessage({ type: 'TALKIE_WAKE', talkieId: TALKIE_ID, audioUrl: 'http://gate.meeshy.me/talkie/b.aac' }, GATEWAY)).toEqual({ talkieId: TALKIE_ID, audioUrl: null });
+    expect(talkieWakeFromMessage({ type: 'NOTIFICATION_CLICKED', talkieId: TALKIE_ID }, GATEWAY)).toBeNull();
+    expect(talkieWakeFromMessage(null, GATEWAY)).toBeNull();
+  });
+
+  test('l’origine de la passerelle vient de la configuration, sinon de la page', () => {
+    expect(gatewayOrigin('https://gate.meeshy.me/api', 'https://meeshy.me')).toBe(GATEWAY);
+    expect(gatewayOrigin('', 'https://meeshy.me')).toBe('https://meeshy.me');
   });
 
   test('une intention expire avec la fenêtre de rattrapage', () => {
@@ -116,5 +129,20 @@ describe('la socket vivante consomme l’intention', () => {
     await flush();
 
     expect(emitted).toEqual([{ event: TALKIE_JOIN_EVENT, payload: { talkieId: TALKIE_ID } }]);
+  });
+});
+
+describe('le téléchargement de l’audio est plafonné', () => {
+  const answer = (bytes: number, declared?: number) =>
+    (async () =>
+      new Response(new Uint8Array(bytes), { status: 200, headers: declared === undefined ? {} : { 'content-length': String(declared) } })) as unknown as typeof fetch;
+
+  test('une voix sous le plafond se télécharge', async () => {
+    expect((await fetchTalkieAudio(AUDIO, answer(10))).byteLength).toBe(10);
+  });
+
+  test('un corps annoncé ou reçu au-delà du plafond est refusé', async () => {
+    await expect(fetchTalkieAudio(AUDIO, answer(10, TALKIE_AUDIO_MAX_BYTES + 1))).rejects.toThrow();
+    await expect(fetchTalkieAudio(AUDIO, answer(TALKIE_AUDIO_MAX_BYTES + 1))).rejects.toThrow();
   });
 });

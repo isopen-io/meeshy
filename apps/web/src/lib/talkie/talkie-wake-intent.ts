@@ -1,3 +1,6 @@
+import { TALKIE_MAX_TOTAL_BYTES } from '@meeshy/shared/types/talkie-constants';
+
+import { apiConfig } from '@/lib/api/config';
 import type { SocketClient } from '@/lib/net/socket';
 
 import type { TalkieSink } from './talkie-player';
@@ -7,8 +10,13 @@ import type { TalkieSink } from './talkie-player';
  * parlé pendant que l'onglet était fermé ou endormi. Le service worker
  * (`public/sw-push.js`) a posé « X vous parle » ; le toucher (ou « Écouter »)
  * remet ici une INTENTION, par deux portes : l'adresse d'un onglet NEUF
- * (`?talkie=<id>`, plus `&talkieAudio=<url>` pour « Écouter »), retirée aussitôt,
- * ou le message qu'un onglet DÉJÀ OUVERT reçoit du worker.
+ * (`?talkie=<id>` SEULEMENT, retirée aussitôt), ou le message qu'un onglet DÉJÀ
+ * OUVERT reçoit du worker.
+ *
+ * **Jamais d'audio par l'adresse de la page** : un lien forgé ferait jouer une
+ * fausse voix d'urgence et partir une requête arbitraire. L'audio n'arrive que
+ * par le message du worker, et seulement s'il vient de la PASSERELLE configurée
+ * (même origine que `apiConfig.base`), téléchargé sous un plafond d'octets.
  *
  * L'intention se consomme dès qu'une socket vivante existe :
  * - avec l'audio porté par le push (« Écouter »), le lecteur du talkie EXISTANT
@@ -20,9 +28,8 @@ import type { TalkieSink } from './talkie-player';
  * plus longtemps ne se rejoue plus.
  */
 
-/** JUMEAUX de `TALKIE_PARAM`, `TALKIE_AUDIO_PARAM` et `TALKIE_WAKE_MESSAGE` dans `public/sw-push.js`. */
+/** JUMEAUX de `TALKIE_PARAM` et `TALKIE_WAKE_MESSAGE` dans `public/sw-push.js`. */
 export const TALKIE_PARAM = 'talkie';
-export const TALKIE_AUDIO_PARAM = 'talkieAudio';
 export const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
 /** Le nom client → serveur du rattrapage (contrat de #17142). */
 export const TALKIE_JOIN_EVENT = 'talkie:join';
@@ -35,28 +42,37 @@ export type TalkieWakeIntent = { readonly talkieId: string; readonly audioUrl: s
 
 const talkieIdOf = (value: unknown): string | null => (typeof value === 'string' && OBJECT_ID.test(value.trim()) ? value.trim() : null);
 
-const audioUrlOf = (value: unknown): string | null => {
+/** L'origine de la passerelle configurée : `apiConfig.base`, ou celle de la page quand l'API est servie à côté. */
+export function gatewayOrigin(base: string = apiConfig.base, page: string = globalThis.location?.origin ?? 'https://meeshy.me'): string {
+  try {
+    return new URL(base === '' ? page : base, page).origin;
+  } catch {
+    return new URL(page).origin;
+  }
+}
+
+const audioUrlOf = (value: unknown, gateway: string): string | null => {
   if (typeof value !== 'string') return null;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' ? url.toString() : null;
+    return url.protocol === 'https:' && url.origin === gateway ? url.toString() : null;
   } catch {
     return null;
   }
 };
 
+/** L'adresse d'un onglet neuf ne porte QUE la prise de parole ; tout autre paramètre est ignoré. */
 export function talkieWakeFromSearch(search: string): TalkieWakeIntent | null {
-  const params = new URLSearchParams(search);
-  const talkieId = talkieIdOf(params.get(TALKIE_PARAM));
-  return talkieId === null ? null : { talkieId, audioUrl: audioUrlOf(params.get(TALKIE_AUDIO_PARAM)) };
+  const talkieId = talkieIdOf(new URLSearchParams(search).get(TALKIE_PARAM));
+  return talkieId === null ? null : { talkieId, audioUrl: null };
 }
 
-export function talkieWakeFromMessage(message: unknown): TalkieWakeIntent | null {
+export function talkieWakeFromMessage(message: unknown, gateway: string = gatewayOrigin()): TalkieWakeIntent | null {
   if (message === null || typeof message !== 'object') return null;
   const { type, talkieId, audioUrl } = message as { readonly type?: unknown; readonly talkieId?: unknown; readonly audioUrl?: unknown };
   if (type !== TALKIE_WAKE_MESSAGE) return null;
   const id = talkieIdOf(talkieId);
-  return id === null ? null : { talkieId: id, audioUrl: audioUrlOf(audioUrl) };
+  return id === null ? null : { talkieId: id, audioUrl: audioUrlOf(audioUrl, gateway) };
 }
 
 export type TalkieWakeIntents = {
@@ -90,11 +106,20 @@ export const talkieWakeIntents: TalkieWakeIntents = createTalkieWakeIntents();
 
 export type FetchAudio = (url: string) => Promise<Uint8Array>;
 
-const fetchAudio: FetchAudio = async (url) => {
-  const response = await fetch(url);
+/** Le plafond d'une prise de parole (`TALKIE_MAX_TOTAL_BYTES`) : un corps plus lourd n'est pas une voix de talkie. */
+export const TALKIE_AUDIO_MAX_BYTES = TALKIE_MAX_TOTAL_BYTES;
+
+export async function fetchTalkieAudio(url: string, fetchImpl: typeof fetch = fetch): Promise<Uint8Array> {
+  const response = await fetchImpl(url, { credentials: 'omit', redirect: 'error' });
   if (!response.ok) throw new Error(`talkie audio ${response.status}`);
-  return new Uint8Array(await response.arrayBuffer());
-};
+  const declared = Number(response.headers.get('content-length') ?? '0');
+  if (declared > TALKIE_AUDIO_MAX_BYTES) throw new Error('talkie audio too large');
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > TALKIE_AUDIO_MAX_BYTES) throw new Error('talkie audio too large');
+  return bytes;
+}
+
+const fetchAudio: FetchAudio = (url) => fetchTalkieAudio(url);
 
 /**
  * Consomme les intentions sur la socket vivante. Un audio servi qui ne se
@@ -142,7 +167,6 @@ export function listenTalkieWakeIntentsInBrowser(intents: TalkieWakeIntents = ta
   if (fromSearch !== null) {
     const url = new URL(window.location.href);
     url.searchParams.delete(TALKIE_PARAM);
-    url.searchParams.delete(TALKIE_AUDIO_PARAM);
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     intents.remember(fromSearch);
   }
