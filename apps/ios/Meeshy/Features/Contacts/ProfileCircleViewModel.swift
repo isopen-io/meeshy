@@ -23,6 +23,8 @@ final class ProfileCircleViewModel: ObservableObject {
     @Published var notice: String?
     @Published private(set) var isLowering = false
     @Published private(set) var didUnlink = false
+    /// Le niveau auquel la passerelle juge les outils de cercle (`accessLevel`, #16623) ; `nil` tant qu'il n'est pas lu.
+    @Published private(set) var toolLevel: RelationLevel?
 
     private let relations: RelationsProviding
     private let friendService: FriendServiceProviding
@@ -68,6 +70,12 @@ final class ProfileCircleViewModel: ObservableObject {
         return target
     }
 
+    /// Le Bring se PROPOSE dès Ami, par le lien affiché ou par le verdict servi — entre deux comptes de l'équipe, Sang
+    /// sans lien (#16623). La ligne ne s'affiche ensuite que si `GET /bring/:userId` l'ouvre : rien n'est déduit d'un rôle.
+    var offersBring: Bool {
+        max(shownLevel ?? .public, toolLevel ?? .public) >= .friend
+    }
+
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
     var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
 
@@ -102,6 +110,7 @@ final class ProfileCircleViewModel: ObservableObject {
         guard let served = try? await relations.link(userId: userId), served.userId.lowercased() == userId.lowercased() else {
             return
         }
+        toolLevel = served.toolLevel
         guard let current = link else {
             if served.effectiveLevel >= .acquaintance { link = served }
             return
@@ -114,7 +123,8 @@ final class ProfileCircleViewModel: ObservableObject {
             progress: current.progress,
             eligibleFor: current.eligibleFor,
             raiseBlockedUntil: served.raiseBlockedUntil ?? current.raiseBlockedUntil,
-            canRaise: served.canRaise ?? current.canRaise
+            canRaise: served.canRaise ?? current.canRaise,
+            accessLevel: served.accessLevel ?? current.accessLevel
         )
     }
 

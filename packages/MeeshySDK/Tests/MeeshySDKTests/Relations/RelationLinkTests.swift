@@ -146,4 +146,30 @@ struct RelationLinkTests {
         #expect(config.icon(for: .blood) == "🩸")
         #expect(config.icon(for: .close) == nil)
     }
+
+    // MARK: - Le niveau des outils de cercle (#16623)
+
+    @Test func decodesTheServedAccessLevel_andToolLevelFollowsIt() throws {
+        let link = try decode(#"{"userId":"u1","effectiveLevel":"PUBLIC","grantedByMe":"PUBLIC","accessLevel":"BLOOD"}"#)
+        #expect(link.accessLevel == .blood)
+        #expect(link.effectiveLevel == .public)
+        #expect(link.toolLevel == .blood)
+    }
+
+    @Test func anOlderGatewayWithoutAccessLevel_fallsBackOnTheLink() throws {
+        let link = try decode(#"{"userId":"u1","effectiveLevel":"FRIEND","grantedByMe":"FRIEND"}"#)
+        #expect(link.accessLevel == nil)
+        #expect(link.toolLevel == .friend)
+    }
+
+    @Test func anUnreadableAccessLevelReadsPublic_neverTheLink() throws {
+        let link = try decode(#"{"userId":"u1","effectiveLevel":"CLOSE","grantedByMe":"CLOSE","accessLevel":"ATOM"}"#)
+        #expect(link.toolLevel == .public)
+    }
+
+    @Test func theAccessLevelSurvivesTheCacheEncoding() throws {
+        let link = RelationLink(userId: "u1", effectiveLevel: .public, grantedByMe: .public, accessLevel: .blood)
+        let decoded = try JSONDecoder().decode(RelationLink.self, from: try JSONEncoder().encode(link))
+        #expect(decoded == link)
+    }
 }

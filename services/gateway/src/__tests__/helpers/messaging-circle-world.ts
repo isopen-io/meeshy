@@ -58,7 +58,7 @@ export function messagingWorld(seed: {
   readonly conversations?: readonly Row[];
 } = {}) {
   const relations = relationStore({ relations: (seed.links ?? []).map(circleLink) });
-  const users = table((seed.users ?? []).map((u) => ({ blockedUserIds: [], ...u })));
+  const users = table((seed.users ?? []).map((u) => ({ blockedUserIds: [], isActive: true, deletedAt: null, deactivatedAt: null, ...u })));
   const communityMember = table([...(seed.communityMembers ?? [])]);
   const participant = table([...(seed.participants ?? [])]);
   const conversation = table([...(seed.conversations ?? [])]);

@@ -44,6 +44,19 @@ struct IncomingCallView: View {
         }
     }
 
+    /// « Répondre sans vidéo » (OPUS-5) : même garde micro qu'Accepter, mais
+    /// la caméra n'est pas demandée et `CallManager` la retire avant de
+    /// répondre — aucune image ne part au pair.
+    private func acceptCallWithoutVideo() {
+        Task { @MainActor in
+            guard await MediaPermissionCoordinator.ensureMicrophone() else {
+                callManager.endCall()
+                return
+            }
+            callManager.answerCallWithoutVideo()
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -94,6 +107,8 @@ struct IncomingCallView: View {
         // l'appelant n'était peinte que dans cette colonne — les côtés
         // montraient un autre fond (2026-09-30, appel réel iPhone → simulateur).
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // OPUS-5 — MA caméra, vue avant de décrocher (jamais envoyée avant).
+        .overlay(alignment: .topTrailing) { selfPreview }
         // #8480 — l'appelant, vu avant de décrocher
         .background { CallPreviewBackdrop(preview: .shared) }
         .sheet(isPresented: $isDeclineSheetPresented) {
@@ -221,58 +236,133 @@ struct IncomingCallView: View {
         .accessibilityHint(String(localized: "call.decline.open.hint", defaultValue: "Propose des réponses rapides qui refusent l'appel", bundle: .main))
     }
 
+    // MARK: - Self Preview
+
+    /// OPUS-5 — la vignette de ma propre caméra, en haut à droite comme la
+    /// vignette de l'appel établi (`CallSelfTileScale.standard`). Elle lit la
+    /// piste locale que la sonnerie a déjà démarrée : aucune caméra en plus,
+    /// et rien ne part au pair avant le décroché (pas de réponse SDP, lien
+    /// d'aperçu en réception seule).
+    @ViewBuilder
+    private var selfPreview: some View {
+        let shows = IncomingCallChoices.showsSelfPreview(
+            isVideoCall: callManager.isVideoEnabled,
+            hasLocalVideoTrack: callManager.hasLocalVideoTrack
+        )
+        ZStack {
+            if shows {
+                let size = CallSelfTileScale.standard.size
+                LocalCameraVideoView(
+                    track: callManager.localVideoTrack,
+                    intendedFront: callManager.isUsingFrontCamera,
+                    contentMode: .scaleAspectFill
+                )
+                .frame(width: size.width, height: size.height)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.35), radius: 10, y: 4)
+                .padding(.top, MeeshySpacing.lg)
+                .padding(.trailing, MeeshySpacing.lg)
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "call.incoming.selfPreview.label", defaultValue: "Votre caméra, non envoyée avant de décrocher", bundle: .main))
+                .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: shows)
+    }
+
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        // iOS 26 Liquid Glass (prominent, tinted) for the two primary actions —
+        let actions = IncomingCallChoices.actions(isVideoCall: callManager.isVideoEnabled)
+        // iOS 26 Liquid Glass (prominent, tinted) for the primary actions —
         // gating/fallback owned by the SDK Compatibility wrappers. Grouped so the
         // glass circles blend rather than clip (glass can't sample glass).
-        AdaptiveGlassContainer(spacing: 40) {
-            HStack(spacing: 60) {
-                // Reject
-                Button {
-                    callManager.rejectCall()
-                } label: {
-                    VStack(spacing: MeeshySpacing.smPlus) {
-                        Image(systemName: "phone.down.fill")
-                            // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
-                            // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundStyle(Color.white)
-                            .frame(width: 70, height: 70)
-                            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
-
-                        Text(String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main))
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(MeeshyColors.error)
-                    }
+        return AdaptiveGlassContainer(spacing: 40) {
+            HStack(spacing: IncomingCallChoices.buttonSpacing(for: actions.count)) {
+                ForEach(actions, id: \.self) { action in
+                    actionButton(action)
                 }
-                .pressable()
-                .accessibilityLabel(String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main))
-                .accessibilityHint(String(localized: "call.incoming.decline.hint", defaultValue: "Décline l'appel entrant", bundle: .main))
-
-                // Accept
-                Button {
-                    acceptCall()
-                } label: {
-                    VStack(spacing: MeeshySpacing.smPlus) {
-                        Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                            // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
-                            // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundStyle(Color.white)
-                            .frame(width: 70, height: 70)
-                            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)
-
-                        Text(String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main))
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(MeeshyColors.success)
-                    }
-                }
-                .pressable()
-                .accessibilityLabel(String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main))
-                .accessibilityHint(String(localized: "call.incoming.accept.hint", defaultValue: "Répond à l'appel entrant", bundle: .main))
             }
         }
+    }
+
+    @ViewBuilder
+    private func actionButton(_ action: IncomingCallAction) -> some View {
+        switch action {
+        case .decline:
+            roundButton(
+                systemImage: "phone.down.fill",
+                tint: MeeshyColors.error,
+                caption: String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main),
+                label: String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main),
+                hint: String(localized: "call.incoming.decline.hint", defaultValue: "Décline l'appel entrant", bundle: .main)
+            ) { callManager.rejectCall() }
+        case .answerWithoutVideo:
+            roundButton(
+                systemImage: "video.slash.fill",
+                tint: MeeshyColors.success,
+                caption: String(localized: "call.incoming.answerNoVideo", defaultValue: "Sans vidéo", bundle: .main),
+                label: String(localized: "call.incoming.answerNoVideo.label", defaultValue: "Répondre sans vidéo", bundle: .main),
+                hint: String(localized: "call.incoming.answerNoVideo.hint", defaultValue: "Décroche caméra coupée : l'appelant voit votre avatar", bundle: .main),
+                prominent: false
+            ) { acceptCallWithoutVideo() }
+        case .accept:
+            roundButton(
+                systemImage: callManager.isVideoEnabled ? "video.fill" : "phone.fill",
+                tint: MeeshyColors.success,
+                caption: String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main),
+                label: String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main),
+                hint: String(localized: "call.incoming.accept.hint", defaultValue: "Répond à l'appel entrant", bundle: .main)
+            ) { acceptCall() }
+        }
+    }
+
+    /// Un bouton rond de 70 pt et sa légende. `prominent: false` — verre neutre
+    /// teinté seulement par le glyphe, pour que « Sans vidéo » se lise comme
+    /// une variante d'Accepter, pas comme un troisième choix aussi fort.
+    private func roundButton(
+        systemImage: String,
+        tint: Color,
+        caption: String,
+        label: String,
+        hint: String,
+        prominent: Bool = true,
+        perform: @escaping () -> Void
+    ) -> some View {
+        Button(action: perform) {
+            VStack(spacing: MeeshySpacing.smPlus) {
+                Group {
+                    if prominent {
+                        Image(systemName: systemImage)
+                            // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
+                            // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 70, height: 70)
+                            .adaptiveGlassProminent(in: Circle(), tint: tint)
+                    } else {
+                        Image(systemName: systemImage)
+                            // doctrine 82i — même cercle fixe 70×70
+                            .font(.system(size: 26, weight: .medium))
+                            .foregroundStyle(tint)
+                            .frame(width: 70, height: 70)
+                            .adaptiveGlass(in: Circle())
+                    }
+                }
+
+                Text(caption)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .pressable()
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
     }
 }

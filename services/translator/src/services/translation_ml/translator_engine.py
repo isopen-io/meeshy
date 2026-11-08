@@ -16,7 +16,7 @@ from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from config.settings import LANGUAGE_MAPPINGS
-from services.task_privacy import run_in_thread_with_context, shown
+from services.task_privacy import caused_by, run_in_thread_with_context, shown
 from utils.sentence_plan import SentencePlan, plan_sentences
 from utils.text_segmentation import (
     has_translatable_text,
@@ -504,7 +504,8 @@ class TranslatorEngine:
                 raise
             except Exception as e:
                 logger.error(f"Erreur pipeline {model_type}: {shown(str(e))}")
-                raise TranslationInferenceError(f"Erreur pipeline {model_type}: {shown(str(e))}") from e
+                failure = caused_by(TranslationInferenceError(f"Erreur pipeline {model_type}: {shown(str(e))}"), e)
+            raise failure
 
         # Exécuter de manière asynchrone
         return await self._in_inference_thread(translate_sync)
@@ -649,7 +650,8 @@ class TranslatorEngine:
             raise
         except Exception as e:
             logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {shown(str(e))}")
-            raise TranslationInferenceError(f"Erreur batch pipeline {model_type}: {shown(str(e))}") from e
+            failure = caused_by(TranslationInferenceError(f"Erreur batch pipeline {model_type}: {shown(str(e))}"), e)
+        raise failure
 
     def cleanup(self):
         """Libère les ressources du moteur"""

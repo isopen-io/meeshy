@@ -131,6 +131,16 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     public var isPresence: Bool {
         self == .presenceOnline || self == .presenceDetailed
     }
+
+    /// Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : une audience de
+    /// contenu, une notification d'entourage, la Connaissance automatique restent au lien réel.
+    public var isClosedToTeam: Bool {
+        switch self {
+        case .notifyNewContent, .relayCommentersOnMyPosts, .relayMyCommentsElsewhere,
+             .audienceAcquaintances, .audienceClose, .audienceBlood, .acquaintanceAuto: return true
+        default: return false
+        }
+    }
 }
 
 /// Âge DÉCLARÉ (`DeclaredAgeClass`) : `unknown` n'est jamais traité en majeur.
@@ -169,6 +179,8 @@ public struct RelationAccessInput: Sendable, Equatable {
     public let viewerMinor: RelationAgeClass
     public let targetMinor: RelationAgeClass
     public let viewerRole: PlatformRole?
+    /// Le rôle de la cible : `nil` (absent ou inconnu), le privilège d'équipe reste fermé (#16623).
+    public let targetRole: PlatformRole?
     public let feature: RelationFeature
     public let consent: RelationConsent?
 
@@ -177,7 +189,8 @@ public struct RelationAccessInput: Sendable, Equatable {
         grantedByViewer: RelationLevel, grantedByTarget: RelationLevel,
         sharesCommunity: Bool, blockedEitherWay: Bool,
         viewerMinor: RelationAgeClass, targetMinor: RelationAgeClass,
-        viewerRole: PlatformRole?, feature: RelationFeature, consent: RelationConsent?
+        viewerRole: PlatformRole?, targetRole: PlatformRole? = nil,
+        feature: RelationFeature, consent: RelationConsent?
     ) {
         self.viewerId = viewerId
         self.targetId = targetId
@@ -188,6 +201,7 @@ public struct RelationAccessInput: Sendable, Equatable {
         self.viewerMinor = viewerMinor
         self.targetMinor = targetMinor
         self.viewerRole = viewerRole
+        self.targetRole = targetRole
         self.feature = feature
         self.consent = consent
     }
@@ -202,7 +216,8 @@ public struct RelationAccessInput: Sendable, Equatable {
 ///
 /// Ordre des verdicts : blocage, identité absente, soi, rôle (présence seule),
 /// âge (Connaissance automatique seule), niveau (relevé par le bouclier des
-/// mineurs, refus dit `level`), consentement.
+/// mineurs, refus dit `level`), consentement. Entre deux comptes de l'équipe, le
+/// niveau d'un outil vaut Sang (#16623), sauf face à un mineur déclaré.
 public struct RelationAccess: Sendable, Equatable {
     public let allowed: Bool
     public let effectiveLevel: RelationLevel
@@ -220,8 +235,16 @@ public struct RelationAccess: Sendable, Equatable {
         return granted == .public && sharesCommunity ? .community : granted
     }
 
+    /// Le privilège d'équipe s'applique-t-il à cette paire, pour cette feature (`teamOpens`) ?
+    static func teamOpens(_ input: RelationAccessInput) -> Bool {
+        input.viewerRole?.isTeam == true
+            && input.targetRole?.isTeam == true
+            && !input.feature.isClosedToTeam
+            && !(input.targetMinor == .minor && input.viewerMinor != .minor)
+    }
+
     public static func resolve(_ input: RelationAccessInput) -> RelationAccess {
-        let level = combinedLevel(
+        let level = teamOpens(input) ? .blood : combinedLevel(
             grantedByViewer: input.grantedByViewer,
             grantedByTarget: input.grantedByTarget,
             sharesCommunity: input.sharesCommunity
