@@ -508,7 +508,7 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     func test_concealment_laSurfaceMasquee_offreUnRetourAuDoigtEtAVoiceOver() throws {
         let code = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
             .filter { !$0.isWhitespace }
-        XCTAssertTrue(code.contains("ComposerLimitCapsuleView()}else{concealedRevealLayer}"))
+        XCTAssertTrue(code.contains("ComposerLimitCapsuleView(capsule:.shared)}else{concealedRevealLayer}"))
         let couche = try XCTUnwrap(code.range(of: "varconcealedRevealLayer:someView{"))
         let corps = code[couche.upperBound...].prefix(400)
         XCTAssertTrue(corps.contains(".onTapGesture{onBackgroundTapped?()}"))
