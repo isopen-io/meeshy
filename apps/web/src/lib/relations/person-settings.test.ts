@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 
-import { loadReceptionSettings, personSettingsQueryKey, setReceptionBlocked } from './person-settings';
+import { loadReceptionSettings, personSettingsQueryKey, setPersonSetting, setReceptionBlocked, TEAM_SHARES } from './person-settings';
 
 /**
  * LES PRÉFÉRENCES DE RÉCEPTION PAR PERSONNE (#13936, #16638) — une lecture pour
@@ -59,5 +59,26 @@ describe('les préférences de réception', () => {
 
   test('la clé de cache est par personne', () => {
     expect(personSettingsQueryKey(OTHER)).not.toEqual(personSettingsQueryKey('x'));
+  });
+
+  test('les quatre partages du rituel se lisent « non accordés » sans `true` explicite (#16864)', async () => {
+    const { deps } = fakeTransport({ ok: true, data: { userId: OTHER, locationShared: true, proximityShared: 'oui' } });
+    const result = await loadReceptionSettings(deps, OTHER);
+    expect(result).toMatchObject({ ok: true, data: { listeningTitleShared: false, locationShared: true, locationHistoryShared: false, proximityShared: false } });
+  });
+
+  test('les partages sont ceux du contrat partagé, dans l’ordre du rituel', () => {
+    expect(TEAM_SHARES).toEqual(['listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared']);
+  });
+
+  test('accorder un partage n’écrit QUE ce champ, à `true`', async () => {
+    const { deps, requests } = fakeTransport({ ok: true, data: { userId: OTHER, locationShared: true } });
+    await setPersonSetting(deps, OTHER, 'locationShared', true);
+    expect(requests[0]).toMatchObject({ method: 'PUT', path: `/api/v1/relations/${OTHER}/settings`, body: { locationShared: true } });
+    expect(Object.keys(requests[0]!.body as object)).toEqual(['locationShared']);
+  });
+
+  test('`setReceptionBlocked` reste la porte des trois réglages de réception', async () => {
+    expect(setReceptionBlocked).toBe(setPersonSetting);
   });
 });
