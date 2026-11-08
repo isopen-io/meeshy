@@ -1070,6 +1070,15 @@
         "source": "RELEVE 2026-11-07 (#6378) -- `bun run build` puis gzip -9 des sept fichiers : 2,18 Ko pour les SEPT catalogues de l adhesion a une communaute (huit cles `community.membership.*` : Rejoindre, Quitter la communaute, la confirmation du depart, hors ligne, l echec, le refus d une communaute privee), charges avec le detail d une communaute (`routes/route-table.tsx`, route `community`) et jamais au demarrage -- les catalogues d interface sont a 215,55 Ko pour un plafond de 216. Arrondi au Ko SUPERIEUR (3). -- Remesure du 2026-11-07 (#6375, meme methode) : 3,66 Ko apres vingt-deux cles `community.members.*` de l ecran Membres (titre, sections et roles, nommer / repasser, retirer et sa confirmation, vide, chargement, erreur, refus), chargees avec le detail et la route `communityMembers`, jamais au demarrage. Arrondi au Ko SUPERIEUR (4). -- Remesure du 2026-11-07 (#6376, meme methode) : 5,28 Ko apres dix-sept cles `community.invite.*` de la feuille Inviter (titre, recherche, amis / autres, deja membre, recherche en cours, vide, hors ligne, bouton selon le nombre, issue, partiel, echec, refus), chargees avec le detail, jamais au demarrage. Arrondi au Ko SUPERIEUR (6). -- Remesure du 2026-11-08 (#6376, meme methode) : 5,87 Ko apres trois cles `community.create.members.*` (titre, recherche, retirer une personne choisie), chargees aussi avec la route `communityNew`, jamais au demarrage. Plafond inchange (6)."
       }
     },
+    "interface_catalogs_community_settings": {
+      "pattern": "^assets/catalog-community-settings-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "MESUREE PAR BUILD LOCAL LE 2026-11-08 -- A CONFIRMER PAR LE PORTEUR",
+        "source": "RELEVE 2026-11-08 (#6377) -- `bun run build` puis gzip -9 des sept fichiers : 4,20 Ko pour les SEPT catalogues des reglages d une communaute (vingt-trois cles `community.settings.*` : titre, sections, nom, description, Enregistrer, l issue, les refus, la zone dangereuse et la confirmation de la suppression), charges avec la route `communitySettings` (`routes/route-table.tsx`) et jamais au demarrage ni avec le detail -- celui de l adhesion est a 5,67 Ko pour un plafond de 6 et n en recoit qu une cle (« Reglages »). Arrondi au Ko SUPERIEUR (5)."
+      }
+    },
     "interface_catalogs_sign_in_link": {
       "pattern": "^assets/catalog-sign-in-link-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,

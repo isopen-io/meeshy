@@ -218,6 +218,14 @@ const communityMembersScreen = () =>
     import('@/lib/i18n-community-membership-catalog').then((m) => m.loadCommunityMembershipCatalog(currentInterfaceLanguage())),
   ]).then(([screen]) => screen);
 
+/* LES RÉGLAGES D'UNE COMMUNAUTÉ (#6377) — leur propre catalogue
+   (`community.settings.*`), chargé avec cet écran seulement. */
+const communitySettingsScreen = () =>
+  Promise.all([
+    import('@/routes/community-settings'),
+    import('@/lib/i18n-community-settings-catalog').then((m) => m.loadCommunitySettingsCatalog(currentInterfaceLanguage())),
+  ]).then(([screen]) => screen);
+
 /* LA CRÉATION D'UNE COMMUNAUTÉ (#6376) — « Ajouter des membres » parle avec
    le catalogue de l'invitation (`community.create.members.*`, `community.invite.*`). */
 const communityNewScreen = () =>
@@ -605,6 +613,8 @@ export const ROUTES = {
   /* LES MEMBRES (#6375) — miroir `Route.communityMembers` ; AVANT le détail,
      comme `communityNew`, pour que l'ordre ne dépende pas du routeur. */
   communityMembers: { pattern: '/communities/$community/members', screen: communityMembersScreen },
+  /* LES RÉGLAGES (#6377) — miroir `Route.communitySettings` ; avant le détail, comme les membres. */
+  communitySettings: { pattern: '/communities/$community/settings', screen: communitySettingsScreen },
   community: { pattern: '/communities/$community', screen: communityScreen },
   settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
