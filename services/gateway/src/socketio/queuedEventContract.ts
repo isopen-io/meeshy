@@ -53,7 +53,30 @@ export const DRAINED_EVENT = {
   pinned: SERVER_EVENTS.MESSAGE_PINNED,
   unpinned: SERVER_EVENTS.MESSAGE_UNPINNED,
   'link-message': SERVER_EVENTS.LINK_MESSAGE_NEW,
+  starred: SERVER_EVENTS.MESSAGE_STARRED,
+  'hidden-for-me': SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME,
+  'restored-for-me': SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME,
 } as const satisfies Record<QueuedEventType, ServerEventName>;
+
+/**
+ * Les MARQUES PERSONNELLES du lecteur (#16688) — les trois familles de cette
+ * file dont l'ACTEUR est le destinataire.
+ *
+ * Elles s'enfilent par `enqueuePersonalMessageMark`, jamais par
+ * `enqueueForOfflineParticipants` : ce dernier décide de l'audience par
+ * `connectedUsers.has(queueKey)`, et cette question n'a pas de réponse utile
+ * ici. La clé de file est le COMPTE (`p.userId ?? p.id`, indexé pour TOUTES les
+ * sockets du compte par `AuthHandler._registerUser`) ; l'appareil qui pose
+ * l'étoile en fournit une. Le test répondait donc toujours « joignable », et
+ * l'appareil resté éteint du même compte n'a jamais rien reçu.
+ *
+ * Le `satisfies` les rattache à l'union : une famille retirée de l'union ne
+ * compile plus ici, et le balayage de `personal-message-mark-offline-queue`
+ * exige en retour que chacune ait un producteur d'entrées.
+ */
+export const PERSONAL_MARK_EVENT_TYPES = ['starred', 'hidden-for-me', 'restored-for-me'] as const satisfies readonly QueuedEventType[];
+
+export type PersonalMarkEventType = (typeof PERSONAL_MARK_EVENT_TYPES)[number];
 
 /**
  * L'événement serveur qu'une entrée de file rejoue. L'absence d'`eventType`

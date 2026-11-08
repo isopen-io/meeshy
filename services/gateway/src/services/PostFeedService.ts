@@ -16,7 +16,8 @@ import {
 import type { CacheStore } from './CacheStore';
 import { loadFeedFriendIds } from './posts/feedFriends';
 import { loadFeedDirectContactIds } from './posts/feedContacts';
-import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
+import { getCommunityCoMemberIds } from './posts/communityVisibility';
+import { loadCommunityFeed } from './posts/communityFeed';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
 import { verdictFor, type ReferenceAccessVerdict } from './posts/referenceAccess';
@@ -906,48 +907,7 @@ export class PostFeedService {
   }
 
   async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20, reader?: WireReader) {
-    const cursorData = cursor ? decodeCursor(cursor) : null;
-
-    // ACL : seuls les membres actifs voient les posts COMMUNITY ; un non-membre
-    // (ou un viewer anonyme) est limité aux posts PUBLIC de la communauté.
-    const isMember = viewerUserId
-      ? await isActiveCommunityMember(this.prisma, viewerUserId, communityId)
-      : false;
-
-    const where: any = {
-      communityId,
-      deletedAt: NOT_DELETED,
-      type: { in: [PostType.POST, PostType.REEL] },
-      visibility: isMember ? { in: ['PUBLIC', 'COMMUNITY'] } : 'PUBLIC',
-    };
-
-    if (cursorData) {
-      where.OR = [
-        { createdAt: { lt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-      ];
-    }
-
-    const posts = await this.prisma.post.findMany({
-      where,
-      select: feedPostInclude,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-    });
-
-    const hasMore = posts.length > limit;
-    const items = hasMore ? posts.slice(0, limit) : posts;
-    const nextCursor = hasMore && items.length > 0
-      ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
-      : null;
-
-    const withState = await withViewerPostState(this.prisma, viewerUserId, items);
-
-    return {
-      items: withState.map((p) => withMentions(hoistLocationDeep(p), reader)),
-      nextCursor,
-      hasMore,
-    };
+    return loadCommunityFeed(this.prisma, { communityId, viewerUserId, ...(cursor !== undefined ? { cursor } : {}), limit, ...(reader !== undefined ? { reader } : {}) });
   }
 
   async getBookmarks(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {

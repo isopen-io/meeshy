@@ -372,7 +372,16 @@ readonly SHARED_BASELINE=0
 # Seule l'ATTRIBUTION a survécu de ce côté-ci, et c'est elle qui manquait : la
 # convention de ce fichier veut qu'une baisse dise QUEL lot l'a gagnée, sans quoi le
 # prochain à la relire ne peut pas vérifier qu'elle était méritée.
-readonly GATEWAY_BASELINE=491
+# 492 → 491 (#16688, cycle 146 : la charge d'une marque personnelle est typée par le
+# CONTRAT de file) : les deux constructions de charge de
+# `socketio/enqueuePersonalMessageMark.ts` portaient
+# `as unknown as Record<string, unknown>` — la forme qui compile en effaçant la
+# corrélation `(eventType, payload)` que `queuedEventContract` existe pour tenir.
+# `QueuedPayloadFor<T>` est la réponse écrite du dépôt : son `Anonymized` rend la
+# charge assignable au `Record<string, unknown>` que la file stocke, sans assertion.
+# Le lot avait été écrit avec les casts, puis nettoyé avant la fusion ; c'est ce
+# nettoyage qui gagne la ligne. Fusionné avec dev (#16940), la mesure tombe à 490.
+readonly GATEWAY_BASELINE=490
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

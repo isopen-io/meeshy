@@ -127,10 +127,15 @@ class PostCommentsViewModel @Inject constructor(
     /** Hors ligne : la feuille garde le fil lu et pose un bandeau discret, ou l'état « hors ligne » si rien n'est gardé. */
     val isOffline: StateFlow<Boolean> = offline.asStateFlow()
 
-    /** L'hôte dit ce que le post sert (#16541) : fermé, le composeur cède la place au bandeau ; rouvert, il revient. */
+    /**
+     * L'hôte dit ce que le post sert (#16541) : fermé, le composeur cède la place au bandeau et une modification en
+     * cours tombe (#16930) ; rouvert, il revient.
+     */
     fun setCommentsClosed(isClosed: Boolean) {
         closed.value = isClosed
-        if (isClosed) composer.value = null
+        if (!isClosed) return
+        composer.value = null
+        cancelEdit()
     }
 
     /** Appelé quand un commentaire ou une réponse de l'utilisateur est confirmé : l'hôte incrémente son compteur. */
@@ -752,10 +757,10 @@ class PostCommentsViewModel @Inject constructor(
         composerDraft.update { it.copy(text = prefill.text) }
     }
 
-    /** Modifier : le composer charge le texte, les effets, le flou et la LANGUE du commentaire (iOS `beginEditComment`, #6600). */
+    /** Modifier : le composer charge le texte, les effets, le flou et la LANGUE du commentaire (iOS `beginEditComment`, #6600) — jamais sur un fil fermé (#16930). */
     fun beginEdit(commentId: String) {
         val target = findComment(commentId) ?: return
-        if (postId.isBlank() || target.id in thread.value.pendingIds) return
+        if (postId.isBlank() || closed.value || target.id in thread.value.pendingIds) return
         val seed = CommentEditing.seed(target)
         composer.value = null
         mentions.reset()
@@ -792,7 +797,9 @@ class PostCommentsViewModel @Inject constructor(
             val outcome = PostCommentsEngine.edit(thread, replies, target, request) { sent ->
                 postRepository.updateComment(postId, sent.commentId, sent.content, sent.effectFlags, sent.originalLanguage)
             }
-            if (outcome is CommentEditOutcome.Refused) status.update { it.copy(notice = CommentNotice.EDIT_FAILED) }
+            if (outcome !is CommentEditOutcome.Refused) return@launch
+            if (PostCommentSettings.refusesComments(outcome.code)) setCommentsClosed(true)
+            else status.update { it.copy(notice = CommentNotice.EDIT_FAILED) }
         }
     }
 

@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { globalSearchQuerySchema, postSearchQuerySchema } from '@meeshy/shared/types/global-search';
+import {
+  GLOBAL_SEARCH_CAPS_HEADER,
+  GLOBAL_SEARCH_PROTECTION_CAPS,
+  globalSearchQuerySchema,
+  postSearchQuerySchema,
+} from '@meeshy/shared/types/global-search';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 import type { UnifiedAuthRequest } from '../../middleware/auth';
@@ -38,6 +43,19 @@ const messageSearchHitResponseSchema = {
     servedLanguage: nullableString,
     originalContent: { type: 'string' },
     originalLanguage: nullableString,
+    isBlurred: { type: 'boolean' },
+    match: { type: 'string', enum: ['content', 'transcript'] },
+    transcript: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        attachmentId: { type: 'string' },
+        mediaKind: { type: 'string', enum: ['audio', 'video', 'image', 'document'] },
+        text: { type: 'string' },
+        servedLanguage: nullableString,
+        durationMs: { type: 'integer', nullable: true },
+      },
+    },
     sender: {
       type: 'object',
       nullable: true,
@@ -53,6 +71,13 @@ const messageSearchHitResponseSchema = {
 const registeredViewerId = (request: FastifyRequest): string | null => {
   const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
   return registeredUser && !(request as UnifiedAuthRequest).authContext.isAnonymous ? registeredUser.id : null;
+};
+
+/** #16957 — un client qui ne déclare pas savoir voiler ne reçoit aucun flouté. */
+const declaresProtectionCaps = (request: FastifyRequest): boolean => {
+  const raw = request.headers[GLOBAL_SEARCH_CAPS_HEADER.toLowerCase()];
+  const value = Number.parseInt(Array.isArray(raw) ? raw[0] ?? '' : raw ?? '', 10);
+  return Number.isFinite(value) && value >= GLOBAL_SEARCH_PROTECTION_CAPS;
 };
 
 const querySummary = (raw: unknown) => ({ q: typeof (raw as { q?: unknown })?.q === 'string' ? '[redacted]' : undefined });
@@ -84,6 +109,7 @@ export function registerGlobalMessageSearchRoute(fastify: FastifyInstance, prism
         query: parsed.data.q,
         limit: parsed.data.limit,
         cursor: parsed.data.cursor,
+        protectionCaps: declaresProtectionCaps(request),
       });
       return sendSuccess(reply, page.data, { pagination: page.pagination });
     } catch (error) {

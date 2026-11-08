@@ -477,7 +477,14 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       // `DELETE /guest-sessions/me`. IDEMPOTENT désormais (critère 4) : un
       // second appel sur la même session ne décrémente plus une seconde fois
       // `currentConcurrentUsers`, qui ne peut donc plus passer sous zéro.
-      const result = await endGuestSession({ prisma: fastify.prisma, sessionToken: body.sessionToken });
+      // #16948 — l'alias déprécié sert la MÊME annonce de départ que la porte
+      // canonique : le cœur partagé la porte, pas la route.
+      const result = await endGuestSession({
+        prisma: fastify.prisma,
+        sessionToken: body.sessionToken,
+        io: fastify.socketIOHandler?.getManager()?.getIO?.(),
+        manager: fastify.socketIOHandler?.getManager() ?? null,
+      });
 
       if (result.kind === 'not-found') {
         return sendNotFound(reply, 'Session introuvable');

@@ -515,6 +515,7 @@ export function registerSharingRoutes(
         // `getIO?.()` : l'éventail est accessoire et ne fait pas échouer une
         // adhésion déjà persistée (#16837).
         arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
+        arrivalRooms: fastify.socketIOHandler?.getManager() ?? null,
         requestIp: resolveClientIp(request),
         profile: {
           firstName: '',
@@ -569,15 +570,12 @@ export function registerSharingRoutes(
 
           // ── PRÉSERVÉ TEL QUEL — hors de la loi d'admission (voir doc-tête) ──
 
-          // Auto-join the joining user's currently-connected sockets to the
-          // conversation room so they receive message:new events immediately
-          // without a reconnect (mirrors POST /conversations/:id/participants).
-          const joinSocketManager = fastify.socketIOHandler?.getManager();
-          if (joinSocketManager) {
-            joinSocketManager.joinUserToConversationRoom(userToken.userId, result.shareLink.conversationId).catch(
-              (err: unknown) => logger.error('Failed to auto-join link joiner to conversation room', err as Error)
-            );
-          }
+          // L'admission dans la room de conversation vivait ICI, et nulle part
+          // ailleurs : la porte CANONIQUE (`POST /links/:key/members`), celle
+          // que le web appelle, ne l'a jamais eue. Elle est passée dans le cœur
+          // partagé (`performLinkJoin`, paramètre `arrivalRooms`), que les deux
+          // portes alimentent — une règle retapée à chaque porte est une règle
+          // qu'une porte finira par ne pas avoir.
 
           // Envoyer des notifications
           const notificationService = fastify.notificationService;

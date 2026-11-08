@@ -58,6 +58,16 @@ const esCommunityMembership = {
   'community.create.members.title': 'Añadir miembros',
   'community.create.members.search': 'Buscar por nombre o usuario…',
   'community.create.members.remove': 'Quitar a {name}',
+  'community.posts.tabs.label': "Contenido de la comunidad",
+  'community.posts.tab.channels': "Conversaciones",
+  'community.posts.tab.posts': "Publicaciones",
+  'community.posts.loading': "Cargando las publicaciones",
+  'community.posts.empty.title': "Sin publicaciones aún",
+  'community.posts.empty.body': "Las publicaciones de la comunidad aparecerán aquí.",
+  'community.posts.error.title': "No se pudieron cargar las publicaciones",
+  'community.posts.error.offline': "Sin conexión: las publicaciones aparecerán cuando vuelva la red.",
+  'community.posts.retry': "Reintentar",
+  'community.posts.loadingMore': "Cargando más",
 } as const satisfies CommunityMembershipCatalog;
 
 export default esCommunityMembership;

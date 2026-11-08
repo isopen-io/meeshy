@@ -3,6 +3,7 @@ package me.meeshy.app.conversations
 import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.isMeaningful
+import me.meeshy.sdk.model.preview.previewEffectOf
 
 data class LastMessagePreviewLabels(
     val photo: String,
@@ -136,6 +137,18 @@ fun messageSummaryLine(
     resolvedContent: String? = null,
 ): SummaryLine {
     val kind = MessageSummaryKind.of(message, nowMillis)
+    return summaryLineOf(message, currentUserId, showSender, labels, kind, resolvedContent)
+        .copy(effect = previewEffectOf(message, nowMillis), messageId = message?.id)
+}
+
+private fun summaryLineOf(
+    message: ApiConversationLastMessage?,
+    currentUserId: String?,
+    showSender: Boolean,
+    labels: LastMessagePreviewLabels,
+    kind: MessageSummaryKind,
+    resolvedContent: String?,
+): SummaryLine {
     return when (kind) {
         MessageSummaryKind.STANDARD, MessageSummaryKind.EPHEMERAL_ACTIVE -> SummaryLine(
             text = lastMessagePreview(message, currentUserId, showSender, labels, resolvedContent),

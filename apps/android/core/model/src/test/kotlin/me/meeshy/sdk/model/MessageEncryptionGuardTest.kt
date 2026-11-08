@@ -55,11 +55,31 @@ class MessageEncryptionGuardTest {
         val clear = message("secret")
 
         assertThat(MessageEncryptionGuard.searchableText(clear.copy(isViewOnce = true))).isNull()
-        assertThat(MessageEncryptionGuard.searchableText(clear.copy(isBlurred = true))).isNull()
         assertThat(MessageEncryptionGuard.searchableText(clear.copy(expiresAt = "2030-01-01T00:00:00.000Z"))).isNull()
         assertThat(MessageEncryptionGuard.searchableText(clear.copy(deletedAt = "2030-01-01T00:00:00.000Z"))).isNull()
         assertThat(MessageEncryptionGuard.searchableText(clear.copy(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt()))).isNull()
         assertThat(MessageEncryptionGuard.searchableText(clear.copy(isViewOnce = false, isBlurred = false))).isEqualTo("secret")
+    }
+
+    @Test
+    fun `un message floute reste trouvable, le flou n'est pas une disparition`() {
+        val clear = message("secret")
+
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(isBlurred = true))).isEqualTo("secret")
+        assertThat(MessageEncryptionGuard.searchableText(clear.copy(effectFlags = MessageEffectFlags.BLURRED.toInt()))).isEqualTo("secret")
+        assertThat(
+            MessageEncryptionGuard.searchableText(clear.copy(effectFlags = (MessageEffectFlags.BLURRED or MessageEffectFlags.VIEW_ONCE).toInt())),
+        ).isNull()
+    }
+
+    @Test
+    fun `un message floute par son drapeau ou par son bit est voile`() {
+        val clear = message("secret")
+
+        assertThat(MessageEncryptionGuard.isVeiled(clear.copy(isBlurred = true))).isTrue()
+        assertThat(MessageEncryptionGuard.isVeiled(clear.copy(effectFlags = MessageEffectFlags.BLURRED.toInt()))).isTrue()
+        assertThat(MessageEncryptionGuard.isVeiled(clear.copy(isBlurred = false, effectFlags = MessageEffectFlags.GLOW.toInt()))).isFalse()
+        assertThat(MessageEncryptionGuard.isVeiled(clear)).isFalse()
     }
 
     @Test

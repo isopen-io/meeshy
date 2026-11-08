@@ -129,15 +129,18 @@ class ChatServerSearch @Inject constructor(
         val ui = host?.uiState?.value ?: return emptyList()
         val ids = ui.search.matchIds.toSet()
         return ui.messages.filter { it.messageId in ids }.map { bubble ->
+            val veiled = bubble.isBlurred || bubble.blurReveal != null
+            val text = if (veiled) "" else bubble.text
             ConversationSearchResult(
                 id = bubble.messageId,
                 conversationId = ui.conversationId,
-                content = bubble.text,
-                matchedText = bubble.text,
+                content = text,
+                matchedText = text,
                 matchType = SearchMatchType.CONTENT,
                 senderName = bubble.senderName ?: "?",
                 senderAvatar = bubble.senderAvatarUrl,
                 createdAtIso = bubble.createdAtIso,
+                isVeiled = veiled,
             )
         }
     }

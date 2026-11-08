@@ -154,22 +154,22 @@ public enum ConversationPreviewComposer {
         if message.messageType == "system" { return systemLine(message, input, strings) }
 
         let author = authorOf(message, input.viewerId, strings)
-        let line = { (icon: ConversationPreviewIcon?, segments: [ConversationPreviewSegment]) in
-            ConversationPreview(kind: .message, icon: icon, author: author, segments: segments)
+        let line = { (icon: ConversationPreviewIcon?, segments: [ConversationPreviewSegment], effect: ConversationPreviewEffect?) in
+            ConversationPreview(kind: .message, icon: icon, author: author, segments: segments, effect: effect)
         }
 
         switch ConversationPreviewProtection.guardOf(message, input) {
         case .expired:
-            return line(.expired, [.label(strings(.protectionExpired))])
+            return line(.expired, [.label(strings(.protectionExpired))], nil)
         case .viewOnce:
             let key: ConversationPreviewStringKey = message.viewOnceConsumed == true ? .protectionViewOnceOpened : .protectionViewOnce
-            return line(.viewOnce, [.label(strings(key))])
+            return line(.viewOnce, [.label(strings(key))], nil)
         case .hidden:
-            return line(.hidden, [.label(strings(.protectionHidden)), .label(strings(.protectionHiddenHint))])
+            return line(.hidden, [.label(strings(.protectionHidden)), .label(strings(.protectionHiddenHint))], .veiled)
         case .encrypted:
-            return line(.encrypted, [.label(strings(.protectionEncrypted))])
+            return line(.encrypted, [.label(strings(.protectionEncrypted))], nil)
         case .afterRead:
-            return line(.ephemeral, [.label(strings(.protectionAfterRead))])
+            return line(.ephemeral, [.label(strings(.protectionAfterRead))], nil)
         case .ephemeral(let expiresAt, let durationSeconds):
             let body = ConversationPreviewBody.of(message, input, strings)
             let countdown: [ConversationPreviewSegment]
@@ -191,7 +191,7 @@ public enum ConversationPreviewComposer {
             let fallback: ConversationPreviewIcon? = !effects.isEmpty
                 ? .effect
                 : (message.isForwarded == true ? .forward : nil)
-            return line(body.icon ?? fallback, body.segments + effects)
+            return line(body.icon ?? fallback, body.segments + effects, appliedEffect(message.effectFlags))
         }
     }
 
@@ -200,6 +200,26 @@ public enum ConversationPreviewComposer {
         (.confetti, .effectConfetti), (.fireworks, .effectFireworks), (.waoo, .effectWaoo),
         (.glow, .effectGlow), (.pulse, .effectPulse), (.rainbow, .effectRainbow), (.sparkle, .effectSparkle),
     ]
+
+    private static let finishes: [(MessageEffectFlags, ConversationPreviewEffect.Finish)] = [
+        (.glow, .glow), (.pulse, .pulse), (.rainbow, .rainbow), (.sparkle, .sparkle),
+    ]
+
+    private static let entrances: [(MessageEffectFlags, ConversationPreviewEffect.Entrance)] = [
+        (.shake, .shake), (.zoom, .pop), (.explode, .pop), (.confetti, .pop), (.fireworks, .pop), (.waoo, .pop),
+    ]
+
+    /// L'effet APPLIQUÉ à la ligne d'un message non protégé (#16975) : le
+    /// premier persistant et la première entrée dans l'ordre des bits ; `nil`
+    /// si ni l'un ni l'autre. Une liste n'émet pas de particules : les entrées
+    /// lourdes se réduisent à `pop`.
+    static func appliedEffect(_ effectFlags: Int?) -> ConversationPreviewEffect? {
+        let flags = MessageEffectFlags(rawValue: UInt32(truncatingIfNeeded: effectFlags ?? 0))
+        let finish = finishes.first { flags.contains($0.0) }?.1
+        let entrance = entrances.first { flags.contains($0.0) }?.1
+        guard finish != nil || entrance != nil else { return nil }
+        return ConversationPreviewEffect(veil: false, finish: finish, entrance: entrance)
+    }
 
     /// Les effets COMPORTEMENTAUX, dans l'ordre des bits — jamais le cycle de
     /// vie (éphémère, flou, vue unique), qui est une protection.
