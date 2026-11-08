@@ -41,10 +41,78 @@ class SignalingQueue(asyncio.Queue):
         self._work_arrived.set()
 
 
+DEFAULT_FAST_LANE_BURST = 8
+
+
+def fast_lane_burst_from_env() -> int:
+    """#16782 — `TRANSLATOR_FAST_LANE_BURST` : un entier ≥ 1, sinon le défaut."""
+    raw = os.getenv("TRANSLATOR_FAST_LANE_BURST")
+    if raw is None:
+        return DEFAULT_FAST_LANE_BURST
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value >= 1:
+        return value
+    logger.warning(
+        f"[TRANSLATOR] Invalid TRANSLATOR_FAST_LANE_BURST={raw!r}, "
+        f"using {DEFAULT_FAST_LANE_BURST}"
+    )
+    return DEFAULT_FAST_LANE_BURST
+
+
+class FastLaneBurst:
+    """
+    #16782 — l'état de rafale d'UN worker : combien de tâches rapides il a
+    prises d'affilée pendant que ses files régulières attendaient. À `limit`,
+    sa prochaine prise sert d'abord les files régulières. Propre au worker,
+    donc jamais disputé.
+    """
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.consecutive = 0
+
+    def exhausted(self) -> bool:
+        return self.consecutive >= self.limit
+
+    def record(self, took_fast: bool, regular_waiting: bool) -> None:
+        self.consecutive = self.consecutive + 1 if took_fast and regular_waiting else 0
+
+
+def _take_in_order(queues: Tuple[asyncio.Queue, ...]) -> Optional[Tuple[int, TranslationTask]]:
+    for index, queue in enumerate(queues):
+        try:
+            return index, queue.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+    return None
+
+
+def _take_with_burst(
+    queues: Tuple[asyncio.Queue, ...],
+    burst: FastLaneBurst
+) -> Optional[TranslationTask]:
+    fast, regular = queues[:1], queues[1:]
+    if burst.exhausted():
+        taken = _take_in_order(regular)
+        if taken is not None:
+            burst.record(took_fast=False, regular_waiting=True)
+            return taken[1]
+    taken = _take_in_order(queues)
+    if taken is None:
+        return None
+    index, task = taken
+    burst.record(took_fast=index == 0, regular_waiting=any(not q.empty() for q in regular))
+    return task
+
+
 async def take_next_task(
     queues: Tuple[asyncio.Queue, ...],
     work_arrived: asyncio.Event,
-    timeout: float
+    timeout: float,
+    burst: Optional[FastLaneBurst] = None
 ) -> Optional[TranslationTask]:
     """
     Prend la première tâche disponible dans `queues`, DANS L'ORDRE (la voie
@@ -54,16 +122,22 @@ async def take_next_task(
     deux : un dépôt postérieur le relève donc forcément, et aucun réveil ne se
     perd. Un réveil pour rien (un autre worker a pris la tâche, ou elle est
     tombée dans une file que ce worker ne sert pas) ne fait que reboucler.
+
+    #16782 — avec `burst`, après `burst.limit` tâches rapides prises d'affilée
+    pendant que les files régulières attendaient, la prise suivante sert
+    d'abord ces dernières. Sans `burst`, l'ordre reste strict.
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     while True:
         work_arrived.clear()
-        for queue in queues:
-            try:
-                return queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
+        if burst is None:
+            taken = _take_in_order(queues)
+            task = taken[1] if taken is not None else None
+        else:
+            task = _take_with_burst(queues, burst)
+        if task is not None:
+            return task
         remaining = deadline - loop.time()
         if remaining <= 0:
             return None
@@ -131,6 +205,7 @@ class ConnectionManager:
             os.getenv("TRANSLATOR_PRIORITY_QUEUE", "true").lower() == "true"
         )
         self.short_text_threshold = int(os.getenv("TRANSLATOR_SHORT_TEXT_THRESHOLD", "100"))
+        self.fast_lane_burst = fast_lane_burst_from_env()
 
         # Statistics
         self.stats = {
@@ -139,7 +214,8 @@ class ConnectionManager:
             'fast_pool_size': 0,
             'pool_full_rejections': 0,
             'batches_created': 0,
-            'fast_track_count': 0
+            'fast_track_count': 0,
+            'caption_fast_lane_overflow': 0
         }
 
         logger.info(
@@ -149,7 +225,8 @@ class ConnectionManager:
         )
         logger.info(
             f"[CONNECTION] Batch processing: enabled={self.enable_batching}, "
-            f"window={self.batch_window_ms}ms, max_size={self.batch_max_size}"
+            f"window={self.batch_window_ms}ms, max_size={self.batch_max_size}, "
+            f"fast_lane_burst={self.fast_lane_burst}"
         )
 
     async def start(self):
@@ -243,9 +320,12 @@ class ConnectionManager:
         """
         #16780 — un sous-titre d'appel se lit pendant qu'on parle : voie rapide
         quelle que soit sa longueur, sans `utils.performance`, jamais en lot.
-        Voie rapide pleine : la file régulière directe, dont le refus se dit.
+        Voie rapide pleine : la file régulière directe, dont le refus se dit,
+        et le débordement se compte (#16783).
         """
         if self.fast_pool.full():
+            self.stats['caption_fast_lane_overflow'] += 1
+            logger.debug(f"[TRANSLATOR] Fast lane full, caption {task.task_id} overflows to regular pool")
             return await self._enqueue_single_task(task)
         await self.fast_pool.put(task)
         self.stats['fast_pool_size'] = self.fast_pool.qsize()
