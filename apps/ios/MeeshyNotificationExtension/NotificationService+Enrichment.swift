@@ -29,10 +29,11 @@ extension NotificationService {
         }
     }
 
-    static func downloadFile(from url: URL, budget: NSEBudget) async -> URL? {
+    static func downloadFile(from url: URL, budget: NSEBudget, token: String? = nil) async -> URL? {
         guard let timeout = budget.downloadTimeout() else { return nil }
+        let request = token.map { NSEAPIRequest.make(url: url, token: $0, timeout: timeout) } ?? URLRequest(url: url, timeoutInterval: timeout)
         do {
-            let (location, _) = try await URLSession.shared.download(for: URLRequest(url: url, timeoutInterval: timeout))
+            let (location, _) = try await URLSession.shared.download(for: request)
             let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             try FileManager.default.moveItem(at: location, to: destination)
             return destination
@@ -54,7 +55,8 @@ extension NotificationService {
     }
 
     private static func attachmentFile(for source: NSEAttachmentSource, budget: NSEBudget) async -> NSEAttachmentFile? {
-        guard let file = await downloadFile(from: source.url, budget: budget) else { return nil }
+        let token = source.authenticated ? NSEDataSync.readAuthToken() : nil
+        guard let file = await downloadFile(from: source.url, budget: budget, token: token) else { return nil }
         guard NSEAttachmentPolicy.mayAttach(mimeType: source.mimeType, fileSize: fileSize(at: file)) else {
             try? FileManager.default.removeItem(at: file)
             return nil

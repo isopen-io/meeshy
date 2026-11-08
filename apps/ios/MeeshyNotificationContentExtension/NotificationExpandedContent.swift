@@ -93,6 +93,18 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     /// Le fichier à jouer : celui que l'extension de service a déjà ATTACHÉ
     /// (sur disque, sans réseau), sinon la piste distante — la même, élue par
     /// le Prisme côté serveur.
+    /// #17143 — la voix d'un talkie ne se joue QUE depuis le fichier que la NSE a attaché (origine vérifiée, jeton de
+    /// la session, taille plafonnée) : jamais en flux depuis l'adresse. Sans ce fichier, rien ne se déploie et le
+    /// toucher ouvre l'app, qui rejoue la prise de parole.
+    static func talkieVoiceOnlyFromAttachment(_ userInfo: [AnyHashable: Any], attachmentURLs: [URL]) -> [AnyHashable: Any] {
+        guard NotificationDetailPolicy.isTalkieWake(userInfo), !attachmentURLs.contains(where: isAudioFile) else { return userInfo }
+        return NotificationDetailPolicy.withoutTalkieVoice(userInfo)
+    }
+
+    private static func isAudioFile(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .audio) == true
+    }
+
     static func playableURL(attachmentURLs: [URL], remote: URL) -> URL {
         attachmentURLs.first { url in
             UTType(filenameExtension: url.pathExtension)?.conforms(to: .audio) == true

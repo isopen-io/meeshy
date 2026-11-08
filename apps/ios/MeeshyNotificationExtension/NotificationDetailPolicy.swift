@@ -74,6 +74,46 @@ nonisolated enum NotificationDetailPolicy {
         type == talkiePushType ? talkieCategory : nil
     }
 
+    static func isTalkieWake(_ userInfo: [AnyHashable: Any]) -> Bool {
+        userInfo["type"] as? String == talkiePushType
+    }
+
+    private static let talkieVoiceKeys = ["attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize", "voiceUrl"]
+
+    /// La voix d'un talkie ne se télécharge ni ne se joue que depuis la passerelle CONFIGURÉE (même schéma, hôte et
+    /// port que `apiBaseURL`) : une adresse d'une autre origine est retirée de la charge, et le toucher retombe sur
+    /// `talkie:join`. Toute autre notification est rendue telle quelle.
+    static func sealingUntrustedTalkieVoice(_ userInfo: [AnyHashable: Any], apiBaseURL: String) -> [AnyHashable: Any] {
+        guard isTalkieWake(userInfo) else { return userInfo }
+        let addresses = ["attachmentUrl", "voiceUrl"].compactMap { userInfo[$0] as? String }.filter { !$0.isEmpty }
+        let trusted = URL(string: apiBaseURL)
+        let allTrusted = addresses.allSatisfy { raw in
+            guard let trusted, let resolved = absoluteVoiceURL(raw, base: apiBaseURL) else { return false }
+            return sameOrigin(resolved, trusted)
+        }
+        return allTrusted ? userInfo : withoutTalkieVoice(userInfo)
+    }
+
+    static func withoutTalkieVoice(_ userInfo: [AnyHashable: Any]) -> [AnyHashable: Any] {
+        userInfo.filter { !talkieVoiceKeys.contains($0.key as? String ?? "") }
+    }
+
+    /// Un chemin relatif se lit sous la passerelle (c'est ainsi qu'elle persiste ses fichiers) ; une valeur qui porte
+    /// un schéma reste telle quelle et doit passer le contrôle d'origine.
+    private static func absoluteVoiceURL(_ raw: String, base: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let carriesScheme = trimmed.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:", options: .regularExpression) != nil
+        guard !carriesScheme else { return URL(string: trimmed) }
+        let root = base.hasSuffix("/") ? String(base.dropLast()) : base
+        return URL(string: trimmed.hasPrefix("/") ? root + trimmed : root + "/" + trimmed)
+    }
+
+    private static func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.scheme?.lowercased() == rhs.scheme?.lowercased()
+            && lhs.host?.lowercased() == rhs.host?.lowercased()
+            && lhs.port == rhs.port
+    }
+
     /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
     /// décompte vivant (`MeeshyNotificationContentExtension`).
     static let ephemeralCategory = "MEESHY_EPHEMERAL"

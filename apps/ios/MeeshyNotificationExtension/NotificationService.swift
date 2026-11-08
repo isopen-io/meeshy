@@ -74,6 +74,7 @@ class NotificationService: UNNotificationServiceExtension {
         case .applyCategory:
             // #17143 — le réveil d'un talkie : sa catégorie dédiée, la seule dont la voix se joue sur place.
             if let talkie = NotificationDetailPolicy.talkieCategory(forType: content.userInfo["type"] as? String ?? "") {
+                content.userInfo = NotificationDetailPolicy.sealingUntrustedTalkieVoice(content.userInfo, apiBaseURL: NSEDataSync.trustedApiBaseURL)
                 content.categoryIdentifier = talkie
             } else {
                 applyCategory(to: content)

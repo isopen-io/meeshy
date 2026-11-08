@@ -53,6 +53,45 @@ final class TalkieNotificationTests: XCTestCase {
         XCTAssertNotNil(TalkieWakePush(userInfo: payload))
     }
 
+    private let gateway = "https://gate.meeshy.me"
+
+    func test_aTalkieVoiceFromTheConfiguredGateway_isKept() {
+        let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(talkiePayload(), apiBaseURL: gateway)
+        XCTAssertEqual(sealed["attachmentUrl"] as? String, talkiePayload()["attachmentUrl"] as? String)
+    }
+
+    func test_aTalkieVoiceFromAnotherOrigin_isDropped_theTapFallsBackToJoin() {
+        ["https://evil.example/voix.m4a", "https://gate.meeshy.me.evil.example/v.m4a", "meeshy://talkie/play?u=x"].forEach { url in
+            let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(talkiePayload(["attachmentUrl": url]), apiBaseURL: gateway)
+            XCTAssertNil(sealed["attachmentUrl"], url)
+            XCTAssertNil(sealed["attachmentMimeType"], url)
+            XCTAssertNil(NotificationExpandedContent.resolve(userInfo: sealed) { URL(string: $0) }, url)
+            XCTAssertNotNil(TalkieWakePush(userInfo: sealed), url)
+        }
+    }
+
+    func test_anUntrustedVoiceUrlBesideATrustedAttachment_dropsBoth() {
+        let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(talkiePayload(["voiceUrl": "https://evil.example/v.m4a"]), apiBaseURL: gateway)
+        XCTAssertNil(sealed["attachmentUrl"])
+        XCTAssertNil(sealed["voiceUrl"])
+    }
+
+    func test_theSeal_leavesEveryOtherNotificationUntouched() {
+        let message: [AnyHashable: Any] = ["type": "new_message", "attachmentUrl": "https://cdn.example/x.m4a"]
+        let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(message, apiBaseURL: gateway)
+        XCTAssertEqual(sealed["attachmentUrl"] as? String, "https://cdn.example/x.m4a")
+    }
+
+    func test_theExpandedTalkie_playsOnlyTheAttachedFile_neverAStream() {
+        let streamed = NotificationExpandedContent.talkieVoiceOnlyFromAttachment(talkiePayload(), attachmentURLs: [])
+        XCTAssertNil(NotificationExpandedContent.resolve(userInfo: streamed) { URL(string: $0) })
+
+        let attached = NotificationExpandedContent.talkieVoiceOnlyFromAttachment(
+            talkiePayload(), attachmentURLs: [URL(fileURLWithPath: "/tmp/voix.m4a")]
+        )
+        XCTAssertNotNil(NotificationExpandedContent.resolve(userInfo: attached) { URL(string: $0) })
+    }
+
     func test_theRegisteredTalkieCategory_carriesNoAction() throws {
         var registered: Set<UNNotificationCategory> = []
         AppDelegate.registerNotificationCategories(bundle: .main) { registered = $0 }

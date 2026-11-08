@@ -23,19 +23,22 @@ public final class SessionEndingHooks {
         hooks.append(hook)
     }
 
+    /// Les crochets tournent dans l'ordre ; passé `timeout`, ils sont annulés (une requête réseau en vol s'interrompt)
+    /// et la déconnexion continue.
     func runAll() async {
         let pending = hooks
         guard !pending.isEmpty else { return }
         let limit = timeout
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                for hook in pending { await hook() }
-            }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(limit))
-            }
-            await group.next()
-            group.cancelAll()
+        let work = Task { @MainActor in
+            for hook in pending { await hook() }
         }
+        let watchdog = Task {
+            do {
+                try await Task.sleep(for: .seconds(limit))
+                work.cancel()
+            } catch {}
+        }
+        await work.value
+        watchdog.cancel()
     }
 }

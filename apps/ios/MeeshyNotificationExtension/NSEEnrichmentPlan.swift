@@ -4,6 +4,8 @@ import MeeshyCore
 struct NSEAttachmentSource: Sendable, Equatable {
     let url: URL
     let mimeType: String
+    /// #17143 — la voix d'un talkie, d'origine déjà vérifiée : téléchargée avec le jeton de la session.
+    var authenticated = false
 }
 
 struct NSEAttachmentFile: Sendable, Equatable {
@@ -43,13 +45,15 @@ struct NSEEnrichmentRequest: Sendable, Equatable {
         return NotificationPayloadHelpers.resolveRemoteMediaURL(raw, apiBaseURL: apiBaseURL)
     }
 
-    private static func media(userInfo: [AnyHashable: Any], apiBaseURL: String) -> NSEAttachmentSource? {
+    private static func media(userInfo payload: [AnyHashable: Any], apiBaseURL: String) -> NSEAttachmentSource? {
+        // #17143 — la voix d'un talkie part avec le jeton de la session : jamais vers une autre origine que la passerelle.
+        let userInfo = NotificationDetailPolicy.sealingUntrustedTalkieVoice(payload, apiBaseURL: apiBaseURL)
         guard let url = remoteURL(userInfo["attachmentUrl"], apiBaseURL: apiBaseURL) else { return nil }
         let mimeType = userInfo["attachmentMimeType"] as? String ?? ""
         let declaredSize = NSEAttachmentPolicy.declaredFileSize(userInfo["attachmentFileSize"])
         guard !NSEAttachmentPolicy.declaresProtection(userInfo: userInfo),
               NSEAttachmentPolicy.mayAttach(mimeType: mimeType, fileSize: declaredSize) else { return nil }
-        return NSEAttachmentSource(url: url, mimeType: mimeType)
+        return NSEAttachmentSource(url: url, mimeType: mimeType, authenticated: NotificationDetailPolicy.isTalkieWake(userInfo))
     }
 
     private static func detail(
