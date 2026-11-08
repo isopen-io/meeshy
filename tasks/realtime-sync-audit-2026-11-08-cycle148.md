@@ -141,3 +141,114 @@ d'un coup.
 > atteste un gestionnaire qui lève. Le double est complété, et le témoin assert
 > désormais la RÉPONSE. Détail :
 > `tasks/lessons/2026-11-08-un-double-mente-aussi-par-ce-qu-il-omet.md`.
+
+---
+
+## Le cycle a dû ouvrir son PROPRE périmètre, et ça a changé sa forme
+
+Quatre des sept suivis cédés, le cycle était à deux lots. Deux auditeurs
+adversariaux sont partis sur des périmètres **explicitement disjoints de
+`socketio/`** — l'un sur `routes/conversations/` + `services/conversations/`,
+l'autre sur `services/notifications/` + `services/messaging/` — avec l'interdit
+écrit dans leur consigne plutôt que laissé à leur jugement.
+
+**Onze constats, tous vrais contre l'arbre vivant** (vérifiés ligne à ligne
+avant d'être repris, deux en primaire par moi). Trois sont devenus des lots,
+huit des issues (#17075 à #17082, plus #17076 et #17077 sans milestone car
+elles demandent chacune un lot à elles).
+
+## Lot D — rentrer dans une conversation supprimée POUR SOI (#17072)
+
+Le constat le plus grave du cycle, et le correctif d'une ligne.
+
+`Participant` porte TROIS colonnes de départ, et le dépôt les lit ENSEMBLE là
+où il en dépend : le flux de tombstones interroge
+`OR: [{leftAt:{gt}}, {bannedAt:{gt}}, {deletedForMe:{gt}}]`.
+`REJOIN_PARTICIPANT_STATE` en effaçait DEUX sur trois — `leftAt` y figurait,
+`deletedForMe` non — et le doc-comment de la constante justifiait nommément
+`historyVisibleFrom`, les trois `messageRequest*` et l'OMISSION de `joinedAt`
+sans la mentionner une fois.
+
+`delete-for-me` écrit pourtant `{ deletedForMe: now, isActive: false }` d'un
+seul geste, et `resolveConversationEntry` ne lit que la seconde. Rentrer après
+avoir supprimé « pour soi » rendait donc `'rejoin'`, rallumait la ligne, et
+laissait la première posée : **appartenance vivante pour tout le service,
+absente de `GET /conversations` pour toujours.** Messages reçus, écriture
+permise, présence au trombinoscope des autres — et la conversation toujours
+dans la corbeille, avec son tombstone servi par `/sync`.
+
+> **Le cliquet qui aurait dû le voir était VERT, et sa langue est la raison.**
+> `participant-reactivation-writers-sweep` est l'inventaire des écritures qui
+> RALLUMENT une participation, et il ne posait qu'une question : « celle-ci
+> peut-elle rallumer un BANNI ? ». La langue de l'inventaire est *banni* ;
+> `deletedForMe` n'y est pas un mot. C'est « un lot ferme une classe dans SA
+> langue », mesuré sur un cliquet plutôt que sur un correctif.
+
+Les deux témoins sont RELATIONNELS : l'un relève les colonnes de départ DANS le
+source du flux plutôt que de les recopier et porte un verdict écrit pour
+chacune (effacée, effacée, **jamais** — une rentrée ne débannit personne) ;
+l'autre est au niveau de la PORTE.
+
+**Et le premier a attrapé sa propre première version.** Mon relevé cherchait
+`{ gt }` en forme abrégée quand le flux écrit `{ gt: floor }` : le balayage
+rendait `[]`, et le témoin de verdict passait À VIDE. C'est le premier `it` du
+fichier — « un balayage à vide resterait vert » — qui l'a dit, dans le lot même
+qui l'écrivait.
+
+## Lot E — le budget de mention valait 2, pas 5 (#17073)
+
+`shouldCreateMentionNotification` est un prédicat MUTANT : il pousse un
+horodatage quand il autorise. Il était appelé DEUX FOIS sur le même chemin pour
+la même paire — filtre d'éligibilité du lot, puis tête de
+`createMentionNotification` que ce lot appelle. Chaque notification consommait
+deux jetons : la troisième mention de quelqu'un dans la minute ne lui arrivait
+jamais.
+
+Le second appel était justifié par « la garde par destinataire reste, pour
+l'appelant qui l'atteint en solo ». **Cet appelant n'existe pas** — mesuré.
+
+> **Un prédicat qui répond « peut-on ? » ne doit pas écrire.** Sa signature ne
+> dit rien de sa mutation, donc rien n'empêche un second appelant de
+> l'interroger, et le coût d'une question devient une réponse fausse.
+
+**Le piège s'est refermé pendant le correctif, et c'est le plus instructif du
+lot.** La même méthode était exposée aux éventails de PUBLICATION et de
+COMMENTAIRE par la surface `fanoutDependencies` — et pour eux, c'est le SEUL
+gate de leur chemin : les lier à la question pure aurait rendu ces mentions
+illimitées. Le nom a donc été corrigé plutôt que la liaison
+(`consumeMentionBudget`), ce qui est exactement la leçon du lot appliquée à
+elle-même.
+
+Seconde moitié : la liste explicite n'était dédoublonnée nulle part, si bien
+que `slice(0, MAX_MENTIONS_PER_MESSAGE)` bornait cinquante **COPIES**. Une
+charge `[victime ×50]` produisait plusieurs bannières identiques et épuisait le
+budget de la paire. Dédoublonnée à la frontière (le plafond compte des
+PERSONNES) **et** au site qui notifie (c'est là que « ne pas notifier deux
+fois » est une propriété, pas une espérance sur ses appelants).
+
+Le témoin de performance existant appelait le lot avec cinquante destinataires
+**distincts** : cinquante clés de paire, aucun budget épuisé, vert. **La
+propriété ne se voit qu'en RÉPÉTANT sur la MÊME paire.**
+
+## Lot F — une demande en attente ne sonne pas, sauf si on ÉDITE (#17074)
+
+La garde #14107 était posée sur l'éventail d'ENVOI et sur l'événement socket
+`mention:created` de l'ÉDITION — **et absente de la NOTIFICATION de cette même
+édition**, c'est-à-dire du seul des trois canaux qui perce la sourdine, pousse
+un e-mail immédiat et fait pré-enregistrer le texte dans la base locale de
+l'appareil.
+
+Un inconnu dont la demande n'est pas acceptée obtenait donc, en éditant son
+message pour y ajouter `@cible`, exactement ce que le chemin d'envoi venait de
+lui refuser. **L'asymétrie vivait dans la même fonction** : le handler socket
+pose la garde dix lignes au-dessus de l'appel qui laissait partir la
+notification sans elle.
+
+Et la garde était GRATUITE : les deux sites lisent DÉJÀ les participants de la
+conversation — il ne manquait qu'une colonne au `select`, et un NOM partagé
+pour que la règle cesse d'être une formulation locale (`pendingRequestUserIds`,
+désormais le site unique du prédicat, employé par les deux éventails).
+
+> Avant de conclure qu'une garde coûterait une requête, regarder ce que le site
+> lit déjà. C'était écrit dans le dépôt depuis le cycle 127 ; ce lot est le
+> troisième à le vérifier.
