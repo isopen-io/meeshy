@@ -6,6 +6,7 @@
  * `messages-advanced.ts`.
  */
 import { FastifyInstance } from 'fastify';
+import { softDeleteMessage } from '../../services/messaging/softDeleteMessage';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
 import { conversationStatsService } from '../../services/ConversationStatsService';
@@ -196,10 +197,14 @@ export function registerDeleteMessageRoute(
       // Forme reprise du handler socket, qui la porte déjà et l'annonce :
       // « Soft delete: atomically clear translations and set deletedAt in one
       // write ».
-      await prisma.message.update({
-        where: { id: messageId },
-        data: { translations: null, deletedAt: new Date() }
-      });
+      // #17079 — la garde OPTIMISTE, par son site unique. Deux suppressions
+      // CONCURRENTES franchissaient toutes deux la lecture d'amont et
+      // appliquaient toutes deux les effets du retrait, dont un décompte NON
+      // idempotent. Le perdant de la course apprend désormais ce que le rejeu
+      // séquentiel apprend déjà : le message n'est plus là.
+      if (await softDeleteMessage(prisma, messageId) === 'already-deleted') {
+        return sendNotFound(reply, 'Message not found');
+      }
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
       // désactivation des `/l/<token>` que ce message emporte. Cette route ne

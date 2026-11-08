@@ -212,7 +212,62 @@ describe('reproduceEditedMessageNotifications', () => {
       const context = updatedData().context;
       expect(context.translatedContent).toBeUndefined();
       expect(context.translatedLanguage).toBeUndefined();
-      // Le reste du contexte est PRÉSERVÉ : la purge vise la traduction, pas le bloc.
+      // Le reste du contexte est PRÉSERVÉ : la purge vise le TEXTE, pas le bloc.
+      expect(context.conversationId).toBe('c1');
+    });
+
+    /**
+     * **La purge visait la TRADUCTION du texte d'avant, et laissait le TEXTE
+     * d'avant** (#17082).
+     *
+     * Son commentaire affirmait : « le reste du contexte (conversation, pièces
+     * jointes, horodatage) décrit le message et NON SON TEXTE ». C'était vrai
+     * quand il a été écrit, et le cycle 124 l'a rendu faux en ajoutant
+     * `context.messageContent` + `context.messageOriginalLanguage` — qui SONT
+     * le texte du message, pré-enregistrés pour la bulle que la NSE grave au
+     * démarrage à froid.
+     *
+     * **Et c'est le commentaire qui rendait l'autre moitié invisible** : on ne
+     * cherche pas un champ de texte dans un contexte dont on vient de lire
+     * qu'il n'en porte pas. Un commentaire qui ÉNONCE une contrainte est une
+     * AFFIRMATION, et se vérifie comme telle.
+     *
+     * Ce qui restait : la ligne `Notification` gardait indéfiniment le texte que
+     * l'auteur avait précisément édité pour le retirer. Aucun lecteur ne lit ce
+     * champ par REST aujourd'hui (balayage des quatre clients), donc c'est une
+     * RÉTENTION et non une fuite servie — et un piège pour le prochain lot qui
+     * câblera ce champ.
+     *
+     * Le témoin ne pouvait pas être posé au cas nominal : une notification sans
+     * `messageContent` rend le même verdict avec ou sans la purge.
+     */
+    it("#17082 — purge aussi le TEXTE d'avant, et son étiquette de langue", async () => {
+      findMany.mockResolvedValue([
+        row({
+          context: {
+            conversationId: 'c1',
+            messageContent: 'texte AVANT édition',
+            messageOriginalLanguage: 'fr',
+            translatedContent: 'old text',
+            translatedLanguage: 'en',
+          },
+        }),
+      ]);
+
+      await reproduceEditedMessageNotifications(
+        prisma,
+        { messageId: MESSAGE_ID, content: 'nouveau texte' },
+        announcer
+      );
+
+      const context = updatedData().context;
+      expect(context.messageContent).toBeUndefined();
+      expect(context.messageOriginalLanguage).toBeUndefined();
+      // Et la ligne écrite ne porte le texte d'avant NULLE PART — c'est la
+      // propriété, pas la clé : un champ voisin qui le reprendrait serait la
+      // même rétention sous un autre nom.
+      expect(JSON.stringify(updatedData())).not.toContain('texte AVANT édition');
+      // Ce qui décrit le message sans être son texte reste.
       expect(context.conversationId).toBe('c1');
     });
 
