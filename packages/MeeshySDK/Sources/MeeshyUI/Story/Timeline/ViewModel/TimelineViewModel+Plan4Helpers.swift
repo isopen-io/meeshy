@@ -719,13 +719,33 @@ extension TimelineViewModel {
 
 /// **Un repère dans l'historique d'une timeline**, posé à l'ouverture d'une
 /// session de réglage ; « Quitter » le rejoint, « Valider » l'oublie.
+///
+/// Le repère est l'IDENTITÉ de la dernière commande appliquée, jamais un
+/// curseur : la pile plafonne (FIFO, `CommandStack.maxSize`), et une pile
+/// pleine garde le même curseur pendant que chaque réglage évince la plus
+/// vieille entrée — un repère compté ne défaisait alors plus rien.
 public nonisolated struct TimelineUndoMark: Equatable, Sendable {
-    let applied: Int
+    let lastAppliedId: String?
 
-    /// Le nombre de commandes APPLIQUÉES au moment où on le pose.
     @MainActor
     public static func taken(on timeline: TimelineViewModel) -> TimelineUndoMark {
-        TimelineUndoMark(applied: timeline.commandStack.snapshot().cursor)
+        let etat = timeline.commandStack.snapshot()
+        return TimelineUndoMark(lastAppliedId: etat.commands.prefix(etat.cursor).last?.underlying.id)
+    }
+
+    /// Combien de commandes défaire pour rejoindre le repère :
+    /// - repère parmi les commandes appliquées ⇒ celles qui le suivent ;
+    /// - repère déjà défait (encore rejouable) ⇒ rien, on est avant lui ;
+    /// - repère évincé par le plafond, ou pile vide à l'ouverture ⇒ tout ce qui
+    ///   reste appliqué date de la session.
+    @MainActor
+    func pendingUndos(on timeline: TimelineViewModel) -> Int {
+        let etat = timeline.commandStack.snapshot()
+        let appliquees = etat.commands.prefix(etat.cursor).map(\.underlying.id)
+        guard let repere = lastAppliedId else { return appliquees.count }
+        if let rang = appliquees.lastIndex(of: repere) { return appliquees.count - 1 - rang }
+        if etat.commands.contains(where: { $0.underlying.id == repere }) { return 0 }
+        return appliquees.count
     }
 
     /// Défait tout ce qui a été appliqué depuis le repère, une commande à la
@@ -733,12 +753,10 @@ public nonisolated struct TimelineUndoMark: Equatable, Sendable {
     /// annulation ne recule plus, pour ne jamais boucler.
     @MainActor
     public func rewind(_ timeline: TimelineViewModel) {
-        var courant = Self.taken(on: timeline).applied
-        while courant > applied {
+        for _ in 0..<pendingUndos(on: timeline) {
+            let avant = timeline.commandStack.snapshot().cursor
             timeline.undo()
-            let suivant = Self.taken(on: timeline).applied
-            guard suivant < courant else { return }
-            courant = suivant
+            guard timeline.commandStack.snapshot().cursor < avant else { return }
         }
     }
 }

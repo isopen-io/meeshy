@@ -538,25 +538,12 @@ struct MediaTrimAdjustPanel: View {
     }
 
     private var curseur: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "speaker.fill")
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Slider(value: Binding(get: { adjustments.volume },
-                                  set: { valeur in changer { $0.volume = valeur } }),
-                   in: volumeRange)
-                .tint(MediaTrimStrip.handleTint)
-                .frame(minHeight: MeeshyControlSize.tapTarget)
-                .accessibilityLabel(Text(MediaTrimCopy.volume))
-                .accessibilityValue(Text(Self.pourcent(adjustments.volume)))
-            Text(Self.pourcent(adjustments.volume))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 44, alignment: .trailing)
-                .accessibilityHidden(true)
-        }
-        .opacity(adjustments.isMuted ? 0.45 : 1)
+        MediaVolumeSlider(value: Binding(get: { adjustments.volume },
+                                         set: { valeur in changer { $0.volume = valeur } }),
+                          in: volumeRange,
+                          tint: MediaTrimStrip.handleTint,
+                          label: MediaTrimCopy.volume)
+            .opacity(adjustments.isMuted ? 0.45 : 1)
     }
 
     private func changer(_ modifier: (inout MediaTrimAdjustments) -> Void) {
@@ -565,9 +552,73 @@ struct MediaTrimAdjustPanel: View {
         guard suivant != adjustments else { return }
         onAdjust(suivant)
     }
+}
 
-    static func pourcent(_ volume: Double) -> String {
-        (volume.isFinite ? volume : 0).formatted(.percent.precision(.fractionLength(0)))
+/// **LE curseur de volume du dépôt** (#17110) : le panneau « Rogner et
+/// régler » et le cadran N3 « Volume » du composer le montent tous deux.
+/// 100 % est le niveau du fichier ; toucher deux fois la valeur l'y remet, et
+/// « Réinitialiser » s'offre à VoiceOver dès qu'un libellé lui est donné.
+public struct MediaVolumeSlider: View {
+    @Binding private var value: Double
+    private let range: ClosedRange<Double>
+    private let tint: Color
+    private let secondary: Color
+    private let label: String
+    private let neutral: Double
+    private let resetLabel: String?
+
+    public init(value: Binding<Double>,
+                in range: ClosedRange<Double>,
+                tint: Color,
+                secondary: Color = .secondary,
+                label: String,
+                neutral: Double = 1,
+                resetLabel: String? = nil) {
+        _value = value
+        self.range = range
+        self.tint = tint
+        self.secondary = secondary
+        self.label = label
+        self.neutral = neutral
+        self.resetLabel = resetLabel
+    }
+
+    public var body: some View {
+        let texte = Self.valueText(value)
+        let ecart = Self.valueText(neutral) != texte
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: "speaker.fill")
+                .font(MeeshyFont.relative(13, weight: .semibold))
+                .foregroundStyle(secondary)
+                .accessibilityHidden(true)
+            Slider(value: $value, in: range)
+                .tint(tint)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .accessibilityLabel(Text(label))
+                .accessibilityValue(Text(texte))
+                .accessibilityAction(named: Text(resetLabel ?? label)) { reset() }
+            Text(texte)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold).monospacedDigit())
+                .foregroundStyle(secondary)
+                .opacity(ecart ? 1 : 0.7)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(minWidth: 48, minHeight: MeeshyControlSize.tapTarget, alignment: .trailing)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { reset() }
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func reset() {
+        value = neutral
+        HapticFeedback.light()
+    }
+
+    /// « 140 % » — arrondi au pour-cent, comme partout où un volume s'écrit.
+    public nonisolated static func valueText(_ volume: Double) -> String {
+        let pourcent = ((volume.isFinite ? volume : 0) * 100).rounded() / 100
+        return pourcent.formatted(.percent.precision(.fractionLength(0)))
     }
 }
 

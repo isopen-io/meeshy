@@ -96,7 +96,8 @@ public nonisolated enum StoryVolumeResolver {
 
     /// **Le gain qu'on ENTEND d'un média réglé** (#17110, « Rogner et régler ») :
     /// Muet l'emporte sur tout, puis le volume borné, puis l'atténuation sous
-    /// les voix. La bande, le lecteur et l'export lisent cette seule fonction.
+    /// les voix, composés depuis `ducked`, la règle que le lecteur et l'export
+    /// appliquent déjà.
     public static func audibleGain(volume: Float, isMuted: Bool, isDucking: Bool) -> Float {
         guard !isMuted else { return 0 }
         return ducked(clamp(volume), isDucking: isDucking)

@@ -7,9 +7,9 @@ import XCTest
 @MainActor
 final class TimelineViewModelUndoMarkTests: XCTestCase {
 
-    private func makeSUT() async -> TimelineViewModel {
+    private func makeSUT(stack: CommandStack = CommandStack()) async -> TimelineViewModel {
         let vm = TimelineViewModel(engine: MockStoryTimelineEngine(),
-                                   commandStack: CommandStack(),
+                                   commandStack: stack,
                                    snapEngine: SnapEngine(toleranceSeconds: 0.1))
         let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 2, duration: 4)
         vm.bootstrap(project: TimelineProject(slideId: "s", slideDuration: 10,
@@ -40,5 +40,29 @@ final class TimelineViewModelUndoMarkTests: XCTestCase {
         sut.setClipStart(id: "m1", to: 3)
         TimelineUndoMark.taken(on: sut).rewind(sut)
         XCTAssertEqual(start(sut), 3, accuracy: 0.001)
+    }
+
+    /// Une pile PLEINE garde son curseur pendant que chaque réglage évince la
+    /// plus vieille entrée : un repère compté n'y défaisait plus rien.
+    func test_rewind_surUnePilePleine_defaitQuandMemeLaSession() async {
+        let sut = await makeSUT(stack: CommandStack(maxSize: 2))
+        sut.setClipStart(id: "m1", to: 3)
+        let repere = TimelineUndoMark.taken(on: sut)
+        sut.setClipEnd(id: "m1", to: 9)
+        sut.setClipStart(id: "m1", to: 1)
+        sut.setClipEnd(id: "m1", to: 8)
+        repere.rewind(sut)
+        XCTAssertEqual(start(sut), 3, accuracy: 0.001, "les réglages encore dans la pile sont défaits")
+        XCTAssertFalse(sut.commandStack.canUndo, "rien d'antérieur à la session n'a été défait de trop")
+    }
+
+    func test_rewind_apresAvoirDejaAnnuleAvantLeRepere_neDefaitRienDePlus() async {
+        let sut = await makeSUT()
+        sut.setClipStart(id: "m1", to: 3)
+        let repere = TimelineUndoMark.taken(on: sut)
+        sut.undo()
+        repere.rewind(sut)
+        XCTAssertEqual(start(sut), 2, accuracy: 0.001)
+        XCTAssertTrue(sut.commandStack.canRedo, "le réglage d'avant reste rejouable")
     }
 }

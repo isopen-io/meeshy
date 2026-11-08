@@ -87,6 +87,14 @@ final class MediaTrimAdjustTests: XCTestCase {
                      "« atténuation active » ne s'écrit pas : nil garde le bénéfice rétroactif")
     }
 
+    /// Le curseur est UN atome (`MediaVolumeSlider`), partagé avec le cadran
+    /// « Volume » du composer : sa valeur s'écrit au pour-cent arrondi.
+    func test_volumeSlider_ecritLeVolumeAuPourCentArrondi() {
+        XCTAssertEqual(MediaVolumeSlider.valueText(1), (1.0).formatted(.percent.precision(.fractionLength(0))))
+        XCTAssertEqual(MediaVolumeSlider.valueText(1.404), (1.4).formatted(.percent.precision(.fractionLength(0))))
+        XCTAssertEqual(MediaVolumeSlider.valueText(.nan), (0.0).formatted(.percent.precision(.fractionLength(0))))
+    }
+
     // MARK: - Ce que chaque surface montre
 
     func test_options_leSonPorteLaLangueEtTranscrire_laVideoNon() {
