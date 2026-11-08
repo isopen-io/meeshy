@@ -21,7 +21,7 @@
 - ~~*Ouvrir aussi les audiences*~~ : rejetée le 2026-11-07, **retenue le 2026-11-08** sur décision du porteur — les contenus « Connaissances », « Proches » et « Sang » d'un collègue se testent aussi, sans lien à construire.
 - *Raison `role`* : elle court-circuiterait les préférences de la cible, comme le privilège ADMIN de présence.
 
-## Amendement du 2026-11-08 : toutes les features de cercle, entre deux comptes de l'équipe
+**Amendement du 2026-11-08 : toutes les features de cercle, entre deux comptes de l'équipe**
 
 **Décision du porteur** (commentaire de l'issue #16623) : entre deux comptes de l'équipe, TOUTES les features de cercle sont disponibles, directement, sans lien ni continuité : `audience.acquaintances|close|blood` (un collègue voit les publications Connaissances, Proches et Sang), `notify.newContent` (il est notifié des nouvelles publications), `relay.commentersOnMyPosts` et `relay.myCommentsElsewhere`. Seule reste fermée `acquaintance.auto` : un rôle ne crée aucun lien.
 

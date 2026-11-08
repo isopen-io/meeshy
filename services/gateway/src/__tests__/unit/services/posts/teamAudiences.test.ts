@@ -115,7 +115,9 @@ describe('filterPostConsumers — un collègue de l\'équipe lit les cercles de 
 
   it('en panne de la lecture des comptes, rien ne s\'ouvre au-delà du lien réel', async () => {
     const prisma = world();
-    prisma.user.findMany = jest.fn<any>().mockRejectedValue(new Error('down'));
+    prisma.user.findMany = jest.fn<any>(async () => {
+      throw new Error('down');
+    });
     expect(await filterPostConsumers({ prisma, authorId: AUTHOR, visibility: 'BLOOD', candidateUserIds: [COLLEAGUE] })).toEqual([]);
   });
 });
