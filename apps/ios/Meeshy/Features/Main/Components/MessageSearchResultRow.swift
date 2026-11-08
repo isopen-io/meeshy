@@ -40,7 +40,7 @@ struct MessageSearchResultRow: View, Equatable {
 
                     Text(RelativeTimeFormatter.shortString(for: result.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Text(result.senderName)
@@ -71,7 +71,7 @@ struct MessageSearchResultRow: View, Equatable {
             if let icon = result.mediaIcon {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
             }
             if result.isVeiled {
@@ -79,7 +79,7 @@ struct MessageSearchResultRow: View, Equatable {
             } else {
                 Text(Self.highlighted(result.content, query: highlightedQuery))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(2)
             }
         }
@@ -89,10 +89,10 @@ struct MessageSearchResultRow: View, Equatable {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "eye.slash")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Text(Self.veiledLabel)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
                 .redacted(reason: .placeholder)
                 .blur(radius: Self.veilBlurRadius)
