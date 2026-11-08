@@ -262,22 +262,16 @@ final class ComposerSlideRailTests: XCTestCase {
 
     // MARK: - La tuile EST la vignette de la scène (#5009 + #5037)
 
-    /// **Une scène existe, sa vignette se voit** (#5037 : « dès qu'une scène
-    /// existe »). Le rail se taisait sous deux scènes ; la story la plus simple
-    /// — une seule scène — n'avait donc jamais d'aperçu.
-    func test_showsRail_uneScenePresente_vrai() {
-        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: 1, scenePresent: true))
-    }
-
-    /// Le document d'un post sans scène montée n'a rien à résumer : une
-    /// vignette noire y annoncerait une scène que l'auteur n'a pas.
-    func test_showsRail_uneSceneNonMontee_faux() {
-        XCTAssertFalse(ComposerHeaderTiles.showsRail(sceneCount: 1, scenePresent: false))
+    /// **Pas de rangée des scènes à une scène** (L13 de la vue finale, qui
+    /// remplace #5037) : une tuile seule porterait (+), le double toucher et
+    /// l'appui long au-dessus d'une scène qui n'a rien à ranger.
+    func test_showsRail_uneSeuleScene_faux() {
+        XCTAssertFalse(ComposerHeaderTiles.showsRail(sceneCount: 1))
     }
 
     func test_showsRail_deuxScenes_vrai_aucune_faux() {
-        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: 2, scenePresent: false))
-        XCTAssertFalse(ComposerHeaderTiles.showsRail(sceneCount: 0, scenePresent: true))
+        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: 2))
+        XCTAssertFalse(ComposerHeaderTiles.showsRail(sceneCount: 0))
     }
 
     /// **Une vignette seule n'est pas un bouton** (loi 4) : elle ne navigue vers
@@ -300,7 +294,7 @@ final class ComposerSlideRailTests: XCTestCase {
         let tuiles = ComposerHeaderTiles.tiles(for: vm.slides)
         XCTAssertEqual(tuiles.count, 2)
         XCTAssertEqual(vm.currentSlideIndex, 1, "la scène créée est celle qu'on compose")
-        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: tuiles.count, scenePresent: true))
+        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: tuiles.count))
         XCTAssertTrue(SceneThumbnailContent.isBlank(tuiles[1], bgImage: nil),
                       "une scène neuve n'a rien : sa vignette est noire")
         XCTAssertFalse(SceneThumbnailContent.isBlank(tuiles[0], bgImage: nil))

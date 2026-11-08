@@ -449,6 +449,8 @@ struct ComposerSceneSurface: View {
                     restChrome.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
                 }
                 ComposerLimitCapsuleView()
+            } else {
+                concealedRevealLayer
             }
         }
         .animation(ComposerSelectionChrome.transition(reduceMotion: reduceMotion), value: chromeIsConcealed)
@@ -512,6 +514,24 @@ struct ComposerSceneSurface: View {
     // `description` et `descriptionPlaceholder` restent au contrat : la porte
     // est servie par le meuble, qui possède le texte. Les retirer obligerait
     // chaque site de montage à re-prouver qu'il n'en a pas besoin.
+}
+
+extension ComposerSceneSurface {
+    /// **Masquée, la scène rend tout au premier toucher** (L5 : « un autre
+    /// toucher rend tout ») — où qu'il tombe, letterbox compris, et sans qu'un
+    /// objet touché se sélectionne derrière un chrome absent. VoiceOver y
+    /// trouve un bouton : sans lui, ✕ compris, plus rien n'était atteignable.
+    var concealedRevealLayer: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .ignoresSafeArea()
+            .onTapGesture { onBackgroundTapped?() }
+            .accessibilityElement()
+            .accessibilityLabel(Text(ComposerPillCopy.concealedHint))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onBackgroundTapped?() }
+            .accessibilityIdentifier("composer.concealed.reveal")
+    }
 }
 
 /// L'état masqué de la scène (#17111), que l'hôte pose et que la surface lit.

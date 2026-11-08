@@ -79,7 +79,7 @@ protocol ComposerLimitSpeaking: AnyObject {
 }
 
 /// **La limite se dit par une CAPSULE, plus par un toast** (#17111) : posée
-/// sur la scène sous ✕, elle chiffre la borne, vibre d'un avertissement et se
+/// au-dessus de la pilule (L12), elle chiffre la borne, vibre d'un avertissement et se
 /// dit à VoiceOver. Le toast montait loin du geste refusé et couvrait le socle.
 @MainActor
 final class ComposerSystemLimitSpeaker: ComposerLimitSpeaking {
@@ -138,7 +138,7 @@ final class ComposerLimitCapsule: ObservableObject {
     }
 }
 
-/// La capsule posée sur la scène : verre sombre, texte blanc, muette pour
+/// La capsule posée au-dessus de la pilule : verre sombre, texte blanc, muette pour
 /// VoiceOver (l'annonce est déjà faite), et elle ne prend aucun doigt.
 struct ComposerLimitCapsuleView: View {
     @ObservedObject var capsule: ComposerLimitCapsule = .shared
@@ -146,6 +146,7 @@ struct ComposerLimitCapsuleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Spacer(minLength: 0)
             if let message = capsule.message {
                 Text(message)
                     .font(.footnote.weight(.semibold))
@@ -154,13 +155,16 @@ struct ComposerLimitCapsuleView: View {
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.sm)
                     .adaptiveGlass(in: Capsule(), tint: Color.black.opacity(0.55))
-                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     .accessibilityHidden(true)
                     .accessibilityIdentifier("composer.limit.capsule")
             }
-            Spacer(minLength: 0)
         }
-        .padding(.top, ComposerSceneRoundGlyph.size + MeeshySpacing.md)
+        // **Au-dessus de la pilule, jamais sous ✕** (L12) : le socle est un
+        // `safeAreaInset` bas de la surface, la capsule se pose donc sur lui, au
+        // plus près du geste refusé, sans croiser la rangée des scènes du haut.
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.sm)
         .frame(maxWidth: .infinity)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: capsule.message)
         .allowsHitTesting(false)

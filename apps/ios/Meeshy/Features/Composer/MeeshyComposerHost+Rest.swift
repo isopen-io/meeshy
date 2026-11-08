@@ -134,8 +134,10 @@ struct ComposerSceneRestRelay {
     /// **Le vide d'une scène habitée MASQUE le chrome, et le rend** (#17111).
     /// `true` quand le toucher est consommé par l'état masqué.
     func concealmentConsumes(_ issue: ComposerSceneEmptyTap.Outcome) -> Bool {
+        // L'état SERVI, jamais le drapeau brut : un masque levé par le viseur ou
+        // par une autre surface ne doit pas avaler le toucher suivant.
         let sceneHasContent = !ComposerSceneQuickCapture.sceneIsBlank(host.viewModel.currentSlide)
-        switch ComposerChromeConcealment.tap(isConcealed: host.sceneChromeIsConcealed, emptyTap: issue,
+        switch ComposerChromeConcealment.tap(isConcealed: host.sceneChromeIsConcealedServed, emptyTap: issue,
                                              sceneHasContent: sceneHasContent) {
         case .reveal:
             host.sceneChromeIsConcealed = false

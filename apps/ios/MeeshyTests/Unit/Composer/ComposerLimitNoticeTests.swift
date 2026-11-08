@@ -95,4 +95,15 @@ final class ComposerLimitNoticeTests: XCTestCase {
         capsule.retire(ifStill: 1)
         XCTAssertEqual(capsule.message, "B", "le minuteur du premier refus ne retire pas le second")
     }
+
+    /// **La capsule se pose AU-DESSUS DE LA PILULE** (L12), jamais sous ✕ où
+    /// elle croisait la rangée des scènes et s'éloignait du geste refusé.
+    func test_capsuleView_seposeAuDessusDeLaPilule() throws {
+        let code = try ComposerSceneArrangementTests.source("ComposerLimitFeedback.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(code.contains("VStack(spacing:0){Spacer(minLength:0)ifletmessage=capsule.message"),
+                      "le vide AVANT la capsule la pousse en bas, sur le socle")
+        XCTAssertTrue(code.contains(".move(edge:.bottom)"))
+        XCTAssertFalse(code.contains(".padding(.top,ComposerSceneRoundGlyph.size"), "plus sous ✕")
+    }
 }

@@ -124,8 +124,7 @@ struct ComposerSlideRail: View {
                 .modifier(ComposerSlideRowJiggle(isOn: isReordering && !reduceMotion))
                 .onTapGesture(count: 2) { perform(.doubleTap, on: index) }
                 .onTapGesture { perform(.tap, on: index) }
-                .onLongPressGesture(minimumDuration: 0.4) { perform(.longPress, on: index) }
-                .simultaneousGesture(reorderDrag(index), including: isReordering ? .all : .subviews)
+                .simultaneousGesture(liftAndMove(index))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(label)
                 .accessibilityAddTraits(index == currentIndex ? [.isButton, .isSelected] : .isButton)
@@ -167,27 +166,40 @@ struct ComposerSlideRail: View {
         }
     }
 
-    private func reorderDrag(_ index: Int) -> some Gesture {
-        DragGesture(minimumDistance: 4)
+    /// **Appui long puis glisser, d'UN seul geste** (L2) : la tuile se
+    /// soulève à l'appui long et suit le doigt sans qu'il faille la relâcher.
+    /// Le réordonnancement déjà armé, elle se soulève dès le toucher.
+    private func liftAndMove(_ index: Int) -> some Gesture {
+        LongPressGesture(minimumDuration: isReordering ? 0.01 : 0.4)
+            .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { valeur in
-                guard isReordering else { return }
-                let avant = dragged.flatMap { ComposerSlideRowGrammar.targetIndex(from: index, translation: $0.translation,
-                                                                                   pitch: Self.pitch,
-                                                                                   count: slides.count) }
-                dragged = ComposerSlideRowDrag(source: index, translation: valeur.translation.width)
-                let apres = ComposerSlideRowGrammar.targetIndex(from: index, translation: valeur.translation.width,
-                                                                pitch: Self.pitch, count: slides.count)
-                if avant != apres { HapticFeedback.rigid() }
+                guard case .second(true, let glisse) = valeur else { return }
+                if !isReordering { perform(.longPress, on: index) }
+                if let glisse { track(index, translation: glisse.translation.width) }
             }
             .onEnded { valeur in
                 defer { dragged = nil }
-                guard isReordering,
-                      let destination = ComposerSlideRowGrammar.destination(from: index,
-                                                                            translation: valeur.translation.width,
-                                                                            pitch: Self.pitch,
-                                                                            count: slides.count) else { return }
-                onMove?(index, destination)
+                guard case .second(true, let glisse?) = valeur else { return }
+                drop(index, translation: glisse.translation.width)
             }
+    }
+
+    private func track(_ index: Int, translation: CGFloat) {
+        guard isReordering else { return }
+        let avant = dragged.flatMap { ComposerSlideRowGrammar.targetIndex(from: index, translation: $0.translation,
+                                                                           pitch: Self.pitch, count: slides.count) }
+        dragged = ComposerSlideRowDrag(source: index, translation: translation)
+        let apres = ComposerSlideRowGrammar.targetIndex(from: index, translation: translation,
+                                                        pitch: Self.pitch, count: slides.count)
+        if avant != apres { HapticFeedback.rigid() }
+    }
+
+    private func drop(_ index: Int, translation: CGFloat) {
+        guard isReordering,
+              let destination = ComposerSlideRowGrammar.destination(from: index, translation: translation,
+                                                                    pitch: Self.pitch,
+                                                                    count: slides.count) else { return }
+        onMove?(index, destination)
     }
 
     private var addTile: some View {
@@ -216,6 +228,10 @@ struct ComposerSlideRail: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: Self.height)
+                // Sans cadre, la rangée flotte sur n'importe quelle scène : le
+                // libellé garde son contraste sur une photo claire (L4).
+                .adaptiveGlass(in: Capsule(), tint: Color.black.opacity(ComposerSceneRoundGlyph.veil),
+                               interactive: true)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("composer.slide.rail.done")

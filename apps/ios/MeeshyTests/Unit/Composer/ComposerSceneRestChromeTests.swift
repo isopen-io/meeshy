@@ -501,4 +501,25 @@ final class ComposerSceneRestChromeTests: XCTestCase {
             .filter { !$0.isWhitespace }
         XCTAssertTrue(relais.contains("switchComposerChromeConcealment.tap(isConcealed:host.sceneChromeIsConcealed"))
     }
+
+    /// **Masquée, tout toucher rend le chrome, VoiceOver compris** (L5) : sans
+    /// la couche de retour, ✕ et chaque contrôle disparaissaient pour VoiceOver,
+    /// et toucher un objet le sélectionnait derrière un chrome absent.
+    func test_concealment_laSurfaceMasquee_offreUnRetourAuDoigtEtAVoiceOver() throws {
+        let code = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(code.contains("ComposerLimitCapsuleView()}else{concealedRevealLayer}"))
+        let couche = try XCTUnwrap(code.range(of: "varconcealedRevealLayer:someView{"))
+        let corps = code[couche.upperBound...].prefix(400)
+        XCTAssertTrue(corps.contains(".onTapGesture{onBackgroundTapped?()}"))
+        XCTAssertTrue(corps.contains(".accessibilityAction{onBackgroundTapped?()}"))
+        XCTAssertTrue(corps.contains(".ignoresSafeArea()"), "le letterbox rend aussi le chrome")
+    }
+
+    func test_concealment_leRelaisLitLEtatServi_pasLeDrapeauBrut() throws {
+        let relais = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(relais.contains("ComposerChromeConcealment.tap(isConcealed:host.sceneChromeIsConcealedServed"),
+                      "un masque levé par le viseur n'avale pas le toucher suivant")
+    }
 }
