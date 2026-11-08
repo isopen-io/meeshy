@@ -4,7 +4,7 @@ import MeeshySDK
 /// **Ce qu'un « Enregistrer » dit quand le média est DÉJÀ dans l'album** (#10370).
 ///
 /// Les visionneuses du SDK n'ont pas le gestionnaire de toasts de l'app : elles
-/// passent par le pont `meeshy.showToast`, que `FeedbackToastManager` écoute.
+/// passent par `FeedbackToastCenter`, que `FeedbackToastManager` écoute.
 /// Le bouton, lui, se lit au registre dès le premier rendu — une coche, jamais
 /// une flèche de téléchargement, sur un média déjà enregistré.
 enum PhotoAlbumSaveFeedback {
@@ -19,8 +19,6 @@ enum PhotoAlbumSaveFeedback {
     }
 
     static func announceAlreadyInAlbum() {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"), object: nil,
-            userInfo: ["message": alreadyInAlbumMessage, "isSuccess": true])
+        FeedbackToastCenter.post(alreadyInAlbumMessage, isSuccess: true)
     }
 }
