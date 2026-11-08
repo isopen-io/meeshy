@@ -144,6 +144,37 @@ final class StoryExportOutroTests: XCTestCase {
                           "le voile de la carte d'auteur doit assombrir le haut vs la phase logo")
     }
 
+    /// **La carte de fin se dessine HORS du fil principal** (#17040) : 105
+    /// images par CoreGraphics bloquaient l'iPhone 1,05 s pendant l'export.
+    /// L'identité se prépare UNE fois ; chaque image se compose ensuite
+    /// n'importe où, à l'identique de la carte rendue sur le fil principal.
+    func test_renderFrame_isDrawnOffTheMainThread_identicalToTheMainThreadOne() async throws {
+        let size = renderSize
+        let logo = await Task.detached { StoryExportOutro.renderFrame(at: 1.0, size: size) }.value
+        XCTAssertNotNil(logo)
+
+        let content = makeContent()
+        let card = try XCTUnwrap(StoryExportOutro.authorCard(content, size: size))
+        let t = StoryExportOutro.logoPhase + StoryExportOutro.identityFadeIn + 0.3
+        let offMain = await Task.detached { StoryExportOutro.renderFrame(at: t, size: size, card: card) }.value
+        let onMain = StoryExportOutro.renderFrame(at: t, size: size, content: content)
+        let offBytes = try XCTUnwrap(offMain?.dataProvider?.data as Data?)
+        let onBytes = try XCTUnwrap(onMain?.dataProvider?.data as Data?)
+        XCTAssertEqual(offBytes, onBytes)
+    }
+
+    /// L'encodage du clip ne s'exécute pas sur l'acteur principal : le module
+    /// est isolé `MainActor` par défaut, et un `async` y resterait (#17040).
+    func test_makeClip_runsOffTheMainActor() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/Canvas/StoryExportOutro.swift")
+        let source = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(source.contains("@concurrent\n    public static func makeClip("),
+                      "makeClip doit être @concurrent : sinon ses 105 images se rendent sur le fil principal")
+    }
+
     /// La carte de fin d'auteur porte le contour de l'avatar, comme l'interlude :
     /// les deux dessinent la même identité. Contour plein ROUGE de largeur 0,08.
     func test_renderFrame_withContent_withRing_paintsTheRingAroundTheAvatar() throws {
