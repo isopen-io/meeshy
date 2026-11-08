@@ -51,11 +51,13 @@ type JournalProps = {
   /** Les sous-titres sont coupés : rien ne s'inscrit, et l'état vide propose de les activer. */
   readonly listening: boolean;
   readonly onListen: () => void;
+  /** Posé dans la colonne du grand écran (#16942) : la liste prend toute la hauteur au lieu d'une fenêtre bornée. */
+  readonly fill?: boolean;
 };
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
-export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen }: JournalProps) {
+export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen, fill = false }: JournalProps) {
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
@@ -86,7 +88,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
   };
 
   return (
-    <CallPanelFrame id={id} title={t(language, 'callControls.journal')} closeLabel={t(language, 'callControls.close')} closeGlyph={closeGlyph} onClose={onClose} back={back} data={{ 'data-call-journal-panel': '' }}>
+    <CallPanelFrame id={id} title={t(language, 'callControls.journal')} closeLabel={t(language, 'callControls.close')} closeGlyph={closeGlyph} onClose={onClose} back={back} fill={fill} data={{ 'data-call-journal-panel': '' }}>
       {entries.length === 0 ? (
         <div className="flex flex-col items-start gap-2 px-3 pb-2" data-call-journal-empty="">
           <p className="text-body" style={{ color: INK_2 }}>
@@ -99,14 +101,14 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
           )}
         </div>
       ) : (
-        <div className="relative">
+        <div className={fill ? 'relative flex min-h-0 flex-1 flex-col' : 'relative'}>
           <ol
             ref={list}
             aria-label={translate(language, 'callCaptions.journal.title')}
             onScroll={onScroll}
             tabIndex={0}
-            className="flex flex-col gap-3 overflow-y-auto overscroll-contain px-3 pb-2"
-            style={{ maxHeight: 'min(28rem, calc(100dvh - 20rem))' }}
+            className={`flex flex-col gap-3 overflow-y-auto overscroll-contain px-3 pb-2 ${fill ? 'min-h-0 flex-1' : ''}`}
+            style={fill ? undefined : { maxHeight: 'min(28rem, calc(100dvh - 20rem))' }}
             data-call-journal=""
             data-panel-first=""
           >

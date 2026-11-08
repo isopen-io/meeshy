@@ -43,6 +43,8 @@ type FrameProps = {
   readonly closeData?: Readonly<Record<`data-${string}`, string>>;
   /** ‹ : revenir au menu des rangées (#8578). */
   readonly back?: PanelBack | undefined;
+  /** Le panneau prend toute la hauteur de son hôte (la colonne du journal sur grand écran, #16942). */
+  readonly fill?: boolean;
 };
 
 export type PanelBack = { readonly label: string; readonly onPress: () => void };
@@ -53,7 +55,7 @@ const chevron = (
   </svg>
 );
 
-export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back }: FrameProps) {
+export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back, fill = false }: FrameProps) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
   useLayoutEffect(() => {
@@ -73,8 +75,8 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, chi
       role="group"
       aria-labelledby={titleId}
       onKeyDown={onKeyDown}
-      className="flex min-w-0 flex-col gap-1.5 rounded-field-ios pb-1.5 text-on-media"
-      style={{ background: 'var(--color-media-fill)' }}
+      className={`flex min-w-0 flex-col gap-1.5 rounded-field-ios pb-1.5 text-on-media ${fill ? 'h-full min-h-0' : ''}`}
+      style={fill ? undefined : { background: 'var(--color-media-fill)' }}
       {...data}
     >
       <div className={`flex items-center gap-1 ${back === undefined ? 'ps-3' : ''}`}>

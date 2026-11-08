@@ -4,6 +4,7 @@ import { useStore } from 'zustand/react';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
+import { CallJournalColumn } from '@/components/call-journal-column';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
@@ -17,6 +18,7 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
+import { JOURNAL_COLUMN_RESERVE, useJournalColumn, useJournalDocks } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
@@ -333,9 +335,11 @@ type CallScreenProps = {
   readonly initiallyExpanded?: boolean;
   /** Ce que le navigateur sait faire en effets — imposé par les témoins. */
   readonly effectsSupport?: EffectsSupport;
+  /** La fenêtre a la place du journal en colonne (#16942) — mesurée, ou imposée par les témoins. */
+  readonly wide?: boolean;
 };
 
-export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport }: CallScreenProps) {
+export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport, wide }: CallScreenProps) {
   useMediaSystemBars();
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
@@ -397,7 +401,16 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     focusNext.current = focusTarget(shown, next);
     setLayer(next);
   };
-  const panels: CallPanels = { open: chrome.panel, toggle: (panel) => send({ type: 'open-panel', panel }), enter: (mode) => send({ type: 'enter-mode', mode }) };
+  const docks = useJournalDocks(wide);
+  const column = useJournalColumn({ docks, available: live && offer.journal && chrome.mode === null, panel: chrome.panel, send });
+  const panels: CallPanels = {
+    open: chrome.panel ?? (column.shown ? 'journal' : null),
+    toggle: (panel) => (panel === 'journal' && docks ? column.toggle() : send({ type: 'open-panel', panel })),
+    enter: (mode) => send({ type: 'enter-mode', mode }),
+  };
+  /* Ce que la colonne du journal retire à la scène, à la bande du bas et au milieu — jamais à l'en-tête. */
+  const reserve = column.shown ? { 'data-call-journal-reserve': '' } : {};
+  const reserveEnd = column.shown ? { paddingInlineEnd: JOURNAL_COLUMN_RESERVE } : {};
   const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
   const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
   const expanded = shown.kind === 'menu' || shown.kind === 'panel';
@@ -426,11 +439,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || !live) return;
       if (chrome.panel !== null) send({ type: 'close' });
+      else if (column.shown) column.close();
       else callActions.minimize();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [live, chrome.panel]);
+  }, [live, chrome.panel, column.shown]);
 
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">
@@ -650,6 +664,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       data-call-screen={phase}
       data-call-chrome={hidden ? 'hidden' : 'shown'}
       data-call-layer={shown.kind}
+      data-call-journal-dock={column.shown ? 'column' : undefined}
     >
       {call.preview === null ? null : (
         <Suspense fallback={null}>
@@ -657,7 +672,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         </Suspense>
       )}
       {overlayVideo ? (
-        <div ref={stageRef} className="absolute inset-0" data-call-stage-surface="">
+        <div ref={stageRef} className="absolute inset-0" style={column.shown ? { insetInlineEnd: JOURNAL_COLUMN_RESERVE } : undefined} data-call-stage-surface="" {...reserve}>
           {stage}
         </div>
       ) : null}
@@ -676,12 +691,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                 {pillRow}
               </div>
             )}
-            <div ref={stageRef} className="flex min-h-0 flex-1 flex-col" data-call-stage-surface="">
+            <div ref={stageRef} className="flex min-h-0 flex-1 flex-col" style={reserveEnd} data-call-stage-surface="" {...reserve}>
               {stage}
             </div>
           </>
         ) : overlayVideo ? (
-          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} aria-hidden={hidden || chrome.mode !== null ? true : undefined}>
+          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} style={reserveEnd} aria-hidden={hidden || chrome.mode !== null ? true : undefined} {...reserve}>
             {sharer === null ? null : (
               <span className="glass-call-prominent rounded-full px-3 py-1 text-mini" role="status" data-call-screen-banner="">
                 {translate(language, 'call.screen.peerSharing', {
@@ -699,8 +714,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         )}
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
-          <div className="relative z-20 flex flex-col gap-3 pb-6" data-call-plane="">
-            {captionsFramed ? null : <div className="relative z-10">{captions}</div>}
+          <div className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
+            {captionsFramed ? null : (
+              <div className={`relative z-10 w-full ${docks ? 'mx-auto max-w-[592px]' : ''}`} data-call-captions-band="">
+                {captions}
+              </div>
+            )}
             {mode === null ? (
               <div className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
                 <CallControlPill
@@ -723,6 +742,13 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         ) : (
           <div className="pb-6">{phase === 'incoming' ? incomingControls : endedControls}</div>
         )}
+        {column.shown ? (
+          <CallJournalColumn>
+            <Suspense fallback={null}>
+              <CallJournalPanel id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} fill />
+            </Suspense>
+          </CallJournalColumn>
+        ) : null}
         {declineOpen && phase === 'incoming' ? (
           <Suspense fallback={null}>
             <CallDeclineSheet call={call} language={language} onClose={() => setDeclineOpen(false)} />
