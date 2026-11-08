@@ -61,4 +61,3 @@ export async function setPersonSetting(deps: PersonSettingsDeps, userId: string,
   return result.ok ? { ok: true, data: decodeReceptionSettings(result.data) } : result;
 }
 
-export const setReceptionBlocked = setPersonSetting;

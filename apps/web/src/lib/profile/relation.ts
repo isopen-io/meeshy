@@ -59,6 +59,9 @@ export type ProfileRelation =
   | { readonly kind: 'pendingReceived'; readonly request: FriendRequestRecord | null }
   | { readonly kind: 'none' };
 
+/** Les partages entre collègues de l'équipe (#16864) s'offrent sans lien, demande d'ami en attente comprise ; ni sur soi, ni sur un compte bloqué. */
+export const teamSharesShownFor = (kind: ProfileRelation['kind']): boolean => kind !== 'self' && kind !== 'blocked';
+
 /* `report` est entré au 2026-09-21 (#7187) — le port `POST reports.root`
    existait côté passerelle et n'avait AUCUN appelant. Il se range ici plutôt
    qu'à côté : la fiche a UNE loi qui décide de ses actions, et un bouton posé

@@ -11,7 +11,8 @@ import {
   decodeReceptionSettings,
   loadReceptionSettings,
   personSettingsQueryKey,
-  setReceptionBlocked,
+  setPersonSetting,
+  type PersonSettingField,
   type PersonSettingsDeps,
   type ReceptionBlock,
   type ReceptionSettings,
@@ -73,10 +74,84 @@ const reaches = (level: RelationLevel, min: RelationLevel): boolean => RELATION_
 export const receptionBlocksFor = (level: RelationLevel): readonly ReceptionBlock[] =>
   (Object.keys(SPECS) as ReceptionBlock[]).filter((block) => reaches(level, SPECS[block].minLevel));
 
-const withBlock = (settings: ReceptionSettings | undefined, block: ReceptionBlock, value: boolean): ReceptionSettings => ({
+const withField = (settings: ReceptionSettings | undefined, field: PersonSettingField, value: boolean): ReceptionSettings => ({
   ...decodeReceptionSettings(settings),
-  [block]: value,
+  [field]: value,
 });
+
+/**
+ * **L'INTERRUPTEUR D'UN RÉGLAGE PAR PERSONNE** — la seule mécanique des coupures
+ * de réception (fiche d'un lien) et des partages accordés entre collègues de
+ * l'équipe (#16864) : une lecture `GET` partagée, une écriture stricte d'un champ,
+ * optimiste, rendue à l'état d'avant sur un refus qui se dit. `disabled` (hors
+ * ligne) laisse l'état servi lisible sans offrir un geste voué à l'échec.
+ */
+export function PersonSettingSwitch({
+  userId,
+  field,
+  copy,
+  marker,
+  refresh = () => null,
+  disabled = false,
+  onNotice,
+  deps = apiDeps,
+}: {
+  readonly userId: string;
+  readonly field: PersonSettingField;
+  readonly copy: { readonly label: string; readonly detail: string; readonly failed: string };
+  readonly marker: Readonly<Record<`data-${string}`, string>>;
+  readonly refresh?: (userId: string) => readonly unknown[] | null;
+  readonly disabled?: boolean;
+  readonly onNotice: (message: string) => void;
+  readonly deps?: PersonSettingsDeps;
+}) {
+  const key = personSettingsQueryKey(userId);
+  const settings = useQuery(
+    {
+      queryKey: key,
+      staleTime: 30_000,
+      queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadReceptionSettings(deps, userId, signal)),
+    },
+    appQueryClient,
+  );
+  const checked = settings.data?.[field] ?? false;
+
+  const toggle = async (next: boolean): Promise<void> => {
+    await appQueryClient.cancelQueries({ queryKey: key });
+    appQueryClient.setQueryData<ReceptionSettings>(key, (before) => withField(before, field, next));
+    const result = await setPersonSetting(deps, userId, field, next);
+    const refreshed = refresh(userId);
+    if (refreshed !== null) void appQueryClient.invalidateQueries({ queryKey: refreshed });
+    if (result.ok) {
+      appQueryClient.setQueryData(key, result.data);
+      return;
+    }
+    appQueryClient.setQueryData<ReceptionSettings>(key, (current) => withField(current, field, !next));
+    onNotice(copy.failed);
+  };
+
+  const detailId = `person-setting-${field}-${userId}`;
+  return (
+    <label className="flex items-center gap-3" style={{ minHeight: 44 }}>
+      <span className="grid min-w-0 flex-1 gap-0.5">
+        <span className="text-body">{copy.label}</span>
+        <span id={detailId} className="text-caption opacity-70">
+          {copy.detail}
+        </span>
+      </span>
+      <input
+        type="checkbox"
+        role="switch"
+        {...marker}
+        checked={checked}
+        disabled={disabled}
+        aria-describedby={detailId}
+        onChange={(event) => void toggle(event.currentTarget.checked)}
+        className="size-5"
+      />
+    </label>
+  );
+}
 
 export function CircleReceptionBlockSwitch({
   language,
@@ -94,52 +169,20 @@ export function CircleReceptionBlockSwitch({
   readonly deps?: PersonSettingsDeps;
 }) {
   const spec = SPECS[block];
-  const opens = reaches(level, spec.minLevel);
-  const key = personSettingsQueryKey(userId);
-  const settings = useQuery(
-    {
-      queryKey: key,
-      staleTime: 30_000,
-      enabled: opens,
-      queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadReceptionSettings(deps, userId, signal)),
-    },
-    appQueryClient,
-  );
-  if (!opens) return null;
-  const checked = settings.data?.[block] ?? false;
-
-  const toggle = async (next: boolean): Promise<void> => {
-    await appQueryClient.cancelQueries({ queryKey: key });
-    appQueryClient.setQueryData<ReceptionSettings>(key, (before) => withBlock(before, block, next));
-    const result = await setReceptionBlocked(deps, userId, block, next);
-    const refresh = spec.refresh(userId);
-    if (refresh !== null) void appQueryClient.invalidateQueries({ queryKey: refresh });
-    if (result.ok) {
-      appQueryClient.setQueryData(key, result.data);
-      return;
-    }
-    appQueryClient.setQueryData<ReceptionSettings>(key, (current) => withBlock(current, block, !next));
-    onNotice(translateCircles(language, spec.failed));
-  };
-
-  const detailId = `circle-${block}-${userId}`;
+  if (!reaches(level, spec.minLevel)) return null;
   return (
-    <label className="flex items-center gap-3" style={{ minHeight: 44 }}>
-      <span className="grid min-w-0 flex-1 gap-0.5">
-        <span className="text-body">{translateCircles(language, spec.label)}</span>
-        <span id={detailId} className="text-caption opacity-70">
-          {translateCircles(language, spec.detail)}
-        </span>
-      </span>
-      <input
-        type="checkbox"
-        role="switch"
-        data-circle-setting={spec.label}
-        checked={checked}
-        aria-describedby={detailId}
-        onChange={(event) => void toggle(event.currentTarget.checked)}
-        className="size-5"
-      />
-    </label>
+    <PersonSettingSwitch
+      userId={userId}
+      field={block}
+      copy={{
+        label: translateCircles(language, spec.label),
+        detail: translateCircles(language, spec.detail),
+        failed: translateCircles(language, spec.failed),
+      }}
+      marker={{ 'data-circle-setting': spec.label }}
+      refresh={spec.refresh}
+      onNotice={onNotice}
+      deps={deps}
+    />
   );
 }

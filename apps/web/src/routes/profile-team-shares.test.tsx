@@ -7,6 +7,8 @@ import { personSettingsQueryKey } from '@/lib/relations/person-settings';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { teamSharesShownFor } from '@/lib/profile/relation';
+
 import { isTeamPair, ProfileTeamShares } from './profile-team-shares';
 
 /**
@@ -67,7 +69,7 @@ describe('qui voit ces interrupteurs', () => {
 
   test('la fiche d’un utilisateur ordinaire n’en montre AUCUN', async () => {
     const { deps } = scripted();
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="USER" deps={deps} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="USER" deps={deps} onNotice={() => undefined} />);
     await settle();
     expect(allSwitches(node)).toHaveLength(0);
     expect(node.textContent).toBe('');
@@ -75,7 +77,7 @@ describe('qui voit ces interrupteurs', () => {
 
   test('un lecteur ordinaire n’en voit aucun, même face à un collègue', async () => {
     const { deps } = scripted({ viewerRole: 'USER' });
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
     await settle();
     expect(allSwitches(node)).toHaveLength(0);
   });
@@ -83,7 +85,7 @@ describe('qui voit ces interrupteurs', () => {
   test('le rôle du lecteur pas encore connu : rien (fail-closed), jamais un clignotement', async () => {
     const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
     transport.request = (() => new Promise(() => undefined)) as HttpTransport['request'];
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="ADMIN" deps={{ source: 'gateway', transport }} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="ADMIN" deps={{ source: 'gateway', transport }} onNotice={() => undefined} />);
     expect(allSwitches(node)).toHaveLength(0);
   });
 });
@@ -91,7 +93,7 @@ describe('qui voit ces interrupteurs', () => {
 describe('le titre écouté et les trois partages de position', () => {
   test('quatre interrupteurs, refusés par défaut, nommés pour un lecteur d’écran', async () => {
     const { deps } = scripted();
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="MODERATOR" deps={deps} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="MODERATOR" deps={deps} onNotice={() => undefined} />);
     await settle();
     expect([...allSwitches(node)].map((input) => input.getAttribute('data-team-share'))).toEqual(['listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared']);
     expect([...allSwitches(node)].every((input) => (input as HTMLInputElement).checked === false)).toBe(true);
@@ -103,7 +105,7 @@ describe('le titre écouté et les trois partages de position', () => {
 
   test('un partage déjà accordé se lit COCHÉ', async () => {
     const { deps } = scripted({ shares: { locationShared: true } });
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
     await settle();
     expect(switchOf(node, 'locationShared')?.checked).toBe(true);
     expect(switchOf(node, 'proximityShared')?.checked).toBe(false);
@@ -111,7 +113,7 @@ describe('le titre écouté et les trois partages de position', () => {
 
   test('accorder est OPTIMISTE et n’écrit que `{ locationShared: true }`', async () => {
     const { deps, requests } = scripted({ put: async () => ({ ok: true, data: { userId: 'u-ada', locationShared: true } }) });
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
     await settle();
     await click(switchOf(node, 'locationShared'));
     expect(switchOf(node, 'locationShared')?.checked).toBe(true);
@@ -121,7 +123,7 @@ describe('le titre écouté et les trois partages de position', () => {
 
   test('retirer écrit `false` d’un geste', async () => {
     const { deps, requests } = scripted({ shares: { listeningTitleShared: true }, put: async () => ({ ok: true, data: { userId: 'u-ada' } }) });
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
     await settle();
     await click(switchOf(node, 'listeningTitleShared'));
     expect(switchOf(node, 'listeningTitleShared')?.checked).toBe(false);
@@ -131,7 +133,7 @@ describe('le titre écouté et les trois partages de position', () => {
   test('un refus REND l’état d’avant et le dit', async () => {
     const notices: string[] = [];
     const { deps } = scripted({ put: async () => ({ ok: false, status: 400, error: 'x' }) });
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="ADMIN" deps={deps} onNotice={(text) => notices.push(text)} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="ADMIN" deps={deps} onNotice={(text) => notices.push(text)} />);
     await settle();
     await click(switchOf(node, 'proximityShared'));
     expect(switchOf(node, 'proximityShared')?.checked).toBe(false);
@@ -141,8 +143,40 @@ describe('le titre écouté et les trois partages de position', () => {
   test('hors ligne, le cache déjà là s’affiche sans attendre le réseau', async () => {
     appQueryClient.setQueryData(personSettingsQueryKey('u-ada'), { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: true, locationHistoryShared: false, proximityShared: false });
     const { deps } = scripted();
-    const node = await mount(<ProfileTeamShares language="fr" person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
+    const node = await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="ADMIN" deps={deps} onNotice={() => undefined} />);
     await settle();
     expect(switchOf(node, 'locationShared')?.checked).toBe(true);
+  });
+});
+
+describe('la fiche telle qu’elle se lit (revue #16864)', () => {
+  test('la fiche d’un utilisateur ordinaire ne demande même pas le rôle du lecteur', async () => {
+    const { deps, requests } = scripted();
+    await mount(<ProfileTeamShares language="fr" online person={PERSON} targetRole="USER" deps={deps} onNotice={() => undefined} />);
+    await settle();
+    expect(requests.map((req) => req.path)).toEqual([]);
+  });
+
+  test('hors ligne, l’état servi se lit mais ne se bascule pas : aucun PUT, aucun avis', async () => {
+    appQueryClient.setQueryData(personSettingsQueryKey('u-ada'), { locationShared: true });
+    const notices: string[] = [];
+    const { deps, requests } = scripted();
+    const node = await mount(<ProfileTeamShares language="fr" online={false} person={PERSON} targetRole="ADMIN" deps={deps} onNotice={(text) => notices.push(text)} />);
+    await settle();
+    expect(switchOf(node, 'locationShared')?.checked).toBe(true);
+    expect([...allSwitches(node)].every((input) => (input as HTMLInputElement).disabled)).toBe(true);
+    await click(switchOf(node, 'locationShared'));
+    expect(switchOf(node, 'locationShared')?.checked).toBe(true);
+    expect(requests.filter((req) => req.method === 'PUT')).toHaveLength(0);
+    expect(notices).toEqual([]);
+  });
+
+  test('un collègue SANS lien se lit aussi quand une demande d’ami est en attente ; ni soi ni un blocage', () => {
+    expect(teamSharesShownFor('none')).toBe(true);
+    expect(teamSharesShownFor('friend')).toBe(true);
+    expect(teamSharesShownFor('pendingSent')).toBe(true);
+    expect(teamSharesShownFor('pendingReceived')).toBe(true);
+    expect(teamSharesShownFor('blocked')).toBe(false);
+    expect(teamSharesShownFor('self')).toBe(false);
   });
 });

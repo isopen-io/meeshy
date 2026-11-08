@@ -2,22 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { isPlatformTeam } from '@meeshy/shared/types/role-types';
 
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
-import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import {
-  decodeReceptionSettings,
-  loadReceptionSettings,
-  personSettingsQueryKey,
-  setPersonSetting,
-  TEAM_SHARES,
-  type PersonSettingsDeps,
-  type ReceptionSettings,
-  type TeamShare,
-} from '@/lib/relations/person-settings';
+import { TEAM_SHARES, type PersonSettingsDeps, type TeamShare } from '@/lib/relations/person-settings';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
+import { PersonSettingSwitch } from '@/routes/circle-reception-block';
 
 /**
  * **LA FICHE D'UN COLLÈGUE DE L'ÉQUIPE** (#16864, décision porteur 2026-11-08) —
@@ -33,9 +24,12 @@ import { useCirclesCatalog } from '@/lib/use-circles-catalog';
  * n'apparaît — fail-closed, jamais un clignotement. Libellés et détails : ceux
  * du rituel du Sang, qui offre les mêmes quatre partages.
  *
- * Optimiste : coché au geste, rendu à l'état d'avant sur un refus, qui se dit.
- * Le cache de la fiche (`personSettingsQueryKey`) est celui des réglages de
- * réception : une seule lecture, un seul état.
+ * Le rôle du lecteur ne se demande que face à un collègue : la fiche d'un
+ * utilisateur ordinaire ne coûte aucune lecture de plus.
+ *
+ * L'interrupteur est celui des réglages de réception (`PersonSettingSwitch`) :
+ * une seule lecture, un seul état, la même mécanique optimiste. Hors ligne,
+ * l'état servi se lit, le geste ne s'offre pas.
  */
 
 type ShareSpec = {
@@ -58,72 +52,42 @@ export function ProfileTeamShares({
   language,
   person,
   targetRole,
+  online,
   onNotice,
   deps = apiDeps,
 }: {
   readonly language: InterfaceLanguage;
   readonly person: { readonly id: string; readonly username: string; readonly displayName: string | null };
   readonly targetRole: string | null | undefined;
+  readonly online: boolean;
   readonly onNotice: (message: string) => void;
   readonly deps?: PersonSettingsDeps;
 }) {
   const ready = useCirclesCatalog(language);
-  const viewer = useQuery(adminIdentityQueryOptions(deps), appQueryClient);
-  const opens = isTeamPair(viewer.data?.role, targetRole);
-  const key = personSettingsQueryKey(person.id);
-  const settings = useQuery(
-    {
-      queryKey: key,
-      staleTime: 30_000,
-      enabled: opens,
-      queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadReceptionSettings(deps, person.id, signal)),
-    },
-    appQueryClient,
-  );
-  if (!ready || !opens) return null;
-
-  const set = async (share: TeamShare, next: boolean): Promise<void> => {
-    await appQueryClient.cancelQueries({ queryKey: key });
-    appQueryClient.setQueryData<ReceptionSettings>(key, (before) => ({ ...decodeReceptionSettings(before), [share]: next }));
-    const result = await setPersonSetting(deps, person.id, share, next);
-    if (result.ok) {
-      appQueryClient.setQueryData(key, result.data);
-      return;
-    }
-    appQueryClient.setQueryData<ReceptionSettings>(key, (current) => ({ ...decodeReceptionSettings(current), [share]: !next }));
-    onNotice(translateCircles(language, 'circles.team.failed'));
-  };
+  const colleague = isPlatformTeam(targetRole);
+  const viewer = useQuery({ ...adminIdentityQueryOptions(deps), enabled: colleague }, appQueryClient);
+  if (!ready || !isTeamPair(viewer.data?.role, targetRole)) return null;
 
   const name = person.displayName ?? person.username;
   const headingId = `profile-team-shares-${person.id}`;
+  const failed = translateCircles(language, 'circles.team.failed');
   return (
     <section role="group" aria-labelledby={headingId} data-profile-team-shares={person.id} className="grid gap-1 px-4 py-2">
       <h3 id={headingId} className="text-body font-bold">
         {translateCircles(language, 'circles.team.title', { name })}
       </h3>
-      {TEAM_SHARES.map((share) => {
-        const spec = SPECS[share];
-        const detailId = `${headingId}-${share}`;
-        return (
-          <label key={share} className="flex items-center gap-3" style={{ minHeight: 44 }}>
-            <span className="grid min-w-0 flex-1 gap-0.5">
-              <span className="text-body">{translateCircles(language, spec.label)}</span>
-              <span id={detailId} className="text-caption opacity-70">
-                {translateCircles(language, spec.detail)}
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              data-team-share={share}
-              checked={settings.data?.[share] ?? false}
-              aria-describedby={detailId}
-              onChange={(event) => void set(share, event.currentTarget.checked)}
-              className="size-5"
-            />
-          </label>
-        );
-      })}
+      {TEAM_SHARES.map((share) => (
+        <PersonSettingSwitch
+          key={share}
+          userId={person.id}
+          field={share}
+          copy={{ label: translateCircles(language, SPECS[share].label), detail: translateCircles(language, SPECS[share].detail), failed }}
+          marker={{ 'data-team-share': share }}
+          disabled={!online}
+          onNotice={onNotice}
+          deps={deps}
+        />
+      ))}
     </section>
   );
 }

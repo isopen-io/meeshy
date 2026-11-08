@@ -17,6 +17,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { profileFailureOf } from '@/lib/profile/failure';
+import { teamSharesShownFor } from '@/lib/profile/relation';
 import { userProfileTabs } from '@/lib/profile/tabs';
 import { useParams } from '@/lib/router';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
@@ -216,6 +217,18 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const onSignIn = useCallback(() => navigate(href('login')), []);
   const onCallFailed = useCallback((message: string) => announce(message, 'error'), [announce]);
   const onPostsAnnounce = useCallback((text: string) => announce(text), [announce]);
+  /* LA FICHE D'UN COLLÈGUE DE L'ÉQUIPE (#16864) : ses partages s'offrent avec ou sans lien,
+     demande d'ami en attente comprise — jamais sur soi ni sur un compte bloqué. */
+  const teamShares =
+    signedIn && person !== undefined && teamSharesShownFor(relation.kind) ? (
+      <ProfileTeamShares
+        language={language}
+        person={{ id: person.id, username: person.username, displayName: person.displayName }}
+        targetRole={person.role}
+        online={online}
+        onNotice={(message) => announce(message, 'error')}
+      />
+    ) : null;
   const callPerson = useMemo(
     () => ({ id: person?.id ?? '', name, avatar: person?.avatar ?? null }),
     [person?.id, person?.avatar, name],
@@ -331,14 +344,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                   friend={relation.kind === 'friend'}
                                   onNotice={(message) => announce(message, 'error')}
                                 />
-                                <ProfileTeamShares
-                                  language={language}
-                                  person={{ id: person.id, username: person.username, displayName: person.displayName }}
-                                  targetRole={person.role}
-                                  onNotice={(message) => announce(message, 'error')}
-                                />
+                                {teamShares}
                               </Suspense>
-                            ) : null
+                            ) : teamShares === null ? null : (
+                              <Suspense fallback={null}>{teamShares}</Suspense>
+                            )
                           }
                         />
                       )}
