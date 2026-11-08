@@ -1,5 +1,6 @@
 import type { MeeshySocket as Socket } from '../typed-socket';
 import { joinE2EEDeviceRoom } from '../../services/e2ee/device-room';
+import { joinUserConversations, joinConversationRoomsWithRetry } from './join-user-conversations';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
@@ -26,7 +27,6 @@ import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { scheduleTokenExpiry } from './tokenExpiryWatch';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
-import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { loadGuestShareLinkGate } from '../../services/shareLinkReadGate';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
@@ -412,8 +412,13 @@ export class AuthHandler {
     // #3706 — la room de l'appareil E2EE lié à CETTE session : ses seules enveloppes y arrivent.
     await joinE2EEDeviceRoom(socket, this.prisma, { userId: user.id, sessionId: decoded.sid });
 
-    const failedRooms = await this._joinUserConversations(socket, user.id, false);
-    if (failedRooms.length > 0) socketUser.unreachableConversations = new Set(failedRooms);
+    const failedRooms = await joinUserConversations(this.prisma, socket, user.id, false);
+    // `undefined` ⇒ la lecture est tombée : aucune room rejointe, et aucune
+    // liste à nommer. Un ensemble ne peut pas dire « toutes, dont j'ignore la
+    // liste » — ce drapeau le dit, et la file le lit comme injoignable pour
+    // n'importe quelle conversation.
+    if (failedRooms === undefined) socketUser.allConversationRoomsUnreachable = true;
+    else if (failedRooms.length > 0) socketUser.unreachableConversations = new Set(failedRooms);
     const isFirstSocket = this._registerUser(user.id, socketUser, socket);
     scheduleTokenExpiry(socket, decoded.exp);
     // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
@@ -623,7 +628,7 @@ export class AuthHandler {
     // échouée » vaut la TOTALITÉ de sa livraison temps réel, là où un inscrit
     // qui en perd une sur trente perd une fraction. La porte qui avait le plus
     // besoin du réessai était la seule à ne pas l'avoir.
-    const guestJoinFailed = await this._joinConversationRoomsWithRetry(socket, [participant.conversationId]);
+    const guestJoinFailed = await joinConversationRoomsWithRetry(socket, [participant.conversationId]);
     if (guestJoinFailed.length > 0) {
       logger.error('conversation room join failed after retries for anonymous user — no live message can reach this session', {
         anonymousId: socketUser.id,
@@ -631,6 +636,10 @@ export class AuthHandler {
       });
     }
 
+    // Pas de branche `undefined` ici, et ce n'est pas un oubli : la porte
+    // invitée n'a AUCUNE lecture à faire tomber — son `conversationId` vient du
+    // participant déjà chargé — et `joinConversationRoomsWithRetry` rend
+    // toujours une liste (`Promise.allSettled` ne rejette pas).
     if (guestJoinFailed.length > 0) socketUser.unreachableConversations = new Set(guestJoinFailed);
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
     this.guestLinkWatch.schedule(socket, participant, linkExpiresAt);
@@ -922,12 +931,6 @@ export class AuthHandler {
     }
   }
 
-  // Retries beyond the initial attempt for a rejected conversation room join.
-  // Total attempts per room = 1 + JOIN_RETRY_ATTEMPTS. Bounded so a permanently
-  // broken adapter can never spin forever; each retry re-attempts only the rooms
-  // that STILL failed, so a room that joined on the first try is never re-joined.
-  private static readonly JOIN_RETRY_ATTEMPTS = 2;
-
   /**
    * Joins the socket to each conversation room, retrying only the rooms whose
    * join rejected (transient adapter hiccup). Returns the conversation ids that
@@ -944,56 +947,4 @@ export class AuthHandler {
    * `AuthHandler.test.ts` compare désormais le nombre de tentatives des deux
    * portes, pour qu'un réessai ajouté d'un seul côté ne puisse plus tenir.
    */
-  private async _joinConversationRoomsWithRetry(socket: Socket, conversationIds: string[]): Promise<string[]> {
-    const maxAttempts = 1 + AuthHandler.JOIN_RETRY_ATTEMPTS;
-    let pending = conversationIds;
-    for (let attempt = 1; attempt <= maxAttempts && pending.length > 0; attempt++) {
-      const results = await Promise.allSettled(pending.map(id => socket.join(ROOMS.conversation(id))));
-      pending = pending.filter((_, i) => results[i].status === 'rejected');
-    }
-    return pending;
-  }
-
-  private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<string[]> {
-    try {
-      let conversations: { conversationId: string }[] = [];
-
-      if (isAnonymous) {
-        conversations = await this.prisma.participant.findMany({
-          where: { id: userId, ...PARTICIPATION_VIVANTE },
-          select: { conversationId: true }
-        });
-      } else {
-        // #7389 — un inscrit banni dont la ligne a été rallumée (bannie
-        // pendant une suppression pour soi, puis restaurée par
-        // `restore-for-me` avant #10436) ne rejoint pas la room : il y
-        // recevrait chaque `message:new` que les portes REST lui refusent.
-        conversations = await this.prisma.participant.findMany({
-          where: { userId: userId, ...PARTICIPATION_VIVANTE },
-          select: { conversationId: true }
-        });
-      }
-
-      const conversationIds = conversations.map(conv => conv.conversationId);
-      const stillFailed = await this._joinConversationRoomsWithRetry(socket, conversationIds);
-      if (stillFailed.length > 0) {
-        // Escalated to error: after retries, these room joins are genuinely
-        // broken. Because delivery gates the offline queue purely on
-        // `connectedUsers.has(userId)`, this recipient now looks online but is
-        // absent from these rooms — a message sent to them lands nowhere (no
-        // live emit, no offline enqueue) until a later reconnect re-joins them.
-        logger.error('conversation room joins failed after retries — recipient may miss live messages until reconnect', {
-          userId,
-          failed: stillFailed.length,
-          total: conversationIds.length,
-          conversationIds: stillFailed,
-        });
-      }
-      logger.debug('user joined conversation rooms', { userId, count: conversationIds.length - stillFailed.length });
-      return stillFailed;
-    } catch (error) {
-      logger.error('error joining conversations for user', { userId, error });
-      return [];
-    }
-  }
 }

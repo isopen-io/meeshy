@@ -176,11 +176,21 @@ function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<Prisma
       updateMany: jest.fn(),
     },
     participant: {
-      findMany: jest.fn(),
+      // `[]` et non `undefined` : le vrai client rend TOUJOURS un tableau, et
+      // un double qui rend `undefined` fait lever tout appelant qui en lit la
+      // longueur — ce qu'une loi d'audience fait avant d'émettre. Un double
+      // mente aussi par ce qu'il FOURNIT.
+      findMany: jest.fn(async () => []),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
     adminAuditLog: { create: jest.fn(async () => ({ id: 'audit-1' })) },
+    // Lu par la loi du plancher d'historique (`editedAudience.ts` →
+    // `translationReaders`), que `handleMessageEdit` interroge avant d'émettre.
+    // Sans cette surface la loi LÈVE, l'édition se tait sur ses deux canaux, et
+    // les témoins de ce fichier tombent sur « rien n'a été émis » — un double
+    // partiel ne se signale qu'au moment où le module grandit.
+    conversationShareLink: { findMany: jest.fn(async () => []) },
     message: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),

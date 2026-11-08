@@ -390,11 +390,15 @@ export async function applyReceipt(
         isAnonymous,
         type: params.type === 'read' ? 'read' : 'received',
         // G-5 (#7347, G-8) — le lot RÉELLEMENT figé par CETTE écriture (le
-        // VETTÉ de `vetReportedMessages`, jamais le lot brut rapporté par le
-        // client) : `broadcastReadStatus` en tire un résumé PAR message.
-        // Réservé à `read` — `received`/`delivered` gardent leur repli
-        // agrégé, cf. sa doc-comment.
-        messageIds: params.type === 'read' ? targeted : undefined,
+        // VETTÉ de `vetReportedMessages`, jamais le lot brut du client) :
+        // `broadcastReadStatus` en tire un résumé PAR message.
+        //
+        // #16961 — la forme suit l'ÉCRITURE, pas le mot de l'accusé, et
+        // `markFor` la décide : `read` et `delivered` figent les ids vettés (le
+        // second un par un) et les déclarent ; `received` fige TOUT le préfixe
+        // en une passe, donc ses seuls ids rapportés diffuseraient MOINS que
+        // l'écrit — repli agrégé, par décision. Table : doc de `messageIds`.
+        messageIds: params.type === 'received' ? undefined : targeted,
       }
     );
   } catch (error) {
