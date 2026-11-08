@@ -1,12 +1,9 @@
 package me.meeshy.app.calls
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import me.meeshy.sdk.model.call.IncomingCallAction
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** L'aspect d'un bouton de l'écran entrant : son glyphe, son disque, la teinte du glyphe et celle de sa légende. */
 internal data class IncomingChoiceLook(val icon: ImageVector, val fill: Color, val glyph: Color, val caption: Color)
@@ -19,19 +16,19 @@ internal data class IncomingChoiceLook(val icon: ImageVector, val fill: Color, v
 internal object IncomingChoiceLooks {
     fun of(action: IncomingCallAction, isVideoCall: Boolean): IncomingChoiceLook = when (action) {
         IncomingCallAction.Decline -> IncomingChoiceLook(
-            icon = Icons.Filled.CallEnd,
+            icon = MeeshyIcons.CallEnd,
             fill = CallPalette.Decline,
             glyph = CallPalette.Ink,
             caption = CallPalette.Decline,
         )
         IncomingCallAction.AnswerWithoutVideo -> IncomingChoiceLook(
-            icon = Icons.Filled.Call,
+            icon = MeeshyIcons.Call,
             fill = CallGlassTone.OverPicture.neutralFill,
             glyph = CallPalette.Ink,
             caption = CallPalette.Ink,
         )
         IncomingCallAction.Accept -> IncomingChoiceLook(
-            icon = if (isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+            icon = if (isVideoCall) MeeshyIcons.Video else MeeshyIcons.Call,
             fill = CallPalette.Accept,
             glyph = CallPalette.Ink,
             caption = CallPalette.Accept,
