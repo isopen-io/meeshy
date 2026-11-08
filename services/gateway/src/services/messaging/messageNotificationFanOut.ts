@@ -22,20 +22,17 @@ import {
 } from './retractMessageNotifications';
 import { loadQuoteCascadeAudience } from './quoteCascade';
 import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
+import { MESSAGE_FANOUT_CONCURRENCY } from '../notifications/fanout-concurrency';
 import { pendingRequestUserIds } from './pendingMessageRequests';
 
 /**
- * Combien de `createMessageNotification` l'éventail `new_message` laisse en vol
- * à la fois (#10819). Chaque création lit une quinzaine de lignes et recompte
- * le badge non lu du destinataire (une requête par conversation qu'il suit) :
- * lancées toutes ensemble sur Meeshy Global (375 membres), elles tenaient la
- * file Prisma et la boucle d'événements 10 à 14 s, et TOUTES les routes de la
- * passerelle attendaient derrière. Seize créations en vol, c'est quelques
- * centaines de lectures au plus dans la file — un groupe ordinaire part
- * toujours d'un seul coup, et le débit d'un grand groupe se remesure en
- * production (p95 des routes, retard de boucle) avant d'ajuster cette borne.
+ * La borne de débit d'un éventail vit désormais chez le service qui porte son
+ * COÛT — `notifications/fanout-concurrency.ts` — parce qu'elle gouverne DEUX
+ * éventails depuis #17081, et que le site qui avait eu la mesure n'est pas le
+ * site où la règle s'applique. Réexportée ici, et SEULEMENT réexportée : les
+ * appelants historiques (dont le témoin de #10819) la lisent à cette adresse.
  */
-export const MESSAGE_FANOUT_CONCURRENCY = 16;
+export { MESSAGE_FANOUT_CONCURRENCY } from '../notifications/fanout-concurrency';
 
 export type { NotificationActorProfile };
 

@@ -82,6 +82,8 @@ import {
   truncateMessage,
   envelopeMayTravelUnder,
 } from './notification-preview';
+import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
+import { MESSAGE_FANOUT_CONCURRENCY } from './fanout-concurrency';
 import type { FanoutDependencies } from './fanout/dependencies';
 import {
   getStoryNotificationRecipients,
@@ -1861,19 +1863,45 @@ export class NotificationService {
     // le verrou de protection n'est jamais arrivé jusqu'ici.
     const { senderId, messageContent, ...banner } = commonData;
 
-    const results = await Promise.all(
-      eligibleUserIds.map(userId =>
-        this.createMentionNotification({
-          ...banner,
-          mentionedUserId: userId,
-          mentionerUserId: senderId,
-          messagePreview: messageContent,
-          prismSource,
-        })
-      )
+    // Débit BORNÉ (#17081). `Promise.all(…​.map(…))` lâchait jusqu'à
+    // `MAX_MENTIONS_PER_MESSAGE = 50` créations d'un coup, quand l'éventail
+    // `regular` est borné à seize depuis #10819 — avec la mesure qui l'a fixé.
+    // Le coût n'est pas propre à `createMessageNotification` : il vient de
+    // `createNotification` → `computeConversationUnreadBadge` (« 2 requêtes +
+    // une par conversation NON MUETTE du destinataire »), que ce chemin paie à
+    // l'identique, plus quatre lectures parallèles par destinataire. Une annonce
+    // qui nomme l'équipe lâchait donc 2 500 à 5 000 lectures dans la file que
+    // partagent TOUTES les routes HTTP.
+    //
+    // `settleWithConcurrency` et non `Promise.all` : le réservoir relance dès
+    // qu'une place se libère (une tranche attendrait son membre le plus lent), et
+    // il SETTLE. Le rejet d'un seul mentionné emportait le compte rendu de ses
+    // quarante-neuf voisins, dont les bannières étaient DÉJÀ parties — c'est la
+    // raison écrite du lot `regular`, et elle vaut mot pour mot ici.
+    const results = await settleWithConcurrency(eligibleUserIds, MESSAGE_FANOUT_CONCURRENCY, userId =>
+      this.createMentionNotification({
+        ...banner,
+        mentionedUserId: userId,
+        mentionerUserId: senderId,
+        messagePreview: messageContent,
+        prismSource,
+      })
     );
 
-    return results.filter(Boolean).length;
+    // Un signalement pour tout le lot, pas un par destinataire : sur une mention
+    // de masse, une panne commune produirait autant de lignes que de mentionnés.
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (rejected.length > 0) {
+      notificationLogger.error('Mention fan-out lost recipients', {
+        conversationId: commonData.conversationId,
+        messageId: commonData.messageId,
+        lost: rejected.length,
+        of: eligibleUserIds.length,
+        err: rejected[0].reason,
+      });
+    }
+
+    return results.filter(r => r.status === 'fulfilled' && Boolean(r.value)).length;
   }
 
   // ==============================================
