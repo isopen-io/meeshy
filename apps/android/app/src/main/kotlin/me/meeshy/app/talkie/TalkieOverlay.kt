@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -54,6 +52,7 @@ import me.meeshy.app.R
 import me.meeshy.app.startup.AppOverlay
 import me.meeshy.sdk.model.relation.TalkieSpeaker
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -131,7 +130,7 @@ internal fun TalkieIndicator(speaker: TalkieSpeaker, onMute: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = Icons.Filled.GraphicEq,
+            imageVector = MeeshyIcons.Waveform,
             contentDescription = null,
             tint = MeeshyPalette.Indigo500,
             modifier = Modifier.alpha(pulse),
