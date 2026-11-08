@@ -81,6 +81,7 @@ internal fun CallGroupStage(
     onFullScreenChange: (Boolean) -> Unit,
     onStageTap: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onScreenAtTheFront: (Boolean) -> Unit = {},
 ) {
     val tiles = GroupCallStageLaw.tiles(
         roster = mesh.roster,
@@ -108,6 +109,11 @@ internal fun CallGroupStage(
         if (focus == GroupCallStageFocus.Grid && fullScreenNow) fullScreenChange(false)
     }
     DisposableEffect(Unit) { onDispose { if (fullScreenNow) fullScreenChange(false) } }
+    // L'écran d'un membre à la une est un contenu clair : l'écran assombrit son verre (loi 3). Le mien n'y compte pas.
+    val receivedScreen = (focus as? GroupCallStageFocus.Spotlight)?.isScreenShare == true && !GroupCallSpotlight.featuresLocal(focus)
+    val screenAtTheFront by rememberUpdatedState(onScreenAtTheFront)
+    LaunchedEffect(receivedScreen) { screenAtTheFront(receivedScreen) }
+    DisposableEffect(Unit) { onDispose { screenAtTheFront(false) } }
 
     val haptics = LocalHapticFeedback.current
     val choose: (GroupCallSpotlightChoice) -> Unit = { next ->

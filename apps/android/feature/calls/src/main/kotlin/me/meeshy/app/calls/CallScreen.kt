@@ -158,8 +158,17 @@ fun CallScreen(
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
+    // Loi 3 : sur un écran partagé reçu (contenu clair), le verre de l'en-tête, de la pilule et des rails s'assombrit.
+    var groupScreenAtTheFront by remember { mutableStateOf(false) }
+    val glassTone = CallGlassTone.of(
+        CallGlassTone.showsReceivedScreen(
+            isGroupStage = groupShown,
+            duoPeerSharing = state.isPeerScreenSharing,
+            groupScreenAtTheFront = groupScreenAtTheFront,
+        ),
+    )
     MeeshyTheme(darkTheme = true) {
-        CompositionLocalProvider(LocalCallLiveSeconds provides liveSeconds) {
+        CompositionLocalProvider(LocalCallLiveSeconds provides liveSeconds, LocalCallGlassTone provides glassTone) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -275,6 +284,7 @@ fun CallScreen(
                                 onFullScreenChange = chrome::setStageFullScreen,
                                 onStageTap = sceneTap,
                                 modifier = stageModifier,
+                                onScreenAtTheFront = { groupScreenAtTheFront = it },
                             )
                         }
                     } else {
