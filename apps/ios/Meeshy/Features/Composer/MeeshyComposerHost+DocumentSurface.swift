@@ -77,7 +77,11 @@ extension MeeshyComposerHost {
             slideImages: viewModel.slideImages,
             loadedImages: viewModel.loadedImages,
             onSelect: { viewModel.selectSlide(at: $0) },
-            onDelete: { retractScene(at: $0) }))
+            onDelete: { retractScene(at: $0) },
+            canAdd: intent.origin.addsSlides && viewModel.canAddSlide,
+            onAdd: intent.origin.addsSlides ? { addSceneSlide() } : nil,
+            onDuplicate: intent.origin.addsSlides ? { viewModel.duplicateSlide(at: $0) } : nil,
+            onMove: { viewModel.moveSlide(from: $0, to: $1) }))
     }
 
     /// **L'outil Texte du document : la scène, le texte posé, le clavier — un
