@@ -54,12 +54,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     @Published var isTakingPhoto = false
     @Published var isRecordingVideo = false
     @Published var recordingDuration: TimeInterval = 0
-    /// Un tic par obturateur PARTI (`willCapturePhotoFor`) : le cadre blanchit
-    /// à cet instant, jamais à la fin du traitement (#16482).
-    @Published private(set) var shutterCount = 0
+    /// Un tic par obturateur PARTI (`willCapturePhotoFor`) : le cadre blanchit à cet instant, jamais à la fin du traitement (#16482).
+    @Published var shutterCount = 0
     /// Un tic par toucher qui photographie : le déclencheur se contracte tout
     /// de suite, avant même que l'objectif ne prenne (#16482).
-    @Published private(set) var shutterPresses = 0
+    @Published var shutterPresses = 0
     /// État de l'autorisation caméra. `.denied`/`.restricted` fait rendre à la
     /// vue un panneau « Ouvrir les Réglages » au lieu d'un preview noir muet.
     @Published private(set) var permission: MediaPermissionState = .notDetermined
@@ -71,7 +70,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// Les sorties se branchent sur la file de la session (`sessionQueue`) ;
     /// le fil principal n'en lit que les connexions.
-    nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
+    nonisolated(unsafe) let photoOutput = AVCapturePhotoOutput()
     nonisolated(unsafe) private let videoOutput = AVCaptureMovieFileOutput()
     /// Les trames de l'objectif pour le look en direct — guettées, mais
     /// gardées seulement quand un look est choisi.
@@ -85,7 +84,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction.
     nonisolated let previewMirroring = ComposerPreviewMirroring()
     /// L'horizon de l'objectif en service, posé sur la photo au déclenchement.
-    private let horizon = ComposerCaptureHorizon()
+    let horizon = ComposerCaptureHorizon()
     /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
     /// refait pas.
     private(set) var sessionIsPrepared = false
@@ -142,7 +141,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     #endif
     /// Du toucher à l'obturateur, relevé pour la recette sur appareil (#16504).
     nonisolated let shutterClock = ComposerShutterClock()
-    private(set) var lastShutterDelay: Int?
+    var lastShutterDelay: Int?
     /// Publiée : le sol blanc du flash avant suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     /// Une bascule d'objectif est en cours : le bouton se tait.
@@ -625,60 +624,6 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
-    func takePhoto(flash: AVCaptureDevice.FlashMode) {
-        #if DEBUG
-        if let fixture {
-            guard !isSwitchingCamera else { return }
-            noteShutterFired()
-            deliverFixturePhoto(fixture)
-            return
-        }
-        #endif
-        // Même exception ObjC que l'enregistrement sans connexion active, donc
-        // même prévention devant l'appel — un `do/catch` ne la rattraperait pas.
-        let connection = photoOutput.connection(with: .video)
-        guard !isSwitchingCamera, CameraRecordingReadiness.mayCapturePhoto(
-            sessionIsRunning: session.isRunning,
-            hasVideoConnection: connection != nil,
-            connectionIsActive: connection?.isActive ?? false,
-            connectionIsEnabled: connection?.isEnabled ?? false
-        ) else { return }
-        let settings = CameraPhotoTuning.settings(
-            flash: flash, supportedFlashModes: photoOutput.supportedFlashModes,
-            outputMaxPhotoDimensions: CameraPhotoDimensions(photoOutput.maxPhotoDimensions),
-            formatMaxPhotoDimensions: photoOutput.sourceMaxPhotoDimensions)
-        horizon.level(connection)
-        isTakingPhoto = true
-        photoOutput.capturePhoto(with: settings, delegate: self)
-    }
-
-    /// **La session peut-elle rendre une image ?** Les mêmes quatre faits que
-    /// `takePhoto` exige — lus ici pour qu'un geste qui OUVRE la caméra et
-    /// PREND dans le même mouvement attende qu'elle le puisse. Jamais
-    /// pendant une bascule : l'entrée en place va être retirée.
-    var isCaptureReady: Bool {
-        #if DEBUG
-        if fixture != nil { return !isSwitchingCamera }
-        #endif
-        let connection = photoOutput.connection(with: .video)
-        return !isSwitchingCamera && CameraRecordingReadiness.mayCapturePhoto(
-            sessionIsRunning: session.isRunning,
-            hasVideoConnection: connection != nil,
-            connectionIsActive: connection?.isActive ?? false,
-            connectionIsEnabled: connection?.isEnabled ?? false)
-    }
-
-    /// Attend que la session soit prête, au plus `timeout`. `false` ⇒ elle ne
-    /// l'a pas été (permission refusée, simulateur sans caméra, tâche annulée).
-    func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool {
-        let limite = Date().addingTimeInterval(timeout)
-        while !isCaptureReady {
-            guard !Task.isCancelled, Date() < limite else { return false }
-            guard await cancellableSleep(for: .milliseconds(50)) else { return false }
-        }
-        return !Task.isCancelled
-    }
-
     /// L'objectif en place, tel que la file l'a installé.
     private(set) var activeVideoDevice: AVCaptureDevice?
 
@@ -830,7 +775,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Handles every `fileOutput(didFinishRecordingTo:...)` callback — both the
     /// intermediate segment closes from a mid-recording camera switch and the
     /// final stop. See `recordedSegmentURLs`'s doc-comment for the overall design.
-    private func handleSegmentFinished(url: URL, error: Error?) async {
+    func handleSegmentFinished(url: URL, error: Error?) async {
         let jeton = segmentTokens.removeValue(forKey: url) ?? recordingId
         // Un appel, l'arrière-plan, Siri, la durée ou le disque closent la prise
         // AVEC une erreur et un fichier valide (OPUS-11) : ce qui est filmé reste.
@@ -950,80 +895,5 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Façade : l'assemblage vit dans `CameraSegmentMerger`.
     nonisolated static func mergeSegments(_ urls: [URL]) async -> URL? {
         await CameraSegmentMerger.merge(urls)
-    }
-}
-
-// MARK: - Photo Delegate
-
-extension CameraModel: AVCapturePhotoCaptureDelegate {
-    /// **L'obturateur part** : le retour visuel suit cet instant, pas la photo
-    /// traitée qui arrive ensuite (#16482).
-    nonisolated func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.noteShutterFired() } }
-    }
-
-    /// **Le toucher est entendu** : le bouton se contracte et une haptique
-    /// LÉGÈRE répond au doigt, avant l'attente de l'objectif.
-    func noteShutterPress() {
-        shutterPresses += 1
-        shutterClock.start()
-        HapticFeedback.light()
-    }
-
-    /// AVFoundation n'a rendu aucune image : le déclencheur se libère, et le dit.
-    func photoWasLost() {
-        isTakingPhoto = false
-        CameraTakeNotice.announceLostPhoto()
-    }
-
-    /// Le tic du cadre, et le délai toucher → obturateur, signpost et console.
-    func noteShutterFired() {
-        shutterCount += 1
-        lastShutterDelay = shutterClock.report()
-    }
-
-    nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard let original = photo.fileDataRepresentation() else {
-            Task { @MainActor in self.photoWasLost() }
-            return
-        }
-        let processed = photoProcessor.process(encoded: original, settings: .capture)
-        let data = processed?.data ?? original
-        guard let image = processed.map({ UIImage(cgImage: $0.image) }) ?? UIImage(data: original) else {
-            Task { @MainActor in self.photoWasLost() }
-            return
-        }
-        // Persist the processed encoded bytes AS-IS (HEIC/JPEG, EXIF kept):
-        // `saveImage(_ data:)` decodes to a UIImage and loses the EXIF,
-        // `saveImageFile` hands Photos the bytes untouched.
-        // `PhotoLibraryManager` is deliberately non-@MainActor so its
-        // `performChanges` block runs on Photos' own queue without the
-        // executor-isolation SIGTRAP an inline save would hit.
-        // L'original ne rejoint Photos que si le réglage le demande,
-        // quelle que soit la zone de la prise : la prise reste dans la
-        // session de toute façon.
-        let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
-        Task { @MainActor in
-            self.isTakingPhoto = false
-            self.capturedPhoto = image
-            // Les octets TRAITÉS, publiés à côté de l'image : ils portent
-            // l'EXIF de la prise, qu'une `UIImage` ne rend pas.
-            self.capturedPhotoData = data
-            self.librarySave = self.savesOriginal()
-                ? Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
-                : nil
-            self.capturedPhotoId = UUID().uuidString
-        }
-    }
-}
-
-// MARK: - Video Delegate
-
-extension CameraModel: AVCaptureFileOutputRecordingDelegate {
-    nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL,
-                                from connections: [AVCaptureConnection], error: Error?) {
-        Task { @MainActor in
-            await self.handleSegmentFinished(url: outputFileURL, error: error)
-        }
     }
 }

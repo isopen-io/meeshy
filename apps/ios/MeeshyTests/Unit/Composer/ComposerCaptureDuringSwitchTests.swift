@@ -51,7 +51,7 @@ final class ComposerCaptureDuringSwitchTests: XCTestCase {
     }
 
     func test_cameraModel_isNotReadyWhileSwitching() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift")
         XCTAssertTrue(camera.contains("!isSwitchingCamera && CameraRecordingReadiness.mayCapturePhoto("))
     }
 

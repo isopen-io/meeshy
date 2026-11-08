@@ -183,7 +183,7 @@ final class CameraLandscapeTakeTests: XCTestCase {
     // MARK: - Ce que le viseur montrait
 
     func test_takePhoto_touchesNeitherLensNorZoom() throws {
-        let code = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let code = try source("Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift")
         let debut = try XCTUnwrap(code.range(of: "func takePhoto("))
         let fin = try XCTUnwrap(code.range(of: "photoOutput.capturePhoto", range: debut.upperBound..<code.endIndex))
         let corps = code[debut.upperBound..<fin.lowerBound]
