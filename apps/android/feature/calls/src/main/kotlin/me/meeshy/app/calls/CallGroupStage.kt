@@ -81,7 +81,7 @@ internal fun CallGroupStage(
     onFullScreenChange: (Boolean) -> Unit,
     onStageTap: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    onScreenAtTheFront: (Boolean) -> Unit = {},
+    onFocusChange: (GroupCallStageFocus) -> Unit = {},
 ) {
     val tiles = GroupCallStageLaw.tiles(
         roster = mesh.roster,
@@ -102,18 +102,8 @@ internal fun CallGroupStage(
     }
     val focus = GroupCallSpotlight.focus(tiles, choice)
     var zoom by remember { mutableFloatStateOf(1f) }
-    val fullScreenChange by rememberUpdatedState(onFullScreenChange)
-    val fullScreenNow by rememberUpdatedState(isFullScreen)
-    LaunchedEffect(focus) {
-        zoom = 1f
-        if (focus == GroupCallStageFocus.Grid && fullScreenNow) fullScreenChange(false)
-    }
-    DisposableEffect(Unit) { onDispose { if (fullScreenNow) fullScreenChange(false) } }
-    // L'écran d'un membre à la une est un contenu clair : l'écran assombrit son verre (loi 3). Le mien n'y compte pas.
-    val receivedScreen = (focus as? GroupCallStageFocus.Spotlight)?.isScreenShare == true && !GroupCallSpotlight.featuresLocal(focus)
-    val screenAtTheFront by rememberUpdatedState(onScreenAtTheFront)
-    LaunchedEffect(receivedScreen) { screenAtTheFront(receivedScreen) }
-    DisposableEffect(Unit) { onDispose { screenAtTheFront(false) } }
+    LaunchedEffect(focus) { zoom = 1f }
+    CallGroupFocusEffects(focus, isFullScreen, onFullScreenChange, onFocusChange)
 
     val haptics = LocalHapticFeedback.current
     val choose: (GroupCallSpotlightChoice) -> Unit = { next ->
@@ -256,3 +246,28 @@ private fun CallInviteRow(friend: FriendRequestUser, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Ce que la une entraîne hors de la scène : revenir à la grille, ou quitter la scène, rend le plein écran ; et l'écran
+ * apprend ce qui est à la une pour en tirer le ton du verre (loi 3, [callGlassTone]) — la grille, une fois la scène quittée.
+ */
+@Composable
+private fun CallGroupFocusEffects(
+    focus: GroupCallStageFocus,
+    isFullScreen: Boolean,
+    onFullScreenChange: (Boolean) -> Unit,
+    onFocusChange: (GroupCallStageFocus) -> Unit,
+) {
+    val fullScreenChange by rememberUpdatedState(onFullScreenChange)
+    val fullScreenNow by rememberUpdatedState(isFullScreen)
+    val report by rememberUpdatedState(onFocusChange)
+    LaunchedEffect(focus) {
+        if (focus == GroupCallStageFocus.Grid && fullScreenNow) fullScreenChange(false)
+        report(focus)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            if (fullScreenNow) fullScreenChange(false)
+            report(GroupCallStageFocus.Grid)
+        }
+    }
+}

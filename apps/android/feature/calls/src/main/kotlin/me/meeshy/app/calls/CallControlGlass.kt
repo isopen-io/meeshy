@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -55,7 +56,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 /** The visual state of a pill button: active = solid white disc and dark glyph, End = red, auto-pause = amber glyph. */
 internal enum class CallPillKind { Normal, Active, Destructive, Warning }
 
-/** The flat disc of ONE button of the glass block (mirrors iOS `CallButtonFill`). */
+/** The flat disc of ONE button of the glass block (iOS `CallButtonFill`, plus the adaptive tone of law 3 iOS does not carry yet). */
 internal object CallButtonFill {
     private val Pressed = Color.White.copy(alpha = 0.22f)
 
@@ -166,14 +167,16 @@ internal fun CallPillButton(
 /**
  * The glass block of the pill: ONE surface that grows with what it holds (open panel or family
  * rows, then the base row). A dark veil under it keeps the captions legible over a bright picture, denser over a received
- * screen ([LocalCallGlassTone], law 3).
+ * screen ([LocalCallGlassTone], law 3) ; the buttons inside keep the light disc ([CallGlassTone.withinVeiledBlock]).
  */
 @Composable
 internal fun CallControlsGlass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(CALL_PILL_RADIUS)
     MeeshyGlassSurface(modifier = modifier, shape = shape) {
         val tone = LocalCallGlassTone.current
-        Column(Modifier.fillMaxWidth().background(tone.veil(tone.veilAlpha), shape).clip(shape), content = content)
+        CompositionLocalProvider(LocalCallGlassTone provides tone.withinVeiledBlock) {
+            Column(Modifier.fillMaxWidth().background(tone.veil(tone.veilAlpha), shape).clip(shape), content = content)
+        }
     }
 }
 
