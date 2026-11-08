@@ -71,7 +71,7 @@ import {
 } from '@meeshy/shared/types/talkie';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitArgs, ServerEmitIO } from '../../socketio/serverEmit';
-import { TALKIE_NOT_ALLOWED, TALKIE_UNAVAILABLE, type TalkieRefusal, type TalkieVerdict, type TalkieWakeChannel } from './talkieGate';
+import { TALKIE_NOT_ALLOWED, TALKIE_UNAVAILABLE, type TalkieRefusal, type TalkieVerdict, type TalkieWakeChannel, type TalkieWaking } from './talkieGate';
 import { guardedTimeout } from '../../utils/guarded-timer';
 
 /** La marge laissée au dernier fragment, en transit quand la minuterie tombe. */
@@ -202,7 +202,7 @@ export class TalkieRelay {
     if (previous) this.close(previous, 'sender');
 
     const startedAt = this.deps.now();
-    const waking = admitted.ok === true && admitted.delivery === 'waking' ? admitted : null;
+    const waking: TalkieWaking | null = admitted.ok === true && admitted.delivery === 'waking' ? (admitted as TalkieWaking) : null;
     const session: Session = {
       talkieId: randomBytes(12).toString('hex'),
       fromUserId,
@@ -239,12 +239,13 @@ export class TalkieRelay {
   }
 
   private async withFallbackConversation(ack: TalkieStartAck, fromUserId: string, toUserId: string): Promise<TalkieStartAck> {
-    if (ack.success || ack.code !== TALKIE_ERROR_CODES.FALLBACK_VOICE || !this.deps.fallbackConversation) return ack;
+    if (ack.success !== false || ack.code !== TALKIE_ERROR_CODES.FALLBACK_VOICE || !this.deps.fallbackConversation) return ack;
+    const refused = ack;
     const conversationId = await this.deps.fallbackConversation(fromUserId, toUserId).catch((error: unknown) => {
       this.deps.report('Talkie fallback conversation failed', error);
       return null;
     });
-    return conversationId ? { ...ack, conversationId } : ack;
+    return conversationId ? { ...refused, conversationId } : ack;
   }
 
   private wakeRecipient(session: Session, channel: TalkieWakeChannel): void {

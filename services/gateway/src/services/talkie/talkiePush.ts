@@ -91,7 +91,7 @@ export type TalkieWakePushPayloadData = TalkieWakePushData & {
   readonly availableUntil?: string;
 } & Partial<TalkieAttachmentFields>;
 
-const attachmentOf = (input: TalkieWakePushInput): Partial<TalkieAttachmentFields> =>
+const attachmentOf = (input: TalkieWakePushInput): Partial<TalkieAttachmentFields> & { readonly availableUntil?: string } =>
   input.phase === 'ended'
     ? {
         availableUntil: input.availableUntil.toISOString(),
