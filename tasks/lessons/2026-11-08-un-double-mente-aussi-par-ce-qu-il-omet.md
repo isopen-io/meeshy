@@ -1,8 +1,8 @@
-# Un double mente aussi par ce qu'il OMET — et un témoin d'émission peut couvrir un 500
+## Un double mente aussi par ce qu'il OMET — et un témoin d'émission peut couvrir un 500
 
 *2026-11-08 — #17032, cycle 148*
 
-## Le site
+### Le site
 
 `POST /conversations/:id/participants` émet ses diffusions d'adhésion, puis
 rebranche les sockets de l'arrivant :
@@ -23,7 +23,7 @@ répondait **500**.
 Et le témoin était VERT. Il assertait `io.to` et `io._emit`, rien d'autre : les
 émissions avaient déjà eu lieu une ligne plus haut.
 
-## Ce que ça dit
+### Ce que ça dit
 
 > **La règle connue — « un double mente aussi par ce qu'il ACCEPTE » — a une
 > variante par OMISSION, et elle est plus discrète.** Une méthode absente ne
@@ -38,7 +38,7 @@ les diffusions — ce que la porte de lien écrivait déjà comme sa règle (« 
 la première qui décide s'il recevra quoi que ce soit du fil ») — le `TypeError`
 est passé devant les émissions, et quatre témoins sont tombés d'un coup.
 
-## Deux réparations, et aucune ne remplace l'autre
+### Deux réparations, et aucune ne remplace l'autre
 
 1. **COMPLÉTER le double** : le manager de production porte la méthode, celui
    du harnais doit la porter aussi. Un double se construit depuis la surface
@@ -49,7 +49,7 @@ est passé devant les émissions, et quatre témoins sont tombés d'un coup.
    statut » prise par l'autre bout — ici il manquait le statut, parce que
    l'effet observé était une émission placée avant la panne.
 
-## À faire la prochaine fois
+### À faire la prochaine fois
 
 Devant un témoin d'ÉMISSION :
 

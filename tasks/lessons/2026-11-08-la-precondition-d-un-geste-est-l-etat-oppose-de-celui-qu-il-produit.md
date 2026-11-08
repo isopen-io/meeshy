@@ -1,8 +1,8 @@
-# La pré-condition d'un geste est l'état OPPOSÉ de celui qu'il produit
+## La pré-condition d'un geste est l'état OPPOSÉ de celui qu'il produit
 
 *2026-11-08 — #17031, cycle 148*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 `PUT …/messages/:id/pin` et son jumeau `DELETE` écrivaient sans regarder l'état
 d'épingle. Un rejeu — ré-épingler un message déjà épinglé, dépingler un message
@@ -15,7 +15,7 @@ autant de fois qu'on rejoue, et `pinnedBy` changeait de main.
 Le correctif est de deux lignes par porte. **Ce qui vaut d'être retenu est ce
 que les témoins existants ont fait en le recevant.**
 
-## Trois fixtures portaient `pinnedAt: null` pour les DEUX méthodes
+### Trois fixtures portaient `pinnedAt: null` pour les DEUX méthodes
 
 Et elles étaient toutes trois écrites par des lots sérieux, sur des propriétés
 réelles — le droit d'écrire (#11219), l'activité de liste (#9026), la charge
@@ -43,7 +43,7 @@ const precondition = (method: 'PUT' | 'DELETE'): Date | null =>
   method === 'DELETE' ? new Date('2026-11-01T08:30:00.000Z') : null;
 ```
 
-## Corollaire : le témoin du correctif porte le REJEU, pas le nominal
+### Corollaire : le témoin du correctif porte le REJEU, pas le nominal
 
 Au rang nominal — un pin sur un message non épinglé, un unpin sur un message
 épinglé — la forme juste et le défaut rendent le **MÊME** verdict. Un témoin
@@ -55,7 +55,7 @@ Les deux cas nominaux restent gardés, verts des deux côtés **par
 construction** : leur rôle n'est pas de voir le défaut, c'est d'interdire que le
 correctif se paie en supprimant le geste.
 
-## À faire la prochaine fois
+### À faire la prochaine fois
 
 Devant tout correctif d'idempotence :
 
