@@ -112,10 +112,8 @@ export async function currentSharedLocationSession(cache: SharedLocationCache, u
   return sessionUnder(cache, userId, await sharedLocationGeneration(cache, userId));
 }
 
-/** Le partage en cours, ou `null` (absent, arrêté, échu, illisible, scellé pour un autre compte). */
-export async function readSharedLocation(cache: SharedLocationCache, userId: string, now: number): Promise<SharedLocationState | null> {
-  const sessionId = await currentSharedLocationSession(cache, userId);
-  if (sessionId === null) return null;
+/** L'état rangé de la session `sessionId`, courante ou non, ou `null` (absent, échu, illisible, scellé pour un autre compte). */
+export async function readSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string, now: number): Promise<SharedLocationState | null> {
   const stored = await cache.get(keyOf(userId, sessionId));
   if (stored === null) return null;
   if (hasValidSecretsKey() && !isSealedSecret(stored)) return null;
@@ -127,17 +125,24 @@ export async function readSharedLocation(cache: SharedLocationCache, userId: str
   }
 }
 
+/** Le partage en cours, ou `null` (absent, arrêté, échu, illisible, scellé pour un autre compte). */
+export async function readSharedLocation(cache: SharedLocationCache, userId: string, now: number): Promise<SharedLocationState | null> {
+  const sessionId = await currentSharedLocationSession(cache, userId);
+  return sessionId === null ? null : readSharedLocationSession(cache, userId, sessionId, now);
+}
+
 /**
  * Arrête : une génération NOUVELLE (`mark`, unique), puis l'effacement de ce que l'ancienne
- * portait — son pointeur et la session qu'il désigne, relue APRÈS le changement de génération
- * pour attraper aussi un démarrage qui s'y serait posé pendant l'arrêt.
+ * portait — son pointeur et la session lue. Rend la session que le pointeur désignait APRÈS le
+ * changement de génération quand ce n'est pas celle lue : un démarrage posé pendant l'arrêt,
+ * dont l'appelant doit prévenir les destinataires avant de l'effacer.
  */
-export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, stopped: { readonly mark: string; readonly generation: string; readonly sessionId: string | null }): Promise<void> {
+export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, stopped: { readonly mark: string; readonly generation: string; readonly sessionId: string | null }): Promise<string | null> {
   await cache.set(stopKeyOf(userId), stopped.mark, STOP_MEMORY_SECONDS);
   const late = await sessionUnder(cache, userId, stopped.generation);
   await cache.del(currentKeyOf(userId, stopped.generation));
-  const sessions = new Set([stopped.sessionId, late].filter((id): id is string => id !== null));
-  await Promise.all([...sessions].map((sessionId) => cache.del(keyOf(userId, sessionId))));
+  if (stopped.sessionId !== null) await cache.del(keyOf(userId, stopped.sessionId));
+  return late !== null && late !== stopped.sessionId ? late : null;
 }
 
 /** Efface le pointeur d'une génération MORTE (un arrêt l'a remplacée) : plus rien ne s'y lira jamais. */

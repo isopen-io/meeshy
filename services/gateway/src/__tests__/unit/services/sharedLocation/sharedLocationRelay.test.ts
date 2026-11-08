@@ -499,6 +499,38 @@ describe('les rejeux en vol — un rejeu ou un rattrapage lus avant un geste ne 
     expect([...m.cache.entries.keys()].filter((key) => key.startsWith('shared-location:') || key.startsWith('shared-location-current:'))).toEqual([]);
   });
 
+  it('un démarrage qui remplace un partage qu\'il n\'a pas lu prévient ceux qui le voyaient et l\'efface', async () => {
+    const m = monde();
+    await demarrer(m, [{ userId: AMI, precision: 'exact' }]);
+
+    m.suspendreProchaineLecture();
+    const enVol = demarrer(m, [{ userId: AMI, precision: 'exact' }]);
+    await tick();
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'city' }])).toMatchObject({ success: true });
+    expect(m.vers(PROCHE).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_CHANGED);
+    m.relacherLecture();
+    expect(await enVol).toMatchObject({ success: true });
+
+    expect(m.vers(PROCHE).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
+    expect([...m.cache.entries.keys()].filter((key) => key.startsWith(`shared-location:${EMETTEUR}:`))).toHaveLength(1);
+  });
+
+  it('un arrêt qui éteint un démarrage posé pendant lui prévient ceux que ce démarrage a servis', async () => {
+    const m = monde();
+    await demarrer(m, [{ userId: AMI, precision: 'exact' }]);
+
+    m.suspendreProchaineLecture();
+    const arret = stopSharedLocation(m.deps, EMETTEUR);
+    await tick();
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'city' }])).toMatchObject({ success: true });
+    m.relacherLecture();
+    expect(await arret).toEqual({ success: true });
+
+    expect(m.vers(PROCHE).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toBeNull();
+    expect([...m.cache.entries.keys()].filter((key) => key.startsWith('shared-location:'))).toEqual([]);
+  });
+
   it('une baisse sous Ami efface chez un destinataire DÉSIGNÉ même si la capture d\'avant ne l\'a pas vu servi', async () => {
     const m = monde();
     const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: PROCHE });
