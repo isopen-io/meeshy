@@ -123,4 +123,44 @@ final class NowPlayingSocketEventsTests: XCTestCase {
         """.utf8))
         XCTAssertEqual(snapshot.items.map(\.userId), ["a"])
     }
+
+    // MARK: - Émettre (#16803)
+
+    func test_theEmissionNamesAreTheServerOnes() {
+        XCTAssertEqual(SocketEvent.nowPlayingUpdate.rawValue, "now-playing:update")
+        XCTAssertEqual(SocketEvent.nowPlayingClear.rawValue, "now-playing:clear")
+    }
+
+    func test_theUpdate_carriesOnlyTheKeysItHas() {
+        XCTAssertEqual(NowPlayingUpdate(category: .music).wirePayload, ["category": "music"])
+        XCTAssertEqual(
+            NowPlayingUpdate(category: .music, title: "Clair de lune", source: "Apple Music").wirePayload,
+            ["category": "music", "title": "Clair de lune", "source": "Apple Music"]
+        )
+    }
+
+    func test_theUpdate_isBoundedBeforeLeaving() {
+        let update = NowPlayingUpdate(
+            category: .music, title: String(repeating: "t", count: 250), source: String(repeating: "s", count: 90)
+        )
+        XCTAssertEqual(update.title?.count, NowPlayingContract.titleMax)
+        XCTAssertEqual(update.source?.count, NowPlayingContract.sourceMax)
+    }
+
+    func test_theUpdate_dropsBlankTexts_andASourceWithoutTitle() {
+        XCTAssertEqual(NowPlayingUpdate(category: .video, title: "  ", source: "YouTube").wirePayload, ["category": "video"])
+    }
+
+    func test_theAck_isReadAsAnOutcome() {
+        XCTAssertEqual(NowPlayingSocketEmitter.outcome(.accepted(SocketAckNoPayload())), .accepted)
+        XCTAssertEqual(NowPlayingSocketEmitter.outcome(.timedOut), .offline)
+        XCTAssertEqual(
+            NowPlayingSocketEmitter.outcome(.refused(SocketAckRefusal(response: ["success": false, "code": "NOW_PLAYING_RATE_LIMITED"]))),
+            .rateLimited
+        )
+        XCTAssertEqual(
+            NowPlayingSocketEmitter.outcome(.refused(SocketAckRefusal(response: ["success": false, "code": "NOW_PLAYING_INVALID"]))),
+            .refused
+        )
+    }
 }

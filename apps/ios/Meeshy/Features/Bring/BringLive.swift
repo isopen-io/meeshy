@@ -58,7 +58,11 @@ extension ProfileBringViewModel {
 }
 
 extension CircleReceptionBlockViewModel {
-    convenience init(userId: String, setting: RelationReceptionSetting) {
-        self.init(userId: userId, setting: setting, service: BringService.shared)
+    /// Le câblage de production. Un partage d'écoute accordé allume l'émetteur de cet iPhone (#16803).
+    convenience init(userId: String, personSwitch: CirclePersonSwitch) {
+        self.init(userId: userId, personSwitch: personSwitch, service: BringService.shared, afterGrant: {
+            guard personSwitch == .share(.listeningCategory) else { return nil }
+            return await ListeningSharePreference.shared.optIn() ? nil : ListeningShareCopy.accessDenied
+        })
     }
 }
