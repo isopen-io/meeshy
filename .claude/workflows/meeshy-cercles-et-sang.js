@@ -276,10 +276,15 @@ ${d.recette.map((s) => `   - ${s}`).join('\n')}
 4. ${freres.length ? `L'issue #${l.n} porte aussi ${freres.join(', ')} : ferme-la (state=closed, state_reason=completed, commentaire de preuve) SEULEMENT si leurs PR (branches claude/cercles-${l.n}-<chaîne>) sont toutes fusionnées et le critère entier tenu.` : `Si ta PR est fusionnée et le critère entier tenu : ferme #${l.n} (state=closed, state_reason=completed) avec la preuve.`}`,
   { label: `livrer ${nomLot(l)}`, phase: 'Livrer', model: 'sonnet', effort: 'low', schema: LIVRAISON })
 
-async function sousLot(l, contrats, freres) {
+async function sousLot(lot, contrats, freres) {
+  let l = lot
   const d = await developper(l, contrats)
   if (!d) return { ...l, etat: 'perdu', raison: 'développement sans rapport' }
-  if (d.bloque) return { ...l, etat: /déjà livré/i.test(d.bloque) ? 'deja-livre' : 'bloque', raison: d.bloque, branche: d.branche }
+  // Un vrai blocage se dit par sa nature ; une note (« audit à passer », « couverture à rejouer ») n'arrête pas le lot :
+  // la revue, l'audit et la preuve qui suivent sont justement ce qu'elle réclame.
+  const vraiBlocage = /^\s*(déjà livré|cédé|bloqu|capacité|impossible|décision)/i.test(d.bloque || '') || !d.sha
+  if (d.bloque && vraiBlocage) return { ...l, etat: /déjà livré/i.test(d.bloque) ? 'deja-livre' : 'bloque', raison: d.bloque, branche: d.branche }
+  if (d.bloque) l = { ...l, critere: `${l.critere}\nNOTES DU DÉVELOPPEUR À SOLDER : ${d.bloque}` }
   let r = await relire(l, d)
   if (!r) return { ...l, etat: 'perdu', raison: 'revue perdue', branche: d.branche }
   if (r.sensible || l.sensible) {
@@ -307,6 +312,7 @@ async function sousLot(l, contrats, freres) {
 const bilan = { fusionnes: [], fermees: [], bloques: [], decisions: new Set(), porteur: new Set(), recettes: new Set(), regressions: [] }
 let idle = 0
 let conformiteFaite = false
+let aRedecouper = []
 
 for (let tour = 1; tour <= MAX_TOURS; tour += 1) {
   log(`=== TOUR ${tour}/${MAX_TOURS} ===`)
@@ -349,7 +355,7 @@ Liste-les : \`gh api "repos/${GH}/issues?milestone=${MILESTONE}&state=open&per_p
 - conformite : #13942 et les issues de pure analyse juridique.
 - chapeau : #${CHAPEAU}.
 ${SEULEMENT.size ? `Ne retiens comme a-faire que : ${[...SEULEMENT].join(', ')}.` : ''}${SAUTER.size ? ` Écarte : ${[...SAUTER].join(', ')}.` : ''}
-Mets en tête les prioritaires : ${PRIORITAIRES.join(', ')}. Sois factuel et COURT par issue (preuve ≤ 300 caractères).`,
+Mets en tête les prioritaires : ${PRIORITAIRES.join(', ')}. Sois factuel et COURT par issue (preuve ≤ 300 caractères).${tour > 1 ? `\nUne issue a-faire porte TOUJOURS au moins un sous_lot (sinon elle n'est jamais développée)${aRedecouper.length ? ` — au tour précédent, restées sans sous-lot : ${aRedecouper.map((n) => `#${n}`).join(', ')} : découpe-les` : ''}.` : ''}`,
     { label: `recenser:tour-${tour}`, phase: 'Recenser', model: 'opus', effort: 'high', schema: RECENSEMENT })
   const issues = (recensement && recensement.issues) || []
   issues.filter((i) => i.verdict === 'decision-sans-defaut').forEach((i) => bilan.decisions.add(`#${i.n} ${i.titre || ''}`.trim()))
@@ -372,6 +378,8 @@ ${livrees.map((i) => `- #${i.n} : ${i.preuve}`).join('\n')}`,
     if (c) bilan.fermees.push(...c.fermees)
   }
 
+  aRedecouper = aFaire.filter((i) => !(i.sous_lots || []).length).map((i) => i.n)
+  if (aRedecouper.length) log(`sans sous-lot, à redécouper au tour suivant : ${aRedecouper.map((n) => `#${n}`).join(', ')}`)
   // Sous-lots du tour : au plus PAR_CHAINE par chaîne, dans l'ordre du recensement (prioritaires d'abord).
   const tous = aFaire.flatMap((i) => (i.sous_lots || []).map((s) => ({ n: i.n, titre: i.titre, sensible: i.sensible, defaut: i.defaut_applique, depend: i.depend || [], chaine: s.chaine, critere: s.critere, inventaire: s.inventaire })))
   const parChaineDuTour = Object.fromEntries(CHAINES.map((c) => [c, tous.filter((l) => l.chaine === c).slice(0, PAR_CHAINE)]))
