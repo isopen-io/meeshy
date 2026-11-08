@@ -93,3 +93,32 @@ struct HeaderPeerListening: ViewModifier {
             }
     }
 }
+
+/// Le pair dont la ligne de liste montre l'écoute (#16733) : celui d'un direct, personne d'autre.
+nonisolated enum ConversationRowListening {
+    static func userId(for conversation: MeeshyConversation) -> String? {
+        guard conversation.type == .direct, let peer = conversation.participantUserId, !peer.isEmpty else { return nil }
+        return peer
+    }
+}
+
+/// L'écoute du pair, dite par la ligne : le libellé de la ligne est posé en bloc, il écrase ce que l'avatar dit de
+/// lui-même — la phrase servie passe donc par la VALEUR de la ligne (#16733). Rien sans source ni sans écoute. Il pose aussi l'indice d'ouverture.
+struct ConversationRowListeningSpeech: ViewModifier {
+    let userId: String?
+    @Environment(\.avatarListeningSource) private var source
+    @State private var spoken: String?
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
+            .accessibilityValue(spoken ?? "")
+            .task(id: userId) {
+                spoken = nil
+                guard let source, let userId, !userId.isEmpty else { return }
+                for await band in source.band(userId).values {
+                    spoken = band?.spoken
+                }
+            }
+    }
+}

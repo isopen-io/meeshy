@@ -451,7 +451,7 @@ final class ComposerCaptureSelfTimer: ObservableObject {
 
     private func show(_ seconde: Int) {
         remaining = seconde
-        HapticFeedback.light()
+        ComposerCaptureHaptic.play(.timerTick(secondsLeft: seconde))
         UIAccessibility.post(notification: .announcement, argument: LocalizedNumber.exact(seconde))
     }
 
@@ -524,7 +524,7 @@ struct ComposerCaptureZoomPresets: View {
             ForEach(presets, id: \.self) { cran in
                 Button {
                     onSelect(cran)
-                    HapticFeedback.light()
+                    ComposerCaptureHaptic.play(.zoomStep)
                 } label: {
                     Text(ComposerSceneCameraCopy.zoomPresetValue(cran))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))

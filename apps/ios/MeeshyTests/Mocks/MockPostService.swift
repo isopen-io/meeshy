@@ -201,6 +201,12 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// Même pattern que `getCommentsResultsQueue`.
     var getCommentRepliesResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
     var getCommunityPostsCallCount = 0
+    /// Communauté et curseur reçus par le dernier `getCommunityPosts` (#16878).
+    var lastGetCommunityPostsCommunityId: String?
+    var lastGetCommunityPostsCursor: String?
+    /// File de résultats page par page pour `getCommunityPosts` ; vide → repli
+    /// sur `getFeedResult` (comportement historique).
+    var getCommunityPostsResultsQueue: [Result<PaginatedAPIResponse<[APIPost]>, Error>] = []
 
     var getBookmarksResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
     var getBookmarksCallCount = 0
@@ -699,6 +705,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getCommunityPostsCallCount += 1
+        lastGetCommunityPostsCommunityId = communityId
+        lastGetCommunityPostsCursor = cursor
+        if !getCommunityPostsResultsQueue.isEmpty {
+            return try getCommunityPostsResultsQueue.removeFirst().get()
+        }
         return try getFeedResult.get()
     }
 

@@ -389,7 +389,7 @@ final class ComposerCaptureSession: ObservableObject {
         pendingSegmentDuration = camera.recordingDuration
         camera.stopRecording()
         extinguishFlash()
-        HapticFeedback.medium()
+        ComposerCaptureHaptic.play(.recordingEnded)
     }
 
     /// **Une vidéo s'ACCUMULE** : `✓` concatène.
@@ -455,7 +455,7 @@ final class ComposerCaptureSession: ObservableObject {
         filmIntent = .edit
         let attend = controls.recordingIsPending
         awaitsPreviousTake = attend
-        if !attend { HapticFeedback.medium() }
+        if !attend { ComposerCaptureHaptic.play(.recordingStarted) }
         holdStartedAt = Date()
         holdPhase = .holding
         lockProgress = 0
@@ -465,7 +465,7 @@ final class ComposerCaptureSession: ObservableObject {
                   await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled,
                   holdStartedAt != nil || holdPhase == .locked else { return }
-            if attend { HapticFeedback.medium() }
+            if attend { ComposerCaptureHaptic.play(.recordingStarted) }
             startFilming()
         }
     }
@@ -482,7 +482,7 @@ final class ComposerCaptureSession: ObservableObject {
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
         lockProgress = 1
-        HapticFeedback.medium()
+        ComposerCaptureHaptic.play(.locked)
         UIAccessibility.post(notification: .announcement, argument: ComposerSceneCameraCopy.lockedAnnouncement)
         lockTake()
     }
