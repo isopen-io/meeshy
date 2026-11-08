@@ -16,6 +16,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { emitServerEvent } from '../serverEmit';
+import { emitConversationActivityUpdate, type ActivityPrisma } from '../emitConversationActivityUpdate';
 import type { QueuedPayloadFor } from '../queuedEventContract';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
@@ -130,8 +131,9 @@ export class AttachmentReactionHandler {
         return;
       }
 
+      let activityAt: Date | undefined;
       if (action === 'add') {
-        const { changed } = await this.deps.service.addAttachmentReaction({
+        const { changed, at } = await this.deps.service.addAttachmentReaction({
           attachmentId: validated.attachmentId, messageId: validated.messageId,
           participantId: resolved.participantId, emoji: validated.emoji,
         });
@@ -145,6 +147,7 @@ export class AttachmentReactionHandler {
           callback?.({ success: true });
           return;
         }
+        activityAt = at;
       } else {
         const removed = await this.deps.service.removeAttachmentReaction({
           attachmentId: validated.attachmentId, participantId: resolved.participantId, emoji: validated.emoji,
@@ -186,6 +189,33 @@ export class AttachmentReactionHandler {
       ).catch((error: unknown) =>
         logger.error('attachment reaction offline enqueue rejected', { conversationId, error })
       );
+
+      // #9026 — le rang SERVI, la seconde moitié de ce que le service vient
+      // d'écrire. Sans elle, la conversation ne remonte en tête qu'au prochain
+      // `GET /conversations` : l'écriture est durable, la liste ne l'est pas.
+      //
+      // `rank: true`, JAMAIS `reaction: true` : ce second drapeau fait résoudre
+      // `Conversation.lastReactionId` par `prisma.reaction.findUnique`, la table
+      // des réactions de MESSAGE, où cette réaction-ci n'a pas de ligne. La
+      // réaction de pièce jointe est donc rangée avec l'appel et l'épingle —
+      // une activité dont aucun autre événement de liste ne porte le rang.
+      //
+      // La clé d'acteur suit la loi du dépôt (`userId ?? id`) : un invité de
+      // lien partagé n'a pas de ligne `User`, et c'est son `Participant.id` qui
+      // nomme sa room personnelle.
+      //
+      // Isolé dans son propre `.catch`, et APRÈS l'accusé du client : une
+      // lecture de liste qui tombe ne doit ni faire échouer une réaction déjà
+      // écrite, ni emporter l'entrée de file hors ligne qui la précède.
+      if (activityAt) {
+        void emitConversationActivityUpdate(this.deps.prisma as ActivityPrisma, this.deps.io, {
+          conversationId,
+          updatedByUserId: resolved.isAnonymous ? resolved.participantId : resolved.userId,
+          rank: true,
+        }).catch((error: unknown) =>
+          logger.error('attachment reaction list rank update rejected', { conversationId, error })
+        );
+      }
 
       callback?.({ success: true });
     } catch (error: unknown) {
