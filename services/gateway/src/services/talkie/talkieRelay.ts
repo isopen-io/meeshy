@@ -35,30 +35,59 @@
  *
  * La coupure n'est annoncée qu'au DESTINATAIRE de la voix (pour qu'il cesse de
  * jouer) ; l'émetteur n'en reçoit rien, ses fragments suivants sont ignorés.
+ *
+ * ## La voix qui réveille (#17142)
+ *
+ * Quand la porte rend `waking`, la session GARDE ses fragments en mémoire — bornés
+ * par les mêmes plafonds, et par `TALKIE_WAKING_PROCESS_MAX_BYTES` pour tout le
+ * processus — et UN réveil part (`wake`). Rien n'est émis vers le destinataire tant
+ * qu'il n'a pas émis `talkie:join` : il reçoit alors, sur SA socket, `talkie:incoming`,
+ * tous les fragments gardés dans l'ordre, puis le direct, puis `talkie:ended`. Une
+ * voix finie (relâchée ou au plafond, jamais coupée) reste rejoignable
+ * `TALKIE_JOIN_WINDOW_MS`, puis son tampon est libéré ; finie sans que personne l'ait
+ * rejointe, elle envoie un push de SUIVI (`followUp`) qui porte l'audio. Le join, et
+ * la lecture HTTP du tampon (`audioFor`), passent la MÊME garde : le destinataire seul,
+ * aucune coupure depuis l'ouverture, et la porte rejugée. Rien n'est persisté.
  */
 import { randomBytes } from 'node:crypto';
 import {
   TALKIE_ERROR_CODES,
+  TALKIE_JOIN_WINDOW_MS,
   TALKIE_MAX_CHUNK_BYTES,
   TALKIE_MAX_CHUNKS,
   TALKIE_MAX_DURATION_MS,
   TALKIE_MAX_TOTAL_BYTES,
   talkieChunkPayloadSchema,
   talkieEndPayloadSchema,
+  talkieJoinPayloadSchema,
   talkieStartPayloadSchema,
+  type TalkieChunkEventData,
   type TalkieCodec,
+  type TalkieDelivery,
+  type TalkieEndedEventData,
   type TalkieEndReason,
+  type TalkieIncomingEventData,
   type TalkieStartAck,
 } from '@meeshy/shared/types/talkie';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitArgs, ServerEmitIO } from '../../socketio/serverEmit';
-import { TALKIE_NOT_ALLOWED, TALKIE_UNAVAILABLE, type TalkieRefusal, type TalkieVerdict } from './talkieGate';
+import { TALKIE_NOT_ALLOWED, TALKIE_UNAVAILABLE, type TalkieRefusal, type TalkieVerdict, type TalkieWakeChannel } from './talkieGate';
 import { guardedTimeout } from '../../utils/guarded-timer';
 
 /** La marge laissée au dernier fragment, en transit quand la minuterie tombe. */
 const DURATION_GRACE_MS = 1_000;
 /** Le rejugement d'arrière-plan d'une prise de parole ouverte. */
 export const REJUDGE_EVERY_MS = 2_000;
+/** Tout ce que les voix réveillées de CE processus gardent en mémoire, ensemble. */
+export const TALKIE_WAKING_PROCESS_MAX_BYTES = 32 * 1024 * 1024;
+
+type Waiting = {
+  readonly buffer: TalkieChunkEventData[];
+  readonly listeners: Set<string>;
+  joined: boolean;
+  ended: TalkieEndedEventData | null;
+  expiry: ReturnType<typeof setTimeout> | null;
+};
 
 type Session = {
   readonly talkieId: string;
@@ -67,6 +96,9 @@ type Session = {
   readonly socketId: string;
   readonly codec: TalkieCodec;
   readonly startedAt: number;
+  readonly delivery: TalkieDelivery;
+  /** Les fragments gardés et les sockets qui ont rejoint : une voix réveillée seulement. */
+  readonly waiting: Waiting | null;
   /** Une coupure posée à partir de cet instant vise la session : celui où son jugement a COMMENCÉ. */
   readonly cutFrom: number;
   bytes: number;
@@ -86,7 +118,26 @@ export type TalkieRelayDeps = {
   readonly cutAt: (fromUserId: string, toUserId: string) => Promise<number | null>;
   readonly now: () => number;
   readonly report: (message: string, error: unknown) => void;
+  /** Le push de réveil d'une voix `waking`, envoyé une fois à l'ouverture (#17142). */
+  readonly wake?: (params: { readonly talkieId: string; readonly fromUserId: string; readonly toUserId: string; readonly channel: TalkieWakeChannel }) => Promise<void>;
+  /** Le push de suivi d'une voix réveillée finie sans que personne l'ait rejointe : il porte l'audio. */
+  readonly followUp?: (params: TalkieFollowUp) => Promise<void>;
+  readonly trace?: (event: '[TALKIE_WAKING]' | '[TALKIE_JOINED]', fields: Readonly<Record<string, unknown>>) => void;
 };
+
+export type TalkieFollowUp = {
+  readonly talkieId: string;
+  readonly fromUserId: string;
+  readonly toUserId: string;
+  readonly availableUntil: Date;
+  readonly bytes: number;
+  readonly durationMs: number;
+};
+
+export type TalkieJoinOutcome = 'joined' | 'unknown' | 'refused';
+export type TalkieAudio =
+  | { readonly ok: true; readonly codec: TalkieCodec; readonly data: Uint8Array }
+  | { readonly ok: false; readonly reason: 'unknown' | 'refused' };
 
 const refusal = (verdict: TalkieRefusal): TalkieStartAck => ({ success: false, error: verdict.message, code: verdict.code });
 const INVALID: TalkieStartAck = { success: false, error: 'Charge illisible', code: TALKIE_ERROR_CODES.INVALID };
@@ -101,12 +152,26 @@ export class TalkieRelay {
   /** Les sockets dont une ouverture est en cours de jugement, et celles qui sont tombées pendant. */
   private readonly opening = new Map<string, number>();
   private readonly lostWhileOpening = new Set<string>();
+  /** Les voix réveillées finies, rejoignables jusqu'à l'expiration de leur fenêtre. */
+  private readonly finished = new Map<string, Session>();
+  private buffered = 0;
 
   constructor(private readonly deps: TalkieRelayDeps) {}
 
   /** Le nombre de prises de parole ouvertes sur cette instance (témoins, métriques). */
   get openCount(): number {
     return this.sessions.size;
+  }
+
+  /** Les octets que les voix réveillées gardent en mémoire sur cette instance. */
+  get bufferedBytes(): number {
+    return this.buffered;
+  }
+
+  /** Le destinataire d'une voix réveillée encore rejoignable, ou `null`. */
+  recipientOf(talkieId: string): string | null {
+    const session = this.waitingSession(talkieId);
+    return session ? session.toUserId : null;
   }
 
   async start(socketId: string, fromUserId: string, raw: unknown): Promise<TalkieStartAck> {
@@ -116,10 +181,12 @@ export class TalkieRelay {
     const cutFrom = this.deps.now();
 
     this.opening.set(socketId, (this.opening.get(socketId) ?? 0) + 1);
+    let admitted: TalkieVerdict;
     try {
       const verdict = await this.admit(fromUserId, toUserId, cutFrom);
-      if (verdict !== null) return verdict;
+      if ('success' in verdict) return verdict;
       if (this.lostWhileOpening.has(socketId)) return refusal(TALKIE_UNAVAILABLE);
+      admitted = verdict;
     } finally {
       const left = (this.opening.get(socketId) ?? 1) - 1;
       if (left > 0) this.opening.set(socketId, left);
@@ -133,6 +200,7 @@ export class TalkieRelay {
     if (previous) this.close(previous, 'sender');
 
     const startedAt = this.deps.now();
+    const waking = admitted.ok === true && admitted.delivery === 'waking' ? admitted : null;
     const session: Session = {
       talkieId: randomBytes(12).toString('hex'),
       fromUserId,
@@ -140,6 +208,8 @@ export class TalkieRelay {
       socketId,
       codec: parsed.data.codec,
       startedAt,
+      delivery: waking ? 'waking' : 'live',
+      waiting: waking ? { buffer: [], listeners: new Set(), joined: false, ended: null, expiry: null } : null,
       cutFrom,
       bytes: 0,
       chunks: 0,
@@ -158,18 +228,24 @@ export class TalkieRelay {
     this.sessions.set(session.talkieId, session);
     this.bySocket.set(socketId, session.talkieId);
 
-    this.sendTo(toUserId, SERVER_EVENTS.TALKIE_INCOMING, {
-      talkieId: session.talkieId,
-      fromUserId,
-      codec: session.codec,
-      startedAt: new Date(startedAt).toISOString(),
-      maxDurationMs: TALKIE_MAX_DURATION_MS,
-    });
-    return { success: true, data: { talkieId: session.talkieId, maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES } };
+    if (waking) this.wakeRecipient(session, waking.channel);
+    else this.sendTo(toUserId, SERVER_EVENTS.TALKIE_INCOMING, incomingOf(session));
+    return {
+      success: true,
+      data: { talkieId: session.talkieId, maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES, delivery: session.delivery },
+    };
   }
 
-  /** `null` : admis. Le débit, la porte, puis une relecture de la coupure posée PENDANT le jugement. */
-  private async admit(fromUserId: string, toUserId: string, cutFrom: number): Promise<TalkieStartAck | null> {
+  private wakeRecipient(session: Session, channel: TalkieWakeChannel): void {
+    const pair = { talkieId: session.talkieId, fromUserId: session.fromUserId, toUserId: session.toUserId };
+    this.deps.trace?.('[TALKIE_WAKING]', { channel, ...pair });
+    const wake = this.deps.wake;
+    if (!wake) return;
+    void wake({ ...pair, channel }).catch((error: unknown) => this.deps.report('Talkie wake failed', error));
+  }
+
+  /** Le verdict de la porte quand elle admet ; sinon l'accusé de refus. Le débit, la porte, puis la coupure posée PENDANT le jugement. */
+  private async admit(fromUserId: string, toUserId: string, cutFrom: number): Promise<TalkieStartAck | TalkieVerdict> {
     try {
       const rate = await this.deps.withinStartRate(fromUserId);
       if (rate === null) return refusal(TALKIE_UNAVAILABLE);
@@ -179,7 +255,7 @@ export class TalkieRelay {
       if (verdict.ok === false) return refusal(verdict);
 
       const cut = await this.deps.cutAt(fromUserId, toUserId);
-      return cut !== null && cut >= cutFrom ? refusal(TALKIE_NOT_ALLOWED) : null;
+      return cut !== null && cut >= cutFrom ? refusal(TALKIE_NOT_ALLOWED) : verdict;
     } catch (error) {
       this.deps.report('Talkie gate failed', error);
       return refusal(TALKIE_UNAVAILABLE);
@@ -197,7 +273,8 @@ export class TalkieRelay {
 
     const receivedAt = this.deps.now();
     const overTime = receivedAt - session.startedAt > TALKIE_MAX_DURATION_MS + DURATION_GRACE_MS;
-    if (overTime || session.bytes + size > TALKIE_MAX_TOTAL_BYTES || session.chunks + 1 > TALKIE_MAX_CHUNKS) {
+    const overProcess = session.waiting !== null && this.buffered + size > TALKIE_WAKING_PROCESS_MAX_BYTES;
+    if (overTime || overProcess || session.bytes + size > TALKIE_MAX_TOTAL_BYTES || session.chunks + 1 > TALKIE_MAX_CHUNKS) {
       this.close(session.talkieId, 'limit');
       return;
     }
@@ -205,6 +282,7 @@ export class TalkieRelay {
     session.lastSeq = parsed.data.seq;
     session.bytes += size;
     session.chunks += 1;
+    if (session.waiting) this.buffered += size;
     this.rejudgeIfDue(session, receivedAt);
 
     let cut: number | null;
@@ -222,14 +300,80 @@ export class TalkieRelay {
     }
 
     const data = parsed.data.data instanceof ArrayBuffer ? new Uint8Array(parsed.data.data) : parsed.data.data;
-    this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_CHUNK, {
+    const event: TalkieChunkEventData = {
       talkieId: session.talkieId,
       fromUserId: session.fromUserId,
       seq: parsed.data.seq,
       data,
       ...(parsed.data.capturedAt === undefined ? {} : { capturedAt: parsed.data.capturedAt }),
       relayedAt: receivedAt,
+    };
+    if (!session.waiting) {
+      this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_CHUNK, event);
+      return;
+    }
+    keepInOrder(session.waiting.buffer, event);
+    session.waiting.listeners.forEach((socket) => this.sendToSocket(socket, SERVER_EVENTS.TALKIE_CHUNK, event));
+  }
+
+  /**
+   * `talkie:join` (#17142) : le destinataire réveillé rejoint une voix `waking`, pendant ou dans la fenêtre qui
+   * suit sa fin. Sa socket reçoit l'ouverture, les fragments gardés dans l'ordre, puis le direct (ou la fin).
+   */
+  async join(socketId: string, userId: string, raw: unknown): Promise<TalkieJoinOutcome> {
+    const parsed = talkieJoinPayloadSchema.safeParse(raw);
+    if (!parsed.success) return 'unknown';
+    const admitted = await this.admitListener(parsed.data.talkieId, userId);
+    if (admitted === 'unknown' || admitted === 'refused') return admitted;
+    const session = admitted;
+    const waiting = session.waiting as Waiting;
+    if (waiting.listeners.has(socketId)) return 'joined';
+    waiting.joined = true;
+
+    this.sendToSocket(socketId, SERVER_EVENTS.TALKIE_INCOMING, incomingOf(session));
+    waiting.buffer.forEach((event) => this.sendToSocket(socketId, SERVER_EVENTS.TALKIE_CHUNK, event));
+    if (waiting.ended) this.sendToSocket(socketId, SERVER_EVENTS.TALKIE_ENDED, waiting.ended);
+    else waiting.listeners.add(socketId);
+    this.deps.trace?.('[TALKIE_JOINED]', {
+      talkieId: session.talkieId, fromUserId: session.fromUserId, toUserId: session.toUserId, chunks: waiting.buffer.length, afterEnd: waiting.ended !== null,
     });
+    return 'joined';
+  }
+
+  /** La voix gardée, concaténée, pour une lecture sans socket (l'extension de notification) — la garde du join. */
+  async audioFor(talkieId: string, userId: string): Promise<TalkieAudio> {
+    const admitted = await this.admitListener(talkieId, userId);
+    if (admitted === 'unknown' || admitted === 'refused') return { ok: false, reason: admitted };
+    const buffer = (admitted.waiting as Waiting).buffer;
+    const data = new Uint8Array(buffer.reduce((total, event) => total + event.data.byteLength, 0));
+    buffer.reduce((offset, event) => {
+      data.set(event.data, offset);
+      return offset + event.data.byteLength;
+    }, 0);
+    return { ok: true, codec: admitted.codec, data };
+  }
+
+  private waitingSession(talkieId: string): Session | null {
+    const session = this.sessions.get(talkieId) ?? this.finished.get(talkieId);
+    return session && session.waiting ? session : null;
+  }
+
+  /** Le destinataire seul, aucune coupure depuis l'ouverture, la porte rejugée — une panne refuse. */
+  private async admitListener(talkieId: string, userId: string): Promise<Session | 'unknown' | 'refused'> {
+    const session = this.waitingSession(talkieId);
+    if (!session) return 'unknown';
+    if (!same(session.toUserId, userId)) return 'refused';
+    try {
+      const [cut, verdict] = await Promise.all([
+        this.deps.cutAt(session.fromUserId, session.toUserId),
+        this.deps.judge(session.fromUserId, session.toUserId),
+      ]);
+      if ((cut !== null && cut >= session.cutFrom) || verdict.ok === false) return 'refused';
+    } catch (error) {
+      this.deps.report('Talkie join gate failed', error);
+      return 'refused';
+    }
+    return this.waitingSession(talkieId) === session ? session : 'unknown';
   }
 
   /** Hors du chemin critique : le fragment repart sans l'attendre ; un refus (ou une panne) coupe la suite. */
@@ -269,13 +413,14 @@ export class TalkieRelay {
 
   /** Coupe, SUR CETTE INSTANCE, les prises de parole de `fromUserId` vers `toUserId` — un blocage. Casse libre. */
   cutPair(fromUserId: string, toUserId: string): void {
-    [...this.sessions.values()]
-      .filter((s) => same(s.fromUserId, fromUserId) && same(s.toUserId, toUserId))
-      .forEach((s) => this.close(s.talkieId, 'cut', 'recipient'));
+    const ofPair = (s: Session) => same(s.fromUserId, fromUserId) && same(s.toUserId, toUserId);
+    [...this.sessions.values()].filter(ofPair).forEach((s) => this.close(s.talkieId, 'cut', 'recipient'));
+    [...this.finished.values()].filter(ofPair).forEach((s) => this.forget(s));
   }
 
   dispose(): void {
     [...this.sessions.keys()].forEach((talkieId) => this.close(talkieId, 'cut'));
+    [...this.finished.values()].forEach((s) => this.forget(s));
   }
 
   /** `audience` : `both` prévient aussi l'émetteur (ses autres appareils) ; `recipient` ne prévient que celui qui écoute. */
@@ -295,6 +440,58 @@ export class TalkieRelay {
     };
     this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
     if (audience === 'both') this.sendTo(session.fromUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
+    if (session.waiting) this.keepForLateJoin(session, ended);
+  }
+
+  /** Une voix relâchée ou au plafond reste rejoignable la fenêtre durant ; une voix coupée est oubliée sur-le-champ. */
+  private keepForLateJoin(session: Session, ended: TalkieEndedEventData): void {
+    const waiting = session.waiting as Waiting;
+    waiting.listeners.clear();
+    if (ended.reason === 'cut') {
+      this.forget(session);
+      return;
+    }
+    waiting.ended = ended;
+    this.finished.set(session.talkieId, session);
+    waiting.expiry = guardedTimeout({
+      name: 'talkie-join-window',
+      run: () => this.forget(session),
+      afterMs: TALKIE_JOIN_WINDOW_MS,
+      logger: { error: (message, error) => this.deps.report(message, error) },
+    });
+    waiting.expiry.unref?.();
+    if (waiting.joined || waiting.buffer.length === 0 || !this.deps.followUp) return;
+    const endedAt = this.deps.now();
+    void this.deps
+      .followUp({
+        talkieId: session.talkieId,
+        fromUserId: session.fromUserId,
+        toUserId: session.toUserId,
+        availableUntil: new Date(endedAt + TALKIE_JOIN_WINDOW_MS),
+        bytes: waiting.buffer.reduce((total, event) => total + event.data.byteLength, 0),
+        durationMs: Math.max(0, endedAt - session.startedAt),
+      })
+      .catch((error: unknown) => this.deps.report('Talkie follow-up failed', error));
+  }
+
+  /** Libère le tampon d'une voix réveillée. */
+  private forget(session: Session): void {
+    const waiting = session.waiting;
+    if (!waiting) return;
+    if (waiting.expiry) clearTimeout(waiting.expiry);
+    waiting.expiry = null;
+    if (this.finished.get(session.talkieId) === session) this.finished.delete(session.talkieId);
+    this.buffered = Math.max(0, this.buffered - session.bytes);
+    waiting.buffer.length = 0;
+    session.bytes = 0;
+  }
+
+  private sendToSocket(socketId: string, ...args: ServerEmitArgs): void {
+    try {
+      this.deps.io?.to(socketId).emit(...args);
+    } catch (error) {
+      this.deps.report('Talkie emit failed', error);
+    }
   }
 
   private sendTo(userId: string, ...args: ServerEmitArgs): void {
@@ -304,4 +501,21 @@ export class TalkieRelay {
       this.deps.report('Talkie emit failed', error);
     }
   }
+}
+
+function incomingOf(session: Session): TalkieIncomingEventData {
+  return {
+    talkieId: session.talkieId,
+    fromUserId: session.fromUserId,
+    codec: session.codec,
+    startedAt: new Date(session.startedAt).toISOString(),
+    maxDurationMs: TALKIE_MAX_DURATION_MS,
+  };
+}
+
+/** Les fragments gardés restent triés par numéro de séquence, quel que soit l'ordre où leurs lectures de coupure rendent. */
+function keepInOrder(buffer: TalkieChunkEventData[], event: TalkieChunkEventData): void {
+  const at = buffer.findIndex((kept) => kept.seq > event.seq);
+  if (at === -1) buffer.push(event);
+  else buffer.splice(at, 0, event);
 }
