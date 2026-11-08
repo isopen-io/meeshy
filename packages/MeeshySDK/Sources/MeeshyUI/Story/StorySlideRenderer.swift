@@ -52,8 +52,8 @@ public enum StorySlideRenderer {
                 // covers composites (Prisme visuel des thumbnails).
                 switch StoryBackgroundValue.parse(slide.effects.background ?? "1E1B4B") {
                 case .gradient(let a, let b):
-                    let c1 = (UIColor(hex: a) ?? .black).cgColor
-                    let c2 = (UIColor(hex: b) ?? .black).cgColor
+                    let c1 = (HexColor(hex: a)?.uiColor ?? .black).cgColor
+                    let c2 = (HexColor(hex: b)?.uiColor ?? .black).cgColor
                     if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                                  colors: [c1, c2] as CFArray,
                                                  locations: [0, 1]) {
@@ -68,7 +68,7 @@ public enum StorySlideRenderer {
                         cgCtx.fill(rect)
                     }
                 case .hex(let h):
-                    (UIColor(hex: h) ?? .black).setFill()
+                    (HexColor(hex: h)?.uiColor ?? .black).setFill()
                     cgCtx.fill(rect)
                 }
             }
@@ -261,7 +261,7 @@ public enum StorySlideRenderer {
         // garde ses lignes dans le cover/thumbHash comme dans la scène.
         let designFontSize = textObj.resolvedSize
         let fontSize = max(6, size.width * CGFloat(designFontSize / Double(CanvasGeometry.designWidth)))
-        let textColor = UIColor(hex: textObj.textColor ?? "FFFFFF") ?? .white
+        let textColor = HexColor(hex: textObj.textColor ?? "FFFFFF")?.uiColor ?? .white
 
         let style = NSMutableParagraphStyle()
         switch textObj.textAlign {
@@ -330,7 +330,7 @@ public enum StorySlideRenderer {
         case .none:
             return nil
         case .solid(let hex):
-            return UIColor(hex: hex)
+            return HexColor(hex: hex)?.uiColor
         case .glass:
             return UIColor.white.withAlphaComponent(0.25)
         }
@@ -393,7 +393,7 @@ public enum StorySlideRenderer {
     private static func drawBackdrop(_ fond: StoryBackdrop, of image: UIImage,
                                      in rect: CGRect, ctx: CGContext) {
         if let hex = fond.solidHex {
-            (UIColor(hex: hex) ?? .black).setFill()
+            (HexColor(hex: hex)?.uiColor ?? .black).setFill()
             ctx.fill(rect)
             return
         }
@@ -523,21 +523,5 @@ public enum StorySlideRenderer {
                               y: rect.midY - drawH / 2,
                               width: drawW,
                               height: drawH))
-    }
-}
-
-// MARK: - UIColor hex init (standalone for MeeshyUI context)
-
-private extension UIColor {
-    convenience init?(hex: String) {
-        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
-        guard hexSanitized.count == 6, let rgb = UInt64(hexSanitized, radix: 16) else { return nil }
-        self.init(
-            red: CGFloat((rgb >> 16) & 0xFF) / 255.0,
-            green: CGFloat((rgb >> 8) & 0xFF) / 255.0,
-            blue: CGFloat(rgb & 0xFF) / 255.0,
-            alpha: 1.0
-        )
     }
 }
