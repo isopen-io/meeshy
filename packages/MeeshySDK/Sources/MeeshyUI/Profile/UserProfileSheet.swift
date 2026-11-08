@@ -360,11 +360,7 @@ public struct UserProfileSheet: View {
     // MARK: - Toast Helper
 
     func postToast(_ message: String, isSuccess: Bool) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": isSuccess]
-        )
+        FeedbackToastCenter.post(message, isSuccess: isSuccess)
     }
 
     // MARK: - Connection Actions
