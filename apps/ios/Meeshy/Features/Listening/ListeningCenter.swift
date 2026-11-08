@@ -31,7 +31,7 @@ final class ListeningCenter: ObservableObject {
     @Published private(set) var byUser: [String: ListeningEntry] = [:]
 
     private let viewerId: () -> String?
-    private let snapshot: @Sendable () async throws -> [NowPlayingChanged]
+    private let snapshot: @Sendable @concurrent () async throws -> [NowPlayingChanged]
     private let now: () -> Date
     private var arrivals = 0
     private var arrivedAt: [String: Int] = [:]
@@ -42,7 +42,7 @@ final class ListeningCenter: ObservableObject {
 
     init(
         viewerId: @escaping () -> String?,
-        snapshot: @escaping @Sendable () async throws -> [NowPlayingChanged],
+        snapshot: @escaping @Sendable @concurrent () async throws -> [NowPlayingChanged],
         changedEvents: AnyPublisher<NowPlayingChanged, Never> = NowPlayingEvents.changed,
         clearedEvents: AnyPublisher<NowPlayingCleared, Never> = NowPlayingEvents.cleared,
         connected: AnyPublisher<Bool, Never>,
