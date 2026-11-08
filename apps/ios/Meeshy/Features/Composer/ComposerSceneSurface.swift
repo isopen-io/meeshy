@@ -175,7 +175,7 @@ struct ComposerSceneSurface: View {
 
     /// Un outil est-il ouvert ? Lu sur `railMode`, la seule source qui le
     /// SAIT — voir `ComposerObjectChips.isServed`.
-    private var toolIsOpen: Bool {
+    var toolIsOpen: Bool {
         ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool,
                                      editsInline: ComposerSelectionChrome.inlineEditOpensTool(
                                         editsInline: editsInline, objectIsSelected: selectionColumn != nil))
@@ -183,7 +183,7 @@ struct ComposerSceneSurface: View {
 
     /// **La scène est en focus** : un outil ouvert, ou un objet sélectionné
     /// (#13957, R6) — les références et la légende cèdent aux deux.
-    private var sceneIsFocused: Bool { toolIsOpen || selectionColumn != nil }
+    var sceneIsFocused: Bool { toolIsOpen || selectionColumn != nil }
 
     /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (vue `1c`).
     ///
@@ -380,7 +380,7 @@ struct ComposerSceneSurface: View {
     /// et tout le reste du chrome s'efface : la
     /// place reste celle où l'on agit, l'outil en cours en est le seul
     /// occupant — `ComposerToolFocus` en porte la règle.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     /// **L'écran LARGE** — la loi `ComposerSceneArrangement` a posé les rails
     /// (#13839, L6) : la place libre décide, jamais la classe de taille. Marges
@@ -388,182 +388,33 @@ struct ComposerSceneSurface: View {
     /// carte. Sans rails, la disposition du pouce.
     var isRoomy: Bool { arrangement == .rails }
 
-    /// **Le chrome du repos, posé SUR la scène** (#13839, qui renverse #4561 et #4633). Le rail gauche, la colonne
-    /// droite du repos, la barre haute et la rangée basse sont partis : ✕, la
-    /// rangée des diapos, ↶ ↷ et les six boutons ronds se posent sur la scène,
-    /// et `ComposerRestChrome` dit ce qui paraît, état par état.
-    private var restState: ComposerRestChrome.State {
-        ComposerRestChrome.State(toolIsOpen: toolIsOpen,
-                                 writesText: writing.writesText,
-                                 cameraIsArmed: cameraStage != .off,
-                                 bottomPanelIsOpen: band != nil || timelinePanel != nil || sceneEffectIsOpen,
-                                 timelineIsOpen: timelinePanel != nil,
-                                 objectIsSelected: selectionColumn != nil,
-                                 propertiesAreOpen: propertiesSheet != nil,
-                                 keyboardIsUp: editingTextId != nil,
-                                 sheetIsRaised: anchoredSheetTop != nil)
-    }
-
-    /// La colonne droite ne sert plus le repos : ses effets de scène vivent
-    /// dans ⋯. Elle reste pour un outil ouvert (hors dessin, qui a sa barre) ;
-    /// un objet sélectionné a sa barre d'actions (L5).
-    private var trailingRailIsShown: Bool {
-        guard ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText),
-              drawingBar == nil else { return false }
-        let servesSomethingElse = trailingOptions.contains { entree in
-            if case .sceneEffect = entree { return false }
-            return true
-        }
-        return toolIsOpen || servesSomethingElse || !trailingActions.isEmpty
-    }
-
-    /// Le rail droit ne recueille ↶ ↷ que s'ils ne sont ni sur la scène, ni
-    /// retirés avec elle quand elle se réduit (#14191).
-    private var historyIsOnTheScene: Bool {
-        ComposerRestChrome.historyIsShown(restState) || ComposerRestChrome.historyIsWithdrawn(restState)
-    }
-
-    /// La trace du son de fond, la MÊME pour le repos et pour le rail libellé.
-    private var backgroundSoundTrace: ComposerSceneOverlayChrome.Sound {
-        .init(trace: backgroundSound, onEdit: onEditBackgroundSound,
-              onDelete: onDeleteBackgroundSound, onPromote: onPromoteBackgroundSound)
-    }
-
-    private var railsLayer: some View {
-        ComposerSceneRailsLayer(
-            leading: ComposerLabeledRail(tools: restTools, moreEntries: rails.moreEntries, openEntry: rails.openEntry,
-                                         onClose: onClose, onTool: { onRestTool?($0) },
-                                         onMore: rails.onMore,
-                                         plus: rails.plus,
-                                         mediaLongPress: onRailDoorLongPress,
-                                         sound: backgroundSoundTrace,
-                                         pasteEntry: railSystemEntry, backgroundIsMedia: restBackgroundIsMedia,
-                                         postText: restPostText),
-            selection: ComposerSelectionRail(selection: nil, onUndo: onUndo, onRedo: onRedo),
-            objectSelection: selectionColumn.map { ComposerSelectionRail(selection: $0) },
-            selectionIsShown: !trailingRailIsShown,
-            slideRow: slideRailSlot,
-            showsSlideRow: showsRailsSlideRow,
-            isServed: ComposerLabeledRailLayout.railsAreServed(writesText: writing.writesText || editingTextId != nil,
-                                                               cameraIsArmed: cameraStage != .off))
-    }
-
-    /// Une feuille ancrée ouverte retire le repos (#13839, L3) : la scène
-    /// réduite ne porte que ce qu'on édite.
-    private var restChrome: some View {
-        restChromeContent
-            // Le rail d'édition s'arrête au-dessus des propriétés : rien ne
-            // recouvre la feuille basse.
-            .padding(.bottom, propertiesSheet == nil ? 0 : lowerFloorsHeight)
-            .opacity(restChromeServed ? 1 : 0)
-            .allowsHitTesting(restChromeServed)
-            .accessibilityHidden(!restChromeServed)
-    }
-
-    private var restChromeContent: some View {
-        ComposerSceneOverlayChrome(state: restState,
-                                   slideRow: slideRailSlot,
-                                   slideCount: slideCount,
-                                   onClose: onClose,
-                                   onUndo: onUndo,
-                                   onRedo: onRedo,
-                                   tools: restTools,
-                                   onTool: onRestTool,
-                                   mediaLongPress: onRailDoorLongPress,
-                                   moreMenu: moreMenu,
-                                   sound: backgroundSoundTrace,
-                                   pasteEntry: railSystemEntry,
-                                   backgroundIsMedia: restBackgroundIsMedia,
-                                   postText: restPostText,
-                                   selection: selectionColumn,
-                                   sceneSideInset: restSceneSideInset,
-                                   sceneTopInset: restSceneTopInset)
-            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { restChromeTop = $0 }
-    }
-
-    /// **Le volet de description, borné à la CARTE.**
-    ///
-    /// Les marges valent la place d'un rail de chaque côté (`lane`) : sans
-    /// elles, le volet s'étalerait sur toute la largeur et croiserait les deux
-    /// rails, qui flottent sur la scène à cette hauteur. Elles ne se lisent pas
-    /// des couloirs (`sceneInset`), qui valent zéro avec la scène plein écran
-    /// — le volet recouvrirait alors le bas des deux rails.
-    @ViewBuilder
-    private var descriptionOverlay: some View {
-        if let descriptionPanel {
-            descriptionPanel
-                .padding(.horizontal, ComposerRailGeometry.descriptionInset(roomy: isRoomy,
-                                                                             cardLeading: sceneCardLeading))
-                .padding(.bottom, MeeshySpacing.smPlus)
-                .environment(\.composerSceneCardWidth, sceneCardWidth)
-        }
-    }
-
     /// Le bord gauche du DESSIN, mesuré par le canvas et lu par l'en-tête son
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
-    @State private var sceneCardLeading: CGFloat = 0
+    @State var sceneCardLeading: CGFloat = 0
 
-    @Environment(\.composerAnchoredSheetTop) private var anchoredSheetTop
-    private var restChromeServed: Bool {
-        ComposerSceneFraming.restChromeIsShown(sheetIsOpen: anchoredSheetTop != nil)
-    }
+    @Environment(\.composerAnchoredSheetTop) var anchoredSheetTop
 
     /// La largeur du DESSIN, mesurée par le canvas : la flèche du volet
     /// s'y proportionne. `0` avant la première passe ⇒ le volet se mesure seul.
-    @State private var sceneCardWidth: CGFloat = 0
+    @State var sceneCardWidth: CGFloat = 0
 
     /// Le cadre du DESSIN dans l'écran : le panneau d'options s'y repère pour
     /// laisser voir l'objet qu'il règle.
     @State var sceneCardFrame: CGRect = .null
-    @State private var restSceneSideInset: CGFloat = 0
-    @State private var restSceneTop: CGFloat = 0
-    @State private var restChromeTop: CGFloat = 0
-
-    private var restSceneTopInset: CGFloat {
-        ComposerRestChrome.sceneTopInset(sceneTop: restSceneTop, chromeTop: restChromeTop)
-    }
-
-    /// Une feuille ou le clavier réduisent la scène au-delà du repos (#15226).
-    private var sceneIsReduced: Bool { ComposerRestChrome.sceneIsReduced(restState) }
-
-    /// Une bande, la frise, les effets, la barre de dessin, les réglages d'un
-    /// outil ou les propriétés d'un objet se posent par-dessus la scène : elle
-    /// garde le bas du repos.
-    private var sceneIsOverlaid: Bool {
-        ComposerSceneLift.overlaysScene(lowZone: lowZone, bottomPanelIsOpen: restState.bottomPanelIsOpen,
-                                        drawingBarIsShown: drawingBar != nil)
-    }
-
-    /// Le bas du repos se relève quand rien n'occupe le bas et qu'on n'écrit pas.
-    private var floorsAreAtRest: Bool {
-        lowZone == .nothing && !sceneIsOverlaid && !writing.writesText && editingTextId == nil
-            && anchoredSheetTop == nil
-    }
+    @State var restSceneSideInset: CGFloat = 0
+    @State var restSceneTop: CGFloat = 0
+    @State var restChromeTop: CGFloat = 0
 
     /// Le haut des étages du bas au dernier repos (#15226).
-    @State private var restFloorTop: CGFloat?
+    @State var restFloorTop: CGFloat?
 
     /// Le cadre de la scène LIBRE, dans le même repère que la carte : le rail
     /// droit s'y borne à la hauteur de la carte (#10542).
-    @State private var freeZoneFrame: CGRect = .null
-
-    /// Les marges verticales du rail droit : du haut de la carte, et au-dessus
-    /// de la remontée tant que sa colonne y tient (`trailingRailBand`).
-    var trailingBand: ComposerRailBand {
-        let pied = [onUndo != nil, onRedo != nil, !toolIsOpen && onTimeButton != nil].filter { $0 }.count
-        return ComposerRailGeometry.trailingRailBand(
-            freeZone: freeZoneFrame, card: sceneCardFrame,
-            columnHeight: ComposerRailGeometry.columnHeight(entries: trailingOptions.count + pied,
-                                                            withSpring: !trailingFootFollowsOptions))
-    }
+    @State var freeZoneFrame: CGRect = .null
 
     /// **La hauteur des étages du bas, mesurée** — ce que les propriétés y
     /// occupent : le rail d'édition s'arrête au-dessus d'elles.
-    @State private var lowerFloorsHeight: CGFloat = 0
-
-    private var lowZone: ComposerLowZone {
-        ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band, properties: propertiesSheet != nil)
-    }
+    @State var lowerFloorsHeight: CGFloat = 0
 
     // MARK: - La scène PREND LE VIEWPORT, le chrome flotte dessus
 
@@ -632,348 +483,8 @@ struct ComposerSceneSurface: View {
         .statusBarHidden(true)
     }
 
-    /// **Le SOL de la scène : le thumbhash de son propre résultat** (directive
-    /// porteur : « la scène doit avoir un sol peint en thumbhash du
-    /// résultat de la scène »).
-    ///
-    /// Une scène 9:16 est moins haute qu'un iPhone, et elle se cadre entre la
-    /// barre haute et le socle : ce qu'elle laisse du viewport n'est pas un
-    /// plateau, c'est son SOL — la loi du lecteur (`SceneBackdropView`,
-    /// `.thumbHash`), peinte du hachage du COMPOSITE de la slide, ce que la
-    /// publication emportera. Le composer et le lecteur posent ainsi la même
-    /// scène sur le même sol.
-    ///
-    /// Tapable comme le fond du canvas, dont il prolonge l'apparence ; inerte
-    /// pendant un tracé, qui possède l'écran entier.
-    private var sceneLetterbox: some View {
-        // **Le sol est BORNÉ par un calque neutre** : en dessin, les
-        // contrôleurs ne doivent pas « s'étirer et sortir » du viewport.
-        // `SceneBackdropView` peint le thumbhash en `.scaledToFill()` et laisse
-        // l'hôte clipper : une image en fill ANNONCE la taille de son
-        // remplissage, plus large que l'écran dès que son rapport diffère —
-        // et le calque de la surface s'élargissait d'autant, emportant la
-        // croix, la carte et les pinceaux hors de l'écran. `Color.clear`
-        // prend la taille proposée ; l'`overlay` ne peut plus la changer.
-        Color.clear
-            .overlay {
-                if let teinte = ComposerSceneFloorRules.backdropColor(slide: slide) {
-                    teinte
-                } else {
-                    SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
-                }
-            }
-            .clipped()
-            .ignoresSafeArea()
-            .contentShape(Rectangle())
-            .onTapGesture { onBackgroundTapped?() }
-            .allowsHitTesting(drawingSurface == nil && timelinePanel == nil)
-            .modifier(ComposerIntakeVeil(veiled: intakeBlocks, dims: false))
-            .task(id: ComposerSceneFloorRules.key(slide: slide, imagesVersion: sceneImagesVersion)) {
-                // Anti-rebond : un geste de cadrage change la clé à chaque image,
-                // et le sol n'a pas à suivre le doigt — il suit la COMPOSITION.
-                try? await Task.sleep(for: .milliseconds(200))
-                guard !Task.isCancelled else { return }
-                floorHash = StorySlideRenderer.computeThumbHash(slide: slide,
-                                                                bgImage: nil,
-                                                                loadedImages: sceneImages)
-            }
-    }
-
-    @State private var floorHash: String?
-    @State private var keyboard = ComposerSceneKeyboard()
-
-    /// **La scène est le plus grand 9:16 de la zone** (#13839) : ni carte ni
-    /// couloir, et elle descend sous le socle, qui se pose dessus. Le clavier
-    /// ou une feuille la RÉDUISENT par une échelle ancrée en haut et un décalage —
-    /// une seule transaction, sans nouvelle mise en page du canvas : aucun
-    /// objet ne saute pendant le geste (`ComposerSceneFit`).
-    private var sceneLayer: some View {
-        GeometryReader { geo in
-            let zone = ComposerSceneFit.zone(in: geo.size, aspectRatio: aspectRatio)
-            let scene = ComposerSceneFit.frame(in: zone, aspectRatio: aspectRatio)
-            let lift = ComposerSceneFit.lift(scene: scene, visibleBottom: visibleBottom(in: geo))
-            sceneCanvas
-                .frame(width: zone.width, height: zone.height)
-                .scaleEffect(lift.scale,
-                             anchor: UnitPoint(x: 0.5, y: zone.height > 0 ? (scene.minY - zone.minY) / zone.height : 0))
-                .offset(y: zone.minY + lift.offsetY)
-                .animation(keyboard.liftAnimation(reduceMotion: reduceMotion, now: Date()), value: lift)
-                .preference(key: ComposerSceneDrawnOriginKey.self,
-                            value: CGPoint(x: ComposerRestChrome.sceneSideInset(layer: geo.frame(in: .global),
-                                                                                aspectRatio: aspectRatio,
-                                                                                scale: lift.scale),
-                                           y: ComposerRestChrome.sceneTop(layer: geo.frame(in: .global),
-                                                                          aspectRatio: aspectRatio,
-                                                                          offsetY: lift.offsetY)))
-        }
-        .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
-        .ignoresSafeArea(.container, edges: arrangement == .rails ? [] : .bottom)
-        .ignoresSafeArea(.keyboard)
-        .allowsHitTesting(timelinePanel == nil)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
-            keyboardMoved($0)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) {
-            keyboardMoved($0, hidden: true)
-        }
-    }
-
-    /// **La scène se réduit DANS le mouvement du clavier** (#13839, L4) : la
-    /// durée et la courbe de la notification, sinon son propre ressort.
-    private func keyboardMoved(_ note: Notification, hidden: Bool = false) {
-        keyboard.moved(duration: note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
-                       endFrame: note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-                       windowFrame: WindowMetrics.activeWindowFrameInScreen, hidden: hidden, at: Date())
-    }
-
-    /// Le bas visible de la scène, dans son propre repère : le haut des étages
-    /// du bas — celui du repos sous un étage posé par-dessus (#15226) —, sinon
-    /// le bas de la zone. Une feuille ancrée du meuble borne aussi la scène
-    /// (#13839, L3) : le plus haut des obstacles gagne (`ComposerSceneFraming`).
-    private func visibleBottom(in geo: GeometryProxy) -> CGFloat {
-        let panneau = ComposerSceneLift.floorTop(measured: freeZoneFrame.isNull ? nil : freeZoneFrame.maxY,
-                                                 rest: restFloorTop, overlaid: sceneIsOverlaid)
-        // La barre et le clavier — ou le panneau qui le remplace, de la même
-        // hauteur — bornent la scène pendant qu'on écrit SUR elle.
-        let clavier: CGFloat? = editingTextId != nil ? keyboard.top : nil
-        return ComposerSceneFraming.visibleBottom(zoneHeight: geo.size.height,
-                                                  zoneMinY: geo.frame(in: .global).minY,
-                                                  obstructionTops: [panneau, anchoredSheetTop, clavier])
-    }
-
-    private var sceneCanvas: some View {
-        EmbeddedSceneCanvas(
-            slide: $slide,
-            aspectRatio: aspectRatio,
-            cornerRadius: MeeshyRadius.xlPlus,
-            // **Le dessin se pose DANS la carte, pas sur le cadre** : un
-            // trait hors du canvas est perdu à la publication.
-            canvasOverlay: drawingSurface,
-            // Les sons posés sur la scène — retirés pendant le dessin,
-            // dont le calque prend la carte entière.
-            objectOverlay: drawingSurface == nil
-                ? { taille in AnyView(ComposerSceneSoundChips(
-                    slide: $slide, canvasSize: taille, selectedItemId: selectedItemId,
-                    onItemTapped: onItemTapped, onItemMenu: onItemMenu)) }
-                : nil,
-            onItemTapped: onItemTapped,
-            onItemDoubleTapped: onItemEdit,
-            editableKinds: editableSceneKinds,
-            onBackgroundTapped: onBackgroundTapped,
-            onBackgroundLongPressed: onBackgroundLongPressed,
-            onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,
-            onBackgroundLongPressChanged: onBackgroundLongPressChanged,
-            onBackgroundLongPressEnded: onBackgroundLongPressEnded,
-            loadedImages: sceneImages,
-            loadedStickerAnimations: sceneStickerAnimations,
-            loadedImagesVersion: sceneImagesVersion,
-            // Le canvas retire son calque de dessin persisté pendant qu'une
-            // surface live est posée dessus — sinon le trait s'affiche deux fois.
-            isDrawingOverlayActive: drawingSurface != nil,
-            editingTextId: editingTextId,
-            onInlineTextChanged: onInlineTextChanged,
-            onInlineTextEditEnded: onInlineTextEditEnded,
-            // « Un seul objet à la fois » a son témoin sur la scène.
-            selectedItemId: selectedItemId,
-            selectionBadge: selectionBadge,
-            timelineBridge: timelineBridge,
-            onItemTrimRequested: onItemTrim,
-            onItemMenuRequested: onItemMenu,
-            localMediaAliases: sceneLocalMediaAliases,
-            inlineEditInputLink: inlineEditInputLink
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(ComposerIntakeLayer(ghost: intakeGhost, blocks: intakeBlocks, aspectRatio: aspectRatio))
-        .overlay { ComposerSceneHints(quickCapture: quickCaptureHint, quoted: quotedPublication, aspectRatio: aspectRatio) }
-        // **La surface PUBLIE la place du viseur, elle ne le peint pas.**
-        // Le meuble le monte une seule
-        // fois ; `Color.clear` + `aspectRatio(.fit)` reproduit exactement le
-        // rectangle du dessin dans le repère où la carte se cadre.
-        .overlay {
-            Color.clear
-                .aspectRatio(aspectRatio, contentMode: .fit)
-                .anchorPreference(key: ComposerSceneCameraFrameKey.self,
-                                  value: .bounds) { $0 }
-                .background {
-                    GeometryReader { geo in
-                        Color.clear.preference(key: ComposerSceneCardFrameKey.self, value: geo.frame(in: .global))
-                    }
-                }
-                .allowsHitTesting(false)
-        }
-        // **Le bord gauche du DESSIN, mesuré ici et remonté** : la
-        // trace du son et le pied des références s'alignent sur la carte, qui
-        // se centre dans le viewport et n'en touche le bord que si la largeur la
-        // contraint.
-        .background {
-            GeometryReader { geo in
-                let bordGauche = ComposerRailGeometry.sceneLeadingInset(overlay: geo.size,
-                                                                        ratio: aspectRatio,
-                                                                        horizontalInset: 0)
-                Color.clear
-                    .preference(key: ComposerSceneCardLeadingKey.self, value: bordGauche + railLaneLeading)
-                    // La carte se CENTRE : sa largeur est ce que les deux bords
-                    // lui laissent. Le volet en proportionne sa flèche.
-                    .preference(key: ComposerSceneCardWidthPreferenceKey.self,
-                                value: max(0, geo.size.width - 2 * bordGauche))
-            }
-        }
-    }
-
-    private var chromeLayer: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // **Ni barre haute ni trace du son** (#13839) : ✕, la rangée des
-            // diapos et ↶ ↷ se posent sur la scène (`restChrome`), le son de
-            // fond se lit au point du bouton Son et se règle de son menu.
-            freeZone
-
-            // **Sur grand écran, le bas reste dans la colonne de la scène** (#13839, L6) : une bande, la frise, les
-            // réglages d'un outil ou la barre de dessin posés sous un rail y seraient couverts et intouchables.
-            bottomFloors
-                .padding(ComposerSceneRailsInsets.lowerFloors(arrangement: arrangement))
-        }
-    }
-
-    /// **La frise prend le bas tant qu'elle est ouverte** : les étages qui outillent la scène image par image n'ont
-    /// rien à y faire, et deux zones basses se recouvriraient.
-    @ViewBuilder
-    private var bottomFloors: some View {
-        if let timelinePanel {
-            timelinePanel
-        } else if ComposerToolFocus.lowerFloorsAreShown(writesText: writesText) {
-            // **Clavier levé, le bas est au clavier** : références,
-            // jetons et rangée basse y seraient couverts ou hors du pouce.
-            lowerFloors
-                .background {
-                    GeometryReader { geo in
-                        Color.clear.preference(key: ComposerLowerFloorsHeightKey.self,
-                                               value: geo.size.height)
-                    }
-                }
-                .animation(ComposerSelectionChrome.propertiesAnimation(reduceMotion: reduceMotion),
-                           value: propertiesSheet != nil)
-        }
-    }
-
-    @ViewBuilder
-    private var lowerFloors: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // **Ce que la publication EMPORTE** — hashtags et
-            // mentions, juste sous la scène libre. Il CÈDE aux options d'un
-            // outil, par `ComposerCanonicalZone`, jamais par un
-            // `!toolIsOpen` écrit ici.
-            if ComposerCanonicalZone.isServed(.references, toolIsOpen: sceneIsFocused), band == nil {
-                ComposerSceneReferenceFooter(hashtags: sceneHashtags,
-                                             references: sceneReferences,
-                                             leadingInset: sceneCardLeading - railLaneLeading,
-                                             onOpenHashtags: onOpenHashtags,
-                                             onOpenMentions: onOpenMentions)
-            }
-
-            // **Le panneau d'options passe AVANT la bande de fond** :
-            // l'outil ouvert a la priorité sur le bas, et les deux ne
-            // coexistent jamais. L'exclusion se lit sur `railMode`, par
-            // `ComposerLowZone`, jamais sur la présence du panneau.
-            switch lowZone {
-            case .properties:
-                if let propertiesSheet { propertiesFloor(propertiesSheet) }
-            case .toolOptions:
-                // La marge des rails : les options d'un outil ne touchent pas
-                // le bord du verre.
-                // Sur une PLAQUE DE VERRE, comme les options de l'éditeur
-                // d'objet.
-                if let toolOptions {
-                    toolOptions
-                        .padding(MeeshySpacing.smPlus)
-                        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
-                                       tint: plateauTint.opacity(0.55))
-                        .padding(.horizontal, ComposerRailGeometry.outerMargin)
-                        .padding(.bottom, MeeshySpacing.xsPlus)
-                }
-            case .band(let ouverte):
-                // Sous la scène, qui se réduit au-dessus d'elle, sur tout écran :
-                // en carte à côté du rail droit, elle couvrait la scène (#13839, L6).
-                bandView(ouverte)
-            case .nothing:
-                EmptyView()
-            }
-            // **La rangée basse — une PLACE permanente, un contenu qui change** :
-            // outil ouvert, ses contrôleurs ; sinon, les portes
-            // qui font ENTRER de la matière ; viseur armé, ses commandes.
-            // **Une bande ouverte prend le bas pour elle seule** : la mention, le
-            // hashtag et le lieu s'effacent aussi le temps du panneau. Un OUTIL ouvert garde la rangée : elle
-            // porte alors ses propres contrôleurs.
-            if let drawingBar { drawingBar }
-        }
-    }
-
-    @ViewBuilder
-    var composingFloors: some View {
-        ZStack(alignment: .bottom) {
-            // Sur grand écran, les rails se CENTRENT en hauteur (maquette
-            // iPad : ils ne descendent pas au pouce, qui n'y tient pas l'écran).
-            HStack(alignment: isRoomy ? .center : .bottom, spacing: 0) {
-                Spacer(minLength: 0)
-                if trailingRailIsShown {
-                // **Les options EN HAUT, l'historique EN BAS** :
-                // la colonne prend la hauteur de la scène libre dès qu'elle a
-                // des options, et son pied reste au pouce.
-                ComposerTrailingRail(actions: trailingActions,
-                                     plateauTint: plateauTint,
-                                     onAction: onTrailingAction,
-                                     onUndo: historyIsOnTheScene ? nil : onUndo,
-                                     onRedo: historyIsOnTheScene ? nil : onRedo,
-                                     pushesToThumb: false,
-                                     separateButtons: true,
-                                     options: trailingOptions,
-                                     onOption: onTrailingOption,
-                                     onTime: nil,
-                                     timeIsOpen: timeIsOpen,
-                                     footFollowsOptions: trailingFootFollowsOptions)
-                    // **Dans la hauteur de la CARTE** : un outil
-                    // ouvert retire la barre haute, et la scène libre remonte
-                    // au-dessus de la carte — le rail, lui, n'en sort pas.
-                    .padding(.top, trailingBand.top)
-                    .padding(.trailing, edge)
-                    .padding(.bottom, trailingBand.bottom)
-                    .transition(.opacity)
-                }
-            }
-            .frame(maxHeight: .infinity, alignment: isRoomy ? .center : .bottom)
-            // **Le volet CÈDE au viseur** : la question passe par la
-            // règle, jamais par un `cameraStage != .off` écrit ici.
-            // **Un outil ou une bande ouverts prennent le bas pour eux seuls** :
-            // la légende s'efface le temps du
-            // dessin ou du Cadre, comme la barre canonique sous un panneau.
-            if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage),
-               ComposerToolFocus.isShown(.description, toolIsOpen: sceneIsFocused, writing: writing), band == nil {
-                descriptionOverlay
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-    }
-
-    /// **Les propriétés montent du bas avec la scène qui se réduit** (#13957) :
-    /// un seul mouvement, au ressort de `ComposerSelectionChrome.propertiesAnimation`,
-    /// sans glissement sous Réduire les animations. La bande, elle, s'insère
-    /// sans animation : son montage reste à part.
-    private func propertiesFloor(_ sheet: AnyView) -> some View {
-        sheet.transition(ComposerSelectionChrome.propertiesTransition(reduceMotion: reduceMotion))
-    }
-
-    private func bandView(_ ouverte: ComposerSceneBand) -> some View {
-        ComposerSceneBandView(band: ouverte,
-                              colors: bandColors,
-                              onPickColor: onPickBandColor,
-                              openingEffect: bandOpeningEffect,
-                              onPickOpening: onPickBandOpening,
-                              fitMode: bandFitMode,
-                              backdrop: bandBackdrop,
-                              plateauTint: plateauTint,
-                              onPickFitMode: onPickBandFitMode,
-                              onPickBackdrop: onPickBandBackdrop,
-                              onCloseBand: onCloseBand)
-    }
+    @State var floorHash: String?
+    @State var keyboard = ComposerSceneKeyboard()
 
     // **Le champ PERMANENT est absent** :
     //
@@ -993,7 +504,7 @@ struct ComposerSceneSurface: View {
 
 /// Le coin haut-gauche de la scène DESSINÉE, dans la fenêtre : le 9:16 de la
 /// couche, à l'échelle et au décalage où la levée le pose.
-private struct ComposerSceneDrawnOriginKey: PreferenceKey {
+struct ComposerSceneDrawnOriginKey: PreferenceKey {
     static let defaultValue: CGPoint? = nil
     static func reduce(value: inout CGPoint?, nextValue: () -> CGPoint?) { value = nextValue() ?? value }
 }

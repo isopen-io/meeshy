@@ -301,8 +301,14 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views")
-        for fichier in ["ReelFeedCard.swift", "ReelsPlayerView.swift"] {
-            let source = try String(contentsOf: views.appendingPathComponent(fichier), encoding: .utf8)
+        let unites: [(fichier: String, parties: [String])] = [
+            ("ReelFeedCard.swift", ["ReelFeedCard.swift"]),
+            ("ReelsPlayerView.swift", ["ReelsPlayerView.swift", "ReelPageView.swift"]),
+        ]
+        for (fichier, parties) in unites {
+            let source = try parties
+                .map { try String(contentsOf: views.appendingPathComponent($0), encoding: .utf8) }
+                .joined(separator: "\n")
             XCTAssertTrue(source.contains("ReelCaptionMemo.shared.caption("),
                           "\(fichier) montre la légende d'un réel sans texte par la règle unique, mémorisée (#10354).")
             XCTAssertFalse(source.contains("ReelPublishedContent.content("),

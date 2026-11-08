@@ -181,6 +181,20 @@ class AsyncAfterRule(unittest.TestCase):
         self.assertEqual(count("async-after", "asyncAfterDelay(1)\n"), 0)
 
 
+class ConcurrencyEscapeRules(unittest.TestCase):
+    def test_task_detached_counts_every_launch_and_ignores_lookalikes(self):
+        self.assertEqual(count("task-detached", "Task.detached { }\nTask.detached(priority: .utility) { }\n"), 2)
+        self.assertEqual(count("task-detached", "Task { }\nMyTask.detached { }\n// Task.detached { }\n"), 0)
+
+    def test_dispatch_main_async_counts_async_and_ignores_after_and_sync(self):
+        self.assertEqual(count("dispatch-main-async", "DispatchQueue.main.async { }\nDispatchQueue.main.async(execute: work)\n"), 2)
+        self.assertEqual(count("dispatch-main-async", "DispatchQueue.main.asyncAfter(deadline: t) { }\nDispatchQueue.main.sync { }\n"), 0)
+
+    def test_preconcurrency_import_counts_imports_only(self):
+        self.assertEqual(count("preconcurrency-import", "@preconcurrency import AVFoundation\n@preconcurrency  import WebRTC\n"), 2)
+        self.assertEqual(count("preconcurrency-import", "extension A: @preconcurrency B {}\nimport AVFoundation\n"), 0)
+
+
 class SinkTaskRule(unittest.TestCase):
     def test_counts_unstored_task_launched_from_a_sink_closure(self):
         self.assertEqual(count("sink-task", ".sink { _ in Task { await f() } }\n"), 1)

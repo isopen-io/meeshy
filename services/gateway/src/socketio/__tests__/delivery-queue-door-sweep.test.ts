@@ -36,13 +36,33 @@
 import { describe, it, expect } from '@jest/globals';
 import { join } from 'path';
 
-import { sweepDirectEnqueueCalls } from './delivery-queue-door-sweep';
+import { sweepDirectEnqueueCalls, SHARED_UNITS } from './delivery-queue-door-sweep';
 
 const SRC_DIR = join(__dirname, '..', '..');
 
 describe("file de remise hors ligne — un seul enfilage, celui de l'unité partagée", () => {
   it('aucun transport de production n’appelle `enqueue` en direct', () => {
     expect(sweepDirectEnqueueCalls(SRC_DIR)).toEqual([]);
+  });
+
+  /**
+   * L'ensemble des portes PARTAGÉES est figé, et c'est la moitié qui donne son
+   * sens à l'inventaire vide ci-dessus : sans lui, exclure un fichier du
+   * balayage suffirait à le rendre vert.
+   *
+   * Quand CE témoin tombe, la question n'est pas « faut-il geler ? » mais
+   * **quelle AUDIENCE cette porte sert-elle, qu'aucune des autres ne sait
+   * servir ?** La première décide des participants d'une CONVERSATION absents ;
+   * la seconde (#16688) des autres APPAREILS d'un compte, que la première ne
+   * pouvait pas servir — son prédicat de joignabilité répond toujours OUI quand
+   * c'est l'appareil acteur qui le renseigne. Ce qui n'est pas une audience
+   * neuve est un transport, et un transport délègue.
+   */
+  it('les portes partagées sont exactement les DEUX unités déclarées', () => {
+    expect([...SHARED_UNITS].sort()).toEqual([
+      'socketio/enqueuePersonalMessageMark.ts',
+      'socketio/offlineParticipantQueue.ts',
+    ]);
   });
 
   /**

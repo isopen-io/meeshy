@@ -28,9 +28,9 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
- * Ce que l'hôte (la feuille ou le détail — UN seul moteur) met derrière le « … » d'un commentaire : qui regarde, et les
- * gestes qu'il sait faire. Un geste absent retire son entrée du menu ; l'hôte ne sait rien de plus que ce que la loi
- * [CommentMenuPolicy] lui demande.
+ * Ce que l'hôte (la feuille ou le détail — UN seul moteur) met derrière le « … » d'un commentaire : qui regarde, si le
+ * fil est fermé (#16930), et les gestes qu'il sait faire. Un geste absent retire son entrée du menu ; l'hôte ne sait rien
+ * de plus que ce que la loi [CommentMenuPolicy] lui demande.
  */
 internal class CommentMenuHost(
     val viewerId: String?,
@@ -38,6 +38,7 @@ internal class CommentMenuHost(
     val onEdit: ((String) -> Unit)? = null,
     val onRequestReport: ((String) -> Unit)? = null,
     val onRequestRemove: ((String) -> Unit)? = null,
+    val commentsClosed: Boolean = false,
 )
 
 internal val LocalCommentMenuHost = staticCompositionLocalOf<CommentMenuHost?> { null }
@@ -70,6 +71,7 @@ internal fun rememberCommentMenuEntries(
         editable = host?.onEdit != null,
         deletable = true,
         removable = host?.onRequestRemove != null,
+        commentsClosed = host?.commentsClosed == true,
     ).filter { it != CommentMenuAction.REPORT || host?.onRequestReport != null }
     val labels = CommentMenuLabels(
         copy = stringResource(R.string.post_comments_copy_text),
@@ -136,13 +138,14 @@ internal fun Modifier.commentMenuCustomActions(entries: List<CommentMenuEntry>):
 internal fun ProvideCommentMenu(state: PostCommentsUiState, viewModel: PostCommentsViewModel, content: @Composable () -> Unit) {
     var reporting by remember { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<String?>(null) }
-    val host = remember(state.viewerId, state.viewerRole, viewModel) {
+    val host = remember(state.viewerId, state.viewerRole, state.commentsClosed, viewModel) {
         CommentMenuHost(
             viewerId = state.viewerId,
             viewerRole = state.viewerRole,
             onEdit = viewModel::beginEdit,
             onRequestReport = { reporting = it },
             onRequestRemove = { removing = it },
+            commentsClosed = state.commentsClosed,
         )
     }
     reporting?.let { id ->

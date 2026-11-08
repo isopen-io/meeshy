@@ -15,7 +15,8 @@ import me.meeshy.sdk.model.StoryComment
 /**
  * L'overlay de commentaires branché sur son [StoryCommentsViewModel] (un par story ouverte) : le fil, la chasse du
  * commentaire visé par une notification, « Répondre » (expose `replyTarget` ET arme le composeur épinglé), la
- * modification en place, le retrait avec motif et le signalement.
+ * modification en place, le retrait avec motif et le signalement. La fermeture du fil (#16930) se lit sur le fil
+ * épinglé [commentThread] — UNE source : la story l'y pose, un refus `COMMENTS_DISABLED` aussi.
  */
 @Composable
 internal fun StoryCommentsOverlayLayer(
@@ -27,6 +28,10 @@ internal fun StoryCommentsOverlayLayer(
 ) {
     val viewModel: StoryCommentsViewModel = hiltViewModel(key = "story-comments-$storyId")
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val threadClosed = commentThread?.let { thread ->
+        val threadState by thread.state.collectAsStateWithLifecycle()
+        threadState.commentsClosed
+    } == true
     var removing by remember(storyId) { mutableStateOf<StoryComment?>(null) }
     var reporting by remember(storyId) { mutableStateOf<StoryComment?>(null) }
     DisposableEffect(storyId) {
@@ -48,7 +53,7 @@ internal fun StoryCommentsOverlayLayer(
                 },
                 onToggleLike = viewModel::toggleLike,
                 onToggleOriginal = viewModel::toggleOriginal,
-                onCommitEdit = viewModel::edit,
+                onCommitEdit = { id, text -> viewModel.edit(id, text) { commentThread?.setCommentsClosed(true) } },
                 onDelete = viewModel::delete,
                 onRequestRemove = { removing = it },
                 onRequestReport = { reporting = it },
@@ -60,7 +65,7 @@ internal fun StoryCommentsOverlayLayer(
     }
     val frame = rememberStoryCommentsFrame(composerPinned, composerHeightPx, request.topReservedPx)
     StoryCommentsOverlay(
-        state = state,
+        state = state.copy(commentsClosed = threadClosed),
         isStoryExpired = request.isStoryExpired,
         frame = frame,
         targetCommentId = target,

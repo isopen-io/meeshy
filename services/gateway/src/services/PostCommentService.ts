@@ -245,6 +245,14 @@ export class PostCommentService {
    * POST). Retourne le commentaire au même select que la création (+ media),
    * `null` si introuvable, jette `FORBIDDEN` pour un non-auteur.
    */
+  private async commentsClosedOn(postId: string): Promise<boolean> {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId },
+      select: { commentsDisabled: true, repostOf: { select: { commentsDisabled: true } } },
+    });
+    return post?.commentsDisabled === true || post?.repostOf?.commentsDisabled === true;
+  }
+
   async updateComment(
     commentId: string,
     userId: string,
@@ -256,6 +264,10 @@ export class PostCommentService {
     });
     if (!existing) return null;
     if (existing.authorId !== userId) throw new Error('FORBIDDEN');
+    // #16930 — un fil FERMÉ (#16541) s'aime et se signale encore, il ne
+    // s'édite plus : la publication qui porte le commentaire, ou l'original
+    // qu'elle republie — même règle que l'admission (`admitCommentHome`).
+    if (await this.commentsClosedOn(existing.postId)) throw new Error('COMMENTS_DISABLED');
 
     // Contenu blanc : accepté SEULEMENT pour un commentaire à média (retrait
     // de légende) — un commentaire texte ne s'édite pas vers du vide (le

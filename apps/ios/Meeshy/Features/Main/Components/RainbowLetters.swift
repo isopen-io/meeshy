@@ -20,6 +20,7 @@ nonisolated enum RainbowLetters {
             : ["#4338CA", "#A21CAF", "#BE123C", "#92400E", "#047857", "#0369A1"]
     }
 
+    /// La palette de lecture en couleurs, pour les sites qui peignent.
     static func palette(isDark: Bool) -> [Color] {
         paletteHex(isDark: isDark).map { Color(hex: $0) }
     }
@@ -44,7 +45,7 @@ nonisolated enum RainbowLetters {
     /// Colore les lettres ORDINAIRES (encre `baseColor`, sans lien) ; mentions, hashtags, liens et espaces
     /// gardent leur rendu. Le texte ne change pas.
     static func painting(_ text: AttributedString, baseColor: Color, seed: String, isDark: Bool) -> AttributedString {
-        let colors = Self.palette(isDark: isDark)
+        let palette = Self.palette(isDark: isDark)
         var painted = text
         var letters: [Range<AttributedString.Index>] = []
         for run in text.runs where run.foregroundColor == baseColor && run.link == nil {
@@ -55,9 +56,9 @@ nonisolated enum RainbowLetters {
                 index = next
             }
         }
-        let indices = colorIndices(count: letters.count, seed: seed, paletteSize: colors.count)
+        let indices = colorIndices(count: letters.count, seed: seed, paletteSize: palette.count)
         for (range, colorIndex) in zip(letters, indices) {
-            painted[range].foregroundColor = colors[colorIndex]
+            painted[range].foregroundColor = palette[colorIndex]
         }
         return painted
     }

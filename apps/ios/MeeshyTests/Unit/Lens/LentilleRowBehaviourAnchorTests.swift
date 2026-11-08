@@ -53,6 +53,14 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         try source(at: "Meeshy/Features/Lens/Row/LentilleConversationRow.swift")
     }
 
+    private func avatarSource() throws -> String {
+        try source(at: "Meeshy/Features/Main/Views/ConversationRowAvatar.swift")
+    }
+
+    private func timestampSource() throws -> String {
+        try source(at: "Meeshy/Features/Main/Views/LiveRelativeTimestamp.swift")
+    }
+
     private func magnificationSource() throws -> String {
         try source(at: "Meeshy/Features/Lens/Mode/LentilleMagnification.swift")
     }
@@ -108,7 +116,7 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     /// CINQ endroits distincts du document normatif : lignes 188/355/406/
     /// 456/491-492, « dot présence forcé vert (typing = preuve d'activité) »)
     /// exige exactement ce câblage — le `presenceState` transmis à
-    /// `LentilleRowAvatar` est `.online` dès qu'un typeur est affiché, quel
+    /// `ConversationRowAvatar` est `.online` dès qu'un typeur est affiché, quel
     /// que soit l'état de présence réel. Voir aussi
     /// `test_L10_presenceDot_isShownForGroupsToo`, même ligne de source,
     /// trou voisin fermé dans le même lot.
@@ -345,7 +353,7 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     // behaviour-matrix:L10
     /// FERMÉ (REV-3/V3ter). « … avec des dots de présence AUSSI pour les
     /// groupes (agrégat PresenceManager, "quelqu'un d'actif") » —
-    /// `LentilleRowAvatar` transmet désormais `presenceState` à
+    /// `ConversationRowAvatar` transmet désormais `presenceState` à
     /// `MeeshyAvatar` dès que `moodStatus == nil` (`isDirect` retiré du
     /// gate) : pour une conversation de groupe, `presenceState` transmis
     /// est l'agrégat réel (offline = aucun dot, verrouillé par
@@ -353,24 +361,24 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     /// `test_L01_presenceDot_isForcedOnline_whenTyping`, même ligne de
     /// source, trou voisin fermé dans le même lot.
     func test_L10_presenceDot_isShownForGroupsToo() throws {
-        let code = normalizedCode(try rowSource())
+        let code = normalizedCode(try avatarSource())
         XCTAssertFalse(
             code.contains("presenceState: (isDirect && moodStatus == nil) ? presenceState : nil"),
             "behaviour-matrix:L10 : « des dots de présence aussi pour les groupes » " +
-            "— LentilleRowAvatar ne doit plus court-circuiter presenceState avec isDirect."
+            "— ConversationRowAvatar ne doit plus court-circuiter presenceState avec isDirect."
         )
     }
 
     /// Réel, même discipline que `FocalIdentityHeader
     /// .test_F03_presenceStateIsPropagatedNotReinterpreted` (Focal) : la
     /// règle « un seul coin, mood gagne, présence sinon » vit dans
-    /// `MeeshyAvatar` (§1.3, frozen) — `LentilleRowAvatar` PROPAGE
+    /// `MeeshyAvatar` (§1.3, frozen) — `ConversationRowAvatar` PROPAGE
     /// `moodStatus?.moodEmoji`/`presenceState` sans réinterpréter les cas.
     func test_L10_moodAndPresence_arePropagatedNotReinterpreted_toMeeshyAvatar() throws {
-        let code = normalizedCode(try rowSource())
+        let code = normalizedCode(try avatarSource())
         XCTAssertTrue(
             code.contains("moodEmoji: moodStatus?.moodEmoji,"),
-            "L10 : LentilleRowAvatar doit transmettre moodStatus?.moodEmoji tel quel à " +
+            "L10 : ConversationRowAvatar doit transmettre moodStatus?.moodEmoji tel quel à " +
             "MeeshyAvatar — la règle « un seul coin, mood gagne » vit dans MeeshyAvatar, " +
             "jamais réécrite ici."
         )
@@ -429,7 +437,7 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     // MARK: - L14 — timestamp ticker, hors gate Equatable (réel)
 
     // behaviour-matrix:L14
-    /// Réel. `LentilleRowTimestamp` ticke via `TimelineView(.periodic(…))`,
+    /// Réel. `LiveRelativeTimestamp` ticke via `TimelineView(.periodic(…))`,
     /// et `LentilleConversationRow.==` (copié de `ThemedConversationRow.==`
     /// puis étendu au pont, I-068) ne compare AUCUN champ de date direct —
     /// le ticker vit hors du portillon `.equatable()`, seul élément vivant
@@ -439,8 +447,8 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     func test_L14_timestampTicker_livesOutsideTheEquatableGate() throws {
         let code = normalizedCode(try rowSource())
         XCTAssertTrue(
-            code.contains("TimelineView(.periodic(from: date, by: 60)) { _ in"),
-            "L14 : LentilleRowTimestamp doit ticker via TimelineView(.periodic(…, by: 60)) — " +
+            normalizedCode(try timestampSource()).contains("TimelineView(.periodic(from: date, by: 60)) { _ in"),
+            "L14 : LiveRelativeTimestamp doit ticker via TimelineView(.periodic(…, by: 60)) — " +
             "seul élément vivant du rang au repos."
         )
         XCTAssertFalse(

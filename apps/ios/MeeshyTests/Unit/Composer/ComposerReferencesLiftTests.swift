@@ -31,9 +31,9 @@ final class ComposerReferencesLiftTests: XCTestCase {
         // pied reste leur PREMIER étage, juste sous la scène libre.
         XCTAssertTrue(code.contains("freeZonebottomFloors.padding(ComposerSceneRailsInsets.lowerFloors(arrangement:arrangement))"),
                       "Les étages du bas suivent immédiatement la scène libre, dans sa colonne (#13839, L6).")
-        XCTAssertTrue(code.contains("privatevarbottomFloors:someView{iflettimelinePanel{timelinePanel}elseifComposerToolFocus.lowerFloorsAreShown(writesText:writesText){lowerFloors.background{"),
+        XCTAssertTrue(code.contains("varbottomFloors:someView{iflettimelinePanel{timelinePanel}elseifComposerToolFocus.lowerFloorsAreShown(writesText:writesText){lowerFloors.background{"),
                       "Sous la scène libre : la frise, ou les étages du bas — sauf pendant l'écriture (#6132).")
-        XCTAssertTrue(code.contains("privatevarlowerFloors:someView{VStack(alignment:.leading,spacing:0){ifComposerCanonicalZone.isServed(.references,toolIsOpen:sceneIsFocused),band==nil{ComposerSceneReferenceFooter("),
+        XCTAssertTrue(code.contains("varlowerFloors:someView{VStack(alignment:.leading,spacing:0){ifComposerCanonicalZone.isServed(.references,toolIsOpen:sceneIsFocused),band==nil{ComposerSceneReferenceFooter("),
                       "Le pied des références doit être l'étage qui suit la scène libre.")
         XCTAssertFalse(code.contains("referencesLift"), "Aucune remontée : il n'y a plus de letterbox à combler.")
     }

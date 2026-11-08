@@ -34,6 +34,9 @@ struct CommentRowView: View, Equatable {
     /// Édite ce commentaire (contenu + effets). Fourni UNIQUEMENT quand
     /// l'utilisateur courant est l'auteur — même règle que la suppression.
     var onEditComment: (() -> Void)? = nil
+    /// Les commentaires de la publication sont fermés : « Modifier » quitte le
+    /// menu, le like et le signalement restent (#16930).
+    var commentsClosed: Bool = false
     /// Demande la traduction du commentaire vers la langue préférée du
     /// lecteur (Prisme « Exploration ») — affiché quand AUCUNE traduction
     /// n'est disponible et que la langue d'origine diffère. Le résultat
@@ -68,6 +71,7 @@ struct CommentRowView: View, Equatable {
             onEdit: onEditComment,
             onDelete: onDeleteComment,
             onRemove: onRemoveComment,
+            commentsClosed: commentsClosed,
             glyphSize: isReply ? 12 : 14,
             glyphColor: theme.textMuted
         )
@@ -93,6 +97,7 @@ struct CommentRowView: View, Equatable {
         (lhs.onDeleteComment == nil) == (rhs.onDeleteComment == nil) &&
         (lhs.onRemoveComment == nil) == (rhs.onRemoveComment == nil) &&
         (lhs.onEditComment == nil) == (rhs.onEditComment == nil) &&
+        lhs.commentsClosed == rhs.commentsClosed &&
         lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&

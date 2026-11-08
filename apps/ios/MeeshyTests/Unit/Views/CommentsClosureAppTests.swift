@@ -161,7 +161,48 @@ final class CommentsClosureAppTests: XCTestCase {
         XCTAssertTrue(code.contains("commentsDisabledChoice = state.commentsDisabled"))
     }
 
+    // MARK: - Éditer sur un fil fermé (#16930)
+
+    /// Les hôtes du menu « … » lui disent que le fil est fermé — sans quoi
+    /// `CommentMenuPolicy` offrirait « Modifier » sur une publication fermée.
+    func test_commentHosts_threadTheClosedStateIntoTheMenu() throws {
+        let sheet = try Self.featureSource("Main/Views/FeedCommentsSheet.swift")
+        let detail = try Self.featureSource("Main/Views/PostDetailCommentThread.swift")
+        let story = try Self.featureSource("Stories/Views/StoryViewerView+CommentMenu.swift")
+        let section = try Self.featureSource("Main/Views/ThreadedCommentSection.swift")
+
+        XCTAssertTrue(sheet.contains("commentsClosed: closure.isClosed"))
+        XCTAssertTrue(detail.contains("commentsClosed: viewModel.commentsClosed"))
+        XCTAssertTrue(story.contains("commentsClosed: currentStory?.commentsClosed == true"))
+        XCTAssertEqual(section.components(separatedBy: "commentsClosed: commentsClosed").count - 1, 2,
+                       "la racine ET chaque réponse reçoivent l'état fermé")
+    }
+
+    /// La feuille ne s'instancie pas en test : son refus d'édition se lit à la
+    /// source — il ferme la feuille comme un envoi refusé, sans erreur générique.
+    func test_sheetEdit_aCommentsDisabledRefusal_closesTheSheet() throws {
+        let code = try Self.featureSource("Main/Views/FeedCommentsSheet+CommentEdit.swift")
+
+        XCTAssertTrue(code.contains("let closed = closure.noteRefusal(error)"))
+        XCTAssertTrue(code.contains("showError(closed ? CommentsClosedNotice.text :"))
+    }
+
+    /// Le lecteur de story ferme la story quand l'édition est refusée.
+    func test_storyWriter_closesTheStoryOnARefusedEdit() throws {
+        let code = try Self.featureSource("Stories/Views/StoryViewerView+CommentMenu.swift")
+
+        XCTAssertTrue(code.contains("onCommentsClosed: { StoryCommentSettings.noteClosed(storyId: story.id, in: viewModel) }"))
+    }
+
     // MARK: - Fabriques
+
+    private static func featureSource(_ chemin: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/\(chemin)")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
 
     private static func draft(_ format: ComposerFormat) -> ComposerDocumentDraft {
         ComposerDocumentDraft.document(

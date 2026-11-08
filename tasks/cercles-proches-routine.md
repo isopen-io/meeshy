@@ -291,6 +291,26 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Playwright tranche 4 (`bun.lock` au format 3 que bun 1.3.14 ne lit pas, plus la gate `media-16 … obtenu flow-end`).
   Lockfiles réparés dans la PR #16873 (#16872).
 
+## 2026-11-08 — réveil 17 : émettre le talkie depuis iOS (#16927 ⊂ #13935)
+
+- Reprise : aucune PR de la routine ouverte ; #16835 (accorder « Ce que j'écoute » depuis le web) fusionnée. Le lot
+  recommandé, l'accord de l'écoute sur Android, touche `CircleReceptionBlockSection.kt` / `CircleLinkSheet.kt` qu'une
+  branche vivante (`claude/cercles-16643-android`) écrit déjà : ce réveil cède et prend l'émission du talkie sur iOS,
+  que personne n'écrivait. Issue #16927 ouverte sous #13935 (milestone #215), branche
+  `claude/cercles-talkie-ios-emettre` réservée avant toute écriture.
+- Lot : SDK — `TalkieSending.swift` (verdict de `talkie:start` et refus codés, blocage et repli rendus par la même issue
+  `voice` ; en-tête ADTS ; `TalkieFragmenter` ~250 ms sous le plafond d'octets ; `TalkieBudget` en octets et en nombre),
+  `TalkieSocketEmitter` (les trois événements client, fragment en binaire natif, hors de `MessageSocketManager`),
+  `talkieStart` / `talkieSendChunk` / `talkieEnd` dans `SocketEvent`. App — `TalkieSender` (iso `createTalkieSender` :
+  appui = accusé ET micro en même temps, capté avant l'accusé envoyé après, relâcher vide puis ferme, durée servie,
+  `talkie:ended` de MA prise de parole), `TalkieMicCapture` (AVAudioEngine → AAC-LC mono 64 kb/s → trames ADTS, session
+  par `MeeshyRecordingSession` comme les vocaux), « Maintenir pour parler » sur la fiche dès Proche
+  (`ProfileTalkieRow`, retirée sur `TALKIE_NOT_ALLOWED`). Treize libellés `talkie.send.*` en sept langues.
+- Ce qui reste du talkie : copie en message vocal (#16698 web, iOS à suivre), émission Android, arrière-plan iOS
+  (PushToTalk) et Android, Safari/Firefox (#16699).
+- Prochain lot recommandé : accorder « Ce que j'écoute » depuis Android quand #16643 aura fusionné, sinon l'émission du
+  talkie sur Android.
+
 ## 2026-11-08 — réveil 18 : le partage temporaire de position, côté serveur (#16980 ⊂ #14109)
 
 - Reprise : #16928 (talkie émis depuis iOS) est ouverte, et le réveil 17 la mène encore (il a poussé une fusion de

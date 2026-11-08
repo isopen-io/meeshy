@@ -164,7 +164,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
         let interdits = ["ComposerControlsLayer", "ComposerBottomBand", "ComposerToolPanelHost"]
 
         for fichier in fichiersDeLaSurfaceNeuve {
-            let code = AppSourceGuard.stripComments(try String(contentsOf: fichier, encoding: .utf8))
+            let code = AppSourceGuard.stripComments(try AppSourceGuard.text(at: fichier))
             XCTAssertGreaterThan(
                 code.count, 400,
                 "Source vide ou introuvable (\(fichier.lastPathComponent)) — la garde serait verte par omission."

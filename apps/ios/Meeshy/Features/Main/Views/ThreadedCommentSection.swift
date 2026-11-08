@@ -17,6 +17,9 @@ struct ThreadedCommentSection: View {
     let accentColor: String
     /// Le post commenté — « Imager » un commentaire le met en tête (#9686).
     var post: FeedPost? = nil
+    /// Les commentaires de la publication sont fermés : chaque ligne retire
+    /// « Modifier » de son menu (#16930).
+    var commentsClosed: Bool = false
     let hearts: CommentHeartLedger
     let onReply: (FeedComment) -> Void
     let onToggleThread: () -> Void
@@ -89,7 +92,7 @@ struct ThreadedCommentSection: View {
             onLikeComment: { onLikeComment(reply.id) },
             onDeleteComment: deleteHandler(for: reply),
             onRemoveComment: removeHandler(for: reply),
-            onEditComment: editHandler(for: reply),
+            onEditComment: editHandler(for: reply), commentsClosed: commentsClosed,
             onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
             moodEmoji: replyMoodResolver?(reply.authorId),
             storyState: replyStoryResolver?(reply.authorId) ?? .none,
@@ -131,7 +134,7 @@ struct ThreadedCommentSection: View {
                 onLikeComment: { onLikeComment(comment.id) },
                 onDeleteComment: deleteHandler(for: comment),
                 onRemoveComment: removeHandler(for: comment),
-                onEditComment: editHandler(for: comment),
+                onEditComment: editHandler(for: comment), commentsClosed: commentsClosed,
                 onRequestTranslation: onRequestTranslation.map { handler in { handler(comment) } },
                 showSeeReplies: showSeeReplies,
                 onSeeReplies: { onToggleThread() },

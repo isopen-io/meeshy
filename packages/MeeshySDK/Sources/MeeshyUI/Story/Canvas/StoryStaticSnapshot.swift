@@ -124,10 +124,10 @@ public enum StoryStaticSnapshot {
                                         ctx: CGContext) {
         switch StoryBackgroundValue.parse(slide.effects.background ?? "1E1B4B") {
         case .hex(let hex):
-            Self.parseHexColor(hex).setFill()
+            (HexColor(hex: hex)?.uiColor ?? .black).setFill()
             ctx.fill(rect)
         case .gradient(let a, let b):
-            let colors = [Self.parseHexColor(a).cgColor, Self.parseHexColor(b).cgColor]
+            let colors = [(HexColor(hex: a)?.uiColor ?? .black).cgColor, (HexColor(hex: b)?.uiColor ?? .black).cgColor]
             if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                          colors: colors as CFArray, locations: [0, 1]) {
                 ctx.drawLinearGradient(gradient, start: rect.origin,
@@ -147,17 +147,6 @@ public enum StoryStaticSnapshot {
         if let bgImage {
             drawAspectFill(bgImage, in: rect, ctx: ctx)
         }
-    }
-
-    /// `UIColor(hex:)` is `private` to `StorySlideRenderer.swift` — not visible here.
-    private static func parseHexColor(_ hex: String) -> UIColor {
-        let sanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "#", with: "")
-        guard sanitized.count == 6, let rgb = UInt64(sanitized, radix: 16) else { return .black }
-        return UIColor(red: CGFloat((rgb >> 16) & 0xFF) / 255.0,
-                       green: CGFloat((rgb >> 8) & 0xFF) / 255.0,
-                       blue: CGFloat(rgb & 0xFF) / 255.0,
-                       alpha: 1.0)
     }
 
     private static func drawAspectFill(_ image: UIImage, in rect: CGRect, ctx: CGContext) {

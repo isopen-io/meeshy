@@ -270,6 +270,16 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // descend d'un site. Temoin de la borne :
   // `__tests__/routes/conversations.read-boundary.test.ts`.
   'conversations/core-list.ts': 2,
+  // #16948 — la sortie d'un INVITÉ de lien, CINQUIÈME porte de fin
+  // d'appartenance, relit les participants RESTANTS pour nommer leurs rooms et
+  // annoncer l'effectif ABSOLU : même éventail, même raison que
+  // `conversations/leave.ts`, `participant-removal.ts` et
+  // `participant-ban-core.ts`, déjà gelés ici pour cette forme. La borne n'est
+  // pas « disponible mais omise » : un `take` rendrait l'effectif FAUX, et
+  // c'est l'effectif absolu qui fait converger un client — celui qui soustrait
+  // ne se rattrape jamais d'un événement manqué. La borne de fait est
+  // l'appartenance à une conversation, la même que celle des trois jumelles.
+  'conversations/guest-sessions.ts': 1,
   'conversations/leave.ts': 1,
   // 5 -> 3 : #4177 a retire du travail MORT, pas ajoute une borne. Trois lectures
   // (currentUserReactions au niveau du message, currentUserConsumption par piece

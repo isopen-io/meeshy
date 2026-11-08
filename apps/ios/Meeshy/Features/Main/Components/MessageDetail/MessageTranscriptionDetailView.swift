@@ -77,7 +77,7 @@ struct MessageTranscriptionDetailView: View {
                 }
 
                 if let durationMs = transcription.durationMs {
-                    Text(formatDuration(durationMs / 1000))
+                    Text(MediaFormat.duration(durationMs / 1000))
                         .font(.system(.caption2, design: .monospaced).weight(.medium))
                         .foregroundStyle(theme.textMuted)
                 }
@@ -167,7 +167,7 @@ struct MessageTranscriptionDetailView: View {
                             .lineLimit(1)
 
                         if let duration = attachment.duration {
-                            Text(formatDuration(duration / 1000))
+                            Text(MediaFormat.duration(duration / 1000))
                                 .font(.caption2)
                                 .foregroundStyle(theme.textMuted)
                         }
@@ -277,7 +277,7 @@ struct MessageTranscriptionDetailView: View {
                             .background(Capsule().fill(langColor.opacity(0.12)))
                         }
 
-                        Text(formatDuration(audio.durationMs / 1000))
+                        Text(MediaFormat.duration(audio.durationMs / 1000))
                             .font(.system(.caption2, design: .monospaced).weight(.medium))
                             .foregroundStyle(theme.textMuted)
                     }
@@ -327,10 +327,6 @@ struct MessageTranscriptionDetailView: View {
 
     /// Durée parlée locale-aware (« 12 secondes » / « 12 seconds » / « 12 Sekunden »)
     /// — remplace le rendu ambigu « 0:12 » pour VoiceOver. Zéro chaîne à traduire.
-    private func spokenDuration(_ seconds: Int) -> String {
-        MediaFormat.duration(seconds, style: .spoken)
-    }
-
     private func transcriptionBannerA11yLabel(_ transcription: MessageTranscription) -> String {
         var parts: [String] = [
             String(format: String(localized: "a11y.transcription.in-language", defaultValue: "Transcription en %@", bundle: .main), MessageLanguageDetailView.languageName(for: transcription.language))
@@ -339,7 +335,7 @@ struct MessageTranscriptionDetailView: View {
             parts.append(String(format: String(localized: "a11y.transcription.confidence", defaultValue: "confiance %d %%", bundle: .main), Int((conf * 100).rounded())))
         }
         if let durationMs = transcription.durationMs {
-            parts.append(spokenDuration(durationMs / 1000))
+            parts.append(MediaFormat.duration(durationMs / 1000, style: .spoken))
         }
         return parts.joined(separator: ", ")
     }
@@ -350,7 +346,7 @@ struct MessageTranscriptionDetailView: View {
         if audio.cloned {
             parts.append(String(localized: "a11y.audio.cloned-voice", defaultValue: "voix clonée", bundle: .main))
         }
-        parts.append(spokenDuration(audio.durationMs / 1000))
+        parts.append(MediaFormat.duration(audio.durationMs / 1000, style: .spoken))
         if !audio.transcription.isEmpty {
             parts.append(audio.transcription)
         }
@@ -358,8 +354,4 @@ struct MessageTranscriptionDetailView: View {
     }
 
     // MARK: - Helpers
-
-    private func formatDuration(_ seconds: Int) -> String {
-        MediaFormat.duration(seconds)
-    }
 }

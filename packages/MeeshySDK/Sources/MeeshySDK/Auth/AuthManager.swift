@@ -272,101 +272,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
         isLoading = false
     }
 
-    // MARK: - Register
-
-    /// La variante LEVANTE de `register(request:)` — la seule qui rende un refus
-    /// TYPÉ à son appelant.
-    ///
-    /// `register(request:)` avale toute erreur dans `errorMessage: String?`, ce
-    /// qui suffit à un bandeau et à rien d'autre : un écran de formulaire qui
-    /// doit poser « cette adresse est déjà utilisée » SOUS le champ e-mail a
-    /// besoin du `code` et du `field`, pas d'une phrase. Elle lève donc :
-    ///
-    /// - `MeeshyError.rejected(APIRejection)` — 400/409 typés (`VALIDATION_ERROR`,
-    ///   `PHONE_INVALID`, `USERNAME_TAKEN`, `EMAIL_TAKEN`), parce que
-    ///   `AuthEndpoint.register` déclare `rejectionPolicy == .structured` ;
-    /// - `PhoneOwnershipConflict` — le refus servi en 200 sans compte créé ;
-    /// - `MeeshyError.network(…)` — réseau indisponible.
-    ///
-    /// Elle tient les mêmes drapeaux (`isLoading`, `errorMessage`) que sa
-    /// jumelle, pour qu'un écran branché sur l'un ou l'autre voie le même
-    /// `AuthManager`.
-    ///
-    /// Rend `.verificationRequired` quand le compte, créé SANS numéro,
-    /// attend la preuve de son adresse : aucune session n'est appliquée, et
-    /// l'écran présente la saisie du code (le mot de passe est déjà sur le
-    /// compte). `.authenticated` quand la session est appliquée.
-    @discardableResult
-    public func registerThrowing(request: RegisterRequest) async throws -> RegistrationOutcome {
-        switch try await registerHoldingSession(request: request) {
-        case .session(let proven, _):
-            try installClosingRefused(proven)
-            return .authenticated
-        case .verificationRequired(let pending):
-            return .verificationRequired(pending)
-        }
-    }
-
-    public func register(request: RegisterRequest) async {
-        guard !isSwitchingAccount else {
-            errorMessage = AccountSwitchUnderway().errorDescription
-            return
-        }
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            let data = try await authService.register(request: request)
-            // Compte créé sans numéro : aucune session, rien d'une panne.
-            if data.pendingEmailVerification(typedIdentifier: request.email) != nil {
-                isLoading = false
-                return
-            }
-            if let token = data.token, let user = data.user {
-                try installClosingRefused(EmailProvenSession(
-                    token: token, sessionToken: data.sessionToken, user: user, origin: .registration))
-            } else {
-                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
-            }
-        } catch let error as MeeshyError {
-            // P1 — `APIClient` only ever throws `MeeshyError` (never the
-            // legacy `APIError`); the previous `catch let error as APIError`
-            // here was dead code that silently fell through to the generic
-            // `catch` below. Behaviourally identical (both paths read
-            // `errorDescription`), but explicit about the real error type.
-            errorMessage = error.errorDescription
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    // MARK: - Forgot Password
-
-    public func requestPasswordReset(email: String) async -> Bool {
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            try await authService.requestPasswordReset(email: email)
-            isLoading = false
-            return true
-        } catch let error as MeeshyError {
-            // P1 — `APIClient` only ever throws `MeeshyError` (never the
-            // legacy `APIError`); the previous `catch let error as APIError`
-            // here was dead code that silently fell through to the generic
-            // `catch` below. Behaviourally identical (both paths read
-            // `errorDescription`), but explicit about the real error type.
-            errorMessage = error.errorDescription
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
-        return false
-    }
-
     // MARK: - Logout
 
     /// Déconnexion COMPLÈTE : la session finit et le compte disparaît du
@@ -710,11 +615,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     private var profileStore: AuthProfileKeychainStore { AuthProfileKeychainStore(keychain: keychain) }
 
-    private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
+    func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
         profileStore.saveUser(user, userId: userId)
     }
 
-    private func savePendingProfileToKeychain(_ snapshot: ProfileSnapshot, userId: String) {
+    func savePendingProfileToKeychain(_ snapshot: ProfileSnapshot, userId: String) {
         profileStore.savePendingProfile(snapshot, userId: userId)
     }
 
@@ -722,7 +627,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         profileStore.loadPendingProfile(userId: userId)
     }
 
-    private func clearPendingProfileFromKeychain(userId: String) {
+    func clearPendingProfileFromKeychain(userId: String) {
         profileStore.clearPendingProfile(userId: userId)
     }
 
@@ -863,85 +768,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// must NOT clobber it; `resolveServerUserWithOptimistic` re-applies these
     /// fields onto the server user and self-clears once the server reflects them.
     var pendingOptimisticProfile: ProfileSnapshot?
-
-    @discardableResult
-    public func applyLocalProfileChanges(
-        displayName: String?,
-        bio: String?,
-        avatarUrl: String?
-    ) -> ProfileSnapshot {
-        let snapshot = ProfileSnapshot(
-            displayName: currentUser?.displayName,
-            bio: currentUser?.bio,
-            avatarUrl: currentUser?.avatar
-        )
-        guard let user = currentUser else { return snapshot }
-        let updated = user.withProfileChanges(
-            displayName: displayName,
-            bio: bio,
-            avatar: avatarUrl
-        )
-        currentUser = updated
-        // U3 — remember the optimistic profile so a revalidation/refresh can't
-        // clobber it, and persist to the keychain so it survives a cold start
-        // (cold-start hydration reads currentUser from the keychain). The
-        // guard itself is ALSO persisted (not just the optimistic user) —
-        // see `savePendingProfileToKeychain` — so a kill+relaunch before the
-        // outbox row confirms still protects the edit from the boot-time
-        // `/auth/me` revalidation.
-        let pending = ProfileSnapshot(
-            displayName: updated.displayName, bio: updated.bio, avatarUrl: updated.avatar)
-        pendingOptimisticProfile = pending
-        saveUserToKeychain(updated, userId: updated.id)
-        savePendingProfileToKeychain(pending, userId: updated.id)
-        return snapshot
-    }
-
-    public func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot) {
-        guard let user = currentUser else { return }
-        let reverted = user.withProfileChanges(
-            displayName: snapshot.displayName,
-            bio: snapshot.bio,
-            avatar: snapshot.avatarUrl
-        )
-        currentUser = reverted
-        // U3 — the optimistic edit was rolled back; drop the guard + persist.
-        pendingOptimisticProfile = nil
-        saveUserToKeychain(reverted, userId: reverted.id)
-        clearPendingProfileFromKeychain(userId: reverted.id)
-    }
-
-    public func applyLocalVoicePublicChange(_ isPublic: Bool) {
-        guard let user = currentUser else { return }
-        let updated = user.withProfileChanges(voicePublic: isPublic)
-        currentUser = updated
-        // The change is already server-confirmed (called after PATCH /users/me),
-        // so it doesn't join the optimistic guard — just persist for cold start.
-        saveUserToKeychain(updated, userId: updated.id)
-    }
-
-    /// U3 — merge any in-flight optimistic profile onto a freshly-fetched server
-    /// `user`. Returns the user to assign + whether the pending guard should be
-    /// cleared: `true` once the server already reflects the optimistic edit (the
-    /// `updateProfile` row propagated), so a later external profile change isn't
-    /// shadowed by a stale optimistic value. Pure + static for testability;
-    /// when `pending == nil` it returns the server user unchanged (the common
-    /// login/session path is unaffected).
-    static func resolveServerUserWithOptimistic(
-        _ server: MeeshyUser, pending: ProfileSnapshot?
-    ) -> (user: MeeshyUser, clearedPending: Bool) {
-        guard let pending else { return (server, false) }
-        if server.displayName == pending.displayName,
-           server.bio == pending.bio,
-           server.avatar == pending.avatarUrl {
-            return (server, true)
-        }
-        return (
-            server.withProfileChanges(
-                displayName: pending.displayName, bio: pending.bio, avatar: pending.avatarUrl),
-            false
-        )
-    }
 
     #if DEBUG
     /// Lève le délai d'une minute de `refreshCurrentUserProfile` : un

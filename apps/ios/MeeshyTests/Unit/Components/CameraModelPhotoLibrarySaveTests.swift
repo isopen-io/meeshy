@@ -21,14 +21,16 @@ import XCTest
 ///     inline Photos call in this `@MainActor` type.
 final class CameraModelPhotoLibrarySaveTests: XCTestCase {
 
-    private func cameraViewSource() throws -> String {
+    private func cameraViewSource(_ fichier: String = "CameraModel.swift") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main/Components/\(fichier)")
+        let video = url.deletingLastPathComponent().appendingPathComponent("CameraModel+Video.swift")
+        let suite = fichier == "CameraModel.swift" ? "\n" + (try String(contentsOf: video, encoding: .utf8)) : ""
+        return try String(contentsOf: url, encoding: .utf8) + suite
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
@@ -40,10 +42,10 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
     }
 
     func test_photoCapture_savesViaPhotoLibraryManager() throws {
-        let source = try cameraViewSource()
+        let source = try cameraViewSource("CameraModel+PhotoCapture.swift")
         let fn = try body(
             from: "func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto",
-            to: "// MARK: - Video Delegate",
+            to: "// MARK: - Video recording",
             in: source
         )
         XCTAssertTrue(
