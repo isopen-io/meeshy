@@ -182,7 +182,7 @@ extension ComposerCaptureSession {
         let (auteur, date) = (lookPerson, lookDate)
         let cache = scenes
         let prise = editPhotoData
-        let proportions = canvasAspect
+        let proportions = editAspect ?? canvasAspect
         let textes = retouchTexts
         let intacte = ComposerPhotoEncoding.untouchedTake(prise, of: photo, paints: ComposerLiveLookRule.rendersLive(regard) || !cadrage.isIdentity || !textes.isEmpty, aspect: proportions)
         return { @MainActor in
@@ -204,7 +204,7 @@ extension ComposerCaptureSession {
         let date = lookDate
         let espace = loopPlayer?.declaredSpace?.name as String?
         let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
-        let proportions = canvasAspect
+        let proportions = editAspect ?? canvasAspect
         let gain = takeSound.effectiveGain
         let calque = loopPlayer.flatMap { retouchTexts.overlay(canvas: ComposerLookPainter.canvas(for: $0.uprightSize, aspect: proportions)) }
         return { @MainActor in
