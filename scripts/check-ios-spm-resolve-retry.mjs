@@ -37,6 +37,9 @@
 //      l'entrée en collision à CHAQUE essai, purgée ou non, tant qu'il
 //      télécharge lui-même ; le script doit précharger l'artefact (faux
 //      `curl` ici) à l'emplacement du cache que SwiftPM consulte, et réussir.
+//   5. COLLISION en forme PAQUET (#16852) — `-` à la place du projet, comme
+//      l'appelle `sdk-tests.yml` ; le faux refuse `-project` comme le vrai, et
+//      le script doit purger et réussir comme en forme projet.
 //
 // `--self-test` rejoue le scénario 1 contre une variante du script où la
 // branche de collision (bornée par les commentaires sentinelles
@@ -52,7 +55,17 @@ import { spawnSync } from 'node:child_process';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT_PATH = join(REPO_ROOT, 'scripts/ci/resolve-spm-packages.sh');
-const WORKFLOW_PATH = join(REPO_ROOT, '.github/workflows/ios.yml');
+/**
+ * Les DEUX workflows qui résolvent un graphe SPM sur un runner macOS (#16852).
+ * `sdk-tests.yml` manquait à cette liste, et c'est tout le défaut : le remède
+ * était écrit, motivé, testé — et ne valait que là où quelqu'un l'avait récité.
+ * Une collision du cache d'artefacts a mis TOUTE la CI du SDK par terre le
+ * 2026-11-08, `dev` compris, pendant que `ios.yml` s'en relevait seul.
+ */
+const WORKFLOW_PATHS = [
+  join(REPO_ROOT, '.github/workflows/ios.yml'),
+  join(REPO_ROOT, '.github/workflows/sdk-tests.yml'),
+];
 
 const STALE_ARTIFACT_RELATIVE = 'org.swift.swiftpm/artifacts/WebRTC-M146.xcframework.zip';
 
@@ -107,6 +120,36 @@ exit 1
 echo "xcodebuild: error: no such module 'Foo'" >&2
 exit 65
 `,
+  /**
+   * Le faux REFUSE ce que le vrai refuse (#16852) : `xcodebuild -project -`
+   * ne résout rien, il échoue sur un chemin de projet introuvable. Sans ce
+   * refus, le scénario de la forme PAQUET ne peut PAS TOMBER — mesuré : avec
+   * l'ancien `-project "$PROJECT"` toujours en place, le garde restait VERT,
+   * parce qu'un faux qui ignore ses arguments accepte `-project -` sans
+   * broncher. Un double ment aussi par ce qu'il ACCEPTE.
+   *
+   * Pour le reste il se comporte comme `collision` : la purge doit marcher en
+   * forme paquet comme en forme projet.
+   */
+  packageCollision: `#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+  if [ "$arg" = "-project" ]; then
+    echo "xcodebuild: error: '-' does not exist." >&2
+    exit 66
+  fi
+done
+STALE="$FAKE_STATE_DIR/${STALE_ARTIFACT_RELATIVE}"
+if [ -f "$STALE" ]; then
+  echo "failed downloading 'https://github.com/stasel/WebRTC/releases/download/146.0.0/WebRTC-M146.xcframework.zip'"
+  echo "which is required by binary target 'WebRTC':"
+  echo "$STALE"
+  echo "already exists in file system"
+  exit 1
+fi
+echo "Resolved source packages"
+exit 0
+`,
 };
 
 const FAKE_SLEEP = `#!/usr/bin/env bash
@@ -130,7 +173,11 @@ const write = (path, content, mode = 0o644) => {
 };
 
 /** Exécute `scriptPath` sous un faux `xcodebuild` (et un faux `sleep`, instantané). */
-const runScenario = (scriptPath, fakeXcodebuild, { seedStaleArtifact = false } = {}) => {
+const runScenario = (
+  scriptPath,
+  fakeXcodebuild,
+  { seedStaleArtifact = false, project = 'apps/ios/Meeshy.xcodeproj', scheme = 'Meeshy' } = {},
+) => {
   const workdir = mkdtempSync(join(tmpdir(), 'spm-resolve-'));
   const bin = join(workdir, 'bin');
   const state = join(workdir, 'state');
@@ -148,7 +195,7 @@ const runScenario = (scriptPath, fakeXcodebuild, { seedStaleArtifact = false } =
 
   const result = spawnSync(
     scriptPath,
-    ['apps/ios/Meeshy.xcodeproj', 'Meeshy', `${workdir}/DerivedData`, `${workdir}/spm`],
+    [project, scheme, `${workdir}/DerivedData`, `${workdir}/spm`],
     {
       env: {
         PATH: `${bin}:${process.env.PATH}`,
@@ -178,9 +225,24 @@ const scenarioChecks = (scriptPath) => {
   const collision = runScenario(scriptPath, FAKE_XCODEBUILD.collision, { seedStaleArtifact: true });
   const network = runScenario(scriptPath, FAKE_XCODEBUILD.transientNetwork);
   const permanent = runScenario(scriptPath, FAKE_XCODEBUILD.permanentFailure);
+  // La forme PAQUET (#16852) : `-` à la place d'un chemin de projet. Elle doit
+  // purger comme la forme projet — c'est pour elle que `sdk-tests.yml` n'appelait
+  // pas le script, et sous `set -u` le bash 3.2 de macOS tue un script qui
+  // déréférence un tableau vide sans précaution.
+  const packageCollision = runScenario(scriptPath, FAKE_XCODEBUILD.packageCollision, {
+    seedStaleArtifact: true,
+    project: '-',
+    scheme: 'MeeshySDK-Package',
+  });
   const refused = runScenario(scriptPath, FAKE_XCODEBUILD.refusedDownload);
 
   return [
+    packageCollision.status === 0
+      ? []
+      : [`collision (forme PAQUET) : devrait réussir après purge, code de sortie ${packageCollision.status}`],
+    packageCollision.sleptFor.length === 0
+      ? []
+      : [`collision (forme PAQUET) : a dormi (${packageCollision.sleptFor.join(',')}s) au lieu de purger`],
     collision.status === 0
       ? []
       : [`collision : devrait réussir après purge, code de sortie ${collision.status}`],
@@ -208,14 +270,14 @@ const scenarioChecks = (scriptPath) => {
   ].flat();
 };
 
-const workflowCallsTheScript = () => {
-  const workflow = readFileSync(WORKFLOW_PATH, 'utf8');
-  return workflow.includes('scripts/ci/resolve-spm-packages.sh')
-    ? []
-    : [
-        `${WORKFLOW_PATH} n'appelle plus scripts/ci/resolve-spm-packages.sh — la boucle de reprise est-elle repassée en ligne ?`,
-      ];
-};
+const workflowCallsTheScript = () =>
+  WORKFLOW_PATHS.flatMap((path) =>
+    readFileSync(path, 'utf8').includes('scripts/ci/resolve-spm-packages.sh')
+      ? []
+      : [
+          `${path} n'appelle plus scripts/ci/resolve-spm-packages.sh — la boucle de reprise est-elle repassée en ligne ?`,
+        ],
+  );
 
 /** Retire la branche de collision (bornée par les sentinelles) — la régression exacte de #6545. */
 const withoutCollisionBranch = (source) => {
@@ -259,7 +321,9 @@ const main = () => {
     console.error(`\n${failures.length} défaut(s) dans la reprise de résolution SPM iOS.`);
     return 1;
   }
-  console.log('scripts/ci/resolve-spm-packages.sh distingue collision de cache et panne réseau (4/4 scénarios).');
+  console.log(
+    'scripts/ci/resolve-spm-packages.sh distingue collision de cache, téléchargement refusé et panne réseau, en forme projet ET paquet (5/5 scénarios).',
+  );
   return 0;
 };
 

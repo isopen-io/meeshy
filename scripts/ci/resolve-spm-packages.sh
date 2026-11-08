@@ -23,7 +23,12 @@
 # large, mais toujours correct (SwiftPM re-télécharge ce qui manque).
 set -euo pipefail
 
-PROJECT="${1:?usage: resolve-spm-packages.sh <project> <scheme> <derivedDataPath> <clonedSourcePackagesDirPath>}"
+# `-` plutôt qu'un chemin de projet : résoudre le PAQUET du répertoire courant
+# (#16852). `sdk-tests.yml` résout `MeeshySDK-Package`, un paquet Swift sans
+# projet Xcode, et c'est la seule raison pour laquelle il n'appelait pas ce
+# script — il lançait donc `build-for-testing` à cru, sans purge ni reprise, et
+# une collision du cache d'artefacts du runner y était définitive.
+PROJECT="${1:?usage: resolve-spm-packages.sh <project|-> <scheme> <derivedDataPath> <clonedSourcePackagesDirPath>}"
 SCHEME="${2:?}"
 DERIVED_DATA="${3:?}"
 SPM_DIR="${4:?}"
@@ -31,6 +36,14 @@ SPM_DIR="${4:?}"
 # Repli de test : `check-ios-spm-resolve-retry.mjs` pointe cette racine vers
 # un répertoire jetable pour vérifier la purge sans toucher au disque réel.
 ARTIFACTS_ROOT="${SWIFTPM_ARTIFACTS_ROOT:-$HOME/Library/Caches/org.swift.swiftpm/artifacts}"
+
+# Tableau VIDE quand il n'y a pas de projet, et déréférencé par
+# `${x[@]+"${x[@]}"}` : sous `set -u`, le bash 3.2 de macOS traite
+# `"${vide[@]}"` comme une variable non liée et tue le script.
+PROJECT_ARGS=()
+if [ "$PROJECT" != "-" ]; then
+  PROJECT_ARGS=(-project "$PROJECT")
+fi
 
 LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
@@ -73,7 +86,7 @@ prefetch_artifact() {
 
 for attempt in 1 2 3 4; do
   if xcodebuild -resolvePackageDependencies \
-       -project "$PROJECT" -scheme "$SCHEME" \
+       ${PROJECT_ARGS[@]+"${PROJECT_ARGS[@]}"} -scheme "$SCHEME" \
        -derivedDataPath "$DERIVED_DATA" \
        -clonedSourcePackagesDirPath "$SPM_DIR" >"$LOG" 2>&1; then
     cat "$LOG"
