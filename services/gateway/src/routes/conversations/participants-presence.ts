@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { mayRankByConversationActivity } from '../../services/conversations/activityRankingGate';
 import { ACTIVE_MEMBER_LISTING_LIMIT } from '@meeshy/shared/utils/member-visibility';
 import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
@@ -84,13 +85,27 @@ export async function loadMostActiveParticipants(options: {
   filters: { onlineOnly?: OnlineOnlyScope; role?: string; search?: string };
   cursor?: string;
   pageLimit: number;
+  /**
+   * Le plancher d'historique du LECTEUR (#17139). Non nul ⇒ le classement par
+   * activité ne lui est pas servi : `participantStats` agrège la vie ENTIÈRE de
+   * la conversation, et un ORDRE qui en dépend révèle autant que le champ que
+   * #17076 a cessé de servir. Le paramètre est REQUIS plutôt qu'optionnel —
+   * c'est une porte de confidentialité, et un appelant qui l'oublierait doit ne
+   * pas compiler, jamais retomber sur « aucun plancher ».
+   */
+  readerHistoryFloor: Date | null;
 }): Promise<{ participants: any[]; hasMore: boolean; nextCursor: string | null }> {
-  const { prisma, conversationId, filters, cursor, pageLimit } = options;
+  const { prisma, conversationId, filters, cursor, pageLimit, readerHistoryFloor } = options;
 
-  const statsRow = await prisma.conversationMessageStats.findUnique({
-    where: { conversationId },
-    select: { participantStats: true }
-  });
+  // La dégradation est GRATUITE : ne pas charger la carte vide `rankedKeys`,
+  // donc tout vient du complément, qui classe déjà par ANCIENNETÉ. Aucune
+  // branche de tri de plus — et une requête de moins pour ce lecteur.
+  const statsRow = mayRankByConversationActivity(readerHistoryFloor)
+    ? await prisma.conversationMessageStats.findUnique({
+        where: { conversationId },
+        select: { participantStats: true }
+      })
+    : null;
   const rawStats = statsRow?.participantStats;
   const parsedStats = ((typeof rawStats === 'string' ? JSON.parse(rawStats) : rawStats) ??
     {}) as Record<string, ParticipantActivityStat>;

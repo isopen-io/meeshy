@@ -29,6 +29,8 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { loadReaderHistoryFloor } from '../historyFloor';
+import { mayRankByConversationActivity } from '../conversations/activityRankingGate';
 import { z } from 'zod';
 import type { CacheStore } from '../CacheStore';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -269,7 +271,27 @@ export class MentionSuggestionFinder {
     }
   }
 
-  private async loadConversationActivity(conversationId: string): Promise<ConversationActivity> {
+  /**
+   * L'activité de la conversation, pour classer les suggestions — **et rien si
+   * le lecteur est planchéisé** (#17139). `participantStats` agrège la vie
+   * ENTIÈRE : un ordre qui en dépend révèle à ce lecteur qui a beaucoup écrit
+   * avant son arrivée, ce que #17076 a cessé de lui servir en chiffres.
+   *
+   * La dégradation est gratuite : une carte VIDE fait retomber
+   * `byConversationActivity` sur ses départages — le libellé, puis le nom
+   * d'utilisateur — qu'il tient déjà. Aucune branche de tri de plus, et une
+   * requête de moins pour ce lecteur.
+   */
+  private async loadConversationActivity(
+    conversationId: string,
+    readerUserId: string,
+  ): Promise<ConversationActivity> {
+    const floor = await loadReaderHistoryFloor(this.prisma, {
+      conversationId,
+      reader: { kind: 'user', userId: readerUserId },
+    });
+    if (!mayRankByConversationActivity(floor)) return new Map();
+
     const statsRow = await this.prisma.conversationMessageStats.findUnique({
       where: { conversationId },
       select: { participantStats: true }
@@ -304,7 +326,7 @@ export class MentionSuggestionFinder {
       where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { not: currentUserId } },
       include: { user: { select: USER_SELECT } }
     });
-    const activity = await this.loadConversationActivity(conversationId);
+    const activity = await this.loadConversationActivity(conversationId, currentUserId);
     return [...members]
       .sort(byConversationActivity(activity))
       .flatMap(member => (member.user ? [member.user] : []));

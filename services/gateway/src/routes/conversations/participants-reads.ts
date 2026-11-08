@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolveParticipantAvatar, serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { participantListUserSelect } from './utils/participant-projection';
@@ -217,7 +218,15 @@ export function registerParticipantReadRoutes(
           conversationId,
           filters: { onlineOnly: onlineOnlyFilter, role, search },
           cursor,
-          pageLimit
+          pageLimit,
+          // #17139 — le plancher du LECTEUR décide s'il a droit au classement
+          // par activité. Il propage ses erreurs, et le `catch` de la route en
+          // fait un 500 : une porte de confidentialité échoue en montrant
+          // moins, jamais en servant le rang de toute la vie du fil.
+          readerHistoryFloor: await loadReaderHistoryFloor(prisma, {
+            conversationId,
+            reader: historyReaderFromAuthContext(authRequest.authContext),
+          })
         });
         paginatedParticipants = page.participants;
         hasMore = page.hasMore;
