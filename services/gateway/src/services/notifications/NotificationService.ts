@@ -675,7 +675,7 @@ export class NotificationService {
       prisma: this.prisma,
       createNotification: (params) => this.createNotification(params),
       resolveRecipientLangs: (ids) => this.resolveRecipientLangs(ids),
-      shouldCreateMentionNotification: (s, r) => this.shouldCreateMentionNotification(s, r),
+      consumeMentionBudget: (s, r) => this.consumeMentionBudget(s, r),
       isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),
     };
   }
@@ -1629,8 +1629,9 @@ export class NotificationService {
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
-    // Anti-spam: rate limit des mentions par paire (sender → recipient)
-    if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
+    // Anti-spam : le budget de la paire, CONSOMMÉ ici et nulle part ailleurs
+    // (#17073). Le filtre du lot ne fait que poser la question.
+    if (!this.consumeMentionBudget(params.mentionerUserId, params.mentionedUserId)) {
       notificationLogger.info('Mention notification blocked (rate limit)', {
         senderId: params.mentionerUserId,
         mentionedUserId: params.mentionedUserId,
@@ -1783,10 +1784,20 @@ export class NotificationService {
     },
     memberIds: string[]
   ): Promise<number> {
-    const eligibleUserIds = mentionedUserIds.filter(userId => {
+    // Une PERSONNE, pas une occurrence (#17073). La liste explicite n'était
+    // dédoublonnée nulle part en amont — ni le schéma zod, ni la troncature à
+    // `MAX_MENTIONS_PER_MESSAGE`, ni `validateMentionPermissions`, qui pousse
+    // une entrée par occurrence — si bien qu'une charge
+    // `mentionedUserIds: [victime, victime, …]` produisait plusieurs bannières
+    // identiques pour UN message, et épuisait le budget de la paire au passage.
+    // La table `Mention` est protégée par `@@unique([messageId,
+    // mentionedUserId])` ; c'est la NOTIFICATION qui ne l'était pas. Ce site
+    // est celui qui notifie : c'est ici que « ne pas notifier deux fois » est
+    // une propriété, et non une espérance sur ses appelants.
+    const eligibleUserIds = [...new Set(mentionedUserIds)].filter(userId => {
       if (userId === commonData.senderId) return false;
       if (!memberIds.includes(userId)) return false;
-      if (!this.shouldCreateMentionNotification(commonData.senderId, userId)) {
+      if (!this.mentionBudgetAllows(commonData.senderId, userId)) {
         notificationLogger.info('Batch mention blocked (rate limit)', {
           senderId: commonData.senderId,
           recipientId: userId,
@@ -2604,28 +2615,56 @@ export class NotificationService {
   // ==============================================
 
   /**
-   * Vérifie le rate limit des mentions par paire (sender → recipient).
-   * Maximum MAX_MENTIONS_PER_MINUTE mentions par minute par paire.
+   * Le budget de mentions d'une paire (expéditeur → destinataire) :
+   * `MAX_MENTIONS_PER_MINUTE` par fenêtre de `MENTION_WINDOW_MS`.
+   *
+   * ─── Deux méthodes, parce que ce sont deux actes (#17073) ────────────────
+   *
+   * Il n'y en avait qu'une, et elle MUTAIT : elle poussait un horodatage quand
+   * elle autorisait. Elle était appelée DEUX FOIS sur le même chemin pour la
+   * même paire — en filtre d'éligibilité dans
+   * `createMentionNotificationsBatch`, puis en tête de
+   * `createMentionNotification`, que ce lot appelle juste après. Chaque
+   * notification consommait donc DEUX jetons : **le budget annoncé était 5, le
+   * budget réel était 2.**
+   *
+   * Le second appel était justifié par « la garde par destinataire reste, pour
+   * l'appelant qui l'atteint en solo » — et mesuré, cet appelant n'existe pas :
+   * `createMentionNotification` n'a aucun appelant de production hors du lot.
+   * Le filtre reste utile (il évite d'ouvrir une relecture de Prisme pour des
+   * destinataires qu'on sait hors budget), mais il doit POSER LA QUESTION sans
+   * y répondre.
+   *
+   * > **Un prédicat qui répond « peut-on ? » ne doit pas écrire.** Sa signature
+   * > ne dit rien de sa mutation, donc rien n'empêche un second appelant de
+   * > l'interroger — et le coût d'une question devient une réponse fausse.
+   *
+   * La CONSOMMATION vit donc au site qui CRÉE, une fois, et la QUESTION est
+   * pure.
    */
-  private shouldCreateMentionNotification(senderId: string, recipientId: string): boolean {
+  private mentionBudgetAllows(senderId: string, recipientId: string): boolean {
+    return this.recentMentionsWithin(`${senderId}:${recipientId}`).length < this.MAX_MENTIONS_PER_MINUTE;
+  }
+
+  /** Consomme un jeton si le budget le permet. Le SEUL site qui écrit. */
+  private consumeMentionBudget(senderId: string, recipientId: string): boolean {
     const key = `${senderId}:${recipientId}`;
-    const now = Date.now();
-    const cutoff = now - this.MENTION_WINDOW_MS;
+    const recentTimestamps = this.recentMentionsWithin(key);
+    if (recentTimestamps.length >= this.MAX_MENTIONS_PER_MINUTE) return false;
 
-    const timestamps = this.recentMentions.get(key) || [];
-    const recentTimestamps = timestamps.filter(ts => ts > cutoff);
-
-    if (recentTimestamps.length >= this.MAX_MENTIONS_PER_MINUTE) {
-      return false;
-    }
-
-    recentTimestamps.push(now);
+    recentTimestamps.push(Date.now());
     this.recentMentions.set(key, recentTimestamps);
     if (this.recentMentions.size > this.MAX_MENTION_MAP_ENTRIES) {
       const firstKey = this.recentMentions.keys().next().value!;
       this.recentMentions.delete(firstKey);
     }
     return true;
+  }
+
+  /** Les horodatages encore dans la fenêtre — une COPIE, jamais la liste rangée. */
+  private recentMentionsWithin(key: string): number[] {
+    const cutoff = Date.now() - this.MENTION_WINDOW_MS;
+    return (this.recentMentions.get(key) || []).filter(ts => ts > cutoff);
   }
 
   /**
