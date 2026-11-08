@@ -80,7 +80,7 @@ describe("#13350 — l'éventail de publication ne notifie pas une personne bloq
       prisma: prisma as unknown as PrismaClient,
       createNotification,
       resolveRecipientLangs: async () => new Map<string, string>(),
-      shouldCreateMentionNotification: () => true,
+      consumeMentionBudget: () => true,
       isConversationMutedFor: async () => false,
     } as unknown as FanoutDependencies;
     await createFriendContentNotificationsBatch(deps, {

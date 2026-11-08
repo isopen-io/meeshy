@@ -81,6 +81,10 @@ struct ComposerCameraHardwareButtons: UIViewRepresentable {
         private var press = ComposerHardwareShutter.Press.none
         private var holdTimer: Task<Void, Never>?
 
+        // iOS 26.1 : une deinit synthétisée ISOLÉE au MainActor (SE-0466) fait un
+        // double-free au démontage (#9694). Le minuteur tient `self` en `weak`.
+        nonisolated deinit {}
+
         @available(iOS 17.2, *)
         static func event(of phase: AVCaptureEventPhase) -> ComposerHardwareShutter.Event {
             switch phase {

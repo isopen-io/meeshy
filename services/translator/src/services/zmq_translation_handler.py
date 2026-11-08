@@ -17,6 +17,7 @@ from typing import Dict, Optional
 # Import des modèles ZMQ
 from .zmq_models import TranslationTask
 from .zmq_pool.translation_processor import unsupported_language
+from .zmq_pool.connection_manager import summarize_task_ids
 
 logger = logging.getLogger(__name__)
 
@@ -407,18 +408,29 @@ class TranslationHandler:
 
     async def publish_pool_full(self, tasks) -> None:
         """Signale à la passerelle chaque tâche refusée par une file pleine,
-        directe ou en lot : UNE `translation_error` par tâche."""
+        directe ou en lot : UNE `translation_error` par tâche.
+
+        #17003 — le journal tient en lignes bornées, quel que soit le nombre de
+        tâches : un résumé des refus, un résumé des envois ratés."""
+        tasks = list(tasks)
         for task in tasks:
             self.release_inflight(task.task_id)
         if not self.pub_socket:
             logger.error("❌ Socket PUB non initialisé pour envoyer l'erreur")
             return
+        failures = []
         for task in tasks:
             try:
                 await self.pub_socket.send(json.dumps(self._pool_full_error(task)).encode('utf-8'))
-                logger.warning(f"Pool pleine, rejet de la tâche {task.task_id}")
             except Exception as e:
-                logger.error(f"❌ Erreur « pool pleine » non publiée pour {task.task_id}: {type(e).__name__}")
+                failures.append((task, type(e).__name__))
+        logger.warning(f"[TRANSLATOR] Pool pleine, rejet de {summarize_task_ids(tasks)}")
+        if failures:
+            error_types = sorted({name for _, name in failures})
+            logger.error(
+                f"❌ [TRANSLATOR] Erreur « pool pleine » non publiée pour "
+                f"{summarize_task_ids([task for task, _ in failures])}: {error_types}"
+            )
 
     async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
         """Publie un résultat de traduction via PUB vers la gateway avec informations techniques complètes"""

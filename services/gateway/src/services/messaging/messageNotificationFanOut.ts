@@ -21,6 +21,7 @@ import {
 } from './retractMessageNotifications';
 import { loadQuoteCascadeAudience } from './quoteCascade';
 import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
+import { pendingRequestUserIds } from './pendingMessageRequests';
 
 /**
  * Combien de `createMessageNotification` l'éventail `new_message` laisse en vol
@@ -438,12 +439,12 @@ export async function notifyMessageRecipients(params: {
     // #14107 (MSG-02, MIN-03) — une DEMANDE de message en attente ne sonne pas :
     // son destinataire la découvre dans sa boîte de demandes, ni bannière, ni
     // mention, ni réponse ne la lui annoncent.
+    // Le prédicat est PARTAGÉ avec l'éventail de notification d'une ÉDITION
+    // depuis #17074 : il était formulé ici et nulle part ailleurs, si bien que
+    // l'édition laissait sonner ce que l'envoi taisait.
     const silenced = new Set<string>([
       ...deadFor.keys(),
-      ...conversation.participants
-        .filter((p) => p.messageRequestAt instanceof Date)
-        .map((p) => p.userId)
-        .filter((id): id is string => Boolean(id)),
+      ...pendingRequestUserIds(conversation.participants),
     ]);
     const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !silenced.has(id));
 

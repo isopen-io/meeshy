@@ -47,6 +47,18 @@ import type { PresenceViewer, PresenceTarget } from '../../../services/PresenceV
 import { canAccessConversation } from '../../../routes/conversations/utils/access-control';
 import { memberRoleCasings } from '@meeshy/shared/types/role-types';
 import { registerParticipantsRoutes } from '../../../routes/conversations/participants';
+// Le harnais vit dans son propre fichier depuis #17032 : cette suite est hors
+// budget de taille, et le cliquet refuse toute ligne de plus à un fichier qui
+// l'est. Voir `helpers/participants-route-harness.ts` pour la raison complète.
+import {
+  createMockPrisma,
+  createMockReply,
+  createMockNotificationService,
+  createMockIO,
+  createMockFastify,
+  getRoute,
+  wireServerToFastify,
+} from '../../helpers/participants-route-harness';
 import { cacheParticipant, getCachedParticipant } from '../../../utils/participant-lookup-cache';
 
 const VALID_CONV_ID = '507f1f77bcf86cd799439011';
@@ -91,153 +103,6 @@ const viewerAuthContext = (viewer: { role: string } | 'anonymous') =>
   viewer === 'anonymous'
     ? { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: PARTICIPANT_ID, participantId: PARTICIPANT_ID, registeredUser: null }
     : { type: 'user', isAuthenticated: true, isAnonymous: false, userId: VALID_USER_ID, registeredUser: { id: VALID_USER_ID, role: viewer.role } };
-
-function createMockPrisma() {
-  return {
-    conversation: {
-      findFirst: jest.fn<any>(),
-      // L'état terminal que la porte d'ajout doit désormais opposer à
-      // `resolveConversationEntry`. Vivante par défaut : c'est le conteneur dans
-      // lequel tous les cas ci-dessous se placent, et le dire ici évite de le
-      // répéter partout.
-      findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }),
-    },
-    participant: {
-      findFirst: jest.fn<any>(),
-      // Vide par défaut : `resolveConversationEntry` lit ici TOUTES les lignes
-      // de la paire (conversation, utilisateur) — y compris celles qu'un départ
-      // ou un bannissement a laissées inactives — donc « aucune ligne » =
-      // primo-arrivant.
-      findMany: jest.fn<any>().mockResolvedValue([]),
-      create: jest.fn<any>(),
-      update: jest.fn<any>(),
-      updateMany: jest.fn<any>(),
-      findUnique: jest.fn<any>(),
-      count: jest.fn<any>().mockResolvedValue(0),
-    },
-    user: {
-      findFirst: jest.fn<any>(),
-    },
-    conversationMessageStats: {
-      findUnique: jest.fn<any>().mockResolvedValue(null),
-    },
-    communityMember: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
-    },
-  } as any;
-}
-
-function createMockReply() {
-  const reply: any = {
-    status: jest.fn<any>(),
-    send: jest.fn<any>(),
-  };
-  reply.status.mockReturnValue(reply);
-  return reply;
-}
-
-function createMockNotificationService() {
-  return {
-    createAddedToConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
-    createMemberJoinedNotification: jest.fn<any>().mockResolvedValue(undefined),
-    createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
-    createRemovedFromConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
-    createMemberRemovedNotification: jest.fn<any>().mockResolvedValue(undefined),
-    createMemberRoleChangedNotification: jest.fn<any>().mockResolvedValue(undefined),
-  };
-}
-
-/**
- * `.to()` rend un émetteur CHAÎNABLE, comme le vrai : `io.to(a).to(b).emit()`
- * est la forme qu'utilise `emitToConversationParticipants` pour ne livrer
- * qu'UNE copie par socket. Un `.to()` qui rend `{ emit }` sans `.to` faisait
- * planter le second maillon — et un mock qui casse sur la forme de production
- * est un témoin qui décrit un autre programme.
- *
- * `_roomsFor` rend les rooms de la chaîne qui a émis un événement donné :
- * c'est la seule façon de prouver « la room personnelle a été adressée », que
- * `expect(io.to).toHaveBeenCalledWith(...)` ne peut pas distinguer d'un simple
- * appel isolé.
- */
-function createMockIO() {
-  const mockEmit = jest.fn<any>();
-  const mockLeave = jest.fn<any>();
-  const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
-  const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
-  const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
-    emit: (event: string, payload: unknown) => {
-      sent.push({ rooms, event, payload });
-      mockEmit(event, payload);
-    },
-  });
-  const io = {
-    to: jest.fn<any>((room: string) => chain([room])),
-    in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
-    _emit: mockEmit,
-    _leave: mockLeave,
-    _fetchSockets: mockFetchSockets,
-    _roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
-    _payloadFor: (event: string) => sent.find((s) => s.event === event)?.payload,
-  };
-  return io;
-}
-
-type RouteHandler = (request: any, reply: any) => Promise<any>;
-type RouteRegistration = {
-  method: string;
-  path: string;
-  handler: RouteHandler;
-  options: any;
-};
-
-function createMockFastify() {
-  const routes: RouteRegistration[] = [];
-  return {
-    routes,
-    get: jest.fn<any>((path: string, options: any, handler: RouteHandler) => {
-      routes.push({ method: 'GET', path, handler, options });
-    }),
-    post: jest.fn<any>((path: string, options: any, handler: RouteHandler) => {
-      routes.push({ method: 'POST', path, handler, options });
-    }),
-    delete: jest.fn<any>((path: string, options: any, handler: RouteHandler) => {
-      routes.push({ method: 'DELETE', path, handler, options });
-    }),
-    patch: jest.fn<any>((path: string, options: any, handler: RouteHandler) => {
-      routes.push({ method: 'PATCH', path, handler, options });
-    }),
-  };
-}
-
-function getRoute(fastify: ReturnType<typeof createMockFastify>, method: string, pathPattern: string) {
-  return fastify.routes.find(r => r.method === method && r.path.includes(pathPattern))!;
-}
-
-// The mutating routes resolve Socket.IO and the notification service from the
-// Fastify instance (`fastify.socketIOHandler?.getManager()?.getIO()` and
-// `fastify.notificationService`), not from `request.server`. Mirror whatever a
-// test wires onto `request.server` onto the registered Fastify instance so the
-// route's closure observes it.
-function wireServerToFastify(
-  fastify: any,
-  server?: { io?: unknown; notificationService?: unknown }
-) {
-  const invalidateParticipantCache = jest.fn<any>();
-  const endLiveLocationForDepartedMember = jest.fn<any>();
-  fastify.socketIOHandler = server?.io
-    ? {
-        getManager: () => ({
-          getIO: () => server.io,
-          invalidateParticipantCache,
-          endLiveLocationForDepartedMember,
-        }),
-      }
-    : undefined;
-  fastify.notificationService = server?.notificationService;
-  fastify._invalidateParticipantCache = invalidateParticipantCache;
-  fastify._endLiveLocationForDepartedMember = endLiveLocationForDepartedMember;
-}
 
 function createParticipant(overrides: Record<string, unknown> = {}) {
   return {
@@ -1600,6 +1465,11 @@ describe('registerParticipantsRoutes', () => {
         conversationId: VALID_CONV_ID,
         userId: TARGET_USER_ID,
       });
+      // Et la route RÉPOND l'ajout : ce témoin a couvert un 500 pendant toute
+      // la vie du double incomplet ci-dessus, parce qu'il n'assertait que
+      // l'émission. Une diffusion juste au-dessus d'un gestionnaire qui lève
+      // n'est pas un succès.
+      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
     it('should not crash when io is undefined (R6-1 graceful)', async () => {

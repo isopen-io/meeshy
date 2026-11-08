@@ -172,7 +172,7 @@ export function monde(world: World = {}) {
     createNotification,
     relayThrottle,
     resolveRecipientLangs: async () => new Map<string, string>(),
-    shouldCreateMentionNotification: () => true,
+    consumeMentionBudget: () => true,
     isConversationMutedFor: async () => false,
   } as unknown as FanoutDependencies;
 

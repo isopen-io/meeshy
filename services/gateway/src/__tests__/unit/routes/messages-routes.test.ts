@@ -1659,7 +1659,11 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it('happy path: unpins message and broadcasts via socket', async () => {
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
+    // `pinnedAt` non nul est la PRÉ-CONDITION du dépinglage (#17031) : la route
+    // sort tôt, sans écrire ni diffuser, sur un message qui n'est pas épinglé.
+    // La fixture rendait la ligne SANS la colonne, donc un rejeu — et un témoin
+    // d'effet posé sur un rejeu ne peut plus tomber.
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID, pinnedAt: new Date('2026-11-01T08:30:00.000Z') });
     prisma.message.update.mockResolvedValue({ id: MSG_ID });
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
@@ -1680,7 +1684,10 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
   });
 
   it('error path → 500', async () => {
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID });
+    // Même pré-condition : sans elle, la route n'appelle plus `update`, donc le
+    // rejet préparé ne peut plus être atteint — le témoin passerait au vert par
+    // le chemin NOMINAL en croyant tenir le chemin d'erreur.
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, conversationId: CONV_ID, pinnedAt: new Date('2026-11-01T08:30:00.000Z') });
     prisma.message.update.mockRejectedValue(new Error('DB error'));
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);

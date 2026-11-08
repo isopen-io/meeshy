@@ -95,7 +95,7 @@ describe("#13350 — l'éventail d'un commentaire de story écarte les personnes
       prisma: prisma as unknown as PrismaClient,
       createNotification,
       resolveRecipientLangs: async () => new Map<string, string>(),
-      shouldCreateMentionNotification: () => true,
+      consumeMentionBudget: () => true,
       isConversationMutedFor: async () => false,
     } as unknown as FanoutDependencies;
     await createStoryCommentNotificationsBatch(deps, {

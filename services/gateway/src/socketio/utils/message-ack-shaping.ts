@@ -11,6 +11,21 @@
  *      the server `messageId` from this ACK, so the cid MUST round-trip or the
  *      by-cid reconciliation cannot promote the row to `.sent`.
  *
+ *      « Echo » veut dire *celui de l'APPELANT*, et le corps rendait celui de
+ *      la LIGNE (#17058). Les deux coïncident sur le chemin nominal et
+ *      divergent là où ça compte : sur un hit de déduplication par contenu, la
+ *      ligne relue est celle du PREMIER message, donc l'accusé de `cid2`
+ *      portait `cid1`. iOS fait confiance au serveur
+ *      (`MessageSocketManager+Send.swift` : `body.clientMessageId ?? requestCid`,
+ *      dont le `??` ne protège de rien quand le serveur a répondu un cid —
+ *      simplement celui d'un autre message), si bien que l'accusé était
+ *      attribué à une ligne DÉJÀ confirmée et que la bulle de `cid2` restait
+ *      en horloge « envoi » indéfiniment.
+ *
+ *      D'où le paramètre-objet : les deux cids sont des `string`, et c'est
+ *      précisément cette interchangeabilité qui a laissé passer le défaut. Un
+ *      nom par rôle rend l'erreur impossible à écrire.
+ *
  *   2. `stripClientMessageId` — remove `clientMessageId` from the peers'
  *      `message:new` payload so a non-sender participant never learns the
  *      sender's optimistic-id space (the sender's own devices still receive the
@@ -30,14 +45,55 @@ export type MessageAckData = {
   readonly createdAt?: string;
 };
 
-export function buildMessageAckData(source: MessageAckSource): MessageAckData {
-  const createdAt =
-    source.createdAt instanceof Date ? source.createdAt.toISOString() : source.createdAt;
+export function buildMessageAckData(input: {
+  /**
+   * La ligne ÉCRITE ou RELUE. Elle donne le `messageId` et le `createdAt`
+   * autoritatifs — jamais le `clientMessageId`, qui est celui d'un autre
+   * message dès qu'un dédup a eu lieu.
+   */
+  readonly row: MessageAckSource;
+  /**
+   * Le `clientMessageId` que l'APPELANT a soumis, et le seul que l'accusé a le
+   * droit de nommer. Absent pour un transport qui n'en envoie pas.
+   */
+  readonly submittedClientMessageId?: string;
+}): MessageAckData {
+  const { row } = input;
+  const createdAt = row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt;
   return {
-    messageId: source.id,
-    ...(source.clientMessageId ? { clientMessageId: source.clientMessageId } : {}),
+    messageId: row.id,
+    ...(input.submittedClientMessageId ? { clientMessageId: input.submittedClientMessageId } : {}),
     ...(createdAt ? { createdAt } : {}),
   };
+}
+
+/**
+ * Le jumeau REST de {@link buildMessageAckData} : la réponse d'envoi ne nomme
+ * que le `clientMessageId` SOUMIS (#17058).
+ *
+ * `POST /conversations/:id/messages` rend la LIGNE entière, donc son
+ * `clientMessageId` — et sur un hit de déduplication par contenu la ligne est
+ * celle du PREMIER message. La réponse à `cid_B` repartait sous `cid_A`, et le
+ * web fusionne « par id OU clientMessageId » (`upsertThreadMessage`) : la
+ * seconde bulle était absorbée par la ligne du premier message et
+ * disparaissait. C'est le second transport du défaut, que l'issue ne nommait
+ * pas.
+ *
+ * Il vit ICI et non dans la route, parce que ce module est déclaré « the single
+ * source of truth for two invariants the iOS / web clients rely on » : une
+ * règle retapée à chaque transport est une règle qu'un transport finira par ne
+ * pas avoir.
+ *
+ * Soumis absent ⇒ la clé est RETIRÉE. Un transport qui n'envoie pas de cid ne
+ * doit pas en recevoir un fabriqué depuis la ligne — le laisser passer est
+ * exactement ce qui faisait nommer un autre message.
+ */
+export function withSubmittedClientMessageId<M extends object>(
+  message: M,
+  submittedClientMessageId: string | undefined,
+): M {
+  const { clientMessageId: _rowCid, ...rest } = message as M & { clientMessageId?: string };
+  return (submittedClientMessageId ? { ...rest, clientMessageId: submittedClientMessageId } : rest) as M;
 }
 
 /**
