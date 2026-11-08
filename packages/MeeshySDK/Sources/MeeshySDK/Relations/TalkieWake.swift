@@ -36,8 +36,8 @@ public struct TalkieWakePush: Sendable, Equatable {
     public let talkieId: String
     public let fromUserId: String
     public let fromUserName: String?
-    /// La voix déjà enregistrée (copie vocale ou segment), sous `voiceUrl` ou les clés d'un vocal (`attachmentUrl`) —
-    /// `nil` tant qu'elle n'existe pas.
+    /// La voix gardée par la passerelle : `attachmentUrl` au push de suivi (`phase: ended`), sinon `audioUrl` (capacité
+    /// signée) — `nil` si la charge n'en porte aucune.
     public let voiceURL: String?
 
     public init(talkieId: String, fromUserId: String, fromUserName: String?, voiceURL: String?) {
@@ -56,8 +56,8 @@ public struct TalkieWakePush: Sendable, Equatable {
     /// La charge `pushtotalk`, sans `type`.
     public init?(pushToTalkPayload payload: [AnyHashable: Any]) {
         guard let talkieId = Self.text(payload["talkieId"]), let fromUserId = Self.text(payload["fromUserId"]) else { return nil }
-        let name = ["fromUserName", "senderName", "fromName"].lazy.compactMap { Self.text(payload[$0]) }.first
-        let voice = Self.text(payload["voiceUrl"]) ?? Self.text(payload["attachmentUrl"])
+        let name = ["fromName", "fromUserName", "senderName"].lazy.compactMap { Self.text(payload[$0]) }.first
+        let voice = Self.text(payload["attachmentUrl"]) ?? Self.text(payload["audioUrl"])
         self.init(talkieId: talkieId, fromUserId: fromUserId, fromUserName: name, voiceURL: voice)
     }
 

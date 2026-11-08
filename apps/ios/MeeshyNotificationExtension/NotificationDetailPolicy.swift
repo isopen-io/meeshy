@@ -78,19 +78,27 @@ nonisolated enum NotificationDetailPolicy {
         userInfo["type"] as? String == talkiePushType
     }
 
-    private static let talkieVoiceKeys = ["attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize", "voiceUrl"]
+    private static let talkieVoiceKeys = ["attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize", "attachmentId", "audioUrl"]
 
-    /// La voix d'un talkie ne se télécharge ni ne se joue que depuis la passerelle CONFIGURÉE (même schéma, hôte et
-    /// port que `apiBaseURL`) : une adresse d'une autre origine est retirée de la charge, et le toucher retombe sur
+    /// Les seuls chemins de la passerelle qu'une requête de la NSE peut viser avec le jeton de la session.
+    static let sessionTokenPathPrefixes = ["/api/v1/attachments/file/", "/api/v1/talkie/"]
+
+    /// Une adresse peut-elle recevoir le jeton de la session ? Même origine que la passerelle configurée ET un chemin
+    /// attendu, sans remontée (`..`). C'est aussi la règle de toute redirection d'un téléchargement authentifié.
+    static func mayCarrySessionToken(_ url: URL?, apiBaseURL: String) -> Bool {
+        guard let url, let trusted = URL(string: apiBaseURL), sameOrigin(url, trusted) else { return false }
+        let path = url.path
+        guard !path.split(separator: "/").contains("..") else { return false }
+        return sessionTokenPathPrefixes.contains { path.hasPrefix($0) }
+    }
+
+    /// La voix d'un talkie ne se télécharge ni ne se joue que depuis la passerelle CONFIGURÉE, sous un chemin attendu
+    /// (`mayCarrySessionToken`) : toute autre adresse est retirée de la charge, et le toucher retombe sur
     /// `talkie:join`. Toute autre notification est rendue telle quelle.
     static func sealingUntrustedTalkieVoice(_ userInfo: [AnyHashable: Any], apiBaseURL: String) -> [AnyHashable: Any] {
         guard isTalkieWake(userInfo) else { return userInfo }
-        let addresses = ["attachmentUrl", "voiceUrl"].compactMap { userInfo[$0] as? String }.filter { !$0.isEmpty }
-        let trusted = URL(string: apiBaseURL)
-        let allTrusted = addresses.allSatisfy { raw in
-            guard let trusted, let resolved = absoluteVoiceURL(raw, base: apiBaseURL) else { return false }
-            return sameOrigin(resolved, trusted)
-        }
+        let addresses = ["attachmentUrl", "audioUrl"].compactMap { userInfo[$0] as? String }.filter { !$0.isEmpty }
+        let allTrusted = addresses.allSatisfy { mayCarrySessionToken(absoluteVoiceURL($0, base: apiBaseURL), apiBaseURL: apiBaseURL) }
         return allTrusted ? userInfo : withoutTalkieVoice(userInfo)
     }
 

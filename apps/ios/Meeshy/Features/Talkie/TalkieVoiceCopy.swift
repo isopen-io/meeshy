@@ -12,8 +12,16 @@ private extension Logger {
 @MainActor
 protocol TalkieVoiceCopying: AnyObject {
     /// `frames` : les trames AAC ADTS captées, dans l'ordre. `false` : rien n'est parti.
+    /// `conversationId` : celle que la passerelle a choisie pour le repli ; `nil`, le client choisit.
     @discardableResult
-    func send(_ frames: [Data], toUserId: String) async -> Bool
+    func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool
+}
+
+extension TalkieVoiceCopying {
+    @discardableResult
+    func send(_ frames: [Data], toUserId: String) async -> Bool {
+        await send(frames, toUserId: toUserId, conversationId: nil)
+    }
 }
 
 /// Une conversation où la copie peut partir : ce qu'il faut savoir pour choisir, rien de plus.
@@ -130,11 +138,11 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
     }
 
     @discardableResult
-    func send(_ frames: [Data], toUserId: String) async -> Bool {
+    func send(_ frames: [Data], toUserId: String, conversationId named: String?) async -> Bool {
         let url = directory.appendingPathComponent("talkie-copy-\(UUID().uuidString).m4a")
         guard !frames.isEmpty, writeFile(frames, url) != nil else { return false }
         do {
-            let conversationId = try await destination(for: toUserId)
+            let conversationId = if let named { named } else { try await destination(for: toUserId) }
             try await enqueue(url, conversationId)
             Logger.talkieCopy.info("talkie · copie vocale confiée à la file d'envoi")
             return true

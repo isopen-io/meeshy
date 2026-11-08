@@ -56,6 +56,24 @@ struct TalkieSendingTests {
         #expect(verdict(["success": true]) == .refused(.failed))
     }
 
+    @Test func unRepliQuiNommeSaConversation_yEnvoieLaCopie() {
+        let read = verdict(["success": false, "error": "x", "code": "TALKIE_FALLBACK_VOICE", "conversationId": "cccccccccccccccccccccccc"])
+        #expect(read == .voiceInto(conversationId: "cccccccccccccccccccccccc"))
+    }
+
+    @Test func uneConversationDeRepliIllisible_retombeSurLeRepliOrdinaire() {
+        #expect(verdict(["success": false, "code": "TALKIE_FALLBACK_VOICE", "conversationId": "../x"]) == .refused(.voice))
+        #expect(verdict(["success": false, "code": "TALKIE_NOT_ALLOWED", "conversationId": "cccccccccccccccccccccccc"]) == .refused(.notAllowed))
+    }
+
+    @Test func uneFinDeVoixReveillee_ditSiLeDestinataireLaRejointe() throws {
+        let decode = { (json: String) in try JSONDecoder().decode(TalkieEnded.self, from: Data(json.utf8)) }
+        let base = #""talkieId":"t","fromUserId":"a","toUserId":"b","reason":"sender""#
+        #expect(try decode("{\(base),\"joined\":false}").joined == false)
+        #expect(try decode("{\(base),\"joined\":true}").joined == true)
+        #expect(try decode("{\(base)}").joined == nil)
+    }
+
     @Test func unBlocageEtUnRepli_rendentLaMemeIssue() {
         #expect(verdict(["success": false, "error": "x", "code": "TALKIE_BLOCKED"]) == .refused(.voice))
         #expect(verdict(["success": false, "error": "x", "code": "TALKIE_FALLBACK_VOICE"]) == .refused(.voice))

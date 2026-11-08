@@ -72,6 +72,21 @@ final class TalkieVoiceCopyTests: XCTestCase {
         XCTAssertEqual(log.enqueued.map(\.1), ["direct"])
     }
 
+    func test_send_intoTheConversationTheGatewayNamed_skipsTheLookup() async {
+        let log = Log()
+        let sut = TalkieVoiceCopySender(
+            shared: { _ in XCTFail("la passerelle a déjà choisi"); return [] },
+            openDirect: { userId in log.opened.append(userId); return "direct" },
+            enqueue: { url, id in log.enqueued.append((url, id)) },
+            writeFile: { _, _ in 1.5 }
+        )
+
+        _ = await sut.send([Data([1])], toUserId: "bob", conversationId: "named")
+
+        XCTAssertEqual(log.enqueued.map(\.1), ["named"])
+        XCTAssertTrue(log.opened.isEmpty)
+    }
+
     func test_send_withNoAudio_sendsNothing() async {
         let log = Log()
         let sut = TalkieVoiceCopySender(

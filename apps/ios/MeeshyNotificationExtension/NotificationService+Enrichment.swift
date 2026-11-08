@@ -33,7 +33,8 @@ extension NotificationService {
         guard let timeout = budget.downloadTimeout() else { return nil }
         let request = token.map { NSEAPIRequest.make(url: url, token: $0, timeout: timeout) } ?? URLRequest(url: url, timeoutInterval: timeout)
         do {
-            let (location, _) = try await URLSession.shared.download(for: request)
+            let delegate = token == nil ? nil : NSETokenRedirectGuard(apiBaseURL: NSEDataSync.trustedApiBaseURL)
+            let (location, _) = try await URLSession.shared.download(for: request, delegate: delegate)
             let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             try FileManager.default.moveItem(at: location, to: destination)
             return destination
@@ -61,7 +62,11 @@ extension NotificationService {
             try? FileManager.default.removeItem(at: file)
             return nil
         }
-        return NSEAttachmentFile(fileURL: file, originalURL: source.url, mimeType: source.mimeType)
+        guard NSEAdtsRemux.needsRemux(mimeType: source.mimeType) else {
+            return NSEAttachmentFile(fileURL: file, originalURL: source.url, mimeType: source.mimeType)
+        }
+        guard let remuxed = await NSEAdtsRemux.m4a(from: file) else { return nil }
+        return NSEAttachmentFile(fileURL: remuxed, originalURL: source.url, mimeType: NSEAdtsRemux.remuxedMimeType)
     }
 
     private static func detailFile(for detail: NSEEnrichmentRequest.Detail, budget: NSEBudget) async -> NSEAttachmentFile? {

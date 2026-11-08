@@ -73,10 +73,12 @@ final class TalkieSenderTests: XCTestCase {
     @MainActor
     final class FakeCopier: TalkieVoiceCopying {
         var sent: [(frames: [Data], toUserId: String)] = []
+        var conversations: [String?] = []
         var succeeds = true
 
-        func send(_ frames: [Data], toUserId: String) async -> Bool {
+        func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool {
             sent.append((frames, toUserId))
+            conversations.append(conversationId)
             return succeeds
         }
     }
@@ -298,6 +300,59 @@ final class TalkieSenderTests: XCTestCase {
 
         await rig.sut.release()
         XCTAssertFalse(rig.sut.waking)
+    }
+
+    func test_aFallbackThatNamesItsConversation_sendsTheCopyThere() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.voiceInto(conversationId: "cccccccccccccccccccccccc"))
+        await settle()
+        await rig.sut.release()
+
+        XCTAssertEqual(rig.copier.conversations, ["cccccccccccccccccccccccc"])
+        XCTAssertEqual(rig.sut.notice, .voice)
+    }
+
+    private func wakingTalk(_ rig: Rig) async {
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(TalkieOpened(talkieId: Self.opened.talkieId, maxDuration: 30, maxChunkBytes: 16_384, delivery: .waking)))
+        await settle()
+        rig.capture.speak(frames: Self.framesPerFragment * 2)
+        await rig.sut.release()
+    }
+
+    func test_aWakingVoiceNobodyJoined_leavesAsAVoiceCopy() async {
+        let rig = makeRig()
+        await wakingTalk(rig)
+        XCTAssertTrue(rig.copier.sent.isEmpty)
+
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+
+        XCTAssertEqual(rig.copier.sent.map(\.toUserId), ["bob"])
+        XCTAssertEqual(rig.copier.sent.first?.frames.reduce(0) { $0 + $1.count }, rig.emitter.chunks.reduce(0) { $0 + $1.bytes })
+        XCTAssertEqual(rig.copier.conversations, [nil])
+        XCTAssertEqual(rig.sut.notice, .voice)
+    }
+
+    func test_aWakingVoiceThatWasJoined_orALiveOne_isNeverCopied() async {
+        let joined = makeRig()
+        await wakingTalk(joined)
+        await joined.sut.ended(Self.opened.talkieId, reason: .sender, joined: true)
+        await joined.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+        XCTAssertTrue(joined.copier.sent.isEmpty)
+
+        let live = makeRig()
+        live.sut.press(toUserId: "bob")
+        await settle()
+        live.emitter.resolve(.opened(Self.opened))
+        await settle()
+        live.capture.speak(frames: Self.framesPerFragment)
+        await live.sut.release()
+        await live.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+        XCTAssertTrue(live.copier.sent.isEmpty)
     }
 
     func test_aLiveDelivery_isNotWaking() async {

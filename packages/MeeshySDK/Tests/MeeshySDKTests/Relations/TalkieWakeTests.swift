@@ -22,10 +22,15 @@ struct TalkieWakeTests {
             "talkieId": "t1",
             "fromUserId": "u1",
             "senderName": "Awa",
-            "voiceUrl": "/api/v1/attachments/file/x.m4a",
+            "audioUrl": "/api/v1/talkie/t1/audio?e=1&t=x",
         ])
         #expect(push?.fromUserName == "Awa")
-        #expect(push?.voiceURL == "/api/v1/attachments/file/x.m4a")
+        #expect(push?.voiceURL == "/api/v1/talkie/t1/audio?e=1&t=x")
+    }
+
+    @Test func leContratDeLaPasserelle_nommeLEmetteurSousFromName() {
+        let push = TalkieWakePush(userInfo: ["type": "talkie_incoming", "talkieId": "t1", "fromUserId": "u1", "fromName": "Awa", "senderName": "Autre"])
+        #expect(push?.fromUserName == "Awa")
     }
 
     @Test func laVoixAttacheeSousLesClesDUnVocal_seLitAussi() {

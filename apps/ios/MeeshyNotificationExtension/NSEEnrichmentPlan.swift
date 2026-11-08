@@ -53,7 +53,9 @@ struct NSEEnrichmentRequest: Sendable, Equatable {
         let declaredSize = NSEAttachmentPolicy.declaredFileSize(userInfo["attachmentFileSize"])
         guard !NSEAttachmentPolicy.declaresProtection(userInfo: userInfo),
               NSEAttachmentPolicy.mayAttach(mimeType: mimeType, fileSize: declaredSize) else { return nil }
-        return NSEAttachmentSource(url: url, mimeType: mimeType, authenticated: NotificationDetailPolicy.isTalkieWake(userInfo))
+        let authenticated = NotificationDetailPolicy.isTalkieWake(userInfo)
+            && NotificationDetailPolicy.mayCarrySessionToken(url, apiBaseURL: apiBaseURL)
+        return NSEAttachmentSource(url: url, mimeType: mimeType, authenticated: authenticated)
     }
 
     private static func detail(

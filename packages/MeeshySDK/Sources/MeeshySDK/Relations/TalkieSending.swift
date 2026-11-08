@@ -59,6 +59,8 @@ struct TalkieOpenedWire: Decodable, Sendable, Equatable {
 public enum TalkieStartVerdict: Sendable, Equatable {
     case opened(TalkieOpened)
     case refused(TalkieSendOutcome)
+    /// Le repli (`voice`) dont la passerelle nomme la conversation où partira la copie vocale.
+    case voiceInto(conversationId: String)
 
     static func read(_ ack: SocketAck<TalkieOpenedWire>) -> TalkieStartVerdict {
         switch ack {
@@ -72,10 +74,16 @@ public enum TalkieStartVerdict: Sendable, Equatable {
         case .accepted, .acceptedWithoutPayload, .undecodable:
             return .refused(.failed)
         case .refused(let refusal):
-            return .refused(.ofRefusal(refusal.code))
+            let outcome = TalkieSendOutcome.ofRefusal(refusal.code)
+            guard outcome == .voice, let id = refusal.conversationId, isObjectId(id) else { return .refused(outcome) }
+            return .voiceInto(conversationId: id)
         case .timedOut:
             return .refused(.offline)
         }
+    }
+
+    private static func isObjectId(_ value: String) -> Bool {
+        value.count == 24 && value.allSatisfy(\.isHexDigit)
     }
 
     /// Une borne servie absente, nulle, négative ou plus large que le contrat est ramenée au contrat.

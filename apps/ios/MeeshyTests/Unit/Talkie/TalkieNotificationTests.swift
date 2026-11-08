@@ -71,9 +71,38 @@ final class TalkieNotificationTests: XCTestCase {
     }
 
     func test_anUntrustedVoiceUrlBesideATrustedAttachment_dropsBoth() {
-        let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(talkiePayload(["voiceUrl": "https://evil.example/v.m4a"]), apiBaseURL: gateway)
+        let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(talkiePayload(["audioUrl": "https://evil.example/v.m4a"]), apiBaseURL: gateway)
         XCTAssertNil(sealed["attachmentUrl"])
-        XCTAssertNil(sealed["voiceUrl"])
+        XCTAssertNil(sealed["audioUrl"])
+    }
+
+    func test_theGatewayFollowUp_withItsSignedTalkieAudio_isKept() {
+        let followUp = talkiePayload([
+            "phase": "ended", "attachmentUrl": "https://gate.meeshy.me/api/v1/talkie/aaaaaaaaaaaaaaaaaaaaaaaa/audio?e=1&t=sig",
+            "attachmentMimeType": "audio/aac", "audioUrl": "/api/v1/talkie/aaaaaaaaaaaaaaaaaaaaaaaa/audio?e=1&t=sig",
+        ])
+        let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(followUp, apiBaseURL: gateway)
+        XCTAssertNotNil(sealed["attachmentUrl"])
+        XCTAssertNotNil(sealed["audioUrl"])
+    }
+
+    func test_theSessionToken_goesOnlyToTheGatewayUnderTheExpectedPaths() {
+        let allowed = ["https://gate.meeshy.me/api/v1/attachments/file/a%2Fb.m4a", "https://gate.meeshy.me/api/v1/talkie/x/audio?e=1&t=s"]
+        allowed.forEach { XCTAssertTrue(NotificationDetailPolicy.mayCarrySessionToken(URL(string: $0), apiBaseURL: gateway), $0) }
+        let refused = [
+            "https://evil.example/api/v1/talkie/x/audio", "https://gate.meeshy.me/api/v1/users/me",
+            "https://gate.meeshy.me/api/v1/talkie/../users/me", "https://gate.meeshy.me/api/v1/talkie/%2E%2E/users/me",
+            "http://gate.meeshy.me/api/v1/talkie/x/audio", "https://gate.meeshy.me:444/api/v1/talkie/x/audio",
+        ]
+        refused.forEach { XCTAssertFalse(NotificationDetailPolicy.mayCarrySessionToken(URL(string: $0), apiBaseURL: gateway), $0) }
+        XCTAssertFalse(NotificationDetailPolicy.mayCarrySessionToken(nil, apiBaseURL: gateway))
+    }
+
+    func test_aTalkieVoiceOnTheGatewayButOutsideTheExpectedPaths_isDropped() {
+        let sealed = NotificationDetailPolicy.sealingUntrustedTalkieVoice(
+            talkiePayload(["attachmentUrl": "https://gate.meeshy.me/api/v1/users/me/export"]), apiBaseURL: gateway
+        )
+        XCTAssertNil(sealed["attachmentUrl"])
     }
 
     func test_theSeal_leavesEveryOtherNotificationUntouched() {
