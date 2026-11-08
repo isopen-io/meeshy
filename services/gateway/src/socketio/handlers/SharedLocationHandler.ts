@@ -36,8 +36,8 @@ type SharedLocationSocket = {
 export type SharedLocationHandlerDeps = {
   readonly relay: SharedLocationRelayDeps;
   readonly callerOf: (socketId: string) => { readonly userId: string; readonly isAnonymous: boolean } | null;
-  /** `true` dans le débit, `false` au-delà, `null` quand le limiteur ne sait pas juger (on laisse passer). */
-  readonly withinRate: (userId: string) => Promise<boolean | null>;
+  /** `true` dans le débit, `false` au-delà. Quand le limiteur partagé ne sait pas juger, un compteur local juge à sa place. */
+  readonly withinRate: (userId: string) => Promise<boolean>;
 };
 
 const UNAVAILABLE = { success: false, error: 'Position momentanément indisponible', code: SHARED_LOCATION_ERROR_CODES.UNAVAILABLE } as const;
@@ -58,7 +58,7 @@ export function listenSharedLocation(socket: SharedLocationSocket, deps: SharedL
       const reply = replier<Reply>(ack);
       const userId = registered();
       if (!userId) return reply(NOT_ALLOWED);
-      const answer = (within: boolean | null): Promise<Reply> => (within === false ? Promise.resolve(RATE_LIMITED) : act(userId, data));
+      const answer = (within: boolean): Promise<Reply> => (within ? act(userId, data) : Promise.resolve(RATE_LIMITED));
       (options.limited ? deps.withinRate(userId) : Promise.resolve(true))
         .then(answer)
         .then(reply, (error: unknown) => {
@@ -85,12 +85,33 @@ const rateLimiter = (): RateLimiter => {
   return limiter.limiter;
 };
 
+/**
+ * Le repli du limiteur partagé quand il ne répond pas (magasin en panne, limitation coupée) :
+ * une fenêtre fixe par compte, dans CE processus. Chaque position vise jusqu'à cinquante
+ * destinataires et relit la loi : un débit sans borne n'est jamais la réponse à une panne.
+ */
+export function localSharedLocationRate(rate: { readonly max: number; readonly windowMs: number } = SHARED_LOCATION_RATE): (userId: string, now: number) => boolean {
+  const windows = new Map<string, { readonly start: number; readonly count: number }>();
+  return (userId, now) => {
+    if (windows.size > 10_000) {
+      windows.forEach((window, id) => {
+        if (now - window.start >= rate.windowMs) windows.delete(id);
+      });
+    }
+    const current = windows.get(userId);
+    const window = current && now - current.start < rate.windowMs ? { start: current.start, count: current.count + 1 } : { start: now, count: 1 };
+    windows.set(userId, window);
+    return window.count <= rate.max;
+  };
+}
+
 export function sharedLocationHandlerDeps(params: {
   readonly prisma: PrismaClient;
   readonly io: SharedLocationIo;
   readonly socketToUser: ReadonlyMap<string, string>;
   readonly connectedUsers: ReadonlyMap<string, { readonly isAnonymous: boolean }>;
 }): SharedLocationHandlerDeps {
+  const localRate = localSharedLocationRate();
   return {
     relay: sharedLocationRelayDepsOf(params),
     callerOf: (socketId) => {
@@ -100,7 +121,7 @@ export function sharedLocationHandlerDeps(params: {
     },
     withinRate: async (userId) => {
       const info = await rateLimiter().consume(userId, 1);
-      return info === null ? null : info.retryAfter === undefined;
+      return info === null ? localRate(userId, Date.now()) : info.retryAfter === undefined;
     },
   };
 }

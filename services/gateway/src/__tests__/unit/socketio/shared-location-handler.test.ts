@@ -6,14 +6,16 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { listenSharedLocation, type SharedLocationHandlerDeps } from '../../../socketio/handlers/SharedLocationHandler';
+import { listenSharedLocation, localSharedLocationRate, type SharedLocationHandlerDeps } from '../../../socketio/handlers/SharedLocationHandler';
 import { messagingWorld } from '../../helpers/messaging-circle-world';
 
 const MOI = '6300000000000000000000a1';
 const AMI = '6300000000000000000000a2';
 const DEMARRER = { recipients: [{ userId: AMI }], durationMinutes: 60, position: { latitude: 48.85, longitude: 2.35 } };
 
-function porte(options: { readonly isAnonymous?: boolean; readonly within?: boolean | null } = {}) {
+const etats = (p: { readonly entries: Map<string, string> }): string[] => [...p.entries.keys()].filter((key) => key.startsWith(`shared-location:${MOI}`));
+
+function porte(options: { readonly isAnonymous?: boolean; readonly within?: boolean } = {}) {
   const entries = new Map<string, string>();
   const world = messagingWorld({ users: [{ id: MOI }, { id: AMI }], links: [[MOI, AMI, 'FRIEND']] });
   const deps: SharedLocationHandlerDeps = {
@@ -47,7 +49,7 @@ describe('SharedLocationHandler — la porte', () => {
   it('un compte inscrit démarre : le partage est rangé et l\'accusé rend son terme', async () => {
     const p = porte();
     expect(await p.call('location:share-start', DEMARRER)).toEqual({ success: true, data: { expiresAt: '2026-11-08T13:00:00.000Z' } });
-    expect(p.entries.size).toBe(1);
+    expect([...p.entries.keys()].map((key) => key.replace(/[0-9a-f-]{36}$/, '<session>')).sort()).toEqual(['shared-location-current:' + MOI, 'shared-location:' + MOI + ':<session>'].sort());
     expect(await p.call('location:share-update', { latitude: 48.86, longitude: 2.34 })).toMatchObject({ success: true });
   });
 
@@ -61,15 +63,26 @@ describe('SharedLocationHandler — la porte', () => {
     const p = porte();
     await p.call('location:share-start', DEMARRER);
     const limitee = porte({ within: false });
-    limitee.entries.set(...([...p.entries.entries()][0] as [string, string]));
+    p.entries.forEach((value, key) => limitee.entries.set(key, value));
+    expect(etats(limitee)).toHaveLength(1);
     expect(await limitee.call('location:share-stop', {})).toEqual({ success: true });
-    expect(limitee.entries.has(`shared-location:${MOI}`)).toBe(false);
+    expect(etats(limitee)).toEqual([]);
   });
 
   it('arrêter retire le partage rangé', async () => {
     const p = porte();
     await p.call('location:share-start', DEMARRER);
+    expect(etats(p)).toHaveLength(1);
     expect(await p.call('location:share-stop', {})).toEqual({ success: true });
-    expect(p.entries.has(`shared-location:${MOI}`)).toBe(false);
+    expect(etats(p)).toEqual([]);
+  });
+});
+
+describe('le repli du débit — un limiteur partagé muet ne laisse pas passer sans borne', () => {
+  it('au-delà du débit, le compteur local refuse ; une nouvelle fenêtre rouvre ; chaque compte a la sienne', () => {
+    const local = localSharedLocationRate({ max: 2, windowMs: 1_000 });
+    expect([local(MOI, 0), local(MOI, 10), local(MOI, 20)]).toEqual([true, true, false]);
+    expect(local(AMI, 20)).toBe(true);
+    expect(local(MOI, 1_000)).toBe(true);
   });
 });

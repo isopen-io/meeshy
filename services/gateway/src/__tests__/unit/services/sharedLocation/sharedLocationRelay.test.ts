@@ -235,7 +235,7 @@ describe('mettre à jour et arrêter', () => {
     m.emissions.length = 0;
 
     expect(await stopSharedLocation(m.deps, EMETTEUR)).toEqual({ success: true });
-    expect(m.cache.entries.has(`shared-location:${EMETTEUR}`)).toBe(false);
+    expect([...m.cache.entries.keys()].filter((key) => key.startsWith(`shared-location:${EMETTEUR}`))).toEqual([]);
     expect(m.emissions.map((e) => e.room).sort()).toEqual([AMI, PROCHE, SANG].map((id) => ROOMS.user(id)).sort());
     expect(new Set(m.emissions.map((e) => e.event))).toEqual(new Set([SERVER_EVENTS.SHARED_LOCATION_ENDED]));
   });
@@ -247,19 +247,23 @@ describe('le repos — la position complète est gardée SCELLÉE, jamais en cla
     const m = monde();
     await demarrer(m, TOUS, 480);
 
-    const [[key, entry]] = [...m.cache.entries.entries()];
-    expect(key).toBe(`shared-location:${EMETTEUR}`);
+    const etats = [...m.cache.entries.entries()].filter(([key]) => key.startsWith(`shared-location:${EMETTEUR}:`));
+    expect(etats).toHaveLength(1);
+    const [[, entry]] = etats;
     expect(entry.value.startsWith('v1:')).toBe(true);
     expect(entry.value).not.toMatch(/48\.8|2\.35|6300000/);
     expect(entry.ttl).toBe(480 * 60);
+    [...m.cache.entries.values()].forEach(({ value }) => expect(value).not.toMatch(/48\.8|2\.35|6300000/));
   });
 
   it('une valeur scellée pour un compte ne s\'ouvre pas sous la clé d\'un autre', async () => {
     process.env.SECRETS_AT_REST_KEY = KEY;
     const m = monde();
     await demarrer(m);
-    const [[, entry]] = [...m.cache.entries.entries()];
-    m.cache.entries.set(`shared-location:${PROCHE}`, entry);
+    const session = m.cache.entries.get(`shared-location-current:${EMETTEUR}`)!;
+    const entry = m.cache.entries.get(`shared-location:${EMETTEUR}:${session.value}`)!;
+    m.cache.entries.set(`shared-location-current:${PROCHE}`, session);
+    m.cache.entries.set(`shared-location:${PROCHE}:${session.value}`, entry);
 
     expect(await readSharedLocation(m.cache, PROCHE, T0)).toBeNull();
     expect(await readSharedLocation(m.cache, EMETTEUR, T0)).not.toBeNull();
@@ -369,9 +373,41 @@ describe('les gestes qui se croisent — un partage arrêté ne revient jamais t
     await enVol;
     expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toBeNull();
 
-    m.avancer(1);
     expect(await demarrer(m)).toMatchObject({ success: true });
-    expect(await readSharedLocation(m.cache, EMETTEUR, T0 + 1)).not.toBeNull();
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).not.toBeNull();
+  });
+
+  it('une mise à jour en vol pendant un NOUVEAU partage n\'y réécrit pas l\'ancienne liste : un destinataire retiré ne revoit rien', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    m.cache.suspendreProchaineEcriture();
+    const enVol = updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toMatchObject({ success: true });
+    m.cache.relacher();
+
+    expect(await enVol).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.NOT_SHARING });
+    expect((await readSharedLocation(m.cache, EMETTEUR, T0))?.recipients.map((r) => r.userId)).toEqual([AMI]);
+    [PROCHE, SANG].forEach((id) => expect(m.vers(id).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED));
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items).toEqual([]);
+    expect(m.vers(AMI).at(-1)?.data).toMatchObject({ latitude: PARIS.latitude });
+  });
+
+  it('arrêter puis redémarrer pendant une mise à jour en vol laisse le nouveau partage intact', async () => {
+    const m = monde();
+    await demarrer(m);
+
+    m.cache.suspendreProchaineEcriture();
+    const enVol = updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    await new Promise((resolve) => setImmediate(resolve));
+    await stopSharedLocation(m.deps, EMETTEUR);
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toMatchObject({ success: true });
+    m.cache.relacher();
+
+    expect(await enVol).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.NOT_SHARING });
+    expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toMatchObject({ position: PARIS, recipients: [{ userId: AMI }] });
   });
 });
 

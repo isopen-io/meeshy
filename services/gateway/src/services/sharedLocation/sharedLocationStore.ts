@@ -23,8 +23,8 @@ import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../.
 export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision };
 
 export type SharedLocationState = {
-  /** L'instant du `start` qui a ouvert ce partage (ms) : un arrêt postérieur ou simultané l'éteint. */
-  readonly startedAt: number;
+  /** Le partage auquel cet état appartient : chaque `start` en ouvre un nouveau, que seul le pointeur rend courant. */
+  readonly sessionId: string;
   readonly recipients: readonly SharedLocationRecipient[];
   readonly position: SharedLocationPosition;
   readonly updatedAt: string;
@@ -33,7 +33,10 @@ export type SharedLocationState = {
 
 export type SharedLocationCache = Pick<CacheStore, 'get' | 'set' | 'del'>;
 
-const keyOf = (userId: string): string => `shared-location:${userId.toLowerCase()}`;
+const keyOf = (userId: string, sessionId: string): string => `shared-location:${userId.toLowerCase()}:${sessionId}`;
+const currentKeyOf = (userId: string): string => `shared-location-current:${userId.toLowerCase()}`;
+const STOPPED = 'stopped';
+const SESSION_ID = /^[0-9a-f-]{36}$/;
 const contextOf = (userId: string): string => `SharedLocation.state:${userId.toLowerCase()}`;
 
 const isPrecision = (value: unknown): value is SharedLocationPrecision =>
@@ -61,27 +64,46 @@ function parseState(raw: string): SharedLocationState | null {
   if (typeof value !== 'object' || value === null) return null;
   const row = value as Record<string, unknown>;
   const position = parsePosition(row.position);
-  if (!position || !Array.isArray(row.recipients) || typeof row.startedAt !== 'number') return null;
+  if (!position || !Array.isArray(row.recipients) || typeof row.sessionId !== 'string') return null;
   if (typeof row.updatedAt !== 'string' || typeof row.expiresAt !== 'string') return null;
   const recipients = row.recipients.map(parseRecipient);
   if (recipients.some((recipient) => recipient === null)) return null;
-  return { startedAt: row.startedAt, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt };
+  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt };
 }
 
-/** Range le partage COMPLET, scellé, jusqu'à son terme. Sans clé de scellement dans un environnement servi, LÈVE : rien n'est rangé en clair. */
+const ttlOf = (state: Pick<SharedLocationState, 'expiresAt'>, now: number): number =>
+  Math.max(1, Math.ceil((Date.parse(state.expiresAt) - now) / 1000));
+
+/**
+ * Range le partage COMPLET, scellé, jusqu'à son terme, sous la clé de SA session : un geste en vol
+ * ne peut écrire que dans le partage qu'il a lu, jamais dans celui qui l'a remplacé. Sans clé de
+ * scellement dans un environnement servi, LÈVE : rien n'est rangé en clair.
+ */
 export async function storeSharedLocation(cache: SharedLocationCache, userId: string, state: SharedLocationState, now: number): Promise<void> {
-  const ttlSeconds = Math.max(1, Math.ceil((Date.parse(state.expiresAt) - now) / 1000));
-  await cache.set(keyOf(userId), sealSecret(JSON.stringify(state), contextOf(userId)), ttlSeconds);
+  await cache.set(keyOf(userId, state.sessionId), sealSecret(JSON.stringify(state), contextOf(userId)), ttlOf(state, now));
 }
 
-/** Le partage en cours, ou `null` (absent, échu, illisible, scellé pour un autre compte). */
+/** Rend `state` courant : le partage précédent cesse d'être lu, quelle que soit l'écriture en vol qui le vise. */
+export async function claimSharedLocation(cache: SharedLocationCache, userId: string, state: SharedLocationState, now: number): Promise<void> {
+  await cache.set(currentKeyOf(userId), state.sessionId, ttlOf(state, now));
+}
+
+/** La session courante, ou `null` (aucune, arrêtée, illisible). */
+export async function currentSharedLocationSession(cache: SharedLocationCache, userId: string): Promise<string | null> {
+  const current = await cache.get(currentKeyOf(userId));
+  return current !== null && SESSION_ID.test(current) ? current : null;
+}
+
+/** Le partage en cours, ou `null` (absent, arrêté, échu, illisible, scellé pour un autre compte). */
 export async function readSharedLocation(cache: SharedLocationCache, userId: string, now: number): Promise<SharedLocationState | null> {
-  const stored = await cache.get(keyOf(userId));
+  const sessionId = await currentSharedLocationSession(cache, userId);
+  if (sessionId === null) return null;
+  const stored = await cache.get(keyOf(userId, sessionId));
   if (stored === null) return null;
   if (hasValidSecretsKey() && !isSealedSecret(stored)) return null;
   try {
     const state = parseState(openSecret(stored, contextOf(userId)));
-    return state && Date.parse(state.expiresAt) > now ? state : null;
+    return state && state.sessionId === sessionId && Date.parse(state.expiresAt) > now ? state : null;
   } catch {
     return null;
   }
@@ -91,23 +113,29 @@ const stopKeyOf = (userId: string): string => `shared-location-stop:${userId.toL
 /** Le plus long partage : l'arrêt n'a pas à être retenu au-delà. */
 const STOP_MEMORY_SECONDS = 480 * 60;
 
+/** La marque du dernier arrêt (une valeur unique par arrêt), ou `null`. Un démarrage la lit AVANT d'écrire. */
+export async function sharedLocationStopMark(cache: SharedLocationCache, userId: string): Promise<string | null> {
+  return cache.get(stopKeyOf(userId));
+}
+
 /**
- * Retient l'instant d'un ARRÊT. Les gestes d'un même émetteur ne passent par aucune file : une
- * mise à jour ou un démarrage partis AVANT l'arrêt peuvent écrire APRÈS lui. Ils relisent cet
- * instant après leur écriture et s'éteignent d'eux-mêmes ({@link stoppedSince}).
+ * Arrête : une marque NOUVELLE (un démarrage parti avant l'arrêt la voit changer et s'éteint), le
+ * pointeur retombe sur « arrêté », et l'état de la session arrêtée est effacé. Aucune horloge :
+ * un arrêt et un démarrage dans la même milliseconde se rangent par leur ordre réel.
  */
-export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, at: number): Promise<void> {
-  await cache.set(stopKeyOf(userId), String(at), STOP_MEMORY_SECONDS);
+export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, stopped: { readonly mark: string; readonly sessionId: string | null }): Promise<void> {
+  await cache.set(stopKeyOf(userId), stopped.mark, STOP_MEMORY_SECONDS);
+  await cache.set(currentKeyOf(userId), STOPPED, STOP_MEMORY_SECONDS);
+  if (stopped.sessionId !== null) await cache.del(keyOf(userId, stopped.sessionId));
 }
 
-/** Vrai si un arrêt est survenu au démarrage du partage `state` ou après. Illisible = arrêté. */
-export async function stoppedSince(cache: SharedLocationCache, userId: string, state: Pick<SharedLocationState, 'startedAt'>): Promise<boolean> {
-  const stored = await cache.get(stopKeyOf(userId));
-  if (stored === null) return false;
-  const at = Number(stored);
-  return !Number.isFinite(at) || at >= state.startedAt;
+/** Efface l'état d'une session qui n'est plus (ou ne sera jamais) courante. */
+export async function dropSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string): Promise<void> {
+  await cache.del(keyOf(userId, sessionId));
 }
 
-export async function clearSharedLocation(cache: SharedLocationCache, userId: string): Promise<void> {
-  await cache.del(keyOf(userId));
+/** Retombe sur « arrêté » si `sessionId` est encore le pointeur : un démarrage qui cède ne laisse rien de courant. */
+export async function releaseSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string): Promise<void> {
+  if ((await cache.get(currentKeyOf(userId))) === sessionId) await cache.set(currentKeyOf(userId), STOPPED, STOP_MEMORY_SECONDS);
+  await dropSharedLocationSession(cache, userId, sessionId);
 }
