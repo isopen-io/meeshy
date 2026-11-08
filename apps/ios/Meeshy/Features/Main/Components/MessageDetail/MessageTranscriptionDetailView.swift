@@ -77,7 +77,7 @@ struct MessageTranscriptionDetailView: View {
                 }
 
                 if let durationMs = transcription.durationMs {
-                    Text(formatDuration(durationMs / 1000))
+                    Text(MediaFormat.duration(durationMs / 1000))
                         .font(.system(.caption2, design: .monospaced).weight(.medium))
                         .foregroundStyle(theme.textMuted)
                 }
@@ -167,7 +167,7 @@ struct MessageTranscriptionDetailView: View {
                             .lineLimit(1)
 
                         if let duration = attachment.duration {
-                            Text(formatDuration(duration / 1000))
+                            Text(MediaFormat.duration(duration / 1000))
                                 .font(.caption2)
                                 .foregroundStyle(theme.textMuted)
                         }
@@ -277,7 +277,7 @@ struct MessageTranscriptionDetailView: View {
                             .background(Capsule().fill(langColor.opacity(0.12)))
                         }
 
-                        Text(formatDuration(audio.durationMs / 1000))
+                        Text(MediaFormat.duration(audio.durationMs / 1000))
                             .font(.system(.caption2, design: .monospaced).weight(.medium))
                             .foregroundStyle(theme.textMuted)
                     }
@@ -355,11 +355,5 @@ struct MessageTranscriptionDetailView: View {
             parts.append(audio.transcription)
         }
         return parts.joined(separator: ", ")
-    }
-
-    // MARK: - Helpers
-
-    private func formatDuration(_ seconds: Int) -> String {
-        MediaFormat.duration(seconds)
     }
 }

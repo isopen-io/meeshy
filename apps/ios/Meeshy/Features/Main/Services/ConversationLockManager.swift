@@ -341,7 +341,7 @@ nonisolated struct ConversationPinThrottle: Codable, Equatable, Sendable {
     static func delay(afterFailures failures: Int) -> TimeInterval {
         guard failures > freeFailures else { return 0 }
         let doublings = min(failures - freeFailures - 1, 20)
-        return min(baseDelay * pow(2, Double(doublings)), maximumDelay)
+        return RetryPolicy(maxAttempts: nil, firstDelay: baseDelay, maxDelay: maximumDelay).delay(afterFailure: doublings + 1)
     }
 
     func retryDelay(at now: Date) -> TimeInterval {

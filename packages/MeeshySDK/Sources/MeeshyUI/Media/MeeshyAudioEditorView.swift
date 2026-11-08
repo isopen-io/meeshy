@@ -292,11 +292,11 @@ public struct MeeshyAudioEditorView: View {
             .frame(height: 96)
 
             HStack {
-                Text(formatTime(displayTime))
+                Text(MediaFormat.duration(displayTime))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                     .foregroundColor(accent)
                 Spacer()
-                Text(formatTime(controller.activeDuration))
+                Text(MediaFormat.duration(controller.activeDuration))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
@@ -407,7 +407,6 @@ public struct MeeshyAudioEditorView: View {
         .accessibilityLabel(tool.title)
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
-
 
     // MARK: - History Strip
 
@@ -539,7 +538,6 @@ public struct MeeshyAudioEditorView: View {
         guard duration > 0 else { return 0 }
         return min(1, max(0, currentTime / duration))
     }
-
 
     // MARK: - Selection editing
 
@@ -710,11 +708,4 @@ public struct MeeshyAudioEditorView: View {
         controller.discard()
         onCancel()
     }
-
-    // MARK: - Formatting
-
-    private func formatTime(_ seconds: Double) -> String {
-        MediaFormat.duration(seconds)
-    }
-
 }
