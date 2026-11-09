@@ -35,21 +35,35 @@
 }
 
 /*
- * LA CARTE GRANDE, LE MENU QU'ON TIRE (#17243) — les deux hauteurs viennent de
- * `peek-sheet.ts` : posées par le rendu au repos, écrites directement par le
- * geste pendant le tirage. Elles ne glissent que vers un cran (relâcher,
- * poignée, clavier) ; pendant le tirage, elles suivent le doigt sans retard.
- * `contain` borne la mise en page de chaque changement de hauteur à sa boîte.
+ * LA CARTE GRANDE, LE MENU QU'ON TIRE (#17243) — par TRANSFORMATIONS
+ * seulement (`peek-sheet.ts`, `peekSheetOffsets`) : la carte garde sa hauteur
+ * de repos, le menu sa hauteur étendue, et le geste glisse le menu vers le
+ * haut en remontant d'autant le contenu de la carte (`--peek-shift`). La
+ * grappe coupe ce qui dépasse en BAS (le menu compact y cache ses dernières
+ * actions), jamais l'ombre des côtés ni du haut. Les translations ne glissent
+ * que vers un cran (relâcher, poignée, clavier) ; pendant le tirage, elles
+ * suivent le doigt sans retard.
  */
+.conversation-peek {
+  clip-path: inset(-48px -48px 0 -48px);
+}
+
 .conversation-peek-card-slot,
 .conversation-peek-sheet {
   flex: none;
-  contain: layout paint;
-  transition: height 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.conversation-peek-sheet,
+.conversation-peek-card-slot .conversation-peek-body {
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.conversation-peek-card-slot .conversation-peek-body {
+  transform: translateY(calc(-1 * var(--peek-shift, 0px)));
 }
 
 .conversation-peek-sheet[data-peek-dragging],
-.conversation-peek:has([data-peek-dragging]) > .conversation-peek-card-slot {
+.conversation-peek:has([data-peek-dragging]) .conversation-peek-body {
   transition: none;
 }
 
@@ -63,6 +77,7 @@
   box-shadow: var(--shadow-cast);
   user-select: none;
   -webkit-user-select: none;
+  will-change: transform;
 }
 
 /* La poignée : une cible de 44 de haut, la capsule au centre, au focus visible. */
@@ -212,8 +227,8 @@
     animation: none;
   }
 
-  .conversation-peek-card-slot,
-  .conversation-peek-sheet {
+  .conversation-peek-sheet,
+  .conversation-peek-card-slot .conversation-peek-body {
     transition: none;
   }
 }

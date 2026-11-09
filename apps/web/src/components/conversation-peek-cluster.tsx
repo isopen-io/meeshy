@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -7,6 +7,7 @@ import {
   detentAfterKey,
   detentProgress,
   peekSheetHeights,
+  peekSheetOffsets,
   progressAfterDrag,
   settleDetent,
   type PeekDetent,
@@ -18,10 +19,11 @@ import { swallowNextClick } from '@/lib/view/swallow-next-click';
  * LA GRAPPE DE L'APPUI LONG (#11211, #17243) — la carte d'aperçu, GRANDE, au-
  * dessus d'un menu COMPACT (sa poignée et sa tête) qu'on tire vers le haut pour
  * voir toutes les actions ; la carte rend ce que le menu prend
- * (`peek-sheet.ts`, la loi). Le geste suit le doigt : chaque `pointermove`
- * écrit les deux hauteurs DIRECTEMENT sur le DOM, sans rendu Preact — la carte
- * et ses rangées ne se re-rendent pas pendant le tirage. Le relâcher conclut
- * vers un cran, et seul ce cran passe par l'état.
+ * (`peek-sheet.ts`, la loi). Le geste suit le doigt par TRANSFORMATIONS
+ * seulement : la carte garde sa hauteur de repos, le menu sa hauteur étendue,
+ * et chaque `pointermove` écrit DIRECTEMENT sur le DOM la translation du menu
+ * et le décalage du contenu (`--peek-shift`) — ni rendu Preact, ni remise en
+ * page. Le relâcher conclut vers un cran, et seul ce cran passe par l'état.
  *
  * Sans le geste, tout reste atteignable : la poignée est un bouton (Entrée,
  * Espace, flèches), une action cachée qui reçoit le focus étend le menu, et
@@ -66,7 +68,8 @@ export type ConversationPeekClusterProps = {
 
 export function ConversationPeekCluster({ frame, initial, language, rootRef, ids, menuLabel, onKeyDown, onDismiss, backDismiss, renderCard, children }: ConversationPeekClusterProps) {
   const [detent, setDetent] = useState<PeekDetent>(initial);
-  const heights = peekSheetHeights(frame, detentProgress(detent));
+  const rest = peekSheetHeights(frame, 0);
+  const offsets = peekSheetOffsets(frame, detentProgress(detent));
   const slotRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<Drag | null>(null);
@@ -79,9 +82,9 @@ export function ConversationPeekCluster({ frame, initial, language, rootRef, ids
   useEffect(() => () => detachSwallow.current?.(), []);
 
   const paint = (progress: number) => {
-    const next = peekSheetHeights(frame, progress);
-    if (slotRef.current !== null) slotRef.current.style.height = `${next.card}px`;
-    if (sheetRef.current !== null) sheetRef.current.style.height = `${next.menu}px`;
+    const next = peekSheetOffsets(frame, progress);
+    slotRef.current?.style.setProperty('--peek-shift', `${next.content}px`);
+    if (sheetRef.current !== null) sheetRef.current.style.transform = `translateY(${next.sheet}px)`;
   };
 
   const conclude = (next: PeekDetent) => {
@@ -165,15 +168,15 @@ export function ConversationPeekCluster({ frame, initial, language, rootRef, ids
       <div aria-hidden data-conversation-peek-veil className="conversation-peek-veil" onClick={onDismiss} />
       <div data-conversation-peek className="conversation-peek" style={{ top: frame.top, left: frame.left, width: frame.width, height: frame.height, gap: frame.gap }}>
         {backDismiss}
-        <div ref={slotRef} data-peek-card-slot className="conversation-peek-card-slot" style={{ height: heights.card }}>
-          {renderCard(heights.card)}
+        <div ref={slotRef} data-peek-card-slot className="conversation-peek-card-slot" style={{ height: rest.card, '--peek-shift': `${offsets.content}px` } as CSSProperties}>
+          {renderCard(rest.card)}
         </div>
         <div
           ref={sheetRef}
           data-peek-sheet
           data-peek-detent={detent}
           className="conversation-peek-sheet"
-          style={{ height: heights.menu, touchAction: listScrolls ? 'pan-y' : 'none' }}
+          style={{ height: frame.menuExpanded, transform: `translateY(${offsets.sheet}px)`, touchAction: listScrolls ? 'pan-y' : 'none' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -185,7 +188,7 @@ export function ConversationPeekCluster({ frame, initial, language, rootRef, ids
               data-peek-handle
               aria-expanded={expanded}
               aria-controls={`${ids}-menu`}
-              aria-label={rowMenuText(language, expanded ? 'rowMenu.peek.collapse' : 'rowMenu.peek.expand')}
+              aria-label={rowMenuText(language, 'rowMenu.peek.expand')}
               className="conversation-peek-handle"
               onClick={() => conclude(expanded ? 'compact' : 'expanded')}
               onKeyDown={onHandleKeyDown}

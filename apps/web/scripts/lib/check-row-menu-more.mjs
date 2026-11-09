@@ -162,8 +162,8 @@ export async function checkRowMenuMore({ browser, base, check }) {
     };
   });
   check(
-    peek.dialog === true && peek.menu && peek.transform === 'none' && peek.filter === 'none' && peek.width <= 340 && peek.left >= 16 && peek.right >= 16 && peek.path === '/chats',
-    `tenir « ${GROUP} » ouvre l'aperçu net (ni transform ni filtre), dans une couche modale qui porte ses actions, 340 px au plus et 16 px des bords, au-dessus de ses actions, sans ouvrir le fil (${JSON.stringify(peek)})`,
+    peek.dialog === true && peek.menu && peek.transform === 'none' && peek.filter === 'none' && peek.width <= 560 && peek.width >= Math.min(560, 390 - 24) && peek.left >= 12 && peek.right >= 12 && peek.path === '/chats',
+    `tenir « ${GROUP} » ouvre l'aperçu net (ni transform ni filtre), dans une couche modale qui porte ses actions, quasi pleine largeur (12 px des bords, 560 px au plus — #17243), au-dessus de ses actions, sans ouvrir le fil (${JSON.stringify(peek)})`,
   );
   await page.keyboard.press('Escape');
   const peekClosed = await page.evaluate((button) => ({ peek: document.querySelector('[data-conversation-peek]') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);

@@ -79,6 +79,18 @@ export function peekSheetHeights(frame: PeekSheetFrame, progress: number): PeekS
   return { card: frame.height - frame.gap - menu, menu };
 }
 
+/**
+ * LES MÊMES HAUTEURS, DITES EN TRANSFORMATIONS — la carte garde sa hauteur de
+ * repos et le menu sa hauteur étendue ; le geste ne fait que GLISSER le menu
+ * vers le haut (`sheet`, sa translation vers le bas) et remonter d'autant le
+ * contenu de la carte (`content`), pour que les derniers messages restent au-
+ * dessus de lui. Rien n'est remis en page pendant le tirage.
+ */
+export function peekSheetOffsets(frame: PeekSheetFrame, progress: number): { readonly sheet: number; readonly content: number } {
+  const { menu } = peekSheetHeights(frame, progress);
+  return { sheet: frame.menuExpanded - menu, content: menu - frame.menuCompact };
+}
+
 /** `dy` positif : le doigt descend. Tirer vers le haut de toute la course mène de 0 à 1. */
 export function progressAfterDrag({ frame, from, dy }: { readonly frame: PeekSheetFrame; readonly from: number; readonly dy: number }): number {
   const travel = frame.menuExpanded - frame.menuCompact;

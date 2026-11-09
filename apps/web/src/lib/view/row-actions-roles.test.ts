@@ -45,7 +45,6 @@ const idsFor = (conversation: Conversation, viewer: RowViewer): readonly RowActi
     flags: { isPinned: false, isMuted: false, isArchived: false },
     unread: false,
     language: 'fr',
-    canCall: true,
     canDelete: viewer.hasAccount,
     more: { details: true, rename: conversation.type !== 'direct', organize: viewer.hasAccount, favorite: undefined, block: null },
     actions: rowConversationActions({ conversation, viewer }),
@@ -93,9 +92,11 @@ describe('rowMenuItems — les actions que le rôle permet', () => {
     expect(ids.includes('delete')).toBe(true);
   });
 
-  test('l’appel suit la loi partagée : une publique n’appelle que pour son créateur ou un admin', () => {
-    expect(idsFor(conversationOf({ type: 'public', currentUserRole: 'member' }), viewerOf()).includes('callAudio')).toBe(false);
-    expect(idsFor(conversationOf({ type: 'public', currentUserRole: 'admin' }), viewerOf()).includes('callAudio')).toBe(true);
+  test('#17243 — aucun rôle ne remet l’appel au menu de la ligne', () => {
+    for (const currentUserRole of ['member', 'admin', 'creator'] as const) {
+      const ids: readonly string[] = idsFor(conversationOf({ type: 'public', currentUserRole }), viewerOf());
+      expect(ids.some((id) => id.startsWith('call'))).toBe(false);
+    }
   });
 
   test('Quitter rougit, comme Supprimer, et passe avant lui', () => {

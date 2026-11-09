@@ -198,7 +198,6 @@ export function RowActions({
   unread,
   magnified,
   language,
-  canCall = false,
   canDelete = false,
   more,
   categoryId,
@@ -216,8 +215,6 @@ export function RowActions({
   readonly unread: boolean;
   /** La langue d'interface du lecteur : chaque libellé du menu la parle (#8150). */
   readonly language: InterfaceLanguage;
-  /** Vrai quand l'appel est permis : le menu ouvre alors sur « Appel vocal » et « Appel vidéo » (#8109). */
-  readonly canCall?: boolean;
   /** Vrai pour un compte : le menu se ferme sur « Supprimer », en rouge (#7285). */
   readonly canDelete?: boolean;
   /** Élue par la bande de focus — seule rangée où le bouton reste visible
@@ -257,7 +254,6 @@ export function RowActions({
       flags,
       unread,
       language,
-      canCall,
       canDelete,
       ...(more === undefined ? {} : { more }),
       ...(actions === undefined ? {} : { actions }),

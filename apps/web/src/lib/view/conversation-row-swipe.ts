@@ -34,10 +34,15 @@ const FLICK_CLOSE_DISTANCE = 10;
 
 export type RowSwipeEdge = 'leading' | 'trailing';
 
-/** Dans l'ordre depuis le BORD : la première est la première révélée. La table peut dépasser le plafond : `ROW_SWIPE_YIELDS` la ramène. */
+/**
+ * Dans l'ordre depuis le BORD : la première est la première révélée. La table
+ * peut dépasser le plafond : `ROW_SWIPE_YIELDS` la ramène. La sourdine et la
+ * suppression ne se balaient plus (consigne porteur, #17243) : elles restent
+ * au menu de l'appui long, la suppression avec sa confirmation.
+ */
 export const ROW_SWIPE_EDGES: Readonly<Record<RowSwipeEdge, readonly RowActionId[]>> = {
-  leading: ['pin', 'mute'],
-  trailing: ['archive', 'read', 'delete', 'obsolete'],
+  leading: ['pin'],
+  trailing: ['archive', 'read', 'obsolete'],
 };
 
 /** L'action qui cède sa place quand un bord dépasse `ROW_SWIPE_MAX_ACTIONS` (iOS : `ConversationTrailingSwipe.plan`). */

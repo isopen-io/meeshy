@@ -7,6 +7,7 @@ import {
   initialDetent,
   peekSheetFrame,
   peekSheetHeights,
+  peekSheetOffsets,
   progressAfterDrag,
   settleDetent,
   type PeekSheetFrameInput,
@@ -82,6 +83,28 @@ describe('la boîte de la grappe', () => {
     const frame = peekSheetFrame(phone());
     expect(peekSheetHeights(frame, -0.4)).toEqual(peekSheetHeights(frame, 0));
     expect(peekSheetHeights(frame, 1.7)).toEqual(peekSheetHeights(frame, 1));
+  });
+});
+
+describe('par transformations seulement (le geste ne remet rien en page)', () => {
+  test('compact : le menu est décalé de toute la course, le contenu en place', () => {
+    const frame = peekSheetFrame(phone());
+    const travel = frame.menuExpanded - frame.menuCompact;
+    expect(peekSheetOffsets(frame, 0)).toEqual({ sheet: travel, content: 0 });
+  });
+
+  test('étendu : le menu est en place, le contenu remonte de toute la course pour rester au-dessus de lui', () => {
+    const frame = peekSheetFrame(phone());
+    const travel = frame.menuExpanded - frame.menuCompact;
+    expect(peekSheetOffsets(frame, 1)).toEqual({ sheet: 0, content: travel });
+  });
+
+  test('les décalages suivent les hauteurs : la carte visible et le menu visible se partagent toujours la même hauteur', () => {
+    const frame = peekSheetFrame(phone());
+    const half = peekSheetOffsets(frame, 0.5);
+    const heights = peekSheetHeights(frame, 0.5);
+    expect(frame.menuExpanded - half.sheet).toBe(heights.menu);
+    expect(peekSheetHeights(frame, 0).card - half.content).toBe(heights.card);
   });
 });
 

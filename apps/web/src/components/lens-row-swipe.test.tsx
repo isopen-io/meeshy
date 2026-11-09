@@ -154,21 +154,21 @@ describe('LensRow — les deux bords', () => {
     expect(row('c-lyon').querySelector('button[aria-haspopup="menu"]')).not.toBeNull();
   });
 
-  test('vers la droite : Épingler puis Silence, au bord de début', async () => {
+  test('#17243 — vers la droite : Épingler seul au bord de début (la sourdine reste au menu)', async () => {
     const { row } = await monter();
     await versLaDroite(row('c-lyon'), 80);
     expect(stateOf(row('c-lyon'))).toBe('open');
     expect(zoneOf(row('c-lyon'))?.getAttribute('data-row-swipe-actions')).toBe('leading');
-    expect(labelsOf(row('c-lyon'))).toEqual(['Épingler', 'Silence']);
-    expect(offsetOf(row('c-lyon'))).toBe('152px');
+    expect(labelsOf(row('c-lyon'))).toEqual(['Épingler']);
+    expect(offsetOf(row('c-lyon'))).toBe('76px');
   });
 
-  test('vers la gauche : Archiver, Lu / Non lu, Supprimer, au bord de fin', async () => {
+  test('#17243 — vers la gauche : Archiver, Lu / Non lu au bord de fin (la suppression reste au menu)', async () => {
     const { row } = await monter();
     await versLaGauche(row('c-lyon'), 100);
     expect(zoneOf(row('c-lyon'))?.getAttribute('data-row-swipe-actions')).toBe('trailing');
-    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu', 'Supprimer']);
-    expect(offsetOf(row('c-lyon'))).toBe('-228px');
+    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu']);
+    expect(offsetOf(row('c-lyon'))).toBe('-152px');
   });
 
   test('aucun bord ne monte plus de 3 boutons', async () => {
@@ -183,15 +183,15 @@ describe('LensRow — les deux bords', () => {
   test('archive imposée : « Désarchiver » ne se balaie pas', async () => {
     const { row } = await monter({ flags: { isPinned: false, isMuted: false, isArchived: true, archiveLocked: true } });
     await versLaGauche(row('c-lyon'), 100);
-    expect(labelsOf(row('c-lyon'))).toEqual(['Non lu', 'Supprimer']);
-    expect(offsetOf(row('c-lyon'))).toBe('-152px');
+    expect(labelsOf(row('c-lyon'))).toEqual(['Non lu']);
+    expect(offsetOf(row('c-lyon'))).toBe('-76px');
   });
 
   test('en arabe, le bord de début se révèle en balayant vers la GAUCHE', async () => {
     const { row } = await monter({ dir: 'rtl' });
     await versLaGauche(row('c-lyon'), 80);
     expect(zoneOf(row('c-lyon'))?.getAttribute('data-row-swipe-actions')).toBe('leading');
-    expect(offsetOf(row('c-lyon'))).toBe('-152px');
+    expect(offsetOf(row('c-lyon'))).toBe('-76px');
   });
 
   test('les actions révélées sont de vrais boutons nommés', async () => {
@@ -210,22 +210,22 @@ describe('LensRow — rendre obsolète en un geste (#14645)', () => {
   test('administrateur : « Rendre obsolète » se révèle en dernier au bord de fin et demande la confirmation', async () => {
     const { row } = await monter({ conversations: [ADMIN_LYON, PARIS] });
     await versLaGauche(row('c-lyon'), 120);
-    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Supprimer', 'Rendre obsolète']);
+    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu', 'Rendre obsolète']);
     expect(offsetOf(row('c-lyon'))).toBe('-228px');
     await act(async () => actionOf(row('c-lyon'), 'Rendre obsolète').click());
     expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'obsolete', returnToList: false });
   });
 
-  test('administrateur : le bord de début reste épingler et sourdine', async () => {
+  test('administrateur : le bord de début reste épingler', async () => {
     const { row } = await monter({ conversations: [ADMIN_LYON, PARIS] });
     await versLaDroite(row('c-lyon'), 80);
-    expect(labelsOf(row('c-lyon'))).toEqual(['Épingler', 'Silence']);
+    expect(labelsOf(row('c-lyon'))).toEqual(['Épingler']);
   });
 
-  test('simple membre d’un groupe : le bord de fin garde archiver, lu / non lu, supprimer', async () => {
+  test('simple membre d’un groupe : le bord de fin garde archiver, lu / non lu', async () => {
     const { row } = await monter({ conversations: [{ ...LYON, currentUserRole: 'member' } as Conversation, PARIS] });
     await versLaGauche(row('c-lyon'), 100);
-    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu', 'Supprimer']);
+    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu']);
   });
 });
 
@@ -238,7 +238,7 @@ describe('LensRow — le geste', () => {
     expect(stateOf(surface)).toBe('dragging');
     expect(offsetOf(surface)).toBe('40px');
     expect(surface.style.getPropertyValue('--row-reveal')).toBe('40px');
-    expect(labelsOf(surface)).toEqual(['Épingler', 'Silence']);
+    expect(labelsOf(surface)).toEqual(['Épingler']);
     await act(async () => surface.dispatchEvent(pointer('pointermove', 60, 41)));
     expect(offsetOf(surface)).toBe('-40px');
     expect(zoneOf(surface)?.getAttribute('data-row-swipe-actions')).toBe('trailing');
@@ -247,7 +247,7 @@ describe('LensRow — le geste', () => {
 
   test('relâchée avant 35 % de la zone, elle revient en place et démonte ses actions', async () => {
     const { row, actions } = await monter();
-    await versLaDroite(row('c-lyon'), 40);
+    await versLaDroite(row('c-lyon'), 25);
     expect(offsetOf(row('c-lyon'))).toBe('0px');
     await reposer();
     expect(estFermee(row('c-lyon'))).toBe(true);
@@ -283,7 +283,7 @@ describe('LensRow — le geste', () => {
     host.matchMedia = (query: string) => ({ matches: query.includes('prefers-reduced-motion') });
     try {
       const { row } = await monter();
-      await versLaDroite(row('c-lyon'), 40);
+      await versLaDroite(row('c-lyon'), 25);
       expect(estFermee(row('c-lyon'))).toBe(true);
     } finally {
       host.matchMedia = native;
@@ -317,11 +317,11 @@ describe('LensRow — le retour en place', () => {
     expect(estFermee(row('c-lyon'))).toBe(true);
   });
 
-  test('« Supprimer » demande la confirmation existante, jamais une action de drapeau', async () => {
-    const { row, actions } = await monter();
-    await versLaGauche(row('c-lyon'), 100);
-    await act(async () => actionOf(row('c-lyon'), 'Supprimer').click());
-    expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'delete', returnToList: false });
+  test('« Rendre obsolète » demande la confirmation existante, jamais une action de drapeau', async () => {
+    const { row, actions } = await monter({ conversations: [{ ...LYON, currentUserRole: 'admin' } as Conversation, PARIS] });
+    await versLaGauche(row('c-lyon'), 120);
+    await act(async () => actionOf(row('c-lyon'), 'Rendre obsolète').click());
+    expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'obsolete', returnToList: false });
     expect(actions).toEqual([]);
     await reposer();
     expect(estFermee(row('c-lyon'))).toBe(true);

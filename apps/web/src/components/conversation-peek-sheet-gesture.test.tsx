@@ -8,7 +8,7 @@ import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
 import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { peekSheetFrame, peekSheetHeights } from '@/lib/view/peek-sheet';
+import { peekSheetFrame, peekSheetHeights, peekSheetOffsets } from '@/lib/view/peek-sheet';
 
 import { LensRow } from './lens-row';
 
@@ -121,6 +121,12 @@ const handle = (): HTMLButtonElement => {
 const menuItems = (): HTMLButtonElement[] => [...document.body.querySelectorAll<HTMLButtonElement>('[data-peek-menu] [role^="menuitem"]')];
 const frame = () => peekSheetFrame({ viewport: { width: window.innerWidth, height: window.innerHeight }, safe: { top: 0, bottom: 0 }, itemCount: menuItems().length });
 const px = (value: number) => `${value}px`;
+/** Ce que l'utilisateur voit : la translation du menu et le décalage du contenu de la carte, jamais une hauteur re-mise en page. */
+const shown = () => ({ sheet: sheet().style.transform, content: slot().style.getPropertyValue('--peek-shift') });
+const expected = (progress: number) => {
+  const offsets = peekSheetOffsets(frame(), progress);
+  return { sheet: `translateY(${offsets.sheet}px)`, content: px(offsets.content) };
+};
 
 const drag = (target: Element, type: string, y: number) =>
   act(() => {
@@ -138,10 +144,10 @@ describe('#17243 — au repos, la carte est grande et le menu compact', () => {
     await holdOpenAndRelease();
     expect(sheet().dataset.peekDetent).toBe('compact');
     expect(handle().getAttribute('aria-expanded')).toBe('false');
-    expect(handle().getAttribute('aria-label')).toBe('Afficher toutes les actions');
-    const rest = peekSheetHeights(frame(), 0);
-    expect(sheet().style.height).toBe(px(rest.menu));
-    expect(slot().style.height).toBe(px(rest.card));
+    expect(handle().getAttribute('aria-label')).toBe('Toutes les actions');
+    expect(shown()).toEqual(expected(0));
+    expect(slot().style.height).toBe(px(peekSheetHeights(frame(), 0).card));
+    expect(sheet().style.height).toBe(px(frame().menuExpanded));
   });
 
   test('toutes les actions sont dans le menu, même compact : le catalogue ne change pas', async () => {
@@ -159,15 +165,14 @@ describe('#17243 — tirer le menu', () => {
     const travel = f.menuExpanded - f.menuCompact;
     drag(handle(), 'pointerdown', 600);
     drag(handle(), 'pointermove', 600 - travel / 2);
-    expect(sheet().style.height).toBe(px(peekSheetHeights(f, 0.5).menu));
-    expect(slot().style.height).toBe(px(peekSheetHeights(f, 0.5).card));
+    expect(shown()).toEqual(expected(0.5));
+    expect(slot().style.height).toBe(px(peekSheetHeights(f, 0).card));
     drag(handle(), 'pointermove', 600 - travel);
     await wait(150);
     drag(handle(), 'pointerup', 600 - travel);
     expect(sheet().dataset.peekDetent).toBe('expanded');
     expect(handle().getAttribute('aria-expanded')).toBe('true');
-    expect(sheet().style.height).toBe(px(f.menuExpanded));
-    expect(slot().style.height).toBe(px(peekSheetHeights(f, 1).card));
+    expect(shown()).toEqual(expected(1));
   });
 
   test('relâché lentement avant la moitié de la course, le menu revient compact', async () => {
@@ -180,7 +185,7 @@ describe('#17243 — tirer le menu', () => {
     await wait(150);
     drag(handle(), 'pointerup', 600 - travel * 0.3);
     expect(sheet().dataset.peekDetent).toBe('compact');
-    expect(sheet().style.height).toBe(px(f.menuCompact));
+    expect(shown()).toEqual(expected(0));
   });
 
   test('revenir en arrière avant de relâcher restaure le menu compact', async () => {
@@ -261,7 +266,8 @@ describe('#17243 — toutes les actions sans le geste', () => {
       handle().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     });
     expect(sheet().dataset.peekDetent).toBe('expanded');
-    expect(handle().getAttribute('aria-label')).toBe('Réduire les actions');
+    expect(handle().getAttribute('aria-label')).toBe('Toutes les actions');
+    expect(handle().getAttribute('aria-expanded')).toBe('true');
     act(() => {
       handle().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     });
