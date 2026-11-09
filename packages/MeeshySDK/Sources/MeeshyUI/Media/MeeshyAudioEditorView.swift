@@ -53,7 +53,7 @@ public struct MeeshyAudioEditorView: View {
     /// remet `safeAreaInsets = 0` dans l'environnement SwiftUI ; le chrome
     /// (header, transport, dock) passerait sous la Dynamic Island / home
     /// indicator. La fenêtre expose toujours les insets physiques réels. Même
-    /// pattern que `MeeshyVideoEditorView` / `MeeshyImageEditorView`.
+    /// pattern que les anciens éditeurs plein écran d'image et de vidéo.
     // MARK: - Body
 
     public var body: some View {

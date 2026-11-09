@@ -25753,7 +25753,7 @@
       }
     },
     "media.editor.before": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -25799,55 +25799,8 @@
         }
       }
     },
-    "media.editor.brightness": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "السطوع"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Helligkeit"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Brightness"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Brillo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Luminosité"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Luminosità"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Brilho"
-          }
-        }
-      }
-    },
     "media.editor.cancel": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -25893,55 +25846,8 @@
         }
       }
     },
-    "media.editor.contrast": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التباين"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Kontrast"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Contrast"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Contraste"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Contraste"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contrasto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Contraste"
-          }
-        }
-      }
-    },
     "media.editor.crop.applied": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -25988,7 +25894,7 @@
       }
     },
     "media.editor.cropHint": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26035,7 +25941,7 @@
       }
     },
     "media.editor.done": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26082,7 +25988,7 @@
       }
     },
     "media.editor.flip": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26129,7 +26035,7 @@
       }
     },
     "media.editor.flipH": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26176,7 +26082,7 @@
       }
     },
     "media.editor.flipV": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26223,7 +26129,7 @@
       }
     },
     "media.editor.history": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26269,55 +26175,8 @@
         }
       }
     },
-    "media.editor.preview": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "معاينة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Vorschau"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Preview"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Vista previa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Aperçu"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anteprima"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Pré-visualização"
-          }
-        }
-      }
-    },
     "media.editor.redo": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26364,7 +26223,7 @@
       }
     },
     "media.editor.reset": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26411,7 +26270,7 @@
       }
     },
     "media.editor.resetAdjust": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26458,7 +26317,7 @@
       }
     },
     "media.editor.rotateLeft": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26505,7 +26364,7 @@
       }
     },
     "media.editor.rotateRight": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26552,7 +26411,7 @@
       }
     },
     "media.editor.rotation": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26598,290 +26457,8 @@
         }
       }
     },
-    "media.editor.saturation": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التشبّع"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sättigung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Saturation"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Saturación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Saturation"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saturazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Saturação"
-          }
-        }
-      }
-    },
-    "media.editor.sharpness": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الحدّة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Schärfe"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sharpness"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Nitidez"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Netteté"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nitidezza"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Nitidez"
-          }
-        }
-      }
-    },
-    "media.editor.tab.adjustments": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التعديل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Anpassen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Adjust"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ajustar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Ajust."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Regol."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ajustar"
-          }
-        }
-      }
-    },
-    "media.editor.tab.crop": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الاقتصاص"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Zuschn."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Crop"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Recortar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Crop"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ritaglio"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Recortar"
-          }
-        }
-      }
-    },
-    "media.editor.tab.effects": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المؤثرات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "FX"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "FX"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "FX"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "FX"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "FX"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "FX"
-          }
-        }
-      }
-    },
-    "media.editor.tab.filters": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المرشّحات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Filter"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Filters"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Filtros"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Filtres"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtri"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Filtros"
-          }
-        }
-      }
-    },
     "media.editor.tool.adjust": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26928,7 +26505,7 @@
       }
     },
     "media.editor.tool.crop": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -26975,7 +26552,7 @@
       }
     },
     "media.editor.tool.effects": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -27022,7 +26599,7 @@
       }
     },
     "media.editor.tool.filters": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -27069,7 +26646,7 @@
       }
     },
     "media.editor.undo": {
-      "extractionState": "extracted_with_value",
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -27111,53 +26688,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desfazer a alteração"
-          }
-        }
-      }
-    },
-    "media.editor.vignette": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تظليل الحواف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Vignette"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Vignette"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Viñeta"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vignette"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vignettatura"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Vinheta"
           }
         }
       }

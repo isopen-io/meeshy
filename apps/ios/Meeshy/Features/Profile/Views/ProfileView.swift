@@ -119,33 +119,26 @@ struct ProfileView: View {
                 bannerImageForEditor = image
             }
         }
+        // La retouche de la capture caméra (#17251) : annuler ne pose ni n'envoie rien.
         .fullScreenCover(item: $avatarImageForEditor) { image in
-            MeeshyImageEditorView(
-                image: image,
-                context: .avatar,
-                onAccept: { edited in
-                    avatarImageForEditor = nil
-                    uploadAvatar(edited)
-                },
-                onCancel: {
-                    avatarImageForEditor = nil
-                    avatarItem = nil
-                }
-            )
+            EntityImageRetouch(image: image, format: .avatar, onDone: { edited in
+                avatarImageForEditor = nil
+                avatarItem = nil
+                uploadAvatar(edited)
+            }, onCancel: {
+                avatarImageForEditor = nil
+                avatarItem = nil
+            })
         }
         .fullScreenCover(item: $bannerImageForEditor) { image in
-            MeeshyImageEditorView(
-                image: image,
-                context: .banner,
-                onAccept: { edited in
-                    bannerImageForEditor = nil
-                    uploadBanner(edited)
-                },
-                onCancel: {
-                    bannerImageForEditor = nil
-                    bannerItem = nil
-                }
-            )
+            EntityImageRetouch(image: image, format: .banner, onDone: { edited in
+                bannerImageForEditor = nil
+                bannerItem = nil
+                uploadBanner(edited)
+            }, onCancel: {
+                bannerImageForEditor = nil
+                bannerItem = nil
+            })
         }
     }
 

@@ -44,14 +44,7 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Media/AudioRecorderSheet.swift",
         "Media/UniversalAudioRecorderView.swift",
         "Media/AudioEditorToolPanel.swift",
-        "Media/MeeshyAudioEditorView.swift",
-        "Media/MeeshyImageEditorView.swift",
-        "Media/ImageEditorPanels/ImageEditorFiltersPanel.swift",
-        "Media/ImageEditorPanels/ImageEditorAdjustPanel.swift",
-        "Media/ImageEditorPanels/ImageEditorEffectsPanel.swift",
-        "Media/ImageEditorPanels/ImageEditorCropPanel.swift",
-        "Media/ImageEditorPanels/ImageEditorControllerPanel.swift",
-        "Media/ImageEditorHistoryOverlay.swift"
+        "Media/MeeshyAudioEditorView.swift"
     ]
 
     private static let fixedGlyphs: [FixedGlyph] = [
@@ -70,11 +63,7 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         FixedGlyph(
             file: "Media/CodeViewerView.swift",
             receiver: "Text(\"\\(index + 1)\")",
-            marker: ".font(.system(size: 11, weight: .medium, design: .monospaced))"),
-        FixedGlyph(
-            file: "Media/ImageEditorHistoryOverlay.swift",
-            receiver: "Text(\"\\(index)\")",
-            marker: ".font(.system(size: MeeshyFont.smallSize, weight: .bold))")
+            marker: ".font(.system(size: 11, weight: .medium, design: .monospaced))")
     ]
 
     private static let exactSizes: Set<Double> = [11, 12, 13, 15, 16, 17, 20, 22, 28, 34]

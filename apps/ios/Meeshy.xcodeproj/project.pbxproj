@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		079D89C6A74DD0985933E533 /* EntityImageRetouchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BD3097FD2D11180A9F8D19 /* EntityImageRetouchTests.swift */; };
+		F1E2BAF2AC88F59D3B4827CD /* EntityImageRetouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F58902DCA24DD9F7B821678 /* EntityImageRetouch.swift */; };
 		00073C670926284DD45E1271 /* StoryViewerEngagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7417FA813FF1BE163808BFC4 /* StoryViewerEngagement.swift */; };
 		0008D7D5B479D759E7DBC760 /* MediaSaveDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2624CEAC671EFD3549C7B59C /* MediaSaveDeduplicationTests.swift */; };
 		000948901E548E0CAC33E529 /* StatusBubbleControllerReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABF76B8551B950BB417F705 /* StatusBubbleControllerReplyTests.swift */; };
@@ -4589,6 +4591,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		6F58902DCA24DD9F7B821678 /* EntityImageRetouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityImageRetouch.swift; sourceTree = "<group>"; };
+		B8BD3097FD2D11180A9F8D19 /* EntityImageRetouchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityImageRetouchTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransitionPlan.swift; sourceTree = "<group>"; };
 		003584F81D0B65A6FD4ACACB /* StoryGroupIntroPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryGroupIntroPresenter.swift; sourceTree = "<group>"; };
@@ -11209,6 +11213,7 @@
 				9ECA044B184C6B8713DA612D /* ComposerCloseGuardTests.swift */,
 				16E4CC580826D1CC0CB73459 /* ComposerConversationImageTests.swift */,
 				BBFA636D161284F4671106D6 /* ComposerCropCancelTests.swift */,
+				B8BD3097FD2D11180A9F8D19 /* EntityImageRetouchTests.swift */,
 				2EBD9BE13BB9E53C9BCD1452 /* ComposerDescriptionLayerTests.swift */,
 				FA253F566091EE0D3A2D46CB /* ComposerDescriptionTargetTests.swift */,
 				CBEB35EB43D6AE6688DAD6B2 /* ComposerDestinationSelectorTests.swift */,
@@ -12966,6 +12971,7 @@
 				C935D5FBD1D0ECF376CCABB2 /* ComposerViewfinder.swift */,
 				CBF37237ED9F784B7903D33A /* ComposerViewfinder+Provider.swift */,
 				E23B43A646AFC027EDE0233C /* ConversationPieceRetouch.swift */,
+				6F58902DCA24DD9F7B821678 /* EntityImageRetouch.swift */,
 				A81268ECFBF9A118B2553BF2 /* DocumentComposerDoor.swift */,
 				ED3AF17DA66BDD7996546F72 /* MediaComposerDoor.swift */,
 				4E7C1D0DD77D41AF5BBC85B5 /* MeeshyComposerHost.swift */,
@@ -16378,6 +16384,7 @@
 				FCE1C328E3B1D4ED8B7B1FF8 /* ConversationOptionsViewModel.swift in Sources */,
 				62A87E715ED7ACC270F03C41 /* ConversationOverlayState.swift in Sources */,
 				EE1BEE977885A12FD7EF7E60 /* ConversationPieceRetouch.swift in Sources */,
+				F1E2BAF2AC88F59D3B4827CD /* EntityImageRetouch.swift in Sources */,
 				E3887C1A73453A40A54D17E9 /* ConversationPreferencesTab.swift in Sources */,
 				C0BC0114211AC760A0A4AA1E /* ConversationPresentedMedia.swift in Sources */,
 				1A2181EB19BC3BD7E55F8CDC /* ConversationPreviewCatalog.swift in Sources */,
@@ -18221,6 +18228,7 @@
 				92F73E0A794221AED62B731E /* ComposerCloseGuardTests.swift in Sources */,
 				53533E98D9D7835B3B517178 /* ComposerConversationImageTests.swift in Sources */,
 				1971703EF6A7C64C0263B8D2 /* ComposerCropCancelTests.swift in Sources */,
+				079D89C6A74DD0985933E533 /* EntityImageRetouchTests.swift in Sources */,
 				F8E9A8DCE74CAFB07E0ED4E4 /* ComposerDescriptionLayerTests.swift in Sources */,
 				EB88EC5413C30AFBA1360273 /* ComposerDescriptionTargetTests.swift in Sources */,
 				C7027C73BC278E94D2D6AFC7 /* ComposerDestinationSelectorTests.swift in Sources */,

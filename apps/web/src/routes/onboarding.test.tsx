@@ -45,6 +45,12 @@ const landed = () => act(() => new Promise<void>((resolve) => setTimeout(resolve
 
 const card = (host: ParentNode): string | null => host.querySelector('[data-onb-card]')?.getAttribute('data-onb-card') ?? null;
 const action = (host: ParentNode, id: string) => host.querySelector<HTMLElement>(`[data-onb-action="${id}"]`);
+const cardOnceLoaded = async (host: ParentNode, expected: string): Promise<string | null> => {
+  for (let tick = 0; tick < 200 && card(host) !== expected; tick += 1) {
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+  }
+  return card(host);
+};
 
 describe('la reprise — la première étape manquante, « Passer tout » dès la carte 1', () => {
   test('un compte neuf commence aux langues, et « Passer tout » est là', async () => {
@@ -390,7 +396,7 @@ describe('« Montre-toi » (#17237) — après le courriel, avant le salut, jama
     signIn();
     const { deps, patches } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
-    expect(card(host)).toBe('profile');
+    expect(await cardOnceLoaded(host, 'profile')).toBe('profile');
     expect(host.textContent).toContain('@maya');
     await click(action(host, 'profile.continue'));
     expect(patches).toEqual([{ step: 'profile', outcome: 'skipped' }]);
@@ -401,6 +407,7 @@ describe('« Montre-toi » (#17237) — après le courriel, avant le salut, jama
     signIn();
     const { deps, patches, uploads } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(await cardOnceLoaded(host, 'profile')).toBe('profile');
     const input = host.querySelector<HTMLInputElement>('[data-onb-profile-input="avatar"]');
     if (input === null) throw new Error('champ de la photo absent');
     Object.defineProperty(input, 'files', { value: [new File(['x'], 'moi.png', { type: 'image/png' })], configurable: true });

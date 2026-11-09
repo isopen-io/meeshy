@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **LE montage de la capture — un seul plein écran, celui du composer**
 /// (#9351, décision porteur 2026-10-05 : « réutiliser exactement le mode plein
@@ -131,6 +132,8 @@ struct ComposerCaptureMount<Content: View>: View {
             // car l'image qui se charge n'a pas encore de taille, et sous les
             // commandes, qui restent lisibles.
             .overlay { ComposerShutterFlash(tick: session.camera.shutterCount) }
+            // L'avatar se cadre dans son rond (#17251).
+            .overlay { if session.imageFormat?.isRound == true, session.phase.isEditing { EntityImageRoundVeil() } }
             .background {
                 ComposerCameraHardwareButtons(
                     session: session,
