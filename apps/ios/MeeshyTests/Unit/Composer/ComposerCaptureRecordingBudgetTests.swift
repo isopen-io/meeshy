@@ -13,20 +13,11 @@ final class ComposerCaptureRecordingBudgetTests: XCTestCase {
         XCTAssertNil(ComposerCaptureRecordingBudget.maxDuration(for: .status))
     }
 
-    func test_theBar_hasFiveSlots_filledLeftToRight() {
+    func test_theBar_hasFiveSlots_andItsFractionIsBounded() {
         XCTAssertEqual(ComposerCaptureRecordingBudget.slots, 5)
-        let fills = ComposerCaptureRecordingBudget.slotFills(elapsed: 30, budget: 60)
-        XCTAssertEqual(fills.count, 5)
-        XCTAssertEqual(fills[0], 1, accuracy: 0.0001)
-        XCTAssertEqual(fills[1], 1, accuracy: 0.0001)
-        XCTAssertEqual(fills[2], 0.5, accuracy: 0.0001, "la case en cours se remplit à moitié")
-        XCTAssertEqual(fills[3], 0, accuracy: 0.0001)
-        XCTAssertEqual(fills[4], 0, accuracy: 0.0001)
-    }
-
-    func test_theBar_isEmptyWithoutABudget_andNeverOverflows() {
-        XCTAssertEqual(ComposerCaptureRecordingBudget.slotFills(elapsed: 12, budget: nil), [0, 0, 0, 0, 0])
-        XCTAssertEqual(ComposerCaptureRecordingBudget.slotFills(elapsed: 500, budget: 60), [1, 1, 1, 1, 1])
+        XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 30, budget: 60), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 12, budget: nil), 0)
+        XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 500, budget: 60), 1)
         XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: -3, budget: 60), 0)
     }
 
