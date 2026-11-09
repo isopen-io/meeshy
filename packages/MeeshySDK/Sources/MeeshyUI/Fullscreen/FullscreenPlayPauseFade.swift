@@ -1,7 +1,7 @@
 import Foundation
 
 /// **Le bouton pause d'une vidéo plein écran s'efface vite, et revient au doigt**
-/// (#9577, directive porteur 2026-10-07).
+/// (#9577).
 ///
 /// Un bouton posé au centre de l'image cache ce qu'on regarde. Il part donc une
 /// seconde après le début de la lecture (`FullscreenChromeMetrics

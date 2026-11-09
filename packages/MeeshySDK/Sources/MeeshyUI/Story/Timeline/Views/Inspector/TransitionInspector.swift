@@ -24,7 +24,7 @@ public struct TransitionInspector: View {
     /// Selectable kinds in the picker. Dissolve is intentionally excluded —
     /// it renders identically to crossfade everywhere it's actually played
     /// (see `ReaderTransitionResolver.liveRenderableTransition`), so offering
-    /// it as a distinct option was a false promise (design doc 2026-07-18).
+    /// it as a distinct option was a false promise.
     /// `.dissolve` itself stays in the `StoryTransitionKind` enum for Codable
     /// back-compat with already-published stories.
     public static let availableKinds: [StoryTransitionKind] = [.crossfade]
@@ -94,7 +94,7 @@ public struct TransitionInspector: View {
     }
 
     /// Titre lisible — l'ancien header affichait les UUID bruts des deux
-    /// clips (« 5D212F9D-6530-… »), inutilisables (retour user 2026-07-11).
+    /// clips (« 5D212F9D-6530-… »), inutilisables.
     private var header: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "diamond.fill")

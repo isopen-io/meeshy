@@ -19,8 +19,7 @@ public struct StoryTextEditorView: View {
     @State private var expandedSection: TextEditorSection?
     /// Handle `@…` en cours de frappe dans le texte de CE calque, `nil` sinon.
     /// Même règle pure que le composer de post — écrire `@alice` dans une story
-    /// n'ouvrait aucune liste, donc ne vérifiait aucun pseudo (retour user
-    /// 2026-08-18).
+    /// n'ouvrait aucune liste, donc ne vérifiait aucun pseudo.
     @State private var mentionQuery: String?
     @Environment(\.colorScheme) private var colorScheme
 
@@ -70,7 +69,7 @@ public struct StoryTextEditorView: View {
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.textEditor.title", defaultValue: "Texte", bundle: .module))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
-                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                .foregroundStyle(colorScheme == .dark ? .white : MeeshyColors.indigo950)
             Spacer()
         }
     }
@@ -85,7 +84,7 @@ public struct StoryTextEditorView: View {
             // l'éditeur, on ajoute un overlay subtil pour la lisibilité.
             TextField(String(localized: "story.textEditor.placeholder", defaultValue: "Saisissez votre texte...", bundle: .module), text: contentBinding, axis: .vertical)
                 .font(storyFont(for: textObject.parsedTextStyle, size: min(textObject.resolvedSize, 20)))
-                .foregroundColor(Color(hex: textObject.textColor ?? "FFFFFF"))
+                .foregroundStyle(Color(hex: textObject.textColor ?? "FFFFFF"))
                 .multilineTextAlignment(resolvedAlignment)
                 .focused($isFocused)
                 .lineLimit(1...4)
@@ -111,7 +110,7 @@ public struct StoryTextEditorView: View {
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .frame(width: 34, height: 34)
                         .background(Circle().fill(MeeshyColors.error.opacity(0.12)))
                 }
@@ -183,7 +182,7 @@ public struct StoryTextEditorView: View {
             } label: {
                 Text("Aa")
                     .font(storyFont(for: textObject.parsedTextStyle, size: 14))
-                    .foregroundColor(primaryText)
+                    .foregroundStyle(primaryText)
                     .frame(width: 34, height: 30)
                     .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
@@ -195,7 +194,7 @@ public struct StoryTextEditorView: View {
             } label: {
                 Image(systemName: alignmentIcon)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(secondaryText)
+                    .foregroundStyle(secondaryText)
                     .frame(width: 34, height: 30)
                     .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
@@ -208,7 +207,7 @@ public struct StoryTextEditorView: View {
             } label: {
                 Image(systemName: textObject.hasBg ? "a.square.fill" : "a.square")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(textObject.hasBg ? MeeshyColors.brandPrimary : mutedText)
+                    .foregroundStyle(textObject.hasBg ? MeeshyColors.brandPrimary : mutedText)
                     .frame(width: 34, height: 30)
                     .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
@@ -303,7 +302,7 @@ public struct StoryTextEditorView: View {
                         VStack(spacing: 4) {
                             Text("Aa")
                                 .font(storyFont(for: style, size: 18))
-                                .foregroundColor(isSelected ? Color.white : primaryText)
+                                .foregroundStyle(isSelected ? Color.white : primaryText)
                                 .frame(width: 52, height: 40)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
@@ -311,7 +310,7 @@ public struct StoryTextEditorView: View {
                                 )
                             Text(style.displayName)
                                 .meeshyScaledFont(9, weight: .medium)
-                                .foregroundColor(isSelected ? primaryText : mutedText)
+                                .foregroundStyle(isSelected ? primaryText : mutedText)
                         }
                     }
                     .buttonStyle(.plain)
@@ -359,18 +358,18 @@ public struct StoryTextEditorView: View {
         HStack(spacing: 8) {
             Image(systemName: "textformat.size.smaller")
                 .font(.system(size: 11))
-                .foregroundColor(mutedText)
+                .foregroundStyle(mutedText)
 
             Slider(value: sizeBinding, in: 14...60, step: 1)
                 .tint(MeeshyColors.brandPrimary)
 
             Image(systemName: "textformat.size.larger")
                 .font(.system(size: 15))
-                .foregroundColor(mutedText)
+                .foregroundStyle(mutedText)
 
             Text("\(Int(textObject.resolvedSize))")
                 .font(MeeshyFont.relative(11, weight: .bold, design: .monospaced))
-                .foregroundColor(secondaryText)
+                .foregroundStyle(secondaryText)
                 .frame(width: 28)
         }
         .padding(.horizontal, 14)
@@ -397,13 +396,13 @@ public struct StoryTextEditorView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .meeshyScaledFont(9, weight: .semibold)
-                .foregroundColor(mutedText)
+                .foregroundStyle(mutedText)
             HStack(spacing: 4) {
                 Slider(value: value, in: range, step: 0.5)
                     .tint(MeeshyColors.indigo400)
                 Text("\(String(format: "%.1f", value.wrappedValue))\(unit)")
                     .meeshyScaledFont(10, weight: .medium, design: .monospaced)
-                    .foregroundColor(secondaryText)
+                    .foregroundStyle(secondaryText)
                     .frame(width: 32)
             }
         }

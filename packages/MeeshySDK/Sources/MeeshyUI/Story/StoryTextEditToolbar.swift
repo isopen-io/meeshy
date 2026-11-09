@@ -21,13 +21,13 @@ public struct StoryTextEditToolbar: View {
 
     /// Rapporte le Y (écran) du bord SUPÉRIEUR de la rangée de contrôles —
     /// panneau déplié compris. Le composer le transmet au canvas, qui garde la
-    /// dernière ligne du texte édité au-dessus (directive user 2026-07-30).
+    /// dernière ligne du texte édité au-dessus.
     /// `.greatestFiniteMagnitude` quand l'éditeur est fermé : aucun plafond.
     var onControlsTopYChange: ((CGFloat) -> Void)? = nil
 
     /// Rapporte le Y (écran) du bord INFÉRIEUR du bouton « Terminé ». Avec
     /// `onControlsTopYChange`, il borne la ZONE dans laquelle le canvas centre
-    /// le texte édité (spec 2026-08-01).
+    /// le texte édité.
     var onTopBarBottomYChange: ((CGFloat) -> Void)? = nil
 
     /// Les outils et les fonds offerts — le composer les garde tous.

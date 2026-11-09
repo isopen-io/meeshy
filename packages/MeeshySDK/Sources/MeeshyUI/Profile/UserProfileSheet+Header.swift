@@ -166,17 +166,17 @@ extension UserProfileSheet {
 
             Text(displayUser.resolvedDisplayName)
                 .font(.system(.title3, design: .rounded).weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             HStack(spacing: MeeshySpacing.xs) {
                 Text("@\(displayUser.username)")
-                    .foregroundColor(Color(hex: resolvedAccent))
+                    .foregroundStyle(Color(hex: resolvedAccent))
                 // Présence datée après le pseudo — rendue seulement si le serveur
                 // l'a jugée montrable (lastActiveAt non nil pour cet observateur).
                 if let lastActive = displayUser.lastActiveAt {
-                    Text(verbatim: "·").foregroundColor(theme.textSecondary)
+                    Text(verbatim: "·").foregroundStyle(theme.textSecondary)
                     Text(RelativeTimeFormatter.lastSeenString(for: lastActive))
-                        .foregroundColor(presenceColor(for: lastActive))
+                        .foregroundStyle(presenceColor(for: lastActive))
                 }
             }
             .font(.system(size: 14, weight: .medium))
@@ -301,7 +301,7 @@ extension UserProfileSheet {
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .adaptiveGlass(in: Circle())
                 .meeshyTapTarget()
@@ -325,7 +325,7 @@ extension UserProfileSheet {
                     Text(tab.title)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
-                .foregroundColor(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
+                .foregroundStyle(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
                 .padding(.vertical, MeeshySpacing.smPlus)
 
                 Rectangle()
@@ -361,11 +361,11 @@ extension UserProfileSheet {
             VStack(alignment: .leading, spacing: 0) {
                 Text(displayUser.resolvedDisplayName)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 Text("@\(displayUser.username)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(Color(hex: resolvedAccent))
+                    .foregroundStyle(Color(hex: resolvedAccent))
                     .lineLimit(1)
             }
 

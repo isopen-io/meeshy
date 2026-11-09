@@ -397,7 +397,7 @@ public struct StoryTimelineView: View {
         )
         .gesture(swipeUpExpand)
         // Surface d'édition complète : sélectionner un clip, un keyframe ou une
-        // transition ouvre son inspecteur en SHEET (item 8, 2026-07-25). Le
+        // transition ouvre son inspecteur en SHEET. Le
         // survol translucide qu'on utilisait avant recouvrait précisément la
         // piste qu'on réglait ; la sheet libère la timeline et apporte les
         // affordances système (poignée, glisser-fermer, paliers de hauteur).
@@ -410,12 +410,12 @@ public struct StoryTimelineView: View {
 
     /// Le readout temps est AFFICHÉ en Quick : masqué un temps (vague modale
     /// allégée), il a été redemandé à chaud — « remet le time dans la vue
-    /// simple ! » (user, 2026-07-11). Le paramètre TransportBar reste : c'est
+    /// simple ! ». Le paramètre TransportBar reste : c'est
     /// le point de bascule si le produit retranche à nouveau.
     public static let transportShowsTimeReadout = true
 
     /// Bande d'opérations SOUS la bande des outils : historique, snap,
-    /// prolongation « +10 s » et enregistrement (retour user 2026-07-20) —
+    /// prolongation « +10 s » et enregistrement —
     /// le transport en dessous ne garde que lecture / temps / zoom / son.
     private var operationsBar: some View {
         TimelineOperationsBar(

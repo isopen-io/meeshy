@@ -7,7 +7,7 @@ import Foundation
 //
 // **Le motif de l'extraction est la RÈGLE, pas l'esthétique** : le fichier
 // pesait 4 285 lignes, et « ajouter à un fichier déjà hors budget est interdit :
-// on extrait d'abord, on ajoute ensuite » (directive 2026-09-02, plafond 1200).
+// on extrait d'abord, on ajoute ensuite ».
 // #4840 devait ajouter un cas à `TimelineClipKind` et deux branches aux
 // commandes de fenêtre — donc ce bloc, et lui seul, sort avant l'ajout. C'est
 // exactement ce que #4715 avait fait pour `StorySticker` et
@@ -31,7 +31,7 @@ public struct TimelineProject: Codable, Sendable {
     /// leur fenêtre d'apparition (startTime/duration), déplaçables comme les textes.
     public var stickerObjects: [StorySticker]
 
-    /// **Les pastilles de lieu ONT une piste** (directive porteur 2026-08-31).
+    /// **Les pastilles de lieu ONT une piste**.
     ///
     /// Elles manquaient à ce projet, et j'avais lu leur absence comme une
     /// propriété — « un lieu n'a pas de piste parce qu'il n'a pas de temps ».

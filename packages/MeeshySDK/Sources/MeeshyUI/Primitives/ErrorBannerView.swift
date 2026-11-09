@@ -50,7 +50,7 @@ public struct ErrorBannerView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .meeshyTapTarget()
             }
             .accessibilityLabel(String(localized: "common.close", bundle: .module))

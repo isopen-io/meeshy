@@ -1,6 +1,6 @@
 import UIKit
 
-// MARK: - La saisie CÈDE au doigt (retour porteur 2026-09-28)
+// MARK: - La saisie CÈDE au doigt
 //
 // > « Lorsqu'on édite un texte dans la vue d'édition, il faut être capable de
 // > déplacer au doigt le texte dans la scène, zoomer, tourner sans attendre de

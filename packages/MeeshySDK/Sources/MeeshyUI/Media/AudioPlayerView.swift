@@ -22,7 +22,7 @@ public struct AudioPlayerView: View {
     /// every existing call site) means "show the original". The SDK stays
     /// agnostic of the resolution rule itself (systemLanguage > regional >
     /// custom > deviceLocale); it only renders whichever code it is handed.
-    /// Prisme audio-follow (2026-08-09) — this now ALSO seeds playback: a
+    /// Prisme audio-follow — this now ALSO seeds playback: a
     /// non-nil/non-"orig" value marks `hasExplicitAudioLanguage = true` in
     /// `init`, so the matching translated audio track (if one exists) plays
     /// automatically, exactly like the transcription strip. See
@@ -125,7 +125,7 @@ public struct AudioPlayerView: View {
     /// can observe the seeding decision from MeeshyUITests without exposing
     /// it publicly — same pattern as `usesExternalPlayer` above.
     @State internal var selectedAudioLanguage: String
-    /// Prisme audio-follow (2026-08-09) — `selectedAudioLanguage` doubles as
+    /// Prisme audio-follow — `selectedAudioLanguage` doubles as
     /// the Prisme-seeded transcription-STRIP default AND the playback
     /// language: this flag says whether `selectedAudioLanguage` should steer
     /// which audio track plays. Seeded in `init` to `true` when Prisme
@@ -523,7 +523,6 @@ public struct AudioPlayerView: View {
         //     the first tap on every fresh bubble bypasses the coordinator
         //     and plays via the dummy local engine, leaving `activeContext`
         //     nil. That broke the mini-player + background continuation
-        //     (cf. 2026-05-28 bug report).
         //  2. The bubble is ACTIVE but the shared engine is loaded with a
         //     DIFFERENT attachment (`player.attachmentId != attachment.id`)
         //     — the parent must rebuild the queue around this audio.
@@ -712,7 +711,7 @@ public struct AudioPlayerView: View {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .meeshyScaledFont(MeeshyIconSize.sm)
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                 }

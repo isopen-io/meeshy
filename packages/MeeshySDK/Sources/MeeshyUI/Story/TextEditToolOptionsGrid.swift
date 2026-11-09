@@ -1,8 +1,7 @@
 import SwiftUI
 import MeeshySDK
 
-/// **La DISPOSITION du panneau d'options est DEMANDÉE par l'hôte** (#5045,
-/// directive porteur 2026-09-03).
+/// **La DISPOSITION du panneau d'options est DEMANDÉE par l'hôte** (#5045).
 ///
 /// > « Il faut lister les Fond en verticale sur le nombre de rangé qui entre
 /// > dans l'écran. Pareil pour les effets, il faut montrer l'exemple dans la
@@ -133,8 +132,8 @@ nonisolated enum TextEditOptionsGridMetrics {
 
 extension TextEditToolOptions {
 
-    /// **Cinq colonnes FLEXIBLES**, jamais adaptatives (directive porteur
-    /// 2026-09-05). `.flexible()` partage la largeur servie en parts égales :
+    /// **Cinq colonnes FLEXIBLES**, jamais adaptatives.
+    /// `.flexible()` partage la largeur servie en parts égales :
     /// le compte est tenu, et chaque boîte reste centrée dans sa part.
     var gridColumns: [GridItem] {
         if layout == .column {

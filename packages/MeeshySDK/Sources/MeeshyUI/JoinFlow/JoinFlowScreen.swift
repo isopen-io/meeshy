@@ -118,7 +118,7 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
         HStack {
             Text(String(localized: "joinFlow.header.title", defaultValue: "Rejoindre", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -128,7 +128,7 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
@@ -152,7 +152,7 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
 
             Text(String(localized: "joinFlow.loading.message", defaultValue: "Chargement du lien...", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             Spacer()
         }
@@ -172,17 +172,17 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
 
                 Image(systemName: "checkmark.circle.fill")
                     .font(MeeshyFont.relative(56))
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundStyle(MeeshyColors.success)
             }
 
             Text(String(localized: "joinFlow.success.title", defaultValue: "Bienvenue !", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             if let result = viewModel.joinResult {
                 Text(JoinFlowCopy.joinedSentence(conversationTitle: result.conversation.title, username: result.participant.username))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xxxl + MeeshySpacing.sm)
             }
@@ -199,7 +199,7 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
                     Text(String(localized: "joinFlow.success.openConversation", defaultValue: "Ouvrir la conversation", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.lg)
                 .background(MeeshyColors.brandGradient)
@@ -225,16 +225,16 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
 
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.hero))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
             }
 
             Text(String(localized: "joinFlow.error.title", defaultValue: "Lien indisponible", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(message)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl + MeeshySpacing.sm)
 
@@ -246,7 +246,7 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
                     Text(String(localized: "joinFlow.error.retry", defaultValue: "Réessayer", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 }
-                .foregroundColor(MeeshyColors.indigo400)
+                .foregroundStyle(MeeshyColors.indigo400)
                 .padding(.horizontal, MeeshySpacing.xxl)
                 .padding(.vertical, MeeshySpacing.md)
                 .background(
@@ -260,7 +260,7 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
                 dismiss()
             }
             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .padding(.top, MeeshySpacing.xs)
 
             Spacer()

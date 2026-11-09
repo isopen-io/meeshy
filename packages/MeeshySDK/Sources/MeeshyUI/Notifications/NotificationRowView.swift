@@ -134,7 +134,7 @@ public struct NotificationRowView: View, Equatable {
         } label: {
             Label(label, systemImage: icon)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(isPrimary ? .white : (isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600))
+                .foregroundStyle(isPrimary ? .white : (isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600))
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .frame(minHeight: 44)
                 .background(Capsule().fill(isPrimary ? MeeshyColors.indigo600 : MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))
@@ -231,13 +231,13 @@ public struct NotificationRowView: View, Equatable {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(presentation.title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: notification.isRead ? .medium : .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(2)
 
             if let body = presentation.body {
                 Text(body)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(2)
             }
 
@@ -245,7 +245,7 @@ public struct NotificationRowView: View, Equatable {
                 Text(quote)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .italic()
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
             }
 
@@ -271,7 +271,7 @@ public struct NotificationRowView: View, Equatable {
         case .plain(let text):
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .lineLimit(1)
         }
     }
@@ -314,7 +314,7 @@ public struct NotificationRowView: View, Equatable {
     private var timestampView: some View {
         Text(relativeTime)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
     }
 
     // MARK: - Computed

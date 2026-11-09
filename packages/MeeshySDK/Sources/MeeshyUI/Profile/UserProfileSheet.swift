@@ -284,11 +284,11 @@ public struct UserProfileSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "wifi.exclamationmark")
                 .font(MeeshyFont.relative(28, weight: .light))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
             Text(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
                 HapticFeedback.light()
@@ -296,7 +296,7 @@ public struct UserProfileSheet: View {
             } label: {
                 Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .frame(minHeight: MeeshyControlSize.tapTarget)
                     .background(Capsule().fill(Color(hex: resolvedAccent)))
@@ -463,7 +463,7 @@ public struct UserProfileSheet: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(bio)
                 .font(.callout)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(5)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -484,11 +484,11 @@ public struct UserProfileSheet: View {
                 // SF Symbol
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
-                    .foregroundColor(Color(hex: resolvedAccent))
+                    .foregroundStyle(Color(hex: resolvedAccent))
             }
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.xsPlus)
@@ -505,11 +505,11 @@ public struct UserProfileSheet: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundStyle(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundStyle(MeeshyColors.success)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.sm)
@@ -546,7 +546,7 @@ public struct UserProfileSheet: View {
                 .font(.system(size: MeeshyFont.labelSize))
             Text(lang.name)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.xsPlus)
@@ -588,7 +588,7 @@ public struct UserProfileSheet: View {
                 Text(String(localized: "profile.action.sendMessage", defaultValue: "Envoyer un message", bundle: .module))
                     .meeshyScaledFont(compact ? 13 : 15, weight: .semibold)
             }
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .frame(maxWidth: compact ? nil : .infinity)
             .padding(.horizontal, compact ? 20 : 0)
             .padding(.vertical, compact ? 10 : 14)
@@ -632,7 +632,7 @@ public struct UserProfileSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .module))
                 .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
 
             Button {
                 HapticFeedback.medium()
@@ -640,7 +640,7 @@ public struct UserProfileSheet: View {
             } label: {
                 Text(String(localized: "profile.blocked.unblock", defaultValue: "Débloquer", bundle: .module))
                     .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .padding(.vertical, MeeshySpacing.smPlus)
                     .background(

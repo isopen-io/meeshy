@@ -119,8 +119,7 @@ public nonisolated struct ComposerReference: Sendable, Equatable {
     public let userId: String?
     public var display: PostReferenceDisplay
 
-    /// **À quelle PUBLICATION cette mention appartient** (#4068, porteur
-    /// 2026-09-03).
+    /// **À quelle PUBLICATION cette mention appartient** (#4068).
     ///
     /// > Une mention est attachée à la publication. En Story, une publication
     /// > est une slide ; en Post et en Réel, il n'y en a qu'une.

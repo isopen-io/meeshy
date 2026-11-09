@@ -12,7 +12,7 @@ import MeeshySDK
 /// `init` et depuis leurs `onChange`, c'est-à-dire à CHAQUE évaluation du
 /// `body` de leur hôte.
 ///
-/// Mesuré au Time Profiler sur iPhone 16 Pro Max le 2026-08-31 :
+/// Mesuré au Time Profiler sur iPhone 16 Pro Max :
 /// `DiskCacheStore.cachedFileURL` sous `LentilleRailEntryView.avatarContent`,
 /// puis sous `LentilleRailSelfEntryView.avatarContent`.
 ///

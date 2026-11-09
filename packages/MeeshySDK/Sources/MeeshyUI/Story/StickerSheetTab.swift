@@ -1,10 +1,9 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - Les cinq onglets de la feuille (directive porteur 2026-09-05)
+// MARK: - Les cinq onglets de la feuille
 
-/// **Ce que la feuille de stickers propose, en cinq entrées** (directive
-/// porteur 2026-09-05).
+/// **Ce que la feuille de stickers propose, en cinq entrées**.
 ///
 /// > « Une tab de recherche, favoris, récents, dynamique (pour les stickers
 /// > avec localisation, texte, météo), smileys. Dans chaque tab tout est
@@ -35,7 +34,7 @@ import MeeshySDK
 ///
 /// RECHERCHE d'abord parce que c'est le seul onglet qui atteint TOUT ;
 /// FAVORIS et RÉCENTS ensuite parce qu'ils sont les plus courts chemins pour
-/// qui revient ; PERSONNALISÉS (ex-DYNAMIQUE, 2026-09-25) puis SMILEYS ferment, parce qu'ils sont les deux
+/// qui revient ; PERSONNALISÉS puis SMILEYS ferment, parce qu'ils sont les deux
 /// seuls qu'on ouvre en SACHANT ce qu'on veut.
 public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
 

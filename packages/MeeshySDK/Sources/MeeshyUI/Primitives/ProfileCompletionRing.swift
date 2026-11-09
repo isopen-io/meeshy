@@ -45,7 +45,7 @@ public struct ProfileCompletionRing: View {
             // Percentage text
             Text("\(Int(progress * 100))%")
                 .font(.system(size: MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {

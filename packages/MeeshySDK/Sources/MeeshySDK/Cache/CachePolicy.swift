@@ -91,7 +91,7 @@ extension CachePolicy {
     /// spinner compris, alors que `purgeStoryTray` retire déjà les stories
     /// sorties de leur propre fenêtre de visibilité. La validité d'une story et
     /// la durée de vie du conteneur sont deux choses distinctes : on garde le
-    /// cache 72 h (directive user 2026-07-27), la purge se charge du reste.
+    /// cache 72 h, la purge se charge du reste.
     public static let stories = CachePolicy(ttl: .hours(72), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     public static let notifications = CachePolicy(ttl: .hours(24), staleTTL: .minutes(2), maxItemCount: 200, storageLocation: .grdb)
     /// Call journal. Calls are immutable once terminal, so a long TTL is safe;

@@ -112,7 +112,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var onViewportZoomResetRequested: (() -> Void)?
     /// Miroir de `viewModel.isDrawingActive` du composer. Quand `true`, le
     /// canvas supprime son drawingLayer persisté pour éviter le double rendu
-    /// avec le PKCanvasView SwiftUI overlay (bug "écrit en double", 2026-05-27).
+    /// avec le PKCanvasView SwiftUI overlay.
     public var isDrawingOverlayActive: Bool = false
     /// Side-cache des bitmaps édités/foreground du composer keyé par `media.id`.
     /// Wired vers `StoryCanvasUIView.readerContext.imageCache` via le pont
@@ -135,7 +135,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// URLs locales (file://) des clips audio importés, keyées par `audio.id`
     /// (miroir de `viewModel.loadedAudioURLs`). Wiré vers
     /// `readerContext.localAudioURLResolver` pour que le mixer joue le son en
-    /// preview d'édition (directive user 2026-07-14). `postMediaId` étant vide
+    /// preview d'édition. `postMediaId` étant vide
     /// pour un clip non publié, le resolver par `postMediaId` échouait.
     public var loadedAudioURLs: [String: URL] = [:]
     /// Les médias adoptés rendus à leur fichier (`StoryReaderContext.localMediaAliases`).

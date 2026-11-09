@@ -18,8 +18,7 @@ import MeeshySDK
 /// devient inatteignable au doigt sur un écran court.
 extension StickerPickerView {
 
-    /// **Le contenu servi, gouverné par l'ONGLET choisi** (directive porteur
-    /// 2026-09-05).
+    /// **Le contenu servi, gouverné par l'ONGLET choisi**.
     ///
     /// Chaque onglet porte des SECTIONS — c'est la seconde moitié de la
     /// directive (« dans chaque tab tout est organisé par section »), et c'est

@@ -37,7 +37,7 @@ struct AudioPlayerChipsColumn: View {
         } label: {
             Text(speed.label)
                 .meeshyScaledFont(isCompact ? 9 : 10, weight: .bold, design: .monospaced)
-                .foregroundColor(chipFg)
+                .foregroundStyle(chipFg)
                 .padding(.horizontal, isCompact ? 7 : 8)
                 .padding(.vertical, isCompact ? 2 : 3)
                 .background(Capsule().fill(chipBg))

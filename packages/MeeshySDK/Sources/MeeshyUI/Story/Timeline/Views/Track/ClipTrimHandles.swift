@@ -11,7 +11,7 @@ struct ClipTrimHandles: View {
 
     /// Quand les poignées de rognage sont montrées sur une piste.
     ///
-    /// Règle unique (décision user 2026-07-27) : **surligner une piste, c'est
+    /// Règle unique : **surligner une piste, c'est
     /// passer en mode édition dessus** — le tap révèle les deux poignées. Les
     /// trois barres divergeaient : la vidéo les affichait en permanence, même
     /// sur une piste que personne ne touchait, tandis que l'audio et le texte

@@ -428,7 +428,7 @@ public final class StoryTextLayer: CATextLayer {
     /// boîte ? » : `hasFrameBox` est faux dès que la forme est « Aucun », mais
     /// `applyBackgroundStyle(.solid)` pose le fond sur `backgroundColor` sans
     /// regarder la forme — fond solide + forme « Aucun » + effet ombrait la
-    /// boîte (revue adverse du lot, 2026-09-02). Le verre et les formes
+    /// boîte. Le verre et les formes
     /// path-based installent toujours leur sous-calque : ce prédicat ne
     /// tranche que les cas où `self` peint lui-même.
     private var effectNeedsGlyphSublayer: Bool {

@@ -1,8 +1,7 @@
 import QuartzCore
 import CoreGraphics
 
-/// **Pincer un texte agrandit son CADRE entier** (#9139, demande porteur
-/// 2026-10-02).
+/// **Pincer un texte agrandit son CADRE entier** (#9139).
 ///
 /// La taille choisie à l'édition (`fontSize`) fige le texte ET sa forme : la
 /// mise en ligne se calcule toujours à l'échelle 1, contre la largeur de coupe
