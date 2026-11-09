@@ -166,7 +166,8 @@ private struct CallFrameScopeChip: View {
     }
 }
 
-private struct CallFrameMoodChip: View {
+/// La puce de verre des cadres de l'appel — aussi celle du tri de la bande du composer (#17267).
+struct CallFrameMoodChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
