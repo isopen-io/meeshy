@@ -22,7 +22,9 @@ réutilise pas : il sera retiré.
 - **Faux WhatsApp** (`fake-whatsapp-peer.ts`) : annuaire de bundles et relais d'enveloppes et de pièces, état dans
   un `PeerStore` (sous-ensemble de `CacheStore` : Redis du staging, ou mémoire). Réservation ATOMIQUE de chaque
   pré-clé unique par `setnx` sur sa réservation ; une nouvelle `registrationId` efface les pré-clés de l'ancienne
-  génération ; rétention 30 jours (`E2EE_ENVELOPE_RETENTION_DAYS`). Aucun hôte appelé.
+  génération, et une nouvelle clé d'identité (même sous la même `registrationId`) efface toutes les pré-clés
+  uniques de l'appareil et leurs réservations — elles ne servent qu'à l'identité qui les a publiées ; rétention
+  30 jours (`E2EE_ENVELOPE_RETENTION_DAYS`). Aucun hôte appelé.
 - **Choix par configuration** (`external-peer-selection.ts`) : `EXTERNAL_PEER_PROVIDER=fake-whatsapp` ouvre le
   faux en développement, en test (`NODE_ENV` dans une liste FERMÉE) ou au staging déclaré (`MEESHY_ENV=staging`) ;
   un `NODE_ENV` absent ou inconnu le laisse fermé, la production le garde fermé même demandé, et aucune autre

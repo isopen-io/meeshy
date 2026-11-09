@@ -216,6 +216,18 @@ describe('pair externe — la distribution des pré-clés', () => {
     expect(bundle.kyberPreKey.lastResort).toBe(true);
   });
 
+  it('une nouvelle identité peut réemployer les numéros de pré-clés déjà réservés sous l’ancienne', async () => {
+    const { peer } = gate();
+    const user = { side: 'external', network: 'whatsapp', handle: HANDLE } as const;
+    await peer.publishPreKeyBundle(publication());
+    await peer.fetchPreKeyBundles(user);
+    await peer.publishPreKeyBundle(publication({ identityKey: fakeKey(11), oneTimePreKeys: [{ keyId: 1, publicKey: fakeKey(12) }], kyberPreKeys: [] }));
+
+    const [bundle] = await peer.fetchPreKeyBundles(user);
+
+    expect(bundle.preKey).toEqual({ keyId: 1, publicKey: fakeKey(12) });
+  });
+
   it('republier la MÊME identité garde les pré-clés uniques encore libres', async () => {
     const { peer } = gate();
     await peer.publishPreKeyBundle(publication());

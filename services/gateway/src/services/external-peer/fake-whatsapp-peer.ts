@@ -73,6 +73,7 @@ const storageKeys = (network: ExternalNetwork) => {
     anyOneTimeOf: (device: string) => `${prefix}:otpk:*:${device}:*`,
     claim: (kind: OneTimeKind, device: string, registrationId: number, keyId: number) =>
       `${prefix}:claim:${kind}:${device}:${registrationId}:${keyId}`,
+    anyClaimOf: (device: string) => `${prefix}:claim:*:${device}:*`,
     envelope: (recipient: string, stamp: number, envelopeId: string) =>
       `${prefix}:env:${recipient}:${String(stamp).padStart(20, '0')}:${envelopeId}`,
     envelopesOf: (recipient: string) => `${prefix}:env:${recipient}:*`,
@@ -115,7 +116,11 @@ function preKeyDirectory(store: PeerStore, keys: StorageKeys): Pick<ExternalPeer
       const user = userKey(userOf(publication.party));
       const { registrationId, party: { deviceId } } = publication;
       const device = `${user}:${deviceId}`;
-      const stale = (await store.keys(keys.anyOneTimeOf(device))).filter((key) => !key.includes(`:${device}:${registrationId}:`));
+      const previous = parse<StoredBundle>(await store.get(keys.bundle(user, deviceId)));
+      const identityChanged = previous !== null && previous.identityKey !== publication.identityKey;
+      const stale = identityChanged
+        ? [...(await store.keys(keys.anyOneTimeOf(device))), ...(await store.keys(keys.anyClaimOf(device)))]
+        : (await store.keys(keys.anyOneTimeOf(device))).filter((key) => !key.includes(`:${device}:${registrationId}:`));
       await Promise.all(stale.map((key) => store.del(key)));
       const stored: StoredBundle = {
         deviceId,
