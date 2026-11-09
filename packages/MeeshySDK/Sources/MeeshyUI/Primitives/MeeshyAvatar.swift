@@ -119,7 +119,7 @@ public enum AvatarContext: Sendable {
     /// pendant le scroll.
     /// Contextes où le badge de mood « respire » (`repeatForever`). Les
     /// contextes de LISTE et d'EN-TÊTE de conversation en sont sortis le
-    /// 2026-08-21 : `.conversationHeaderCollapsed` est aussi l'avatar de la
+    /// `.conversationHeaderCollapsed` est aussi l'avatar de la
     /// rangée plate Lentille — un ressort infini PAR RANGÉE pendant tout le
     /// défilement (précédent « hog device 2026-07-03 », plus bas), pour une
     /// animation qui n'informe de rien (directive user : moins d'animations
@@ -567,7 +567,7 @@ public struct MeeshyAvatar: View {
         switch effectiveStoryState {
         case .unread:
             // Unread-story affordance: solid brand-primary ring at double the
-            // resting width (product decision 2026-06-21). Replaces the former
+            // resting width. Replaces the former
             // Instagram-style multi-colour rotating gradient.
             Circle()
                 .stroke(MeeshyColors.brandPrimary, lineWidth: context.ringWidth * 2)
