@@ -56,6 +56,16 @@ nonisolated enum ConversationPeekPullDown {
     }
 }
 
+/// La largeur commune des menus d'appui long (#17274, #17275) : 80 % de la
+/// largeur entre les marges, plafonnée. L'aperçu d'une conversation et le menu
+/// d'un message la partagent : un même geste, une même taille.
+nonisolated enum LongPressPeekWidth {
+    static func menuWidth(availableWidth: CGFloat) -> CGFloat {
+        let between = availableWidth - 2 * ConversationPeekLayout.sideMargin
+        return max(0, min(ConversationPeekLayout.maximumWidth, between)) * ConversationPeekLayout.footprint
+    }
+}
+
 /// La loi de dimensionnement de l'aperçu d'appui long (#17242), pure : une
 /// progression 0 → 1 pilote les DEUX hauteurs (menu qui grandit, carte qui se
 /// réduit d'autant), et la levée du doigt conclut vers le cran le plus proche
@@ -91,9 +101,7 @@ nonisolated struct ConversationPeekLayout: Equatable, Sendable {
     /// Poignée + tout le contenu du panneau affiché, mesurés.
     let naturalMenuHeight: CGFloat
 
-    var cardWidth: CGFloat {
-        max(0, min(Self.maximumWidth, availableWidth - 2 * Self.sideMargin)) * Self.footprint
-    }
+    var cardWidth: CGFloat { LongPressPeekWidth.menuWidth(availableWidth: availableWidth) }
 
     /// Le menu, compact comme étendu, a la largeur de la carte, centré sous elle.
     var menuWidth: CGFloat { cardWidth }

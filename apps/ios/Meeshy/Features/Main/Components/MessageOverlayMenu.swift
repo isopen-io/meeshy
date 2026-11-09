@@ -127,7 +127,8 @@ struct MessageOverlayMenu: View {
     private var liveDragTranslation: CGFloat = 0
     /// Le facteur de réduction de l'aperçu GARDÉ au relâchement (#9043).
     /// `nil` tant qu'aucun geste n'a conclu : l'ouverture vaut alors
-    /// `MessageOverlayRevealLaw.restingFactor` (réduit d'office sous VoiceOver).
+    /// `MessageOverlayRevealLaw.restingFactor` (réduit d'office sous VoiceOver
+    /// et en animations réduites).
     @State private var committedReveal: CGFloat?
     /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
     @State private var dragHapticArmed = false
@@ -313,7 +314,7 @@ struct MessageOverlayMenu: View {
             // presque à l'aperçu, distinct du gap barre-réactions → aperçu.
             let nlMenuGap: CGFloat = 6
             let nlSidePadding: CGFloat = 16
-            let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
+            let nlMenuWidth: CGFloat = LongPressPeekWidth.menuWidth(availableWidth: containerW)
             let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
             let nlEmojiWidth: CGFloat = Self.emojiBandWidth(available: containerW - 2 * nlSidePadding)
             let nlAvailTop = safeTop + 12
@@ -354,7 +355,7 @@ struct MessageOverlayMenu: View {
             let reveal = RevealContext(
                 floor: revealFloor, shrinkable: shrinkable,
                 committed: committedReveal
-                    ?? MessageOverlayRevealLaw.restingFactor(floor: revealFloor, assistiveReveal: voiceOverEnabled))
+                    ?? MessageOverlayRevealLaw.restingFactor(floor: revealFloor, assistiveReveal: voiceOverEnabled || reduceMotion))
             let revealSplit = reveal.split(liveDragTranslation)
             let clusterDragOffset = MessageOverlayDragLaw.displayOffset(for: revealSplit.residual)
             let menuRise = MessageOverlayRevealLaw.rise(factor: revealSplit.factor, shrinkableHeight: shrinkable)
@@ -368,7 +369,7 @@ struct MessageOverlayMenu: View {
                 MessageActionsMenu(
                     actions: primaryActions,
                     accentHex: contactColor,
-                    onSelect: { handlePrimaryAction($0) }
+                    onSelect: { handlePrimaryAction($0) }, width: nlMenuWidth
                 )
                 .position(
                     x: nlMenuX,

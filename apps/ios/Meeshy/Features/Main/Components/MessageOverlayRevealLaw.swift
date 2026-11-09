@@ -53,7 +53,8 @@ enum MessageOverlayRevealLaw {
         (1 - factor) * shrinkableHeight
     }
 
-    /// Le facteur à l'ouverture. Sous VoiceOver, le menu doit être atteignable
+    /// Le facteur à l'ouverture. Sous VoiceOver ou Réduire les animations
+    /// (comme l'aperçu de conversation, #17275), le menu doit être atteignable
     /// SANS le geste : l'overlay s'ouvre déjà réduit, menu entièrement visible.
     static func restingFactor(floor: CGFloat, assistiveReveal: Bool) -> CGFloat {
         assistiveReveal ? floor : 1
