@@ -117,7 +117,7 @@ struct GalleryImagePage: View, Equatable {
     private var emptyStateGlyph: some View {
         Image(systemName: "photo")
             .meeshyScaledFont(MeeshyIconSize.hero)
-            .foregroundColor(.white.opacity(MeeshyOpacity.medium))
+            .foregroundStyle(Color.white.opacity(MeeshyOpacity.medium))
             .accessibilityHidden(true)
     }
 

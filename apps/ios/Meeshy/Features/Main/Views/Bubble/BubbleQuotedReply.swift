@@ -256,7 +256,7 @@ struct BubbleQuotedReply: View, Equatable {
         if let details = quotedDetails {
             Text(details)
                 .font(.caption2)
-                .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
+                .foregroundStyle(previewColor.opacity(MeeshyOpacity.intense))
                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
         }
     }
@@ -269,7 +269,7 @@ struct BubbleQuotedReply: View, Equatable {
         if reply.moodEmoji != nil, let date = reply.storyPublishedAt {
             Text(date, style: .relative)
                 .font(.caption2)
-                .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
+                .foregroundStyle(previewColor.opacity(MeeshyOpacity.intense))
                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 .layoutPriority(-1)
         }
@@ -556,14 +556,14 @@ struct BubbleQuotedReply: View, Equatable {
             if let mediaGateTap, glyphOpensTheMedia {
                 Image(systemName: kind.hasTimebasedTrack ? "play.circle.fill" : kind.sfSymbolName)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: mediaGateTap)
                     .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reply))
             } else {
                 Image(systemName: kind.sfSymbolName)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
                     .accessibilityHidden(true)
             }
         }
@@ -614,7 +614,7 @@ struct BubbleQuotedReply: View, Equatable {
                         if reply.moodEmoji != nil || reply.isStoryReply {
                             Text(quotedTitle)
                                 .font(.caption.weight(.bold))
-                                .foregroundColor(nameColor)
+                                .foregroundStyle(nameColor)
                                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
                         } else {
                             quotedFlow(previewColor: previewColor, nameColor: nameColor)
@@ -736,7 +736,7 @@ struct BubbleMoodReplyPreview: View, Equatable {
             if !reply.previewText.isEmpty {
                 Text(reply.previewText)
                     .font(.caption)
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
                     .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .bubble))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -785,21 +785,21 @@ struct BubbleStoryReplyPreview: View, Equatable {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "camera.fill")
                 .font(.caption2.weight(.medium))
-                .foregroundColor(previewColor)
+                .foregroundStyle(previewColor)
                 // Decorative glyph — the adjacent "Story" label conveys the
                 // reply kind, so hide the symbol from VoiceOver.
                 .accessibilityHidden(true)
             Text(QuotedStoryLabel.text(for: reply))
                 .font(.caption.weight(.medium))
-                .foregroundColor(previewColor)
+                .foregroundStyle(previewColor)
 
             if let date = reply.storyPublishedAt {
                 Text("\u{2022}")
                     .font(.caption2)
-                    .foregroundColor(previewColor.opacity(0.6))
+                    .foregroundStyle(previewColor.opacity(0.6))
                 Text(date, style: .relative)
                     .font(.caption2)
-                    .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(previewColor.opacity(MeeshyOpacity.intense))
             }
 
             let reactions = reply.storyReactionCount ?? 0
@@ -808,7 +808,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
             if reactions > 0 || comments > 0 || shares > 0 {
                 Text("(")
                     .font(.caption2)
-                    .foregroundColor(previewColor.opacity(0.6))
+                    .foregroundStyle(previewColor.opacity(0.6))
                 if reactions > 0 {
                     storyMetric(icon: "heart.fill", value: reactions)
                 }
@@ -826,7 +826,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
                 }
                 Text(")")
                     .font(.caption2)
-                    .foregroundColor(previewColor.opacity(0.6))
+                    .foregroundStyle(previewColor.opacity(0.6))
             }
         }
     }
@@ -844,6 +844,6 @@ struct BubbleStoryReplyPreview: View, Equatable {
     private var storyMetricSeparator: some View {
         Text("\u{2022}")
             .font(.caption2)
-            .foregroundColor(previewColor.opacity(MeeshyOpacity.strong))
+            .foregroundStyle(previewColor.opacity(MeeshyOpacity.strong))
     }
 }

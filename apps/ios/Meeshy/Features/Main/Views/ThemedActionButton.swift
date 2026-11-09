@@ -52,14 +52,14 @@ struct ThemedActionButton: View {
 
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(iconSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .scaleEffect(isPressed ? 1.2 : 1.0)
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
                     Text(NotificationBadge.displayed(badge))
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
-                        .foregroundColor(Color(hex: color))
+                        .foregroundStyle(Color(hex: color))
                         .lineLimit(1)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .frame(minWidth: 16, minHeight: 16)

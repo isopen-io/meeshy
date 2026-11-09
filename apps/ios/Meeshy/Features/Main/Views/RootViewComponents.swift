@@ -332,7 +332,7 @@ struct ThemedFeedOverlay: View {
         } label: {
             Image(systemName: "play.rectangle.on.rectangle.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .meeshyTapTarget()
@@ -353,7 +353,7 @@ struct ThemedFeedOverlay: View {
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
                 .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .meeshyTapTarget()
@@ -829,13 +829,13 @@ extension ThemedFeedOverlay {
 
                     Text(String(localized: "composer.placeholder.share", defaultValue: "Partager quelque chose", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
 
                     Spacer()
 
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(MeeshyFont.relative(MeeshyIconSize.md))
-                        .foregroundColor(MeeshyColors.indigo400)
+                        .foregroundStyle(MeeshyColors.indigo400)
                 }
                 .padding(MeeshySpacing.md)
                 .background(

@@ -239,7 +239,7 @@ struct NearbyDiscoveryView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(15, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.backgroundSecondary.opacity(0.9)))
                     .meeshyTapTarget()
@@ -263,7 +263,7 @@ struct NearbyDiscoveryView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.backgroundSecondary.opacity(0.9)))
                     .meeshyTapTarget()
@@ -295,7 +295,7 @@ struct NearbyDiscoveryView: View {
         } else {
             Text(Self.sectionLabel(.nearby))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(theme.backgroundSecondary.opacity(0.9)))
@@ -410,7 +410,7 @@ struct NearbyDiscoveryView: View {
         } label: {
             Text(String(format: "%.0f km", km))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : theme.textSecondary)
+                .foregroundStyle(isSelected ? Color.white : theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
@@ -441,12 +441,12 @@ struct NearbyDiscoveryView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(post.author)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                     if !post.displayContent.isEmpty {
                         Text(post.displayContent)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                     }
@@ -457,12 +457,12 @@ struct NearbyDiscoveryView: View {
                 if let meters = viewModel.distanceMeters(for: post.id) {
                     Text(NearbyDistanceLabel.short(meters: meters))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
 
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
             }
             .padding(MeeshySpacing.md)
@@ -524,17 +524,17 @@ struct NearbyEmptyStateCard: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(30, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo400)
+                .foregroundStyle(MeeshyColors.indigo400)
                 .accessibilityHidden(true)
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             Text(detail)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -557,7 +557,7 @@ struct NearbyEmptyStateCard: View {
             } label: {
                 Text(actionTitle)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.sm)
                     .background(Capsule().fill(MeeshyColors.indigo500))
@@ -571,7 +571,7 @@ struct NearbyEmptyStateCard: View {
                 } label: {
                     Text(secondaryTitle)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                         .padding(.horizontal, MeeshySpacing.xl)
                         .padding(.vertical, MeeshySpacing.xs)
                 }
@@ -679,19 +679,19 @@ struct NearbyPostRow: View {
                     HStack(spacing: MeeshySpacing.xs) {
                         Text(post.author)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         if let distanceMeters {
                             Text(NearbyDistanceLabel.short(meters: distanceMeters))
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
+                                .foregroundStyle(MeeshyColors.indigo500)
                         }
                     }
                     if !post.displayContent.isEmpty {
                         Text(post.displayContent)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
                     }

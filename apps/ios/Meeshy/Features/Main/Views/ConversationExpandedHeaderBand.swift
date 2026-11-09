@@ -394,7 +394,7 @@ struct ConversationHeaderTagsRow: View {
     private func tagChip(name: String, hex: String) -> some View {
         Text(name)
             .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-            .foregroundColor(Color(hex: hex))
+            .foregroundStyle(Color(hex: hex))
             .padding(.horizontal, MeeshySpacing.xs)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(chipBackground(hex: hex))

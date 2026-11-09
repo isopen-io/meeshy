@@ -476,7 +476,7 @@ struct FeedView: View {
         } label: {
             Image(systemName: "play.rectangle.on.rectangle.fill")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
                 .meeshyTapTarget()
@@ -511,7 +511,7 @@ struct FeedView: View {
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
                 .meeshyTapTarget()

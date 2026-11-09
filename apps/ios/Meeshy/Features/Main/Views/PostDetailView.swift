@@ -368,7 +368,7 @@ struct PostDetailView: View {
             } label: {
                 Text(String(localized: "feed.post.detail.load_more", defaultValue: "Charger plus", bundle: .main))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
             }
             .padding()
         }
@@ -549,7 +549,7 @@ struct PostDetailView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(theme.inputBackground.opacity(0.6)))
                 .meeshyTapTarget()
@@ -574,11 +574,11 @@ struct PostDetailView: View {
                 if hasUsername {
                     Text("@\(username)")
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
                 if isPostAuthor {
                     if hasUsername {
-                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
                     }
                     HStack(spacing: MeeshySpacing.xxs) {
                         ReachMetricLabel(
@@ -587,7 +587,7 @@ struct PostDetailView: View {
                             label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
                             tint: theme.textMuted
                         )
-                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
                         ReachMetricLabel(
                             icon: "chart.bar.fill",
                             count: post.impressionCount,
@@ -655,7 +655,7 @@ struct PostDetailView: View {
 
                         let flags = buildAvailableFlags()
                         if !flags.isEmpty || post.translations?.isEmpty == false {
-                            MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
+                            MetaSeparator().font(.caption).foregroundStyle(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
                                 LanguageFlagChip(code: code, isActive: code == secondaryLangCode) {
@@ -814,7 +814,7 @@ EngagementGlyph(
                     if n > 0 {
                         Text("\(n)")
                             .font(.caption.weight(.medium))
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                             .contentTransition(.numericText())
                     }
                 }
@@ -925,11 +925,11 @@ EngagementGlyph(
         HStack(spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text("(\(displayPost?.commentCount ?? 0))")
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             Spacer()
         }

@@ -227,20 +227,20 @@ extension PostDetailView {
                         .frame(width: 48, height: 56)
                     Image(systemName: "doc.fill")
                         .font(.title3)
-                        .foregroundColor(Color(hex: media.thumbnailColor))
+                        .foregroundStyle(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                     HStack(spacing: MeeshySpacing.sm) {
                         if let size = media.fileSize {
-                            Text(size).font(.caption).foregroundColor(theme.textMuted)
+                            Text(size).font(.caption).foregroundStyle(theme.textMuted)
                         }
                         if let pages = media.pageCount {
-                            Text("\u{2022}").foregroundColor(theme.textMuted)
-                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.caption).foregroundColor(theme.textMuted)
+                            Text("\u{2022}").foregroundStyle(theme.textMuted)
+                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.caption).foregroundStyle(theme.textMuted)
                         }
                     }
                 }
@@ -296,7 +296,7 @@ extension PostDetailView {
                                     Color.black.opacity(0.5)
                                     Text("+\(count - 4)")
                                         .font(.headline.weight(.bold))
-                                        .foregroundColor(.white)
+                                        .foregroundStyle(Color.white)
                                 }
                             }
                             .contentShape(Rectangle())
@@ -335,7 +335,7 @@ extension PostDetailView {
                     Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: 30, height: 30)
                     Image(systemName: "play.fill")
                         .font(.caption.bold())
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .offset(x: 1)
                 }
                 .shadow(color: .black.opacity(0.3), radius: 6, y: 3)

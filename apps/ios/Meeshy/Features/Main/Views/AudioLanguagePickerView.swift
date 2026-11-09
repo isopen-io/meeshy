@@ -46,7 +46,7 @@ struct AudioLanguagePickerView: View {
                     Toggle(isOn: $showAllLanguages) {
                         Text(String(localized: "composer.audio.languages.show-all", defaultValue: "Afficher toutes les langues"))
                             .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                     }
                     .tint(MeeshyColors.indigo500)
                 } footer: {
@@ -74,13 +74,13 @@ struct AudioLanguagePickerView: View {
                                         .foregroundColor(theme.textPrimary)
                                     Text(item.locale.identifier)
                                         .font(.caption)
-                                        .foregroundColor(theme.textMuted)
+                                        .foregroundStyle(theme.textMuted)
                                 }
                                 Spacer()
                                 if selectedLocale.identifier == item.locale.identifier {
                                     Image(systemName: "checkmark")
                                         .font(.subheadline.weight(.bold))
-                                        .foregroundColor(MeeshyColors.indigo500)
+                                        .foregroundStyle(MeeshyColors.indigo500)
                                 }
                             }
                         }

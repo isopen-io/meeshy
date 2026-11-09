@@ -110,7 +110,7 @@ struct ConversationSearchCommunitiesBand: View {
                     } label: {
                         Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo300)
+                            .foregroundStyle(MeeshyColors.indigo300)
                     }
                     .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautés"))
 

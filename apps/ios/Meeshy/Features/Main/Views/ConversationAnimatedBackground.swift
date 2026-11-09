@@ -461,7 +461,7 @@ struct ConversationAnimatedBackground: View {
 
             Image(systemName: "person.3.fill")
                 .font(.system(size: 24))
-                .foregroundColor(currentGroupColor.opacity(0.40))
+                .foregroundStyle(currentGroupColor.opacity(0.40))
         }
     }
 
@@ -484,7 +484,7 @@ struct ConversationAnimatedBackground: View {
             if config.memberCount > avatarCount {
                 Text("+\(config.memberCount - avatarCount)")
                     .font(.system(size: MeeshyFont.labelSize, weight: .bold))
-                    .foregroundColor(currentGroupColor.opacity(0.50))
+                    .foregroundStyle(currentGroupColor.opacity(0.50))
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(currentGroupColor.opacity(0.12)))

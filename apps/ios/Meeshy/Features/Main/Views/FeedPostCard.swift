@@ -498,12 +498,12 @@ struct FeedPostCard: View {
                                         Text(display.flag).font(.caption)
                                         Text(display.name)
                                             .font(.caption2.weight(.semibold))
-                                            .foregroundColor(langColor)
+                                            .foregroundStyle(langColor)
                                     }
                                 }
                                 Text(content)
                                     .font(.footnote)
-                                    .foregroundColor(theme.textPrimary.opacity(0.8))
+                                    .foregroundStyle(theme.textPrimary.opacity(0.8))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(.vertical, MeeshySpacing.sm)
@@ -852,11 +852,11 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.accentText(repost.authorColor))
 
                     MetaSeparator()
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
 
                     Text(RelativeTimeFormatter.shortString(for: repost.timestamp))
                         .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 // Original content — préfixé du mood emoji pour un STATUS
@@ -869,7 +869,7 @@ struct FeedPostCard: View {
                     }
                     Text(Self.repostBodyText(for: repost))
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(4)
                 }
 

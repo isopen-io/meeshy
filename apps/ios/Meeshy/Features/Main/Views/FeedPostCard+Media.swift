@@ -268,7 +268,7 @@ extension FeedPostCard {
                 // Glyphe dans un cadre de dimension fixe 48×56 : figé (déborderait s'il scalait, doctrine 86i) ; le nom de fichier porte le sens
                 Image(systemName: "doc.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(Color(hex: media.thumbnailColor))
+                    .foregroundStyle(Color(hex: media.thumbnailColor))
                     .accessibilityHidden(true)
             }
 

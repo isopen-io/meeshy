@@ -58,7 +58,7 @@ struct BubbleFooter: View, Equatable {
             if let timestamp = model.timestamp {
                 Text(timestamp)
                     .font(.caption.weight(.medium))
-                    .foregroundColor(compactMetaColor)
+                    .foregroundStyle(compactMetaColor)
             }
             if model.delivery != nil {
                 if model.isFailed, let onRetry = actions.onRetry {
@@ -129,7 +129,7 @@ struct BubbleFooter: View, Equatable {
                     if let username = sender.username {
                         Text(username)
                             .font(.caption2)
-                            .foregroundColor(metaColor.opacity(MeeshyOpacity.intense))
+                            .foregroundStyle(metaColor.opacity(MeeshyOpacity.intense))
                             .lineLimit(1)
                     }
                 }
@@ -205,7 +205,7 @@ struct BubbleFooter: View, Equatable {
         if let timestamp = model.timestamp {
             Text(timestamp)
                 .font(.caption.weight(.medium))
-                .foregroundColor(metaColor)
+                .foregroundStyle(metaColor)
         }
         if model.delivery != nil {
             if model.isFailed, let onRetry = actions.onRetry {

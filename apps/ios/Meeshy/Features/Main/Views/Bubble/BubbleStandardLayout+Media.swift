@@ -537,7 +537,7 @@ fileprivate struct BubbleGridCell: View {
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
@@ -688,7 +688,7 @@ fileprivate struct BubbleGridImageView: View {
             .clipped()
         } else {
             Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(MeeshyOpacity.strong)))
+                .overlay(Image(systemName: "photo").foregroundStyle(Color.white.opacity(MeeshyOpacity.strong)))
         }
     }
 }

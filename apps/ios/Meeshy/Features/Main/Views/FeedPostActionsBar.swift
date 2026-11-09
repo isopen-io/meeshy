@@ -146,7 +146,7 @@ struct FeedPostActionsBar: View, Equatable {
                         let heartColor: Color = isLikedByMe ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: isLikedByMe || likeCount > 0 ? "heart.fill" : "heart")
                             .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                            .foregroundColor(heartColor)
+                            .foregroundStyle(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (isLikedByMe ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                             .opacity(isHeartInFlight ? 0.5 : 1.0)
@@ -154,7 +154,7 @@ struct FeedPostActionsBar: View, Equatable {
                         if isLikedByMe {
                             Image(systemName: "heart")
                                 .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                                .foregroundColor(Color(hex: accentColor))
+                                .foregroundStyle(Color(hex: accentColor))
                                 .scaleEffect(likeAnimating ? 1.3 : 1.1)
                                 .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                         }
@@ -220,7 +220,7 @@ struct FeedPostActionsBar: View, Equatable {
                         if isBookmarked {
                             Image(systemName: "bookmark")
                                 .font(MeeshyFont.relative(17))
-                                .foregroundColor(Color(hex: accentColor))
+                                .foregroundStyle(Color(hex: accentColor))
                         }
                     }
                     let count = bookmarkCount

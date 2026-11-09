@@ -187,10 +187,10 @@ struct MediaReplyComposerBar: View {
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "arrowshape.turn.up.left.fill")
                         .font(MeeshyFont.relative(9, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                     Text(QuotedReplyPresentation.title(author: bannerAuthor))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                         .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 }
                 Text(citation.previewText)

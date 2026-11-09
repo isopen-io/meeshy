@@ -56,7 +56,7 @@ struct FriendRequestListView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     // Seule sortie de l'écran, et la plus petite cible : le glyphe
                     // `.callout` seul fait ~17 pt. `alignment: .leading` étend la
                     // zone tactile vers la droite SANS déplacer le chevron (un
@@ -70,7 +70,7 @@ struct FriendRequestListView: View {
 
             Text(String(localized: "friends.requests.title", defaultValue: "Demandes d'amis", bundle: .main))
                 .font(.system(.body, design: .rounded, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -152,32 +152,32 @@ struct FriendRequestListView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = sender?.username {
                     Text("@\(username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 if let message = request.message, !message.isEmpty {
                     Text(message)
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(2)
                 } else {
                     // Sans message personnalisé, expliciter l'intention pour que la
                     // ligne se suffise à elle-même (parité avec le sheet profil).
                     Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(2)
                 }
 
                 Text(RelativeTimeFormatter.longString(for: request.createdAt))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             // Nom + pseudo + intention + ancienneté lus comme une seule annonce
             // VoiceOver (au lieu de 4 focus séparés) — les boutons Accepter /
@@ -195,7 +195,7 @@ struct FriendRequestListView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
                         .meeshyTapTarget()
@@ -208,7 +208,7 @@ struct FriendRequestListView: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: 36, height: 36)
                         .background(
                             Circle()

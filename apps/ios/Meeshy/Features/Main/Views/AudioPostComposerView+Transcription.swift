@@ -79,7 +79,7 @@ extension AudioPostComposerView {
         } label: {
             Text(Self.shortDisplayName(for: loc))
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : theme.textPrimary)
+                .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.sm)
                 .background(
@@ -264,15 +264,15 @@ extension AudioPostComposerView {
             HStack {
                 Image(systemName: "text.bubble.fill")
                     .font(.footnote)
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
                 Text(String(localized: "composer.audio.transcription.title", defaultValue: "Transcription"))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                 Spacer()
                 Text((t?.language ?? Self.shortDisplayName(for: selectedLocale)).uppercased())
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(theme.surface(tint: MeeshyColors.indigo300Hex)))
@@ -366,7 +366,7 @@ extension AudioPostComposerView {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption)
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .accessibilityHidden(true)
             Text(String(localized: "composer.audio.transcription.unavailable",
                         defaultValue: "Transcription indisponible"))
@@ -415,7 +415,7 @@ extension AudioPostComposerView {
         Button(action: action) {
             Text(titre)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(pleine ? .white : MeeshyColors.indigo400)
+                .foregroundStyle(pleine ? Color.white : MeeshyColors.indigo400)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, MeeshySpacing.sm)

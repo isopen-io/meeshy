@@ -361,12 +361,12 @@ struct SecondaryMainWindowView: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "macwindow.on.rectangle")
                 .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .regular))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
             Text(String(localized: "window.main.already_open.title", defaultValue: "Meeshy est déjà ouvert", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
             Text(String(localized: "window.main.already_open.body", defaultValue: "La fenêtre principale est ouverte ailleurs. Une conversation ou les réels peuvent, eux, avoir leur propre fenêtre.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
             Button {
@@ -629,7 +629,7 @@ struct DetachedWindowView: View {
     private func note(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-            .foregroundColor(.secondary)
+            .foregroundStyle(Color.secondary)
             .multilineTextAlignment(.center)
             .padding(MeeshySpacing.xl)
     }

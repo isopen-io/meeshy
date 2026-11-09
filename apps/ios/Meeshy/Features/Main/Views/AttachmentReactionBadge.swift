@@ -106,7 +106,7 @@ struct AttachmentReactionBadge: View {
             if model.total > 1 {
                 Text("\(model.total)")
                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
         }
         .padding(.horizontal, MeeshySpacing.xs).padding(.vertical, MeeshySpacing.xxs)

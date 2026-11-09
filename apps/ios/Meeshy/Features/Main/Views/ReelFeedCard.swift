@@ -503,7 +503,7 @@ struct ReelFeedCard: View, Equatable {
     private var authorMetaLine: some View {
         HStack(spacing: MeeshySpacing.xs) {
             if let u = displayUsername, !u.isEmpty {
-                Text("@\(u)").font(.caption).foregroundColor(.white.opacity(MeeshyOpacity.heavy))
+                Text("@\(u)").font(.caption).foregroundStyle(Color.white.opacity(MeeshyOpacity.heavy))
             }
             if isAuthor {
                 if displayUsername?.isEmpty == false { metaDot }
@@ -517,7 +517,7 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private var metaDot: some View {
-        MetaSeparator().font(.caption).foregroundColor(.white.opacity(MeeshyOpacity.strong))
+        MetaSeparator().font(.caption).foregroundStyle(Color.white.opacity(MeeshyOpacity.strong))
     }
 
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {

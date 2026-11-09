@@ -333,7 +333,7 @@ struct CommentsSheetView: View {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
                 ToolbarItem(placement: .topBarLeading) {
@@ -343,7 +343,7 @@ struct CommentsSheetView: View {
                         // Figé : chrome xmark dans un cadre tap fixe 32×32 (doctrine 82i).
                         Image(systemName: "xmark")
                             .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
                             .meeshyTapTarget()

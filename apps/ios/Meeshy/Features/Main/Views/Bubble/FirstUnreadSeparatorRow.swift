@@ -42,7 +42,7 @@ struct FirstUnreadSeparatorRow: View, Equatable {
             Rectangle().fill(lineColor).frame(height: 1)
             Text(label)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Rectangle().fill(lineColor).frame(height: 1)

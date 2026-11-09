@@ -188,7 +188,7 @@ struct PostSceneCard: View {
             if isActive, SceneMotion.isAudible(document) {
                 Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
                     .font(MeeshyFont.relative(11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: UIFontMetrics.default.scaledValue(for: 26), height: UIFontMetrics.default.scaledValue(for: 26))
                     .background(Circle().fill(.black.opacity(0.45)))
                     .padding(MeeshySpacing.smPlus)

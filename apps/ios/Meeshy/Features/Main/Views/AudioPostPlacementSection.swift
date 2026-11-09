@@ -75,7 +75,7 @@ struct AudioPostPlacementSection: View {
         } label: {
             Text(ComposerSoundRoleCopy.label(role, destination: foregroundDestination))
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(choisi ? .white : theme.textPrimary)
+                .foregroundStyle(choisi ? Color.white : theme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity)

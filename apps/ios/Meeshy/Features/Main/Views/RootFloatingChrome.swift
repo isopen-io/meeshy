@@ -134,7 +134,7 @@ struct RootFloatingChrome: View {
                     } else {
                         Image(systemName: "square.stack.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                     }
                 }
             },

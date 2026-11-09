@@ -37,7 +37,7 @@ extension FeedPostCard {
                 label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
                 tint: theme.textMuted
             )
-            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+            MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
             ReachMetricLabel(
                 icon: "eye.fill",
                 count: post.viewCount,
@@ -77,7 +77,7 @@ extension FeedPostCard {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(post.author)
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     // Vue `1h` — l'heure appartient à la ligne du NOM, pas à la
                     // ligne de méta. Elle qualifie l'auteur (« Camille Roux, il
@@ -171,7 +171,7 @@ extension FeedPostCard {
                     // Les NOMBRES seulement : toucher la portée n'ouvre « Vues »
                     // que pour ADMIN/BIGBOSS (#9727, décision 2026-10-09).
                     if isAuthor {
-                        MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption).foregroundStyle(theme.textMuted)
                         if canListViewers {
                             Button { showViewersSheet = true } label: { reachMetrics }
                                 .buttonStyle(GameBounceButtonStyle())
@@ -221,7 +221,7 @@ extension FeedPostCard {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(MeeshySpacing.sm)
             }
             .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
@@ -367,7 +367,7 @@ struct PostDateWithPoints<DateLabel: View>: View {
             HStack(spacing: MeeshySpacing.xxs) {
                 date()
                     .font(.caption)
-                    .foregroundColor(color)
+                    .foregroundStyle(color)
                 if let points = PostViewerPoints.shown(store.displayed(postId: postId, seed: seed)) {
                     PostPointsMark(points: points, color: color)
                         .equatable()

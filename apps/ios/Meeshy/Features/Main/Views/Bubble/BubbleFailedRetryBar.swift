@@ -44,7 +44,7 @@ struct BubbleFailedRetryBar: View {
             } else {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
         }
         .frame(maxHeight: .infinity)
