@@ -132,6 +132,7 @@ public struct LanguagePickerSheet: View {
     @State private var searchText = ""
     @State private var selectedId: String?
     @State private var sheetDragOffset: CGFloat = 0
+    @State private var dismissal: Task<Void, Never>?
 
     // Cap to a reasonable max so iPad (1024+pt height) doesn't get a sheet
     // that towers across the entire screen. 65% on iPhone, ~520pt on iPad.
@@ -216,7 +217,7 @@ public struct LanguagePickerSheet: View {
 
     private func dismiss() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { sheetDragOffset = maxHeight }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
+        dismissal = Task { await DelayedUI.perform(after: .milliseconds(300)) { onDismiss?() } }
     }
 
     // MARK: - Drag Handle

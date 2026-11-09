@@ -403,9 +403,6 @@ public struct MeeshyAvatar: View {
 
     private func performTap() {
         withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 0.9 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 1.0 }
-        }
         handleTap()
     }
 
@@ -446,6 +443,7 @@ public struct MeeshyAvatar: View {
                    value: shownPresence?.transitionKey)
         .adaptiveOnChange(of: shownPresence?.transitionKey) { _, _ in presenceChanged = true }
         .scaleEffect(tapScale)
+        .settling($tapScale, to: 1.0, after: .milliseconds(100), animation: .spring(response: 0.2, dampingFraction: 0.6))
 
         let tappable = Group {
             if hasTapHandler {

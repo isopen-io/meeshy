@@ -261,14 +261,12 @@ private struct VibrantCommunityCard: View, Equatable {
     var body: some View {
         Button {
             withAnimation { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation { isPressed = false }
-            }
             onTap()
         } label: {
             cardContent
         }
         .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .roundedRect(cornerRadius: MeeshyRadius.xl)))
+        .settling($isPressed, to: false, after: .milliseconds(150), animation: .default)
     }
 
     private var cardContent: some View {

@@ -433,6 +433,7 @@ public struct EmojiFullPickerSheet: View {
     @State private var reactedEmoji: String?
     @State private var sheetHeight: CGFloat = 340
     @State private var dragOffset: CGFloat = 0
+    @State private var dismissal: Task<Void, Never>?
     /// Dernière hauteur du conteneur lue dans le `GeometryReader` du body.
     /// Captée ici parce que `sheetDragGesture` et `dismiss()` tournent en
     /// dehors du scope du `GeometryReader` (computed properties) et ont
@@ -575,7 +576,7 @@ public struct EmojiFullPickerSheet: View {
 
     private func dismiss() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight(for: containerHeight) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
+        dismissal = Task { await DelayedUI.perform(after: .milliseconds(300)) { onDismiss?() } }
     }
 }
 
