@@ -22,7 +22,11 @@ struct TalkieInfoButton: View {
         .accessibilityLabel(TalkieInfoWording.a11y)
         .accessibilityHint(TalkieInfoWording.text)
         .accessibilityIdentifier("talkie.info")
-        .popover(isPresented: $showing) {
+        .anchoredPicker(
+            isPresented: $showing,
+            compactDetents: [.fraction(0.3), .medium],
+            popoverSize: CGSize(width: 320, height: 180)
+        ) {
             TalkieInfoBubble()
         }
     }
@@ -32,10 +36,6 @@ private struct TalkieInfoBubble: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        bubble.modifier(TalkieInfoCompactPopover())
-    }
-
-    private var bubble: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(MeeshyColors.brandPrimary)
@@ -48,17 +48,6 @@ private struct TalkieInfoBubble: View {
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: 320)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Sur iPhone, la bulle reste une bulle (iOS 16.4+) ; avant, le système la présente en feuille.
-private struct TalkieInfoCompactPopover: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 16.4, *) {
-            content.presentationCompactAdaptation(.popover)
-        } else {
-            content.presentationDetents([.medium])
-        }
     }
 }
 

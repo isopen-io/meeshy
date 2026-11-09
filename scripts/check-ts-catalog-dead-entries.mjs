@@ -85,6 +85,15 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // construisait le chemin à la main dans l'ancienne refonte v3, retirée du dépôt
   // depuis (#5994) : la route reste appelée, l'exception reste juste.
   'guestSessions.me',
+  // `POST`/`DELETE /api/v1/users/me/push-to-talk-token` — le jeton PushToTalk
+  // n'existe que sur iOS (`PTChannelManager`) : appelé par
+  // `apps/ios/Meeshy/Features/Talkie/TalkiePushToTalkChannel.swift` (chemin
+  // écrit à la main), hors `SEARCH_ROOTS`. Aucun client web n'en aura (#17142).
+  'users.mePushToTalkToken',
+  // `GET /api/v1/talkie/:talkieId/audio` — atteinte par l'URL SIGNÉE que le push
+  // de suivi porte (`attachmentUrl` / `audioUrl`, #17165), téléchargée telle
+  // quelle par la NSE iOS et le lecteur ; jamais composée depuis le catalogue.
+  'talkie.byTalkieIdAudio',
 ]);
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

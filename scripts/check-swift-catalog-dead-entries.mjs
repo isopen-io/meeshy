@@ -102,6 +102,11 @@ const KNOWN_LIVE_VIA_OPAQUE_SERVER_URL = new Set([
   // `StaticEndpoint.byFilename`. Appelants réels (parmi d'autres) :
   // `StoryAudioSourceResolver.swift`, `StoryCanvasUIView+Audio.swift`.
   'StaticEndpoint.byFilename',
+  // `GET /api/v1/talkie/:talkieId/audio` : URL SIGNÉE rendue par le serveur
+  // dans le push de suivi (`attachmentUrl` / `audioUrl`, #17165), téléchargée
+  // telle quelle par la NSE (`NotificationService` → `NSEAdtsRemux`) — jamais
+  // reconstruite via `TalkieEndpoint.byTalkieIdAudio`.
+  'TalkieEndpoint.byTalkieIdAudio',
 ]);
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

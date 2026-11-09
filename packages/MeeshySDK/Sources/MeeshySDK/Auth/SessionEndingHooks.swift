@@ -32,7 +32,8 @@ public final class SessionEndingHooks {
         let work = Task { @MainActor in
             for hook in pending { await hook() }
         }
-        let watchdog = Task {
+        // Détaché : le délai ne doit pas attendre que l'acteur principal se libère pour annuler le travail.
+        let watchdog = Task.detached {
             do {
                 try await Task.sleep(for: .seconds(limit))
                 work.cancel()
