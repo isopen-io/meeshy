@@ -7,7 +7,9 @@
  *
  * Toutes les clés sont des clés de TEST, tirées ici et jamais réutilisées. Le
  * script vérifie lui-même chaque vecteur avant de l'écrire. Une montée de
- * libsignal régénère le fichier, et la garde
+ * libsignal déplace d'abord le fichier courant dans
+ * `fixtures/libsignal/legacy/<ancienne version>.vectors.json` (les trois bancs
+ * le rejouent encore, #9231), puis le régénère, et la garde
  * `__tests__/ci/libsignal-version-alignment.test.ts` exige qu'il porte la même
  * version que les quatre déclarations du dépôt.
  */

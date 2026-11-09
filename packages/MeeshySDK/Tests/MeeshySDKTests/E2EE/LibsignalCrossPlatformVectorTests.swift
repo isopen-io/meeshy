@@ -68,7 +68,7 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
     private static let fixturesURL: URL = {
         var url = URL(fileURLWithPath: #filePath)
         for _ in 0..<6 { url.deleteLastPathComponent() }
-        return url.appendingPathComponent("packages/shared/fixtures/libsignal")
+        return url.appendingPathComponent("packages/shared/fixtures/libsignal/")
     }()
 
     private static let fileURL = fixturesURL.appendingPathComponent("cross-platform.vectors.json")

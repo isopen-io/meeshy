@@ -31,6 +31,12 @@ const declarations = (): Record<string, string | undefined> => ({
   'packages/shared/package.json': npmPin('packages/shared/package.json'),
   'packages/LibSignalClient/LIBSIGNAL_VERSION': read('packages/LibSignalClient/LIBSIGNAL_VERSION').trim().replace(/^v/, ''),
   'apps/android/gradle/libs.versions.toml': gradlePin(),
+  'apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/licenses/LicenseNotice.kt': read(
+    'apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/licenses/LicenseNotice.kt',
+  ).match(/VERSION: String = "([^"]+)"/)?.[1],
+  'apps/android/scripts/jvm-check/build.gradle.kts': read('apps/android/scripts/jvm-check/build.gradle.kts').match(
+    /org\.signal:libsignal-client:([^"]+)"/,
+  )?.[1],
   'packages/shared/fixtures/libsignal/cross-platform.vectors.json': (
     JSON.parse(read('packages/shared/fixtures/libsignal/cross-platform.vectors.json')) as { libsignal: string }
   ).libsignal,
