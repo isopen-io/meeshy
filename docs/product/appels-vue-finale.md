@@ -208,3 +208,4 @@ Ce tableau est un compte rendu daté. L'état vivant est dans les issues du mile
   - routine « calling agent » (passerelle et web) : `docs/engineering/calling-agent/STATE.md` ;
   - routine « vue d'appel » iOS : `apps/ios/tasks/routine-appels.md`.
 - Quand la planche change, régénérer les captures (`capture.mjs`) dans le même commit.
+- La conformité de chaque vue se relève par le workflow `.claude/workflows/meeshy-conformite-vues.js` (#17311, mode d'emploi dans le `.md` voisin) : contrat de clauses par vue, audit iOS puis Android, écarts avec fichier et ligne.
