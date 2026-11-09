@@ -354,11 +354,13 @@ struct PrivacySettingsView: View {
         Self.comingSoonPrivacyKeyPaths.contains(keyPath as AnyKeyPath)
     }
 
-    nonisolated(unsafe) private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
-        \PrivacyPreferences.blockScreenshots,
-        \PrivacyPreferences.shareUsageData,
-        \PrivacyPreferences.allowContactRequests,
-        \PrivacyPreferences.allowGroupInvites,
-    ]
+    private nonisolated static var comingSoonPrivacyKeyPaths: Set<AnyKeyPath> {
+        [
+            \PrivacyPreferences.blockScreenshots,
+            \PrivacyPreferences.shareUsageData,
+            \PrivacyPreferences.allowContactRequests,
+            \PrivacyPreferences.allowGroupInvites,
+        ]
+    }
 
 }

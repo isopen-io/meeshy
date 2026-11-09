@@ -32,7 +32,7 @@ final class ComposerAutosaveController: ObservableObject {
     /// Le brouillon survivra-t-il à la fermeture ? (`ComposerCloseGuard`)
     var keepsDraft: Bool { mayWrite && !isDiscarded }
     @Published private(set) var didBind = false
-    nonisolated(unsafe) private var pending: Task<Void, Never>?
+    private let pending = TaskSlot()
     private var latestCapture: Capture?
     private var deadline: UInt64 = 0
 
@@ -43,7 +43,7 @@ final class ComposerAutosaveController: ObservableObject {
     }
 
     nonisolated deinit {
-        pending?.cancel()
+        pending.cancel()
     }
 
     /// Rattache la session à son tiroir. Rend le brouillon à restaurer quand la
@@ -78,13 +78,13 @@ final class ComposerAutosaveController: ObservableObject {
         guard mayWrite, !isDiscarded else { return }
         latestCapture = capture
         deadline = DispatchTime.now().uptimeNanoseconds &+ debounceNanoseconds
-        guard pending == nil else { return }
-        pending = Task { @MainActor [weak self] in
+        guard pending.isEmpty else { return }
+        pending.replace(with: Task { @MainActor [weak self] in
             while let attente = self?.remainingWait(), attente > 0 {
                 guard await cancellableSleep(for: .nanoseconds(attente)), !Task.isCancelled else { return }
             }
             self?.fireScheduledWrite()
-        }
+        })
     }
 
     /// Passage en arrière-plan, fermeture : l'écriture n'attend pas l'accalmie.
@@ -99,7 +99,7 @@ final class ComposerAutosaveController: ObservableObject {
     }
 
     private func fireScheduledWrite() {
-        pending = nil
+        pending.forget()
         guard let capture = latestCapture else { return }
         latestCapture = nil
         write(capture)
@@ -108,8 +108,7 @@ final class ComposerAutosaveController: ObservableObject {
     /// La capture tient l'hôte, qui tient ce contrôleur : la relâcher à chaque
     /// sortie est ce qui empêche le cycle de survivre à l'écran.
     private func cancelPending() {
-        pending?.cancel()
-        pending = nil
+        pending.cancel()
         latestCapture = nil
     }
 

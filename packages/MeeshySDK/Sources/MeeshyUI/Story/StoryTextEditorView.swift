@@ -66,10 +66,10 @@ public struct StoryTextEditorView: View {
     private var editorHeader: some View {
         HStack {
             Image(systemName: "textformat")
-                .font(.system(size: 16, weight: .semibold))
+                .meeshyScaledFont(16, weight: .semibold)
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.textEditor.title", defaultValue: "Texte", bundle: .module))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
             Spacer()
         }
@@ -115,6 +115,7 @@ public struct StoryTextEditorView: View {
                         .frame(width: 34, height: 34)
                         .background(Circle().fill(MeeshyColors.error.opacity(0.12)))
                 }
+                .accessibilityLabel(String(localized: "common.delete", bundle: .module))
             }
         }
         .padding(.horizontal, 14)
@@ -198,6 +199,7 @@ public struct StoryTextEditorView: View {
                     .frame(width: 34, height: 30)
                     .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
+            .accessibilityLabel(String(localized: "story.textEdit.tool.align", bundle: .module))
 
             // Background toggle
             Button {
@@ -210,6 +212,7 @@ public struct StoryTextEditorView: View {
                     .frame(width: 34, height: 30)
                     .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
+            .accessibilityLabel(String(localized: "story.text.background.toggle.a11y", bundle: .module))
 
             Spacer()
 
@@ -251,9 +254,9 @@ public struct StoryTextEditorView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .meeshyScaledFont(10, weight: .semibold)
                 Text(label)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
             }
             // Tabs lisibles dans les 2 modes : blanc sur le pill brand actif,
             // primary/secondary text-color sur le pill neutre.
@@ -307,7 +310,7 @@ public struct StoryTextEditorView: View {
                                         .fill(isSelected ? MeeshyColors.brandPrimary : chipFill)
                                 )
                             Text(style.displayName)
-                                .font(.system(size: 9, weight: .medium))
+                                .meeshyScaledFont(9, weight: .medium)
                                 .foregroundColor(isSelected ? primaryText : mutedText)
                         }
                     }
@@ -366,7 +369,7 @@ public struct StoryTextEditorView: View {
                 .foregroundColor(mutedText)
 
             Text("\(Int(textObject.resolvedSize))")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .monospaced))
                 .foregroundColor(secondaryText)
                 .frame(width: 28)
         }
@@ -393,13 +396,13 @@ public struct StoryTextEditorView: View {
     private func timingField(label: String, value: Binding<Float>, range: ClosedRange<Float>, unit: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(9, weight: .semibold)
                 .foregroundColor(mutedText)
             HStack(spacing: 4) {
                 Slider(value: value, in: range, step: 0.5)
                     .tint(MeeshyColors.indigo400)
                 Text("\(String(format: "%.1f", value.wrappedValue))\(unit)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .meeshyScaledFont(10, weight: .medium, design: .monospaced)
                     .foregroundColor(secondaryText)
                     .frame(width: 32)
             }

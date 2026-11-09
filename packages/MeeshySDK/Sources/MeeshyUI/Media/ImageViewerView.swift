@@ -143,6 +143,7 @@ public struct ImageViewerView: View {
                             .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                     .padding(MeeshySpacing.xsPlus)
                 }
                 Spacer()
@@ -156,9 +157,9 @@ public struct ImageViewerView: View {
                     Button { onEdit(); HapticFeedback.light() } label: {
                         HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "pencil")
-                                .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                                .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
-                                .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                                .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.sm)
@@ -177,7 +178,7 @@ public struct ImageViewerView: View {
                 HStack {
                     Spacer()
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
@@ -246,7 +247,7 @@ public struct ImageFullscreen: View {
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onTapGesture { toggleControls() }
+                .meeshyTapAction(label: String(localized: "media.controls.toggle.a11y", bundle: .module)) { toggleControls() }
 
             if let url = imageUrl {
                 // autoLoad: true — l'ouverture en plein écran est une intention
@@ -289,13 +290,13 @@ public struct ImageFullscreen: View {
                             }
                         }
                 )
-                .onTapGesture(count: 2) {
+                .meeshyNamedTapAction(String(localized: "media.image.zoom.toggle.a11y", bundle: .module), count: 2) {
                     withAnimation(.spring()) {
                         scale = scale > 1 ? 1 : 2.5
                         offset = .zero
                     }
                 }
-                .onTapGesture { toggleControls() }
+                .meeshyNamedTapAction(String(localized: "media.controls.toggle.a11y", bundle: .module)) { toggleControls() }
             }
 
             if showControls {

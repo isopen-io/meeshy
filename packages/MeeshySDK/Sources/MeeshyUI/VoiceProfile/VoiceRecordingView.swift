@@ -108,7 +108,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
         VStack(spacing: MeeshySpacing.sm) {
             HStack {
                 Image(systemName: "text.quote")
-                    .font(.system(size: MeeshyIconSize.xs, weight: .medium))
+                    .meeshyScaledFont(MeeshyIconSize.xs, weight: .medium)
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.recording.readAloud", defaultValue: "Lisez ce texte à voix haute", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -121,7 +121,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
 
             if let prompt = currentPrompt {
                 Text(prompt.text)
-                    .font(.system(size: MeeshyFont.labelSize, weight: .medium))
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
                     .foregroundStyle(Color.primary)
                     .multilineTextAlignment(prompt.isRightToLeft ? .trailing : .leading)
                     .frame(maxWidth: .infinity, alignment: prompt.isRightToLeft ? .trailing : .leading)
@@ -204,7 +204,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             HStack(spacing: MeeshySpacing.xl) {
                 if recorder.isRecording {
                     Text(MediaFormat.duration(recorder.duration))
-                        .font(.system(size: MeeshyFont.labelSize, weight: .bold, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.labelSize, weight: .bold, design: .monospaced)
                         .foregroundStyle(MeeshyColors.tileCoral)
 
                     Spacer()
@@ -228,6 +228,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                             .foregroundStyle(Color.white)
                     }
                 }
+                .accessibilityLabel(recorder.isRecording ? String(localized: "story.voiceRecorder.stop", bundle: .module) : String(localized: "story.voiceRecorder.start", bundle: .module))
 
                 if recorder.isRecording {
                     Spacer()
@@ -263,7 +264,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             ForEach(Array(recordedSamples.enumerated()), id: \.element.id) { index, sample in
                 HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.md))
+                        .meeshyScaledFont(MeeshyIconSize.md)
                         .foregroundStyle(MeeshyColors.success)
 
                     Text(String(localized: "voiceProfile.recording.sample", defaultValue: "Échantillon \(index + 1)", bundle: .module))
@@ -282,9 +283,10 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                         recordedSamples.removeAll { $0.id == sample.id }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: MeeshyIconSize.md))
+                            .meeshyScaledFont(MeeshyIconSize.md)
                             .foregroundStyle(MeeshyColors.tileCoral.opacity(0.7))
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                 }
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)

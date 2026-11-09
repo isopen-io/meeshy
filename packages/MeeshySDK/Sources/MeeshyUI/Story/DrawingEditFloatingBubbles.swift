@@ -47,6 +47,8 @@ struct DrawingEditFloatingBubbles: View {
                 .adaptiveGlass(in: Circle())
                 .opacity(enabled ? 1 : 0.4)
                 .contentShape(Circle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
         }
         .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
         .accessibilityLabel(label)
@@ -85,6 +87,8 @@ struct DrawingEditFloatingBubbles: View {
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
                 .contentShape(Circle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
         }
         .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
         .accessibilityLabel(String(localized: "story.drawEdit.finish", defaultValue: "Terminer l'édition du dessin", bundle: .module))

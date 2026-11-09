@@ -31,16 +31,14 @@ private struct ImageBox: @unchecked Sendable { let image: UIImage? }
 /// faudrait `await` depuis la complétion PhotoKit — laquelle est `@Sendable` et
 /// synchrone — ne serait pas un loquet.
 nonisolated final class PhotoKitResumeLatch: @unchecked Sendable {
-    private let lock = NSLock()
-    private var claimed = false
+    private let claimed = Locked(false)
 
     /// `true` pour le PREMIER appelant seulement.
     func claim() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !claimed else { return false }
-        claimed = true
-        return true
+        claimed.mutate { taken -> Bool in
+            defer { taken = true }
+            return !taken
+        }
     }
 }
 

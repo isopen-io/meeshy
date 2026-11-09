@@ -191,6 +191,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .clipShape(Circle())
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.back", bundle: .module))
 
             Spacer()
 
@@ -233,6 +234,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .clipShape(Circle())
                         .meeshyTapTarget()
                 }
+                .accessibilityLabel(String(localized: "community.react.a11y", bundle: .module))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
@@ -356,7 +358,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .font(.system(size: MeeshyIconSize.xs))
                     .foregroundStyle(MeeshyColors.brandPrimary)
                 Text(value)
-                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                    .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                     .foregroundStyle(theme.textPrimary)
             }
             Text(label)

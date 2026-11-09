@@ -11,6 +11,7 @@ import MeeshyUI
 /// haptique + toast. La section « Sur Meeshy » montre le profil PUBLIC du
 /// compte associé (bannière, avatar, nom, @username, bio) avec ses actions.
 struct ContactCardDetailSheet: View {
+    @State private var delayed = DelayedActions()
     @ObservedObject var model: ContactCardViewModel
     let accentHex: String
 
@@ -237,7 +238,7 @@ struct ContactCardDetailSheet: View {
         withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .easeOut(duration: 0.2)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        delayed.run(after: .milliseconds(200)) {
             withoutCoverAnimation { dismiss() }
         }
     }

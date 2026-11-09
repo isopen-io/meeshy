@@ -357,22 +357,21 @@ final class AccountReplacementAlertController: UIAlertController {
 /// suivantes sont ignorées, et une question libérée sans réponse rend
 /// `.unavailable` — personne n'a répondu, l'écran le dit (#10463).
 nonisolated final class AccountReplacementAnswer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<AccountReplacementDecision, Never>?
+    private let continuation: Locked<CheckedContinuation<AccountReplacementDecision, Never>?>
 
     init(_ continuation: CheckedContinuation<AccountReplacementDecision, Never>) {
-        self.continuation = continuation
+        self.continuation = Locked(uncheckedState: continuation)
     }
 
     func give(_ answer: AccountReplacementDecision) {
-        lock.lock()
-        let pending = continuation
-        continuation = nil
-        lock.unlock()
+        let pending = continuation.mutateUnchecked { state -> CheckedContinuation<AccountReplacementDecision, Never>? in
+            defer { state = nil }
+            return state
+        }
         pending?.resume(returning: answer)
     }
 
     deinit {
-        continuation?.resume(returning: .unavailable)
+        continuation.mutateUnchecked { $0 }?.resume(returning: .unavailable)
     }
 }

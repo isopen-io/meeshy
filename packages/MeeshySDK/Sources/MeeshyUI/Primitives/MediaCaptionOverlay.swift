@@ -475,11 +475,11 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
             LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.6), .black.opacity(MeeshyOpacity.intense)],
                            startPoint: .top, endPoint: .bottom)
                 .contentShape(Rectangle())
-                .onTapGesture { onToggle() }
+                .meeshyTapAction(label: String(localized: "media.caption.see_less", bundle: .module)) { onToggle() }
         } else {
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture { onToggle() }
+                .meeshyTapAction(label: String(localized: "media.caption.see_less", bundle: .module)) { onToggle() }
         }
     }
 

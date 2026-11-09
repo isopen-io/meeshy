@@ -46,6 +46,7 @@ struct PackDetailView: View {
             .frame(minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
+        .accessibilityLabel(PackPublisherLabel.voiceOver(publisher))
         .buttonStyle(.plain)
         .accessibilityHint(String(localized: "shop.publisher.open.hint", defaultValue: "Ouvre la page de l’éditeur", bundle: .module))
         .accessibilityIdentifier("shop.detail.publisher")

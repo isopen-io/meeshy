@@ -158,7 +158,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 avatarBlock(pencilColor: avatarPencilColor, pencilBackground: avatarPencilBackground)
 
                 Text(viewModel.name)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .meeshyScaledFont(18, weight: .bold, design: .rounded)
                     .foregroundColor(theme.textPrimary)
                     .padding(.top, 8)
             }
@@ -291,7 +291,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 .overlay {
                     if isSelected {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
+                            .meeshyScaledFont(14, weight: .bold)
                             .foregroundColor(.white)
                     }
                 }

@@ -81,20 +81,20 @@ public struct ReferenceNoteRow: View, Equatable {
     private var notedRow: some View {
         HStack(spacing: 0) {
             Text(prefixLabel)
-                .font(.system(size: MeeshyFont.subheadSize))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundStyle(.secondary)
             ForEach(Array(noted.enumerated()), id: \.element.id) { index, reference in
                 Button {
                     onTapReference(reference)
                 } label: {
                     Text(" \(reference.label)")
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(accentColor)
                 }
                 .buttonStyle(.plain)
                 if index < noted.count - 1 {
                     Text(",")
-                        .font(.system(size: MeeshyFont.subheadSize))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -106,9 +106,9 @@ public struct ReferenceNoteRow: View, Equatable {
     private var personalMarker: some View {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "eye.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .meeshyScaledFont(11, weight: .semibold)
             Text(personalMarkerLabel)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
         }
         .foregroundStyle(Color.secondary)
         .accessibilityElement(children: .combine)

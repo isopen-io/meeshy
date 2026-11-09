@@ -146,7 +146,7 @@ public struct MeeshyNewPasswordView: View {
     @ViewBuilder
     private var savedContent: some View {
         Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: MeeshyIconSize.hero))
+            .meeshyScaledFont(MeeshyIconSize.hero)
             .foregroundStyle(.green)
             .accessibilityHidden(true)
 
@@ -163,7 +163,7 @@ public struct MeeshyNewPasswordView: View {
     @ViewBuilder
     private func deadLinkContent(exhausted: Bool) -> some View {
         Image(systemName: exhausted ? "lock.shield.fill" : "link.badge.plus")
-            .font(.system(size: MeeshyIconSize.hero))
+            .meeshyScaledFont(MeeshyIconSize.hero)
             .foregroundStyle(MeeshyColors.error)
             .accessibilityHidden(true)
 

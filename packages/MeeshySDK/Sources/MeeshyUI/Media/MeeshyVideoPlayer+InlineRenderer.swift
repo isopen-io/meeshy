@@ -101,7 +101,7 @@ internal struct _InlineRenderer: View {
                     isMuted: engineIsMuted,
                     enablesPip: MeeshyVideoPlayer.surfaceEnablesPip(style: .inline, controls: player.controls)
                 )
-                    .onTapGesture { handleSurfaceTap() }
+                    .meeshyNamedTapAction(String(localized: "media.controls.toggle.a11y", bundle: .module)) { handleSurfaceTap() }
                 if isLoadingAsset {
                     loadingIndicator
                 }

@@ -672,11 +672,11 @@ public struct AudioPlayerView: View {
     private var timeRow: some View {
         HStack(spacing: 0) {
             Text(MediaFormat.duration(displayedProgress.elapsed))
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
+                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
             Text(MediaFormat.duration(estimatedDuration))
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
+                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
         }
     }
@@ -706,13 +706,15 @@ public struct AudioPlayerView: View {
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                             .frame(width: 26, height: 26)
                     }
+                    .accessibilityLabel(String(localized: "media.audio.edit", bundle: .module))
                 }
                 if let onDelete = onDelete {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: MeeshyIconSize.sm))
+                            .meeshyScaledFont(MeeshyIconSize.sm)
                             .foregroundColor(MeeshyColors.error)
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                 }
             }
         }

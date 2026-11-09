@@ -203,7 +203,21 @@ nonisolated protocol TalkieAacDecoding: AnyObject {
     func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus
 }
 
-extension AVAudioConverter: TalkieAacDecoding {}
+/// `AVAudioConverter` derrière le protocole : la signature importée de `convert(to:error:withInputFrom:)` change de
+/// forme d'un SDK à l'autre (bloc `@escaping` sous Xcode 26, non sous Xcode 27), une conformance directe ne compile
+/// donc que sous l'un des deux.
+nonisolated final class TalkieSystemAacDecoder: TalkieAacDecoding {
+    private let converter: AVAudioConverter
+
+    init?(from input: AVAudioFormat, to output: AVAudioFormat) {
+        guard let converter = AVAudioConverter(from: input, to: output) else { return nil }
+        self.converter = converter
+    }
+
+    func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus {
+        withoutActuallyEscaping(block) { converter.convert(to: buffer, error: error, withInputFrom: $0) }
+    }
+}
 
 /// Le décodeur d'UNE prise de parole (#17094) : les trames ADTS de chaque fragment entrent, en mémoire, dans un même
 /// convertisseur AAC → PCM qui garde son état d'un fragment à l'autre. Un fragment décodé seul repartait d'un décodeur
@@ -226,11 +240,15 @@ nonisolated final class TalkieAdtsStreamDecoder {
     private let makeConverter: ConverterFactory
     private var stream: Stream?
 
-    init(makeConverter: @escaping ConverterFactory = { AVAudioConverter(from: $0, to: $1) }) {
+    init(makeConverter: @escaping ConverterFactory = TalkieAdtsStreamDecoder.systemConverter) {
         self.makeConverter = makeConverter
     }
 
     nonisolated deinit {}
+
+    static func systemConverter(_ input: AVAudioFormat, _ output: AVAudioFormat) -> TalkieAacDecoding? {
+        TalkieSystemAacDecoder(from: input, to: output)
+    }
 
     func pcm(_ data: Data) -> AVAudioPCMBuffer? {
         let frames = TalkieAdtsFrame.split(data)

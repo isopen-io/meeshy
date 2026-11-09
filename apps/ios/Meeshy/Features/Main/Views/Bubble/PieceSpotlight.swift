@@ -41,6 +41,7 @@ extension EnvironmentValues {
 /// L'anneau qui s'allume sur la tuile citée, puis s'éteint. Aucun rendu tant
 /// que rien n'est émis : `onReceive` ne réveille la tuile que pour SA pièce.
 struct PieceSpotlightRing: ViewModifier {
+    @State private var delayed = DelayedActions()
     let attachmentId: String
     let accentHex: String
     @Environment(\.pieceSpotlight) private var spotlight
@@ -65,7 +66,7 @@ struct PieceSpotlightRing: ViewModifier {
 
     private func light() {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { isLit = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+        delayed.run(after: .milliseconds(1400)) {
             withAnimation(reduceMotion ? nil : .easeIn(duration: 0.45)) { isLit = false }
         }
     }

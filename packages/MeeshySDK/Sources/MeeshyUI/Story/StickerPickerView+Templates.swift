@@ -74,7 +74,7 @@ extension StickerPickerView {
             TextField(String(localized: "sticker.text.placeholder",
                              defaultValue: "Écrivez vos mots…", bundle: .module),
                       text: $typedStickerText)
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .medium, design: .rounded))
                 .textFieldStyle(.plain)
                 .submitLabel(.done)
                 .padding(.horizontal, 14)
@@ -260,7 +260,7 @@ extension StickerPickerView {
                      : String(localized: "sticker.place.empty",
                               defaultValue: "Aucun lieu trouvé autour de vous",
                               bundle: .module))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 4)
@@ -308,7 +308,7 @@ extension StickerPickerView {
                         Label(String(localized: "sticker.place.pickExact",
                                      defaultValue: "Ma position…", bundle: .module),
                               systemImage: "location.magnifyingglass")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(MeeshyFont.relative(12, weight: .semibold, design: .rounded))
                             .labelStyle(.titleAndIcon)
                             .lineLimit(1)
                             .padding(.horizontal, 12)
@@ -329,7 +329,7 @@ extension StickerPickerView {
                         HapticFeedback.light()
                     } label: {
                         Text(Self.placeChipTitle(lieu))
-                            .font(.system(size: 12, weight: choisi ? .semibold : .regular,
+                            .font(MeeshyFont.relative(12, weight: choisi ? .semibold : .regular,
                                           design: .rounded))
                             .lineLimit(1)
                             .padding(.horizontal, 12)
@@ -428,7 +428,7 @@ public struct StickerTemplatePreview: View {
                 } else {
                     // Avant le premier rendu — et si le gabarit n'est pas
                     // dessinable — on montre son repli plutôt qu'un vide.
-                    Text(template.fallbackEmoji).font(.system(size: side * 0.34))
+                    Text(template.fallbackEmoji).meeshyScaledFont(side * 0.34)
                 }
             }
             .modifier(StickerMotionPreview(animation: template.animation, side: side))

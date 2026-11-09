@@ -130,7 +130,7 @@ struct NotificationListErrorState: View {
                     bundle: .module
                 )
             )
-            .font(.system(size: 16, weight: .semibold))
+            .font(MeeshyFont.relative(16, weight: .semibold))
             .foregroundColor(theme.textPrimary)
             .multilineTextAlignment(.center)
 
@@ -141,7 +141,7 @@ struct NotificationListErrorState: View {
                     bundle: .module
                 )
             )
-            .font(.system(size: 13))
+            .font(MeeshyFont.relative(13))
             .foregroundColor(theme.textMuted)
             .multilineTextAlignment(.center)
 
@@ -153,7 +153,7 @@ struct NotificationListErrorState: View {
                         bundle: .module
                     )
                 )
-                .font(.system(size: 14, weight: .semibold))
+                .meeshyScaledFont(14, weight: .semibold)
                 .foregroundColor(.white)
                 .padding(.horizontal, MeeshySpacing.xl)
                 .padding(.vertical, MeeshySpacing.smPlus)

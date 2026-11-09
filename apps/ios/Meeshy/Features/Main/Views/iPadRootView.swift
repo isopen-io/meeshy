@@ -23,6 +23,7 @@ import MeeshyUI
 //   iPadRootView+Navigation.swift   — all navigation & notification handlers
 
 struct iPadRootView: View {
+    @State var delayed = DelayedActions()
     @ObservedObject var storyViewModel: StoryViewModel
     @ObservedObject var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :

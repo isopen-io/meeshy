@@ -97,7 +97,7 @@ extension MediaFormat {
         return style.grouping(.never)
     }
 
-    private nonisolated(unsafe) static let componentsFormatters = NSCache<NSString, DateComponentsFormatter>()
+    private static let componentsFormatters = LockedCache<NSString, DateComponentsFormatter>(NSCache())
 
     /// One formatter per style and locale, built once: spoken values are
     /// recomputed at every playhead frame. `NSCache` is thread-safe, and a

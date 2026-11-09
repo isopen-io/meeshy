@@ -495,7 +495,7 @@ struct TimelineExportPreviewSheet: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xxxl))
+                        .meeshyScaledFont(MeeshyIconSize.xxxl)
                         .foregroundStyle(Color.white.opacity(0.85))
                         .padding()
                 }
@@ -534,6 +534,8 @@ struct TimelineExportPreviewSheet: View {
             .foregroundStyle(Color.white.opacity(0.9))
             .frame(width: 40, height: 40)
             .background(Circle().fill(Color.white.opacity(0.2)))
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
         }
         .disabled(Self.isSaveDisabled(saveState))
         .accessibilityLabel(String(localized: saveState == .saved

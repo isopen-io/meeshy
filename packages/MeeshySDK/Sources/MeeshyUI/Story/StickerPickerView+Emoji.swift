@@ -113,7 +113,7 @@ extension StickerPickerView {
                     defaultValue: "Collez une image pour commencer votre bibliothèque",
                     bundle: .module
                 ))
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)

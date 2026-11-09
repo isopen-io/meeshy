@@ -7,6 +7,7 @@ import MeeshyUI
 // MARK: - MessageOverlayMenu
 
 struct MessageOverlayMenu: View {
+    @State private var delayed = DelayedActions()
     let message: Message
     let contactColor: String
     /// Le cadre de la cellule pressée, en coordonnées de FENÊTRE (#11208) :
@@ -740,7 +741,7 @@ struct MessageOverlayMenu: View {
                       : .spring(response: 0.32, dampingFraction: 0.86)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
+        delayed.run(after: .milliseconds(260)) {
             isPresented = false
         }
     }

@@ -131,8 +131,7 @@ nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecke
     /// est documenté pour rendre un objet DIFFÉRENT selon l'activité choisie.
     private let link: URL?
     private let produce: @MainActor @Sendable () async -> URL?
-    private let lock = NSLock()
-    private var produced: URL?
+    private let produced = Locked<URL?>(nil)
 
     init(placeholder: URL, typeIdentifier: String, link: URL? = nil,
          produce: @escaping @MainActor @Sendable () async -> URL?) {
@@ -147,7 +146,7 @@ nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecke
            directory.lastPathComponent.hasPrefix("share-placeholder-") {
             try? FileManager.default.removeItem(at: directory)
         }
-        guard let produced else { return }
+        guard let produced = produced.read({ $0 }) else { return }
         let directory = produced.deletingLastPathComponent()
         let ownsDirectory = directory.lastPathComponent.hasPrefix("media-save-")
         try? FileManager.default.removeItem(at: ownsDirectory ? directory : produced)
@@ -163,7 +162,7 @@ nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecke
             done.signal()
         }
         done.wait()
-        guard !isCancelled, let url = lock.withLock({ produced }) else { return "" }
+        guard !isCancelled, let url = produced.read({ $0 }) else { return "" }
         return url
     }
 
@@ -179,6 +178,6 @@ nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecke
     }
 
     private func store(_ url: URL?) {
-        lock.withLock { produced = url }
+        produced.mutate { $0 = url }
     }
 }

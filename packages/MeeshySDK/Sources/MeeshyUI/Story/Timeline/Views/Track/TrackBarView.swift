@@ -147,7 +147,7 @@ public struct TrackBarView<Content: View>: View {
                     }
                 }
                 Text(durationLabel)
-                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                     .monospacedDigit()
                     .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo700)
                     .lineLimit(1)
@@ -155,7 +155,7 @@ public struct TrackBarView<Content: View>: View {
                 Spacer(minLength: 0)
             }
             Text(typeLabel)
-                .font(.system(size: MeeshyFont.footnoteSize, weight: isSelected ? .bold : .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isSelected ? .bold : .semibold))
                 .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo900)
                 .lineLimit(1)
                 .allowsTightening(true)

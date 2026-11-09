@@ -129,7 +129,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: category.icon)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                 Text(category.label)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
@@ -278,7 +278,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
         return VStack(spacing: MeeshySpacing.lg) {
             Spacer()
             Image(systemName: category.icon)
-                .font(.system(size: MeeshyIconSize.hero))
+                .meeshyScaledFont(MeeshyIconSize.hero)
                 .foregroundColor(Color(hex: category.color).opacity(0.4))
 
             Text(emptyMessage)
