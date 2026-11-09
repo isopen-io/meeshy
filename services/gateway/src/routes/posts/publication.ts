@@ -536,6 +536,7 @@ export async function runPublicationEffects(
       isRepost: asOptionalString(post.repostOfId) !== undefined,
       visibility,
       visibilityUserIds,
+      communityId: asOptionalString(post.communityId) ?? null,
     }).catch((err: unknown) => {
       logError(fastify.log, `[${porte}] friend content notification fan-out failed`, err);
     });

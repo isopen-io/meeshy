@@ -125,17 +125,17 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
         )}
       </div>
       <div data-profile-banner-rank="" role="img" aria-label={rankLabel(standing, language)} className={`${GROUP} ${RANK_CORNERS} flex-col items-center justify-center gap-0.5`} style={GROUP_STYLE}>
+        <span aria-hidden="true" data-profile-banner-rank-name="" className="max-w-full truncate text-check font-semibold">
+          {rankLine}
+        </span>
+        <span aria-hidden="true" className="shrink-0">
+          <RankBlason rank={rank} division={division} mythic={mythic} level={level} size={34} label={rankName(rank, language)} />
+        </span>
         {glory === null ? null : (
           <span aria-hidden="true" data-profile-banner-glory={glory} className="max-w-full truncate text-body font-bold leading-tight tabular-nums">
             {glyphAmount(GLORY_GLYPH, glory, language)}
           </span>
         )}
-        <span aria-hidden="true" className="shrink-0">
-          <RankBlason rank={rank} division={division} mythic={mythic} level={level} size={34} label={rankName(rank, language)} />
-        </span>
-        <span aria-hidden="true" data-profile-banner-rank-name="" className="max-w-full truncate text-check font-semibold">
-          {rankLine}
-        </span>
       </div>
     </div>
   );

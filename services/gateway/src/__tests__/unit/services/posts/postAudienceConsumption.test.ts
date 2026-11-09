@@ -243,6 +243,7 @@ describe('les deux tests d’admission d’un post s’accordent, cas par cas', 
       authorId: AUTHOR,
       visibility: fixture.visibility,
       visibilityUserIds: fixture.visibilityUserIds,
+      communityId: null,
       candidateUserIds: [fixture.candidate],
     });
 

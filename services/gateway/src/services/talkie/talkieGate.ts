@@ -12,9 +12,13 @@
  *    destinataire (#14407), active par défaut, coupée pour cette personne
  *    (`talkieBlockedAt`) ou pour tous (`notification.talkieEnabled`) ⇒
  *    `TALKIE_BLOCKED` ; tout autre refus ⇒ `TALKIE_NOT_ALLOWED`, indistincts ;
- * 2. la paire a une conversation directe CHIFFRÉE DE BOUT EN BOUT ⇒
- *    `TALKIE_E2EE_CONVERSATION` (E10, #14408) : le relais est en clair au MVP, et
- *    rien de clair ne passe à côté d'une conversation que les deux ont chiffrée ;
+ * 2. la paire a une conversation directe CHIFFRÉE DE BOUT EN BOUT et la voix n'est
+ *    PAS scellée sur l'appareil ⇒ `TALKIE_E2EE_CONVERSATION` (E10, #14408) : rien de
+ *    clair ne passe à côté d'une conversation que les deux ont chiffrée. Une voix
+ *    scellée (#13949) passe : le serveur ne voit que des octets qu'il ne lit pas.
+ *    À l'inverse, une voix scellée dans une paire SANS conversation chiffrée ⇒
+ *    `TALKIE_INVALID` : sa clé ne voyage que par le relais des signaux E2EE, lié à
+ *    une conversation chiffrée, donc le destinataire ne pourrait pas la déchiffrer ;
  * 3. la présence du destinataire n'est pas servie à l'émetteur (masquée, ou hors du
  *    niveau), ou il est en APPEL, en Ne pas déranger, ou sans appareil connecté ⇒
  *    `TALKIE_FALLBACK_VOICE` : l'émetteur envoie un message vocal. Le même code dans
@@ -58,6 +62,7 @@ export type TalkieRefusalCause =
   | `relation-${Exclude<RelationAccessReason, 'consent'>}`
   | 'consent'
   | 'e2ee'
+  | 'sealed-without-e2ee'
   | 'presence-masked'
   | 'in-call'
   | 'not-connected'
@@ -80,6 +85,7 @@ const because = (refusal: TalkieRefusal, cause: TalkieRefusalCause): TalkieRefus
 export const TALKIE_NOT_ALLOWED: TalkieRefusal = refuse(TALKIE_ERROR_CODES.NOT_ALLOWED, 'Talkie indisponible');
 const BLOCKED = refuse(TALKIE_ERROR_CODES.BLOCKED, 'Talkie indisponible');
 const E2EE = refuse(TALKIE_ERROR_CODES.E2EE_CONVERSATION, 'Le talkie n’est pas chiffré de bout en bout : il est indisponible dans une conversation chiffrée');
+const SEALED_WITHOUT_E2EE = refuse(TALKIE_ERROR_CODES.INVALID, 'Charge illisible');
 const FALLBACK = refuse(TALKIE_ERROR_CODES.FALLBACK_VOICE, TALKIE_FALLBACK_VOICE_MESSAGE);
 export const TALKIE_UNAVAILABLE: TalkieRefusal = refuse(TALKIE_ERROR_CODES.UNAVAILABLE, 'Talkie momentanément indisponible');
 
@@ -149,6 +155,7 @@ export async function judgeTalkie(
   deps: TalkieGateDeps,
   fromUserId: string,
   toUserId: string,
+  options: { readonly sealed: boolean } = { sealed: false },
 ): Promise<TalkieVerdict> {
   const { prisma } = deps;
   const [blocked, level, sender, recipient, setting, prefs] = await Promise.all([
@@ -190,7 +197,8 @@ export async function judgeTalkie(
     pairHasE2eeDirectConversation(prisma, fromUserId, toUserId),
     deps.presenceServed({ userId: fromUserId, role: sender.role }, toUserId),
   ]);
-  if (encrypted) return because(E2EE, 'e2ee');
+  if (encrypted && !options.sealed) return because(E2EE, 'e2ee');
+  if (!encrypted && options.sealed) return because(SEALED_WITHOUT_E2EE, 'sealed-without-e2ee');
 
   // La disponibilité (appel, Ne pas déranger, appareils connectés) n'est lue que si la
   // présence du destinataire est SERVIE à l'émetteur : sinon le même repli, quel que soit

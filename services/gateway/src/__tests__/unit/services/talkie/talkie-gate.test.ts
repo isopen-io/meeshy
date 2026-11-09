@@ -26,6 +26,8 @@ type Options = {
   readonly presenceServed?: boolean;
   readonly recipient?: Record<string, unknown>;
   readonly sender?: Record<string, unknown>;
+  /** La voix est scellée sur l'appareil (#13949). */
+  readonly sealed?: boolean;
   /** Le canal de réveil du destinataire (#17142) : absent ⇒ aucune dépendance de réveil. */
   readonly wake?: 'pushtotalk' | 'push' | null | 'throws';
 };
@@ -80,6 +82,7 @@ const juger = async (options: Options = {}) => {
     { prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed, ...(options.wake === undefined ? {} : { wakeChannel }) },
     MOI,
     AUTRE,
+    { sealed: options.sealed ?? false },
   );
   return { verdict, prisma, presenceServed, recipientConnected, wakeChannel };
 };
@@ -289,5 +292,30 @@ describe('#17142 — un Proche sans socket mais joignable par push : la voix le 
 
   it('le repli porte le message informatif du porteur', async () => {
     expect((await juger({ level: 'CLOSE', connected: false })).verdict).toMatchObject({ message: TALKIE_FALLBACK_VOICE_MESSAGE });
+  });
+});
+
+describe('#13949 — le talkie scellé passe dans une paire chiffrée, le clair jamais', () => {
+  it.each(['e2ee', 'E2EE', 'mls-futur'])('paire « %s » et voix scellée : la voix passe', async (directMode) => {
+    expect((await juger({ level: 'BLOOD', directMode, sealed: true })).verdict).toEqual({ ok: true });
+  });
+
+  it('paire chiffrée et voix en clair : refus TALKIE_E2EE_CONVERSATION (fail-closed)', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', sealed: false })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_E2EE_CONVERSATION' });
+  });
+
+  it('une voix scellée ne contourne ni la loi ni la présence', async () => {
+    expect((await juger({ level: 'COMMUNITY', directMode: 'e2ee', sealed: true })).verdict).toMatchObject({ ok: false, code: 'TALKIE_NOT_ALLOWED' });
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', sealed: true, connected: false })).verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE' });
+  });
+
+  it('une paire SANS conversation chiffrée refuse une voix scellée : sa clé n’a aucun canal pour voyager', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'server', sealed: true })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_INVALID', cause: 'sealed-without-e2ee' });
+  });
+
+  it('le refus d’une voix scellée en paire claire ne passe qu’APRÈS la loi : un inconnu n’apprend rien du chiffrement', async () => {
+    expect((await juger({ level: 'COMMUNITY', directMode: 'server', sealed: true })).verdict).toMatchObject({ ok: false, code: 'TALKIE_NOT_ALLOWED' });
   });
 });
