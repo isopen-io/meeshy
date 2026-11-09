@@ -99,7 +99,7 @@
     "@types/ws": "^8.18.2",
     "@types/zxcvbn": "^4.4.5",
     "fast-json-stringify": "^7.2.1",
-    "glob": "^13.0.6",
+    "glob": "^13.0.7",
     "grpc-tools": "^1.13.1",
     "jest": "^30.5.2",
     "prisma": "^6.19.3",
