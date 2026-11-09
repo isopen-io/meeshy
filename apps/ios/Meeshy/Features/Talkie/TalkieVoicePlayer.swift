@@ -49,11 +49,15 @@ final class TalkieVoicePlayer: TalkieSink {
     private var announced: Set<String> = []
     private var observers: [NSObjectProtocol] = []
     private let isInCall: () -> Bool
+    /// Le niveau de la voix qui sort, que l'onde de l'en-tête lit en direct (#17310), mesuré sur le mixeur des voix.
+    private let meter: any TalkieLevelMetering
+    private var metering = false
 
     nonisolated deinit {}
 
-    init(isInCall: @escaping () -> Bool = { CallManager.isCallActiveFlag }) {
+    init(isInCall: @escaping () -> Bool = { CallManager.isCallActiveFlag }, meter: any TalkieLevelMetering = TalkieLevelMeter.incoming) {
         self.isInCall = isInCall
+        self.meter = meter
         engine.attach(voicesMixer)
         engine.attach(booster)
         engine.connect(voicesMixer, to: booster, format: nil)
@@ -164,7 +168,28 @@ final class TalkieVoicePlayer: TalkieSink {
     private func startEngineIfNeeded() -> Bool {
         guard !engine.isRunning else { return true }
         engine.prepare()
-        return (try? engine.start()) != nil
+        guard (try? engine.start()) != nil else { return false }
+        startMetering()
+        return true
+    }
+
+    private func startMetering() {
+        let format = voicesMixer.outputFormat(forBus: 0)
+        guard !metering, AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate, channelCount: format.channelCount) else { return }
+        metering = true
+        let meter = self.meter
+        let tap: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+            guard let channel = buffer.floatChannelData?[0] else { return }
+            meter.push(rms: TalkieWaveLaw.rms(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength))))
+        }
+        voicesMixer.installTap(onBus: 0, bufferSize: 1024, format: format, block: tap)
+    }
+
+    private func stopMetering() {
+        meter.reset()
+        guard metering else { return }
+        metering = false
+        voicesMixer.removeTap(onBus: 0)
     }
 
     private func observeOutputChanges() {
@@ -187,6 +212,7 @@ final class TalkieVoicePlayer: TalkieSink {
 
     private func releaseOutputIfIdle() {
         guard isIdle, engine.isRunning || !observers.isEmpty else { return }
+        stopMetering()
         engine.stop()
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []

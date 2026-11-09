@@ -111,6 +111,10 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
           description: 'Authentication required',
           ...errorResponseSchema
         },
+        403: {
+          description: 'Voice cloning refused: under 18 or no birth date (#17309)',
+          ...errorResponseSchema
+        },
         500: {
           description: 'Internal server error',
           ...errorResponseSchema
@@ -127,7 +131,8 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     const result = await voiceProfileService.updateConsent(auth.registeredUser.id, consent);
 
     if (!result.success) {
-      return sendError(reply, 400, result.error as string, { code: (result as any).errorCode });
+      const statusCode = result.errorCode === 'VOICE_CLONING_AGE_REQUIRED' ? 403 : 400;
+      return sendError(reply, statusCode, result.error as string, { code: result.errorCode });
     }
 
     return sendSuccess(reply, (result as any).data);

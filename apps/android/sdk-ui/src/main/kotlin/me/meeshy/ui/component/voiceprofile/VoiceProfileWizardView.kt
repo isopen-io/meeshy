@@ -271,7 +271,10 @@ private fun AgeStep(state: VoiceWizardState, accent: Color, onBirthDateChange: (
     val pickerState = rememberDatePickerState(
         initialSelectedDateMillis = state.birthDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
         selectableDates = object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean = !VoiceWizardRules.dayFromPicker(utcTimeMillis).isAfter(today)
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                VoiceWizardRules.isSelectableBirthDate(VoiceWizardRules.dayFromPicker(utcTimeMillis), today)
+
+            override fun isSelectableYear(year: Int): Boolean = year <= VoiceWizardRules.voiceCloningBirthDateLimit(today).year
         },
     )
     LaunchedEffect(pickerState.selectedDateMillis) {
