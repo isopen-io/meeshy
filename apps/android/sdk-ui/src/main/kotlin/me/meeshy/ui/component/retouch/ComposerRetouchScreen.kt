@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.model.EntityImageFormat
 import me.meeshy.sdk.model.composer.look.CallFaceEffect
 import me.meeshy.sdk.model.composer.look.CallFaceLandmarks
 import me.meeshy.sdk.model.composer.look.ComposerCropPreset
@@ -76,6 +77,8 @@ public val RetouchPhotoTools: List<ComposerEditTool> = listOf(ComposerEditTool.C
  * saisissables et ses proportions par presets posées par-dessus (#15194).
  * L'aperçu se repeint hors du fil principal ; tant qu'il cuit, l'image d'avant reste — jamais de sablier. Rouverte
  * sur une recette ([initial], #14844), elle rend son look, son recadrage et ses textes, modifiables.
+ * Ouverte sur une image d'identité ([format], #17257), le cadre se pose aux proportions du format sans preset, et
+ * l'avatar se voit sous un voile rond.
  */
 @Composable
 public fun ComposerRetouchScreen(
@@ -85,10 +88,12 @@ public fun ComposerRetouchScreen(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
     initial: ComposerPhotoRecipe? = null,
+    format: EntityImageFormat? = null,
 ) {
     var state by remember {
         val opening = ComposerRetouchState.opening(ComposerEditTake.Photo, RetouchRenderableEffects, RetouchPhotoTools)
-        mutableStateOf(initial?.let(opening::restoring) ?: opening)
+        val restored = initial?.let(opening::restoring) ?: opening
+        mutableStateOf(format?.let { restored.lockingFormat(it, source.width, source.height) } ?: restored)
     }
     var finishing by remember { mutableStateOf(false) }
     var lockedPreset by remember { mutableStateOf(initial?.cropPreset) }
@@ -171,7 +176,7 @@ public fun ComposerRetouchScreen(
                 RetouchCropStage(
                     picture = preview.asImageBitmap(),
                     crop = state.crop,
-                    aspect = lockedPreset?.aspect(source.width.toDouble(), source.height.toDouble()),
+                    aspect = format?.aspect ?: lockedPreset?.aspect(source.width.toDouble(), source.height.toDouble()),
                     source = IntSize(source.width, source.height),
                     room = with(LocalDensity.current) { cropRoom(maxWidth.toPx(), maxHeight.toPx(), statusTop, controlsHeight.toFloat()) },
                     onCrop = { crop -> state = state.cropping(crop, source.width, source.height) },
@@ -179,6 +184,7 @@ public fun ComposerRetouchScreen(
             } else {
                 Image(preview.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
                 val display = with(LocalDensity.current) { ComposerLookCanvas.displayRect(maxWidth.toPx(), maxHeight.toPx(), preview.width, preview.height) }
+                if (format?.isRound == true) EntityImageRoundVeil(display)
                 RetouchTextLayer(board = text, display = display, interactive = writing && !finishing, newId = newTextId, onBoard = { text = it }, glass = glass)
             }
         }
@@ -198,7 +204,7 @@ public fun ComposerRetouchScreen(
                 )
             }
             if (writing) RetouchTextToolbar(board = text, newId = newTextId, onBoard = { text = it })
-            if (cropping && state.openFamily == null) {
+            if (cropping && state.openFamily == null && format == null) {
                 RetouchCropPresets(chosen = state.cropPreset, enabled = !finishing) { preset ->
                     lockedPreset = preset
                     state = state.choosingPreset(preset, source.width, source.height)

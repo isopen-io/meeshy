@@ -8,12 +8,11 @@ public enum class AdjustmentKind(
     public val min: Float,
     public val max: Float,
     public val neutral: Float,
-    public val isEssential: Boolean = false,
 ) {
     EXPOSURE("exposure", -2f, 2f, 0f),
-    BRIGHTNESS("brightness", -0.4f, 0.4f, 0f, isEssential = true),
-    CONTRAST("contrast", 0.5f, 1.5f, 1f, isEssential = true),
-    SATURATION("saturation", 0f, 2f, 1f, isEssential = true),
+    BRIGHTNESS("brightness", -0.4f, 0.4f, 0f),
+    CONTRAST("contrast", 0.5f, 1.5f, 1f),
+    SATURATION("saturation", 0f, 2f, 1f),
     VIBRANCE("vibrance", -1f, 1f, 0f),
     TEMPERATURE("temperature", -1f, 1f, 0f),
     SHARPNESS("sharpness", 0f, 1f, 0f),
@@ -23,11 +22,6 @@ public enum class AdjustmentKind(
     GRAIN("grain", 0f, 1f, 0f);
 
     public fun clamp(value: Float): Float = value.coerceIn(min, max)
-
-    public companion object {
-        public fun rail(mode: ImageEditorMode): List<AdjustmentKind> =
-            if (mode.isPro) entries.toList() else entries.filter { it.isEssential }
-    }
 }
 
 /** Sac des onze réglages ; toutes les valeurs par défaut sont neutres. Immuable, borné. */

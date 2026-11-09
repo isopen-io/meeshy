@@ -70,9 +70,10 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.R as UiR
-import me.meeshy.ui.component.imageedit.ProfileImageEditorHost
-import me.meeshy.ui.component.imageedit.rememberProfileImageEditor
-import me.meeshy.ui.component.imageedit.rememberProfileImagePicker
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
+import me.meeshy.ui.component.retouch.EntityImageRetouchHost
+import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
+import me.meeshy.ui.component.retouch.rememberEntityImagePicker
 
 /** Durée d'affichage de la capsule d'erreur (iOS : 3 s). */
 private const val ERROR_CAPSULE_MILLIS = 3_000L
@@ -109,8 +110,8 @@ fun OwnProfileScreen(
     var pickingSlot by rememberSaveable { mutableStateOf<OwnProfileLanguageSlot?>(null) }
     var fullscreen by remember { mutableStateOf<ProfileFullscreenImage?>(null) }
     val mediaBaseUrl = LocalMediaBaseUrl.current
-    val imageEditor = rememberProfileImageEditor(uploadViewModel::onImagePicked)
-    val pickImage = rememberProfileImagePicker(imageEditor::offer)
+    val imageEditor = rememberEntityImageRetouch(uploadViewModel::onImagePicked)
+    val pickImage = rememberEntityImagePicker(imageEditor::offer)
     val capsule = rememberOwnProfileErrorCapsule(
         errorMessage = state.errorMessage,
     )
@@ -168,7 +169,7 @@ fun OwnProfileScreen(
         FeedbackToastHost(toasts = toasts)
     }
 
-    ProfileImageEditorHost(imageEditor)
+    EntityImageRetouchHost(imageEditor, state.user?.let { ComposerLookPerson.author(it.id, it.displayName, it.username) })
     pickingSlot?.let { slot -> OwnProfileLanguagePicker(slot, state, onEvent, onDone = { pickingSlot = null }) }
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val share = state.user?.let(ProfileShareBuilder::build)

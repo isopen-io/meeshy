@@ -9,14 +9,7 @@ public enum class ImageEffect(public val wireName: String) {
     BLOOM("bloom"),
     GRAIN("grain");
 
-    /** Effets offerts en mode Simple : seul « aucun » ; le mode Pro les montre tous. */
-    public val isEssential: Boolean
-        get() = this == NONE
-
     public companion object {
-        public fun rail(mode: ImageEditorMode): List<ImageEffect> =
-            if (mode.isPro) entries.toList() else entries.filter { it.isEssential }
-
         public fun fromWireName(name: String?): ImageEffect =
             entries.firstOrNull { it.wireName == name } ?: NONE
     }
