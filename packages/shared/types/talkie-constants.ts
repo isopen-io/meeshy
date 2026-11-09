@@ -22,6 +22,15 @@ export const TALKIE_SEAL_KEY_ID_CHARS = { min: 22, max: 64 } as const;
 /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
 export const TALKIE_CODECS = ['aac-adts'] as const;
 export type TalkieCodec = (typeof TALKIE_CODECS)[number];
+/**
+ * L'encodage d'une voix SCELLÉE (#13949) : de l'AAC ADTS chiffré fragment par fragment sur l'appareil. Il vit HORS de
+ * {@link TALKIE_CODECS} À DESSEIN : les clients déployés n'ouvrent qu'un encodage de cette liste (web
+ * `decodeTalkieIncoming`, iOS et Android `isPlayable`), donc aucun ne joue comme du son une charge qu'il ne déchiffre pas.
+ */
+export const TALKIE_SEALED_CODEC = 'sealed-aac-adts' as const;
+export type TalkieSealedCodec = typeof TALKIE_SEALED_CODEC;
+/** Ce que `talkie:start` et `talkie:incoming` peuvent porter : la voix en clair, ou la voix scellée. */
+export type TalkieWireCodec = TalkieCodec | TalkieSealedCodec;
 
 export const TALKIE_ERROR_CODES = {
   /** Pas de lien d'au moins Proche, blocage, compte inconnu ou désactivé — indistincts. */

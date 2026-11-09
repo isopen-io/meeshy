@@ -24,11 +24,13 @@
  *
  * ## Une voix scellée (#13949)
  *
- * Un fragment scellé est chiffré sur l'appareil de l'émetteur : le relais le traite comme tout
- * fragment, c'est-à-dire comme des octets qu'il ne lit pas (ni transcription, ni normalisation, ni
- * forme exigée). L'identifiant de clé de l'ouverture repart tel quel dans `talkie:incoming` (la clé, elle,
- * voyage par le relais des signaux E2EE), et le rejugement garde le sceau : une paire chiffrée ne coupe pas
- * une voix scellée.
+ * Une voix scellée n'ouvre QUE si la passerelle l'accepte (`sealedVoiceAccepted`, éteint par défaut) :
+ * tant qu'aucun client ne déchiffre, elle est refusée comme illisible, avant tout jugement. Acceptée, un
+ * fragment scellé est relayé comme tout fragment, c'est-à-dire comme des octets que le relais ne lit pas
+ * (ni transcription, ni normalisation, ni forme exigée). L'identifiant de clé de l'ouverture repart tel
+ * quel dans `talkie:incoming`, sous l'encodage scellé (la clé, elle, voyage par le relais des signaux
+ * E2EE), et le rejugement garde le sceau : une paire chiffrée ne coupe pas une voix scellée. Le dernier
+ * fragment déclaré (`last`) repart déclaré.
  *
  * ## Ce qui change pendant qu'on parle
  *
@@ -54,7 +56,7 @@ import {
   talkieChunkPayloadSchema,
   talkieEndPayloadSchema,
   talkieStartPayloadSchema,
-  type TalkieCodec,
+  type TalkieWireCodec,
   type TalkieSeal,
   type TalkieEndReason,
   type TalkieStartAck,
@@ -74,7 +76,7 @@ type Session = {
   readonly fromUserId: string;
   readonly toUserId: string;
   readonly socketId: string;
-  readonly codec: TalkieCodec;
+  readonly codec: TalkieWireCodec;
   /** Voix scellée (#13949) : l'identifiant de clé, relayé sans être lu ; son absence ⇒ voix en clair. */
   readonly sealed: TalkieSeal | undefined;
   readonly startedAt: number;
@@ -92,6 +94,11 @@ export type TalkieRelayDeps = {
   readonly io: ServerEmitIO | undefined;
   /** `sealed` : la voix est scellée sur l'appareil (#13949) — seule elle passe dans une paire chiffrée. */
   readonly judge: (fromUserId: string, toUserId: string, sealed: boolean) => Promise<TalkieVerdict>;
+  /**
+   * La passerelle accepte-t-elle une voix scellée (#13949) ? Absent ⇒ NON (fail-closed) : tant qu'aucun client
+   * déployé ne refuse une voix de paire chiffrée qui n'est pas scellée ET déchiffrable, aucune n'ouvre.
+   */
+  readonly sealedVoiceAccepted?: () => boolean;
   /** Le débit d'ouverture : `null` quand le compteur est injoignable (fail-closed). */
   readonly withinStartRate: (userId: string) => Promise<boolean | null>;
   /** L'instant de la DERNIÈRE coupure de la paire orientée, ou `null` ; LÈVE quand le cache partagé est injoignable. */
@@ -124,6 +131,7 @@ export class TalkieRelay {
   async start(socketId: string, fromUserId: string, raw: unknown): Promise<TalkieStartAck> {
     const parsed = talkieStartPayloadSchema.safeParse(raw);
     if (!parsed.success) return INVALID;
+    if (parsed.data.sealed !== undefined && this.deps.sealedVoiceAccepted?.() !== true) return INVALID;
     const toUserId = parsed.data.toUserId.toLowerCase();
     const cutFrom = this.deps.now();
 
@@ -242,6 +250,7 @@ export class TalkieRelay {
       seq: parsed.data.seq,
       data,
       ...(parsed.data.capturedAt === undefined ? {} : { capturedAt: parsed.data.capturedAt }),
+      ...(parsed.data.last === true ? { last: true as const } : {}),
       relayedAt: receivedAt,
     });
   }

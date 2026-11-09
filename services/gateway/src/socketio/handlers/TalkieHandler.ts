@@ -20,6 +20,13 @@ import type { ServerEmitIOWithRooms } from '../serverEmit';
 
 const logger = enhancedLogger.child({ module: 'TalkieHandler' });
 
+/**
+ * La voix scellée (#13949) n'est acceptée que sur `TALKIE_SEALED_VOICE_ENABLED=true`, lu à chaque ouverture.
+ * Éteinte par défaut : elle ne s'allume qu'une fois des clients capables de la déchiffrer ET de refuser une voix
+ * de paire chiffrée non scellée publiés, le plancher de version posé, et la conception auditée.
+ */
+export const talkieSealedVoiceEnabled = (): boolean => process.env.TALKIE_SEALED_VOICE_ENABLED === 'true';
+
 /** Trente prises de parole par minute et par compte : une conversation à la voix, jamais un tuyau. */
 export const TALKIE_START_RATE = { max: 30, windowMs: 60_000, keyPrefix: 'talkie:start:u' } as const;
 
@@ -122,6 +129,7 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
       if (verdict.ok === false) logger.info('[TALKIE_REFUSED]', { code: verdict.code, cause: verdict.cause, fromUserId, toUserId });
       return verdict;
     },
+    sealedVoiceAccepted: talkieSealedVoiceEnabled,
     withinStartRate: async (userId) => {
       const info = await startLimiter().consume(userId, 1);
       return info === null ? null : info.retryAfter === undefined;

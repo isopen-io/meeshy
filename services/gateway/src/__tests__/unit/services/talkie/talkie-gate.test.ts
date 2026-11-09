@@ -246,7 +246,12 @@ describe('#13949 — le talkie scellé passe dans une paire chiffrée, le clair 
     expect((await juger({ level: 'BLOOD', directMode: 'e2ee', sealed: true, connected: false })).verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE' });
   });
 
-  it('une paire en clair accepte aussi une voix scellée', async () => {
-    expect((await juger({ level: 'BLOOD', directMode: 'server', sealed: true })).verdict).toEqual({ ok: true });
+  it('une paire SANS conversation chiffrée refuse une voix scellée : sa clé n’a aucun canal pour voyager', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'server', sealed: true })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_INVALID', cause: 'sealed-without-e2ee' });
+  });
+
+  it('le refus d’une voix scellée en paire claire ne passe qu’APRÈS la loi : un inconnu n’apprend rien du chiffrement', async () => {
+    expect((await juger({ level: 'COMMUNITY', directMode: 'server', sealed: true })).verdict).toMatchObject({ ok: false, code: 'TALKIE_NOT_ALLOWED' });
   });
 });
