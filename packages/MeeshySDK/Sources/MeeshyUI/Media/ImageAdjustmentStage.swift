@@ -6,9 +6,9 @@ import MeeshySDK
 
 /// **La chaîne CoreImage des réglages d'une image — UNE seule écriture.**
 ///
-/// Elle vivait en privé dans `ImageFilterEngine`, l'éditeur plein écran (resté
-/// pour l'avatar). Une image posée dans la scène porte désormais ses réglages
-/// (`StoryMediaObject.adjustments`) et le player les peint : les deux rendus
+/// Elle vivait en privé dans l'ancien éditeur d'image plein écran, retiré
+/// depuis (#17251). Une image posée dans la scène porte ses réglages
+/// (`StoryMediaObject.adjustments`) et le player les peint : tous les rendus
 /// passent par CETTE fonction, si bien qu'un contraste réglé ici ne peut pas
 /// diverger d'un contraste réglé là.
 ///

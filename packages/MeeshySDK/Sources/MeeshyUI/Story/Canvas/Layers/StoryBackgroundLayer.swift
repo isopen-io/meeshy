@@ -660,7 +660,7 @@ extension StoryBackgroundLayer {
             var hasVisual = false
 
             // (0) SYNCHRONOUS composer-cache prime — an edited bitmap written by
-            // `MeeshyImageEditorView` onAccept (loadedImages[id]) wins over the
+            // the composer (loadedImages[id]) wins over the
             // on-disk file:// (which still holds the ORIGINAL). This is what makes
             // an image edit appear live on the canvas; the filter is baked via
             // `stampFinalImage` so the canvas shows the edited+filtered bitmap.

@@ -11,7 +11,6 @@ final class SDKTapTargetSweepSourceGuardTests: XCTestCase {
         "Community/CommunityCreateScreen.swift",
         "Community/CommunityDetailScreen.swift",
         "Profile/UserProfileSheet+Header.swift",
-        "Media/ImageEditorHistoryOverlay.swift",
         "Media/MeeshyVideoPlayer+Controls.swift"
     ]
 

@@ -384,8 +384,8 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     var carriedContentSources: Set<URL> = []
 
     /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
-    /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
-    /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
+    /// `loadedImages` (typiquement une retouche qui remplace la valeur sous
+    /// une clé inchangée). Le `Coordinator` du
     /// `StoryComposerCanvasView` compare ce cookie à `lastLoadedImagesVersion`
     /// pour déclencher un rebuild des media layers — sans ça le canvas
     /// principal restait stale après image edit (les dicts UIImage ne sont

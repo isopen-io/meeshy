@@ -16,15 +16,13 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
 
     /// Les filtres de la chaîne légère. Hors du service, seuls deux fichiers
     /// ont le droit de les nommer : le pipeline VIDÉO d'appel (trames en
-    /// direct, pas une prise photo) et l'éditeur d'image, dont les filtres sont
-    /// choisis par l'utilisateur (et son étage de réglages, #9175).
+    /// direct, pas une prise photo) et l'étage de réglages de la scène (#9175),
+    /// dont les curseurs sont choisis par l'utilisateur.
     private static let enhancementFilters = ["\"CINoiseReduction\"", "\"CISharpenLuminance\"", ".noiseReduction()", ".sharpenLuminance()"]
     private static let enhancementHosts: Set<String> = [
         "PhotoCaptureProcessor.swift",
         "VideoFilterPipeline.swift",
-        "ImageFilterEngine.swift",
-        // L'étage RÉGLAGES de l'éditeur d'image, extrait pour que la scène le
-        // partage (#9175) : un curseur de netteté choisi par l'utilisateur.
+        // L'étage RÉGLAGES de la scène (#9175) : un curseur de netteté choisi par l'utilisateur.
         "ImageAdjustmentStage.swift",
     ]
 
