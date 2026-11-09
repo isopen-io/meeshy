@@ -712,8 +712,7 @@ extension ConversationAudioCoordinator {
         )
     }
 
-    // `nonisolated(unsafe)` so tests running on @MainActor can set it synchronously.
-    nonisolated(unsafe) private static var _testOverride: ConversationAudioCoordinator?
+    private static var _testOverride: ConversationAudioCoordinator?
 
     @MainActor
     static func testSetShared(_ instance: ConversationAudioCoordinator) {

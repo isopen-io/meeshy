@@ -199,10 +199,9 @@ final class CrashDiagnosticsManager: NSObject {
     // MARK: - NSException
 
     /// Captured at install time so we can chain to whatever handler was
-    /// installed before us (Crashlytics, Sentry, the OS default, etc.). Marked
-    /// `nonisolated(unsafe)` because it's set exactly once, on the main thread,
-    /// before the handler can ever fire — at which point we only read it.
-    private nonisolated(unsafe) static var previousExceptionHandler: (@convention(c) (NSException) -> Void)?
+    /// installed before us (Crashlytics, Sentry, the OS default, etc.). Set
+    /// exactly once, on the main thread, before the handler can ever fire.
+    private nonisolated static let previousExceptionHandler = Locked<(@convention(c) (NSException) -> Void)?>(uncheckedState: nil)
 
     /// Remote forwarder used by `capture(...)` for MetricKit diagnostics.
     /// Protected by `OSAllocatedUnfairLock` so reads from the MetricKit
@@ -239,7 +238,7 @@ final class CrashDiagnosticsManager: NSObject {
         CrashDiagnosticsManager.writeSync(kind: .nsException, summary: summary, details: details)
         // Hand off to whatever was registered before us so we don't clobber
         // a sibling reporter (e.g. a future Crashlytics integration).
-        CrashDiagnosticsManager.previousExceptionHandler?(exception)
+        CrashDiagnosticsManager.previousExceptionHandler.mutateUnchecked { $0 }?(exception)
     }
 
     private func installNSExceptionHandler() {
@@ -247,7 +246,7 @@ final class CrashDiagnosticsManager: NSObject {
         // about to be terminated, so we intentionally avoid spawning Tasks or
         // hopping actors — just fsync a JSON blob and return so the OS can
         // continue its termination sequence.
-        Self.previousExceptionHandler = NSGetUncaughtExceptionHandler()
+        Self.previousExceptionHandler.mutateUnchecked { $0 = NSGetUncaughtExceptionHandler() }
         NSSetUncaughtExceptionHandler(Self.uncaughtExceptionHandler)
     }
 

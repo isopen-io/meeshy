@@ -69,7 +69,21 @@ final class ConcurrencyPrimitivesMigrationGuardTests: XCTestCase {
         "Main/Components/ComposerCameraPreparedInputs.swift",
         "Composer/ComposerFramePacing.swift",
         "Composer/ComposerLookSceneCache.swift",
-    ].map { (path: $0, rules: [artisanLock]) }
+    ].map { (path: $0, rules: [artisanLock]) } + [
+        "Notifications/NotificationListViewModel.swift",
+        "Main/ViewModels/GlobalSearchViewModel.swift",
+        "Composer/ComposerAutosaveController.swift",
+        "Main/Services/PresenceManager.swift",
+        "Main/ViewModels/ConversationListTypingTracker.swift",
+        "Main/ViewModels/ConversationMarkedReadObserver.swift",
+        "Main/Services/ThermalStateMonitor.swift",
+        "Main/Services/CrashDiagnosticsManager.swift",
+        "Main/Services/ConversationAudioCoordinator.swift",
+        "Main/Stores/MessageStore.swift",
+        "Main/Components/OverlayAudioPlayer.swift",
+        "JoinFlow/JoinFlowViewModel.swift",
+        "Settings/Views/PrivacySettingsView.swift",
+    ].map { (path: $0, rules: [unsafeIsolation]) }
 
     private static var featuresRoot: URL {
         URL(fileURLWithPath: #filePath)

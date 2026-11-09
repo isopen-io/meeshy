@@ -23,6 +23,10 @@ nonisolated final class TaskSlot: Sendable {
         previous?.cancel()
     }
 
+    func forget() {
+        slot.mutate { $0 = nil }
+    }
+
     func cancel() {
         let held = slot.mutate { state -> Task<Void, Never>? in
             let old = state
