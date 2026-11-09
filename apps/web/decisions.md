@@ -5925,3 +5925,16 @@ Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import '
 **Écart assumé.** `StoreBadge` (#16407) reste le badge de la landing et de `/download`, dessiné à la main ; le pied des pages d'accès porte l'image officielle demandée par le porteur. La convergence sur l'image officielle, App Store localisé compris, est #16453.
 
 **Gardes.** `components/auth-header.test.tsx` (ordre, retour, marque vers `/`, langue, cibles de 44 px, indésirables sur chaque hôte et dans chaque langue, pied absent dans la coque, badges et liens, badges présents pour chaque langue, libellés distincts par langue), `i18n-catalog.test.ts` et `satisfies InterfaceCatalog` (complétude des sept catalogues).
+
+## D-234 — Avatar et bannière se posent par la retouche de la capture, à format imposé : rond 1:1, bandeau 3:1 (2026-11-09, #17256, jumelle de #17251)
+
+**Contexte.** Directive porteur du 2026-11-09 : un seul éditeur d'image, celui de la capture caméra. Le web n'avait aucun éditeur d'image d'identité : « Montre-toi », le profil, la communauté et la photo de groupe recompressaient le fichier choisi et l'envoyaient tel quel, sans garantir ni le 1:1 ni le 3:1.
+
+**Décision.**
+- L'éditeur est le studio en `retouch` (`StoryComposeScreen`, le même que « Éditer » une pièce du fil et la caméra de la barre). `StudioRetouch.format` (`lib/profile/entity-image-format.ts` : `avatar` | `banner`) lui impose un format : la carte de la scène en prend les proportions (`StudioScene`, `data-scene-format`), un voile rond couvre ce qui tombe hors du cercle de l'avatar, le fond REMPLIT le cadre à l'ouverture, ni recadrage ni quart de tour ne sont offerts (`formatLocked`), et « Terminé » rend TOUJOURS un JPEG à la taille du format (1080×1080, 1500×500), même intact.
+- `components/entity-image-retouch.tsx` monte cette retouche en couche (portail dans `document.body`, ou dans la feuille `<dialog>` qui l'ouvre) ; `lib/profile/use-entity-image-edit.tsx` est le site unique que les quatre appelants partagent : choisir un fichier ouvre la retouche, seule l'image retouchée part, Annuler (✕, Échap, retour matériel) ne rend rien. Les deux se chargent à la demande, jamais avec l'écran.
+- Un HEIC que le navigateur ne décode pas (W9, #11315) ne se peint pas dans un canvas : il part tel quel, la passerelle le convertit.
+
+**Écart assumé.** Le fond d'une scène ne se déplace pas (le studio n'offre qu'un recadrage centré) : l'image se cadre au centre, le Cadre bascule entre remplir et ajuster. La feuille d'image de l'administration (`admin-user-image-sheet.tsx`) reste sans retouche.
+
+**Gardes.** `components/entity-image-retouch.test.tsx` (scène carrée voilée, scène 3:1, rendu aux tailles du format, ✕ et retour sans rendu, rien téléversé), `lib/profile/use-entity-image-edit.test.tsx`, `routes/onboarding-profile.test.tsx` (seule l'image retouchée part, Annuler n'envoie rien, l'avatar n'ouvre jamais la bannière), `lib/stories/studio-background-tools.test.ts`, `lib/stories/studio-retouch.test.ts`.

@@ -49,6 +49,7 @@ import {
   type JourneyStep,
 } from '@/lib/onboarding/journey';
 import { journeyProgressStore, type JourneyProgressStore } from '@/lib/onboarding/progress-store';
+import type { EntityImageEditor } from '@/lib/profile/use-entity-image-edit';
 import { storyReturn } from '@/lib/onboarding/story-return';
 import { useSearch } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
@@ -111,6 +112,8 @@ export type OnboardingScreenDeps = {
   readonly saveLanguages: (patch: { readonly systemLanguage: string; readonly regionalLanguage: string }) => Promise<LanguagesSave>;
   /** « Montre-toi » (#17237) — le chemin de l'écran Profil, la session et le cache du profil suivent la valeur servie. */
   readonly uploadProfileImage: (kind: ProfileImageKind, file: Blob) => Promise<ProfileImageUpload>;
+  /** La retouche de la capture (#17256) — injectable pour les témoins ; la production la charge à la demande. */
+  readonly profileImageEditor?: EntityImageEditor;
   readonly notificationsAskable: () => boolean;
   readonly askNotifications: () => Promise<void>;
   readonly loadRecap: () => Promise<RecapNumbers | null>;
@@ -595,6 +598,7 @@ export function OnboardingJourney({
               avatar={avatar ?? null}
               banner={deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.banner ?? null}
               upload={deps.uploadProfileImage}
+              {...(deps.profileImageEditor !== undefined ? { editor: deps.profileImageEditor } : {})}
               onDone={() => advance('profile', 'done')}
               onLater={() => advance('profile', 'skipped')}
             />

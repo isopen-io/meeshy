@@ -42,6 +42,7 @@ import {
   withSelected,
   withSoundPlane,
   withAnimated,
+  withBackgroundFrame,
   withStatic,
   withAudience,
   withCommentsDisabled,
@@ -427,6 +428,8 @@ function StoryStudio({
     }
     if (retouch !== undefined) {
       if (retouch.file !== null) place('visual', retouch.file);
+      // Une image d'identité REMPLIT son cadre (#17256) : un visage, pas des bandes.
+      if (retouch.format !== undefined) setDraft((current) => withBackgroundFrame(current, { ...DEFAULT_FRAME, fitMode: 'fill' }));
       return;
     }
     // Une modification (#9317) ne consomme pas la pièce déposée pour une création.
@@ -783,6 +786,7 @@ function StoryStudio({
     kind,
     frame,
     retouching,
+    formatLocked: retouch?.format !== undefined,
     timelineOpen,
     locked: publishing,
     edit,
@@ -931,6 +935,7 @@ function StoryStudio({
           lang={lang}
           stageRef={stageRef}
           capture={quick.capture}
+          {...(retouch?.format !== undefined ? { format: retouch.format } : {})}
           pageId={page.id}
           locked={publishing}
           preview={{ document: previewDocument, carrier: PREVIEW_CARRIER, preferredLanguages: reader.languages, onContentReady: remeasureText, onClock: setClock }}

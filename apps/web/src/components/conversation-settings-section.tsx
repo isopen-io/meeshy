@@ -8,6 +8,7 @@ import { updateConversationSettings, type ConversationSettingsPatch } from '@/li
 import type { Conversation } from '@/lib/api/types';
 import { manageText, type ConversationManageCatalogKey } from '@/lib/i18n-conversation-manage-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useEntityImageEdit } from '@/lib/profile/use-entity-image-edit';
 import { initialsOf } from '@/lib/view/conversation';
 import type { ConversationManagement } from '@/lib/view/conversation-management';
 
@@ -93,8 +94,7 @@ export function ConversationSettingsSection({
     setSaving(false);
   };
 
-  const onPhoto = async (file: File | undefined) => {
-    if (file === undefined) return;
+  const onPhoto = async (file: File) => {
     setUploading(true);
     setStatus(t('conversationManage.settings.photo.uploading'));
     const { uploadProfileImage } = await import('@/lib/profile/image-upload');
@@ -106,6 +106,9 @@ export function ConversationSettingsSection({
     }
     await apply({ avatar: upload.url }, 'conversationManage.settings.saved');
   };
+  /* #17256 — la photo du groupe passe par la retouche de la capture, en rond
+     1:1 ; seule l'image retouchée part, Annuler ne pose rien. */
+  const retouch = useEntityImageEdit<'avatar'>({ deliver: (_format, file) => void onPhoto(file) });
 
   const writeRole = conversation.defaultWriteRole === 'creator' ? 'admin' : (conversation.defaultWriteRole ?? 'everyone');
   const announcement = conversation.isAnnouncementChannel === true;
@@ -122,7 +125,8 @@ export function ConversationSettingsSection({
         <div className="flex items-center gap-3 p-3">
           <Avatar initials={initialsOf(title)} color={accent} size={56} name={title} {...(conversation.avatar === undefined ? {} : { src: conversation.avatar })} />
           <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-            <input ref={fileRef} type="file" accept="image/*" className="offscreen" tabIndex={-1} aria-hidden onChange={(event) => void onPhoto(event.currentTarget.files?.[0])} data-conversation-photo-input />
+            <input ref={fileRef} type="file" accept="image/*" className="offscreen" tabIndex={-1} aria-hidden onChange={(event) => retouch.pick('avatar', event)} data-conversation-photo-input />
+            {retouch.layer}
             <ChipButton disabled={uploading} onClick={() => fileRef.current?.click()} data="data-conversation-photo-change">
               {uploading ? t('conversationManage.settings.photo.uploading') : t('conversationManage.settings.photo.change')}
             </ChipButton>

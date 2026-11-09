@@ -1,5 +1,5 @@
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import '@/styles/onboarding-profile.css';
 
@@ -14,6 +14,7 @@ import { loadOnboardingProfileCatalog, translateOnboardingProfile } from '@/lib/
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { needsServedPreview } from '@/lib/media/heif';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
+import { useEntityImageEdit, type EntityImageEditor } from '@/lib/profile/use-entity-image-edit';
 import { initialsOf } from '@/lib/view/conversation';
 
 import { CardFrame, type CardHost } from './onboarding-cards';
@@ -24,7 +25,9 @@ import { PrimaryButton, SecondaryButton } from './onboarding-visuals';
  * une photo et une bannière dès l'inscription, miroir de la carte iOS du même
  * lot. Elle montre le profil TEL QUE LES AUTRES LE VERRONT (bannière 3:1,
  * avatar rond qui la chevauche, nom et @pseudo), et chaque cible ouvre le
- * sélecteur de fichiers du système.
+ * sélecteur de fichiers du système. L'image choisie passe par la retouche de
+ * la capture, au format de sa cible (#17256 : rond 1:1, bandeau 3:1) ; seule
+ * l'image retouchée part, et Annuler ne pose rien.
  *
  * Le téléversement est celui de l'écran Profil (`performImageUpdate`, câblé
  * par `onboarding.tsx`) : recompression, `POST attachments.upload`, puis
@@ -79,6 +82,8 @@ export function ProfileCard({
   banner,
   upload,
   preview = localPreview,
+  editor,
+  undecodable,
   onDone,
   onLater,
 }: {
@@ -90,6 +95,9 @@ export function ProfileCard({
   readonly banner: string | null;
   readonly upload: (kind: ProfileImageKind, file: Blob) => Promise<ProfileImageUpload>;
   readonly preview?: (file: Blob) => Promise<string | null>;
+  /** La retouche de la capture — injectable pour les témoins. */
+  readonly editor?: EntityImageEditor;
+  readonly undecodable?: (file: File) => Promise<boolean>;
   readonly onDone: () => void;
   readonly onLater: () => void;
 }) {
@@ -117,11 +125,11 @@ export function ProfileCard({
     patch(kind, (slot) => ({ url: slot.url, pending: null, failed: outcome.status === 'failed' ? file : null }));
   };
 
-  const picked = (kind: ProfileImageKind, event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (file !== undefined) void send(kind, file);
-  };
+  const retouch = useEntityImageEdit<ProfileImageKind>({
+    deliver: (kind, file) => void send(kind, file),
+    ...(editor !== undefined ? { editor } : {}),
+    ...(undecodable !== undefined ? { undecodable } : {}),
+  });
 
   const initial: Readonly<Record<ProfileImageKind, string | null>> = { avatar, banner };
   const posed = KINDS.some((kind) => slots[kind].pending !== null || slots[kind].url !== initial[kind]);
@@ -223,7 +231,7 @@ export function ProfileCard({
           tabIndex={-1}
           aria-hidden="true"
           data-onb-profile-input={kind}
-          onChange={(event) => picked(kind, event)}
+          onChange={(event) => retouch.pick(kind, event)}
         />
       ))}
 
@@ -243,6 +251,7 @@ export function ProfileCard({
           </button>
         </div>
       )}
+      {retouch.layer}
       {!host.online ? <p className="onb-note">{translateOnboarding(lang, 'onboarding.offline')}</p> : null}
     </CardFrame>
   );

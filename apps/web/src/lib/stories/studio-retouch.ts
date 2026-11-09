@@ -140,10 +140,15 @@ export function studioRetouchSize(page: StudioPage): { readonly width: number; r
 
 /** Le JPEG de la scène — `null` quand le rendu est impossible (pas de canvas,
  * une image qui ne se décode pas, un média qui ne se dessine pas : vidéo). */
-export async function renderStudioRetouch(unmeasured: StudioPage, deps: StudioRetouchDeps): Promise<Blob | null> {
+export async function renderStudioRetouch(
+  unmeasured: StudioPage,
+  deps: StudioRetouchDeps,
+  /** `size` : un format imposé (#17256, image d'identité) — la scène en a les proportions. */
+  { size: imposed }: { readonly size?: { readonly width: number; readonly height: number } } = {},
+): Promise<Blob | null> {
   const page = await withMeasuredImages(unmeasured, deps.loadImage);
   const hasMedia = page.background !== null || page.overlay !== null;
-  const size = studioRetouchSize(page);
+  const size = imposed ?? studioRetouchSize(page);
   const plan: readonly StudioCompositeOp[] | null = hasMedia
     ? studioCompositePlan(page, { cardRatio: size.width / size.height })
     : [{ kind: 'fill', color: `#${STORY_PLAIN_BACKGROUND}` }];

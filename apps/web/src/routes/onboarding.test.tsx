@@ -415,6 +415,9 @@ describe('« Montre-toi » (#17237) — après le courriel, avant le salut, jama
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
     await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+    expect(uploads).toEqual([]);
+    expect(document.querySelector('[data-harness-retouch]')?.getAttribute('data-harness-retouch')).toBe('avatar');
+    await click(document.querySelector('[data-harness-retouch-done]'));
     expect(uploads).toEqual(['avatar']);
     await click(action(host, 'profile.continue'));
     expect(patches).toEqual([{ step: 'profile', outcome: 'done' }]);
