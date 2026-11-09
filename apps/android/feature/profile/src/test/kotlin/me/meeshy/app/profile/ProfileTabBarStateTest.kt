@@ -20,7 +20,7 @@ class ProfileTabBarStateTest {
 
     @Test
     fun `les trois onglets suivent l'ordre iOS`() {
-        assertThat(PROFILE_SHEET_TABS).containsExactly(ProfileTab.POSTS, ProfileTab.CONVERSATIONS, ProfileTab.DETAILS).inOrder()
+        assertThat(PROFILE_SHEET_TABS).containsExactly(ProfileTab.DETAILS, ProfileTab.CONVERSATIONS, ProfileTab.POSTS).inOrder()
     }
 
     @Test
