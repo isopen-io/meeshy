@@ -17,7 +17,11 @@ public final class StoryTextLayer: CATextLayer {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    public private(set) nonisolated(unsafe) var textObject: StoryTextObject?
+    private nonisolated let textObjectSlot = Locked<StoryTextObject?>(nil)
+    public private(set) nonisolated var textObject: StoryTextObject? {
+        get { textObjectSlot.read { $0 } }
+        set { textObjectSlot.mutate { $0 = newValue } }
+    }
 
     /// **La taille de police PEINTE sur le canvas monté** — celle du calque ET
     /// celle du champ de saisie en ligne (#8680). Une seule écriture : le texte

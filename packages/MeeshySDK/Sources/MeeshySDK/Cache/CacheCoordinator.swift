@@ -132,7 +132,7 @@ public actor CacheCoordinator {
     /// #8674 — où dorment les caches des comptes quittés mais gardés, et qui
     /// possède le cache vivant. Injectables pour les témoins.
     nonisolated let accountArchiveDirectory: URL
-    nonisolated(unsafe) let ownerDefaults: UserDefaults
+    nonisolated let ownerDefaults: UserDefaults
 
     public init(
         messageSocket: any MessageSocketProviding = MessageSocketManager.shared,
