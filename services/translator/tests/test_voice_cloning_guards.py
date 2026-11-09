@@ -28,3 +28,40 @@ class TestTakesMultiSpeakerPath:
     def test_sans_segments_ou_sans_compte(self):
         assert not takes_multi_speaker_path(speaker_count=2, segments=[], generate_voice_clone=True)
         assert not takes_multi_speaker_path(speaker_count=None, segments=SEGMENTS, generate_voice_clone=True)
+
+
+@pytest.mark.unit
+class TestProcessMultiSpeakerAudioRefusesWithoutAuthorization:
+    """Le témoin de CÂBLAGE : quel que soit le site appelant, le processeur multi-locuteur
+    ne modélise aucune voix sans autorisation explicite de la passerelle."""
+
+    @staticmethod
+    def _run(**kwargs):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from src.services.audio_pipeline.multi_speaker_processor import process_multi_speaker_audio
+
+        voice_clone_service = MagicMock()
+        voice_clone_service.get_or_create_voice_model = AsyncMock()
+        result = asyncio.run(process_multi_speaker_audio(
+            translation_stage=MagicMock(),
+            voice_clone_service=voice_clone_service,
+            segments=SEGMENTS,
+            source_audio_path="/tmp/absent.wav",
+            target_languages=["fr"],
+            source_language="en",
+            message_id="m",
+            attachment_id="a",
+            **kwargs,
+        ))
+        return result, voice_clone_service.get_or_create_voice_model
+
+    def test_drapeau_faux_ne_modelise_personne(self):
+        result, create = self._run(generate_voice_clone=False)
+        assert result == {}
+        create.assert_not_called()
+
+    def test_drapeau_absent_vaut_refus(self):
+        result, create = self._run()
+        assert result == {}
+        create.assert_not_called()
