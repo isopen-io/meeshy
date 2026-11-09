@@ -1377,6 +1377,7 @@
   "2026-11-09 — Rien n'est aplati avant l'envoi : la pièce en attente garde sa scène et se rouvre modifiable, en conversation comme en statut (I9).",
   "2026-11-09 21:57 — Le chantier vise TOUTES les vues sur iOS, Android ET le web, de manière sophistiquée et optimisée ; le workflow reçoit la plateforme web.",
   "2026-11-09 22:11 — Les actions de l'appel gardent Journal, Réagir, Capture et Image dans l'image ; Messages reste à droite comme la vue P2 le dessine (I1).",
-  "2026-11-09 22:22 — Aucune régression de feature : la planche est préservée et s'enrichit de ce que le code porte en plus, sans doublon de ce qu'elle rend déjà autrement (règle en tête de « regles »)."
+  "2026-11-09 22:22 — Aucune régression de feature : la planche est préservée et s'enrichit de ce que le code porte en plus, sans doublon de ce qu'elle rend déjà autrement (règle en tête de « regles »).",
+  "2026-11-09 22:20 — Lecture consolidée de la liste de l'appel (#17329, #17333) : tout est gardé, rien n'est en double. Liste « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture ; en-tête : Réduire, Image dans l'image, Conversation. Remplace la ligne de 22:11 sur la place de Messages et d'Image dans l'image (I1)."
  ]
 }
