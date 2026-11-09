@@ -458,3 +458,11 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   un nouveau dispatch prouve le commit de fusion.
 - Prochain lot recommandé : inchangé — #17147 (la porte lit la conversation close), puis « ensemble » sur Android
   (#17100), puis l'icône de position par cercle (#17013).
+
+## 2026-11-09 — réveil 24 : mener #17148 à la fusion (#17022)
+
+- Reprise : #17148 (coupures « ensemble » au démarrage, à la suppression d'une pièce ou d'une conversation) restait
+  ouverte, la fusion ayant été refusée deux fois (`dev` verrouillée la nuit, 405). Aucun nouveau lot ouvert.
+- `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
+  passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
+- Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
