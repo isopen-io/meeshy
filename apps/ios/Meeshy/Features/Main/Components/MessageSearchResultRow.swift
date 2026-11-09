@@ -105,7 +105,7 @@ struct MessageSearchResultRow: View, Equatable {
 
     static func mediaLabel(_ kind: APIMessageSearchHit.MediaKind) -> String {
         switch kind {
-        case .audio: return String(localized: "search.messages.media.audio", defaultValue: "Message vocal")
+        case .audio: return MediaKindLabel.voiceMessageTitle()
         case .video: return String(localized: "search.messages.media.video", defaultValue: "Vidéo")
         case .image: return String(localized: "search.messages.media.image", defaultValue: "Image")
         case .document: return String(localized: "search.messages.media.document", defaultValue: "Document")

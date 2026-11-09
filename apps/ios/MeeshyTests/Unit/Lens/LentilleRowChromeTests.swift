@@ -66,13 +66,18 @@ final class LentilleRowChromeTests: XCTestCase {
     func test_flatRow_preview_isOneText_authorColonMessage_noOutline() throws {
         XCTAssertTrue(try rowSource().contains("ConversationPreviewLine("), "la rangée monte la ligne partagée")
         let line = try previewLineSource()
-        let text = try block("private func styledText(_ preview: ConversationPreview, at now: Date) -> Text {", in: line)
-        XCTAssertTrue(text.contains("(author + unencrypted + glyph + direction + styledBody)"),
-                      "« Auteur : texte » en UN seul texte, marqueur « non chiffré » compris")
+        let text = try block("private func styledText(_ preview: ConversationPreview, at now: Date, paintsBody: Bool = true) -> Text {", in: line)
+        XCTAssertTrue(text.contains("(leadText(preview) + styledBody)"),
+                      "« Auteur : texte » en UN seul texte")
+        // Ce qui précède le corps — auteur, « non chiffré », glyphe, flèche —
+        // vit dans `leadText`, que le voile d'un aperçu flouté laisse lisible.
+        let lead = try block("private func leadText(_ preview: ConversationPreview) -> Text {", in: line)
+        XCTAssertTrue(lead.contains("author + unencrypted + glyphText(preview) + direction"),
+                      "l'auteur, le marqueur « non chiffré » et le glyphe se rangent dans ce même texte")
         // #15760 — le préfixe d'auteur est PARTAGÉ avec `seenText` (le texte
         // vu, comparé au texte dit) : la ligne le lit chez `authorPrefix`,
         // qui le tient du catalogue.
-        XCTAssertTrue(text.contains("Self.authorPrefix(of: preview, strings: strings)"),
+        XCTAssertTrue(lead.contains("Self.authorPrefix(of: preview, strings: strings)"),
                       "la ligne rend le préfixe d'auteur partagé")
         let prefix = try block("private static func authorPrefix(", in: line).components(separatedBy: "\n\n")[0]
         XCTAssertTrue(prefix.contains("strings(.lineAuthor"), "le séparateur d'auteur vient du catalogue")
