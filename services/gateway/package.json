@@ -63,7 +63,7 @@
     "libphonenumber-js": "^1.13.15",
     "mmdb-lib": "^3.0.4",
     "mongodb": "^7.8.0",
-    "music-metadata": "^12.3.2",
+    "music-metadata": "^12.3.5",
     "nice-grpc": "^2.1.18",
     "pdf-parse": "^2.4.5",
     "pino": "^10.4.0",
