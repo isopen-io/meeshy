@@ -7,7 +7,6 @@ import {
   updateBloodLocationSettings,
 } from '../../services/bloodLocation/bloodLocationService';
 import { bloodLocationDepsOf } from '../../services/bloodLocation/bloodLocationDeps';
-import { bloodLocationEnabledFor } from '../../services/bloodLocation/bloodLocationFlag';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
@@ -16,9 +15,9 @@ import { errorResponses, relationLimiter } from '../relations/shared';
 
 /**
  * La position du Sang côté COMPTE (#13937) : enregistrer un point, effacer son historique, lire son
- * journal de consultations, régler fantôme et rayon — et `GET /me/features`, qui dit au client si la
- * fonction lui est ouverte (drapeau serveur ET liste blanche). Hors drapeau, tout sauf `features`
- * répond 404 comme une route inconnue.
+ * journal de consultations, régler fantôme et rayon. Hors drapeau, tout répond 404 comme une route
+ * inconnue ; le client apprend si la fonction lui est ouverte par `GET /relations/config`
+ * (`services.bloodLocation`), là où il lit déjà l'interrupteur du Bring — aucune route de plus.
  *
  * Le point arrive par REST et non par socket : les changements significatifs d'iOS réveillent l'app
  * quelques secondes, sans socket ouverte (`location:live-*` suppose une conversation connectée).
@@ -28,12 +27,6 @@ export default async function bloodLocationMeRoutes(fastify: FastifyInstance): P
   const reads = relationLimiter(fastify, 'rel:blood-loc:r', 60);
   const depsOf = () => bloodLocationDepsOf({ prisma: fastify.prisma, io: fastify.socketIOHandler?.getManager?.()?.getIO() as never, report: (error) => logError(fastify.log, 'Blood location side effect:', error) });
   const sink = { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object', additionalProperties: true } } } as const;
-
-  fastify.get('/features', {
-    onRequest: [fastify.authenticate],
-    preHandler: [reads.middleware()],
-    schema: { description: 'Which gated features are open to the caller.', tags: ['me'], summary: 'Server feature flags', response: { 200: sink, ...errorResponses }, security: [{ bearerAuth: [] }] },
-  }, async (request, reply) => sendSuccess(reply, { bloodLocation: bloodLocationEnabledFor(request.user!.userId) }));
 
   fastify.post('/location/blood', {
     onRequest: [fastify.authenticate],

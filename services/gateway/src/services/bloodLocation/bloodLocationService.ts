@@ -7,7 +7,8 @@
  *   ceux-là même après la levée du fantôme.
  * - **Lire** l'historique d'un autre : la loi d'accès (`location.history`, niveau Sang, blocage, âge,
  *   équipe) ET le consentement de l'émetteur, relu en base à chaque appel. Le fantôme rend la même
- *   réponse vide qu'un compte sans historique ; la consultation est notée dans les deux cas.
+ *   réponse vide qu'un compte sans historique ; la consultation est notée dans les deux cas. Un
+ *   émetteur hors drapeau rend aussi la réponse vide, sans journal : la fonction n'existe pas pour lui.
  * - **Journal** : lisible du seul observé ; `excessive` quand un même observateur dépasse 20 lectures
  *   en 24 h.
  * - **Proximité** : `bloodProximity.ts`, déclenchée à l'enregistrement, jamais bloquante.
@@ -116,6 +117,7 @@ export async function readBloodLocationHistory(
   if (viewerId === ownerId) return { kind: 'ok', items: await pointsOf(deps, ownerId, '', params) };
   const refusal = await viewerMayRead(deps, viewerId, ownerId);
   if (refusal) return refusal;
+  if (!deps.enabledFor(ownerId)) return { kind: 'ok', items: [] };
   const now = deps.now();
   await deps.prisma.bloodLocationConsultation.create({
     data: { observedId: ownerId, observerId: viewerId, consultedAt: new Date(now), expiresAt: new Date(now + HISTORY_MS) },

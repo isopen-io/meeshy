@@ -7,6 +7,8 @@
  * 2 h (`RELATION_THRESHOLDS.proximity.cooldownHours`), prise AVANT l'envoi par un magasin strict : une
  * panne n'envoie rien.
  *
+ * Seuls les comptes que le drapeau admet sont candidats : hors liste blanche, aucun événement.
+ *
  * Le consentement est relu en base à CHAQUE enregistrement (`relationConsent`), jamais en cache : un
  * retrait coupe l'alerte suivante. La loi d'accès (`location.proximity`, niveau, blocage, âge, équipe)
  * est celle de `pairAccessAmong`, dans les deux sens.
@@ -108,7 +110,7 @@ export async function alertBloodProximity(
     comptesAuMoins(deps.prisma, ownerId, 'BLOOD', { limit: CANDIDATE_LIMIT }),
     teamPeerCandidates(deps.prisma, ownerId),
   ]);
-  const candidates = [...new Set([...linked.map((account) => account.id), ...team])].filter((id) => id !== ownerId);
+  const candidates = [...new Set([...linked.map((account) => account.id), ...team])].filter((id) => id !== ownerId && deps.enabledFor(id));
   const visible = await unhiddenCandidates(deps, ownerId, candidates, ghostedByOwner);
   if (visible.length === 0) return;
   const allowed = await mutuallyAllowed(deps, ownerId, visible);

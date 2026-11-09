@@ -7,6 +7,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
+import { bloodLocationEnabledFor } from './bloodLocationFlag';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
 export function bloodLocationDepsOf(params: {
@@ -18,6 +19,7 @@ export function bloodLocationDepsOf(params: {
     prisma: params.prisma,
     io: params.io,
     now: () => Date.now(),
+    enabledFor: (userId) => bloodLocationEnabledFor(userId),
     report: params.report,
     claimProximityCooldown: async (pairKey, ttlSeconds) => {
       const client = getCacheStore().getNativeClient();

@@ -59,18 +59,11 @@ describe('le drapeau — éteint, aucune route ne répond', () => {
     expect(response.json().code).toBe(unknown.json().code);
   });
 
-  it('`GET /me/features` dit false', async () => {
-    fastify = await app(bloodWorldAvecConsentements(), MOI);
-    const response = await fastify.inject({ method: 'GET', url: '/me/features' });
-    expect(response.json()).toMatchObject({ success: true, data: { bloodLocation: false } });
-  });
-
   it('allumé, un compte hors liste blanche reste en 404', async () => {
     process.env.BLOOD_LOCATION_ENABLED = 'true';
     process.env.BLOOD_LOCATION_ALLOWLIST = SANG;
     fastify = await app(bloodWorldAvecConsentements(), MOI);
     expect((await fastify.inject({ method: 'POST', url: '/me/location/blood', payload: PARIS })).statusCode).toBe(404);
-    expect((await fastify.inject({ method: 'GET', url: '/me/features' })).json().data.bloodLocation).toBe(false);
   });
 });
 
@@ -83,7 +76,6 @@ describe('le drapeau — allumé pour la liste blanche', () => {
   it('un point se range, et un Sang consentant lit l\'historique par la route', async () => {
     const world = bloodWorldAvecConsentements();
     const sang = await app(world, SANG);
-    expect((await sang.inject({ method: 'GET', url: '/me/features' })).json().data.bloodLocation).toBe(true);
     expect((await sang.inject({ method: 'POST', url: '/me/location/blood', payload: PARIS })).json()).toMatchObject({ data: { recorded: true } });
     await sang.close();
 

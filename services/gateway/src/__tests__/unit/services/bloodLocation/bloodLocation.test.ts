@@ -330,11 +330,45 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     expect(w.emissions).toEqual([]);
   });
 
+  it('un retrait de la proximité coupe l\'alerte suivante : le consentement est relu en base à chaque émission', async () => {
+    const w = proxi();
+    await recordBloodLocation(w.deps, SANG, PARIS);
+    await recordBloodLocation(w.deps, MOI, A_300_M);
+    expect(w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
+
+    w.consentir(SANG, MOI, { proximityShared: false });
+    w.avancer(3 * HEURE);
+    await recordBloodLocation(w.deps, SANG, PARIS);
+    await recordBloodLocation(w.deps, MOI, A_300_M);
+
+    expect(w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
+    expect(w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
+  });
+
   it('un Proche ou un Ami voisin ne reçoit jamais d\'alerte', async () => {
     const w = bloodLocationWorld({ consents: [[PROCHE, MOI, TOUT_PARTAGE], [MOI, PROCHE, TOUT_PARTAGE]] });
     await recordBloodLocation(w.deps, PROCHE, PARIS);
     await recordBloodLocation(w.deps, MOI, A_300_M);
     expect(w.emissions).toEqual([]);
+  });
+});
+
+describe('le drapeau vaut pour les DEUX comptes — hors liste blanche, rien ne part ni ne se sert', () => {
+  it('un Sang sorti de la liste blanche ne reçoit plus aucune alerte, et son voisin non plus à cause de lui', async () => {
+    const w = bloodWorldAvecConsentements({ horsDrapeau: [SANG] });
+    await recordBloodLocation(w.deps, SANG, PARIS);
+
+    await recordBloodLocation(w.deps, MOI, A_300_M);
+
+    expect(w.emissions).toEqual([]);
+  });
+
+  it('l\'historique rangé avant la sortie de la liste blanche n\'est plus servi, et la lecture ne laisse aucune trace', async () => {
+    const w = bloodWorldAvecConsentements({ horsDrapeau: [SANG] });
+    await recordBloodLocation(w.deps, SANG, PARIS);
+
+    await expect(readBloodLocationHistory(w.deps, MOI, SANG, {})).resolves.toEqual({ kind: 'ok', items: [] });
+    expect(w.consultations.rows).toEqual([]);
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * LA POSITION DU SANG (#13937 ; spec cercles § 1.7, LOC-03/04/10/11, RG-12 à 16, RG-27).
  *
- * Derrière un drapeau serveur ÉTEINT par défaut (`GET /me/features` → `bloodLocation`), entre
+ * Derrière un drapeau serveur ÉTEINT par défaut (`GET /relations/config` → `services.bloodLocation`), entre
  * Sangs qui se sont consentis les partages « historique » et « proximité » au rituel :
  *
  * 1. `POST /me/location/blood` {@link BloodLocationPayload} range un point, scellé au repos,
@@ -70,5 +70,3 @@ export type BloodProximityEventData = {
   readonly userId: string;
   readonly distanceMeters: 100 | 250 | 500 | 1000 | 2500 | 5000;
 };
-
-export type BloodLocationFeatures = { readonly bloodLocation: boolean };

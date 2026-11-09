@@ -102,6 +102,8 @@ export type BloodLocationWorldSeed = {
   /** `[propriétaire, bénéficiaire, partages]` : ce que `propriétaire` partage à `bénéficiaire`. */
   readonly consents?: ReadonlyArray<readonly [string, string, Consentements & Row]>;
   readonly cooldownDown?: boolean;
+  /** Les comptes que le drapeau n'admet pas (hors liste blanche). */
+  readonly horsDrapeau?: readonly string[];
 };
 
 export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
@@ -146,6 +148,7 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
     prisma: prisma as unknown as PrismaClient,
     io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as BloodLocationDeps['io'],
     now: () => now,
+    enabledFor: (userId) => !(seed.horsDrapeau ?? []).includes(userId),
     claimProximityCooldown: async (key, ttlSeconds) => {
       if (seed.cooldownDown) throw new Error('redis injoignable');
       const until = cooldowns.get(key);
