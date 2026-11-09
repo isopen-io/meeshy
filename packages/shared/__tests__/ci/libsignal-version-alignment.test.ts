@@ -49,3 +49,35 @@ describe('libsignal — une seule version sur la passerelle, shared, iOS, Androi
     expect(versions).toEqual(Object.fromEntries(Object.keys(versions).map((path) => [path, reference])));
   });
 });
+
+const LIBSIGNAL_NPM_DIRECTORIES = ['/', '/services/gateway', '/packages/shared'] as const;
+
+type DependabotEntry = { ecosystem: string; directory: string; body: string };
+
+const dependabotEntries = (): readonly DependabotEntry[] =>
+  read('.github/dependabot.yml')
+    .split(/^ {2}- package-ecosystem:/m)
+    .slice(1)
+    .map((body) => ({
+      ecosystem: body.match(/^\s*"([^"]+)"/)?.[1] ?? '',
+      directory: body.match(/^ {4}directory:\s*"([^"]+)"/m)?.[1] ?? '',
+      body,
+    }));
+
+const libsignalIgnoreRule = (body: string): string | undefined =>
+  body.match(/^ {6}- dependency-name:\s*"@signalapp\/libsignal-client"\n(?: {8}\S.*\n)*/m)?.[0];
+
+describe('libsignal — Dependabot ne monte jamais une seule plateforme (#17113)', () => {
+  it('chaque entrée npm qui voit libsignal l\'exclut entièrement, correctifs compris', () => {
+    const entries = dependabotEntries().filter(
+      ({ ecosystem, directory }) => ecosystem === 'npm' && (LIBSIGNAL_NPM_DIRECTORIES as readonly string[]).includes(directory),
+    );
+    expect(entries.map(({ directory }) => directory).sort()).toEqual([...LIBSIGNAL_NPM_DIRECTORIES].sort());
+    entries.forEach(({ directory, body }) => {
+      expect({ directory, rule: libsignalIgnoreRule(body) }).toEqual({
+        directory,
+        rule: '      - dependency-name: "@signalapp/libsignal-client"\n',
+      });
+    });
+  });
+});
