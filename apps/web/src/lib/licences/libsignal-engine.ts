@@ -15,9 +15,11 @@ export type LibsignalEngine = {
 
 export const LIBSIGNAL_WASM_DIRECTORY = 'src/lib/e2ee/libsignal';
 
+export const LIBSIGNAL_WASM_FILE = `${LIBSIGNAL_WASM_DIRECTORY}/libsignal_wasm_bg.wasm`;
+
 export const libsignalEngineAt = (version: string): LibsignalEngine => ({
   version,
   acknowledgmentsUrl: `https://github.com/signalapp/libsignal/tree/v${version}/acknowledgments`,
 });
 
-export const WEB_LIBSIGNAL_ENGINE: LibsignalEngine | null = null;
+export const WEB_LIBSIGNAL_ENGINE: LibsignalEngine | null = libsignalEngineAt('0.106.2');
