@@ -252,6 +252,7 @@ struct CommentMediaView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(String(localized: "a11y.comment.media.image", defaultValue: "Image du commentaire", bundle: .main))
         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
+        .accessibilityAction { showFullscreen = true }
     }
 
     // MARK: - Video

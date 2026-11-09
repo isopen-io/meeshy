@@ -86,7 +86,7 @@ public struct OpeningEffectChips: View {
             HapticFeedback.light()
         } label: {
             Text(title)
-                .font(.system(size: MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
                 .foregroundColor(textColor)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.sm)

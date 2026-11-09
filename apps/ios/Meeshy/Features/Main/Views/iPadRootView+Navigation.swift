@@ -516,7 +516,7 @@ extension iPadRootView {
             return
         }
         suppressToastTap = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { suppressToastTap = false }
+        delayed.run(after: .milliseconds(600)) { suppressToastTap = false }
         HapticFeedback.medium()
         notifications.manager.dismissToast()
 

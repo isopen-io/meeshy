@@ -199,11 +199,42 @@ final class TalkieVoicePlayer: TalkieSink {
 }
 
 /// Ce que le décodeur AAC → PCM sait faire : `AVAudioConverter`, ou une doublure qui en reproduit un comportement.
+/// L'entrée que le décodeur réclame. Elle n'est pas `AVAudioConverterInputBlock` : sous Xcode 26 ce type est
+/// `@Sendable`, et le décodeur d'une prise de parole lui fait capturer un curseur mutable.
+typealias TalkieAacInputBlock = (AVAudioPacketCount, UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer?
+
 nonisolated protocol TalkieAacDecoding: AnyObject {
-    func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus
+    func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: @escaping TalkieAacInputBlock) -> AVAudioConverterOutputStatus
 }
 
-nonisolated extension AVAudioConverter: TalkieAacDecoding {}
+/// `AVAudioConverter` derrière le protocole : la signature importée de `convert(to:error:withInputFrom:)` change de
+/// forme d'un SDK à l'autre (bloc `@escaping @Sendable` sous Xcode 26, non sous Xcode 27), une conformance directe ne
+/// compile donc que sous l'un des deux.
+nonisolated final class TalkieSystemAacDecoder: TalkieAacDecoding {
+    private let converter: AVAudioConverter
+
+    init?(from input: AVAudioFormat, to output: AVAudioFormat) {
+        guard let converter = AVAudioConverter(from: input, to: output) else { return nil }
+        self.converter = converter
+    }
+
+    func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: @escaping TalkieAacInputBlock) -> AVAudioConverterOutputStatus {
+        let relay = TalkieAacInputRelay(block)
+        return converter.convert(to: buffer, error: error) { relay.next($0, $1) }
+    }
+}
+
+/// L'entrée relayée au convertisseur système, qui l'appelle de façon synchrone pendant `convert` : le relais la
+/// rend acceptable là où le SDK exige un bloc `@Sendable`.
+nonisolated private final class TalkieAacInputRelay: @unchecked Sendable {
+    private let input: TalkieAacInputBlock
+
+    init(_ input: @escaping TalkieAacInputBlock) { self.input = input }
+
+    func next(_ count: AVAudioPacketCount, _ status: UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer? {
+        input(count, status)
+    }
+}
 
 /// Le décodeur d'UNE prise de parole (#17094) : les trames ADTS de chaque fragment entrent, en mémoire, dans un même
 /// convertisseur AAC → PCM qui garde son état d'un fragment à l'autre. Un fragment décodé seul repartait d'un décodeur
@@ -233,7 +264,7 @@ nonisolated final class TalkieAdtsStreamDecoder {
     nonisolated deinit {}
 
     static func systemConverter(_ input: AVAudioFormat, _ output: AVAudioFormat) -> TalkieAacDecoding? {
-        AVAudioConverter(from: input, to: output)
+        TalkieSystemAacDecoder(from: input, to: output)
     }
 
     func pcm(_ data: Data) -> AVAudioPCMBuffer? {

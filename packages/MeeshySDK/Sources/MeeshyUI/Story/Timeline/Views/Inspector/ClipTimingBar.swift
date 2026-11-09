@@ -136,7 +136,7 @@ public struct ClipTimingBar: View {
                 .frame(width: segmentWidth, height: Self.trackHeight)
                 .overlay(
                     Image(systemName: "arrow.left.and.right")
-                        .font(.system(size: 11, weight: .bold))
+                        .meeshyScaledFont(11, weight: .bold)
                         .foregroundStyle(.white.opacity(0.9))
                 )
                 .offset(x: x0)
@@ -210,7 +210,7 @@ public struct ClipTimingBar: View {
     private func readout(title: String, value: String, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 1) {
             Text(title.uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.system(.callout, design: .monospaced))

@@ -29,7 +29,7 @@ struct StoryTrayView: View {
     // `SharePickerView` (« Transférer ») crasherait sur un environment object
     // manquant. (Le cover du composer, lui, est monté aux racines depuis S5 —
     // cf. `StoryComposerCover`.)
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
@@ -69,13 +69,13 @@ struct StoryTrayView: View {
         }
         .frame(height: Self.trayHeight + Self.decorReserve.top + Self.decorReserve.bottom)
         .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
-        .myStoriesSheet(
+        .relayingMeeshyRouter(meeshyRouter) { $0.myStoriesSheet(
             isPresented: $showMyStories,
             followUp: $myStoriesFollowUp,
             viewModel: viewModel,
             userId: AuthManager.shared.currentUser?.id ?? "",
             statusViewModel: statusViewModel,
-            router: router,
+            router: $1,
             conversationListViewModel: conversationListViewModel,
             perform: { action in
                 // Aucun `Task`, aucun `sleep` : `onDismiss` s'exécute APRÈS la
@@ -98,7 +98,7 @@ struct StoryTrayView: View {
                     viewModel.openComposer(resumingDraftId: draftId)
                 }
             }
-        )
+        ) }
         .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         // NOTE : la tuile « Stories » du profil est désormais servie par le
         // listener `openMyStories` de la RACINE (RootView / iPadRootView) —
@@ -386,22 +386,7 @@ private struct MyStoryButton: View {
                 .accessibilityAddTraits(.isButton)
                 .overlay(alignment: .bottomTrailing) {
                     if myMoodEmoji == nil {
-                        Button {
-                            onAddStatus?()
-                            HapticFeedback.medium()
-                        } label: {
-                            // user request 2026-05-28 — placeholder = x0.8 du
-                            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
-                            // pour garder la parité avec l'emoji mood animé
-                            // (cf. MeeshyAvatar.badgeSize .storyTray).
-                            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
-                            Text("\u{1F4AD}")
-                                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
-                                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                                .background(Circle().fill(theme.backgroundPrimary))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
+                        moodPlaceholderButton
                     }
                 }
                 .overlay {
@@ -439,7 +424,7 @@ private struct MyStoryButton: View {
                         // (déborderait s'il scalait, doctrine 86i) ; le
                         // bouton porte le libellé.
                         Image(systemName: "plus")
-                            .font(.system(size: MeeshyIconSize.lg, weight: .bold))
+                            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
                             .foregroundStyle(Color.white)
                             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                             .background(
@@ -469,6 +454,27 @@ private struct MyStoryButton: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
+    }
+
+    private var moodPlaceholderButton: some View {
+        Button {
+            onAddStatus?()
+            HapticFeedback.medium()
+        } label: {
+            // user request 2026-05-28 — placeholder = x0.8 du
+            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
+            // pour garder la parité avec l'emoji mood animé
+            // (cf. MeeshyAvatar.badgeSize .storyTray).
+            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
+            Text("\u{1F4AD}")
+                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                .background(Circle().fill(theme.backgroundPrimary))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
 
     private func storyCountDots(_ group: StoryGroup) -> some View {
@@ -534,7 +540,7 @@ private struct StoryUploadOverlay: View {
 
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(.white)
             } else {
                 Circle()
@@ -619,7 +625,7 @@ struct PinnedStoryTrailBand: View {
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     // Capturés pour réinjection sur la sheet MyStoriesView (sa sheet interne
     // SharePickerView « Transférer » crasherait sur un env object manquant).
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     /// S5 — le tap sur son propre anneau ouvre désormais le VIEWER (parité avec
@@ -682,13 +688,13 @@ struct PinnedStoryTrailBand: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
-                .myStoriesSheet(
+                .relayingMeeshyRouter(meeshyRouter) { $0.myStoriesSheet(
                     isPresented: $showMyStories,
                     followUp: $myStoriesFollowUp,
                     viewModel: viewModel,
                     userId: currentUserId,
                     statusViewModel: statusViewModel,
-                    router: router,
+                    router: $1,
                     conversationListViewModel: conversationListViewModel,
                     perform: { action in
                         switch action {
@@ -705,7 +711,7 @@ struct PinnedStoryTrailBand: View {
                             viewModel.openComposer(resumingDraftId: draftId)
                         }
                     }
-                )
+                ) }
                 .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         }
     }

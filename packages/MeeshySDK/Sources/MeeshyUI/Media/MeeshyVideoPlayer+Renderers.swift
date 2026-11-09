@@ -186,7 +186,7 @@ internal struct _FullscreenRenderer: View {
                     onReadyForDisplay: { surfaceReady = true }
                 )
                     .ignoresSafeArea()
-                    .onTapGesture { handleSurfaceTap() }
+                    .meeshyNamedTapAction(String(localized: "media.controls.toggle.a11y", bundle: .module)) { handleSurfaceTap() }
                     .gesture(swipeDownGesture)
                     .gesture(pinchGesture)
             } else {
@@ -311,7 +311,7 @@ internal struct _FullscreenRenderer: View {
             Spacer()
             if let caption = player.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundStyle(Color.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
@@ -346,7 +346,7 @@ internal struct _FullscreenRenderer: View {
                     )
                 }
                 Text(author.displayName)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundStyle(Color.white)
             }
             .padding(.horizontal, MeeshySpacing.sm)
@@ -452,7 +452,7 @@ internal struct _FullscreenRenderer: View {
                 }())
 
                 Text(downloadOverlayMessage)
-                    .font(.system(size: MeeshyFont.labelSize, weight: .medium))
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
                     .foregroundStyle(Color.white.opacity(0.85))
                     .shadow(color: .black.opacity(0.6), radius: 4)
                     .multilineTextAlignment(.center)
@@ -462,7 +462,7 @@ internal struct _FullscreenRenderer: View {
                     HapticFeedback.light()
                 } label: {
                     Text(String(localized: "media.video.close", defaultValue: "Fermer", bundle: .module))
-                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
                         .foregroundStyle(Color.white.opacity(0.7))
                         .padding(.horizontal, 18)
                         .padding(.vertical, MeeshySpacing.sm)
@@ -483,7 +483,7 @@ internal struct _FullscreenRenderer: View {
         // actually needs.
         if loadFailed {
             Image(systemName: "arrow.clockwise")
-                .font(.system(size: 30, weight: .bold))
+                .meeshyScaledFont(30, weight: .bold)
                 .foregroundStyle(Color.white)
         } else {
             switch player.availability {

@@ -26,6 +26,8 @@ struct ComposerFormatBar: View {
                             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(accent.opacity(MeeshyOpacity.light))
                         )
+                        .meeshyTapTarget()
+                        .padding(.vertical, -MeeshyTapTarget.inset(forVisualSide: 36))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(label(style))

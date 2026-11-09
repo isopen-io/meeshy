@@ -17,6 +17,7 @@ enum LoginServerPicker {
 }
 
 struct LoginView: View {
+    @State private var delayed = DelayedActions()
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
@@ -413,7 +414,7 @@ struct LoginView: View {
             username = account.username
             accountPassword = Self.isSimulator ? (Self.debugAutofillPassword ?? "") : ""
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        delayed.run(after: .milliseconds(350)) {
             focusedField = .accountPassword
         }
     }

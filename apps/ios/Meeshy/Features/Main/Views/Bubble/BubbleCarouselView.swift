@@ -226,6 +226,7 @@ struct BubbleCarouselView: View {
             fullscreenAttachment = attachment
             HapticFeedback.light()
         }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { fullscreenAttachment = attachment }
         .overlay(alignment: .bottom) {
             DownloadBadgeView(
                 attachment: attachment,

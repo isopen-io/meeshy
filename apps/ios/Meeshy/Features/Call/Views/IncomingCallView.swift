@@ -498,14 +498,14 @@ struct IncomingCallView: View {
                         Image(systemName: systemImage)
                             // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
                             // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
-                            .font(.system(size: 28, weight: .medium))
+                            .font(MeeshyFont.fixedGlyph(28, weight: .medium))
                             .foregroundStyle(Color.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: tint)
                     } else {
                         Image(systemName: systemImage)
                             // doctrine 82i — même cercle fixe 70×70
-                            .font(.system(size: 26, weight: .medium))
+                            .font(MeeshyFont.fixedGlyph(26, weight: .medium))
                             .foregroundStyle(tint)
                             .frame(width: 70, height: 70)
                             .adaptiveGlass(in: Circle())

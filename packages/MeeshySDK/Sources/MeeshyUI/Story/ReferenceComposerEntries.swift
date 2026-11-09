@@ -129,7 +129,7 @@ public struct ReferenceComposerBar: View {
         } label: {
             Label(String(localized: "reference.sheet.title", defaultValue: "Mentionner", bundle: .module),
                   systemImage: "at")
-                .font(.system(size: 14, weight: .medium))
+                .meeshyScaledFont(14, weight: .medium)
                 .foregroundStyle(accentColor)
         }
         .buttonStyle(.plain)

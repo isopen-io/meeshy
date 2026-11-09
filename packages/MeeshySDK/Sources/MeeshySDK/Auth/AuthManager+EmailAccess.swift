@@ -221,7 +221,7 @@ extension AuthManager {
         }
         // Même image à l'état « sorti » que `switchAccount(to:)` : sans elle,
         // `false` puis `true` dans le même tour échappent aux observateurs.
-        try? await Task.sleep(for: .milliseconds(150))
+        _ = await cancellableSleep(for: .milliseconds(150))
         guard !isAuthenticated else {
             closeRefusedProvenSession(proven)
             return .refused(.failed)

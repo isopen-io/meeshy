@@ -44,7 +44,7 @@ struct StoryTextEditTopBar: View {
         } label: {
             Text(String(localized: "story.textEdit.finish.short",
                         defaultValue: "Terminé", bundle: .module))
-                .font(.system(size: 14, weight: .semibold))
+                .meeshyScaledFont(14, weight: .semibold)
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .padding(.horizontal, MeeshySpacing.lg)

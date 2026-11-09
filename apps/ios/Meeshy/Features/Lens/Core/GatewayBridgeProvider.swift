@@ -40,16 +40,12 @@ final class GatewayBridgeProvider: ConversationBridgeProviding, @unchecked Senda
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private let lock = NSLock()
-    private var bridges: [String: ConversationBridge] = [:]
+    private let bridges = Locked<[String: ConversationBridge]>(uncheckedState: [:])
 
     init() {}
 
     func bridgeFor(conversationId: String, viewerId: String, unreadCount: Int) async -> ConversationBridge? {
-        // `lock()`/`unlock()` sont `noasync` (SE-0340) : dans cette méthode
-        // `async`, seuls `withLock` (closure synchrone, aucune suspension
-        // possible verrou tenu) passe la compile Swift 6 / Xcode 26.
-        lock.withLock { bridges[conversationId] }
+        bridges.mutateUnchecked { $0[conversationId] }
     }
 
     /// Enregistre (`bridge` non nil) ou efface (`nil`) le pont connu pour une
@@ -59,11 +55,11 @@ final class GatewayBridgeProvider: ConversationBridgeProviding, @unchecked Senda
     /// exactement la donnée fabriquée que ce fichier proscrit partout
     /// ailleurs.
     func note(_ bridge: ConversationBridge?, for conversationId: String) {
-        lock.withLock {
+        bridges.mutateUnchecked { entries in
             if let bridge {
-                bridges[conversationId] = bridge
+                entries[conversationId] = bridge
             } else {
-                bridges.removeValue(forKey: conversationId)
+                entries.removeValue(forKey: conversationId)
             }
         }
     }

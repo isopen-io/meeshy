@@ -61,7 +61,7 @@ public struct ProfileConnectedBadge: View {
                 .font(.system(size: MeeshyIconSize.sm))
                 .foregroundColor(MeeshyColors.success)
             Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
                 .foregroundColor(MeeshyColors.success)
         }
         .frame(maxWidth: .infinity)

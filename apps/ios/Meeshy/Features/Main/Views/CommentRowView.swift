@@ -208,6 +208,7 @@ struct CommentRowView: View, Equatable {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel(String(format: String(localized: "a11y.comment.author_profile", defaultValue: "Profil de %@", bundle: .main), comment.author))
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
+                        .accessibilityAction { selectedProfileUser = .from(feedComment: comment) }
                 } translationOffer: {
                     translationRequestButton
                 }
@@ -340,7 +341,6 @@ struct CommentRowView: View, Equatable {
                         }
 
                     Spacer()
-
                     imagerButton
                     moreMenu
                 }

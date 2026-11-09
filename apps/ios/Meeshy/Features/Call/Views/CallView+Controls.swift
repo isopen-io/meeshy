@@ -29,7 +29,7 @@ extension CallView {
             VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "camera.filters")
                     // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
-                    .font(.system(size: 24, weight: .medium))
+                    .font(MeeshyFont.fixedGlyph(24, weight: .medium))
                     .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
                     .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
 
@@ -50,7 +50,7 @@ extension CallView {
             VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "phone.down.fill")
                     // Doctrine 86i : glyphe de fin d'appel dans un cercle glass fixe (diameter 56) → figé.
-                    .font(.system(size: 24, weight: .medium))
+                    .font(MeeshyFont.fixedGlyph(24, weight: .medium))
                     .foregroundStyle(Color.white)
                     .endCallGlass(diameter: 56)
 

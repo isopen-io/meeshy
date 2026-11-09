@@ -142,11 +142,11 @@ public struct TransitionInspector: View {
                 // « DURATION %@ » et affichait le format brut (retour user).
                 Text(String(localized: "story.timeline.inspector.transition.duration",
                             defaultValue: "Durée", bundle: .module).uppercased())
-                    .font(.system(size: 9, weight: .semibold))
+                    .meeshyScaledFont(9, weight: .semibold)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Text(String(format: "%.2f s", duration))
-                    .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                    .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                     .foregroundStyle(MeeshyColors.indigo400)
             }
             Slider(value: $duration, in: Self.durationRange, step: 0.05) { editing in
@@ -178,7 +178,7 @@ public struct TransitionInspector: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "story.timeline.inspector.easing.section",
                         defaultValue: "Courbe", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(9, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach([StoryEasing.linear, .easeIn, .easeOut, .easeInOut], id: \.self) { candidate in

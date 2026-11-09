@@ -616,7 +616,7 @@ public struct ClipInspector: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "story.timeline.inspector.volume", bundle: .module).uppercased())
-                    .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 // Le chiffre est indispensable depuis que la course va jusqu'à

@@ -479,7 +479,7 @@ public struct UserProfileSheet: View {
             if icon.count > 1 {
                 // Emoji flag
                 Text(icon)
-                    .font(.system(size: MeeshyFont.labelSize))
+                    .meeshyScaledFont(MeeshyFont.labelSize)
             } else {
                 // SF Symbol
                 Image(systemName: icon)
@@ -586,7 +586,7 @@ public struct UserProfileSheet: View {
                 Image(systemName: "paperplane.fill")
                     .font(.system(size: compact ? 12 : 14, weight: .semibold))
                 Text(String(localized: "profile.action.sendMessage", defaultValue: "Envoyer un message", bundle: .module))
-                    .font(.system(size: compact ? 13 : 15, weight: .semibold))
+                    .meeshyScaledFont(compact ? 13 : 15, weight: .semibold)
             }
             .foregroundColor(.white)
             .frame(maxWidth: compact ? nil : .infinity)
@@ -631,7 +631,7 @@ public struct UserProfileSheet: View {
     private var blockedByMeCard: some View {
         VStack(spacing: MeeshySpacing.md) {
             Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .module))
-                .font(.system(size: MeeshyFont.labelSize, weight: .medium))
+                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
                 .foregroundColor(theme.textSecondary)
 
             Button {
@@ -639,7 +639,7 @@ public struct UserProfileSheet: View {
                 Task { await unblockUser() }
             } label: {
                 Text(String(localized: "profile.blocked.unblock", defaultValue: "Débloquer", bundle: .module))
-                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .padding(.vertical, MeeshySpacing.smPlus)

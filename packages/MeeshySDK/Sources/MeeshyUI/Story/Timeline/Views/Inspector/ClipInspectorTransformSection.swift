@@ -13,7 +13,7 @@ struct ClipInspectorTransformSection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "story.timeline.inspector.transform",
                         defaultValue: "Position dans le plan", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(9, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 // x/y sont normalisés 0–1 dans le modèle ; on les présente en

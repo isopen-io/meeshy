@@ -81,7 +81,7 @@ final class EngagementRetryScheduler {
             .removeDuplicates()
             .dropFirst()
             .filter { $0 }
-            .sink { _ in Task { @MainActor in await EngagementFlushTrigger.flushNow() } }
+            .relay(through: OrderedEventLane()) { _ in await EngagementFlushTrigger.flushNow() }
     }
     func scheduleSoon() {
         timer?.cancel()

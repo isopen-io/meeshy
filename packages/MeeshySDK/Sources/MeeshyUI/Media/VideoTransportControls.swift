@@ -228,7 +228,7 @@ public struct VideoTransportControls: View {
     /// défilant et la ligne tressaute à chaque seconde.
     private func timeLabel(_ seconds: Double) -> some View {
         Text(MediaFormat.duration(seconds))
-            .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
             .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             .lineLimit(1)
             .fixedSize()

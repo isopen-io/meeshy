@@ -116,7 +116,7 @@ struct GalleryImagePage: View, Equatable {
     /// format malgré une source partielle, ex. thumbHash seul).
     private var emptyStateGlyph: some View {
         Image(systemName: "photo")
-            .font(.system(size: MeeshyIconSize.hero))
+            .meeshyScaledFont(MeeshyIconSize.hero)
             .foregroundColor(.white.opacity(MeeshyOpacity.medium))
             .accessibilityHidden(true)
     }
@@ -173,14 +173,12 @@ struct GalleryImagePage: View, Equatable {
                          trois repères : en mode CADRÉ les trois se voyaient ; en
                          PLEIN CADRE, « HAUT » et « BAS » disparaissaient et seul
                          « MILIEU » subsistait.
-
                          > Une loi qui calcule une valeur que personne ne lit ne
                          > protège de rien — et elle est PIRE qu'absente, parce que
                          > son existence et ses tests donnent l'illusion que la
                          > question est réglée. `MediaGalleryStageGeometryTests`
                          > éprouvait `aspectFit` et passait ; le pixel, lui, était
                          > rogné.
-
                          La taille est désormais posée en dur depuis `stage.media`.
                          Le non-rognage devient une propriété de CONSTRUCTION : le
                          cadre proposé a exactement le ratio de l'image, donc
@@ -228,6 +226,8 @@ struct GalleryImagePage: View, Equatable {
         // cadrage qui change quand on voulait agrandir.
         .onTapGesture(count: 2) { toggleZoom() }
         .onTapGesture { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.main.gallery.zoomToggle", bundle: .main))) { toggleZoom() }
         .adaptiveOnChange(of: isActive) { _, active in
             guard !active else { return }
             resetTransform()
@@ -563,7 +563,6 @@ struct GalleryVideoPage: View, Equatable {
                 if !isPlayerAttached {
                     playOrDownloadButton
                 }
-
                 // **La quatrième porte** (#6163) : double tap à gauche ⇒ −10 s, à
                 // droite ⇒ +10 s. Armée seulement quand une piste est ATTACHÉE à
                 // cette page — sans piste il n'y a rien à parcourir, et la loi 4
@@ -595,6 +594,7 @@ struct GalleryVideoPage: View, Equatable {
         }
         .contentShape(Rectangle())
         .onTapGesture { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onEnterStage(.tap) }
         .offset(y: offset.height)
         // **`isActive` désarme les pages VOISINES**, exactement comme il le fait
         // pour la jumelle image une page plus haut et pour l'appui long de la

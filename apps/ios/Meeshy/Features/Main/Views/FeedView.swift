@@ -19,7 +19,8 @@ struct FeedView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var routerCommands
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @EnvironmentObject private var statusViewModel: StatusViewModel
     // Stories in the iPad feed: the tray reads the shared StoryViewModel (loaded
     // by `iPadRootView`). FeedView is iPad-only, so these objects are always
@@ -441,11 +442,11 @@ struct FeedView: View {
         // des publications d'une autre nature que l'iPhone (#5322). L'origine est
         // la MÊME que celle du fil iPhone (`.feedComposer`) — une origine « iPad »
         // aurait fabriqué une seconde vérité à tenir d'accord avec la première.
-        .feedPostComposer(
-            isPresented: $showComposer, router: router, viewModel: viewModel,
+        .relayingMeeshyRouter(meeshyRouter) { $0.feedPostComposer(
+            isPresented: $showComposer, router: $1, viewModel: viewModel,
             storyViewModel: storyViewModel, statusViewModel: statusViewModel,
             conversationListViewModel: conversationListViewModel
-        )
+        ) }
     }
 
     /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
@@ -478,6 +479,8 @@ struct FeedView: View {
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         // Les réels dans leur propre fenêtre (iPad) : le fil des publications reste dans la fenêtre principale.
@@ -504,13 +507,15 @@ struct FeedView: View {
     private var nearbyButton: some View {
         Button {
             HapticFeedback.light()
-            router.push(.nearbyDiscovery())
+            routerCommands.push(.nearbyDiscovery())
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
@@ -834,7 +839,7 @@ struct FeedView: View {
             .postEditCover(item: $editingPost) { post, draft in
                 await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
             }
-            .fullScreenCover(item: $quoteTargetPost) { quoted in
+            .relayingMeeshyRouter(meeshyRouter) { view, router in view.fullScreenCover(item: $quoteTargetPost) { quoted in
                 QuoteComposerDoor(
                     quoted: quoted,
                     storyViewModel: storyViewModel,
@@ -843,7 +848,7 @@ struct FeedView: View {
                     statusViewModel: statusViewModel,
                     onFinish: { quoteTargetPost = nil }
                 )
-            }
+            } }
     }
 }
 

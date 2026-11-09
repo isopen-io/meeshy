@@ -120,6 +120,24 @@ struct StoryComposerBarView: View {
         }
     }
 
+    private var cancelReplyButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                replyingToStoryComment = nil
+            }
+        } label: {
+            Image(systemName: "xmark")
+                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
+                .font(MeeshyFont.fixedGlyph(9, weight: .bold))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 22))
+        }
+        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
+    }
+
     private var composerBar: some View {
         UniversalComposerBar(
             style: .dark,
@@ -178,19 +196,7 @@ struct StoryComposerBarView: View {
 
                         Spacer()
 
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                replyingToStoryComment = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
-                                .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
-                        }
-                        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
+                        cancelReplyButton
                     }
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.sm)

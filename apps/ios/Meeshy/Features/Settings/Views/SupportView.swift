@@ -143,7 +143,7 @@ struct SupportView: View {
         // Dynamic Type would burst the fixed frame (doctrine 74i/86i/91i). The
         // adjacent row label carries the meaning, so the glyph is decorative to VoiceOver.
         Image(systemName: name)
-            .font(.system(size: MeeshyIconSize.sm, weight: .medium))
+            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .background(

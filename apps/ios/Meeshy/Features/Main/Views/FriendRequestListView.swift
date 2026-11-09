@@ -198,7 +198,7 @@ struct FriendRequestListView: View {
                         .foregroundColor(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
-                        .frame(width: 44, height: 44)
+                        .meeshyTapTarget()
                         .contentShape(Circle())
                 }
                 .accessibilityLabel(String(localized: "friends.requests.decline", defaultValue: "Refuser la demande", bundle: .main))
@@ -220,7 +220,7 @@ struct FriendRequestListView: View {
                                     )
                                 )
                         )
-                        .frame(width: 44, height: 44)
+                        .meeshyTapTarget()
                         .contentShape(Circle())
                 }
                 .accessibilityLabel(String(localized: "friends.requests.accept", defaultValue: "Accepter la demande", bundle: .main))

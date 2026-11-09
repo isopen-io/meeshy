@@ -323,7 +323,7 @@ extension UserProfileSheet {
                     Image(systemName: tab.icon)
                         .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     Text(tab.title)
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .foregroundColor(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
                 .padding(.vertical, MeeshySpacing.smPlus)
@@ -360,11 +360,11 @@ extension UserProfileSheet {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(displayUser.resolvedDisplayName)
-                    .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text("@\(displayUser.username)")
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(Color(hex: resolvedAccent))
                     .lineLimit(1)
             }

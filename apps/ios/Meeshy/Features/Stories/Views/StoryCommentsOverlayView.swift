@@ -294,7 +294,7 @@ struct StoryCommentsOverlayView: View {
                 // Doctrine 84i/86i : glyphe héros décoratif de l'état vide → taille
                 // figée + masqué de VoiceOver (les deux libellés ci-dessous portent
                 // le sens). Le texte, lui, scale avec le Dynamic Type.
-                .font(.system(size: MeeshyIconSize.xxxl))
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xxxl))
                 .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
