@@ -41,8 +41,8 @@ export const E2EE_PADDING_TIERS = [256, 1024, 4096, 16384] as const;
 export const E2EE_PADDING_STEP = 16384;
 /**
  * Ce que libsignal ajoute au clair, majoré : un premier message (PreKey, PQXDH
- * avec Kyber1024) ajoute 1 761 à 1 763 octets (mesuré, libsignal 0.105), un
- * message ordinaire 107.
+ * avec Kyber1024) ajoute 1 753 à 1 761 octets, un message ordinaire 98 à 106
+ * (mesuré, libsignal 0.106.2, clairs de 0 à 4 096 octets).
  */
 export const E2EE_PADDING_CIPHER_OVERHEAD = 2048;
 

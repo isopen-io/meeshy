@@ -72,6 +72,11 @@ on:
       - 'packages/shared/fixtures/keyframe-scale.vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
+      # Les vecteurs croisés libsignal (#17113) : LibsignalCrossPlatformVectorTests les rejoue,
+      # comme la passerelle et :core:e2ee — une régénération, ou une montée de la version
+      # épinglée, doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/libsignal/**'
+      - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
       - 'scripts/ci/**'
   pull_request:
@@ -119,6 +124,8 @@ on:
       # rejoue ces vecteurs, partagés avec le web et Android.
       - 'packages/shared/fixtures/keyframe-scale.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
+      - 'packages/shared/fixtures/libsignal/**'
+      - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
       - 'scripts/ci/**'
   # Un workflow se déclenche quand son OUTILLAGE change (2026-10-23) : ce fichier et
