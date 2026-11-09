@@ -68,4 +68,15 @@ final class TalkiePushToTalkChannelTests: XCTestCase {
         let unregistered = await registrar.unregistered
         XCTAssertTrue(unregistered.isEmpty)
     }
+
+    /// Recette du 2026-11-09 : sans environnement déclaré, la passerelle rangeait le jeton d'une build de
+    /// développement en `production`, Apple répondait `BadEnvironmentKeyInToken` et le réveil n'arrivait jamais.
+    func test_registrationBody_declaresTheBuildApnsEnvironmentAndBundle() throws {
+        let body = TalkiePushToTalkRegistration(token: "abcdef0123456789")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(body)) as? [String: Any])
+
+        XCTAssertEqual(json["token"] as? String, "abcdef0123456789")
+        XCTAssertEqual(json["apnsEnvironment"] as? String, PushNotificationManager.apnsEnvironment)
+        XCTAssertEqual(json["bundleId"] as? String, Bundle.main.bundleIdentifier)
+    }
 }

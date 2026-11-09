@@ -58,14 +58,31 @@ nonisolated protocol TalkiePushToTalkTokenRegistering: Sendable {
     func unregister(token: String) async throws
 }
 
-/// `POST/DELETE /api/v1/users/me/push-to-talk-token { token }` (#17142), par le catalogue généré.
+/// Le corps d'enregistrement : le jeton ET l'environnement APNs de la build qui l'a produit. Sans lui, la passerelle
+/// range le jeton en `production` et Apple refuse le réveil d'une build de développement (`BadEnvironmentKeyInToken`).
+nonisolated struct TalkiePushToTalkRegistration: Encodable, Sendable {
+    let token: String
+    let apnsEnvironment: String
+    let bundleId: String?
+
+    init(token: String, apnsEnvironment: String = PushNotificationManager.apnsEnvironment, bundleId: String? = Bundle.main.bundleIdentifier) {
+        self.token = token
+        self.apnsEnvironment = apnsEnvironment
+        self.bundleId = bundleId
+    }
+}
+
+/// `POST/DELETE /api/v1/users/me/push-to-talk-token` (#17142), par le catalogue généré.
 nonisolated struct APITalkiePushToTalkTokenRegistrar: TalkiePushToTalkTokenRegistering {
     private struct Body: Encodable, Sendable {
         let token: String
     }
 
     func register(token: String) async throws {
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(UsersEndpoint.mePushToTalkToken, body: Body(token: token))
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
+            UsersEndpoint.mePushToTalkToken,
+            body: TalkiePushToTalkRegistration(token: token)
+        )
     }
 
     func unregister(token: String) async throws {
