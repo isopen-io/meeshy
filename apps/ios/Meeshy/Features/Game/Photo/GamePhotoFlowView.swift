@@ -148,7 +148,7 @@ struct GamePhotoFlowView: View {
 
     // MARK: - 2. La caméra
 
-    /// LE CADRE EST LE DÉCLENCHEUR (#10284, directive porteur 2026-10-12) — aucun cercle d'enregistrement à
+    /// LE CADRE EST LE DÉCLENCHEUR (#10284) — aucun cercle d'enregistrement à
     /// côté du cadre. La disposition est celle de la caméra du composer (`ComposerLookStrip`, bande repliée) :
     /// la case du cadre choisi photographie d'un toucher, part dans Photos puis ouvre le résultat ; la scène,
     /// touchée deux fois, prend hors cadre et la photo reste dans l'app. La table des gestes du composer

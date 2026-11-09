@@ -84,7 +84,7 @@ struct GameSeasonScreen: View {
 
 // MARK: - La saison à venir (#10014)
 
-/// Avant l'ouverture de la saison 1 (lundi 2026-12-21), le serveur sert `seasonUpcoming` : l'écran dit
+/// Avant l'ouverture de la saison 1, le serveur sert `seasonUpcoming`: l'écran dit
 /// laquelle vient, quand, et sur quel thème — jamais un vide. Une donnée de calendrier, la même pour tous.
 ///
 /// Son état se calcule à l'horloge locale (#10131) : le jour de l'ouverture, la carte gardée hors ligne devient celle

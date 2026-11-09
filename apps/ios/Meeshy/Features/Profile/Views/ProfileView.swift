@@ -502,7 +502,7 @@ struct ProfileView: View {
     /// L'entrée du tableau de bord des streaks & badges (#5698) — sous les
     /// statistiques, là où l'utilisateur cherche « où j'en suis ». La vue vit
     /// dans son propre fichier : `ProfileView` est déjà au-delà du seuil de
-    /// découpage (1 000 lignes, directive 2026-09-02) — on n'y ajoute que la
+    /// découpage (1 000 lignes) — on n'y ajoute que la
     /// ligne qui la monte.
     /// #10093 — plus de carte de jeu sur le profil : le niveau et le rang vivent sur la bannière.
     private var progressionEntry: some View {

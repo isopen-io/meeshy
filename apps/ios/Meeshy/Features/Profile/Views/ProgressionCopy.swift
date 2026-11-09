@@ -370,7 +370,7 @@ enum ProgressionCopy {
     /// monnaie dont il parlait.
     static let meeshEntryTitle = String(localized: "progression.meesh.title", defaultValue: "Meesh", bundle: .main)
 
-    /// L'en-tête du hero de la FLAMME (directive porteur 2026-09-09). Il en
+    /// L'en-tête du hero de la FLAMME. Il en
     /// manquait un : le hero s'ouvrait sur « 9 jours d'affilée », un chiffre
     /// sans nom. Ses deux voisins — DERNIER SUCCÈS, VOS ÉLANS — se présentent ;
     /// celui-ci laissait le lecteur deviner de quoi on lui parle.
