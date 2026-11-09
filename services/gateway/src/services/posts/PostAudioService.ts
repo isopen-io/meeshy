@@ -9,6 +9,7 @@
  */
 
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
+import { voiceCloningAllowedFor } from '../voice-cloning-gate';
 import type { Post } from '@meeshy/shared/types/post';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -138,6 +139,9 @@ export class PostAudioService {
       targetLanguageCount: targetLanguages.length,
     });
 
+    // #17309 — la voix d'un post est celle de son auteur : elle ne se clone qu'à 18 ans révolus.
+    const generateVoiceClone = enableTranslation && await voiceCloningAllowedFor(this.prisma, [params.authorId]);
+
     try {
       await zmqClient.sendAudioProcessRequest({
         messageId: params.postMediaId,
@@ -147,7 +151,7 @@ export class PostAudioService {
         audioPath,
         audioDurationMs: 0,
         targetLanguages,
-        generateVoiceClone: enableTranslation,
+        generateVoiceClone,
         modelType: 'medium',
         postId: params.postId,
         postMediaId: params.postMediaId,

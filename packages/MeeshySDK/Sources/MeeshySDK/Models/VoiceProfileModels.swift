@@ -223,6 +223,26 @@ public enum VoiceProfileWizardStep: Int, CaseIterable {
     case complete
 }
 
+// MARK: - Voice Cloning Age Rule (#17309)
+
+/// Le clonage vocal n'est ouvert qu'à 18 ans révolus : la date de naissance doit être au plus tard
+/// à aujourd'hui moins 18 années civiles, au jour près, dans le calendrier du sélecteur. Foundation
+/// ramène un 29 février au 28 quand l'année visée n'en a pas. Même loi que la passerelle
+/// (`voiceCloningBirthDateLimit`, `packages/shared/utils/age.ts`), qui reste la garde finale.
+public enum VoiceCloningAgeRule {
+    public static let minimumAge = 18
+
+    public static func voiceCloningBirthDateLimit(today: Date, calendar: Calendar) -> Date {
+        let startOfToday = calendar.startOfDay(for: today)
+        return calendar.date(byAdding: .year, value: -minimumAge, to: startOfToday) ?? .distantPast
+    }
+
+    public static func isAdmitted(birthDate: Date?, today: Date, calendar: Calendar) -> Bool {
+        guard let birthDate else { return false }
+        return calendar.startOfDay(for: birthDate) <= voiceCloningBirthDateLimit(today: today, calendar: calendar)
+    }
+}
+
 // MARK: - GDPR Delete
 
 public struct VoiceProfileDeleteResponse: Decodable {

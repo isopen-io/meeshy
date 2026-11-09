@@ -9,6 +9,7 @@
  */
 
 import { readStoredFileBytes } from './attachments/atRest/atRestFiles';
+import { gatedVoiceClone, userIdOfParticipant } from './voice-cloning-gate';
 import { PrismaClient, type Prisma } from '@meeshy/shared/prisma/client';
 import path from 'path';
 import { AudioTranslateService } from './AudioTranslateService';
@@ -404,6 +405,14 @@ export class AttachmentTranslateService {
 
     logger.debug('Envoi au Translator', { languageCount: languagesToTranslate.length });
 
+    // #17309 — la voix de l'audio est celle de l'émetteur ORIGINAL (un `Participant`) ;
+    // sans voix originale, celle du demandeur. Aucune n'est clonée sans 18 ans révolus.
+    const originalSenderUserId = await userIdOfParticipant(this.prisma, originalSenderId);
+    const generateVoiceClone = await gatedVoiceClone(this.prisma, {
+      requested: options.generateVoiceClone,
+      voiceOwnerUserIds: useOriginalVoice ? [originalSenderUserId] : [originalSenderUserId, userId],
+    });
+
     // Read audio file
     const audioBuffer = await this.readAttachmentFile(attachment.filePath);
     const audioBase64 = audioBuffer.toString('base64');
@@ -418,7 +427,7 @@ export class AttachmentTranslateService {
           audioBase64,
           targetLanguages: languagesToTranslate,
           sourceLanguage: options.sourceLanguage,
-          generateVoiceClone: options.generateVoiceClone,
+          generateVoiceClone,
           webhookUrl: options.webhookUrl,
           priority: options.priority,
           originalSenderId: originalSenderId || undefined,
@@ -460,7 +469,7 @@ export class AttachmentTranslateService {
         audioBase64,
         targetLanguages: languagesToTranslate,
         sourceLanguage: options.sourceLanguage,
-        generateVoiceClone: options.generateVoiceClone,
+        generateVoiceClone,
         originalSenderId: originalSenderId || undefined,
         existingVoiceProfile: voiceProfile || undefined,
         useOriginalVoice,

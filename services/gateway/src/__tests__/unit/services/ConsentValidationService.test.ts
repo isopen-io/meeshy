@@ -15,6 +15,27 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 // ─── Factories ───────────────────────────────────────────────────────────────
 
 const NOW = new Date();
+const ADULT_BIRTH_DATE = new Date('1990-01-01T00:00:00.000Z');
+
+// Horloge GELÉE un 29 février (#17309) : 18 n'étant pas multiple de 4, la date
+// limite tombe le 28 février 2010 — le cas que l'horloge réelle n'atteint qu'une
+// fois tous les quatre ans. Seule la date est gelée ; les minuteries restent vraies.
+const FROZEN_NOW = new Date('2028-02-29T12:00:00.000Z');
+const EIGHTEENTH_BIRTHDAY = new Date('2010-02-28T00:00:00.000Z');
+const DAY_BEFORE_EIGHTEEN = new Date('2010-03-01T00:00:00.000Z');
+const FIFTEEN_YEARS_OLD = new Date('2013-02-28T00:00:00.000Z');
+const freezeClock = () =>
+  jest.useFakeTimers({
+    now: FROZEN_NOW,
+    doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+  });
+
+const FULL_CLONING_CHAIN = {
+  dataProcessingConsentAt: NOW,
+  voiceDataConsentAt: NOW,
+  voiceProfileConsentAt: NOW,
+  voiceCloningEnabledAt: NOW,
+};
 
 function makeUser(overrides: Record<string, any> = {}) {
   return {
@@ -23,6 +44,7 @@ function makeUser(overrides: Record<string, any> = {}) {
     voiceDataConsentAt: null,
     voiceProfileConsentAt: null,
     voiceCloningEnabledAt: null,
+    birthDate: null,
     ...overrides,
   };
 }
@@ -175,12 +197,56 @@ describe('ConsentValidationService', () => {
           voiceDataConsentAt: NOW,
           voiceProfileConsentAt: NOW,
           voiceCloningEnabledAt: NOW,
+          birthDate: ADULT_BIRTH_DATE,
         },
         { application: { voiceCloningConsentAt: NOW } }
       );
       const status = await makeSut(prisma).getConsentStatus('u1');
 
       expect(status.canUseVoiceCloning).toBe(true);
+    });
+
+    describe('#17309 — le clonage vocal exige 18 ans révolus, au jour près', () => {
+      beforeEach(freezeClock);
+      afterEach(() => jest.useRealTimers());
+
+      it('lit birthDate dans la même requête que les consentements', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: ADULT_BIRTH_DATE });
+        await makeSut(prisma).getConsentStatus('u1');
+
+        const call = (prisma.user.findUnique as jest.Mock<any>).mock.calls[0][0] as { select: Record<string, true> };
+        expect(call.select.birthDate).toBe(true);
+      });
+
+      it('ouvre le clonage le jour exact des 18 ans', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: EIGHTEENTH_BIRTHDAY });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canUseVoiceCloning).toBe(true);
+      });
+
+      it('ferme le clonage la veille des 18 ans, consentement accordé ou non', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: DAY_BEFORE_EIGHTEEN });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canUseVoiceCloning).toBe(false);
+      });
+
+      it('ferme le clonage sans date de naissance (fail-closed)', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: null });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canUseVoiceCloning).toBe(false);
+      });
+
+      it('ne touche à aucune autre capacité audio d’un mineur', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: FIFTEEN_YEARS_OLD });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canTranscribeAudio).toBe(true);
+        expect(status.canTranslateAudio).toBe(true);
+        expect(status.hasVoiceProfileConsent).toBe(true);
+      });
     });
 
     it('canUseVoiceCloning is false when voiceProfileConsent is missing', async () => {
@@ -300,6 +366,7 @@ describe('ConsentValidationService', () => {
           voiceDataConsentAt: NOW,
           voiceProfileConsentAt: NOW,
           voiceCloningEnabledAt: NOW,
+          birthDate: ADULT_BIRTH_DATE,
         })
       );
 

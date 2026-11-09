@@ -7,6 +7,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
+import { gatedVoiceClone } from '../../services/voice-cloning-gate';
 import { logger } from '../../utils/logger';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
@@ -225,7 +226,7 @@ export function registerTranslationRoutes(
           audioBase64,
           targetLanguages,
           sourceLanguage,
-          generateVoiceClone: generateVoiceClone ?? true
+          generateVoiceClone: await gatedVoiceClone(prisma, { requested: generateVoiceClone, voiceOwnerUserIds: [userId] })
         });
 
         return sendSuccess(reply, {
@@ -429,7 +430,7 @@ export function registerTranslationRoutes(
           audioBase64,
           targetLanguages,
           sourceLanguage,
-          generateVoiceClone: generateVoiceClone ?? true,
+          generateVoiceClone: await gatedVoiceClone(prisma, { requested: generateVoiceClone, voiceOwnerUserIds: [userId] }),
           webhookUrl,
           priority,
           callbackMetadata
