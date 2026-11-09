@@ -109,14 +109,14 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             HStack {
                 Image(systemName: "text.quote")
                     .meeshyScaledFont(MeeshyIconSize.xs, weight: .medium)
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.recording.readAloud", defaultValue: "Lisez ce texte à voix haute", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundStyle(Color.secondary)
                 Spacer()
                 Text("\(recordedSamples.count + 1)/\(minimumSamples)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
 
             if let prompt = currentPrompt {
@@ -181,7 +181,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
         } label: {
             Text("\(info?.flag ?? "") \(info?.nativeName ?? code.uppercased())")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? Color(hex: accentColor) : .secondary)
+                .foregroundStyle(isSelected ? Color(hex: accentColor) : Color.secondary)
                 .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, 5)
                 .background(

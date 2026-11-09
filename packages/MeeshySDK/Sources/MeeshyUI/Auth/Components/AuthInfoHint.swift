@@ -96,7 +96,7 @@ public struct AuthInfoHintText: View {
         if isExpanded {
             Text(hint.text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                .foregroundColor(color)
+                .foregroundStyle(color)
                 .multilineTextAlignment(alignment)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)

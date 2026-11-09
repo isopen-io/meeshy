@@ -314,7 +314,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                         } else {
                             Text(title)
                                 .font(.system(size: titleSize, weight: titleWeight, design: .rounded))
-                                .foregroundColor(titleColor)
+                                .foregroundStyle(titleColor)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                                 // Un EN-TÊTE pour le rotor de VoiceOver (#6481) : les pages
@@ -487,7 +487,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         } label: {
             Image(systemName: leadingGlyph.systemImage)
                 .font(.system(size: backArrowSize, weight: .semibold))
-                .foregroundColor(backArrowColor)
+                .foregroundStyle(backArrowColor)
                 .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
