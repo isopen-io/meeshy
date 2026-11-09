@@ -50,14 +50,15 @@ function Backdrop({ banner, accent }: { readonly banner: MoodPageBanner; readonl
       <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
     ) : (
       <span
+        data-mood-backdrop-fill
         className="block size-full"
-        style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${accent} 70%, black), color-mix(in srgb, ${accent} 25%, black))` }}
+        style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${accent} 70%, var(--color-media-backdrop)), color-mix(in srgb, ${accent} 25%, var(--color-media-backdrop)))` }}
       />
     );
   return (
     <div data-mood-backdrop aria-hidden="true" className="absolute inset-0">
       {painted}
-      <span className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.15) 40%, rgb(0 0 0 / 0.55))' }} />
+      <span className="absolute inset-0" style={{ background: 'linear-gradient(180deg, var(--color-scrim-soft), color-mix(in srgb, var(--color-media-backdrop) 15%, transparent) 40%, var(--color-scrim))' }} />
     </div>
   );
 }
@@ -65,7 +66,7 @@ function Backdrop({ banner, accent }: { readonly banner: MoodPageBanner; readonl
 function ReplyStatus({ state, language }: { readonly state: MoodReplyState; readonly language: InterfaceLanguage }) {
   if (state.status === 'sent') {
     return (
-      <p data-mood-reply-status="sent" className="text-center text-caption text-white">
+      <p data-mood-reply-status="sent" className="text-center text-caption text-on-media">
         {moodComposeText(language, 'mood.page.reply.sent')} ·{' '}
         <a href={href('thread', { conversation: state.conversationId })} className="font-semibold underline">
           {moodComposeText(language, 'mood.page.reply.open')}
@@ -75,7 +76,7 @@ function ReplyStatus({ state, language }: { readonly state: MoodReplyState; read
   }
   if (state.status === 'failed' || state.status === 'offline') {
     return (
-      <p data-mood-reply-status={state.status} className="text-center text-caption text-white">
+      <p data-mood-reply-status={state.status} className="text-center text-caption text-on-media">
         {moodComposeText(language, state.status === 'failed' ? 'mood.page.reply.failed' : 'mood.page.reply.offline')}
       </p>
     );
@@ -132,7 +133,7 @@ function ReplyField({
           data-mood-reply-send
           disabled={text.trim() === '' || state.status === 'sending'}
           aria-label={moodComposeText(language, 'mood.page.reply.send')}
-          className="grid size-11 shrink-0 place-items-center rounded-full text-white transition-opacity disabled:opacity-40"
+          className="grid size-11 shrink-0 place-items-center rounded-full text-ios-on-brand transition-opacity disabled:opacity-40"
           style={{ backgroundColor: 'var(--color-ios-brand)' }}
         >
           <GlyphSvg glyph={DISCOVER_GLYPHS.paperPlaneTilt} size={20} />
@@ -167,7 +168,7 @@ export function MoodPageBody({
     <main
       data-mood-page={view.postId}
       aria-label={`${moodComposeText(language, 'mood.page.label')} — ${view.authorName}`}
-      className="h-app fixed inset-x-0 top-0 isolate flex flex-col overflow-hidden text-white"
+      className="h-app fixed inset-x-0 top-0 isolate flex flex-col overflow-hidden text-on-media"
     >
       <Backdrop banner={banner} accent={accent} />
       <MoodRain emoji={view.emoji} {...(rainScheduler === undefined ? {} : { scheduler: rainScheduler })} />
@@ -179,19 +180,19 @@ export function MoodPageBody({
           onClick={onClose}
           aria-label={moodComposeText(language, 'mood.page.close')}
           className="glass mt-3 grid size-11 place-items-center rounded-full text-xl leading-none focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ color: 'var(--color-ios-ink)', outlineColor: 'white' }}
+          style={{ color: 'var(--color-ios-ink)', outlineColor: 'var(--color-on-media)' }}
         >
           <span aria-hidden="true">✕</span>
         </button>
       </header>
 
       <section className="relative grid flex-1 content-center justify-items-center gap-5 px-6 text-center">
-        <span className="block rounded-full p-1" style={{ background: 'rgb(255 255 255 / 0.85)', boxShadow: '0 12px 40px rgb(0 0 0 / 0.35)' }}>
+        <span className="block rounded-full p-1" style={{ background: 'var(--color-on-media-2)', boxShadow: '0 12px 40px var(--color-scrim-soft)' }}>
           <AvatarRing ring={banner.ring} size={AVATAR_SIZE}>
             <PeerAvatar presenceKey={mine ? undefined : view.authorId} initials={initialsOf(view.authorName)} color={accent} size={AVATAR_SIZE} name={view.authorName} {...(view.avatar === null ? {} : { src: view.avatar })} />
           </AvatarRing>
         </span>
-        <p className="text-thread font-semibold" style={{ textShadow: '0 1px 8px rgb(0 0 0 / 0.45)' }}>
+        <p className="text-thread font-semibold" style={{ textShadow: '0 1px 8px var(--color-scrim)' }}>
           {view.authorName}
         </p>
         <figure data-mood-card className="glass grid max-w-md justify-items-center gap-2 rounded-hero px-6 py-5" style={{ color: 'var(--color-ios-ink)' }}>

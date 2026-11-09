@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-9e6ean` |
+| Branche de travail de la session courante | `claude/practical-fermat-jsk76s` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -45,7 +45,25 @@ normal.
 | **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | [#14198](https://github.com/isopen-io/meeshy/pull/14198) → `dev` | ✅ mergé |
 | **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ✅ mergé |
 | **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ✅ mergé |
-| **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ⏳ ouverte |
+| **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ✅ mergé |
+| **82w** | 2026-11-09 | `claude/practical-fermat-jsk76s` | → `dev` | ⏳ ouverte |
+
+**82w** — cohérence de thème / maintenabilité : l'écran d'une humeur reçue
+(`components/mood-page.tsx`) peignait son chrome immersif en littéraux bruts —
+`text-white` ×4, `rgb(0 0 0 / …)` ×6, `rgb(255 255 255 / .85)`, `black` ×2, `'white'`
+— soit **13 des 27 violations du gate d'harmonie (48 %)**, la plus grosse poche de
+chrome du produit web. Chacune a pourtant un rôle que la charte nomme : encre sur
+média (`text-on-media`), encre sur aplat de marque (`text-ios-on-brand`), voiles
+(`var(--color-scrim-soft)` / `var(--color-scrim)`), halo blanc (`var(--color-on-media-2)`),
+assombrissement vers le fond média (`var(--color-media-backdrop)`). Les 13 littéraux
+remplacés par leur jeton (aucune couleur de tiers ici — que du chrome, donc aucune
+exemption). Témoins : `check-design-harmony.test.ts` describe « l'écran d'humeur »
+(`scanSource` → `[]`, RED→GREEN, 21→23) + `mood-page.test.tsx` (branche de repli par
+marqueur `data-mood-backdrop-fill`, happy-dom ne parsant pas `color-mix(…, var(…))`).
+Gate **27 → 14 violations** (−13, exactement `mood-page.tsx`), **9 → 8 fichiers** ;
+`tsc` 0. Housekeeping : 81w confirmée mergée (`screen-wait-art` dans `EXEMPT_PATHS`
+sur `dev`) ; appariement analyses↔plans 1:1 revérifié (45w→81w). Analyse :
+`docs/analyses/uiux/2026-11-09-iteration-82w.md`.
 
 **81w** — maintenabilité / cohérence (périmètre du gate d'harmonie) : l'art GÉNÉRÉ
 `components/screen-wait-art.ts` (SVG baké du sticker Mee/Meo « On danse », byte-identique
@@ -124,8 +142,9 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **82w**
-Revue fraîche `apps/web` — voir les pistes 82w+ en pied de
-`docs/analyses/uiux/2026-11-08-iteration-81w.md` (gate d'harmonie enfin lisible à
-22/8 : `mood-page.tsx` (13), `message-menu`/`message-edit-composer`,
-`comment-compose-bar`, letterbox admin ; + axe épuration).
+## Prochaine itération : **83w**
+Revue fraîche `apps/web` — voir les pistes 83w+ en pied de
+`docs/analyses/uiux/2026-11-09-iteration-82w.md` (gate d'harmonie à 14/8 :
+`lens-preview-line.tsx` (5, fini « rainbow » = couleur de tiers → exemption),
+`message-menu`/`message-edit-composer`, `comment-compose-bar`, letterbox admin ;
++ axe épuration, toujours non entamé).

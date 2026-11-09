@@ -9,7 +9,7 @@ import {
   type PreviewPrismBasis,
 } from '../notifications/notification-preview';
 import { contactCardNameFromFileName, isContactCardAttachment } from '@meeshy/shared/utils/vcard';
-import { messageProtection } from '@meeshy/shared/utils/message-protection';
+import { deviceEnvelopeForPush } from '../messages/push-envelope-protection';
 import {
   transcriptTranslationTexts,
   transcriptTranslationTracks,
@@ -358,87 +358,6 @@ async function listeningRegularRecipients(
  * envoi réussi en 500. `onError` laisse l'appelant journaliser dans le contexte
  * de sa requête.
  */
-/**
- * #13114 — le seul chiffré qui voyage sur le fil push est l'enveloppe qu'un
- * APPAREIL a scellée (`e2ee`), que la NSE ouvre avec ses propres clés. En
- * `server` et `hybrid`, `encryptedContent` est le chiffré AU REPOS, sous la clé
- * de conversation que seule la passerelle détient : il ne quitte pas le
- * serveur. Le mode de la LIGNE décide, celui de la conversation ne supplée
- * qu'une ligne héritée qui n'en porte aucun.
- *
- * #17191 — et le MODE ne suffisait pas. Cette enveloppe est du CONTENU : la NSE
- * la déchiffre et REMPLACE le corps de la bannière (`applyBodyRewrites`), en
- * posant `didDecrypt` qui saute la branche `notificationLocKey` douze lignes
- * plus bas. Un message à VUE UNIQUE / ÉPHÉMÈRE / FLOUTÉ en conversation
- * chiffrée affichait donc son texte ENTIER sur l'écran verrouillé, sous une
- * bannière que la passerelle venait de composer en « 👁️ 💬 ».
- *
- * **Pourquoi le SECOND VERROU du cycle 125 ne pouvait pas garder ce champ.** En
- * E2EE, `protectedPreview` rend toujours un verdict (`isEncrypted` est vrai
- * pour toute ligne de la conversation), donc `notificationLocKey` est TOUJOURS
- * posé — et l'enveloppe est précisément ce qui doit traverser ce verrou pour
- * que « 🔒 💬 » devienne le vrai texte chez le lecteur. Les quatre sites qui
- * s'en servent (`pushMediaFields`, `contentDetailPushFields`,
- * `prePersistedMessageFields`, `previewPrismSource`) retiennent leur charge
- * sans dommage ; ici le même verrou tuerait la feature.
- *
- * Le discriminant n'est donc pas « y a-t-il un verrou ? » mais **« la
- * protection posée est-elle PLUS FORTE que le chiffrement ? »** — la préséance
- * que `protectedPreview` écrit déjà : éphémère > vue unique > flouté > chiffré.
- * L'enveloppe ne voyage que quand `encrypted` est la SEULE protection.
- *
- * `isEncrypted` n'est délibérément PAS passé à `messageProtection` : la question
- * posée ici n'est pas « ce message est-il protégé ? » (il l'est toujours, c'est
- * l'hypothèse) mais « l'est-il AUTREMENT que par son chiffrement ? ». La loi
- * partagée est appelée plutôt que ses drapeaux relus, pour qu'un canal de
- * protection ajouté à `effectFlags` arrive ici sans qu'on y pense.
- *
- * **Les cinq champs de protection sont REQUIS, et c'est la garde elle-même.**
- * Ils l'étaient d'abord par un `Pick<FanOutMessage, …>` — or `FanOutMessage` les
- * déclare tous optionnels, et un `Pick` de champs optionnels reste optionnel :
- * `deviceEnvelopeForPush({ encryptedContent, encryptionMode }, 'e2ee')`
- * COMPILAIT et rendait l'enveloppe d'un message à vue unique. C'est mot pour mot
- * l'interdit du cycle 123 bis — « une garde de confidentialité se relit CHEZ
- * ELLE, pas dans ses paramètres : un paramètre dont l'absence désactive une
- * garde est un demi-correctif ».
- *
- * Aucun appelant du dépôt ne la désarmait (les deux producteurs de fan-out
- * remettent la ligne Prisma entière, qui porte les cinq colonnes) : c'était un
- * PIÈGE ARMÉ, pas une panne — et le dépôt ne laisse pas un piège armé au motif
- * que personne n'a encore marché dessus (cycle 84). Un type pur ne peut pas
- * relire la base ; ce qu'il peut, c'est refuser de compiler quand l'appelant ne
- * s'est pas prononcé. `null` reste permis, mais il s'ÉCRIT.
- *
- * Le second verrou — ré-affirmer la protection depuis la relecture VIVANTE que
- * les trois créateurs font déjà (`loadMessagePrismSource`, qui sélectionne
- * `effectFlags`, `expiresAt` et `ephemeralDuration`) — est #17195.
- */
-export function deviceEnvelopeForPush(
-  message: {
-    readonly encryptedContent?: string | null;
-    readonly encryptionMode?: string | null;
-    readonly isViewOnce: boolean | null;
-    readonly isBlurred: boolean | null;
-    readonly effectFlags: number | null;
-    readonly expiresAt: Date | null;
-    readonly ephemeralDuration: number | null;
-  },
-  conversationMode: string | null | undefined,
-): string | undefined {
-  if (!message.encryptedContent) return undefined;
-  if (!isEndToEndMode(message.encryptionMode ?? conversationMode)) return undefined;
-
-  const stronger = messageProtection({
-    isViewOnce: message.isViewOnce,
-    isBlurred: message.isBlurred,
-    effectFlags: message.effectFlags,
-    expiresAt: message.expiresAt ?? null,
-    ephemeralDuration: message.ephemeralDuration ?? null,
-  });
-  if (stronger.ephemeral || stronger.viewOnce || stronger.blurred) return undefined;
-
-  return message.encryptedContent;
-}
 
 export async function notifyMessageRecipients(params: {
   prisma: FanOutPrisma;
