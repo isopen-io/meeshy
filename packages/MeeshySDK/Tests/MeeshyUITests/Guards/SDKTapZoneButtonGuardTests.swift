@@ -44,7 +44,23 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         "community.settings.color.swatch.a11y",
         "media.image.open.a11y",
         "userIdentity.language.show.a11y",
-        "story.timeline.transition.select.a11y"
+        "story.timeline.transition.select.a11y",
+        "story.text.align.left.a11y",
+        "story.text.align.center.a11y",
+        "story.text.align.right.a11y",
+        "story.text.background.toggle.a11y",
+        "story.timeline.step.decrease.a11y",
+        "story.timeline.step.increase.a11y",
+        "community.react.a11y",
+        "reaction.picker.more.a11y",
+        "audio.transcript.show.a11y",
+        "audio.transcript.hide.a11y",
+        "media.code.copy.a11y",
+        "audio.editor.skip.backward.a11y",
+        "audio.editor.skip.forward.a11y",
+        "media.controls.toggle.a11y",
+        "media.image.zoom.toggle.a11y",
+        "avatar.presence.details.a11y"
     ]
 
     private static let catalogLanguages = ["fr", "en", "es", "de", "it", "ar", "pt-BR"]
