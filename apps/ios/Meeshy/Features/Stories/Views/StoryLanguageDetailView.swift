@@ -314,34 +314,12 @@ struct StoryLanguageDetailView: View {
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                         .frame(maxWidth: 150, alignment: .trailing)
-                    // Retraduire
-                    Button {
-                        HapticFeedback.light()
-                        retranslateBaseline[lang.code] = translated
-                        onTranslate(lang.code, true)
-                        let code = lang.code
-                        Task {
-                            _ = await cancellableSleep(for: Self.retranslateTimeout)
-                            retranslateBaseline[code] = nil
-                        }
-                    } label: {
-                        Group {
-                            if isRetranslating {
-                                ProgressView().scaleEffect(0.6)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.caption2.weight(.medium))
-                            }
-                        }
-                        .foregroundColor(langColor.opacity(MeeshyOpacity.heavy))
-                        .tint(langColor)
-                        .frame(width: 26, height: 26)
-                        .contentShape(Circle())
-                    }
-                    .disabled(isRetranslating)
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(localized: "story.language.detail.retranslate",
-                                                    defaultValue: "Retraduire", bundle: .main)))
+                    retranslateButton(
+                        lang: lang,
+                        translated: translated,
+                        langColor: langColor,
+                        isRetranslating: isRetranslating
+                    )
                     Image(systemName: isActive ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isActive ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
@@ -364,6 +342,41 @@ struct StoryLanguageDetailView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(lang.name))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    private func retranslateButton(
+        lang: LanguageDisplay,
+        translated: String,
+        langColor: Color,
+        isRetranslating: Bool
+    ) -> some View {
+        Button {
+            HapticFeedback.light()
+            retranslateBaseline[lang.code] = translated
+            onTranslate(lang.code, true)
+            let code = lang.code
+            Task {
+                _ = await cancellableSleep(for: Self.retranslateTimeout)
+                retranslateBaseline[code] = nil
+            }
+        } label: {
+            Group {
+                if isRetranslating {
+                    ProgressView().scaleEffect(0.6)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2.weight(.medium))
+                }
+            }
+            .foregroundColor(langColor.opacity(MeeshyOpacity.heavy))
+            .tint(langColor)
+            .frame(width: 26, height: 26)
+            .contentShape(Circle())
+        }
+        .disabled(isRetranslating)
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(String(localized: "story.language.detail.retranslate",
+                                        defaultValue: "Retraduire", bundle: .main)))
     }
 
     /// Code langue AFFICHABLE de la sélection courante.
