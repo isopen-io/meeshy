@@ -39,6 +39,7 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isVoiceCloningAgeAdmitted } from '@meeshy/shared/utils/age';
 
 export interface ConsentStatus {
   hasDataProcessingConsent: boolean;
@@ -73,7 +74,8 @@ export class ConsentValidationService {
         analyticsConsentAt: true,
         voiceDataConsentAt: true,
         voiceProfileConsentAt: true,
-        voiceCloningEnabledAt: true
+        voiceCloningEnabledAt: true,
+        birthDate: true
       }
     });
 
@@ -182,7 +184,11 @@ export class ConsentValidationService {
     const canTranslateText = textTranslationEnabled && hasDataProcessingConsent;
     const canTranslateAudio = audioTranslationEnabled && canTranscribeAudio && canTranslateText;
     const canGenerateTranslatedAudio = translatedAudioGenerationEnabled && canTranslateAudio;
-    const canUseVoiceCloning = !!voiceCloningEnabledAt && hasVoiceCloningConsent;
+    // #17309 — le clonage vocal (donnée biométrique) n'est ouvert qu'à 18 ans
+    // révolus, date limite calculée au calendrier. Fail-closed : sans date de
+    // naissance, pas de clonage, quel que soit le consentement accordé.
+    const canUseVoiceCloning =
+      !!voiceCloningEnabledAt && hasVoiceCloningConsent && isVoiceCloningAgeAdmitted(user.birthDate, new Date());
 
     return {
       hasDataProcessingConsent,

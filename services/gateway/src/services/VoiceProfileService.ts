@@ -39,7 +39,7 @@ import { VOICE_CLONING_QUALITY_PRESETS } from '@meeshy/shared/types/preferences'
 import type { FastifyInstance } from 'fastify';
 import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { calculateAge, judgeDeclaredBirthDate, parseBirthDateDay } from '@meeshy/shared/utils/age';
+import { calculateAge, isVoiceCloningAgeAdmitted, judgeDeclaredBirthDate, parseBirthDateDay } from '@meeshy/shared/utils/age';
 import { writeBirthDateOnce } from './auth/birth-date-write';
 import { EngagementService } from './engagement/EngagementService';
 import { guardedTimeout } from '../utils/guarded-timer';
@@ -328,6 +328,21 @@ export class VoiceProfileService extends EventEmitter {
       const { birthDate: existingBirthDate, ...existingConsents } = existingUser ?? { birthDate: null };
       logger.info('[VoiceProfileService] Existing user consents:', existingConsents);
 
+      // #9927 — déclarée UNE fois (écriture conditionnée en base), jamais une date que PUT /me/birth-date refuserait.
+      const declaredBirthDate = declaredBirthDateText ? parseBirthDateDay(declaredBirthDateText) : null;
+      const birthDateToWrite = declaredBirthDate && !existingBirthDate && judgeDeclaredBirthDate(declaredBirthDate, now) === 'admitted'
+        ? declaredBirthDate : null;
+
+      // #17309 — le clonage vocal ne s'accorde qu'à 18 ans révolus, au jour près :
+      // la date posée prime, sinon celle que cette requête écrit ; sans date, refus.
+      if (consent.voiceCloningConsent === true && !isVoiceCloningAgeAdmitted(existingBirthDate ?? birthDateToWrite, now)) {
+        return {
+          success: false,
+          error: 'Voice cloning requires being at least 18 years old',
+          errorCode: 'VOICE_CLONING_AGE_REQUIRED'
+        };
+      }
+
       // Les consentements vocaux sont maintenant dans User
       // IMPORTANT: Respecter la chaîne de dépendances:
       // dataProcessingConsentAt → voiceDataConsentAt → voiceProfileConsentAt → voiceCloningEnabledAt
@@ -367,10 +382,6 @@ export class VoiceProfileService extends EventEmitter {
         }
       }
 
-      // #9927 — déclarée UNE fois (écriture conditionnée en base), jamais une date que PUT /me/birth-date refuserait.
-      const declaredBirthDate = declaredBirthDateText ? parseBirthDateDay(declaredBirthDateText) : null;
-      const birthDateToWrite = declaredBirthDate && !existingBirthDate && judgeDeclaredBirthDate(declaredBirthDate, now) === 'admitted'
-        ? declaredBirthDate : null;
       if (birthDateToWrite) await writeBirthDateOnce(this.prisma, userId, { birthDate: birthDateToWrite, ageVerifiedAt: now });
       if (Object.keys(userData).length === 0 && declaredBirthDateText) {
         return { success: true, data: { consentUpdated: birthDateToWrite !== null } };
