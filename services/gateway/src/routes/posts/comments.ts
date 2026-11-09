@@ -360,7 +360,7 @@ export function registerCommentRoutes(
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: targetPostId },
-        select: { authorId: true, commentCount: true, type: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true, isQuote: true, repostOfId: true },
+        select: { authorId: true, commentCount: true, type: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true, communityId: true, isQuote: true, repostOfId: true },
       });
       if (socialEvents && post) {
         const audience = commentEventAudience(post);

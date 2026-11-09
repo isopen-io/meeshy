@@ -109,6 +109,7 @@ type RelayedPost = {
   readonly type: string | null;
   readonly visibility: string | null;
   readonly visibilityUserIds: readonly string[];
+  readonly communityId?: string | null;
   readonly content: string | null;
   readonly expiresAt?: Date | string | null;
   readonly isQuote?: boolean;
@@ -155,7 +156,7 @@ const readRelayedPost = (deps: ActivityRelayDependencies, postId: string): Promi
   deps.prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
     select: {
-      id: true, authorId: true, type: true, visibility: true, visibilityUserIds: true, content: true, expiresAt: true,
+      id: true, authorId: true, type: true, visibility: true, visibilityUserIds: true, communityId: true, content: true, expiresAt: true,
       isQuote: true, repostOfId: true, originalRepostOfId: true,
     },
   }) as Promise<RelayedPost | null>;
@@ -171,6 +172,7 @@ const admit = async (deps: ActivityRelayDependencies, post: RelayedPost, candida
         authorId: post.authorId,
         visibility: post.visibility,
         visibilityUserIds: post.visibilityUserIds,
+        communityId: post.communityId ?? null,
         candidateUserIds: [...candidateUserIds],
       });
 

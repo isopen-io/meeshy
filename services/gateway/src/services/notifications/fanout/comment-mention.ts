@@ -35,6 +35,11 @@ export type CommentMentionFanoutParams = {
   /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
   visibilityUserIds?: readonly string[];
   /**
+   * `Post.communityId` — REQUIS (#17178) : une publication `COMMUNITY` posée dans
+   * une communauté ne prévient que ses lecteurs. `null` = sans communauté.
+   */
+  communityId: string | null;
+  /**
    * Ceux que ce commentaire prévient DÉJÀ par ailleurs — l'auteur du commentaire
    * parent pour une réponse, l'auteur du post pour un commentaire de premier
    * niveau : les nommer n'est pas pousser une notification à un inconnu (#14168).
@@ -78,6 +83,7 @@ export async function createCommentMentionNotificationsBatch(
     authorId: params.postAuthorId,
     visibility: params.visibility,
     visibilityUserIds: params.visibilityUserIds,
+    communityId: params.communityId,
     candidateUserIds: params.mentionedUserIds,
   });
   if (audience.length === 0) return;

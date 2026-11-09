@@ -16,7 +16,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | L'onglet Publications du détail lit les publications (iOS) | #17061 | #16878 | fusionnée dans dev (réveil 20) |
 | 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | fusionnée dans dev (réveil 21) |
 | 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
-| 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | voir réveil 22 | #16892 | voir réveil 22 |
+| 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | #17183 | #16892 | fusionnée dans dev (réveil 25) |
+| 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
 
 ## 2026-11-07 — lot 1
 
@@ -199,4 +200,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 ## 2026-11-09 — réveil 25
 
 - Début du run : #17183 (#16892) et #17152 (#6380) fusionnées par le porteur à 05:30–05:35 UTC ; dev n'est plus verrouillé.
-- Lot : #17178 (passerelle, sécurité) — en cours.
+- Lot : #17178 (passerelle, sécurité). Les trois portes d'ÉMISSION d'une publication `COMMUNITY` posée dans une communauté suivent la loi de lecture de #16892 (membres actifs + créateur, communauté vivante) :
+  - admission des éventails (`filterPostConsumers`, `communityId: string | null` REQUIS dans `PostAudienceParams` et dans les paramètres des éventails ami, mention de commentaire, commentaire de story ; relu par le relais d'activité) → `filterCommunityPostReadersAmong` ;
+  - temps réel (`SocialEventsHandler.getVisibilityFilteredRecipients` reçoit la référence du post ; la communauté est relue quand l'appelant ne tient que `postId`) → `communityPostAudienceIdsOf` ;
+  - traductions de texte de story → `communityPostAudienceIds`.
+  Sans communauté : règle co-membre inchangée. Post introuvable, id malformé, communauté désactivée, panne ⇒ personne d'autre que l'auteur. Borne 5 000 membres par diffusion.
+- Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
+- Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
+- Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.

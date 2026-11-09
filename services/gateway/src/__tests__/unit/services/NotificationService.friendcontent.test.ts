@@ -1087,6 +1087,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
         authorId: AUTHOR_ID,
         contentType: 'POST',
         visibility: 'COMMUNITY',
+        communityId: null,
       });
 
       const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
@@ -1112,6 +1113,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
         authorId: AUTHOR_ID,
         contentType: 'POST',
         visibility: 'COMMUNITY',
+        communityId: null,
         excludeUserIds: [FRIEND_2],
       });
 
