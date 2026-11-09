@@ -184,6 +184,10 @@ describe('#17191 — une protection PLUS FORTE que le chiffrement retient l’en
 
     for (const lot of [regular, reply, mention]) {
       expect(lot?.encryptedContent).toBeUndefined();
+      // Cycle 125 — la charge se relit ENTIÈRE, pas à la clé qu'on vient de
+      // garder : un champ qui transporterait l'enveloppe sous un autre nom
+      // rouvrirait la même porte. Le témoin à la clé seule ne le verrait pas.
+      expect(JSON.stringify(lot)).not.toContain(ENVELOPE);
     }
   });
 

@@ -9,6 +9,7 @@ import {
   type PreviewPrismBasis,
 } from '../notifications/notification-preview';
 import { contactCardNameFromFileName, isContactCardAttachment } from '@meeshy/shared/utils/vcard';
+import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import {
   transcriptTranslationTexts,
   transcriptTranslationTracks,
@@ -364,13 +365,54 @@ async function listeningRegularRecipients(
  * de conversation que seule la passerelle détient : il ne quitte pas le
  * serveur. Le mode de la LIGNE décide, celui de la conversation ne supplée
  * qu'une ligne héritée qui n'en porte aucun.
+ *
+ * #17191 — et le MODE ne suffisait pas. Cette enveloppe est du CONTENU : la NSE
+ * la déchiffre et REMPLACE le corps de la bannière (`applyBodyRewrites`), en
+ * posant `didDecrypt` qui saute la branche `notificationLocKey` douze lignes
+ * plus bas. Un message à VUE UNIQUE / ÉPHÉMÈRE / FLOUTÉ en conversation
+ * chiffrée affichait donc son texte ENTIER sur l'écran verrouillé, sous une
+ * bannière que la passerelle venait de composer en « 👁️ 💬 ».
+ *
+ * **Pourquoi le SECOND VERROU du cycle 125 ne pouvait pas garder ce champ.** En
+ * E2EE, `protectedPreview` rend toujours un verdict (`isEncrypted` est vrai
+ * pour toute ligne de la conversation), donc `notificationLocKey` est TOUJOURS
+ * posé — et l'enveloppe est précisément ce qui doit traverser ce verrou pour
+ * que « 🔒 💬 » devienne le vrai texte chez le lecteur. Les quatre sites qui
+ * s'en servent (`pushMediaFields`, `contentDetailPushFields`,
+ * `prePersistedMessageFields`, `previewPrismSource`) retiennent leur charge
+ * sans dommage ; ici le même verrou tuerait la feature.
+ *
+ * Le discriminant n'est donc pas « y a-t-il un verrou ? » mais **« la
+ * protection posée est-elle PLUS FORTE que le chiffrement ? »** — la préséance
+ * que `protectedPreview` écrit déjà : éphémère > vue unique > flouté > chiffré.
+ * L'enveloppe ne voyage que quand `encrypted` est la SEULE protection.
+ *
+ * `isEncrypted` n'est délibérément PAS passé à `messageProtection` : la question
+ * posée ici n'est pas « ce message est-il protégé ? » (il l'est toujours, c'est
+ * l'hypothèse) mais « l'est-il AUTREMENT que par son chiffrement ? ». La loi
+ * partagée est appelée plutôt que ses drapeaux relus, pour qu'un canal de
+ * protection ajouté à `effectFlags` arrive ici sans qu'on y pense.
  */
 export function deviceEnvelopeForPush(
-  message: Pick<FanOutMessage, 'encryptedContent' | 'encryptionMode'>,
+  message: Pick<
+    FanOutMessage,
+    'encryptedContent' | 'encryptionMode' | 'isViewOnce' | 'isBlurred' | 'effectFlags' | 'expiresAt' | 'ephemeralDuration'
+  >,
   conversationMode: string | null | undefined,
 ): string | undefined {
   if (!message.encryptedContent) return undefined;
-  return isEndToEndMode(message.encryptionMode ?? conversationMode) ? message.encryptedContent : undefined;
+  if (!isEndToEndMode(message.encryptionMode ?? conversationMode)) return undefined;
+
+  const stronger = messageProtection({
+    isViewOnce: message.isViewOnce,
+    isBlurred: message.isBlurred,
+    effectFlags: message.effectFlags,
+    expiresAt: message.expiresAt ?? null,
+    ephemeralDuration: message.ephemeralDuration ?? null,
+  });
+  if (stronger.ephemeral || stronger.viewOnce || stronger.blurred) return undefined;
+
+  return message.encryptedContent;
 }
 
 export async function notifyMessageRecipients(params: {
@@ -676,6 +718,26 @@ export async function notifyMessageRecipients(params: {
         }
       : previewBasis;
 
+    // #17080 — l'ENVELOPPE de l'appareil, élue UNE fois pour les trois lots.
+    //
+    // Elle ne partait que sur `regular`, et pour la raison exacte du cycle 126 :
+    // **elle ne compose aucune chaîne.** Ce n'est ni un texte, ni un
+    // qualificatif de texte — c'est la charge que le LECTEUR déchiffre. On ne la
+    // trouve donc pas en cherchant « qui compose ce corps ? », la question qui a
+    // guidé les cycles 125 bis à 128.
+    //
+    // Conséquence mesurée : la NSE ne remplace le corps que si
+    // `userInfo["encryptedContent"]` est non vide, et sa branche de repli
+    // (`locKey`) exige `isEncryptedPush`, dérivé du MÊME champ. Avec `''`,
+    // aucune des deux ne tire — une RÉPONSE ou une MENTION en conversation
+    // chiffrée restait « 🔒 💬 » à vie, pendant qu'un message simple du même
+    // fil arrivait déchiffré.
+    //
+    // Aucune audience n'est élargie : les destinataires de ces deux lots sortent
+    // de `memberIds`, et ce sont exactement ceux que `regular` aurait servis si
+    // `alreadyNotified` ne les en avait pas retirés.
+    const deviceEnvelope = deviceEnvelopeForPush(message, conversation.encryptionMode);
+
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
     // `createMemberJoinedNotificationsBatch`. Une préférence, un DND ou une
@@ -716,6 +778,8 @@ export async function notifyMessageRecipients(params: {
             // localisation cliente du placeholder et le second verrou de
             // `createNotification`.
             notificationLocKey,
+            // #17080 — cf. `deviceEnvelope` : la charge que le LECTEUR ouvre.
+            encryptedContent: deviceEnvelope,
           });
           return created != null;
         })
@@ -747,6 +811,9 @@ export async function notifyMessageRecipients(params: {
               // Cycle 126 — cf. `createReplyNotification` : la clé de protection
               // qualifie l'aperçu que ce lot vient de recevoir.
               notificationLocKey,
+              // #17080 — cf. `deviceEnvelope`. Le relais la RÉPAND
+              // (`...banner`) : rien à recopier par mentionné.
+              encryptedContent: deviceEnvelope,
             },
             memberIds
           )
@@ -783,7 +850,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: deviceEnvelopeForPush(message, conversation.encryptionMode),
+          encryptedContent: deviceEnvelope,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
