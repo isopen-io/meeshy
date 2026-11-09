@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { act } from 'react';
 
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
+import { loadOnboardingProfileCatalog } from '@/lib/i18n-onboarding-profile-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -21,7 +22,7 @@ const { mount, unmountAll, click, settle } = createActMounter();
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/onboarding' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadOnboardingCatalog('fr');
+  await Promise.all([loadOnboardingCatalog('fr'), loadOnboardingProfileCatalog('fr')]);
 });
 
 afterAll(async () => {

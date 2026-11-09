@@ -5,6 +5,7 @@ import { MY_PROFILE_QUERY_KEY } from '@/lib/api/profile';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
+import { loadOnboardingProfileCatalog } from '@/lib/i18n-onboarding-profile-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { bareServed, harness, served, signIn } from '@/test-support/onboarding-harness';
@@ -24,7 +25,7 @@ const { mount, unmountAll, click, type } = createActMounter();
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/onboarding' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadOnboardingCatalog('fr'), loadOnboardingCatalog('ar'), loadInterfaceCatalog('ar')]);
+  await Promise.all([loadOnboardingCatalog('fr'), loadOnboardingCatalog('ar'), loadInterfaceCatalog('ar'), loadOnboardingProfileCatalog('fr')]);
 });
 
 afterAll(async () => {

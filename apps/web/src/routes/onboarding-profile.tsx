@@ -7,7 +7,11 @@ import { Avatar } from '@/components/avatar';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
 import type { ProfileImageKind } from '@/lib/api/profile';
+import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
+import { performImageUpdate } from '@/lib/api/profile-actions';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
+import { loadOnboardingProfileCatalog, translateOnboardingProfile } from '@/lib/i18n-onboarding-profile-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { needsServedPreview } from '@/lib/media/heif';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { initialsOf } from '@/lib/view/conversation';
@@ -32,6 +36,16 @@ import { PrimaryButton, SecondaryButton } from './onboarding-visuals';
  * rien ne l'est, le bouton principal dit « Plus tard » et vaut `skipped` —
  * un second « Plus tard » identique n'apparaît qu'à côté de « Continuer ».
  */
+
+/** La carte arrive dans son propre chunk, AVEC son catalogue (#17237) : le parcours ne paie ni l'une ni l'autre avant d'y entrer. */
+export const prepareProfileCard = (language: InterfaceLanguage): Promise<unknown> => loadOnboardingProfileCatalog(language);
+
+/** Le téléversement de l'écran Profil (`performImageUpdate`) : la session, le cache du profil et la fiche publique suivent la valeur servie. */
+export async function uploadWithProfilePath(kind: ProfileImageKind, file: Blob): Promise<ProfileImageUpload> {
+  const outcome = await performImageUpdate({ kind, file, deps: appProfileActionDeps() });
+  if (outcome.status === 'saved') return { status: 'saved', url: outcome.url };
+  return outcome.status === 'cancelled' ? { status: 'cancelled' } : { status: 'failed' };
+}
 
 export type ProfileImageUpload = { readonly status: 'saved'; readonly url: string } | { readonly status: 'failed' } | { readonly status: 'cancelled' };
 
@@ -123,8 +137,8 @@ export function ProfileCard({
   return (
     <CardFrame
       step="profile"
-      title={translateOnboarding(lang, 'onboarding.profile.title')}
-      body={translateOnboarding(lang, 'onboarding.profile.body')}
+      title={translateOnboardingProfile(lang, 'onboarding.profile.title')}
+      body={translateOnboardingProfile(lang, 'onboarding.profile.body')}
       illustration={null}
       actions={
         <>
@@ -142,11 +156,11 @@ export function ProfileCard({
       <ul className="onb-profile-perks">
         <li>
           <Glyph name="eye" size={18} />
-          <span>{translateOnboarding(lang, 'onboarding.profile.visibility')}</span>
+          <span>{translateOnboardingProfile(lang, 'onboarding.profile.visibility')}</span>
         </li>
         <li>
           <Glyph name="users" size={18} />
-          <span>{translateOnboarding(lang, 'onboarding.profile.contacts')}</span>
+          <span>{translateOnboardingProfile(lang, 'onboarding.profile.contacts')}</span>
         </li>
       </ul>
 
@@ -155,7 +169,7 @@ export function ProfileCard({
           type="button"
           className="onb-profile-banner"
           data-onb-profile-pick="banner"
-          aria-label={translateOnboarding(lang, 'onboarding.profile.pickBanner')}
+          aria-label={translateOnboardingProfile(lang, 'onboarding.profile.pickBanner')}
           aria-busy={slots.banner.pending !== null || undefined}
           disabled={!host.online}
           onClick={() => inputs.current.banner?.click()}
@@ -163,7 +177,7 @@ export function ProfileCard({
           {bannerShown === null ? (
             <span className="onb-profile-banner-empty" aria-hidden="true">
               <GlyphSvg glyph={PROFILE_GLYPHS.camera} size={22} />
-              <span>{translateOnboarding(lang, 'onboarding.profile.addBanner')}</span>
+              <span>{translateOnboardingProfile(lang, 'onboarding.profile.addBanner')}</span>
             </span>
           ) : (
             <img src={bannerShown} alt="" data-onb-profile-image="banner" />
@@ -175,7 +189,7 @@ export function ProfileCard({
           type="button"
           className="onb-profile-avatar"
           data-onb-profile-pick="avatar"
-          aria-label={translateOnboarding(lang, 'onboarding.profile.pickAvatar')}
+          aria-label={translateOnboardingProfile(lang, 'onboarding.profile.pickAvatar')}
           aria-busy={slots.avatar.pending !== null || undefined}
           disabled={!host.online}
           onClick={() => inputs.current.avatar?.click()}
@@ -215,7 +229,7 @@ export function ProfileCard({
 
       {failedKind === undefined ? null : (
         <div role="alert" className="onb-profile-error">
-          <span className="onb-error">{translateOnboarding(lang, 'onboarding.profile.failed')}</span>
+          <span className="onb-error">{translateOnboardingProfile(lang, 'onboarding.profile.failed')}</span>
           <button
             type="button"
             className="onb-secondary onb-profile-retry"
@@ -225,7 +239,7 @@ export function ProfileCard({
               if (file !== null) void send(failedKind, file);
             }}
           >
-            {translateOnboarding(lang, 'onboarding.profile.retry')}
+            {translateOnboardingProfile(lang, 'onboarding.profile.retry')}
           </button>
         </div>
       )}

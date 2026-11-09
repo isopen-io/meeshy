@@ -37,16 +37,6 @@ const es = {
   'onboarding.age.check': 'Revisa tu fecha de nacimiento.',
   'onboarding.age.failed': 'Tu fecha no se guardó. Inténtalo de nuevo.',
 
-  'onboarding.profile.title': 'Déjate ver',
-  'onboarding.profile.body': 'Una cara y un banner hacen tu perfil más visible: te reconocen en las sugerencias, las conversaciones y las historias, y recibes más solicitudes de contacto.',
-  'onboarding.profile.visibility': 'Más visibilidad',
-  'onboarding.profile.contacts': 'Más contactos',
-  'onboarding.profile.addBanner': 'Añadir un banner',
-  'onboarding.profile.pickBanner': 'Elegir un banner',
-  'onboarding.profile.pickAvatar': 'Elegir una foto de perfil',
-  'onboarding.profile.failed': 'Tu imagen no se guardó.',
-  'onboarding.profile.retry': 'Reintentar',
-
   'onboarding.global.title': 'Saluda al mundo',
   'onboarding.global.body': 'Meeshy Global es el salón donde está todo el mundo. Suelta un saludo, sin presión.',
   'onboarding.global.field': 'Tu saludo, editable',
