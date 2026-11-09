@@ -661,3 +661,36 @@ socket jusqu'au client.
 2. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
 3. #17132 et #17133 : petits lots du même site.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 17 — 2026-11-08
+
+- **Base** : `origin/dev` @ `ee28259f9`. La PR du cycle 16 (`claude/determined-volta-1jsemr`) y est fusionnée.
+- **Branche** : `claude/determined-volta-2xnkrh`.
+- **Objectif** : #16822, piste 1 du cycle 16. L'entrée en file ne journalise plus l'exception brute, et aucune tâche ne se perd si l'entrée d'un lot lève.
+- **Constat** :
+  - Si `_enqueue_batch` levait dans `_accumulate` après le `pop`, l'exception remontait à `enqueue_task`, qui rendait `False`. Seule la tâche déclenchante était signalée, et les N-1 autres disparaissaient.
+  - Si `_enqueue_batch` levait au milieu de `_flush_batches`, on sortait du verrou sans `clear()`. Les lots déjà enfilés étaient alors **ré-enfilés** au flush suivant (traduction en double), et les refus déjà rassemblés se perdaient.
+  - Quatre sites journalisaient `{e}` en brut : `enqueue_task`, `_batch_flush_loop`, et les deux `except` de `_handle_translation_request`.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni le JSON publié) :
+  - `ConnectionManager._enqueue_batch_or_refused` : il enfile un lot déjà retiré de l'accumulateur, ou rend ses tâches à signaler, que la file soit pleine ou que l'entrée lève. Il sert à `_accumulate` et à `_flush_batches`, donc au flush périodique comme au flush final de `stop()`. Chaque tâche est signalée une fois, et l'accumulateur est toujours vidé.
+  - Nouvelle stat : `enqueue_error_rejections`, comptée par tâche.
+  - Les quatre sites ne journalisent plus que `[TRANSLATOR] … {type(e).__name__}`.
+- **Tests** : `tests/test_enqueue_errors_and_raw_logs.py` (6 tests) et `..._qa.py` (QA : 5 tests, dont le vrai chemin passerelle `TranslationHandler` + `TranslationPoolManager`, le flush final de `stop()` et l'annulation).
+  - **Rouge sur `origin/dev`** : 6 sur 6, puis 5 sur 5 pour la QA. Exemples : `Error enqueueing task t3: SECRET-TEXT-16822 boom` et `assert [True, True, False] == [True, True, True]`.
+  - **Vert** : relancé par moi, `11 passed` sur les deux fichiers, et `82 passed, 1 xfailed` sur `test_enqueue_*`, `test_shutdown_*` et `test_batch_pool_full_rejection*`.
+  - **Suites voisines** (QA, `-k "zmq_pool or translation_processor or batch or pool or zmq or handler"`) : 454 passés et 5 échecs sur la branche, contre 446 passés et 13 échecs sur `dev` (les 8 nouveaux témoins). Les 5 échecs préexistants et les 31 erreurs de collecte sont identiques des deux côtés (dépendances ML absentes).
+  - **Mutations QA** : 8 sur 8 tuées.
+- **QA** : favorable avec réserves. R1 → #17173. R2 et R4 → #17174. R3 (un code ajouté après le `pool.put` de `_enqueue_batch` et qui lèverait ferait enfiler ET signaler le lot) n'est pas atteignable aujourd'hui, et je le consigne ici.
+
+### Limites connues
+
+- Une tâche refusée sur exception part à la passerelle sous le libellé « translation pool full ». La différence ne se lit que dans les stats du traducteur. → #17174.
+- Le gestionnaire garde des `{e}` bruts hors du chemin d'entrée des traductions. → #17173.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : la mettre à jour sur `dev`, lancer `workflow_dispatch` de `ci.yml`, puis fusionner au vert.
+1. #17004 côté passerelle : un refus transitoire n'alimente plus le disjoncteur.
+2. #17173 et #17174 : petits lots sur `zmq_translation_handler.py`, à grouper.
+3. #17132 et #17133.
+4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
