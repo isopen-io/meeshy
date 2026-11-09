@@ -121,6 +121,32 @@ final class TalkieAdtsStreamDecoderTests: XCTestCase {
         XCTAssertGreaterThan(quietestWindow(decoded, skippingFirst: 4_096, last: 2_048), Self.amplitude / sqrt(2) * 0.8)
     }
 
+    func test_aFragmentCarryingDozensOfFrames_comesOutWhole() throws {
+        let frames = try encodedTalk(seconds: 1)
+        XCTAssertGreaterThanOrEqual(frames.count, 40)
+
+        let decoded = decode([frames.reduce(Data()) { $0 + $1.data }])
+
+        XCTAssertEqual(decoded.count, frames.count * 1024)
+    }
+
+    func test_theVoiceCopy_lastsAsLongAsTheTalk_whenEachFragmentCarriesDozensOfFrames() throws {
+        let frames = try encodedTalk(seconds: 3)
+        let perFragment = 47
+        let fragments = stride(from: 0, to: frames.count, by: perFragment).map { start in
+            frames[start..<min(start + perFragment, frames.count)].reduce(Data()) { $0 + $1.data }
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("talkie-copy-test-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let duration = try XCTUnwrap(TalkieVoiceCopyFile.write(fragments, to: url))
+        let written = try AVAudioFile(forReading: url)
+
+        let expected = Double(frames.count * 1024) / Self.sampleRate
+        XCTAssertEqual(duration, expected, accuracy: 0.001)
+        XCTAssertEqual(Double(written.length) / written.fileFormat.sampleRate, expected, accuracy: 0.1)
+    }
+
     func test_aFragment_splitsIntoItsFrames_andStopsAtATruncatedOne() throws {
         let frames = try encodedTalk(seconds: 0.1)
         let whole = frames.prefix(2).reduce(Data()) { $0 + $1.data }
@@ -131,6 +157,32 @@ final class TalkieAdtsStreamDecoderTests: XCTestCase {
         XCTAssertEqual(split.count, 2)
         XCTAssertEqual(split.first?.layout, TalkieAdtsLayout(sampleRate: Self.sampleRate, channels: 1))
         XCTAssertEqual(split.first?.payload.count, frames[0].data.count - 7)
+    }
+
+    func test_aDecoderThatHandsBackOnePacketPerCall_stillYieldsEveryFrameOfTheFragment() throws {
+        let frames = try encodedTalk(seconds: 1)
+        let decoder = TalkieAdtsStreamDecoder { _, output in OnePacketPerCallDecoder(output: output) }
+
+        let decoded = decoder.pcm(frames.reduce(Data()) { $0 + $1.data })
+
+        XCTAssertEqual(decoded?.frameLength, AVAudioFrameCount(frames.count * 1024))
+    }
+
+    /// Le décodeur que trahit la recette sur iPhone réel (#17255) : un appel rend UN paquet décodé, le reste du tampon
+    /// fourni est perdu, et l'appel suivant redemande de l'entrée. Le simulateur, lui, décode tout le tampon.
+    private final class OnePacketPerCallDecoder: TalkieAacDecoding {
+        let output: AVAudioFormat
+        init(output: AVAudioFormat) { self.output = output }
+
+        func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus {
+            var status = AVAudioConverterInputStatus.haveData
+            guard let pcm = buffer as? AVAudioPCMBuffer, block(1, &status) != nil, status == .haveData else {
+                (buffer as? AVAudioPCMBuffer)?.frameLength = 0
+                return .inputRanDry
+            }
+            pcm.frameLength = min(1024, pcm.frameCapacity)
+            return .haveData
+        }
     }
 
     private final class FrameBox: @unchecked Sendable {
