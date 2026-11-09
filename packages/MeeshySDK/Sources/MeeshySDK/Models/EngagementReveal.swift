@@ -127,7 +127,7 @@ public enum EngagementReveal: Equatable, Sendable, Identifiable {
 
     /// **Ce qui se célèbre TOUT SEUL, sans que l'utilisateur ait rien touché.**
     ///
-    /// Directive porteur (2026-09-09) : *« la vue d'achievement s'affiche
+    /// Directive porteur : *« la vue d'achievement s'affiche
     /// lorsqu'on a réalisé une opération qui déclenche un succès, le reste ce
     /// sont des notifications rien de plus »*. Un SUCCÈS nomme un fait rare et
     /// non répétable — il mérite qu'on interrompe. Un badge, une série, un

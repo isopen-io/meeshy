@@ -81,7 +81,7 @@ struct SummaryProtectionsView: View {
                             }
                             Text(entry.senderDisplayName)
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                                .foregroundColor(isDark ? .white.opacity(0.9) : .black.opacity(0.85))
+                                .foregroundStyle(isDark ? Color.white.opacity(0.9) : Color.black.opacity(0.85))
                                 .lineLimit(1)
                             Spacer(minLength: 0)
                             // Le MÊME chrome que la bulle, la rangée plate et

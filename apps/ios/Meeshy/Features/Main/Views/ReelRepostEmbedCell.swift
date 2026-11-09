@@ -180,7 +180,7 @@ struct ReelRepostEmbedCell: View {
                 // `validUsernames` vaut `nil` PAR DÉFAUT dans le renderer, et
                 // `nil` veut dire « linkifier tout » : sans les références du
                 // post source, chaque `@handle` du texte cité devenait un lien
-                // mort. Le gateway les sert depuis le 2026-08-19, le SDK les
+                // mort. Le gateway les sert, le SDK les
                 // décode ; il ne restait qu'à les passer ici.
                 MessageTextRenderer.render(repost.displayContent, fontSize: 13, color: theme.textSecondary,
                                            validUsernames: repost.validMentionUsernames)
@@ -250,7 +250,7 @@ struct ReelRepostEmbedCell: View {
                 Image(systemName: "music.note")
                     // doctrine 86i — glyphe décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 30, weight: .semibold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(Color.white.opacity(MeeshyOpacity.intense))
             }
         }
     }
@@ -262,7 +262,7 @@ struct ReelRepostEmbedCell: View {
             Image(systemName: "play.fill")
                 // doctrine 86i — affordance décorative bornée par la bande média de hauteur fixe (stripHeight)
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(MeeshySpacing.md)
                 .background(Circle().fill(.ultraThinMaterial))
                 .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
@@ -279,7 +279,7 @@ struct ReelRepostEmbedCell: View {
                 Image(systemName: "play.rectangle.on.rectangle.fill")
                     // doctrine 86i — badge décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(MeeshySpacing.xsPlus)
                     .background(Circle().fill(.ultraThinMaterial))
                     .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))

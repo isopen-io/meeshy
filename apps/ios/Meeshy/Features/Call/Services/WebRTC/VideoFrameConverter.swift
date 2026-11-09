@@ -64,7 +64,7 @@ nonisolated final class VideoFrameConverter: @unchecked Sendable {
 
     /// Fond neutre + silhouette générique — remplace le flux live du PiP système
     /// quand le pair coupe sa caméra, pour ne jamais figer le dernier frame vidéo
-    /// à l'écran (spec 2026-06-20 §5.3: "enqueue un buffer placeholder, pas le
+    /// à l'écran (pas le
     /// dernier frame figé"). Pur CoreGraphics/CoreVideo, aucune dépendance WebRTC.
     static func makePlaceholderPixelBuffer(width: Int = 480, height: Int = 854) -> CVPixelBuffer? {
         var pixelBuffer: CVPixelBuffer?

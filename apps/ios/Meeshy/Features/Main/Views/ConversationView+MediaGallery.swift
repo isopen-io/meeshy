@@ -8,7 +8,7 @@ import MeeshyUI
 ///
 /// Deux raisons, et la première est mécanique : `ConversationView.swift` fait
 /// plus de trois mille lignes et figure dans la dette héritée du cliquet de
-/// taille — la directive du 2026-08-28 y interdit tout ajout. Câbler une action
+/// taille — la y interdit tout ajout. Câbler une action
 /// de plus dans son corps était donc impossible avant d'en sortir quelque
 /// chose. Ce modificateur emporte le cover ET son câblage : l'hôte y perd des
 /// lignes au lieu d'en gagner.
@@ -229,8 +229,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         scrollState.galleryStartAttachment = nil
     }
 
-    /// **Répondre à la pièce SANS quitter son plein écran** (#6165, directive
-    /// porteur 2026-09-12).
+    /// **Répondre à la pièce SANS quitter son plein écran** (#6165).
     ///
     /// Ce chemin remplace `replyToCarrier` dès qu'il est câblé — la bascule vit
     /// dans `FullscreenReplyRoute`, côté galerie. Deux différences, et la

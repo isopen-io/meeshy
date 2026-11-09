@@ -518,36 +518,6 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
     }
 }
 
-// MARK: - Crop Ratio
-
-public enum CropRatio: Equatable, Hashable {
-    case square
-    case ratio4x3
-    case ratio16x9
-    case ratio9x16
-    case free
-
-    public var aspectRatio: Double? {
-        switch self {
-        case .square: return 1.0
-        case .ratio4x3: return 4.0 / 3.0
-        case .ratio16x9: return 16.0 / 9.0
-        case .ratio9x16: return 9.0 / 16.0
-        case .free: return nil
-        }
-    }
-
-    public var label: String {
-        switch self {
-        case .square: return "1:1"
-        case .ratio4x3: return "4:3"
-        case .ratio16x9: return "16:9"
-        case .ratio9x16: return "9:16"
-        case .free: return "Libre"
-        }
-    }
-}
-
 // MARK: - Media Preview Context
 
 public enum MediaPreviewContext: Equatable {
@@ -569,16 +539,6 @@ public enum MediaPreviewContext: Equatable {
 
     public var isImmersive: Bool {
         self == .story
-    }
-
-    public var preferredCropRatio: CropRatio? {
-        switch self {
-        case .story: return .ratio9x16
-        case .post: return nil
-        case .message: return nil
-        case .avatar: return .square
-        case .banner: return .ratio16x9
-        }
     }
 
     public var contextLabel: String {

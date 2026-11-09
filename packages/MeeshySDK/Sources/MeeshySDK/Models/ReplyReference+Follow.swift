@@ -121,8 +121,7 @@ public extension ReplyReference {
         return quotedExitNature == .ordinary
     }
 
-    /// **La citation porte-t-elle un contenu PROTÉGÉ ?** (#9573, décision
-    /// porteur du 2026-10-08)
+    /// **La citation porte-t-elle un contenu PROTÉGÉ ?** (#9573)
     ///
     /// Citer un contenu protégé reste permis, et la contagion de protection des
     /// réponses s'applique ; mais « Imager » — et « Imager la discussion » qui

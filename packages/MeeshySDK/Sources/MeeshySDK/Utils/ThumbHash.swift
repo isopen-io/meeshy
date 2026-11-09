@@ -472,11 +472,11 @@ extension UIImage {
     /// hash, and its callers sit on hot render paths (story cube swipe, loading overlay, image
     /// cells re-initialised by every parent render) that re-ask for the same hash at frame rate.
     /// `NSCache` is thread-safe and evicts under memory pressure; each entry is a ~32 px bitmap.
-    private nonisolated(unsafe) static let thumbHashImageCache: NSCache<NSString, UIImage> = {
+    private static let thumbHashImageCache: LockedCache<NSString, UIImage> = LockedCache({
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 256
         return cache
-    }()
+    }())
 
     /// Decode a base64-encoded ThumbHash string to a UIImage placeholder.
     /// Decode time: ~1-3 ms (full inverse DCT to ~32 px), paid once per hash — later calls are

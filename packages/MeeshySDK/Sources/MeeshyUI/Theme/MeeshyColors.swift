@@ -260,7 +260,7 @@ public nonisolated struct MeeshyColors {
         isDark ? indigo50 : indigo950
     }
 
-    /// D-18 bis (2026-09-08, #5625) — la variante CLAIRE, `indigo700
+    /// D-18 bis (#5625) — la variante CLAIRE, `indigo700
     /// .opacity(0.6)`, mesurait **2,70–3,12:1** selon le fond (composition
     /// alpha PUIS luminance WCAG, même loi que `textMuted` ci-dessous) : sous
     /// AA texte normal (4,5:1) sur CHAQUE fond clair déclaré, y compris le
@@ -280,7 +280,7 @@ public nonisolated struct MeeshyColors {
         isDark ? indigo300 : indigo700.opacity(0.8)
     }
 
-    /// D-18 (2026-08-18, soldée) — `indigo500.opacity(0.4)`/`indigo400.opacity(0.5)`
+    /// D-18 — `indigo500.opacity(0.4)`/`indigo400.opacity(0.5)`
     /// (valeurs d'origine) mesuraient **1,67:1 en clair et 2,46:1 en sombre**
     /// contre `backgroundSecondary`/le fond ambiant (composition alpha PUIS
     /// luminance WCAG, même loi que Q142-a) — les DEUX thèmes étaient sous

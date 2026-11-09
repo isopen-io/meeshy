@@ -24,11 +24,8 @@ import type { MenuRow } from '@/lib/reading-mode/catalog';
  * `ConversationListView.swift:929-943` précalcule les MÊMES couples.
  */
 export type RowActionId =
-  | 'callAudio'
-  | 'callVideo'
   | 'pin'
   | 'mute'
-  | 'search'
   | 'read'
   | 'readingMode'
   | 'details'
@@ -44,10 +41,8 @@ export type RowActionId =
   | 'delete'
   | 'obsolete';
 
-export type RowCallActionId = Extract<RowActionId, 'callAudio' | 'callVideo'>;
-
-/** Les actions de DRAPEAU — celles que `performRowAction` arbitre. L'appel et la
- * suppression ont chacun leur chemin (`callActions`, `requestDeparture`). */
+/** Les actions de DRAPEAU — celles que `performRowAction` arbitre. La
+ * suppression a son chemin (`requestDeparture`). */
 export type RowFlagActionId = Extract<RowActionId, 'pin' | 'mute' | 'read' | 'archive'>;
 
 /** Les entrées qui ne basculent pas un drapeau (#10593) : elles ouvrent une
@@ -59,8 +54,6 @@ export type RowIntentActionId = Extract<RowActionId, 'details' | 'rename' | 'blo
 export type RowRoleActionId = Extract<RowActionId, 'invite' | 'manageMembers' | 'adminOpen' | 'leave' | 'obsolete'>;
 
 export const isRowFlagAction = (id: RowActionId): id is RowFlagActionId => id === 'pin' || id === 'mute' || id === 'read' || id === 'archive';
-
-export const isRowCallAction = (id: RowActionId): id is RowCallActionId => id === 'callAudio' || id === 'callVideo';
 
 /**
  * Sous-ensemble de `GlyphName` (`@/components/glyphs`) — délibérément
@@ -118,27 +111,19 @@ export type RowMenuMore = {
 };
 
 /**
- * LES DEUX PORTES DU FIL (#11226) — « Rechercher » ouvre la conversation sur
- * sa recherche, « Mode de lecture › » choisit comment elle s'ouvrira : celles
- * du menu d'iOS (`ConversationListView+Overlays.swift`). Le mode suit le
- * drapeau de construction (`apiConfig.readingModesEnabled`) : coupé, un mode
- * choisi ici serait ignoré à l'ouverture, et l'entrée n'existe pas.
+ * LA PORTE DU FIL (#11226) — « Mode de lecture › » choisit comment la
+ * conversation s'ouvrira. Il suit le drapeau de construction
+ * (`apiConfig.readingModesEnabled`) : coupé, un mode choisi ici serait ignoré
+ * à l'ouverture, et l'entrée n'existe pas. « Rechercher », l'appel vocal et
+ * l'appel vidéo ont quitté le menu de la ligne (consigne porteur, #17243) :
+ * ils se font dans la conversation.
  */
 export type RowMenuDoors = {
-  readonly search: boolean;
   readonly readingMode: boolean;
 };
 
-/**
- * APPELER DEPUIS LA LIGNE (#8109) — iOS offre « Appeler » au menu contextuel
- * d'une ligne (`ConversationListView+Overlays.swift`) ; le web y pose les deux
- * gestes de son bouton d'appel du fil, vocal et vidéo. `canCall` faux ⇒ l'appel
- * n'est pas permis (invité anonyme) et aucune entrée ne s'affiche. Chaque
- * libellé passe par le catalogue d'interface, dans la langue du lecteur (#8150).
- */
+/** Chaque libellé passe par le catalogue d'interface, dans la langue du lecteur (#8150). */
 type RowMenuLabelKey =
-  | 'call.action.audio'
-  | 'call.action.video'
   | 'rowActions.pin'
   | 'rowActions.unpin'
   | 'rowActions.mute'
@@ -229,35 +214,29 @@ export function rowMenuItems(params: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
   readonly language: InterfaceLanguage;
-  readonly canCall?: boolean;
   /** Un compte : « Supprimer » ferme le menu, comme dans la liste iOS (#7285). */
   readonly canDelete?: boolean;
   /** Absent (le balayage) : aucune des entrées de #10593. */
   readonly more?: RowMenuMore;
   /**
    * LES VERDICTS DU RÔLE (#11211) — absents (le balayage), le menu reste
-   * celui d'avant ; présents, ils GOUVERNENT l'appel, Renommer et Supprimer,
+   * celui d'avant ; présents, ils GOUVERNENT Renommer et Supprimer,
    * et ouvrent Inviter, Gérer les membres, l'administration et Quitter.
    */
   readonly actions?: RowConversationActions;
-  /** Absentes (le balayage) : ni « Rechercher » ni « Mode de lecture ». */
+  /** Absente (le balayage) : pas de « Mode de lecture ». */
   readonly doors?: RowMenuDoors;
 }): readonly RowMenuItem[] {
-  const { flags, unread, language, canCall = false, canDelete = false, more, actions, doors } = params;
+  const { flags, unread, language, canDelete = false, more, actions, doors } = params;
   const label = (key: RowMenuLabelKey) => translate(language, key);
-  const call = canCall && (actions?.call ?? true);
   const remove = canDelete && (actions?.hide ?? true);
+  /* La TÊTE du menu — Épingler, Sourdine, Lu, celle d'iOS — puis « Détails »
+     en première entrée sous elle (consigne porteur, #17243). */
   return [
-    ...(call
-      ? [
-          { id: 'callAudio', label: label('call.action.audio'), glyph: 'phone' } as const,
-          { id: 'callVideo', label: label('call.action.video'), glyph: 'videoCamera' } as const,
-        ]
-      : []),
     { id: 'pin', label: label(flags.isPinned ? 'rowActions.unpin' : 'rowActions.pin'), glyph: 'pushPin' },
     { id: 'mute', label: label(flags.isMuted ? 'rowActions.unmute' : 'rowActions.mute'), glyph: flags.isMuted ? 'bell' : 'bellSlash' },
-    ...(doors?.search === true ? [{ id: 'search', label: rowMenuText(language, 'rowMenu.search'), glyph: 'magnifyingGlass' } as const] : []),
     { id: 'read', label: label(unread ? 'rowActions.read' : 'rowActions.unread'), glyph: 'envelopeOpen' },
+    ...(more?.details === true ? [{ id: 'details', label: rowMenuText(language, 'rowMenu.details'), glyph: 'info' } as const] : []),
     ...(doors?.readingMode === true
       ? [{ id: 'readingMode', label: rowMenuText(language, 'rowMenu.readingMode'), glyph: 'eye', submenu: 'readingMode' } as const]
       : []),
@@ -275,11 +254,10 @@ export function rowMenuItems(params: {
   ];
 }
 
-/** L'ordre d'iOS : Détails, Renommer, Inviter, Gérer les membres, Favori, Déplacer vers… */
+/** L'ordre d'iOS après « Détails » : Renommer, Inviter, Gérer les membres, Favori, Déplacer vers… */
 function moreItems(more: RowMenuMore, language: InterfaceLanguage, actions: ConversationActions | undefined): readonly RowMenuItem[] {
   const rename = more.organize && more.rename && (actions?.rename ?? true);
   return [
-    ...(more.details ? [{ id: 'details', label: rowMenuText(language, 'rowMenu.details'), glyph: 'info' } as const] : []),
     ...(rename ? [{ id: 'rename', label: rowMenuText(language, 'rowMenu.rename'), glyph: 'pencilSimple' } as const] : []),
     ...(more.details && actions?.invite === true ? [{ id: 'invite', label: rowMenuText(language, 'rowMenu.invite'), glyph: 'userPlus' } as const] : []),
     ...(more.details && actions?.manageMembers === true

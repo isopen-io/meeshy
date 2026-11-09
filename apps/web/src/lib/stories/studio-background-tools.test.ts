@@ -80,3 +80,16 @@ describe('studioBackgroundEditResolved — l’édition ne survit pas à son fon
     expect(studioBackgroundEditResolved(null, { hasBackground: true, timelineOpen: false })).toBeNull();
   });
 });
+
+/** UNE IMAGE D'IDENTITÉ (#17256) — son format est imposé : ni recadrage libre
+ * ni quart de tour, qui changeraient ses proportions ; le Cadre et le retrait
+ * restent. */
+describe('la retouche à format imposé', () => {
+  test('le fond n’offre que le Cadre', () => {
+    expect(studioBackgroundSections({ mediaType: 'image', retouching: true, formatLocked: true })).toEqual(['frame']);
+  });
+
+  test('ses gestes : retirer, sans pivoter', () => {
+    expect(studioBackgroundToolActions({ offersPhoto: true, overlayFree: true, retouching: true, formatLocked: true })).toEqual(['remove']);
+  });
+});

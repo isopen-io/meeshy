@@ -20,7 +20,7 @@ struct ProgressionMeeshEntry: View {
 
     private let tint = MeeshyColors.warning
 
-    /// La forme de la pièce : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
+    /// La forme de la pièce: plus RECTANGLE qu'une capsule (#6466).
     private static let forme = RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
 
     var body: some View {
@@ -32,13 +32,13 @@ struct ProgressionMeeshEntry: View {
             //
             // Le porteur a d'abord demandé « le nombre comme dans sa bulle, les
             // deux dans le même composant » ; il a vu deux bulles séparées au
-            // simulateur et a tranché (2026-09-14) : « les deux éléments
+            // simulateur et a tranché: « les deux éléments
             // associés en un seul, pas de séparation visuelle ». Le verre porte
             // donc les deux ensemble, sans conteneur ni écart, à la hauteur des
             // chromes ronds de l'en-tête dont l'entrée est l'action (#6480).
             //
             // Le glyphe a changé deux fois, et pour la même raison. `medal.fill`
-            // disait « récompense » en général ; le logo Meeshy (2026-09-09)
+            // disait « récompense » en général; le logo Meeshy
             // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
             // (#6427) est le premier glyphe qui dit ce qu'est la chose.
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -186,8 +186,7 @@ struct ProgressionMeeshDetail: View {
                 // faire disparaître au moment du tap donnerait l'impression que
                 // l'action a échoué, alors qu'elle est en cours.
                 //
-                // **Et il MONTRE qu'il travaille** (#6467, retour porteur
-                // 2026-09-14) : une opacité seule, sur un aller-retour court, ne
+                // **Et il MONTRE qu'il travaille** (#6467): une opacité seule, sur un aller-retour court, ne
                 // se voyait pas. L'indicateur d'activité tourne à côté du mot, et
                 // l'identifiant change avec l'état pour que le témoin le lise.
                 Button {

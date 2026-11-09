@@ -262,7 +262,7 @@ struct PrivacySettingsView: View {
 
     /// Le chiffrement E2EE n'est pas encore opérationnel : la section est
     /// affichée GRISÉE et NON interactive avec un statut explicite « Désactivé /
-    /// Bientôt disponible » (décision produit 2026-06-14). Aucune préférence de
+    /// Bientôt disponible ». Aucune préférence de
     /// chiffrement n'est éditable tant que la fonctionnalité n'est pas livrée —
     /// éviter de laisser croire qu'un chiffrement optionnel/actif existe.
     private var encryptionSection: some View {
@@ -280,7 +280,7 @@ struct PrivacySettingsView: View {
                 ) {
                     Text(String(localized: "settings.privacy.encryption.status_disabled", defaultValue: "Désactivé", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
         }
@@ -310,7 +310,7 @@ struct PrivacySettingsView: View {
             SettingsRow(icon: spec.icon, title: spec.title, color: spec.color) {
                 Text(String(localized: "settings.privacy.coming_soon", defaultValue: "Bientôt disponible", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             .opacity(0.55)
             .allowsHitTesting(false)
@@ -354,11 +354,13 @@ struct PrivacySettingsView: View {
         Self.comingSoonPrivacyKeyPaths.contains(keyPath as AnyKeyPath)
     }
 
-    nonisolated(unsafe) private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
-        \PrivacyPreferences.blockScreenshots,
-        \PrivacyPreferences.shareUsageData,
-        \PrivacyPreferences.allowContactRequests,
-        \PrivacyPreferences.allowGroupInvites,
-    ]
+    private nonisolated static var comingSoonPrivacyKeyPaths: Set<AnyKeyPath> {
+        [
+            \PrivacyPreferences.blockScreenshots,
+            \PrivacyPreferences.shareUsageData,
+            \PrivacyPreferences.allowContactRequests,
+            \PrivacyPreferences.allowGroupInvites,
+        ]
+    }
 
 }

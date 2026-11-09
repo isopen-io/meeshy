@@ -67,7 +67,7 @@ struct MagicLinkView: View {
     }
 
     /// UNE ligne visible par étape dit ce qu'on fait ; le COMMENT vit derrière
-    /// un (i) (directive porteur 2026-09-15, #6626) — le même que celui des
+    /// un (i) (#6626) — le même que celui des
     /// champs de l'inscription.
     private enum Hint {
         case howItWorks
@@ -131,7 +131,7 @@ struct MagicLinkView: View {
                         // Chrome de fermeture : glyphe dans un cadre de tap fixe (toolbar) —
                         // gardé figé, doctrine 82i/87i. Libellé VoiceOver ajouté.
                         Image(systemName: "xmark")
-                            .font(.system(size: MeeshyFont.headlineSize, weight: .medium))
+                            .font(MeeshyFont.fixedGlyph(MeeshyFont.headlineSize, weight: .medium))
                             .foregroundStyle(theme.textSecondary)
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
@@ -153,7 +153,7 @@ struct MagicLinkView: View {
 
             // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
             Image(systemName: "wand.and.stars")
-                .font(.system(size: 56, weight: .light))
+                .font(MeeshyFont.fixedGlyph(56, weight: .light))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],
@@ -276,7 +276,7 @@ struct MagicLinkView: View {
 
                 // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
                 Image(systemName: "envelope.open.fill")
-                    .font(.system(size: MeeshyIconSize.hero, weight: .light))
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.hero, weight: .light))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],

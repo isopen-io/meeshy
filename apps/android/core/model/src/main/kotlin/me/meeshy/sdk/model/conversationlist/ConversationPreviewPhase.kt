@@ -41,8 +41,11 @@ sealed interface PreviewCacheReading {
 }
 
 object ConversationPreviewLaw {
-    /** Nombre de messages montrés par l'aperçu. */
-    const val PREVIEW_LIMIT = 5
+    /**
+     * Nombre de messages lus pour l'aperçu d'appui long : assez pour remplir la grande carte au repos
+     * (#17244), le surplus sortant du cadre par le haut.
+     */
+    const val PREVIEW_LIMIT = 15
 
     /** Une demande plus ambitieuse que le chargement en vol l'attend, puis repart. */
     fun mustWaitThenRerun(running: ConversationPreviewIntent, requested: ConversationPreviewIntent): Boolean =

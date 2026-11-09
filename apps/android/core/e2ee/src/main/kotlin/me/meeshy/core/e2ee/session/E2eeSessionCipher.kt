@@ -40,7 +40,7 @@ public class E2eeSessionCipher(
 
     private val ours: SignalProtocolAddress get() = local.protocolAddress()
 
-    // L'ordre des adresses DIFFÈRE entre les deux constructeurs Java de libsignal 0.105 (lu au bytecode) :
+    // L'ordre des adresses DIFFÈRE entre les deux constructeurs Java de libsignal (lu au bytecode en 0.105, inchangé en 0.106.2) :
     // `SessionBuilder(store, distante, locale)` mais `SessionCipher(store, locale, distante)`.
 
     /** PQXDH (spec § 4.1) : libsignal vérifie les signatures XEdDSA de la pré-clé signée et de la Kyber avant d'ouvrir. */

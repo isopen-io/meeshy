@@ -3,7 +3,7 @@ import MeeshySDK
 
 /// What the reader shows of the current story's reactions (#13135): the count
 /// and this viewer's own emojis (the sidebar heart lights up only when THIS
-/// viewer has reacted, bug 2026-05-28), the optimistic append and its rollback.
+/// viewer has reacted), the optimistic append and its rollback.
 ///
 /// A transport failure does not roll back: the reaction joins the durable
 /// queue under `toggleLikePost` — the gateway serves the story reaction on

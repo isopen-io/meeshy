@@ -53,7 +53,7 @@ nonisolated enum CallLiveFrameRule {
 
     /// Un cadre se propose en direct s'il sert un duo et que la loi d'usage lui ouvre l'appel —
     /// c'est-à-dire s'il DÉCLARE `live` (#10195). Un cadre de capture seule ne sert jamais
-    /// l'appel, quel que soit son coût (directive porteur 2026-10-11).
+    /// l'appel, quel que soit son coût.
     static func isEligible(_ design: CallFrameDesign) -> Bool {
         design.serves(people: people) && FrameUsageLaw.canUseFrame(design.usage, .call)
     }

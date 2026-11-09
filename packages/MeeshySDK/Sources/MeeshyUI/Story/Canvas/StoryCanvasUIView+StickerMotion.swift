@@ -16,7 +16,7 @@ extension StoryCanvasUIView {
     }
 
     /// **Fait vivre les décorations à chaque tick de l'horloge d'édition**
-    /// (#4999, directive porteur 2026-09-03).
+    /// (#4999).
     ///
     /// ## Ce que cette passe fait, et surtout ce qu'elle NE fait pas
     ///

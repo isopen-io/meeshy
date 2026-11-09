@@ -336,7 +336,7 @@ extension AudioFullscreenPage {
             } label: {
                 // Le disque partagé du chrome (36 pt visibles, cible de 44) :
                 // le cercle de 26 pt et son glyphe de 12 se perdaient au pied
-                // de l'écran (porteur, 2026-10-13).
+                // de l'écran (porteur).
                 FullscreenChromeDisc(systemImage: "translate", tone: .adaptive)
                     .background(Circle().fill(MeeshyColors.controlFill(isDark: isDark))
                         .frame(width: FullscreenChromeMetrics.discDiameter, height: FullscreenChromeMetrics.discDiameter))
@@ -383,7 +383,7 @@ extension AudioFullscreenPage {
         NavigationStack {
             // La vue des langues est un contenu, pas un écran : sans défilement
             // ni marge, elle se collait aux bords de la feuille et sa liste ne
-            // se parcourait pas (porteur, 2026-10-13) — même hôte que la galerie.
+            // se parcourait pas (porteur) — même hôte que la galerie.
             ScrollView(showsIndicators: false) {
                 MessageLanguageDetailView(
                     message: translationMessage,

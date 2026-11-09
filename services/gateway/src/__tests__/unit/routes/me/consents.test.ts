@@ -32,6 +32,7 @@ type ConsentColumns = {
   voiceDataConsentAt: Date | null;
   voiceProfileConsentAt: Date | null;
   voiceCloningEnabledAt: Date | null;
+  birthDate?: Date | null;
 };
 
 const EMPTY_COLUMNS: ConsentColumns = {
@@ -169,6 +170,7 @@ describe('GET /me/consents', () => {
           voiceDataConsentAt: now,
           voiceProfileConsentAt: now,
           voiceCloningEnabledAt: now,
+          birthDate: new Date('1990-01-01T00:00:00.000Z'),
         },
       })
     );
@@ -291,7 +293,9 @@ describe('PUT /me/consents/:purpose', () => {
   });
 
   it('accorder une feuille pose ses ANCÊTRES manquants (cascade de VoiceProfileService reproduite)', async () => {
-    const { app, prisma } = await buildApp();
+    const { app, prisma } = await buildApp(
+      makePrisma({ [USER_ID]: { ...EMPTY_COLUMNS, birthDate: new Date('1990-01-01T00:00:00.000Z') } })
+    );
 
     const res = await putConsent(
       app,

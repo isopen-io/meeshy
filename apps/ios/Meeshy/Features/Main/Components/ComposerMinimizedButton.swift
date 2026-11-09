@@ -79,13 +79,13 @@ struct ComposerMinimizedButton: View {
 
             Image(systemName: "square.and.pencil")
                 .font(.title3.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         }
     }
 
     private func caption(_ text: String) -> some View {
         Text(text)
             .font(.caption2).fontWeight(.semibold)
-            .foregroundColor(captionColor)
+            .foregroundStyle(captionColor)
     }
 }

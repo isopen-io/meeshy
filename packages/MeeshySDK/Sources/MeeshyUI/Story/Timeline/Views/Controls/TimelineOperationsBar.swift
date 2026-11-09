@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Bande d'opérations de la timeline — rendue SOUS la bande des outils du
-/// composer et AU-DESSUS du transport (retour user 2026-07-20) : l'historique
+/// composer et AU-DESSUS du transport : l'historique
 /// (annuler / rétablir), l'aimantation et l'enregistrement vivent ici. Le
 /// transport ne garde que la lecture, le temps, le zoom et le son. Leaf view —
 /// paramètres primitifs uniquement.
@@ -88,7 +88,7 @@ public struct TimelineOperationsBar: View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Image(systemName: "plus")
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                 Text(String(format: String(localized: "story.timeline.ops.extend.label",
                                            defaultValue: "%@ s", bundle: .module),
                             "\(Int(Self.extendStepSeconds))"))

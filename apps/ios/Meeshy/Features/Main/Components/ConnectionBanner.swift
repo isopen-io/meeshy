@@ -60,8 +60,7 @@ struct ConnectionBanner: View {
     /// `RootView.body` ne se ré-évalue pas pour une frappe.
     @StateObject private var typingSource: TypingEntriesSource
 
-    // **L'annonce de frappe est retournée à la pastille** (#6188, directive
-    // porteur 2026-09-12). Elle avait été confiée le 2026-08-28 (#4066) à une
+    // **L'annonce de frappe est retournée à la pastille** (#6188). Elle avait été confiée (#4066) à une
     // capsule naissant dans la Dynamic Island, orchestrée ici : trois états et
     // une vue vivaient à cet endroit.
     //
@@ -72,7 +71,7 @@ struct ConnectionBanner: View {
     // Dupliquer ici la détection de nouveauté (`seenTypingIDs`) revenait à
     // tenir deux fois le même fait ; `SyncPill.seenEntryIDs` le tient une.
     //
-    // `IslandEmergingBanner` a été retiré : plus aucun hôte ne le montait depuis le 2026-07-13.
+    // `IslandEmergingBanner` a été retiré: plus aucun hôte ne le montait.
 
     /// `true` quand `StoryViewerView` est présenté en `fullScreenCover` —
     /// cache la pill pour qu'elle ne rende plus par-dessus le header story
@@ -273,7 +272,7 @@ struct ConnectionBanner: View {
         // Skip rendering when StoryViewerView est présenté plein écran —
         // le fullScreenCover du root ne supprime pas les safeAreaInset /
         // overlays du parent et le pill restait visible par-dessus le
-        // header story (bug 2026-05-27).
+        // header story.
         if !SyncPillVisibility.isVisible(storyViewerPresenting: isStoryViewerPresenting,
                                          inAppNoticePresenting: inAppNotices.currentToast != nil) {
             EmptyView()

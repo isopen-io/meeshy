@@ -11,12 +11,14 @@ object OnboardingFlowRules {
     /**
      * Les étapes « geste », dans l'ordre. La carte notifications n'en fait pas partie : elle n'est proposée
      * qu'APRÈS, et seulement si un geste a produit de quoi être notifié. L'âge précède Global : un 13-17 ans y lit
-     * sans écrire, la carte du salut n'a donc pas lieu d'être après sa déclaration.
+     * sans écrire, la carte du salut n'a donc pas lieu d'être après sa déclaration. « Montre-toi » (avatar et
+     * bannière) suit l'adresse et précède Global : le salut part déjà sous un visage.
      */
     val gestureSteps: List<OnboardingStepId> = listOf(
         OnboardingStepId.LANGUAGES,
         OnboardingStepId.AGE,
         OnboardingStepId.EMAIL,
+        OnboardingStepId.PROFILE,
         OnboardingStepId.GLOBAL,
         OnboardingStepId.STORY,
         OnboardingStepId.FRIENDS,
@@ -31,9 +33,14 @@ object OnboardingFlowRules {
 
     /**
      * `contactsOfferable` : la proposition « retrouver tes amis » peut aboutir — elle suffit alors à faire naître la
-     * carte des amis, même sans profil suggéré.
+     * carte des amis, même sans profil suggéré. `profileComplete` : le compte porte déjà avatar ET bannière — la carte
+     * « Montre-toi » n'a rien à proposer (iOS `OnboardingFlow.pendingGestureSteps`).
      */
-    fun pendingGestureSteps(state: ApiOnboardingState, contactsOfferable: Boolean = false): List<OnboardingStepId> {
+    fun pendingGestureSteps(
+        state: ApiOnboardingState,
+        contactsOfferable: Boolean = false,
+        profileComplete: Boolean = false,
+    ): List<OnboardingStepId> {
         val settled = state.seenSteps.toSet() + state.prefilledSteps.toSet()
         return gestureSteps.filter { step ->
             if (step in settled) return@filter false
@@ -43,6 +50,7 @@ object OnboardingFlowRules {
                 OnboardingStepId.AGE -> state.servesAgeStep
                 OnboardingStepId.FRIENDS -> state.suggestions.isNotEmpty() || contactsOfferable
                 OnboardingStepId.EMAIL -> state.emailVerified == false
+                OnboardingStepId.PROFILE -> !profileComplete
                 OnboardingStepId.LANGUAGES, OnboardingStepId.STORY, OnboardingStepId.NOTIFICATIONS -> true
             }
         }
@@ -106,10 +114,11 @@ data class OnboardingPlan(
             state: ApiOnboardingState,
             contactsOfferable: Boolean,
             notificationsUndetermined: Boolean,
+            profileComplete: Boolean = false,
         ): OnboardingPlan {
             val unseen = OnboardingStepId.NOTIFICATIONS !in state.seenSteps
             return OnboardingPlan(
-                queue = OnboardingFlowRules.pendingGestureSteps(state, contactsOfferable),
+                queue = OnboardingFlowRules.pendingGestureSteps(state, contactsOfferable, profileComplete),
                 notificationsPending = unseen && notificationsUndetermined,
                 producedSomething = OnboardingFlowRules.alreadyProduced(state),
             )

@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// **Glisser vers le haut réduit l'aperçu pour dégager le menu coupé**
-/// (directive porteur 2026-10-01, #9043).
+/// (#9043).
 ///
 /// Un long message élevé par l'appui long pousse le menu d'actions sous le bas
 /// de l'écran. Le glissement vertical PILOTE un facteur de réduction de
@@ -53,7 +53,8 @@ enum MessageOverlayRevealLaw {
         (1 - factor) * shrinkableHeight
     }
 
-    /// Le facteur à l'ouverture. Sous VoiceOver, le menu doit être atteignable
+    /// Le facteur à l'ouverture. Sous VoiceOver ou Réduire les animations
+    /// (comme l'aperçu de conversation, #17275), le menu doit être atteignable
     /// SANS le geste : l'overlay s'ouvre déjà réduit, menu entièrement visible.
     static func restingFactor(floor: CGFloat, assistiveReveal: Bool) -> CGFloat {
         assistiveReveal ? floor : 1

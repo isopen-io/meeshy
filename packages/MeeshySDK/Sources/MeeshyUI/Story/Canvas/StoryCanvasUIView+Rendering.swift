@@ -49,7 +49,7 @@ extension StoryCanvasUIView {
         let bgKind = readerContext.aliasingLocalMedia(
             StoryRenderer.renderBackground(slide: slide, languages: readerContext.preferredLanguages))
         // BG transform : priorité à `mediaObjects[bg]` (source de vérité
-        // unifiée avec les items FG depuis 2026-05-29). Fallback sur le
+        // unifiée avec les items FG). Fallback sur le
         // champ legacy `slide.effects.backgroundTransform.scale/offset/rotation`
         // pour les stories publiées AVANT l'unification (les valeurs y sont
         // gelées mais valides). `videoFitMode` reste toujours sur
@@ -65,7 +65,7 @@ extension StoryCanvasUIView {
             // garde de transition (scale != 1.0 || x != 0.5 || ...) basculait
             // sur `backgroundTransform` legacy quand le user dezoomait
             // exactement à 1.0, provoquant un saut visible entre les deux
-            // sources si la legacy avait un scale différent (bug 2026-05-29).
+            // sources si la legacy avait un scale différent.
             // `backgroundTransform` n'est utilisée qu'en pur fallback quand
             // `mediaObjects[bg]` n'existe pas (stories pré-unification).
             if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }) {
@@ -92,8 +92,8 @@ extension StoryCanvasUIView {
         // Letterbox fill : la couleur de fond de la slide n'habille les bandes QUE
         // s'il n'y a PAS de média de fond visuel. Avec un fond image/vidéo
         // (`bgKind.isVisualMedia`), aucune couleur — letterbox neutre (transparente)
-        // → le fond coloré est supprimé dès qu'un visuel de fond existe (user
-        // 2026-06-03, inverse la préférence 2026-05-28). En pratique le média
+        // → le fond coloré est supprimé dès qu'un visuel de fond existe.
+        // En pratique le média
         // remplit le canvas (resizeAspectFill par défaut) ; la bande neutre ne
         // concerne que le mode fit explicite (double-tap auteur).
         let letterboxColor: UIColor? = {
@@ -113,7 +113,7 @@ extension StoryCanvasUIView {
             // (user spec 2026-05-28: thumbnail visible above color, not below).
             slidePreviewThumbHash: slide.effects.thumbHash,
             // **Les bandes d'un média AJUSTÉ sont peintes, pas laissées nues**
-            // (directive porteur 2026-08-31). La scène étant figée en 9:16, un
+            // La scène étant figée en 9:16, un
             // fond paysage n'en occupe que la tranche centrale — et l'auteur
             // écrit dans ce qui reste. La cascade des sources est une RÈGLE
             // pure : le fond d'abord, les collages de premier plan ensuite, le
@@ -121,7 +121,7 @@ extension StoryCanvasUIView {
             letterboxFillHashes: StoryLetterboxFill.candidateHashes(effects: slide.effects),
             // Filter is BAKED into the background bitmap at stamp time (no overlay) —
             // renders identically in composer / preview / reader / published, and an
-            // in-place image edit re-filters via `contentVersion` (2026-06-03 pivot).
+            // in-place image edit re-filters via `contentVersion`.
             filter: slide.effects.filter.flatMap { StoryFilter(rawValue: $0) },
             filterIntensity: Float(slide.effects.filterIntensity ?? 1.0),
             // Les réglages du média de fond (#9496) et son look (#13840), comme la vignette et l'export.
@@ -147,7 +147,7 @@ extension StoryCanvasUIView {
                                                       languages: readerContext.preferredLanguages, contentsScale: traitCollection.storyCanvasDisplayScale)
         }
 
-        // Cache CALayer : actif dans LES DEUX modes depuis 2026-07-11.
+        // Cache CALayer : actif dans LES DEUX modes.
         // - `.play` : `displayLinkTick` rebuild à 60 Hz sans mutation du modèle
         //   (seul `currentTime` avance) — fingerprint historique inchangé.
         // - `.edit` : `StoryRenderer.render` fournit un `contentHash` JSON

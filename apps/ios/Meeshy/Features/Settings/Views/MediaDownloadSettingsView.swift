@@ -17,6 +17,9 @@ struct MediaDownloadSettingsView: View {
     /// #9684 — à la prise de vue : l'original (défaut : non) et la version avec effets et cadre.
     @AppStorage(CaptureSavePolicy.savesOriginalKey) private var captureSavesOriginal = CaptureSavePolicy.standard.savesOriginal
     @AppStorage(CaptureSavePolicy.renderedModeKey) private var captureRenderedMode = CaptureSavePolicy.standard.renderedMode
+    /// #17269 — à l'ouverture du composer : la caméra armée et la photothèque à mi-hauteur.
+    @AppStorage(ComposerOpeningPreferences.armsCameraKey) private var openingArmsCamera = ComposerOpeningPreferences.standard.armsCamera
+    @AppStorage(ComposerOpeningPreferences.opensLibraryKey) private var openingOpensLibrary = ComposerOpeningPreferences.standard.opensLibrary
     /// #9885 — à l'envoi : le lieu des photos (retiré par défaut, #11247) et la compression.
     @AppStorage(OutgoingImageLocationSetting.key) private var keepsPhotoLocation = OutgoingImageLocationSetting.standard
     @ObservedObject private var preferences: UserPreferencesManager
@@ -52,6 +55,7 @@ struct MediaDownloadSettingsView: View {
             infoSection
             autoSaveSection
             captureSaveSection
+            composerOpeningSection
             outgoingSection
             policyPicker(
                 title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandPrimaryHex,
@@ -156,6 +160,32 @@ struct MediaDownloadSettingsView: View {
                                             defaultValue: "Enregistrer la version avec effets et cadre", bundle: .main),
                               subtitle: String(localized: "settings.media.capture.rendered.subtitle",
                                                defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.",
+                                               bundle: .main))
+            }
+            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+        }
+    }
+
+    // MARK: - À l'ouverture du composer (#17269)
+
+    private var composerOpeningSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "settings.media.opening.header",
+                                        defaultValue: "À l'ouverture du composer", bundle: .main),
+                          icon: "square.and.pencil", color: MeeshyColors.indigo600Hex)
+            VStack(spacing: 0) {
+                captureToggle(isOn: $openingArmsCamera, icon: "camera.viewfinder",
+                              title: String(localized: "settings.media.opening.camera.title",
+                                            defaultValue: "Armer la caméra", bundle: .main),
+                              subtitle: String(localized: "settings.media.opening.camera.subtitle",
+                                               defaultValue: "La caméra s'ouvre derrière la scène dès l'ouverture du composer. Maintenez la scène pour filmer.",
+                                               bundle: .main))
+                Divider().padding(.leading, Self.separatorInset)
+                captureToggle(isOn: $openingOpensLibrary, icon: "photo.on.rectangle",
+                              title: String(localized: "settings.media.opening.library.title",
+                                            defaultValue: "Ouvrir la photothèque", bundle: .main),
+                              subtitle: String(localized: "settings.media.opening.library.subtitle",
+                                               defaultValue: "Vos photos s'ouvrent à mi-hauteur, la caméra visible derrière.",
                                                bundle: .main))
             }
             .background(sectionBackground(tint: MeeshyColors.indigo600Hex))

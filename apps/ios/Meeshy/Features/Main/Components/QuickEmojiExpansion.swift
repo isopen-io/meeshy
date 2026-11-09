@@ -7,8 +7,7 @@ import CoreGraphics
 /// parcouru vers la gauche depuis le début du geste, et le champ de saisie
 /// cède d'autant — progressivement, et le doigt qui revient la rétrécit. Le
 /// champ garde toujours son micro (une cible de 44 pt) et le début de son
-/// texte d'invite. Au relâcher, la bande GARDE sa largeur (#12440, retour
-/// porteur 2026-10-23) : elle ne reprend sa largeur de repos que lorsqu'on
+/// texte d'invite. Au relâcher, la bande GARDE sa largeur (#12440): elle ne reprend sa largeur de repos que lorsqu'on
 /// touche le texte ou qu'on choisit un émoji.
 ///
 /// Les emojis restent sous le doigt : la bande grandit par son bord gauche, son

@@ -49,7 +49,7 @@ const flagsOf = (overrides: Partial<ConversationFlags> = {}): ConversationFlags 
   ...overrides,
 });
 
-function mountRowActions(options: { readonly canCall?: boolean } = {}): { readonly actions: string[] } {
+function mountRowActions(): { readonly actions: string[] } {
   const actions: string[] = [];
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -63,7 +63,6 @@ function mountRowActions(options: { readonly canCall?: boolean } = {}): { readon
             unread
             magnified
             language="fr"
-            canCall={options.canCall === true}
             onAction={(id) => actions.push(id)}
           />
         </li>
@@ -126,25 +125,30 @@ describe('RowActions — le retour matériel consomme le menu, jamais la liste (
   });
 });
 
-describe('RowActions — appeler depuis la ligne, au clic droit comme à l’appui long (#8109)', () => {
+describe('RowActions — #17243 : le panneau passe AU-DESSUS du chrome fixe du haut', () => {
+  test('ouvert près du haut, le panneau couvre la bannière du joueur (z-index 40) au lieu de passer dessous', () => {
+    mountRowActions();
+    openMenu();
+    const panel = document.body.querySelector<HTMLElement>('[role="menu"]');
+    expect(Number(panel?.style.zIndex)).toBeGreaterThan(40);
+    expect(panel?.className ?? '').not.toContain('z-30');
+  });
+});
+
+describe('RowActions — le menu de la ligne, au clic droit comme à l’appui long (#8109)', () => {
   const menuItem = (label: string): HTMLButtonElement | null =>
     [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === label) ?? null;
 
-  test('« Appel vocal » et « Appel vidéo » routent leur action', () => {
-    const { actions } = mountRowActions({ canCall: true });
+  test('#17243 — ni « Appel vocal » ni « Appel vidéo » : l’appel se passe depuis la conversation', () => {
+    mountRowActions();
     openMenu();
-    act(() => {
-      menuItem('Appel vocal')?.click();
-    });
-    openMenu();
-    act(() => {
-      menuItem('Appel vidéo')?.click();
-    });
-    expect(actions).toEqual(['callAudio', 'callVideo']);
+    expect(menuItem('Appel vocal')).toBeNull();
+    expect(menuItem('Appel vidéo')).toBeNull();
+    expect(menuItem('Désépingler')).not.toBeNull();
   });
 
   test('le menu contextuel de la ligne (clic droit, appui long) ouvre le même menu, sans le menu du navigateur', () => {
-    mountRowActions({ canCall: true });
+    mountRowActions();
     const row = container.querySelector('li[data-row]');
     if (row === null) throw new Error('ligne introuvable');
     const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
@@ -153,7 +157,7 @@ describe('RowActions — appeler depuis la ligne, au clic droit comme à l’app
     });
     expect(menuIsOpen()).toBe(true);
     expect(event.defaultPrevented).toBe(true);
-    expect(menuItem('Appel vocal') !== null).toBe(true);
+    expect(menuItem('Désépingler') !== null).toBe(true);
   });
 
   /**

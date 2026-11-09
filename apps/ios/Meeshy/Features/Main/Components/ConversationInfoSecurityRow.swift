@@ -67,7 +67,7 @@ struct ConversationInfoSecurityRow: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: regimeSymbol)
                     .font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .foregroundColor(regimeTint)
+                    .foregroundStyle(regimeTint)
                     .frame(width: 24)
                     .accessibilityHidden(true)
 

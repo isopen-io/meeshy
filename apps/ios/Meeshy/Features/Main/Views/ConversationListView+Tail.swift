@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Accès rapides (queue de liste / état vide, 2026-08-21)
+// MARK: - Accès rapides (queue de liste / état vide)
 
 /// La queue de la liste : les accès rapides, ou l'espace neutre quand le
 /// drapeau Lentille est éteint ou que la liste n'est pas encore connue. Elle
@@ -73,7 +73,7 @@ struct ConversationListTail: View {
         // Sous un squelette, la queue attend la liste (#8759) : posée sous
         // lui, elle était repoussée par les rangées réelles.
         if LentilleFeatureFlag.isLentilleListEnabled, ConversationListView.showsQuickActionsTail(emptyBranch: emptyBranch) {
-            // UNIQUE montage des accès rapides (2026-09-09). `listTail` vit
+            // UNIQUE montage des accès rapides. `listTail` vit
             // HORS du `if groupedConversations.isEmpty` : il se rend dans
             // toutes les branches. Le titre suit donc le VIDE plutôt que le
             // site d'appel — « Aucune conversation » à qui démarre, « Et

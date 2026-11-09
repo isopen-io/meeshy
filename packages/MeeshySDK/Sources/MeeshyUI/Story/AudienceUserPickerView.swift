@@ -221,6 +221,7 @@ public struct AudienceUserPickerView: View {
                 Button { vm.query = ""; vm.resetToContacts() } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
+                .accessibilityLabel(String(localized: "common.clear_input", bundle: .module))
             }
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -249,6 +250,7 @@ public struct AudienceUserPickerView: View {
                         Button { vm.toggle(user) } label: {
                             Image(systemName: "xmark.circle.fill").font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         }
+                        .accessibilityLabel(String(localized: "community.members.remove", bundle: .module))
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, MeeshySpacing.sm)

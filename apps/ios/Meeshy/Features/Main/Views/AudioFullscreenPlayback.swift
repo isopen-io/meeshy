@@ -113,7 +113,7 @@ struct AudioFullscreenPlaybackScope<Content: View>: View {
 /// centaines de mots — un bouton chacun, mesurés un à un par la mise en page
 /// en flux — étaient réévalués et remesurés pour une surbrillance qui ne bouge
 /// qu'une à trois fois par seconde. Le rapport système de l'iPhone du porteur
-/// (2026-10-13) montrait 59 % de CPU en moyenne, dans le rendu.
+/// montrait 59 % de CPU en moyenne, dans le rendu.
 ///
 /// Le segment actif se résout ICI, à chaque tick, à coût négligeable ; la vue
 /// se compare sur lui, et SwiftUI ne la refait que lorsqu'il change.

@@ -11,11 +11,9 @@ extension ConversationListViewModel {
         syncCancellable = publisher
             .receive(on: DispatchQueue.main)
             .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
-            .sink { [weak self] in
-                Task { @MainActor [weak self] in
-                    await self?.reloadFromCache()
-                    if self?.messagePrefetcher.takeReloadArm() == true { self?.prefetchTopConversationMessages() }
-                }
+            .relay(through: OrderedEventLane()) { [weak self] _ in
+                await self?.reloadFromCache()
+                if await self?.messagePrefetcher.takeReloadArm() == true { await self?.prefetchTopConversationMessages() }
             }
         // (Removed) ConversationPreferencesBroadcaster subscription: the options
         // sheet now mutates via ConversationStore (increment 2), so a pref change

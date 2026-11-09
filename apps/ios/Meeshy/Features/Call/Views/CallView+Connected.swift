@@ -112,24 +112,7 @@ extension CallView {
             // audio call to video unilaterally — its stream must render even
             // while the local camera stays off.
             if callManager.isVideoUIActive {
-                // Tap the primary video to hide the controls, tap again to
-                // bring them back; nothing hides them on a timer. The PiP (on top)
-                // keeps its own swap tap.
-                videoCallLayout
-                    .contentShape(Rectangle())
-                    .onTapGesture { toggleControls() }
-                    // Swipe-down-to-minimize is attached HERE, not on the whole
-                    // connectedView ZStack: the draggable PiP is a sibling ABOVE
-                    // this layer, so moving the PiP does not also dismiss the
-                    // full-screen call.
-                    .simultaneousGesture(swipeDownToLeaveGesture)
-                    .accessibilityLabel(showControls
-                        ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
-                        : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-                    // Under VoiceOver the controls stay put — this tap element has no
-                    // meaningful purpose then, so it leaves the accessibility tree.
-                    .accessibilityHidden(!exposesTheTapToggle)
+                primaryVideoLayer
             }
 
             VStack(spacing: MeeshySpacing.md) {
@@ -213,6 +196,22 @@ extension CallView {
                 }
                 leaveFullScreen(outcome)
             }
+    }
+
+    private var primaryVideoLayer: some View {
+        // Un toucher masque ou rend les contrôles ; la vignette garde son propre échange.
+        videoCallLayout
+            .contentShape(Rectangle())
+            .onTapGesture { toggleControls() }
+            // Le balayage vers le bas vit ici : déplacer la vignette, au-dessus, ne ferme pas l'appel.
+            .simultaneousGesture(swipeDownToLeaveGesture)
+            .accessibilityLabel(showControls
+                ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
+                : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { toggleControls() }
+            // Sous VoiceOver les contrôles restent en place : cet élément quitte l'arbre.
+            .accessibilityHidden(!exposesTheTapToggle)
     }
 
     /// Ce qui flotte AU-DESSUS de la disposition 1:1 : la vignette perso. Les

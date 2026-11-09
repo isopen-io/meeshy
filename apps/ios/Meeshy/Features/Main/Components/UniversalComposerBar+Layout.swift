@@ -427,8 +427,7 @@ extension UniversalComposerBar {
     // MARK: - Panneau de verre
     // ========================================================================
 
-    /// **Toute la barre repose sur UN panneau de verre** (#7884, directive
-    /// porteur 2026-09-25) — réel sur iOS 26, fait maison avant. Il remplace le
+    /// **Toute la barre repose sur UN panneau de verre** (#7884) — réel sur iOS 26, fait maison avant. Il remplace le
     /// fond transparent de #3920 ; les éléments posés dessus (champ, (+),
     /// enregistrement, pastille de langue) sont du verre aussi.
     static let panelShape = RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)

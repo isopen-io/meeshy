@@ -33,11 +33,11 @@ struct InviteInviterHeader: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(InviteLandingCopy.invites(firstName))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
-                        .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                        .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(verbatim: "@\(creator.username)")
                         .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                        .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                        .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -47,7 +47,7 @@ struct InviteInviterHeader: View {
             if let text = trimmedMessage {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize))
-                    .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, MeeshySpacing.lg)

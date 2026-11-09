@@ -27,10 +27,9 @@ public enum StoryExportOutro {
     /// tôt puis respire le reste du temps.
     nonisolated static let traceDuration: TimeInterval = 1.1
 
-    // MARK: - Carte de fin d'AUTEUR (Part D — 2026-07-26)
+    // MARK: - Carte de fin d'AUTEUR
 
-    /// Fermeture en 2 temps quand une identité d'auteur est fournie (directive
-    /// user 2026-07-26) :
+    /// Fermeture en 2 temps quand une identité d'auteur est fournie:
     ///   1. le logo animé apparaît pour TERMINER la vidéo — muet (le jingle est
     ///      décalé), pendant `logoPhase`. Il chevauche exactement le crossfade
     ///      d'entrée (`overlap`) : le logo est plein pile quand la story s'éteint.

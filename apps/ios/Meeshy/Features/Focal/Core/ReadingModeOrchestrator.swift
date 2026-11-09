@@ -47,7 +47,7 @@ nonisolated public enum ReadingModeOrchestrator {
     /// Ce que l'utilisateur a choisi (mots du menu). `.auto` rend la main aux
     /// branches numériques de `resolveOrchestratorDecision`.
     ///
-    /// AMENDEMENT S1 (REV-4bis/B2, 2026-08-17) — `.bulles` est le sixième cas,
+    /// AMENDEMENT S1 (REV-4bis/B2) — `.bulles` est le sixième cas,
     /// miroir de `ReadingModePreferenceSchema` (`packages/shared/types/
     /// reading-modes.ts`, qui porte la justification COMPLÈTE de la
     /// réouverture du gel). Il naît d'un besoin WEB : le sélecteur historique
@@ -245,8 +245,7 @@ nonisolated public enum ReadingModeOrchestrator {
         return nowMs - lastOpenedMs > absenceWindowMs
     }
 
-    /// Repli du clamp ET mode par défaut : `.script` (directive porteur
-    /// 2026-09-26, #8147 — « ce ne doit plus être le mode par défaut, mais le
+    /// Repli du clamp ET mode par défaut: `.script` (#8147 — « ce ne doit plus être le mode par défaut, mais le
     /// mode Script »), miroir de `CLAMP_FALLBACK_MODE` (`reading-modes.ts`).
     /// Focal reste choisissable ; un choix collant est conservé, et « auto »
     /// n'ayant aucune clé stockée, aucune migration n'est nécessaire. Présent

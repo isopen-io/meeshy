@@ -9,7 +9,7 @@
 
 Madame, Monsieur,
 
-Meeshy est une messagerie libre (https://github.com/isopen-io/meeshy) dont le code source est public. Elle intègre libsignal, à la version [0.105.4], sans modification, pour offrir un chiffrement de bout en bout fondé sur le protocole Signal (X3DH/PQXDH, Double Ratchet) dans ses applications iOS, Android et web et dans sa passerelle.
+Meeshy est une messagerie libre (https://github.com/isopen-io/meeshy) dont le code source est public. Elle intègre libsignal, à la version [0.106.2], sans modification, pour offrir un chiffrement de bout en bout fondé sur le protocole Signal (X3DH/PQXDH, Double Ratchet) dans ses applications iOS, Android et web et dans sa passerelle.
 
 Nous distribuons ces applications, ainsi que leur code source complet, sous les conditions de l'AGPL-3.0 : chaque binaire indique sa licence et renvoie à son code source au commit exact de sa construction, et les avis de libsignal sont affichés dans l'application.
 

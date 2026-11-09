@@ -132,6 +132,7 @@ public struct LanguagePickerSheet: View {
     @State private var searchText = ""
     @State private var selectedId: String?
     @State private var sheetDragOffset: CGFloat = 0
+    @State private var dismissal: Task<Void, Never>?
 
     // Cap to a reasonable max so iPad (1024+pt height) doesn't get a sheet
     // that towers across the entire screen. 65% on iPhone, ~520pt on iPad.
@@ -178,7 +179,7 @@ public struct LanguagePickerSheet: View {
         ZStack(alignment: .bottom) {
             (style == .dark ? Color.black.opacity(0.6) : Color.black.opacity(MeeshyOpacity.medium))
                 .ignoresSafeArea()
-                .onTapGesture { dismiss() }
+                .meeshyTapAction(label: String(localized: "common.close", bundle: .module)) { dismiss() }
 
             VStack(spacing: 0) {
                 dragHandle
@@ -216,7 +217,7 @@ public struct LanguagePickerSheet: View {
 
     private func dismiss() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { sheetDragOffset = maxHeight }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
+        dismissal = Task { await DelayedUI.perform(after: .milliseconds(300)) { onDismiss?() } }
     }
 
     // MARK: - Drag Handle
@@ -231,15 +232,16 @@ public struct LanguagePickerSheet: View {
             HStack {
                 Text(String(localized: "languagePicker.title", defaultValue: "Langue de traduction", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    .foregroundColor(style == .dark ? .white : .primary)
+                    .foregroundStyle(style == .dark ? .white : Color.primary)
                 Spacer()
                 Button {
                     onDismiss?()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xxl))
-                        .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
+                        .meeshyScaledFont(MeeshyIconSize.xxl)
+                        .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
                 }
+                .accessibilityLabel(String(localized: "common.close", bundle: .module))
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.bottom, MeeshySpacing.sm)
@@ -252,11 +254,11 @@ public struct LanguagePickerSheet: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray)
-                .font(.system(size: MeeshyIconSize.sm))
+                .meeshyScaledFont(MeeshyIconSize.sm)
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(style == .dark ? .white : .primary)
+                .foregroundStyle(style == .dark ? .white : Color.primary)
                 .tint(MeeshyColors.brandPrimary)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)

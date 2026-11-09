@@ -58,14 +58,31 @@ nonisolated protocol TalkiePushToTalkTokenRegistering: Sendable {
     func unregister(token: String) async throws
 }
 
-/// `POST/DELETE /api/v1/users/me/push-to-talk-token { token }` (#17142), par le catalogue généré.
+/// Le corps d'enregistrement : le jeton ET l'environnement APNs de la build qui l'a produit. Sans lui, la passerelle
+/// range le jeton en `production` et Apple refuse le réveil d'une build de développement (`BadEnvironmentKeyInToken`).
+nonisolated struct TalkiePushToTalkRegistration: Encodable, Sendable {
+    let token: String
+    let apnsEnvironment: String
+    let bundleId: String?
+
+    init(token: String, apnsEnvironment: String = PushNotificationManager.apnsEnvironment, bundleId: String? = Bundle.main.bundleIdentifier) {
+        self.token = token
+        self.apnsEnvironment = apnsEnvironment
+        self.bundleId = bundleId
+    }
+}
+
+/// `POST/DELETE /api/v1/users/me/push-to-talk-token` (#17142), par le catalogue généré.
 nonisolated struct APITalkiePushToTalkTokenRegistrar: TalkiePushToTalkTokenRegistering {
     private struct Body: Encodable, Sendable {
         let token: String
     }
 
     func register(token: String) async throws {
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(UsersEndpoint.mePushToTalkToken, body: Body(token: token))
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
+            UsersEndpoint.mePushToTalkToken,
+            body: TalkiePushToTalkRegistration(token: token)
+        )
     }
 
     func unregister(token: String) async throws {
@@ -132,6 +149,14 @@ final class TalkiePushToTalkChannel: TalkiePushToTalkChanneling {
         _ = await managerIfAvailable()
     }
 
+    /// À l'ouverture de session, au premier plan : un destinataire joignable rejoint le canal, même s'il n'a jamais
+    /// parlé lui-même — sinon iOS jette ses réveils.
+    func joinIfReachable(role: String?, relations: RelationsProviding = RelationsService.shared) async {
+        let links = (try? await relations.links()) ?? []
+        guard TalkieOfferRule.reachable(links: links, role: role) else { return }
+        await activate()
+    }
+
     func tokenReceived(_ token: String) async {
         defaults.set(token, forKey: TalkiePushToTalkRules.tokenDefaultsKey)
         do {
@@ -187,15 +212,27 @@ nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDele
     private let fallbackName: String
     private let onToken: @Sendable (String) -> Void
     private let onLeft: @Sendable () -> Void
+    private let prepareAudio: @Sendable () -> Void
 
     init(
         fallbackName: String,
         onToken: @escaping @Sendable (String) -> Void,
-        onLeft: @escaping @Sendable () -> Void
+        onLeft: @escaping @Sendable () -> Void,
+        prepareAudio: @escaping @Sendable () -> Void = TalkiePushToTalkDelegate.preparePlayAndRecord
     ) {
         self.fallbackName = fallbackName
         self.onToken = onToken
         self.onLeft = onLeft
+        self.prepareAudio = prepareAudio
+    }
+
+    /// PushToTalk n'active la session audio — et n'appelle `didActivate` — que si elle est en `.playAndRecord`.
+    static func preparePlayAndRecord() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        } catch {
+            Logger.talkiePTT.error("talkie · session audio PushToTalk non préparée : \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// La session du compte finit : un réveil annoncé pour lui ne se rejoint plus.
@@ -220,13 +257,20 @@ nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDele
     // MARK: Réception
 
     func incomingPushResult(channelManager: PTChannelManager, channelUUID: UUID, pushPayload: [String: Any]) -> PTPushResult {
+        .activeRemoteParticipant(PTParticipant(name: receive(pushPayload: pushPayload), image: nil))
+    }
+
+    /// Un réveil arrive : il attend la session audio, la socket se lève, la session se prépare pour que le système
+    /// l'active. Rend le nom de l'orateur.
+    func receive(pushPayload: [AnyHashable: Any]) -> String {
         let push = TalkieWakePush(pushToTalkPayload: pushPayload)
         pending.withLock { $0 = push }
+        prepareAudio()
         if push != nil {
             Task { @MainActor in TalkieWakeJoiner.shared.prepareConnection() }
         }
-        let name = TalkiePushToTalkRules.participantName(for: pushPayload, fallback: fallbackName)
-        return .activeRemoteParticipant(PTParticipant(name: name, image: nil))
+        Logger.talkiePTT.info("talkie · réveil PushToTalk reçu, session audio préparée")
+        return TalkiePushToTalkRules.participantName(for: pushPayload, fallback: fallbackName)
     }
 
     func channelManager(_ channelManager: PTChannelManager, didActivate audioSession: AVAudioSession) {

@@ -51,7 +51,7 @@ extension StoryComposerViewModel {
             order: 0
         )
 
-        // **Aucune puce de crédit** (décision porteur 2026-10-13, #10524) : le
+        // **Aucune puce de crédit** (#10524) : le
         // crédit vit dans l'en-tête du lecteur, après la date. La puce qu'une
         // source publiée avant la règle porte encore part avec la copie, sans
         // jamais toucher le texte éditable de l'auteur.

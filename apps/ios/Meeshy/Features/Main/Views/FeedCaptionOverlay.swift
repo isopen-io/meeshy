@@ -2,8 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **La légende, PAR-DESSUS l'image, dans le listing du fil** (directive
-/// porteur 2026-09-05).
+/// **La légende, PAR-DESSUS l'image, dans le listing du fil**.
 ///
 /// > « lors du listing du feed ajouter les caption par dessus l'image les 20
 /// > premiers mots et … »

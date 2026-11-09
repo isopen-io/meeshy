@@ -5,7 +5,7 @@ import MeeshyUI
 /// Centralizes image memory management for the Meeshy app.
 ///
 /// The image pipeline is built on `DiskCacheStore` (NSCache + disk FileManager),
-/// not Kingfisher — Kingfisher was audited out (2026-05-06, see `decisions.md`).
+/// not Kingfisher — Kingfisher was audited out (see `decisions.md`).
 /// This type provides:
 /// - `applyGlobal()` — called once at app launch to cap the in-memory image cache
 ///   at 60 MB and configure background decode via the shared `DiskCacheStore`

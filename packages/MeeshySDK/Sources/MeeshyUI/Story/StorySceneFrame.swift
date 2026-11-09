@@ -15,11 +15,10 @@ nonisolated enum StorySceneFrame {
         return effects.backgroundTransform?.videoFitMode != "fit"
     }
 
-    /// **La SCÈNE est figée en 9:16 — le fond n'impose plus sa forme
-    /// (directive porteur, 2026-08-31).**
+    /// **La SCÈNE est figée en 9:16 — le fond n'impose plus sa forme.**
     ///
     /// Elle suivait le ratio CONTINU du fond, clampé à [9/21, 21/9] : « l'import
-    /// du fond impose le cadre et forme du Canvas » (directive du 2026-07-14).
+    /// du fond impose le cadre et forme du Canvas ».
     /// Une photo paysage donnait donc un canvas 16:9 — ce que le porteur a
     /// mesuré sur capture, là où toutes les planches du document montrent une
     /// scène verticale.

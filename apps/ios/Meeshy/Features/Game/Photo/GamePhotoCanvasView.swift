@@ -125,7 +125,7 @@ struct GamePhotoCanvasView: View {
     private func text(_ line: PhotoTextLine, text value: String, weight: UIFont.Weight, color: Color) -> some View {
         Text(value)
             .font(Self.fixedFont(line.size, weight))
-            .foregroundColor(color)
+            .foregroundStyle(color)
             .lineLimit(1)
             .minimumScaleFactor(0.5)
             .shadow(color: MeeshyColors.indigo950.opacity(0.6), radius: layout.width * 0.012)

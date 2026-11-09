@@ -21,7 +21,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// pendant que cet offset restait à 72, ~40pt de décalage). Remises en
     /// lockstep à 52 (colonne deux-lignes icône+durée / type).
     // 84 pt : « 12,0 s » + type lisibles en entier — à 52 la durée tronquait
-    // en « 12,… » (capture user 2026-07-20). Lockstep avec
+    // en « 12,… ». Lockstep avec
     // `TrackBarView.labelColumnWidth` (test dédié).
     public nonisolated static var laneLabelWidth: CGFloat { 84 }
     public nonisolated static var horizontalPadding: CGFloat { 12 }
@@ -111,7 +111,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     }
 
     /// Bornes de zoom partagées avec les boutons du transport — élargies à
-    /// 5 % – 800 % (retour user 2026-07-20) : 5 % embrasse une timeline de
+    /// 5 % – 800 % : 5 % embrasse une timeline de
     /// plusieurs minutes d'un coup d'œil, 800 % permet le calage fin < 0,1 s.
     public nonisolated static var zoomRange: ClosedRange<CGFloat> { 0.05...8.0 }
 

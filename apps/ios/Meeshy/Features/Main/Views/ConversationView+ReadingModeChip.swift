@@ -25,8 +25,7 @@ struct ConversationReadingModeAffordance: View {
 
     var body: some View {
         // Drapeau OFF ⇒ la loi ne rend que `.bubbles` : pas de chip. Drapeau
-        // ON ⇒ chip TOUJOURS, y compris en Bulles (c'est depuis lui qu'on en
-        // sort — 2026-08-21, Bulles est l'un des trois rendus du fil).
+        // ON ⇒ chip TOUJOURS, y compris en Bulles (Bulles est l'un des trois rendus du fil).
         if capabilities.availableModes.contains(where: { $0 != .bubbles }) {
             ReadingModeChip(
                 model: chipModel,

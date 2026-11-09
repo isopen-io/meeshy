@@ -35,8 +35,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable, Equatable
     /// Variantes TTS par langue (rattachées à l'audio background historiquement).
     public var backgroundAudioVariants: [StoryAudioVariant]?
     /// Z-order persistent (cf. `StoryTextObject.zIndex`).
-    /// **Tout objet de scène se REDIMENSIONNE et TOURNE** (directive porteur
-    /// 2026-08-31, #4591) :
+    /// **Tout objet de scène se REDIMENSIONNE et TOURNE** (#4591):
     ///
     /// > « Dans la V3, tout `MeeshySceneObject` a ces détails. Tout objet sur la
     /// > scène peut scale et roter. Il n'existe sur la scène que des

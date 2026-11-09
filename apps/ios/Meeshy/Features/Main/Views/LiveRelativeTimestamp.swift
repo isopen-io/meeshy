@@ -13,9 +13,7 @@ struct LiveRelativeTimestamp: View {
 
     /// Le tick minute n'a de sens que tant que le libellé change à la minute
     /// (« 3 min », « 47 min ») : au-delà d'une heure, une rangée rend un texte
-    /// STATIQUE, rafraîchi par le prochain passage de body de la liste (audit
-    /// chauffe 2026-08-26 : 15-20 réveils par minute pour des libellés qui ne
-    /// bougent pas avant des heures).
+    /// STATIQUE, rafraîchi par le prochain passage de body de la liste.
     static let liveTickWindow: TimeInterval = 3600
 
     var body: some View {

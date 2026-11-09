@@ -78,7 +78,7 @@ nonisolated struct LentilleModeMenuModel: Equatable {
         capabilities: ReadingModeOrchestrator.ReadingModeCapabilities,
         currentPreference: ReadingModeOrchestrator.ReadingModePreference
     ) -> LentilleModeMenuModel {
-        // 2026-08-21 : Focal est de retour (passe minimale) et Bulles devient
+        // Focal est de retour (passe minimale) et Bulles devient
         // un choix — les trois vues du fil, puis Résumé et Rivière.
         let order: [ReadingModeOrchestrator.ReadingModePreference] = [.auto, .focal, .script, .bulles, .resume, .riviere]
         let entries = order.map { preference -> Entry in
@@ -216,8 +216,7 @@ struct LentilleModeMenu: View {
 /// et le menu custom de repli (`ConversationContextMenuView`), qui le ferme
 /// sur le choix (`onSelected`) et en expose les modes à VoiceOver
 /// (`selectableModes` / `select(_:)`). L'aperçu d'appui long
-/// (`LentillePeekView`, ancien troisième point d'entrée) a été SUPPRIMÉ le
-/// 2026-08-21 : l'aperçu montre les derniers messages, le choix de mode a
+/// (`LentillePeekView`, ancien troisième point d'entrée) a été SUPPRIMÉ: l'aperçu montre les derniers messages, le choix de mode a
 /// deux portes — l'encoche et ce sous-menu.
 ///
 /// Charge la préférence mémorisée (M-048) à l'ouverture — `UserDefaults`

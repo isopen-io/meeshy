@@ -7,12 +7,9 @@ import MeeshyUI
 // `ConversationView+Composer.swift`, qui montait quatre fermetures jumelles.
 extension ConversationView {
 
-    /// **Toucher une pièce en attente ouvre la retouche de la caméra** (#11133,
-    /// porteur 2026-10-20 : « brancher cette édition sur les images et vidéos
-    /// qu'on veut envoyer ») : mêmes outils, même chrome. Rien n'y oblige —
+    /// **Toucher une pièce en attente ouvre la retouche de la caméra** (#11133): mêmes outils, même chrome. Rien n'y oblige —
     /// une pièce non touchée part telle quelle. La série de scènes du composer
-    /// (#9126) n'est plus une porte de la conversation (décision porteur
-    /// 2026-10-20).
+    /// (#9126) n'est plus une porte de la conversation.
     func openPieceRetouch(_ id: String) {
         scrollState.pieceToRetouch = ComposerRetouchSeries.candidates(attachments: composerState.pendingAttachments,
                                                                       files: composerState.pendingMediaFiles)

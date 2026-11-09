@@ -363,7 +363,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(tags)
         h.combine(userState.reaction)
         // Catégorie — AFFICHÉE par l'encoche haut-gauche de la carte de focus
-        // magnifiée (réintroduite le 2026-08-22), qui en peint le NOM résolu
+        // magnifiée, qui en peint le NOM résolu
         // depuis `userCategories`. Non repliée, elle se figeait sur sa
         // première valeur : `LentilleFocusCard.==` ne compare la conversation
         // QUE par ce hash, donc déplacer la conversation depuis l'encoche

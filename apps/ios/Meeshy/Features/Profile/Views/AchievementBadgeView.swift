@@ -28,7 +28,7 @@ struct AchievementBadgeView: View {
 
                 Image(systemName: achievement.icon)
                     // doctrine 86i — icône bornée par le cercle de progression fixe 56×56
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(MeeshyFont.fixedGlyph(22, weight: .semibold))
                     .foregroundColor(
                         achievement.isUnlocked
                             ? Color(hex: achievement.color)
@@ -45,7 +45,7 @@ struct AchievementBadgeView: View {
 
             Text("\(achievement.current)/\(achievement.threshold)")
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium, design: .rounded))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .padding(.vertical, MeeshySpacing.md)
         .frame(maxWidth: .infinity)

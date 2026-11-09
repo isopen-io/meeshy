@@ -304,7 +304,7 @@ final class GamePhotoSession: ObservableObject {
     }
 
     /// Changer de format sur le résultat : le carré est une autre image, « Enregistrer » revient s'il
-    /// n'est pas en galerie avec ce cadre (#10296, porteur 2026-10-12).
+    /// n'est pas en galerie avec ce cadre (#10296).
     func chooseFormat(square: Bool) {
         squareFormat = square
         guard let takeSave else { return }

@@ -83,7 +83,7 @@ struct PhonebookListView: View {
                 } else {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
             }
             .frame(width: 38, height: 38)
@@ -163,7 +163,7 @@ struct PhonebookListView: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "contacts.phonebook.platform-results", defaultValue: "Sur Meeshy, hors de ton répertoire", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
 
                 if viewModel.isSearchingPlatform {
                     ProgressView().progressViewStyle(.circular).scaleEffect(0.6)
@@ -175,7 +175,7 @@ struct PhonebookListView: View {
             if viewModel.platformResults.isEmpty && !viewModel.isSearchingPlatform {
                 Text(String(localized: "contacts.phonebook.platform-none", defaultValue: "Aucun utilisateur ne correspond", bundle: .main))
                     .font(.subheadline)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.sm)
             } else {

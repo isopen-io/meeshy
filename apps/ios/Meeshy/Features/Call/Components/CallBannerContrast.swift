@@ -4,7 +4,7 @@ import MeeshyUI
 /// Décor et vérification de contraste WCAG (1.4.3 texte, 1.4.11 composants
 /// UI/graphiques) de la bannière d'appel réduite (`FloatingCallPillView`).
 ///
-/// Retour user 2026-08-12 (second passage) : la bannière est un aplat
+/// (second passage): la bannière est un aplat
 /// PLEINEMENT indigo — plus de voile noir semi-opaque (l'ancien scrim 40 %
 /// la faisait lire comme une « barre noire »), plus de fondu transparent en
 /// bas. Le contraste est obtenu par le CHOIX DES ARRÊTS du dégradé (600→800,

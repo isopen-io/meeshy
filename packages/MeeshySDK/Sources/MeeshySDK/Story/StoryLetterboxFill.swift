@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// **La bande qu'un média AJUSTÉ laisse dans la scène est une SURFACE de
-/// composition, pas un vide** (directive porteur 2026-08-31).
+/// composition, pas un vide**.
 ///
 /// La scène est figée en 9:16 depuis `d75c471d78` — le fond ne lui impose plus
 /// sa forme. Un média 16:9 posé en fond et affiché AJUSTÉ (double-tap auteur,

@@ -26,7 +26,7 @@ struct CallView: View {
     // l'ancienne instance locale orpheline ne transcrivait jamais rien et
     // était ré-allouée à chaque présentation du CallView.
     //
-    // 2026-07-10 — derived from the injected `callManager` in `init` (below)
+    // derived from the injected `callManager` in `init` (below)
     // instead of defaulting to `CallManager.shared.transcriptionService` at
     // declaration. Same P1-16 hazard as `callManager` above: a defaulted
     // @ObservedObject is reassigned every time the parent reconstructs
@@ -71,7 +71,7 @@ struct CallView: View {
     // so the user knows the call is ringing, not stuck.
     @State var sdpOfferSlow = false
     let sdpOfferSlowSeconds: UInt64 = 6
-    // 2026-07-13 — les alertes qualité (« réseau faible chez votre contact »,
+    // les alertes qualité (« réseau faible chez votre contact »,
     // « connexion au serveur perdue ») ne s'affichent plus en bannière pop-up
     // (retour user : la pill était du bruit inutile en plein appel). L'état de
     // faiblesse réseau vit UNIQUEMENT dans les indicateurs discrets déjà
@@ -150,15 +150,14 @@ struct CallView: View {
         // du morph PiP, lui, rogne à cette boîte-là — d'où deux bandes du fond
         // BLANC du cover, hautes d'exactement les deux insets (59 pt sous la
         // Dynamic Island, 34 pt au-dessus du home indicator), constatées au
-        // simulateur en thème clair le 2026-08-19.
+        // simulateur en thème clair.
         //
-        // Un correctif du 2026-08-18 avait déplacé `.ignoresSafeArea()` AVANT
+        // Un correctif avait déplacé `.ignoresSafeArea` AVANT
         // le clip en croyant élargir la boîte : les bandes sont restées. C'est
         // le PARENT qui doit proposer le plein écran — ici — pour que la boîte
         // de la surface l'égale et que le clip n'ait plus rien à rogner. Le
         // fond du contact couvre alors les quatre bords LUI-MÊME : aucun socle
-        // opaque ne vient s'intercaler (retour user 2026-08-19 — « la bande
-        // noire ne doit pas exister, le fond doit être l'image entière »).
+        // opaque ne vient s'intercaler (le fond doit être l'image entière »).
         ZStack {
             callSurface
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -200,8 +199,7 @@ struct CallView: View {
             // lignes au lieu de passer dessous.
             //
             // §4.3 — l'ancien bandeau plein-écran "Reconnexion…" (IslandEmergingBanner
-            // + ProgressView) a été retiré (user-reported 2026-07-11 : l'indicateur
-            // jaune couvrait tout l'écran). L'état `.reconnecting` est maintenant
+            // + ProgressView) a été retiré. L'état `.reconnecting` est maintenant
             // porté UNIQUEMENT par une pill compacte dans la même "queue" que les
             // autres indicateurs de statut (statusPill dans audioCallLayout, glyphe
             // inline dans le badge durée de videoCallLayout) — jamais par un overlay
@@ -233,7 +231,7 @@ struct CallView: View {
         // area haute, il coupait net le fond, le self-preview et les flux vidéo
         // que leurs propres `.ignoresSafeArea()` avaient étendus jusqu'au bord —
         // et le fond BLANC du `fullScreenCover` transparaissait en bandeau sous
-        // la Dynamic Island (retour user 2026-08-18, capture).
+        // la Dynamic Island (capture).
         //
         // Le chrome haut ne perd rien : il ré-encarte lui-même la safe area via
         // `chromeTopInset`, seule façon de la retrouver sous un conteneur qui
@@ -334,7 +332,7 @@ struct CallView: View {
         }
     }
 
-    // Débordement de pile sur iPhone (2026-09-30, 5 `.ips` `___chkstk_darwin`
+    // Débordement de pile sur iPhone (5 `.ips` `___chkstk_darwin`
     // dans `closure #1 in CallView.callSurface`) : la fermeture du `ZStack`
     // réservait la trame de TOUTES ses branches à la fois, au-delà du 1 Mo de
     // pile du fil principal d'un appareil (le simulateur en a 8 et ne le voit

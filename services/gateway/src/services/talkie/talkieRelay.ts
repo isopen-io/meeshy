@@ -349,9 +349,12 @@ export class TalkieRelay {
       this.close(session.talkieId, 'cut', 'recipient');
       return;
     }
-    if (!this.sessions.has(session.talkieId)) return;
+    // #17255 — relâchée pendant cette lecture, une voix réveillée reste gardée : son dernier fragment aussi.
+    const live = this.sessions.has(session.talkieId);
+    if (!live && this.finished.get(session.talkieId) !== session) return;
     if (cut !== null && cut >= session.cutFrom) {
-      this.close(session.talkieId, 'cut', 'recipient');
+      if (live) this.close(session.talkieId, 'cut', 'recipient');
+      else this.forget(session);
       return;
     }
 
@@ -525,7 +528,9 @@ export class TalkieRelay {
       logger: { error: (message, error) => this.deps.report(message, error) },
     });
     waiting.expiry.unref?.();
-    if (waiting.joined || waiting.buffer.length === 0 || !this.deps.followUp) return;
+    // Les octets RÉSERVÉS comptent : un fragment encore en lecture de coupure rejoint le tampon avant que le push
+    // n'atteigne l'appareil et que son extension ne lise la voix (#17255).
+    if (waiting.joined || session.chunks === 0 || !this.deps.followUp) return;
     const endedAt = this.deps.now();
     void this.deps
       .followUp({
@@ -533,7 +538,7 @@ export class TalkieRelay {
         fromUserId: session.fromUserId,
         toUserId: session.toUserId,
         availableUntil: new Date(endedAt + TALKIE_JOIN_WINDOW_MS),
-        bytes: waiting.buffer.reduce((total, event) => total + event.data.byteLength, 0),
+        bytes: session.bytes,
         durationMs: Math.max(0, endedAt - session.startedAt),
       })
       .catch((error: unknown) => this.deps.report('Talkie follow-up failed', error));

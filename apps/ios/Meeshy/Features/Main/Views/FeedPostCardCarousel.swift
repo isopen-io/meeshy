@@ -137,6 +137,7 @@ struct FeedPostCardCarousel: View {
         .accessibilityHint(String(localized: "feed.media.viewFullscreen",
                                   defaultValue: "Toucher pour agrandir", bundle: .main))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onOpen(item) }
     }
 
     private func slideAccessibilityLabel(_ item: FeedMedia, at offset: Int) -> String {
@@ -196,8 +197,7 @@ struct FeedPostCardCarousel: View {
                 .foregroundStyle(Color.white)
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(.black.opacity(0.45)))
-                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-                .contentShape(Rectangle())
+                .meeshyTapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

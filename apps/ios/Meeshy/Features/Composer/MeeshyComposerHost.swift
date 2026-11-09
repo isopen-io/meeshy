@@ -487,6 +487,8 @@ struct MeeshyComposerHost: View {
     @StateObject var mediaPorterStore = ComposerMediaPorterStore()
 
     @State var showsPhotoPicker = false
+    /// La photothèque d'ouverture, à mi-hauteur devant la caméra armée (#17269).
+    @State var showsOpeningLibrary = false
     /// Les médias choisis EN SÉRIE : chacun fonde sa scène (`ComposerScenePicking`).
     @State var sceneSeriesMediaURLs: Set<URL> = []
     /// Le sélecteur ouvert À L'OUVERTURE du composer : même un seul média y
@@ -832,14 +834,12 @@ struct MeeshyComposerHost: View {
         let issue = ComposerSceneEmptyTap.outcome(
             hadSelection: sceneSelectionRelay.hasLiveSelection,
             effectIsOpen: openSceneEffect != nil,
-            quickCaptureOffered: sceneQuickCaptureIsOffered,
             backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil,
             bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil,
             writesText: writesText)
         if sceneRestRelay.concealmentConsumes(issue) { return }
         if issue == .endWriting { return endSceneWriting() }
         if ComposerSceneEmptyTap.closesBand(issue) { requestedSceneBand = nil }
-        if issue == .armViewfinder, handleSceneQuickTap() { return }
         // Le document sélectionne son fond par KIND (#4035).
         selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
             currentSelection: selectedSceneItemKind,
@@ -850,7 +850,7 @@ struct MeeshyComposerHost: View {
         switch issue {
         case .deselect:                   sceneSelectionRelay.deselectSceneItem()
         case .selectBackground(let fond): sceneSelectionRelay.selectSceneItem(fond)
-        case .endWriting, .closeEffect, .closeBand, .armViewfinder, .nothing:
+        case .endWriting, .closeEffect, .closeBand, .nothing:
             selectedSceneItemId = nil
             inlineEdit = nil
         }

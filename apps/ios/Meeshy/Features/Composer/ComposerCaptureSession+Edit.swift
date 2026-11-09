@@ -23,7 +23,7 @@ extension ComposerCaptureSession {
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.photo)
         editChromeShown = true
-        editAspect = ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: CGSize(width: debout.width, height: debout.height)))
+        editAspect = imageFormat?.aspect ?? ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: CGSize(width: debout.width, height: debout.height)))
         openingAspect = editAspect
         phase = .editing(.photo)
         camera.pauseRunning()
@@ -54,7 +54,7 @@ extension ComposerCaptureSession {
         editChromeShown = true
         takeSound = ComposerTakeSound()
         editPaused = false
-        editAspect = ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: lecteur.uprightSize))
+        editAspect = imageFormat?.aspect ?? ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: lecteur.uprightSize))
         openingAspect = editAspect
         phase = .editing(.video(url))
         camera.pauseRunning()
@@ -391,7 +391,7 @@ extension ComposerCaptureSession {
 
     /// Les outils que la prise offre, après Filtres et Cadres.
     var editTools: [ComposerEditTool] {
-        editTake.map(ComposerEditTools.offered) ?? []
+        editTake.map { ComposerEditTools.offered($0, formatLocked: imageFormat != nil) } ?? []
     }
 
     /// Les outils dont la surface est à l'écran — ce que le rail allume.
@@ -472,7 +472,7 @@ extension ComposerCaptureSession {
     /// rien ne bouge.
     func setEditAspect(_ aspect: CGFloat) {
         guard phase.isEditing, !isRenderingLook else { return }
-        editAspect = ComposerEditScene.clampedAspect(aspect)
+        editAspect = imageFormat?.aspect ?? ComposerEditScene.clampedAspect(aspect)
     }
 
     // MARK: - La découpe (#9353)

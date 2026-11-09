@@ -98,8 +98,8 @@ public extension MessageProtectionIntent {
     /// Même règle que `ReplyProtectionContagion.contaminate`, exprimée dans la
     /// forme que le composeur manipule. Flou et vue unique, EXCLUSIFS au choix
     /// de l'auteur (#7667), COHABITENT quand le flou est imposé : la vue unique
-    /// ne se transmet pas mais reste un choix libre de la réponse (#8567,
-    /// directive porteur 2026-09-29), et la réponse porte les deux bits.
+    /// ne se transmet pas mais reste un choix libre de la réponse (#8567),
+    /// et la réponse porte les deux bits.
     func contaminated(by imposed: ReplyProtectionContagion.Imposed) -> MessageProtectionIntent {
         guard !imposed.isEmpty else { return self }
         let durationSeconds: Int?

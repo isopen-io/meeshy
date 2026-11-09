@@ -435,7 +435,7 @@ struct ConversationHeaderAvatarView: View {
         // on n'ajoute que les entrées profil / conversation / message.
         var items: [AvatarContextMenuItem] = []
         if isDirect {
-            // F10 (revue adversariale 2026-08-25) : clé app (`.main`) alors
+            // F10: clé app (`.main`) alors
             // que le pendant SDK (`MeeshyAvatar.swift`) réserve
             // `avatar.menu.view_profile` (`.module`) à ce même geste pour
             // que la dédup par LIBELLÉ ne divise jamais deux entrées

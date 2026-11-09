@@ -39,6 +39,7 @@ const EXEMPTIONS: readonly Exemption[] = [
   { fichier: 'components/floating-menus.tsx', combien: 1, pourquoi: SOI },
   { fichier: 'components/story-rail-self-tile.tsx', combien: 1, pourquoi: SOI },
   { fichier: 'routes/onboarding-visuals.tsx', combien: 1, pourquoi: SOI },
+  { fichier: 'routes/onboarding-profile.tsx', combien: 1, pourquoi: `${SOI} — l’aperçu de « Montre-toi » (#17237)` },
   { fichier: 'routes/profile-sections.tsx', combien: 1, pourquoi: SOI },
   { fichier: 'routes/settings-sections.tsx', combien: 1, pourquoi: SOI },
   {

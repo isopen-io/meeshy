@@ -17,7 +17,7 @@ import UIKit
 /// donc, et les deux écrans le montent.
 struct InteractivePopEnabler: UIViewControllerRepresentable {
     /// **La Rivière défile HORIZONTALEMENT — le geste de bord doit lui céder.**
-    /// Retour produit 2026-08-21 : « aucune possibilité de naviguer librement
+    /// « aucune possibilité de naviguer librement
     /// horizontalement ». Le geste de retour par bord gauche d'iOS, réactivé
     /// ici pour toutes les autres vues du fil, s'emparait de chaque balayage
     /// latéral : mesuré au simulateur, un glissement dans la Rivière fermait

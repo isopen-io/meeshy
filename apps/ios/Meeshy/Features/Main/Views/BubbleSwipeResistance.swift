@@ -70,7 +70,7 @@ enum BubbleSwipeResistance {
     /// réponse). Rangée plate (Script, `uniformFlatRow`) : géométrie
     /// UNIFORME — tous les messages étant alignés pareil, reply = glisser à
     /// DROITE (+1) et forward = glisser à GAUCHE, indépendamment de
-    /// l'expéditeur (directive user 2026-08-18). Bulles : convention
+    /// l'expéditeur. Bulles: convention
     /// historique — le côté qui « pointe vers l'expéditeur »
     /// (`isMine ? -1 : +1`), inchangée bit-à-bit.
     static func replyDirection(uniformFlatRow: Bool, isMine: Bool) -> CGFloat {

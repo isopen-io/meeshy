@@ -21,6 +21,7 @@ struct OnboardingCardView: View {
         case .step(.languages): languages
         case .step(.age): OnboardingAgeCard(model: model, isDark: isDark)
         case .step(.email): email
+        case .step(.profile): OnboardingProfileCard(model: model, profile: model.profile, isDark: isDark)
         case .step(.global): global
         case .step(.story): story
         case .step(.friends): OnboardingFriendsCard(model: model, isDark: isDark)

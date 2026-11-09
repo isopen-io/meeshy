@@ -12,7 +12,7 @@ import Foundation
 // croient encore : le serveur recalcule et refuse SANS débit.
 //
 // Une Meesh ne se frappe QU'EN DÉBITANT des points, au prix de son rang : aucun
-// autre chemin n'existe — ni fragment, ni frappe gratuite (porteur, 2026-10-10).
+// autre chemin n'existe — ni fragment, ni frappe gratuite.
 
 /// Argent ; or à chaque centième ; prisme à chaque millième. Aucun avantage de jeu.
 public enum MeeshEdition: String, CaseIterable, Codable, Sendable, Hashable {
@@ -171,7 +171,7 @@ public enum GameMint {
     public static let basePrice = 1221
     public static let priceStepEvery = 10
     public static let priceGrowth = 1.3
-    /// Le plafond (porteur, 2026-10-10) : atteint à la 101e frappe.
+    /// Le plafond : atteint à la 101e frappe.
     public static let priceCap = 16_556
 
     /// Le prix de la n-ième Meesh frappée (n commence à 1 ; une valeur < 1 vaut 1).

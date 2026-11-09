@@ -23,7 +23,7 @@ import { judgeTalkie } from '../../services/talkie/talkieGate';
 import { TalkieRelay } from '../../services/talkie/talkieRelay';
 import { readTalkieCut, registerProcessTalkieRelay } from '../../services/talkie/talkieCut';
 import { mostRecentSharedConversation } from '../../services/talkie/talkieFallback';
-import { sendTalkieWake, talkieWakeChannel } from '../../services/talkie/talkiePush';
+import { resolveTalkieWake, sendTalkieWake, type TalkieWakeDeps, type TalkieWakePhase } from '../../services/talkie/talkiePush';
 import { getPushNotificationService, type SendPushOptions } from '../../services/PushNotificationService';
 import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -114,6 +114,17 @@ export function listenTalkie(socket: TalkieSocket, deps: TalkieHandlerDeps): voi
 
 const relays = new WeakMap<object, TalkieRelay>();
 
+/** Un réveil qui n'atteint aucun appareil laisse UNE ligne qui nomme sa cause (#17249). */
+async function wakeAndTrace(
+  deps: TalkieWakeDeps,
+  params: { readonly talkieId: string; readonly fromUserId: string; readonly toUserId: string } & TalkieWakePhase,
+): Promise<void> {
+  const { failure } = await sendTalkieWake(deps, params);
+  if (failure !== null) {
+    logger.warn('[TALKIE_WAKE_FAILED]', { talkieId: params.talkieId, fromUserId: params.fromUserId, toUserId: params.toUserId, phase: params.phase, cause: failure });
+  }
+}
+
 /** Le relais du processus, créé une fois pour un `io` et enregistré pour la coupure (`talkieCut.ts`). */
 export function talkieHandlerDeps(params: {
   readonly prisma: PrismaClient;
@@ -166,15 +177,16 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
     return limiter.limiter;
   };
   const presence = getPresenceVisibilityService(params.prisma);
-  const wakeDeps = {
+  const push = () => getPushNotificationService(params.prisma);
+  const wakeDeps: TalkieWakeDeps = {
     prisma: params.prisma,
-    push: { sendToUser: (options: SendPushOptions) => getPushNotificationService(params.prisma).sendToUser(options) },
+    push: { sendToUser: (options: SendPushOptions) => push().sendToUser(options) },
     now: () => new Date(),
   };
   return new TalkieRelay({
     io: params.io,
-    wake: (wake) => sendTalkieWake(wakeDeps, { ...wake, phase: 'live' }),
-    followUp: ({ availableUntil, bytes, durationMs, ...pair }) => sendTalkieWake(wakeDeps, { ...pair, phase: 'ended', availableUntil, bytes, durationMs }),
+    wake: (wake) => wakeAndTrace(wakeDeps, { ...wake, phase: 'live' }),
+    followUp: ({ availableUntil, bytes, durationMs, ...pair }) => wakeAndTrace(wakeDeps, { ...pair, phase: 'ended', availableUntil, bytes, durationMs }),
     fallbackConversation: (fromUserId, toUserId) => mostRecentSharedConversation(params.prisma, fromUserId, toUserId),
     trace: (event, fields) => logger.info(event, fields),
     judge: async (fromUserId, toUserId, sealed) => {
@@ -185,13 +197,16 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
           recipientConnected: async (userId) => (await params.io.in(ROOMS.user(userId)).fetchSockets()).length > 0,
           presenceServed: async (viewer, targetId) =>
             (await presence.resolveForTarget({ userId: viewer.userId, role: viewer.role as GlobalUserRoleType }, { id: targetId })).showOnline,
-          wakeChannel: (userId) => talkieWakeChannel(params.prisma, userId),
+          wakeChannel: async (userId) => resolveTalkieWake(params.prisma, userId, await push().deliveryTransports()),
         },
         fromUserId,
         toUserId,
         { sealed },
       );
-      if (verdict.ok === false) logger.info('[TALKIE_REFUSED]', { code: verdict.code, cause: verdict.cause, fromUserId, toUserId });
+      if (verdict.ok === false) {
+        const wakeMiss = verdict.wakeMiss === undefined ? {} : { wakeMiss: verdict.wakeMiss };
+        logger.info('[TALKIE_REFUSED]', { code: verdict.code, cause: verdict.cause, ...wakeMiss, fromUserId, toUserId });
+      }
       return verdict;
     },
     sealedVoiceAccepted: talkieSealedVoiceEnabled,

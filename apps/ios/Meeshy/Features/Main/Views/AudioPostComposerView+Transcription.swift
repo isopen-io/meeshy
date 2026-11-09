@@ -6,8 +6,8 @@ import MeeshyUI
 /// **La TRANSCRIPTION de la création audio** — sa langue, son relevé, ses
 /// échecs et les deux façons de s'en passer.
 ///
-/// Extrait de `AudioPostComposerView.swift` au 2026-09-01 (#4657), qui passait
-/// 1 191 lignes : la directive 2026-08-28 interdit d'ajouter à un fichier hors
+/// Extrait de `AudioPostComposerView.swift` (#4657), qui passait
+/// 1 191 lignes: la interdit d'ajouter à un fichier hors
 /// budget, et `FileSizeBudgetGuardTests` la mesure. La ligne de découpe est une
 /// RESPONSABILITÉ — d'un côté ce que l'auteur ENREGISTRE et place, de l'autre
 /// ce que l'appareil en COMPREND. Les deux bougent pour des raisons
@@ -60,8 +60,7 @@ extension AudioPostComposerView {
         // trompé de langue, et la relance ci-dessous s'en charge.
         .disabled(phase == .recording)
         .opacity(phase == .recording ? 0.5 : 1)
-        // **Changer la langue RELANCE la transcription** (directive porteur
-        // 2026-09-01). Sans cela le sélecteur était un contrôle à moitié
+        // **Changer la langue RELANCE la transcription**. Sans cela le sélecteur était un contrôle à moitié
         // inerte : il agissait avant la transcription et plus après, alors que
         // c'est APRÈS qu'on lit le résultat et qu'on voit l'erreur de langue.
         .adaptiveOnChange(of: selectedLocale.identifier) { _, _ in
@@ -79,7 +78,7 @@ extension AudioPostComposerView {
         } label: {
             Text(Self.shortDisplayName(for: loc))
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : theme.textPrimary)
+                .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.sm)
                 .background(
@@ -155,7 +154,7 @@ extension AudioPostComposerView {
             .prefix(Self.suggestionCap).map { $0 }
     }
 
-    /// **Cinq suggestions, pas sept** (directive porteur 2026-09-01).
+    /// **Cinq suggestions, pas sept**.
     ///
     /// Les sept locales expédiées remplissaient la rangée jusqu'au bord :
     /// « Plus de langues » existait, mais hors champ, donc invisible — un
@@ -264,15 +263,15 @@ extension AudioPostComposerView {
             HStack {
                 Image(systemName: "text.bubble.fill")
                     .font(.footnote)
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
                 Text(String(localized: "composer.audio.transcription.title", defaultValue: "Transcription"))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                 Spacer()
                 Text((t?.language ?? Self.shortDisplayName(for: selectedLocale)).uppercased())
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(theme.surface(tint: MeeshyColors.indigo300Hex)))
@@ -317,7 +316,7 @@ extension AudioPostComposerView {
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
-    /// **Une ligne, et rien de plus** (directive porteur 2026-09-01).
+    /// **Une ligne, et rien de plus**.
     ///
     /// Le panneau portait un titre, le message technique du moteur sur quatre
     /// lignes, puis un bouton en dessous. Ce que l'auteur a besoin de savoir
@@ -327,8 +326,7 @@ extension AudioPostComposerView {
     /// utiliser ; il reste dans l'annonce d'accessibilité, où il ne coûte pas
     /// trois lignes d'écran.
     func errorPanel(_ error: String) -> some View {
-        // **Le message, puis ses sorties DESSOUS** (directive porteur
-        // 2026-09-01). La ligne unique a été tentée et mesurée : à quatre
+        // **Le message, puis ses sorties DESSOUS**. La ligne unique a été tentée et mesurée: à quatre
         // éléments sur 402 pt, ou bien on force les largeurs et la rangée POUSSE
         // son conteneur — toute la feuille se décalait, bords rognés — ou bien
         // on les réduit et « Transcription indis… » n'apprend rien.
@@ -366,7 +364,7 @@ extension AudioPostComposerView {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption)
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .accessibilityHidden(true)
             Text(String(localized: "composer.audio.transcription.unavailable",
                         defaultValue: "Transcription indisponible"))
@@ -384,7 +382,7 @@ extension AudioPostComposerView {
                 actionErreur(String(localized: "common.retry", defaultValue: "Réessayer"),
                              pleine: true, action: retryTranscription)
             }
-            // **Deux façons de s'en passer** (directive porteur 2026-09-01).
+            // **Deux façons de s'en passer**.
             // La reconnaissance vocale échoue pour des raisons qui ne regardent
             // pas l'auteur — pas de modèle pour sa langue, audio bruité,
             // service indisponible. Lui laisser une transcription VIDE le prive
@@ -415,7 +413,7 @@ extension AudioPostComposerView {
         Button(action: action) {
             Text(titre)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(pleine ? .white : MeeshyColors.indigo400)
+                .foregroundStyle(pleine ? Color.white : MeeshyColors.indigo400)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, MeeshySpacing.sm)

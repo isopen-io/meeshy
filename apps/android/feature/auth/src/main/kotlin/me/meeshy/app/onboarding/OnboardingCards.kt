@@ -90,6 +90,9 @@ internal data class OnboardingCardActions(
     val pickBirthDate: (java.time.LocalDate) -> Unit = {},
     val declareBirthDate: () -> Unit = {},
     val acknowledgeAgeRefusal: () -> Unit = {},
+    val chooseProfileImage: (me.meeshy.sdk.model.ImageUploadTarget) -> Unit = {},
+    val retryFailedProfileImages: () -> Unit = {},
+    val continueFromProfile: () -> Unit = {},
 )
 
 /** La carte courante du parcours : un aiguillage, rien d'autre. */
@@ -104,6 +107,7 @@ internal fun OnboardingCardContent(
             OnboardingStepId.LANGUAGES -> LanguagesCard(state, actions, reduceMotion)
             OnboardingStepId.AGE -> OnboardingAgeCard(state, actions)
             OnboardingStepId.EMAIL -> EmailCard(state, actions)
+            OnboardingStepId.PROFILE -> OnboardingProfileStepCard(state, actions)
             OnboardingStepId.GLOBAL -> GlobalCard(state, actions, reduceMotion)
             OnboardingStepId.STORY -> StoryCard(state, actions, reduceMotion)
             OnboardingStepId.FRIENDS -> OnboardingFriendsCard(state, actions)

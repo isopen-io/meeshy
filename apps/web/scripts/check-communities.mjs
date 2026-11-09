@@ -486,8 +486,33 @@ try {
       );
       const picks = await page.$$eval('[data-community-settings-pick]', (els) => els.map((el) => { const r = el.getBoundingClientRect(); return Math.min(Math.round(r.width), Math.round(r.height)); }));
       check(picks.length === 2 && picks.every((side) => side >= TAP_FLOOR), `${label} : chaque bouton d'image fait au moins 44 — ${JSON.stringify(picks)}`);
+      // #17256 — l'image choisie passe d'abord par la retouche de la capture, au format de sa
+      // cible : rond 1:1 pour l'avatar, bandeau 3:1 pour la bannière. Rien ne part avant
+      // « Terminé » ; ✕ n'envoie rien.
+      const retouchRatio = () =>
+        page.$eval('[data-entity-image-retouch] [data-scene-stage]', (el) => {
+          const box = el.getBoundingClientRect();
+          return box.height > 0 ? box.width / box.height : 0;
+        });
+      const noticeShown = async () => ((await page.getAttribute('[data-community-settings-notice]', 'data-community-settings-notice')) ?? '') !== '';
+      await page.setInputFiles('[data-community-settings-file="avatar"]', { name: 'avatar.png', mimeType: 'image/png', buffer: Buffer.from(TINY_PNG, 'base64') });
+      await page.waitForSelector('[data-entity-image-retouch="avatar"] [data-scene-stage][data-scene-format="avatar"]', { timeout: 20_000 });
+      const avatarRatio = await retouchRatio();
+      check(Math.abs(avatarRatio - 1) < 0.01, `${label} : l'avatar se retouche en scène carrée (${avatarRatio.toFixed(3)})`);
+      check((await page.$('[data-entity-image-veil="round"]')) !== null, `${label} : la retouche de l'avatar voile ce qui tombe hors du cercle`);
+      check(!(await noticeShown()), `${label} : rien ne part avant « Terminé »`);
+      await page.click('[data-entity-image-retouch] [data-story-retouch-cancel]');
+      await page.waitForFunction(() => document.querySelector('[data-entity-image-retouch]') === null);
+      await page.waitForTimeout(300);
+      check(!(await noticeShown()), `${label} : ✕ referme la retouche sans rien envoyer`);
       await page.setInputFiles('[data-community-settings-file="banner"]', { name: 'banniere.png', mimeType: 'image/png', buffer: Buffer.from(TINY_PNG, 'base64') });
-      await page.waitForSelector('[data-community-settings-notice="community.settings.banner.uploaded"]');
+      await page.waitForSelector('[data-entity-image-retouch="banner"] [data-scene-stage][data-scene-format="banner"]', { timeout: 20_000 });
+      const bannerRatio = await retouchRatio();
+      check(Math.abs(bannerRatio - 3) < 0.03, `${label} : la bannière se retouche en bandeau 3:1 (${bannerRatio.toFixed(3)})`);
+      check((await page.$('[data-entity-image-veil]')) === null, `${label} : la bannière n'a pas de voile rond`);
+      check(!(await noticeShown()), `${label} : la bannière ne part pas avant « Terminé »`);
+      await page.click('[data-entity-image-retouch] [data-story-retouch-done]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.banner.uploaded"]', { timeout: 20_000 });
       check((await textOf(page, '[data-community-settings-notice]')) === 'Bannière prête : enregistrez pour la publier.', `${label} : la bannière choisie se dit prête`);
       check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : une image posée rend « Enregistrer » actif`);
       check((await page.$('[data-community-settings-images] img')) !== null, `${label} : la bannière choisie s'affiche dans les réglages`);

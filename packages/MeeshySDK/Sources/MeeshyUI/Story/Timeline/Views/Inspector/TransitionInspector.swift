@@ -24,7 +24,7 @@ public struct TransitionInspector: View {
     /// Selectable kinds in the picker. Dissolve is intentionally excluded —
     /// it renders identically to crossfade everywhere it's actually played
     /// (see `ReaderTransitionResolver.liveRenderableTransition`), so offering
-    /// it as a distinct option was a false promise (design doc 2026-07-18).
+    /// it as a distinct option was a false promise.
     /// `.dissolve` itself stays in the `StoryTransitionKind` enum for Codable
     /// back-compat with already-published stories.
     public static let availableKinds: [StoryTransitionKind] = [.crossfade]
@@ -94,7 +94,7 @@ public struct TransitionInspector: View {
     }
 
     /// Titre lisible — l'ancien header affichait les UUID bruts des deux
-    /// clips (« 5D212F9D-6530-… »), inutilisables (retour user 2026-07-11).
+    /// clips (« 5D212F9D-6530-… »), inutilisables.
     private var header: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "diamond.fill")
@@ -142,11 +142,11 @@ public struct TransitionInspector: View {
                 // « DURATION %@ » et affichait le format brut (retour user).
                 Text(String(localized: "story.timeline.inspector.transition.duration",
                             defaultValue: "Durée", bundle: .module).uppercased())
-                    .font(.system(size: 9, weight: .semibold))
+                    .meeshyScaledFont(9, weight: .semibold)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Text(String(format: "%.2f s", duration))
-                    .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                    .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                     .foregroundStyle(MeeshyColors.indigo400)
             }
             Slider(value: $duration, in: Self.durationRange, step: 0.05) { editing in
@@ -178,7 +178,7 @@ public struct TransitionInspector: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "story.timeline.inspector.easing.section",
                         defaultValue: "Courbe", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(9, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach([StoryEasing.linear, .easeIn, .easeOut, .easeInOut], id: \.self) { candidate in

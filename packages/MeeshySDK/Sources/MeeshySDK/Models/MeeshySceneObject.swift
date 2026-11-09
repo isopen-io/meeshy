@@ -4,7 +4,7 @@ import CoreGraphics
 // MARK: - MeeshySceneObject
 
 /// **Ce que la planche appelle « un objet de scène », et que le code n'avait
-/// pas** (#4591, directive porteur 2026-08-31).
+/// pas** (#4591).
 ///
 /// ## Le manque
 ///
@@ -135,7 +135,7 @@ public enum MeeshySceneObject: Sendable {
         }
     }
 
-    /// **TOUT objet de scène se redimensionne** (directive porteur 2026-08-31) :
+    /// **TOUT objet de scène se redimensionne** :
     ///
     /// > « Dans la V3, tout `MeeshySceneObject` a ces détails. Tout objet sur la
     /// > scène peut scale et roter. Il n'existe sur la scène que des
@@ -190,7 +190,7 @@ public enum MeeshySceneObject: Sendable {
 
     /// **La DURÉE propre de l'objet — `nil` ⇒ il vit toute la slide.**
     ///
-    /// Les CINQ familles en portent une (directive porteur 2026-08-31) :
+    /// Les CINQ familles en portent une :
     ///
     /// > « Tout `MeeshySceneObject` peut apparaître et disparaître quand il
     /// > souhaite, y compris la pastille de lieu. »

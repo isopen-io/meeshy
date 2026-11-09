@@ -2,7 +2,7 @@ import Foundation
 
 /// **Est-ce qu'on a le DROIT de demander un enregistrement à AVFoundation ?**
 ///
-/// ## Le défaut qui la fait naître (2026-09-02)
+/// ## Le défaut qui la fait naître
 ///
 /// Toucher le bouton d'enregistrement du viseur vidéo TUAIT l'application :
 ///

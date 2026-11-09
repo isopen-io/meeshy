@@ -18,6 +18,7 @@ struct SectionHeaderView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var isTapped = false
+    @State private var delayed = DelayedActions()
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -26,7 +27,7 @@ struct SectionHeaderView: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
                 isTapped = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            delayed.run(after: .milliseconds(150)) {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
                     isTapped = false
                 }
@@ -50,7 +51,7 @@ struct SectionHeaderView: View {
 
                     Image(systemName: section.icon)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(Color(hex: section.color))
+                        .foregroundStyle(Color(hex: section.color))
                         .scaleEffect(isTapped ? 1.15 : 1.0)
                 }
 
@@ -62,7 +63,7 @@ struct SectionHeaderView: View {
                 // Count badge
                 Text("\(count)")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(Color(hex: section.color))
+                    .foregroundStyle(Color(hex: section.color))
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(
@@ -77,7 +78,7 @@ struct SectionHeaderView: View {
                 if isDropTarget {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3.weight(.semibold))
-                        .foregroundColor(Color(hex: section.color))
+                        .foregroundStyle(Color(hex: section.color))
                         .transition(.scale.combined(with: .opacity))
                 }
 
@@ -91,7 +92,7 @@ struct SectionHeaderView: View {
                 // Expand/collapse chevron with rotation animation
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(Color(hex: section.color))
+                    .foregroundStyle(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .animation(.easeOut(duration: 0.2), value: isExpanded)
@@ -145,6 +146,13 @@ struct ConversationPreviewView: View {
     var onSearch: (() -> Void)? = nil
     var onInfo: (() -> Void)? = nil
     var onProfileInfo: (() -> Void)? = nil
+    /// L'aperçu d'appui long (#17242) : la carte ne montre que ses messages,
+    /// SANS en-tête (directive porteur, #17242). Ils se mettent en page sur
+    /// la hauteur de REPOS de la carte, et la hauteur courante ne fait que les
+    /// découper par le haut — les plus récents restent visibles, rien ne se
+    /// remet en page pendant le geste. `nil` ⇒ la carte bornée du menu natif,
+    /// en-tête compris.
+    var peekHeights: ConversationPeekCardHeights? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     /// La largeur que la carte occupe vraiment : les bulles s'y mesurent.
@@ -167,13 +175,16 @@ struct ConversationPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-                .padding(MeeshySpacing.mdPlus)
-                .background(headerBackground)
+            // L'aperçu d'appui long ne montre que le CONTENU (directive porteur,
+            // #17242) : on sait déjà quelle conversation on presse.
+            if peekHeights == nil {
+                header
+                    .padding(MeeshySpacing.mdPlus)
+                    .background(headerBackground)
+            }
 
-            recentMessagesSection
-            .frame(minHeight: 120, maxHeight: 300)
-            .background(previewBackground)
+            sizedRecentMessages
+                .background(previewBackground)
         }
         // Largeur pilotée par le call site (overlay) — source de vérité unique.
         // La carte remplit la largeur proposée ; le conteneur la fixe à 340.
@@ -195,6 +206,23 @@ struct ConversationPreviewView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 20, y: 10)
+    }
+
+    @ViewBuilder
+    private var sizedRecentMessages: some View {
+        if let peekHeights {
+            recentMessagesSection
+                .frame(height: max(0, peekHeights.rest))
+                .frame(height: max(0, peekHeights.current), alignment: .bottom)
+                .clipped()
+                // Rien de visible ne nomme la conversation : VoiceOver, lui, la nomme.
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text(conversation.displayName))
+                .accessibilityIdentifier("conversation.peek.card")
+        } else {
+            recentMessagesSection
+                .frame(minHeight: 120, maxHeight: 300)
+        }
     }
 
     // MARK: - Header (avatar, titre, indicateurs, actions)
@@ -468,7 +496,7 @@ struct ConversationPreviewView: View {
     private func headerGlassButtonLabel(icon: String, targetSize: CGFloat) -> some View {
         Image(systemName: icon)
             .font(.footnote.weight(.semibold))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .frame(width: targetSize, height: ConversationPreviewRenderer.headerTargetSize)
@@ -502,6 +530,7 @@ struct ConversationPreviewView: View {
 
 // MARK: - Themed Community Card
 struct ThemedCommunityCard: View, Equatable {
+    @State private var delayed = DelayedActions()
     let community: Community
     var action: (() -> Void)? = nil
     @State private var isPressed = false
@@ -541,7 +570,7 @@ struct ThemedCommunityCard: View, Equatable {
             // libellé d'accessibilité.
             Text(community.name)
                 .font(MeeshyFont.relative(CommunityCardMetrics.nameSize, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
                 .padding(CommunityCardMetrics.padding)
@@ -554,7 +583,7 @@ struct ThemedCommunityCard: View, Equatable {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                 isPressed = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            delayed.run(after: .milliseconds(150)) {
                 withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                     isPressed = false
                 }
@@ -569,6 +598,7 @@ struct ThemedCommunityCard: View, Equatable {
             + "\(community.conversationCount) " + String(localized: "tab.conversations", defaultValue: "Conversations")
         )
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action?() }
     }
 }
 
@@ -609,7 +639,7 @@ struct ThemedFilterChip: View {
         }) {
             Text(title)
                 .font(font)
-                .foregroundColor(isSelected ? .white : Color(hex: color))
+                .foregroundStyle(isSelected ? Color.white : Color(hex: color))
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
                 .background(
@@ -645,7 +675,7 @@ struct TagChip: View {
     var body: some View {
         Text(tag.name)
             .font(.caption2.weight(.semibold))
-            .foregroundColor(Color(hex: tag.color))
+            .foregroundStyle(Color(hex: tag.color))
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(

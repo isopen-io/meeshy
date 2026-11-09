@@ -36,7 +36,7 @@ enum WebRTCCodecPreferences {
             return
         }
 
-        // Audit 2026-05-11 — the previous typed-function-reference trick
+        // the previous typed-function-reference trick
         // (`let setCodecs: ([X]) throws -> Void = transceiver.setCodecPreferences`)
         // still selected the deprecated void overload at compile time —
         // confirmed by the persistent deprecation warning emitted at the
@@ -116,8 +116,7 @@ enum WebRTCCodecPreferences {
 
     /// Calls the throwing `setCodecPreferences:error:` selector on the given
     /// transceiver via the ObjC runtime, bypassing Swift's overload resolution
-    /// which silently prefers the deprecated void overload (see audit
-    /// 2026-05-11 §B-Claim-1). The function-pointer cast matches the real
+    /// which silently prefers the deprecated void overload. The function-pointer cast matches the real
     /// ObjC method signature: `BOOL (*)(NSObject, Selector, NSArray, NSError**)`.
     private static func invokeSetCodecPreferences(
         on transceiver: RTCRtpTransceiver,

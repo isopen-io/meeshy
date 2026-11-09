@@ -39,7 +39,7 @@ extension ShareSheetView {
                 if let reason {
                     Label(reason, systemImage: "info.circle")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -160,7 +160,7 @@ extension ShareSheetView {
     private func toolLabel(_ title: String, _ symbol: String) -> some View {
         Label(title, systemImage: symbol)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .padding(.horizontal, MeeshySpacing.md)
             .frame(minHeight: MeeshyControlSize.tapTarget)
             .background(Capsule().fill(MeeshyColors.surfaceFill(isDark: isDark)))

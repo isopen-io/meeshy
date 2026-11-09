@@ -29,11 +29,11 @@ private struct PendingSettingsBannerInline: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo950)
+                        .foregroundStyle(MeeshyColors.indigo950)
 
                     Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo950)
+                        .foregroundStyle(MeeshyColors.indigo950)
                         .lineLimit(1)
                         .layoutPriority(1)
 
@@ -42,7 +42,7 @@ private struct PendingSettingsBannerInline: View {
                     // La version FR est plus longue : shrink-avant-troncature pour rester lisible.
                     Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                        .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
+                        .foregroundStyle(MeeshyColors.indigo950.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .truncationMode(.tail)

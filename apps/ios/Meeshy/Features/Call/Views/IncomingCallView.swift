@@ -114,7 +114,7 @@ struct IncomingCallView: View {
         // L'écran ENTIER, avant d'y poser l'aperçu : sans ce cadre, le
         // `VStack` ne prenait que la largeur de ses boutons, et la vidéo de
         // l'appelant n'était peinte que dans cette colonne — les côtés
-        // montraient un autre fond (2026-09-30, appel réel iPhone → simulateur).
+        // montraient un autre fond (appel réel iPhone → simulateur).
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // #8480 — l'appelant, vu avant de décrocher
         .background { CallPreviewBackdrop(preview: .shared) }
@@ -498,14 +498,14 @@ struct IncomingCallView: View {
                         Image(systemName: systemImage)
                             // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
                             // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
-                            .font(.system(size: 28, weight: .medium))
+                            .font(MeeshyFont.fixedGlyph(28, weight: .medium))
                             .foregroundStyle(Color.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: tint)
                     } else {
                         Image(systemName: systemImage)
                             // doctrine 82i — même cercle fixe 70×70
-                            .font(.system(size: 26, weight: .medium))
+                            .font(MeeshyFont.fixedGlyph(26, weight: .medium))
                             .foregroundStyle(tint)
                             .frame(width: 70, height: 70)
                             .adaptiveGlass(in: Circle())

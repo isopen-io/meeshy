@@ -26,6 +26,7 @@ public final class CachePurgeViewModel: ObservableObject {
     private let service: CachePurgeService
     private let refreshSubject = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
+    private let measureLane = OrderedEventLane()
 
     public init(service: CachePurgeService = .shared) {
         self.service = service
@@ -38,10 +39,7 @@ public final class CachePurgeViewModel: ObservableObject {
         // base, ce n'est pas gratuit.
         refreshSubject
             .debounce(for: .milliseconds(120), scheduler: DispatchQueue.main)
-            .sink { [weak self] in
-                guard let self else { return }
-                Task { await self.measure() }
-            }
+            .relay(through: measureLane) { [weak self] _ in await self?.measure() }
             .store(in: &cancellables)
     }
 
@@ -202,7 +200,7 @@ public struct SelectiveCachePurgeView: View {
                     Text(MediaFormat.bytes(Int64(viewModel.report?.bytes(for: kind) ?? 0)))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 }
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .padding(.leading, MeeshySpacing.xs)
             }
             .accessibilityHint(String(
@@ -234,17 +232,17 @@ public struct SelectiveCachePurgeView: View {
                 HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: viewModel.isSelected(id) ? "checkmark.square.fill" : "square")
                         .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                        .foregroundColor(viewModel.isSelected(id) ? Color(hex: accentColor) : theme.textMuted)
+                        .foregroundStyle(viewModel.isSelected(id) ? Color(hex: accentColor) : theme.textMuted)
 
                     Text(Self.label(for: domain))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Spacer()
 
                     Text(MediaFormat.bytes(Int64(bytes)))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(bytes > 0 ? theme.textPrimary : theme.textMuted)
+                        .foregroundStyle(bytes > 0 ? theme.textPrimary : theme.textMuted)
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.smPlus)
@@ -259,15 +257,15 @@ public struct SelectiveCachePurgeView: View {
             HStack(alignment: .top, spacing: MeeshySpacing.md) {
                 Image(systemName: "minus.square")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                    .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
+                    .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.strong))
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(Self.label(for: domain))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     Text(Self.explanation(for: limitation))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                        .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.intense))
+                        .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.intense))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
@@ -296,7 +294,7 @@ public struct SelectiveCachePurgeView: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                         .tracking(1.2)
                 }
-                .foregroundColor(MeeshyColors.neutral500)
+                .foregroundStyle(MeeshyColors.neutral500)
                 .padding(.leading, MeeshySpacing.xs)
 
                 Button {
@@ -306,20 +304,20 @@ public struct SelectiveCachePurgeView: View {
                     HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: viewModel.includeUnattributed ? "checkmark.square.fill" : "square")
                             .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                            .foregroundColor(viewModel.includeUnattributed ? Color(hex: accentColor) : theme.textMuted)
+                            .foregroundStyle(viewModel.includeUnattributed ? Color(hex: accentColor) : theme.textMuted)
 
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(String(localized: "settings.cache.purge.unattributed.label",
                                         defaultValue: "Médias orphelins", bundle: .module))
                                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                             Text(String(
                                 localized: "settings.cache.purge.unattributed.description",
                                 defaultValue: "Fichiers encore sur l'appareil dont la publication, la story ou la conversation d'origine n'est plus en cache. Impossible de les rattacher à un domaine.",
                                 bundle: .module
                             ))
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
@@ -327,7 +325,7 @@ public struct SelectiveCachePurgeView: View {
 
                         Text(MediaFormat.bytes(Int64(bytes)))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                     }
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.smPlus)
@@ -350,7 +348,7 @@ public struct SelectiveCachePurgeView: View {
                 Text(String(localized: "settings.cache.purge.selectAll",
                             defaultValue: "Tout sélectionner", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
 
             Button {
@@ -367,7 +365,7 @@ public struct SelectiveCachePurgeView: View {
                     Text(purgeButtonTitle)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 }
-                .foregroundColor(viewModel.hasSelection ? MeeshyColors.error : theme.textMuted)
+                .foregroundStyle(viewModel.hasSelection ? MeeshyColors.error : theme.textMuted)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.md)
                 .background(

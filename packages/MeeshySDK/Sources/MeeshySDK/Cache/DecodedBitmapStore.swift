@@ -6,12 +6,12 @@ import ImageIO
 /// partagé par tous les stores, ses variantes par palier de taille, et le
 /// décodage réduit qui l'alimente. Aucun état du store n'y est lu.
 enum DecodedBitmapStore {
-    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
+    private static let cache: LockedCache<NSString, UIImage> = LockedCache({
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 150
         cache.totalCostLimit = 80 * 1024 * 1024
         return cache
-    }()
+    }())
 
     /// Hard cap for the decoded bitmap we will keep resident in the NSCache
     /// (in bytes). A malicious or accidentally-huge image (e.g. 20K×20K JPEG

@@ -1,7 +1,7 @@
 import Foundation
 import MeeshySDK
 
-// MARK: - Le filtre d'UN objet média (retour porteur 2026-09-28)
+// MARK: - Le filtre d'UN objet média
 
 extension StoryComposerViewModel {
 

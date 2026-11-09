@@ -21,14 +21,25 @@ extension MeeshyComposerHost {
             && draftId == nil
     }
 
-    /// **La photothèque à l'ouverture** — après l'apparition du composer, qui
-    /// doit être à l'écran pour présenter une feuille par-dessus lui.
-    func presentOpeningPickerIfNeeded() async {
+    /// **L'ouverture d'un composer vierge** (#17269), une fois le composer à l'écran :
+    /// la caméra s'arme derrière, la photothèque s'ouvre à mi-hauteur devant.
+    func applyOpeningPlan() async {
         _ = await cancellableSleep(for: .milliseconds(450))
-        guard ComposerScenePicking.opensOnPicker(origin: intent.origin,
-                                                 compositionIsEmpty: compositionIsEmpty) else { return }
+        let plan = ComposerOpeningPlan.resolve(origin: intent.origin, compositionIsEmpty: compositionIsEmpty,
+                                               format: selectedFormat, sceneServesCapture: sceneServesCapture,
+                                               preferences: .stored())
+        if plan.armsCamera, sceneCameraStage == .off { armSceneCamera() }
+        guard let library = plan.library else { return }
         openingPickFoundsScenes = true
-        showsPhotoPicker = true
+        if library == .halfHeight { showsOpeningLibrary = true } else { showsPhotoPicker = true }
+    }
+
+    /// Choisir dans la photothèque d'ouverture la ferme et rend la scène (#17269).
+    func closeOpeningLibraryForPick() {
+        showsOpeningLibrary = false
+        guard ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: openingPickFoundsScenes, stage: sceneCameraStage,
+              pendingSegments: sceneCapture.segments.count, editing: sceneCapture.phase.isEditing) else { return }
+        disarmSceneCamera()
     }
 
     /// Une SÉRIE fonde ses scènes ; un média seul choisi par une porte suit le

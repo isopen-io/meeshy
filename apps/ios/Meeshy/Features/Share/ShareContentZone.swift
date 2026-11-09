@@ -56,7 +56,7 @@ struct ShareContentZone: View {
         HStack {
             Text(headerTitle)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             if plan.limits.trimCount > 0, case .incoming = model.subject {
@@ -112,7 +112,7 @@ struct ShareContentZone: View {
             ForEach(incoming.shortfalls, id: \.self) { shortfall in
                 Label(ShareSheetCopy.shortfall(shortfall), systemImage: Self.symbol(for: shortfall))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !incoming.media.isEmpty {
@@ -171,11 +171,11 @@ struct ShareContentZone: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(message.senderName ?? "?")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                         .lineLimit(1)
                     Text(withdrawn.map { _ in ShareSheetCopy.withdrawn(withdrawn?.reason ?? .unavailable) } ?? ShareMessagePreview.text(for: message))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(2)
                         .captureShield(message.contentExitLaw.capture.shieldsCapture())
                 }
@@ -184,7 +184,7 @@ struct ShareContentZone: View {
                 if plan.kept.count > 1, withdrawn == nil {
                     Button { withAnimation { model.removeMessage(message.id) } } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     }
                     .accessibilityLabel(ShareSheetCopy.remove)
@@ -203,10 +203,10 @@ struct ShareContentZone: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(ShareMessagePreview.kindLabel(piece))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(message.senderName ?? "")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             Spacer(minLength: 0)
         }
@@ -225,7 +225,7 @@ struct ShareContentZone: View {
             } else {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(MeeshyIconSize.xl))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .frame(width: 48, height: 48)
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color(hex: accentColor).opacity(MeeshyOpacity.light)))
                     .accessibilityHidden(true)
@@ -233,12 +233,12 @@ struct ShareContentZone: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(3)
                 if let subtitle {
                     Text(subtitle)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 }
             }
@@ -270,7 +270,7 @@ struct ShareContentZone: View {
         if let first = plan.withdrawn.first, !plan.kept.isEmpty {
             Label("\(ShareSheetCopy.withdrawn(first.reason)) \(ShareSheetCopy.othersLeave(plan.kept.count))", systemImage: "eye.slash")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

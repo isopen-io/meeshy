@@ -2,6 +2,8 @@ package me.meeshy.app.conversations
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
@@ -58,6 +60,7 @@ class ConversationSwipeRtlTest {
         compose.onAllNodesWithTag(ROW_TEST_TAG)[0].performTouchInput { swipeLeft() }
         compose.waitForIdle()
 
-        compose.onNodeWithText("Hide").assertExists()
+        compose.onNodeWithText("Archive").assertExists()
+        compose.onAllNodesWithText("Hide").assertCountEquals(0)
     }
 }

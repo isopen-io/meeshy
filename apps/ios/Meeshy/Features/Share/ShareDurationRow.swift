@@ -75,7 +75,7 @@ struct ShareDurationRow: View, Equatable {
         } label: {
             Text(choice.label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .semibold : .medium))
-                .foregroundColor(isSelected ? .white : Color(hex: accentColor))
+                .foregroundStyle(isSelected ? Color.white : Color(hex: accentColor))
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .background(

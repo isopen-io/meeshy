@@ -24,7 +24,7 @@ struct MessageReactionsDetailView: View {
 
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
-            // Ajouter une réaction (req 2026-07-24 : « Réactions » = voir + ajouter).
+            // Ajouter une réaction.
             // Bande rapide partagée (mêmes emojis que la pastille de l'appui long).
             if let onReact {
                 EmojiReactionPicker(
@@ -126,7 +126,7 @@ struct MessageReactionsDetailView: View {
                     .font(.subheadline.weight(.medium))
                 Text("\(count)")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textMuted)
+                    .foregroundStyle(isSelected ? Color(hex: contactColor) : theme.textMuted)
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xsPlus)
@@ -189,7 +189,7 @@ struct MessageReactionsDetailView: View {
     private var emptyReactionsView: some View {
         VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "face.smiling")
-                .font(.system(size: MeeshyIconSize.xxxl, weight: .light)) // decorative empty-state glyph (parity with MessageViewsDetailView)
+                .meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)
                 .foregroundStyle(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(String(localized: "message-detail.reactions.empty", defaultValue: "Aucune réaction", bundle: .main))

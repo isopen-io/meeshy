@@ -35,7 +35,7 @@ struct PhonePromptSheet: View {
                 if let error = flow.error {
                     Text(error)
                         .font(.footnote.weight(.medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -63,13 +63,13 @@ struct PhonePromptSheet: View {
 
             Text(String(localized: "contacts.phonePrompt.title", defaultValue: "Ajoute ton numéro", bundle: .main))
                 .font(.title3.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
             Text(String(localized: "contacts.phonePrompt.benefit", defaultValue: "Tes proches te retrouvent sur Meeshy grâce à ton numéro. Tu pourras aussi t’en servir pour te connecter.", bundle: .main))
                 .font(.subheadline)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -82,7 +82,7 @@ struct PhonePromptSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             TextField("+33 6 12 34 56 78", text: $flow.newPhone)
                 .font(.body.weight(.medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .textContentType(.telephoneNumber)
                 .keyboardType(.phonePad)
                 .focused($focusedField, equals: .phone)
@@ -110,11 +110,11 @@ struct PhonePromptSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             Label(String(localized: "settings.security.phone.code_sent", defaultValue: "Code envoyé par SMS", bundle: .main), systemImage: "ellipsis.message.fill")
                 .font(.footnote.weight(.medium))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundStyle(MeeshyColors.success)
 
             TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code à 6 chiffres", bundle: .main), text: $flow.code)
                 .font(.system(.title3, design: .monospaced).weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
@@ -141,7 +141,7 @@ struct PhonePromptSheet: View {
             } label: {
                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                     .contentShape(Rectangle())
             }
@@ -158,7 +158,7 @@ struct PhonePromptSheet: View {
         } label: {
             Text(String(localized: "contacts.phonePrompt.later", defaultValue: "Plus tard", bundle: .main))
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
         }

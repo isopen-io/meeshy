@@ -69,7 +69,7 @@ struct CreateShareLinkView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
             .sheet(isPresented: $showConversationPicker) {
@@ -101,10 +101,10 @@ struct CreateShareLinkView: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(conv.name)
                                 .font(.subheadline.weight(.medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                             Text(conv.type.displayLabel)
                                 .font(.caption)
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundStyle(theme.textSecondary)
                         }
                     } else {
                         Image(systemName: "plus.circle.dashed")
@@ -112,12 +112,12 @@ struct CreateShareLinkView: View {
                             .foregroundColor(accent)
                         Text(String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main))
                             .font(.subheadline)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
                     Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .accessibilityHidden(true)
                 }
                 .padding(MeeshySpacing.mdPlus)
@@ -254,7 +254,7 @@ struct CreateShareLinkView: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(String(localized: "share.link.create.limit_uses", defaultValue: "Limiter les utilisations", bundle: .main))
                                 .font(.subheadline.weight(.medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                             if maxUsesEnabled {
                                 Text(String(localized: "share.link.create.max_uses", defaultValue: "^[\(maxUsesValue) utilisation](inflect: true) maximum", bundle: .main))
                                     .font(.caption)
@@ -262,7 +262,7 @@ struct CreateShareLinkView: View {
                             } else {
                                 Text(String(localized: "share.link.create.unlimited", defaultValue: "Illimité", bundle: .main))
                                     .font(.caption)
-                                    .foregroundColor(theme.textSecondary)
+                                    .foregroundStyle(theme.textSecondary)
                             }
                         }
                     }
@@ -285,7 +285,7 @@ struct CreateShareLinkView: View {
                                 .foregroundColor(accent)
                             Text(String(localized: "share.link.create.uses_label", defaultValue: "utilisations", bundle: .main))
                                 .font(.footnote)
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundStyle(theme.textSecondary)
                             Spacer()
                         }
                     }
@@ -302,10 +302,10 @@ struct CreateShareLinkView: View {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main))
                             .font(.subheadline.weight(.medium))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                         Text(expirationOption.label)
                             .font(.caption)
-                            .foregroundColor(expirationOption == .never ? theme.textSecondary : MeeshyColors.warning)
+                            .foregroundStyle(expirationOption == .never ? theme.textSecondary : MeeshyColors.warning)
                     }
                     Spacer()
                     Picker(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main), selection: $expirationOption) {
@@ -329,10 +329,10 @@ struct CreateShareLinkView: View {
             if let error = errorMessage {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                     Text(error)
                         .font(.footnote)
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                 }
                 .padding(.horizontal, MeeshySpacing.xl)
             }
@@ -397,7 +397,7 @@ struct CreateShareLinkView: View {
                     .accessibilityHidden(true)
                 Text(title.uppercased())
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .accessibilityAddTraits(.isHeader)
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -409,7 +409,7 @@ struct CreateShareLinkView: View {
             if let subtitle {
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.xl)
             }
 
@@ -427,11 +427,11 @@ struct CreateShareLinkView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
                 .font(.caption2.weight(.medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .accessibilityHidden(true)
             TextField(placeholder, text: text)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityLabel(label)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -452,10 +452,10 @@ struct CreateShareLinkView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
             .tint(accent)
@@ -471,7 +471,7 @@ struct CreateShareLinkView: View {
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
         }
         .accessibilityHidden(true)
     }
@@ -574,7 +574,7 @@ private struct ConversationPickerSheet: View {
                                 } label: {
                                     HStack(spacing: MeeshySpacing.md) {
                                         Text(conv.name)
-                                            .foregroundColor(theme.textPrimary)
+                                            .foregroundStyle(theme.textPrimary)
                                         Spacer()
                                         if selected?.id == conv.id {
                                             // Selection is conveyed to VoiceOver by the

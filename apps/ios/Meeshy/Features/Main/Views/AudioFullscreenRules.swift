@@ -169,8 +169,7 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
     static let minLyrics: CGFloat = 120
     /// Le corps de la transcription avant le 2026-10-13.
     static let baseTranscriptSize: CGFloat = 14
-    /// Les paroles, par rapport à ce corps : quatre fois (première directive du
-    /// 2026-10-13), puis « diminue de 0,4 » le même soir — 4 × 0,6.
+    /// Les paroles, par rapport à ce corps: quatre fois, puis « diminue de 0,4 » le même soir — 4 × 0,6.
     static let lyricScale: CGFloat = 2.4
 
     /// **Ce que la page empilée occupe SANS le cadran**, à la taille de texte
@@ -193,7 +192,7 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
 
     /// **La rangée du bas se pose au-dessus de la barre d'accueil.** La page du
     /// pager descend jusqu'au bord de l'écran : mesurée sur l'iPhone du porteur
-    /// (2026-10-13), la rangée des langues passait sous la barre d'accueil. Un
+    /// la rangée des langues passait sous la barre d'accueil. Un
     /// conteneur qui n'annonce aucune marge garde un plancher.
     static func bottomInset(safeArea: CGFloat) -> CGFloat {
         max(safeArea, 28) + 8

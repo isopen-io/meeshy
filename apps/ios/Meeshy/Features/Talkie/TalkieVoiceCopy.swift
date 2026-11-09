@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import Foundation
 import MeeshySDK
 import os
@@ -15,9 +16,13 @@ protocol TalkieVoiceCopying: AnyObject {
     /// `conversationId` : celle que la passerelle a choisie pour le repli ; `nil`, le client choisit.
     @discardableResult
     func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool
+    /// Une copie confiée à la file d'envoi que celle-ci a fini par abandonner : l'émetteur doit le voir (#17255).
+    var failures: AnyPublisher<Void, Never> { get }
 }
 
 extension TalkieVoiceCopying {
+    var failures: AnyPublisher<Void, Never> { Empty().eraseToAnyPublisher() }
+
     @discardableResult
     func send(_ frames: [Data], toUserId: String) async -> Bool {
         await send(frames, toUserId: toUserId, conversationId: nil)
@@ -86,6 +91,11 @@ nonisolated enum TalkieCopyDestination {
 
 /// La copie vocale sur le disque : les trames ADTS décodées puis réécrites en AAC dans un conteneur `.m4a`, le format
 /// des vocaux de Meeshy.
+///
+/// Le fichier est FERMÉ avant de rendre la main, et la durée rendue est celle qu'on relit sur le disque (#17255) : la
+/// passerelle a reçu une copie de 820 octets lue « 128 ms » pendant que l'iPhone en affichait 7 s — la file d'envoi
+/// copiait un `.m4a` dont les derniers paquets et l'atome `moov` n'étaient pas encore écrits. La fermeture d'un
+/// `AVAudioFile` attend sa désallocation (avant iOS 18), qu'une référence autoreleasée peut repousser au-delà du retour.
 nonisolated enum TalkieVoiceCopyFile {
     static func write(_ frames: [Data], to url: URL) -> TimeInterval? {
         let decoder = TalkieAdtsStreamDecoder()
@@ -96,30 +106,55 @@ nonisolated enum TalkieVoiceCopyFile {
             AVSampleRateKey: first.format.sampleRate,
             AVNumberOfChannelsKey: first.format.channelCount,
         ]
-        do {
-            let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: first.format.commonFormat, interleaved: first.format.isInterleaved)
-            try buffers.filter { $0.format == first.format }.forEach(file.write(from:))
-        } catch {
+        let written: Bool = autoreleasepool {
+            do {
+                let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: first.format.commonFormat, interleaved: first.format.isInterleaved)
+                try buffers.filter { $0.format == first.format }.forEach(file.write(from:))
+                if #available(iOS 18.0, *) { file.close() }
+                return true
+            } catch {
+                return false
+            }
+        }
+        guard written, let duration = recordedDuration(of: url) else {
             try? FileManager.default.removeItem(at: url)
             return nil
         }
-        let frameCount = buffers.reduce(0) { $0 + Double($1.frameLength) }
-        return frameCount / first.format.sampleRate
+        return duration
+    }
+
+    private static func recordedDuration(of url: URL) -> TimeInterval? {
+        autoreleasepool {
+            guard let file = try? AVAudioFile(forReading: url), file.length > 0 else { return nil }
+            return Double(file.length) / file.fileFormat.sampleRate
+        }
     }
 }
 
 /// Le câblage de la copie : écrire le fichier, choisir la conversation, la confier à la file d'envoi durable.
+///
+/// La file rejoue un message sous son `clientMessageId`, que la passerelle exige au format `cid_<uuid v4>` : un autre
+/// format était refusé à la validation du `message:send-with-attachments`, et la file retéléversait la voix à chaque
+/// essai sans jamais créer le message (#17255). Le cid vient donc de `ClientMessageId`, et l'abandon d'une copie par la
+/// file remonte en `failures`.
 @MainActor
 final class TalkieVoiceCopySender: TalkieVoiceCopying {
     typealias SharedConversations = @MainActor (String) async throws -> [TalkieCopyCandidate]
     typealias DirectOpener = @MainActor (String) async throws -> String
-    typealias Enqueuer = @MainActor (URL, String) async throws -> Void
+    /// Le fichier, la conversation, le `clientMessageId` sous lequel la file enverra le message, et le nom de la pièce.
+    typealias Enqueuer = @MainActor (URL, String, String, String) async throws -> Void
 
     private let shared: SharedConversations
     private let openDirect: DirectOpener
     private let enqueue: Enqueuer
     private let writeFile: ([Data], URL) -> TimeInterval?
     private let directory: URL
+    private let newClientMessageId: () -> String
+    private let now: () -> Date
+    private let failed = PassthroughSubject<Void, Never>()
+    /// Les copies confiées à la file et pas encore tranchées : seul leur abandon se dit.
+    private var queued: Set<String> = []
+    private var exhaustion: AnyCancellable?
 
     nonisolated deinit {}
 
@@ -128,29 +163,51 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
         openDirect: @escaping DirectOpener = TalkieVoiceCopySender.liveOpenDirect,
         enqueue: @escaping Enqueuer = TalkieVoiceCopySender.liveEnqueue,
         writeFile: @escaping ([Data], URL) -> TimeInterval? = TalkieVoiceCopyFile.write,
-        directory: URL = FileManager.default.temporaryDirectory
+        directory: URL = FileManager.default.temporaryDirectory,
+        exhausted: AnyPublisher<String, Never> = TalkieVoiceCopySender.liveExhausted,
+        newClientMessageId: @escaping () -> String = ClientMessageId.generate,
+        now: @escaping () -> Date = Date.init
     ) {
         self.shared = shared
         self.openDirect = openDirect
         self.enqueue = enqueue
         self.writeFile = writeFile
         self.directory = directory
+        self.newClientMessageId = newClientMessageId
+        self.now = now
+        exhaustion = exhausted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] clientMessageId in
+                MainActor.assumeIsolated { self?.abandoned(clientMessageId) }
+            }
     }
+
+    var failures: AnyPublisher<Void, Never> { failed.eraseToAnyPublisher() }
 
     @discardableResult
     func send(_ frames: [Data], toUserId: String, conversationId named: String?) async -> Bool {
         let url = directory.appendingPathComponent("talkie-copy-\(UUID().uuidString).m4a")
+        let name = TalkieVoiceCopyName.of(now())
         guard !frames.isEmpty, writeFile(frames, url) != nil else { return false }
+        let clientMessageId = newClientMessageId()
         do {
             let conversationId = if let named { named } else { try await destination(for: toUserId) }
-            try await enqueue(url, conversationId)
+            queued.insert(clientMessageId)
+            try await enqueue(url, conversationId, clientMessageId, name)
             Logger.talkieCopy.info("talkie · copie vocale confiée à la file d'envoi")
             return true
         } catch {
+            queued.remove(clientMessageId)
             try? FileManager.default.removeItem(at: url)
             Logger.talkieCopy.error("talkie · copie vocale non partie : \(error.localizedDescription, privacy: .public)")
             return false
         }
+    }
+
+    private func abandoned(_ clientMessageId: String) {
+        guard queued.remove(clientMessageId) != nil else { return }
+        Logger.talkieCopy.error("talkie · copie vocale abandonnée par la file d'envoi")
+        failed.send(())
     }
 
     private func destination(for userId: String) async throws -> String {
@@ -170,20 +227,38 @@ extension TalkieVoiceCopySender {
         return try await ConversationCreator().createDirectConversation(with: userId, currentUserId: currentUserId).id
     }
 
-    static func liveEnqueue(_ url: URL, _ conversationId: String) async throws {
+    static var liveExhausted: AnyPublisher<String, Never> {
+        OfflineQueue.shared.retryExhausted.publisher.map(\.clientMessageId).eraseToAnyPublisher()
+    }
+
+    static func liveEnqueue(_ url: URL, _ conversationId: String, _ clientMessageId: String, _ name: String) async throws {
         _ = try await OfflineQueue.shared.enqueueMedia(
             sourceMediaURLs: [url],
             kinds: [AttachmentKind.audio.rawValue],
             conversationId: conversationId,
             content: nil,
-            clientMessageId: UUID().uuidString,
+            clientMessageId: clientMessageId,
             originalLanguage: nil,
             replyToId: nil,
             forwardedFromId: nil,
             forwardedFromConversationId: nil,
             copyAttachmentsFromClientMessageId: nil,
             deletesSourceFiles: true,
-            createdAt: Date()
+            createdAt: Date(),
+            originalNames: [name]
         )
+    }
+}
+
+/// Le nom sous lequel la copie vocale part : `talkie_AAAA-MM-JJ_HHmm.m4a`, à l'heure locale de la prise de parole
+/// (#17308). Le fichier local garde un nom unique ; seul ce nom voyage avec la pièce jointe.
+enum TalkieVoiceCopyName {
+    static func of(_ date: Date, timeZone: TimeZone = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let day = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+        let minute = String(format: "%02d%02d", parts.hour ?? 0, parts.minute ?? 0)
+        return "talkie_\(day)_\(minute).m4a"
     }
 }

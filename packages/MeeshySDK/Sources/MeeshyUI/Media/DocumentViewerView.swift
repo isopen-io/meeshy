@@ -82,14 +82,14 @@ public struct DocumentViewerView: View {
 
                 Image(systemName: docType.icon)
                     .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
             }
             .overlay(alignment: .topTrailing) {
                 if let onDelete = onDelete {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: MeeshyIconSize.sm))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
                     .offset(x: 6, y: -6)
@@ -98,7 +98,7 @@ public struct DocumentViewerView: View {
             }
 
             Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                 .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
                 .lineLimit(1)
                 .frame(width: 60)
@@ -125,32 +125,32 @@ public struct DocumentViewerView: View {
 
                 Image(systemName: docType.icon)
                     .font(.system(size: context.isCompact ? 17 : 20, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                    .font(.system(size: context.isCompact ? 12 : 13, weight: .semibold))
-                    .foregroundColor(isDark ? .white : .black)
+                    .meeshyScaledFont(context.isCompact ? 12 : 13, weight: .semibold)
+                    .foregroundStyle(isDark ? .white : .black)
                     .lineLimit(1)
 
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(docType.label)
-                        .font(.system(size: MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(Color(hex: docType.color))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
+                        .foregroundStyle(Color(hex: docType.color))
 
                     if attachment.fileSize > 0 {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(attachment.fileSizeFormatted)
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
-                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
+                            .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                     }
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(String(localized: "media.document.pages", defaultValue: "\(pages) pages", bundle: .module))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
-                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
+                            .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                     }
                 }
             }
@@ -164,8 +164,8 @@ public struct DocumentViewerView: View {
             if context.showsDeleteButton, let onDelete = onDelete {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.sm))
-                        .foregroundColor(MeeshyColors.error)
+                        .meeshyScaledFont(MeeshyIconSize.sm)
+                        .foregroundStyle(MeeshyColors.error)
                 }
                 .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
             }
@@ -231,7 +231,7 @@ public struct DocumentFullSheet: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
                 }
@@ -255,7 +255,7 @@ public struct DocumentFullSheet: View {
                                 case .failed: Image(systemName: "xmark")
                                 }
                             }
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                         }
                         .disabled(saveState == .saving || saveState == .saved)
                         .accessibilityLabel(String(localized: "media.document.download", defaultValue: "T\u{00E9}l\u{00E9}charger le document", bundle: .module))
@@ -268,7 +268,7 @@ public struct DocumentFullSheet: View {
                        let url = MeeshyConfig.resolveMediaURL(urlStr) {
                         ShareLink(item: url) {
                             Image(systemName: "square.and.arrow.up")
-                                .foregroundColor(Color(hex: accentColor))
+                                .foregroundStyle(Color(hex: accentColor))
                         }
                     }
                 }
@@ -335,21 +335,21 @@ public struct DocumentFullSheet: View {
     private var noPreviewView: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: docType.icon)
-                .font(.system(size: MeeshyIconSize.hero))
-                .foregroundColor(Color(hex: docType.color))
+                .meeshyScaledFont(MeeshyIconSize.hero)
+                .foregroundStyle(Color(hex: docType.color))
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
-                .font(.system(size: MeeshyFont.labelSize))
-                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                .meeshyScaledFont(MeeshyFont.labelSize)
+                .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
 
             if attachment.fileSize > 0 {
                 Text(attachment.fileSizeFormatted)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
             }
         }
     }

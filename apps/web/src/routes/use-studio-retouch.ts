@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { createStudioDraftStore } from '@/lib/stories/studio-draft-store';
+import type { EntityImageFormat } from '@/lib/profile/entity-image-format';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 import type { StudioRetouchVideoDeps } from '@/lib/stories/studio-retouch-video';
 import type { StudioPage } from '@/lib/stories/studio-page';
@@ -22,6 +23,10 @@ export type StudioRetouch = {
   /** **TOUTES LES PIÈCES DU MESSAGE** (#9126) — une scène chacune, `file` étant
    * la touchée ; « Terminé » rend chaque scène retouchée à SA pièce. */
   readonly series?: StudioRetouchSeries;
+  /** **UNE IMAGE D'IDENTITÉ** (#17256) — avatar (rond 1:1) ou bannière (3:1) :
+   * la scène en prend les proportions et « Terminé » rend TOUJOURS une image à
+   * ce format, même intacte. */
+  readonly format?: EntityImageFormat;
   readonly onDone: (file: File) => void;
   readonly onCancel: () => void;
   /** Injectable pour les témoins ; la production peint un canvas hors écran. */
@@ -84,7 +89,7 @@ export function useStudioRetouchFinish(
     }
     const original = retouch.file ?? taken();
     const { studioRetouchReturn, renderedImage, renderedVideo } = await import('@/lib/stories/studio-retouch-finish');
-    const decision = studioRetouchReturn({ capturing: retouch.file === null, page: currentPage(), original });
+    const decision = retouch.format !== undefined ? 'render-image' : studioRetouchReturn({ capturing: retouch.file === null, page: currentPage(), original });
     if (decision === 'cancel') {
       setFinishing(false);
       return retouch.onCancel();

@@ -119,8 +119,7 @@ extension View {
             // `onGeometryChange` (iOS 16+) : la MÊME mesure — le `midY` global,
             // relu à chaque layout, défilement compris — sans monter de vue de
             // plus par rang (un `GeometryReader` en fond + `onChange` coûtait
-            // une vue et une comparaison par rang et par layout, audit
-            // fluidité 2026-08-21, H8). L'action est appelée au montage avec
+            // une vue et une comparaison par rang et par layout, H8). L'action est appelée au montage avec
             // la valeur initiale : l'amorçage de `onAppear` est couvert.
             self
                 .onGeometryChange(for: CGFloat.self) { proxy in

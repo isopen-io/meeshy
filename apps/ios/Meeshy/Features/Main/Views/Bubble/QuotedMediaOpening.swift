@@ -24,7 +24,7 @@ nonisolated enum QuotedMediaOpening {
 
     /// **Ce que fait le toucher de la zone média — UNE décision, deux hôtes.**
     ///
-    /// Depuis #8320 (directive porteur du 2026-09-27) un AUDIO cité se joue
+    /// Depuis #8320 un AUDIO cité se joue
     /// SUR PLACE et n'ouvre rien ; l'image et la vidéo s'ouvrent en plein
     /// écran ; le reste retombe sur le saut au message cité. Le Fil
     /// (`MessageListViewController.openQuotedMedia`) et la Rivière

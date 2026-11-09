@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 /// **La machine d'état de capture du viseur du composeur — UNE pour ses deux
 /// montages**.
@@ -63,8 +64,7 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var openFamily: ComposerLookFamily? {
         didSet { refreshFeed() }
     }
-    /// Les proportions de ce que le viseur montre : l'aperçu les mesure,
-    /// tout ce qui part les garde. Une carte 9:16 tant que rien n'est monté.
+    /// Les proportions du viseur, que tout ce qui part garde ; 9:16 tant que rien n'est monté.
     var canvasAspect = ComposerLookPainter.designAspect
     /// Le texte de la retouche (#12591) : une planche d'objets, peinte au-dessus du cadre.
     let retouchTexts = ComposerRetouchTextBoard()
@@ -75,12 +75,13 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var discardPrompt = ComposerCaptureDiscardPrompt()
     /// Les proportions de la scène de retouche — ce qui partira ; `nil` hors retouche.
     @Published var editAspect: CGFloat?
+    /// Le format imposé d'une image d'identité (#17251) : ses proportions fixent la scène.
+    var imageFormat: EntityImageFormat?
     /// Celles de l'ouverture : un écart est un recadrage de l'auteur (CAM-14).
     var openingAspect: CGFloat?
     /// Ce qu'« Annuler » rend pendant le recadrage (#15355).
     var cropEntry: ComposerCropEntry?
-    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ;
-    /// vide hors retouche.
+    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ; vide hors retouche.
     @Published var activeEditTools: Set<ComposerEditTool> = []
     /// **Le chrome de la retouche, par-dessus la prise** : montré à
     /// l'entrée ; glissé vers le bas ou haut, ou toucher sur la prise, le bascule.

@@ -5,6 +5,9 @@ public enum class ClientCapability(public val wire: String) {
     /** L'étape d'onboarding `age` et `viewerWriteRestriction` dans `/me/onboarding`. */
     ONBOARDING_AGE("onboarding-age"),
 
+    /** L'étape d'onboarding `profile` (« Montre-toi », avatar et bannière) dans `/me/onboarding` (#17238). */
+    ONBOARDING_PROFILE("onboarding-profile"),
+
     /** Le lien de connexion lié à l'appareil. */
     LINK_DEVICE_BINDING("link-device-binding"),
 }
@@ -17,12 +20,12 @@ public enum class ClientCapability(public val wire: String) {
  * nouvelle qu'au client qui la DÉCLARE. Déclarer avant de savoir lire échangerait une
  * dégradation lisible contre un écran vide. [declared] ne liste donc que ce dont l'écran
  * est livré : `ONBOARDING_AGE` et `LINK_DEVICE_BINDING` y entrent le jour où leurs écrans
- * existent, jamais avant.
+ * existent, jamais avant. `ONBOARDING_PROFILE` y est : la carte « Montre-toi » est livrée (#17238).
  */
 public object ClientCapabilities {
     public const val HEADER_NAME: String = "X-Meeshy-Capabilities"
 
-    public val declared: List<ClientCapability> = emptyList()
+    public val declared: List<ClientCapability> = listOf(ClientCapability.ONBOARDING_PROFILE)
 
     /** La valeur de l'en-tête, ou `null` quand rien n'est déclaré (l'en-tête est alors omis). */
     public fun headerValue(capabilities: List<ClientCapability> = declared): String? =

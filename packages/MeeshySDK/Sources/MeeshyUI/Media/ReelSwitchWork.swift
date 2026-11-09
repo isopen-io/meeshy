@@ -5,7 +5,7 @@ import Foundation
 
 /// **Ce qu'un passage de réel à réel a le droit de faire, selon la phase.**
 ///
-/// Mesuré sur l'iPhone 16 Pro Max (build Release, 2026-10-12) : la page restait
+/// Mesuré sur l'iPhone 16 Pro Max : la page restait
 /// figée à mi-chemin 250 à 450 ms pendant les balayages rapides, parce que
 /// l'élection À MI-COURSE (`AdaptiveVerticalPager.onMajorityPage`) déclenchait
 /// tout le travail du réel entrant SUR le fil du geste — `load()` et `cleanup()`

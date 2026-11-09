@@ -827,7 +827,7 @@ reviennent au sélecteur avec leur session dormante. Une déconnexion ou un refu
 
 ---
 
-## ADR-030 — L'E2EE Android repose sur libsignal 0.105.4, par appareil, comme iOS
+## ADR-030 — L'E2EE Android repose sur libsignal (0.105.4, puis 0.106.2 avec #17113), par appareil, comme iOS
 **Date:** 2026-11-02 · **Status:** accepted (dev/staging) · **Issue:** #14591 (sous #14370) · **Gates:** #11548 (avis AGPL), #3710 (audit externe)
 
 **Context.** Directive porteur du 2026-11-02 : tous les clients chiffrent de bout en bout. La passerelle sert déjà
@@ -838,7 +838,8 @@ Kyber), le relais d'enveloppes avec l'admission Sesame (409 `E2EE_DEVICES_MISMAT
 (Tink X25519/Ed25519, publication coupée) : aucun message ne se chiffrait ni ne se lisait.
 
 **Decision.**
-- **Bibliothèque** : `org.signal:libsignal-android` **0.105.4**, la version d'iOS (`packages/LibSignalClient/LIBSIGNAL_VERSION`)
+- **Bibliothèque** : `org.signal:libsignal-android` **0.105.4** à la décision, **0.106.2** depuis #17113 (les quatre
+  plateformes montent ensemble, `packages/shared/decisions/2026-11-09-une-montee-de-libsignal-est-un-seul-lot-sur-les-quatre-plateformes-17113.md`), la version d'iOS (`packages/LibSignalClient/LIBSIGNAL_VERSION`)
   et de la passerelle. Signal ne publie plus sur Maven Central depuis la 0.86 : le dépôt
   `build-artifacts.signal.org/libraries/maven/` est déclaré dans `settings.gradle.kts`, restreint au groupe `org.signal`.
   Aucune primitive maison : PQXDH, Double Ratchet et XEdDSA sont ceux de la bibliothèque.

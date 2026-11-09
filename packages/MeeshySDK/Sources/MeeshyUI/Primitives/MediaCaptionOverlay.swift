@@ -39,7 +39,7 @@ import SwiftUI
 /// annotation elle hérite de l'isolation `@MainActor` du paquet, et devient
 /// inappelable depuis un test synchrone — ce qui est exactement ce qui a cassé
 /// la cible de tests du SDK quand elle vivait encore sur le type générique de la
-/// vue (2026-08-30).
+/// vue.
 ///
 /// Le déplacement dit aussi quelque chose de la conception : une règle portée
 /// par un type GÉNÉRIQUE demande à chaque appelant de choisir un paramètre qui
@@ -99,7 +99,7 @@ private extension View {
 
 public struct MediaCaptionOverlay<TextBody: View>: View {
 
-    /// **Le SEUIL et la TÊTE sont deux nombres, pas un** (directive 2026-08-30).
+    /// **Le SEUIL et la TÊTE sont deux nombres, pas un**.
     ///
     /// La règle du porteur est : « on affiche les 15 premiers mots si le texte
     /// fait plus de 30 mots ; sinon on affiche tout, une fois ». Le seuil qui
@@ -123,8 +123,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     private let onToggle: () -> Void
     private let render: (String, CGFloat) -> TextBody
 
-    /// **Le retrait horizontal, dit par l'HÔTE** (directive porteur
-    /// 2026-09-01).
+    /// **Le retrait horizontal, dit par l'HÔTE**.
     ///
     /// Il valait 20 en dur, dans les deux états. Le lecteur de réel monte sa
     /// colonne d'information à 16 : la légende s'y retrouvait indentée de 36 pt
@@ -168,8 +167,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     /// l'incrémente quand son propre geste le décide, le composant remonte. Rien
     /// de la géographie de l'écran n'entre dans l'atome.
     private let scrollToTopToken: Int
-    /// **Assombrir le fond quand on déplie est une décision d'HÔTE** (directive
-    /// porteur 2026-09-02, portée par la story).
+    /// **Assombrir le fond quand on déplie est une décision d'HÔTE**.
     ///
     /// Le composant peignait un dégradé noir dans TOUS ses hôtes. La story a
     /// depuis un meilleur mécanisme — sa scène s'efface elle-même à 0,28 et
@@ -271,7 +269,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
             expandedCaption
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(expandedBackdrop)
-                // **Le dépliage MONTE** (directive porteur 2026-09-02) : « le
+                // **Le dépliage MONTE** : « le
                 // dépliement doit être moderne et bien animé, monter vers le
                 // haut avec possibilité de scroll ».
                 //
@@ -351,7 +349,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
         // moment même où on demandait à en voir plus.
         //
         // **Et une `ScrollView` ne se dimensionne PAS à son contenu** (#6504).
-        // Ce commentaire l'affirmait ; mesuré le 2026-09-14, une légende d'une
+        // Ce commentaire l'affirmait ; mesuré, une légende d'une
         // ligne dépliée occupait 444 pt — la fenêtre prenait tout le plafond, et
         // « voir moins » tombait sous 420 pt de vide (capture du porteur). Le
         // corpus est donc rendu NU tant qu'il tient sous le plafond, et dans une
@@ -373,7 +371,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             ScrollViewReader { proxy in
-                // **Aucune barre de défilement** (directive porteur 2026-09-03).
+                // **Aucune barre de défilement**.
                 //
                 // `showsIndicators` a `true` pour défaut : l'omettre repeindrait
                 // la barre en silence. Elle est donc posée EXPLICITEMENT.
@@ -434,7 +432,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     /// > écrit ; elles divergent au premier changement de règle, et c'est
     /// > toujours l'état le moins visible qui reste en arrière.
     ///
-    /// Les couleurs de l'application (directive porteur 2026-09-02), en GRAS, et
+    /// Les couleurs de l'application, en GRAS, et
     /// la cible de 44 pt acquise en #4762 — les trois tiennent ici, donc dans les
     /// deux états.
     private func affordance(_ label: String, hint: String) -> some View {
@@ -457,7 +455,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     // d'une ligne, qu'aucune autre ligne de la colonne ne porte. Ce qui la rend
     // lisible est `legibleOverCanvas()`, la manière de `ReelFeedCard`.
     //
-    // **Dépliée, c'est l'HÔTE qui décide** (directive 2026-09-02, ci-dessus) :
+    // **Dépliée, c'est l'HÔTE qui décide** :
     // la story refuse le voile parce que sa scène s'efface déjà ; le réel et le
     // plein écran média le gardent, faute d'équivalent.
 
@@ -475,11 +473,11 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
             LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.6), .black.opacity(MeeshyOpacity.intense)],
                            startPoint: .top, endPoint: .bottom)
                 .contentShape(Rectangle())
-                .onTapGesture { onToggle() }
+                .meeshyTapAction(label: String(localized: "media.caption.see_less", bundle: .module)) { onToggle() }
         } else {
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture { onToggle() }
+                .meeshyTapAction(label: String(localized: "media.caption.see_less", bundle: .module)) { onToggle() }
         }
     }
 

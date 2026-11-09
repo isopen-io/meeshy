@@ -3,9 +3,9 @@ import Foundation
 @testable import MeeshySDK
 
 /// **Les EFFETS de l'ancien éditeur d'image reviennent dans la scène — ceux qui
-/// n'étaient pas déjà des réglages** (#9498). L'outil « Effets » de
-/// `MeeshyImageEditorView` offrait flou, vignette, netteté, bloom et grain ; les
-/// trois premiers sont des curseurs de `AdjustmentKind` depuis #9175. Le BLOOM
+/// n'étaient pas déjà des réglages** (#9498). Son outil « Effets » offrait
+/// flou, vignette, netteté, bloom et grain ; les trois premiers sont des
+/// curseurs de `AdjustmentKind` depuis #9175. Le BLOOM
 /// et le GRAIN entrent dans le MÊME sac, sous une famille à eux : une seule
 /// source de vérité, une seule chaîne, un seul fil.
 struct ImageEffectsRuleTests {
@@ -24,13 +24,7 @@ struct ImageEffectsRuleTests {
         for kind in [AdjustmentKind.bloom, .grain] {
             #expect(kind.range == 0...1)
             #expect(kind.neutralValue == 0)
-            #expect(!kind.isEssential)
         }
-    }
-
-    @Test func lEditeurDeLAvatar_neMontreQueLesReglages() {
-        #expect(AdjustmentKind.toneCases == AdjustmentKind.allCases.filter { $0.family == .tone })
-        #expect(!AdjustmentKind.toneCases.contains(.bloom) && !AdjustmentKind.toneCases.contains(.grain))
     }
 
     @Test func uneImage_recoitLesEffets_uneVideoAucun() {

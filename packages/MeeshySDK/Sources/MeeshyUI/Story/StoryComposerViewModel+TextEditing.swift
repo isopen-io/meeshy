@@ -23,8 +23,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     case border
     /// Langue dans laquelle le texte est ÉCRIT. Réglable ici, à côté des
     /// attributs visuels, parce qu'une langue source fausse ne se voit PAS à
-    /// l'écriture — elle ne se paie qu'à la traduction (directive user
-    /// 2026-07-25).
+    /// l'écriture — elle ne se paie qu'à la traduction.
     case language
     /// L'EFFET posé par-dessus la police — lueur, ombre, relief (#4870).
     /// Ajouté EN QUEUE de l'énuméré (l'ordre des `case` porte aussi la

@@ -31,7 +31,7 @@ extension SignupView {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             HStack(spacing: MeeshySpacing.sm) {
                 Button {
@@ -42,10 +42,10 @@ extension SignupView {
                         Text(viewModel.form.country.flag)
                         Text(viewModel.form.country.dialCode)
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                         Image(systemName: "chevron.down")
                             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .accessibilityHidden(true)
                     }
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -95,7 +95,7 @@ extension SignupView {
             // seconde fois au balayage n'apprendrait rien.
             Text(phoneBenefit)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)
         }

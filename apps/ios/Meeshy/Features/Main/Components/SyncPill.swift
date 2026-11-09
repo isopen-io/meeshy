@@ -261,6 +261,8 @@ struct SyncPill: View {
     // cannot dismiss. Reduce Motion must reach it. (The pulse is driven by
     // `dotTimer`, not by a `repeatForever` curve — see `pulseCurve`.)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Hors de la phase active, ni battement ni rotation (#17250, `SyncPillDotClock`).
+    @Environment(\.scenePhase) private var scenePhase
     @State private var dotPhase: Int = 0
     // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
     // on every reconstruction of this View value (every unrelated re-render
@@ -531,15 +533,29 @@ struct SyncPill: View {
         // annulé = timer déconnecté ; le pulse ne coûte que quand il s'affiche.
         // La rotation, elle, est déjà coupée par SyncPillRotator à
         // itemCount == 0.
-        .onReceive(dotTimer) { _ in
-            dotPhase += 1
+        .background { foregroundDotClock }
+        .adaptiveOnChange(of: scenePhase) { _, phase in
+            rotator.setAutoRotation(SyncPillDotClock.rotates(in: phase, pausedByUser: isPausedByUser))
         }
-        // La pill peut disparaître (abonnement annulé → connexion du timer
-        // coupée) puis revenir : on repart d'un publisher NEUF plutôt que de
-        // parier sur la reconnexion d'un `autoconnect` déjà annulé.
-        .onAppear {
-            dotPhase = 0
-            dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    }
+
+    /// #17250 — le battement ne vit qu'au PREMIER PLAN : en arrière-plan, la pastille reste montée (une publication en
+    /// file la garde affichée) et chaque tic réveillait le processeur pour réévaluer un corps que personne ne voit.
+    /// Hors de la phase active, cette vue est démontée : abonnement annulé, timer déconnecté. À chaque retour, on repart
+    /// d'un publisher NEUF plutôt que de parier sur la reconnexion d'un `autoconnect` déjà annulé.
+    @ViewBuilder
+    private var foregroundDotClock: some View {
+        if SyncPillDotClock.runs(in: scenePhase) {
+            Color.clear
+                .onReceive(dotTimer) { _ in
+                    dotPhase += 1
+                }
+                .onAppear {
+                    dotPhase = 0
+                    dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+                    rotator.setAutoRotation(SyncPillDotClock.rotates(in: scenePhase, pausedByUser: isPausedByUser))
+                }
+                .accessibilityHidden(true)
         }
     }
 

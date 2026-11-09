@@ -143,7 +143,7 @@ struct ShareLinkDetailView: View {
                 CachedAsyncImage(url: link.conversation?.avatar, targetSize: CGSize(width: 48, height: 48), showsStatusOverlays: false) {
                     Text(MeeshyAvatar.initials(for: groupName))
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 .scaledToFill()
             )
@@ -159,7 +159,7 @@ struct ShareLinkDetailView: View {
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(link.isActive ? MeeshyColors.success.opacity(MeeshyOpacity.intense) : Color.white.opacity(MeeshyOpacity.medium)))
-            .foregroundColor(link.isActive ? MeeshyColors.indigo950 : .white)
+            .foregroundStyle(link.isActive ? MeeshyColors.indigo950 : Color.white)
     }
 
     /// Native share: `ShareLink` gives the activity sheet, the iPad popover

@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import type { OnboardingStepOutcome, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import '@/styles/onboarding.css';
@@ -16,6 +16,7 @@ import {
   type OnboardingState,
   type OnboardingStepId,
 } from '@/lib/api/onboarding';
+import { MY_PROFILE_QUERY_KEY, type MyProfile, type ProfileImageKind } from '@/lib/api/profile';
 import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
 import { performProfileEdit } from '@/lib/api/profile-actions';
 import { retrySendAction, sendAction } from '@/lib/api/query';
@@ -48,6 +49,7 @@ import {
   type JourneyStep,
 } from '@/lib/onboarding/journey';
 import { journeyProgressStore, type JourneyProgressStore } from '@/lib/onboarding/progress-store';
+import type { EntityImageEditor } from '@/lib/profile/use-entity-image-edit';
 import { storyReturn } from '@/lib/onboarding/story-return';
 import { useSearch } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
@@ -67,6 +69,7 @@ import {
   type ResendLink,
 } from './onboarding-cards';
 import { AgeCard, type AgeSubmit } from './onboarding-age';
+import type { ProfileImageUpload } from './onboarding-profile';
 import { RecapCard, type RecapNumbers } from './onboarding-recap';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
 import { href, navigate } from './route-table';
@@ -107,6 +110,10 @@ export type OnboardingScreenDeps = {
   }) => Promise<GreetingSend>;
   readonly addFriend: (suggestion: OnboardingSuggestion, viewerId: string | null) => Promise<FriendActionOutcome>;
   readonly saveLanguages: (patch: { readonly systemLanguage: string; readonly regionalLanguage: string }) => Promise<LanguagesSave>;
+  /** « Montre-toi » (#17237) — le chemin de l'écran Profil, la session et le cache du profil suivent la valeur servie. */
+  readonly uploadProfileImage: (kind: ProfileImageKind, file: Blob) => Promise<ProfileImageUpload>;
+  /** La retouche de la capture (#17256) — injectable pour les témoins ; la production la charge à la demande. */
+  readonly profileImageEditor?: EntityImageEditor;
   readonly notificationsAskable: () => boolean;
   readonly askNotifications: () => Promise<void>;
   readonly loadRecap: () => Promise<RecapNumbers | null>;
@@ -153,6 +160,8 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
     });
     return outcome.status === 'saved' ? 'saved' : outcome.status === 'offline' ? 'offline' : 'failed';
   },
+  /* Le chemin de l'écran Profil voyage avec la carte, dans son chunk. */
+  uploadProfileImage: async (kind, file) => (await import('./onboarding-profile')).uploadWithProfilePath(kind, file),
   /* La carte 5 ne s'ouvre que là où un ABONNEMENT push peut suivre le
      « Oui » (`notifications-offer.ts`) — aujourd'hui nulle part : l'abonné
      web est #7306, la coque Android #7307. */
@@ -186,6 +195,35 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
   random: Math.random,
   navigate,
 };
+
+/**
+ * « MONTRE-TOI » (#17237) arrive dans SON chunk, avec son catalogue : le
+ * parcours n'en paie les octets que s'il la propose (`budgets.json` ›
+ * `onboarding_profile`). Une seule promesse, partagée par le préchargement et
+ * le rendu — la carte est en général prête avant qu'on y arrive.
+ */
+type ProfileCardProps = Parameters<typeof import('./onboarding-profile').ProfileCard>[0];
+type ProfileCardComponent = (props: ProfileCardProps) => ReturnType<typeof import('./onboarding-profile').ProfileCard> | null;
+
+/* Le chunk injoignable ne bloque pas le parcours : la carte facultative se
+   passe d'elle-même, comme « Plus tard ». */
+const ProfileCardUnavailable: ProfileCardComponent = ({ onLater }) => {
+  useEffect(() => onLater(), [onLater]);
+  return null;
+};
+
+let profileCardModule: Promise<{ readonly default: ProfileCardComponent }> | null = null;
+const loadProfileCard = () =>
+  (profileCardModule ??= import('./onboarding-profile')
+    .then(async (module) => {
+      await module.prepareProfileCard(currentInterfaceLanguage());
+      return { default: module.ProfileCard };
+    })
+    .catch(() => {
+      profileCardModule = null;
+      return { default: ProfileCardUnavailable };
+    }));
+const ProfileCard = lazy(loadProfileCard);
 
 const isStepId = (value: string | null): value is OnboardingStepId =>
   value !== null && (ONBOARDING_STEPS as readonly string[]).includes(value);
@@ -333,10 +371,25 @@ export function OnboardingJourney({
     });
   }, [deps.readScore, setProgress]);
 
+  /* « Montre-toi » (#17237) ne se propose pas à un compte qui a DÉJÀ photo ET
+     bannière — miroir d'iOS (`hasProfileImages`), filet face à une passerelle
+     qui ne pré-coche pas l'étape. Lu au montage : une image posée PAR la carte
+     ne la retire pas sous les doigts. */
+  const [profileComplete] = useState(() => {
+    const avatarHeld = session.status === 'authenticated' ? session.user.avatar : undefined;
+    const banner = deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.banner;
+    return (avatarHeld ?? '') !== '' && (banner ?? '') !== '';
+  });
   const context = useMemo<JourneyContext | null>(
-    () => (state === undefined ? null : { state, progress, notificationsAskable: askable }),
-    [state, progress, askable],
+    () => (state === undefined ? null : { state, progress, notificationsAskable: askable, profileComplete }),
+    [state, progress, askable, profileComplete],
   );
+
+  const profileAhead =
+    context !== null && isOffered('profile', context) && !context.state.seenSteps.includes('profile') && !context.state.prefilledSteps.includes('profile');
+  useEffect(() => {
+    if (profileAhead) void loadProfileCard();
+  }, [profileAhead]);
 
   /* L'ENTRÉE — une fois l'état connu (cache d'abord) : `?story=<id>` au
      retour du studio, crédité seulement avec sa preuve (`story-return.ts`),
@@ -535,6 +588,21 @@ export function OnboardingJourney({
           <EmailCard host={host} resend={resend} onLater={() => advance('email', 'skipped')} />
         ) : step === 'age' ? (
           <AgeCard host={host} today={today} submit={submitAge} onSkip={() => advance('age', 'skipped')} />
+        ) : step === 'profile' ? (
+          <Suspense fallback={null}>
+            <ProfileCard
+              host={host}
+              userId={viewer.id}
+              name={displayName}
+              handle={account?.username ?? viewer.handle ?? null}
+              avatar={avatar ?? null}
+              banner={deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.banner ?? null}
+              upload={deps.uploadProfileImage}
+              {...(deps.profileImageEditor !== undefined ? { editor: deps.profileImageEditor } : {})}
+              onDone={() => advance('profile', 'done')}
+              onLater={() => advance('profile', 'skipped')}
+            />
+          </Suspense>
         ) : step === 'global' ? (
           <GlobalCard
             host={host}

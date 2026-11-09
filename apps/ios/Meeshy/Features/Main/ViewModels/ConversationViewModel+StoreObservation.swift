@@ -175,8 +175,8 @@ extension ConversationViewModel {
         // `kind` to apply the right rollback strategy.
         OfflineQueue.shared.retryExhausted
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] payload in
-                Task { [weak self] in await self?.handleRetryExhausted(payload) }
+            .relay(through: OrderedEventLane()) { [weak self] payload in
+                await self?.handleRetryExhausted(payload)
             }
             .store(in: &cancellables)
     }

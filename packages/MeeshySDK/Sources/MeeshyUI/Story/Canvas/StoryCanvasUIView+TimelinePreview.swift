@@ -96,7 +96,7 @@ extension StoryCanvasUIView {
     /// `stop()` (et non `pause()`) purge la `startedSlideKey` du mixer canvas :
     /// la sortie de preview repartira donc d'une planification neuve, à zéro.
     /// C'est l'un des deux seuls points de reset autorisés du son d'édition —
-    /// « ouvrir l'outil timeline » (directive user 2026-07-30) ; l'autre est le
+    /// « ouvrir l'outil timeline » ; l'autre est le
     /// bouton lecture/pause de la timeline, porté par l'engine lui-même. Toute
     /// autre manipulation du canvas laisse la boucle intacte.
     ///

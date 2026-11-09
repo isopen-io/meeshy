@@ -48,7 +48,7 @@ struct GameNotebookPage: View {
         let occupied = String(format: String(localized: "game.notebook.size", defaultValue: "La Chronique occupe %@.", bundle: .main), size)
         return Text(viewModel.occupiedBytes > 0 ? "\(occupied) \(deviceOnly)" : deviceOnly)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("game.notebook.place")
     }
@@ -75,7 +75,7 @@ struct GameNotebookPage: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "game.notebook.pending", defaultValue: "En attente", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(viewModel.pending) { entry in
                 HStack(spacing: MeeshySpacing.md) {
@@ -87,7 +87,7 @@ struct GameNotebookPage: View {
                     } label: {
                         Text(String(localized: "game.photo.offer.start", defaultValue: "Photographier", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .foregroundColor(MeeshyColors.brandPrimary)
+                            .foregroundStyle(MeeshyColors.brandPrimary)
                             .padding(.horizontal, MeeshySpacing.md)
                             .frame(minHeight: 44)
                             .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.12)))
@@ -107,7 +107,7 @@ struct GameNotebookPage: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "game.notebook.catch_up", defaultValue: "À rattraper", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(viewModel.catchUp) { step in
                 catchUpRow(step)
@@ -126,14 +126,14 @@ struct GameNotebookPage: View {
                 Text(step.moment.kicker)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .textCase(.uppercase)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Text(step.moment.title)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 if let lockedLine {
                     Text(lockedLine)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             Spacer(minLength: 0)
@@ -144,7 +144,7 @@ struct GameNotebookPage: View {
                 } label: {
                     Text(String(localized: "game.photo.offer.start", defaultValue: "Photographier", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .foregroundStyle(MeeshyColors.brandPrimary)
                         .padding(.horizontal, MeeshySpacing.md)
                         .frame(minHeight: 44)
                         .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.12)))
@@ -154,7 +154,7 @@ struct GameNotebookPage: View {
             } else {
                 Image(systemName: "lock.fill")
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(minWidth: 44, minHeight: 44)
                     .accessibilityHidden(true)
             }
@@ -171,7 +171,7 @@ struct GameNotebookPage: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "game.notebook.kept", defaultValue: "Photos gardées", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(viewModel.kept) { entry in
                 HStack(alignment: .top, spacing: MeeshySpacing.md) {
@@ -215,13 +215,13 @@ struct GameNotebookPage: View {
             Text(entry.kicker)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Text(entry.title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Text(entry.createdAt.formatted(date: .abbreviated, time: .omitted))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
     }
 
@@ -232,7 +232,7 @@ struct GameNotebookPage: View {
         } label: {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .frame(minHeight: 44)
                 .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.12)))

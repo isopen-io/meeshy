@@ -2,8 +2,8 @@ import SwiftUI
 import MeeshySDK
 
 /// Sélecteur de couche manipulable de la bordure gauche du composer : deux
-/// chips TAPPABLES « Arrière-plan » / « Premier plan » (directive user
-/// 2026-07-14). Choisir un chip pilote quel groupe d'éléments reçoit les
+/// chips TAPPABLES « Arrière-plan » / « Premier plan ».
+/// Choisir un chip pilote quel groupe d'éléments reçoit les
 /// gestes (pan/pinch/rotate) — le fond (zoom/rotation/position du média de
 /// fond) ou le premier plan (textes, stickers, médias ajoutés).
 ///
@@ -43,11 +43,11 @@ struct CanvasLayerIndicator: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
                 Text(label)
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: isActive ? .semibold : .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isActive ? .semibold : .medium))
             }
-            .foregroundColor(isActive ? .white : mutedText)
+            .foregroundStyle(isActive ? .white : mutedText)
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
             .background(
