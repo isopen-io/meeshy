@@ -279,6 +279,7 @@ struct BubbleReactionsOverlay: View, Equatable {
 /// Une pill deja presente (`isNew == false`) est rendue a son etat final
 /// sans aucune animation : pas de re-jeu sur un simple re-render de liste.
 private struct CometPillModifier: ViewModifier {
+    @State private var delayed = DelayedActions()
     let isNew: Bool
 
     /// `progress` pilote zoom + offset (0 = comete lointaine, 1 = posee).
@@ -360,7 +361,7 @@ private struct CometPillModifier: ViewModifier {
         // Phase 3 — shake : declenche a l'impact (~0.18s apres le lancement).
         // On amorce `shake` a 1, on fait avancer `wobblePhase` lineairement
         // pour generer les oscillations, puis on amortit `shake` vers 0.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        delayed.run(after: .milliseconds(180)) {
             shake = 1
             wobblePhase = 0
             withAnimation(.linear(duration: 0.42)) {

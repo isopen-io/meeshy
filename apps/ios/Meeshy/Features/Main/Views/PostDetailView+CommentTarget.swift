@@ -70,7 +70,7 @@ extension PostDetailView {
     /// Surligne `id` puis désarme après 2,6 s (si toujours actif).
     private func applyTargetHighlight(_ id: String) {
         highlightedCommentId = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+        delayed.run(after: .milliseconds(2600)) {
             if highlightedCommentId == id { highlightedCommentId = nil }
         }
     }

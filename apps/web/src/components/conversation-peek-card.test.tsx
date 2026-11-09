@@ -431,6 +431,11 @@ describe('conversation-peek.css — le fond sous la carte (#12633)', () => {
     expect(layer).toContain('pointer-events: none');
   });
 
+  test('#17260 — la grappe passe AU-DESSUS du chrome fixe de la coquille (bandeau du joueur, z-index 40)', () => {
+    const zIndex = Number(/z-index:\s*(\d+)/.exec(rule('.conversation-peek-cluster'))?.[1]);
+    expect(zIndex).toBeGreaterThan(40);
+  });
+
   test('tant que le fond choisi n’est pas prêt, la carte garde sa propre surface', () => {
     expect(rule('.conversation-peek-card > .thread-backdrop:not([data-appearance])')).toContain('display: none');
   });

@@ -78,15 +78,15 @@ extension VitrineInteractions {
         envoyer(copie, vocal.duree)
         _ = await serveur.attendreLaCreation()
         VitrineTournage.etape("creation")
-        try? await Task.sleep(for: avantLeDefilement)
+        guard await cancellableSleep(for: avantLeDefilement) else { return }
         guard let montrer = VitrineRendu.shared.montrerLesCommentaires else {
             fatalError("Vitrine « \(scene.rawValue) » : le détail du post n'a pas prêté son défilement")
         }
         montrer()
-        try? await Task.sleep(for: avantLaTranscription)
+        guard await cancellableSleep(for: avantLaTranscription) else { return }
         VitrineTournage.etape("transcription")
         if let transcription = serveur.transcriptionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(transcription) }
-        try? await Task.sleep(for: avantLaTraduction)
+        guard await cancellableSleep(for: avantLaTraduction) else { return }
         VitrineTournage.etape("traduction")
         if let traduction = serveur.traductionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(traduction) }
         guard await cancellableSleep(for: tenueDeLaTraduction) else { return }
@@ -100,7 +100,7 @@ extension VitrineInteractions {
         ouvrir()
         await VitrineRendu.shared.attendre([.paletteDeReactions])
         VitrineTournage.etape("palette")
-        try? await Task.sleep(for: tenueDeLaPalette)
+        guard await cancellableSleep(for: tenueDeLaPalette) else { return }
         guard let choisir = VitrineRendu.shared.choisirDansLaPalette else {
             fatalError("Vitrine « \(scene.rawValue) » : la palette n'a pas prêté son geste")
         }

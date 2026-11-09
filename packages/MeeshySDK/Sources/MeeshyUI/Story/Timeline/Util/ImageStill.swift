@@ -8,13 +8,13 @@ import MeeshySDK
 /// bitmap plein format en mémoire), cache keyé URL+hauteur+échelle.
 enum ImageStill {
 
-    private nonisolated(unsafe) static let cache: NSCache<NSString, UIImage> = {
+    private nonisolated static let cache: LockedCache<NSString, UIImage> = LockedCache({
         let cache = NSCache<NSString, UIImage>()
         // Borne le nombre de vignettes décodées résidentes (une par média ×
         // hauteur) — sans elle le cache ne rendait jamais rien au système.
         cache.countLimit = 64
         return cache
-    }()
+    }())
 
     static func thumbnail(url: URL, maxHeight: CGFloat, scale: CGFloat) async -> UIImage? {
         let key = "\(url.absoluteString)|\(Int(maxHeight))|\(scale)" as NSString

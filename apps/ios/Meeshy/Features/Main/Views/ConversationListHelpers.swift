@@ -18,6 +18,7 @@ struct SectionHeaderView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var isTapped = false
+    @State private var delayed = DelayedActions()
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -26,7 +27,7 @@ struct SectionHeaderView: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
                 isTapped = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            delayed.run(after: .milliseconds(150)) {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
                     isTapped = false
                 }
@@ -529,6 +530,7 @@ struct ConversationPreviewView: View {
 
 // MARK: - Themed Community Card
 struct ThemedCommunityCard: View, Equatable {
+    @State private var delayed = DelayedActions()
     let community: Community
     var action: (() -> Void)? = nil
     @State private var isPressed = false
@@ -581,7 +583,7 @@ struct ThemedCommunityCard: View, Equatable {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                 isPressed = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            delayed.run(after: .milliseconds(150)) {
                 withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                     isPressed = false
                 }

@@ -56,14 +56,29 @@ nonisolated enum ConversationPeekPullDown {
     }
 }
 
+/// La largeur commune des menus d'appui long (#17274, #17275) : 80 % de la
+/// largeur entre les marges, plafonnée. L'aperçu d'une conversation et le menu
+/// d'un message la partagent : un même geste, une même taille.
+nonisolated enum LongPressPeekWidth {
+    static func menuWidth(availableWidth: CGFloat) -> CGFloat {
+        let between = availableWidth - 2 * ConversationPeekLayout.sideMargin
+        return max(0, min(ConversationPeekLayout.maximumWidth, between)) * ConversationPeekLayout.footprint
+    }
+}
+
 /// La loi de dimensionnement de l'aperçu d'appui long (#17242), pure : une
 /// progression 0 → 1 pilote les DEUX hauteurs (menu qui grandit, carte qui se
 /// réduit d'autant), et la levée du doigt conclut vers le cran le plus proche
 /// de la position projetée (seuil à mi-course, la vélocité comprise).
+///
+/// L'aperçu n'occupe que 80 % de ce que l'écran lui offre (#17274) : la carte
+/// et le menu, plus étroits et la carte moins haute, laissent voir la liste
+/// autour d'eux — un voile qu'on touche pour fermer.
 nonisolated struct ConversationPeekLayout: Equatable, Sendable {
     static let sideMargin: CGFloat = 12
     static let maximumWidth: CGFloat = 560
     static let spacing: CGFloat = 12
+    static let footprint: CGFloat = 0.8
     /// La carte réduite garde quelques messages lisibles (elle n'a pas d'en-tête).
     static let minimumCardHeight: CGFloat = 150
     static let settleThreshold: CGFloat = 0.5
@@ -86,14 +101,25 @@ nonisolated struct ConversationPeekLayout: Equatable, Sendable {
     /// Poignée + tout le contenu du panneau affiché, mesurés.
     let naturalMenuHeight: CGFloat
 
-    var cardWidth: CGFloat {
-        max(0, min(Self.maximumWidth, availableWidth - 2 * Self.sideMargin))
+    var cardWidth: CGFloat { LongPressPeekWidth.menuWidth(availableWidth: availableWidth) }
+
+    /// Le menu, compact comme étendu, a la largeur de la carte, centré sous elle.
+    var menuWidth: CGFloat { cardWidth }
+
+    /// La hauteur de la carte, du menu et de leur espacement réunis : constante
+    /// pendant le geste, ce que le menu gagne, la carte le perd.
+    var stackHeight: CGFloat {
+        let restCard = max(0, availableHeight - Self.spacing - compactMenuHeight) * Self.footprint
+        return restCard + Self.spacing + compactMenuHeight
     }
+
+    /// Ce que l'aperçu laisse au voile, au-dessus et au-dessous de lui.
+    var verticalSlack: CGFloat { max(0, availableHeight - stackHeight) }
 
     /// Le menu étendu montre tout son contenu, sans jamais réduire la carte
     /// sous quelques messages lisibles ; au-delà, son contenu défile.
     var expandedMenuHeight: CGFloat {
-        let ceiling = availableHeight - Self.spacing - Self.minimumCardHeight
+        let ceiling = stackHeight - Self.spacing - Self.minimumCardHeight
         return max(compactMenuHeight, min(naturalMenuHeight, ceiling))
     }
 
@@ -107,7 +133,7 @@ nonisolated struct ConversationPeekLayout: Equatable, Sendable {
     }
 
     func cardHeight(progress: CGFloat) -> CGFloat {
-        max(0, availableHeight - Self.spacing - menuHeight(progress: progress))
+        max(0, stackHeight - Self.spacing - menuHeight(progress: progress))
     }
 
     /// La progression sous le doigt : tirer vers le HAUT (translation

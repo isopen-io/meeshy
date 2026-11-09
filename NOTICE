@@ -11,7 +11,8 @@ La rédaction finale de ce fichier, du paragraphe « Licences » du README et de
 
 Chaque fichier source écrit pour Meeshy dans ce dépôt est distribué sous la
 licence MIT (fichier LICENSE), sauf mention contraire en tête du fichier
-(par exemple `packages/libsignal-wasm/`, déclaré AGPL-3.0-only) ou dans le
+(par exemple le futur `packages/libsignal-wasm/`, #14592, qui sera déclaré
+AGPL-3.0-only) ou dans le
 dossier d'un composant tiers (par exemple `packages/LibSignalClient/`, copie
 non modifiée de libsignal, AGPL-3.0-only, voir son LICENSE).
 
@@ -31,16 +32,16 @@ l'AGPL-3.0-only. Sont concernés :
 
   | binaire                         | libsignal embarqué                                   | version |
   |---------------------------------|------------------------------------------------------|---------|
-  | application iOS (IPA)           | `packages/LibSignalClient` + `SignalFfi.xcframework` | 0.105.4 |
-  | application Android (APK / AAB) | `org.signal:libsignal-android`                       | 0.105.4 |
-  | bundle web avec moteur WASM     | `packages/libsignal-wasm` (pont navigateur)          | 0.105.4 |
-  | image Docker de la passerelle   | `@signalapp/libsignal-client` (prébuilds Node)       | 0.105.0 |
+  | application iOS (IPA)           | `packages/LibSignalClient` + `SignalFfi.xcframework` | 0.106.2 |
+  | application Android (APK / AAB) | `org.signal:libsignal-android`                       | 0.106.2 |
+  | bundle web avec moteur WASM     | aucun aujourd'hui : le pont WASM arrive avec #14592  | —       |
+  | image Docker de la passerelle   | `@signalapp/libsignal-client` (prébuilds Node)       | 0.106.2 |
 
   Les versions sont celles épinglées au moment de la rédaction ; la version
   qui fait foi pour un build donné est celle que son commit déclare
   (`packages/LibSignalClient/LIBSIGNAL_VERSION`,
-  `apps/android/gradle/libs.versions.toml`, `packages/libsignal-wasm/Cargo.toml`,
-  `services/gateway/package.json`).
+  `apps/android/gradle/libs.versions.toml`, `services/gateway/package.json`, et
+  `packages/libsignal-wasm/Cargo.toml` quand le pont WASM existera, #14592).
 
 Le texte officiel de la licence est dans `LICENSES/AGPL-3.0.txt`. Il est
 identique octet pour octet à https://www.gnu.org/licenses/agpl-3.0.txt
@@ -74,15 +75,15 @@ sans frais, sur https://github.com/isopen-io/meeshy :
       * Android : `apps/android/` (Gradle), `.github/workflows/android.yml` et
         `android-release.yml` ; l'AAR `libsignal-android` est le binaire publié
         par Signal pour le tag épinglé, dont la source est
-        https://github.com/signalapp/libsignal/tree/v0.105.4 ;
+        https://github.com/signalapp/libsignal/tree/v0.106.2 ;
       * web : `apps/web/Dockerfile`, `apps/web/vite.config.ts`,
-        `packages/libsignal-wasm/build.sh` (le pont WASM se reconstruit depuis
-        les sources, sans binaire téléchargé) ;
+        et, quand il existera (#14592), `packages/libsignal-wasm/build.sh` (le
+        pont WASM se reconstruira depuis les sources, sans binaire téléchargé) ;
       * passerelle : `services/gateway/Dockerfile`, `.github/workflows/docker.yml` ;
         les prébuilds de `@signalapp/libsignal-client` viennent de
-        https://github.com/signalapp/libsignal/tree/v0.105.0.
+        https://github.com/signalapp/libsignal/tree/v0.106.2.
   - les sources de libsignal au tag épinglé : https://github.com/signalapp/libsignal
-    (tags `v0.105.4` et `v0.105.0`).
+    (tag `v0.106.2`, une seule version sur toutes les plateformes, #17113).
 
 Offre écrite (AGPL-3.0, section 6) : pendant au moins trois ans après la
 dernière distribution d'un binaire, et aussi longtemps que des pièces de
@@ -115,7 +116,7 @@ le dit.
         dans l'app, affiché par l'écran Licences) ;
       * Android : `apps/android/feature/settings/src/main/res/raw/libsignal_acknowledgments.md`
         (copie de `acknowledgments/acknowledgments-android.md` de libsignal au
-        tag v0.105.4, affichée par l'écran Licences quand libsignal est lié) ;
+        tag v0.106.2, affichée par l'écran Licences quand libsignal est lié) ;
       * web : la liste des avis du moteur WASM accompagnera son lot (#14592) ;
         l'écran Licences renvoie, en attendant, à la liste publiée par Signal
         au tag épinglé ;

@@ -1,14 +1,6 @@
 import Foundation
 import UIKit
-
-/// `@unchecked Sendable` box autour de `NSCache`, qui est thread-safe (documenté
-/// Apple) mais ne déclare pas `Sendable`. Permet de capturer le cache dans la
-/// closure `@Sendable` de l'observer de mémoire sans data-race réelle, sans
-/// capturer `self` (la classe est traitée non-Sendable sous `@Sendable` closure).
-private struct SendableGlyphCacheRef: @unchecked Sendable {
-    nonisolated(unsafe) let cache: NSCache<NSString, CGImage>
-    nonisolated init(cache: NSCache<NSString, CGImage>) { self.cache = cache }
-}
+import MeeshySDK
 
 /// Caches rasterized emoji glyphs (`emoji|sizePx → CGImage`) so a sticker is
 /// drawn through Core Text at most once per (emoji, integer size) pair.
@@ -42,44 +34,38 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
     /// MainActor-isolated and rejected by the compiler in nonisolated context.
     public nonisolated static let defaultCountLimit: Int = 100
 
-    private nonisolated(unsafe) let cache: NSCache<NSString, CGImage>
-    private nonisolated(unsafe) var memoryWarningObserver: NSObjectProtocol?
+    private let cache: LockedCache<NSString, CGImage>
+    // unchecked: jeton d'observateur, écrit à l'init et lu par deinit seulement
+    private let memoryWarningObserver: Locked<NSObjectProtocol?>
 
-    private nonisolated init(countLimit: Int = StoryStickerRasterizer.defaultCountLimit) {
-        let cache = NSCache<NSString, CGImage>()
-        cache.countLimit = countLimit
-        cache.totalCostLimit = 10 * 1024 * 1024
-        self.cache = cache
-        let cacheRef = SendableGlyphCacheRef(cache: cache)
-        self.memoryWarningObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil,
-            queue: nil
-        ) { [cacheRef] _ in
-            cacheRef.cache.removeAllObjects()
-        }
+    private nonisolated convenience init(countLimit: Int = StoryStickerRasterizer.defaultCountLimit) {
+        let backing = NSCache<NSString, CGImage>()
+        backing.countLimit = countLimit
+        backing.totalCostLimit = 10 * 1024 * 1024
+        self.init(backing: backing)
     }
 
     /// Test-only initializer that allows shrinking the cache to exercise the
     /// eviction path without rasterizing thousands of glyphs.
-    internal nonisolated init(countLimitForTesting: Int) {
-        let cache = NSCache<NSString, CGImage>()
-        cache.countLimit = countLimitForTesting
+    internal nonisolated convenience init(countLimitForTesting: Int) {
+        let backing = NSCache<NSString, CGImage>()
+        backing.countLimit = countLimitForTesting
+        self.init(backing: backing)
+    }
+
+    private nonisolated init(backing: NSCache<NSString, CGImage>) {
+        let cache = LockedCache(backing)
         self.cache = cache
-        let cacheRef = SendableGlyphCacheRef(cache: cache)
-        self.memoryWarningObserver = NotificationCenter.default.addObserver(
+        let observer = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: nil
-        ) { [cacheRef] _ in
-            cacheRef.cache.removeAllObjects()
-        }
+        ) { _ in cache.removeAllObjects() }
+        self.memoryWarningObserver = Locked<NSObjectProtocol?>(uncheckedState: observer)
     }
 
-    // `nonisolated` : ne touche que `memoryWarningObserver` (nonisolated(unsafe)).
-    // Évite le shim isolated-deinit qui double-free le TaskLocal scope (SIGABRT).
     nonisolated deinit {
-        if let observer = memoryWarningObserver {
+        if let observer = memoryWarningObserver.mutateUnchecked({ $0 }) {
             NotificationCenter.default.removeObserver(observer)
         }
     }

@@ -15,11 +15,18 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated deinit {
         // Un modèle libéré sans `stop()` ne laisse pas son guet de la scène
         // inscrit au centre de notifications.
-        if let subjectAreaObserver { NotificationCenter.default.removeObserver(subjectAreaObserver) }
-        sessionObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers.releaseNow { observers in
+            if let subjectArea = observers.subjectArea { NotificationCenter.default.removeObserver(subjectArea) }
+            observers.session.forEach { NotificationCenter.default.removeObserver($0) }
+        }
     }
+    private let observers = TeardownBox(CameraNotificationObservers())
+
     /// Le guet de la santé de la session — `CameraModel+Recovery`.
-    nonisolated(unsafe) var sessionObservers: [NSObjectProtocol] = []
+    var sessionObservers: [NSObjectProtocol] {
+        get { var value: [NSObjectProtocol] = []; observers.update { value = $0.session }; return value }
+        set { observers.update { $0.session = newValue } }
+    }
     /// Le rang de la dernière entrée vidéo posée : la couche d'aperçu
     /// ne règle sa connexion qu'à ce changement, jamais à chaque passe.
     @Published private(set) var inputEpoch = 0
@@ -152,9 +159,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     private var switchGeneration = 0
     var recordingTimer: Timer?
     /// Le guet de la scène après un toucher — `nil` hors session.
-    /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
-    /// écrit que sur le fil principal.
-    nonisolated(unsafe) var subjectAreaObserver: NSObjectProtocol?
+    /// Retiré par la deinit non isolée, via la `TeardownBox`.
+    var subjectAreaObserver: NSObjectProtocol? {
+        get { var value: NSObjectProtocol?; observers.update { value = $0.subjectArea }; return value }
+        set { observers.update { $0.subjectArea = newValue } }
+    }
 
     // Camera-switch-mid-recording: `AVCaptureMovieFileOutput`'s
     // active recording connection breaks when its video input is removed, even
@@ -646,4 +655,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         sessionQueue.setRunning(false, session)
         handBackRecordingSession()
     }
+}
+
+private nonisolated struct CameraNotificationObservers {
+    var session: [NSObjectProtocol] = []
+    var subjectArea: NSObjectProtocol?
 }

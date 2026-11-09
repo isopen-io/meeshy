@@ -19,6 +19,10 @@
         {
           "androidName": "peek_menu_state_expanded",
           "status": "android-only"
+        },
+        {
+          "androidName": "peek_close",
+          "status": "android-only"
         }
       ]
     }

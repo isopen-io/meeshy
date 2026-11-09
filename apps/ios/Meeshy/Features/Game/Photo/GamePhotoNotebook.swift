@@ -441,16 +441,15 @@ fileprivate actor NotebookDisk {
 }
 
 fileprivate nonisolated final class NotebookDiskRegistry: @unchecked Sendable {
-    private let lock = NSLock()
-    private var disks: [String: NotebookDisk] = [:]
+    private let disks = Locked<[String: NotebookDisk]>(uncheckedState: [:])
 
     func disk(for directory: URL) -> NotebookDisk {
-        lock.lock()
-        defer { lock.unlock() }
         let key = directory.standardizedFileURL.path
-        if let known = disks[key] { return known }
-        let created = NotebookDisk(directory: directory)
-        disks[key] = created
-        return created
+        return disks.mutateUnchecked { known in
+            if let existing = known[key] { return existing }
+            let created = NotebookDisk(directory: directory)
+            known[key] = created
+            return created
+        }
     }
 }

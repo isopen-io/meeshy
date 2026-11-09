@@ -48,9 +48,7 @@ public final class StoryTimelineEngine {
     private var timeObserver: Any?
     private var currentProject: TimelineProject?
     private var endObserver: NSObjectProtocol?
-    // nonisolated(unsafe): read in deinit (off main thread safe — only written
-    // from shutdown() which is @MainActor, deinit is the sole reader off-actor).
-    private nonisolated(unsafe) var didShutdown: Bool = false
+    private let didShutdown = Locked(false)
 
     // MARK: Internal drive clock (D0.1)
     //
@@ -88,8 +86,12 @@ public final class StoryTimelineEngine {
     /// Explicit teardown — releases AVPlayer, observers, and audio mixer. Must be
     /// called by the owner before deallocation. Idempotent.
     public func shutdown() {
-        guard !didShutdown else { return }
-        didShutdown = true
+        let wasShutdown = didShutdown.mutate { done -> Bool in
+            let previous = done
+            done = true
+            return previous
+        }
+        guard !wasShutdown else { return }
         tearDown()
         restoreIOBufferDuration()
     }
@@ -102,7 +104,7 @@ public final class StoryTimelineEngine {
         // in OS logs without crashing tests / production users (XCTest may
         // tear down test owners off the main thread; a hard precondition there
         // would mask the real assertion failures we care about).
-        if !didShutdown {
+        if !didShutdown.read({ $0 }) {
             MeeshyLog.logger(.media).warning(
                 "StoryTimelineEngine deinit without shutdown() — owner should call shutdown() before drop to release AVPlayer + observers. Falling back to ARC-driven cleanup of AVPlayer / AVAudioEngine; observer leaks are possible."
             )

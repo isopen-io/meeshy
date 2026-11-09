@@ -284,17 +284,17 @@ nonisolated public enum MeeStickerCatalog {
     /// La borne est en OCTETS, pas en nombre : un film de 60 images à 360 px
     /// pèse 31 Mo rasterisé, et vingt d'entre eux rempliraient la mémoire
     /// d'un iPhone.
-    nonisolated(unsafe) private static let films: NSCache<NSString, FilmEntry> = {
+    private nonisolated static let films: LockedCache<NSString, FilmEntry> = LockedCache({
         let cache = NSCache<NSString, FilmEntry>()
         cache.totalCostLimit = 96 * 1024 * 1024
         return cache
-    }()
+    }())
 
-    nonisolated(unsafe) private static let stills: NSCache<NSString, UIImage> = {
+    private nonisolated static let stills: LockedCache<NSString, UIImage> = LockedCache({
         let cache = NSCache<NSString, UIImage>()
         cache.totalCostLimit = 24 * 1024 * 1024
         return cache
-    }()
+    }())
 
     /// `nonisolated deinit` : `NSCache` évince sur le fil qu'il choisit, et une
     /// deinit isolée au `MainActor` double-libère sur iOS 26.1 (voir

@@ -24,15 +24,12 @@ final class ConversationListTypingTracker {
     /// OTHER members are still typing (displayed "personne n'écrit" ≠ real
     /// "B écrit").
     private var typers: [String: [String: TypingUser]] = [:]
-    // `nonisolated(unsafe)` : muté uniquement sur le MainActor, lu une fois
-    // par le `nonisolated deinit` pour invalider les timers de typing 15 s
-    // encore armés — même pattern que `ConversationSocketHandler.typingSafetyTimers`.
-    nonisolated(unsafe) private var typingTimers: [String: Timer] = [:]
+    private let typingTimers = TeardownBox<[String: Timer]>([:])
     private var cancellables = Set<AnyCancellable>()
     private var onSelectionChanged: (@MainActor (_ conversationId: String, _ selection: TypingUser?) -> Void)?
 
     nonisolated deinit {
-        typingTimers.values.forEach { $0.invalidate() }
+        typingTimers.releaseNow { $0.values.forEach { $0.invalidate() } }
     }
 
     /// Picks the single typer surfaced for a conversation. The row API is
@@ -109,10 +106,12 @@ final class ConversationListTypingTracker {
     // MARK: - Typing Cleanup
 
     private func scheduleTypingCleanup(for conversationId: String) {
-        typingTimers[conversationId]?.invalidate()
-        typingTimers[conversationId] = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.clearTyping(for: conversationId)
+        typingTimers.update { timers in
+            timers[conversationId]?.invalidate()
+            timers[conversationId] = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.clearTyping(for: conversationId)
+                }
             }
         }
     }
@@ -137,8 +136,10 @@ final class ConversationListTypingTracker {
     }
 
     private func clearTyping(for conversationId: String) {
-        typingTimers[conversationId]?.invalidate()
-        typingTimers[conversationId] = nil
+        typingTimers.update { timers in
+            timers[conversationId]?.invalidate()
+            timers[conversationId] = nil
+        }
         typers.removeValue(forKey: conversationId)
         onSelectionChanged?(conversationId, nil)
     }
