@@ -161,7 +161,7 @@ struct CommentRowView: View, Equatable {
             } label: {
                 Image(systemName: translationRequested ? "hourglass" : "translate")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
+                    .foregroundStyle(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
             }
             .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
             .meeshyTapTarget(MeeshyControlSize.tapTarget)
@@ -321,7 +321,7 @@ struct CommentRowView: View, Equatable {
                             if showSeeReplies {
                                 MetaSeparator()
                                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
 
                                 Button {
                                     onSeeReplies?()
@@ -329,7 +329,7 @@ struct CommentRowView: View, Equatable {
                                 } label: {
                                     Text(String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
                                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                                        .foregroundColor(Color(hex: accentColor))
+                                        .foregroundStyle(Color(hex: accentColor))
                                 }
                                 .frame(minHeight: 44)
                                 .accessibilityElement(children: .ignore)

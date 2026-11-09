@@ -23,7 +23,7 @@ struct StoryCommentsOverlayView: View {
     let readerLanguages: [String]
     /// Vrai quand la story consultée est expirée. Affiche une bannière au-dessus
     /// de la liste pour que les commentaires/réactions restent visibles tout en
-    /// indiquant que la story n'est plus accessible (spec 2026-06-23).
+    /// indiquant que la story n'est plus accessible.
     var isStoryExpired: Bool = false
 
     /// Commentaire ciblé par une notification : premier scroll de la liste
@@ -86,8 +86,7 @@ struct StoryCommentsOverlayView: View {
     /// the input is legible against any background.
     ///
     /// No global scrim behind the list — each individual `StoryCommentRowView`
-    /// carries its own dark bubble for legibility (user spec 2026-05-28:
-    /// « enlève le fond dégradé noir sur le composant de listing »). The
+    /// carries its own dark bubble for legibility. The
     /// `listFadeMask` keeps fading rows out at the top so older comments
     /// dissolve into the story above as the user scrolls up.
     /// Bannière « story expirée » : les commentaires/réactions restent
@@ -157,8 +156,7 @@ struct StoryCommentsOverlayView: View {
         // 0)` collapse à 0pt et la liste se positionne au TOP de la VStack
         // intrinsèque (~150-200pt) qui se centre dans le canvas ZStack →
         // les commentaires apparaissent dans le tiers supérieur de l'écran
-        // au lieu de juste au-dessus du composer (bug user 2026-05-28
-        // « la zone de commentaire est coupé »). Auparavant `composerStrip`
+        // au lieu de juste au-dessus du composer. Auparavant `composerStrip`
         // avec son `Rectangle.ignoresSafeArea(.bottom)` étirait
         // implicitement la VStack ; maintenant il faut le déclarer.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -174,8 +172,7 @@ struct StoryCommentsOverlayView: View {
                     ForEach(Array(topLevel.enumerated()), id: \.element.id) { idx, comment in
                         // Separator between top-level comments — `Divider()`
                         // SwiftUI natif (1pt, white opacity ~15%) au lieu de la
-                        // RoundedRectangle box autour de chaque row (user spec
-                        // 2026-05-28 : « alignés et séparés par des ---- »).
+                        // RoundedRectangle box autour de chaque row.
                         if idx > 0 {
                             Divider()
                                 .overlay(Color.white.opacity(0.28))
@@ -216,8 +213,7 @@ struct StoryCommentsOverlayView: View {
                 // canvas line 1108). Le commentaire-row visuel commence
                 // exactement au même `leading` que la rangée de saisie du
                 // composer → plus de désalignement entre la liste
-                // commentaires et la zone Commenter / reply banner (bug
-                // user 2026-05-28). Trailing 80pt préserve le dégagement
+                // commentaires et la zone Commenter / reply banner. Trailing 80pt préserve le dégagement
                 // sidebar (Layer 8 ~56+6=62pt depuis le bord droit).
                 .padding(.leading, 28)
                 .padding(.trailing, 80)

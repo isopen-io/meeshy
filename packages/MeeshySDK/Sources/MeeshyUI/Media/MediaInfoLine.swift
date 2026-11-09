@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 
 /// **La ligne d'informations d'un média plein écran :
-/// `largeur × hauteur · poids · durée`** (#9577, directive porteur 2026-10-07).
+/// `largeur × hauteur · poids · durée`** (#9577).
 ///
 /// Trois segments au plus, séparés par un point médian ; un segment absent ne
 /// laisse aucun séparateur orphelin. La durée affiche le temps RESTANT pendant

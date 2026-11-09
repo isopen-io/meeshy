@@ -19,7 +19,7 @@ extension UserProfileSheet {
             VStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: isInteractionDisabled ? "nosign" : "bubble.left.and.bubble.right")
                     .font(.system(size: MeeshyIconSize.xxxl))
-                    .foregroundColor(theme.textMuted.opacity(isInteractionDisabled ? 0.3 : 0.5))
+                    .foregroundStyle(theme.textMuted.opacity(isInteractionDisabled ? 0.3 : 0.5))
                     .accessibilityHidden(true)
 
                 if !isCurrentUser, !isInteractionDisabled {
@@ -30,7 +30,7 @@ extension UserProfileSheet {
                      ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions désactivées", bundle: .module)
                      : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
                     .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.xxl)
@@ -62,14 +62,14 @@ extension UserProfileSheet {
 
                             Text(conv.name)
                                 .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                                 .lineLimit(1)
 
                             Spacer()
 
                             Image(systemName: "chevron.forward")
                                 .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                         .padding(.horizontal, MeeshySpacing.xl)
                         .padding(.vertical, MeeshySpacing.smPlus)

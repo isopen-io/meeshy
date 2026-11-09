@@ -134,7 +134,7 @@ private struct CallFloatingReactionView: View {
                 .scaleEffect(launched && !reduceMotion ? 2.4 : 1.6, anchor: .bottom)
             Text(CallControlsCopy.reactionAuthor(reaction.author))
                 .font(.caption2.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: 128)
@@ -163,7 +163,7 @@ struct CallInviteStrip: View, Equatable {
                                  presenceState: PresenceManager.shared.knownPresenceState(for: invite.userId)) }
                     Text(invite.displayName)
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .lineLimit(1)
                     Text(CallControlsCopy.ringing)
                         .font(.caption)
@@ -192,7 +192,7 @@ struct CallControlsNoticePill: View, Equatable {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Text(CallControlsCopy.notice(notice))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(2)
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -235,7 +235,7 @@ struct CallAddPeopleSheet: View {
                 if loaded && candidates.isEmpty {
                     Text(CallControlsCopy.addPeopleEmpty)
                         .font(.body)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(candidates, id: \.id) { friend in
@@ -251,7 +251,7 @@ struct CallAddPeopleSheet: View {
                                     .font(.body)
                                 Spacer()
                                 Image(systemName: "phone.badge.plus")
-                                    .foregroundColor(MeeshyColors.indigo500)
+                                    .foregroundStyle(MeeshyColors.indigo500)
                                     .accessibilityHidden(true)
                             }
                             .frame(minHeight: 44)

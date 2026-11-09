@@ -94,8 +94,8 @@ extension ConversationSyncEngine {
         // LA VOIE `/sync` D'ABORD sur un cache CHAUD (#4172, seconde moitié du
         // critère 1) : la réconciliation en pages d'ancre au lieu de ≈ 100
         // requêtes par rang. Le repli est la condition NOMMÉE du critère 2 — la collection
-        // non servie par ce déploiement (`UNSUPPORTED_COLLECTION`, mesuré en
-        // production le 2026-09-04) ramène le chemin historique ENTIER,
+        // non servie par ce déploiement
+        // ramène le chemin historique ENTIER,
         // jamais un `try?` qui fondrait un refus dans une panne.
         // À FROID, `/sync` peindrait une liste SANS APERÇUS (#7787) : ses lignes
         // maigres ne portent ni le dernier message ni les non-lus, et chacune

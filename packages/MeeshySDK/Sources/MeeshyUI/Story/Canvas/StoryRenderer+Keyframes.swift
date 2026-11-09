@@ -105,7 +105,7 @@ extension StoryRenderer {
     /// resservie telle quelle par le cache : sans re-pose, elle conserverait
     /// à jamais l'opacité de son tick de construction.
     ///
-    /// Bug corrigé (2026-07-25) : un texte à `startTime = 20.006` avec
+    /// Bug corrigé : un texte à `startTime = 20.006` avec
     /// `fadeIn = 0.5`, construit à t ≈ 20.01, restait figé à
     /// (20.01 − 20.006) / 0.5 ≈ 2 % d'opacité — invisible pour toute la story.
     /// Les médias avaient déjà leur post-passe (R14/C1) ; textes et stickers

@@ -111,20 +111,20 @@ struct ContactCardDetailSheet: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(model.card?.displayName ?? "")
                     .font(.title3.weight(.bold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
             Spacer(minLength: 8)
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                     .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .contentShape(Circle())
             }
@@ -164,14 +164,14 @@ struct ContactCardDetailSheet: View {
                     .accessibilityAddTraits(.isHeader)
                 Text(account.displayName)
                     .font(.headline)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                 Text("@" + account.username)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 if let bio = account.bio, !bio.isEmpty {
                     Text(bio)
                         .font(.subheadline)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(Color.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 // #9481 — trois coupes au plus, ce que SA visibilité autorise ; rien quand elle est fermée.
@@ -270,10 +270,10 @@ struct ContactCardFieldRow: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(field.label)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
                 Text(field.value)
                     .font(.body)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

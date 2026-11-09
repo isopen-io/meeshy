@@ -64,7 +64,7 @@ struct ConversationListQuickActions: View, Equatable {
             }
         }
 
-        /// Les GROS boutons de l'état vide (directives 2026-08-21/22) :
+        /// Les GROS boutons de l'état vide:
         /// chercher des membres à qui écrire, retrouver ses contacts sur
         /// Meeshy (synchronisation du carnet), voir ses affiliations (les
         /// personnes invitées qui sont venues). En queue de liste, ils
@@ -76,8 +76,7 @@ struct ConversationListQuickActions: View, Equatable {
         }
     }
 
-    /// **Combien de temps l'app aide-t-elle à DÉMARRER ?** (directive porteur
-    /// 2026-09-01)
+    /// **Combien de temps l'app aide-t-elle à DÉMARRER ?**
     ///
     /// > « Les trois lignes ci-dessus de cet empty state doivent toujours
     /// > s'afficher tant qu'on n'a pas plus de 10 conversations dans sa

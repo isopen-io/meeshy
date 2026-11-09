@@ -36,7 +36,7 @@ extension CallManager {
             return
         }
 
-        // CALL-FIX 2026-06-06 — stop the incoming ringtone the INSTANT the user
+        // CALL-FIX — stop the incoming ringtone the INSTANT the user
         // accepts, not at .connected (which is seconds later after ICE). Otherwise
         // the ringtone keeps playing through the connecting phase.
         ringbackPlayer.stop()
@@ -108,7 +108,7 @@ extension CallManager {
     }
 
     /// Async SDP+media setup kicked off by `CXAnswerCallAction`. As of the
-    /// [Fix 2026-07-02]/[Fix 2026-07-03] hold-and-settle model, the action is
+    /// []/[] hold-and-settle model, the action is
     /// NOT fulfilled synchronously here: `provider(_:perform: CXAnswerCallAction)`
     /// holds it via `holdPendingAnswerAction` (so CallKit's callee elapsed-timer
     /// doesn't start before the connection exists) and this method settles it

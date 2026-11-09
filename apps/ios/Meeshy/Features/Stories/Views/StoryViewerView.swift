@@ -51,7 +51,7 @@ struct StoryViewerView: View {
     /// La progression vit dans une horloge que SEULE la barre observe (#9859) :
     /// tenue par référence, jamais observée ici, elle ne réévalue pas le lecteur.
     @State var progressClock = StoryPlaybackProgressClock() // internal for cross-file extension access
-    /// Interstitiel d'identité inter-groupes (directive user 2026-07-03) :
+    /// Interstitiel d'identité inter-groupes:
     /// au passage au groupe d'une AUTRE personne, bannière en fond + pseudo,
     /// nom, présence, mood pendant `groupIntroDuration` avant le slide.
     /// Its visibility, identity, hold and the neighbours' pre-resolved
@@ -386,7 +386,7 @@ struct StoryViewerView: View {
             // Pas de haptic au changement de slide : ce onChange fire pour
             // TOUTE navigation (auto-advance compris) et doublait le tick du
             // point de geste — 2 à 3 vibrations par slide qui ralentissaient
-            // la lecture (retour user 2026-07-13). Le tick unique vit dans
+            // la lecture. Le tick unique vit dans
             // le geste manuel (+Canvas touchUp, commit de swipe de groupe).
             // U6 — VoiceOver : annonce du changement de slide (« Story 2 sur
             // 5 ») — sans elle, un utilisateur non-voyant n'a AUCUN signal
@@ -471,7 +471,7 @@ struct StoryViewerView: View {
             // Même contrat éphémère pour la transcription : elle est demandée
             // POUR une story, pas pour la session. La laisser ouverte imposerait
             // un bandeau sur les stories suivantes, qui n'ont peut-être même pas
-            // de son (directive user 2026-07-25).
+            // de son.
             if showAudioTranscript { showAudioTranscript = false }
         }
         .modifier(StoryViewerSheets(
@@ -660,7 +660,7 @@ struct StoryViewerView: View {
 
     private func composerBottomPadding(geometry: GeometryProxy) -> CGFloat {
         // `geometry.safeAreaInsets.bottom` vaut 0 sous `.ignoresSafeArea()` : l'encart mesuré tient le
-        // composer au-dessus du home indicator (bug 2026-05-28).
+        // composer au-dessus du home indicator.
         let safeBottom = max(geometry.safeAreaInsets.bottom, windowBottomInset)
         if showTextEmojiPicker {
             // Emoji panel is showing — just need safe area below it
@@ -755,7 +755,7 @@ struct StoryViewerView: View {
     /// failed probe counts as silent). Runs from the prefetch, so the button is
     /// settled before the slide shows, and again as a backstop when the slide
     /// becomes current (cold start, rapid skip). Merges, never replaces: the
-    /// entries are shared across stories (regression 2026-05-28); resolved
+    /// entries are shared across stories; resolved
     /// entries are skipped, so probing again is cheap.
     @MainActor
     func probeVideoAudio(for story: StoryItem) async {

@@ -63,7 +63,7 @@ private struct StoryMiniFilterModifier: ViewModifier {
 /// paraissait sous son repli emoji au lieu de son dessin. La vignette mentait
 /// donc sur la slide — un auteur qui avait posé un lieu ne le voyait pas dans
 /// la bande.
-/// `public` depuis le 2026-09-06 : le composer de POST (app) monte cette
+/// `public` : le composer de POST (app) monte cette
 /// mini-preview dans sa rangée haute. Elle reste un ATOME au sens de la règle
 /// de pureté du SDK — elle prend des paramètres opaques (des effets, des
 /// bitmaps) et n'appelle aucun singleton nommé Meeshy.
@@ -123,7 +123,7 @@ public struct SlideMiniPreview: View {
                 // `StoryRenderer` (overlay dessin à zPosition 9999, au-dessus de
                 // texte/média/stickers) et avec le composite ThumbHash. Avant, le
                 // `drawingLayer` était rendu en 2ᵉ position (sous média/texte) →
-                // mini-preview incohérente avec le rendu réel (2026-06-01).
+                // mini-preview incohérente avec le rendu réel.
                 drawingLayer
                     .zIndex(rangDuDessin)
             }
@@ -198,7 +198,7 @@ public struct SlideMiniPreview: View {
 
     @ViewBuilder
     private var drawingLayer: some View {
-        // Bridge dessin (2026-05-30) : format moderne `drawingStrokes` rendu via
+        // Bridge dessin : format moderne `drawingStrokes` rendu via
         // `MeeshyStrokeCanvas` (positionnement design-space exact dans le cadre 9:16),
         // fallback legacy `drawingData` (PKDrawing croppé) sinon.
         if let strokes = effects.drawingStrokes, !strokes.isEmpty {
@@ -270,12 +270,12 @@ public struct SlideMiniPreview: View {
         let fontSize = CGFloat(max(3, text.fontSize * Double(size.width) / Double(CanvasGeometry.designWidth)))
         Text(text.text.isEmpty ? " " : text.text)
             .font(.system(size: fontSize, weight: .medium))
-            .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
+            .foregroundStyle(Color(hex: text.textColor ?? "FFFFFF"))
             .lineLimit(1)
             // Fond du texte — parité avec le canvas (`StoryTextLayer`) et le
             // composite ThumbHash. Sans ça la mini-preview montrait les glyphes nus
             // (souvent illisibles sur un fond de slide clair) alors que le canvas
-            // affiche la boîte colorée — incohérence strip ↔ canvas (bug 2026-06-01).
+            // affiche la boîte colorée — incohérence strip ↔ canvas.
             .padding(.horizontal, max(0.5, fontSize * 0.16))
             .padding(.vertical, max(0.5, fontSize * 0.08))
             .background(miniTextBackground(for: text, fontSize: fontSize))
@@ -424,7 +424,7 @@ public struct SlideMiniPreview: View {
                 Spacer()
                 Text("\(index + 1)")
                     .font(.system(size: 7, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 3)
                     .padding(.vertical, 1)
                     .background(Color.black.opacity(0.55))

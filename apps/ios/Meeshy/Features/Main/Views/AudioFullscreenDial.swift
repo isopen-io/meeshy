@@ -69,8 +69,7 @@ nonisolated enum AudioFullscreenDialRule {
     }
 }
 
-/// **Le spectre du vocal, en cercle autour de celui qui parle** (directive
-/// porteur du 2026-10-13).
+/// **Le spectre du vocal, en cercle autour de celui qui parle**.
 ///
 /// La bande d'onde horizontale occupait le milieu de l'écran et disputait le
 /// balayage des pages. Le spectre fait désormais le tour du portrait : les
@@ -78,7 +77,7 @@ nonisolated enum AudioFullscreenDialRule {
 /// point-curseur dit où l'on en est — on le saisit pour reculer ou avancer.
 /// Les paroles prennent toute la partie basse.
 ///
-/// Le geste est PROGRESSIF (directive du 2026-08-30) : `onChanged` déplace
+/// Le geste est PROGRESSIF: `onChanged` déplace
 /// réellement la lecture, relâcher ne fait que conclure. Seul l'ANNEAU capte le
 /// doigt — le portrait, dessous, garde son toucher (le profil), et tout le
 /// reste de l'écran tourne les pages.

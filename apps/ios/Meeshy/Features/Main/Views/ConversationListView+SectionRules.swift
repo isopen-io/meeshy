@@ -93,7 +93,7 @@ extension ConversationListView {
             // Cold, cache-less first fetch still in flight: a still-loading
             // state is never a definitive result, so this wins over an
             // active search — never show "no results" while we don't yet
-            // know whether the cache is genuinely empty (fix 2026-07-21).
+            // know whether the cache is genuinely empty.
             return .skeleton
         default:
             guard searchTextIsEmpty else { return .searchNoResults }

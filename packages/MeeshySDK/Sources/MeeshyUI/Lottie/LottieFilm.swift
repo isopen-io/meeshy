@@ -42,7 +42,7 @@ nonisolated public final class LottieFilmSource: @unchecked Sendable {
 ///   `LottieAnimationLayer` nu : seule la vue PLACE le calque d'animation
 ///   (`layoutAnimation()`). Un calque nu le laisse centré sur son origine, et
 ///   l'image ne montrait qu'un quart du sticker (7 % de pixels opaques contre
-///   20 % au web, mesuré le 2026-10-15).
+/// 20 % au web, mesuré).
 nonisolated public enum LottieFilm {
 
     /// Le rythme des images rasterisées : celui des films WebP qu'elles
@@ -86,8 +86,8 @@ nonisolated public enum LottieFilm {
 
     /// Une lecture à la fois : `DotLottieFile` échoue quand plusieurs fichiers
     /// se décompressent en même temps — sur iPhone, 15 lectures simultanées
-    /// sur 17 rendaient une erreur et les cases de la feuille restaient vides
-    /// (recette du 2026-10-15). Une file série, et non un verrou : les tâches
+    /// sur 17 rendaient une erreur et les cases de la feuille restaient vides.
+    /// Une file série, et non un verrou : les tâches
     /// en attente n'immobilisent aucun fil du pool coopératif. Une lecture
     /// coûte quelques millisecondes ; le cache de lottie-ios sert ensuite les
     /// suivantes sans décompresser.

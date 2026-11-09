@@ -141,7 +141,7 @@ struct ConversationListEmptyState: View {
         case .createFirstConversation:
             Group {
                 if LentilleFeatureFlag.isLentilleListEnabled {
-                    // RIEN ICI (2026-09-09). La queue de liste
+                    // RIEN ICI. La queue de liste
                     // porte les accès rapides et se rend dans
                     // TOUTES les branches, celle-ci comprise :
                     // les monter ici aussi les affichait DEUX

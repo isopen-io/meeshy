@@ -291,7 +291,7 @@ struct HeaderFlameGlyph: View, Equatable {
 }
 
 /// Le compte du jour, sans fond : chiffres ROUGES cerclés de 1 pt blanc, en
-/// clair comme en sombre (directive porteur 2026-10-01).
+/// clair comme en sombre.
 /// Feuille `Equatable` ; le chiffre défile vers sa nouvelle valeur.
 struct HeaderFlameCount: View, Equatable {
     let text: String

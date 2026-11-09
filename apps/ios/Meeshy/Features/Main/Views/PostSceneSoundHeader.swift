@@ -91,7 +91,7 @@ struct PostSceneSoundHeader: View {
                     onToggle: onToggleMute
                 )
                 Spacer(minLength: 4)
-                // L'arrêt de la SCÈNE entière (directive 2026-09-06) garde son
+                // L'arrêt de la SCÈNE entière garde son
                 // propre bouton : couper le son n'arrête pas l'image.
                 Button(action: {
                     HapticFeedback.light()

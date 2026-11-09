@@ -64,7 +64,7 @@ struct DataStorageView: View {
 
                             Text(MediaFormat.bytes(Int64(cacheSize)))
                                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                                .foregroundColor(Color(hex: accentColor))
+                                .foregroundStyle(Color(hex: accentColor))
                         }
 
                         Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et vidéos mis en cache", bundle: .main))
@@ -103,7 +103,7 @@ struct DataStorageView: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
                 // Décorative — jumelle de `SettingsView.settingsSection` : sans
                 // ce masque, VoiceOver annonce le nom du symbole avant le titre.
                 .accessibilityHidden(true)
@@ -127,7 +127,7 @@ struct DataStorageView: View {
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
             .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-            .foregroundColor(Color(hex: color))
+            .foregroundStyle(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)

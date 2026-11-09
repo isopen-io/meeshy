@@ -25,7 +25,7 @@ struct ShareLinkEditForm: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(ShareLinkDetailCopy.editTitle)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .accessibilityAddTraits(.isHeader)
 
             group {
@@ -152,7 +152,7 @@ struct ShareLinkEditForm: View {
     private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) { content() }
             .font(MeeshyFont.relative(MeeshyFont.bodySize))
-            .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+            .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MeeshySpacing.lg)
             .inviteCardSurface(isDark: isDark)
@@ -163,7 +163,7 @@ struct ShareLinkEditForm: View {
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
             .scriptSafeTracking(1.1)
             .textCase(.uppercase)
-            .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+            .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
             .padding(.top, MeeshySpacing.sm)
             .accessibilityAddTraits(.isHeader)
     }
@@ -172,7 +172,7 @@ struct ShareLinkEditForm: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                 .accessibilityHidden(true)
             field()
                 .padding(.horizontal, MeeshySpacing.md)
@@ -238,7 +238,7 @@ struct ShareLinkEditForm: View {
         Button(action: action) {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(color)
+                .foregroundStyle(color)
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)

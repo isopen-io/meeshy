@@ -211,7 +211,7 @@ struct ConversationInfoSheet: View {
         HStack {
             Text(String(localized: "conversation.info.header", defaultValue: "Conversation", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -219,7 +219,7 @@ struct ConversationInfoSheet: View {
                 NavigationLink(value: "settings") {
                     Image(systemName: "gearshape.fill")
                         .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
@@ -232,7 +232,7 @@ struct ConversationInfoSheet: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
@@ -275,7 +275,7 @@ struct ConversationInfoSheet: View {
 
             Text(conversation.name)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
@@ -285,7 +285,7 @@ struct ConversationInfoSheet: View {
 
             Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.bottom, MeeshySpacing.lg)
@@ -320,7 +320,7 @@ struct ConversationInfoSheet: View {
             // Name
             Text(conversation.name)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .padding(.top, MeeshySpacing.smPlus)
@@ -334,7 +334,7 @@ struct ConversationInfoSheet: View {
 
             Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .padding(.top, MeeshySpacing.xsPlus)
         }
         .padding(.horizontal, MeeshySpacing.xs)
@@ -384,17 +384,17 @@ struct ConversationInfoSheet: View {
 
             Text(conversation.type.displayName)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
 
             if conversation.memberCount > 0 {
                 MetaSeparator()
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Image(systemName: "person.2.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Text(conversation.memberCountDisplay)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
         }
     }
@@ -439,7 +439,7 @@ struct ConversationInfoSheet: View {
                                     // Compteur numérique compact dans une pastille capsule — gardé
                                     // hors Dynamic Type pour que la pill reste « tight » (cf. 53i).
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(isSelected ? .white : theme.textMuted)
+                                    .foregroundStyle(isSelected ? Color.white : theme.textMuted)
                                     .padding(.horizontal, MeeshySpacing.xs)
                                     .padding(.vertical, 1)
                                     .background(
@@ -514,7 +514,7 @@ struct ConversationInfoSheet: View {
             HStack {
                 Text(MembersCountLabel.text(participants.count))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Spacer()
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -525,10 +525,10 @@ struct ConversationInfoSheet: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre…", bundle: .main), text: $memberSearchQuery)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                 if !memberSearchQuery.isEmpty {
@@ -537,7 +537,7 @@ struct ConversationInfoSheet: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
@@ -597,7 +597,7 @@ struct ConversationInfoSheet: View {
                 Spacer()
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .foregroundColor(accent)
             .padding(.horizontal, MeeshySpacing.lg)
@@ -618,11 +618,11 @@ struct ConversationInfoSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(32, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
+                .foregroundStyle(theme.textMuted.opacity(0.4))
 
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)

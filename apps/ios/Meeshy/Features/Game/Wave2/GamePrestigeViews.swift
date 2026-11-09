@@ -57,12 +57,12 @@ struct GamePrestigeScreen: View {
             .gameElement(GameElementDetails.prestigeStar(min(prestige.stars + 1, prestige.max), in: prestige))
             Text(GameText.prestigeStars(stars: GameCopy.formatCount(prestige.stars), max: GameCopy.formatCount(prestige.max)))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(maxWidth: .infinity)
             if let passed {
                 Text(GameText.prestigeDone(number: GameCopy.formatCount(passed)))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundStyle(MeeshyColors.success)
                     .frame(maxWidth: .infinity)
                     .accessibilityAddTraits(.updatesFrequently)
             }
@@ -132,7 +132,7 @@ struct GamePrestigeScreen: View {
             if !mirrored { figure(film, mirrored: false) }
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: mirrored ? .regular : .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             if mirrored { figure(film, mirrored: true) }
@@ -152,7 +152,7 @@ struct GamePrestigeScreen: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(GameText.prestigeConfirmTitle(number: GameCopy.formatCount(next)))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             GameFactChipRow(concept: .prestige, items: Self.passValues(game: game), identifier: "game.prestige.values")
             ForEach(GameText.prestigeConfirmationLines, id: \.self) { line in

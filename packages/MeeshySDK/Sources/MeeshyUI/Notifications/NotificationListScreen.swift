@@ -133,7 +133,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
                 Text(category.label)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
-            .foregroundColor(isSelected ? .white : Color(hex: chipColor))
+            .foregroundStyle(isSelected ? .white : Color(hex: chipColor))
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
@@ -279,7 +279,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
             Spacer()
             Image(systemName: category.icon)
                 .meeshyScaledFont(MeeshyIconSize.hero)
-                .foregroundColor(Color(hex: category.color).opacity(0.4))
+                .foregroundStyle(Color(hex: category.color).opacity(0.4))
 
             Text(emptyMessage)
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))

@@ -44,7 +44,7 @@ final class RingbackTonePlayer {
 
     func start() { startLoop(resource: "RingbackTone", volume: 0.6) }
 
-    /// Audit fix (calling-stack audit 2026-08-15): must mirror `stopRingtone()`'s
+    /// Audit fix: must mirror `stopRingtone`'s
     /// `activeLoop` check. Before this fix, `stop()` tore down whichever loop
     /// happened to be playing — if `startRingtone()` had won the race (e.g. an
     /// incoming call while a stale ringback loop reference lingered), a call
@@ -127,7 +127,7 @@ final class RingbackTonePlayer {
             config.mode = AVAudioSession.Mode.default.rawValue
             config.categoryOptions = [.allowBluetoothHFP, .duckOthers, .defaultToSpeaker]
             try rtc.setConfiguration(config, active: true)
-            // CALL-FIX 2026-06-06 — do NOT set `rtc.isAudioEnabled` here. That is
+            // CALL-FIX — do NOT set `rtc.isAudioEnabled` here. That is
             // WebRTC's CALL-audio flag (manual-audio mode): setting it during the
             // ringing phase starts WebRTC's audio I/O unit prematurely AND makes
             // the call's `[AUDIO_FALLBACK]` (transitionToConnected) think the

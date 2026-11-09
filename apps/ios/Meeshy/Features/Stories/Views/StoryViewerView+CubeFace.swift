@@ -16,10 +16,10 @@ import MeeshyUI
 ///
 /// L'identité de l'auteur voisin monte AU DOIGT par-dessus ce backdrop, via
 /// `StoryAuthorIdentityCard` — la vue d'identité PARTAGÉE avec
-/// `StoryGroupIntroOverlay` (directive user 2026-07-25, règle 4 de la
+/// `StoryGroupIntroOverlay` (règle 4 de la
 /// navigation gestuelle : « le swipe doit afficher l'interlude du groupe
 /// suivant en mode cube, l'animation suit le geste »). Cela RENVERSE la
-/// contrainte du 2026-07-14 (« aucune identité ici »), qui visait deux rendus
+/// contrainte (« aucune identité ici »), qui visait deux rendus
 /// DIFFÉRENTS s'enchaînant : face du cube puis interstitiel. Avec une seule
 /// implémentation, le doigt révèle progressivement exactement la carte que
 /// l'interstitiel prolongera au commit — plus de double affichage divergent.

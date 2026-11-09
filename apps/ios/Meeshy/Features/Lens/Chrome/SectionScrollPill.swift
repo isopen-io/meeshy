@@ -35,7 +35,7 @@ public struct SectionScrollPill: View {
     public var body: some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+            .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
             .padding(.vertical, MeeshySpacing.xs)
             .padding(.horizontal, MeeshySpacing.sm)
             .background(.ultraThinMaterial, in: Capsule())

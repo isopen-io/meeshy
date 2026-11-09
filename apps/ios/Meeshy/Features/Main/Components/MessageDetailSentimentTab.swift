@@ -31,7 +31,7 @@ struct MessageDetailSentimentTab: View, Equatable {
 
             Text(label)
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -63,7 +63,7 @@ struct MessageDetailSentimentTab: View, Equatable {
 
             Text(String(format: String(localized: "message-detail.sentiment.score", defaultValue: "Score : %.2f", bundle: .main), score))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.sm)

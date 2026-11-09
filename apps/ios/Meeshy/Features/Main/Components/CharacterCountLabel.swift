@@ -28,7 +28,7 @@ struct CharacterCountLabel: View {
     /// mieux que le thème de l'app. `nil` ⇒ `theme.textMuted`, le comportement
     /// de tous les appelants existants.
     ///
-    /// **Pourquoi ce paramètre existe, mesuré le 2026-08-24** : le compteur est
+    /// **Pourquoi ce paramètre existe**: le compteur est
     /// monté par le composer sur le PLATEAU, sombre par construction quel que
     /// soit le thème. `theme.textMuted` y mesure **1,68:1** en thème clair
     /// (`indigo700@0.8` sur `violet950`) et **4,41:1** même en thème sombre —

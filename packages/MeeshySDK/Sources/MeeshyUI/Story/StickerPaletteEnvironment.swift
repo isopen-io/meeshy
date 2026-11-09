@@ -58,8 +58,8 @@ public struct StickerNearbyPlacesKey: EnvironmentKey {
 /// raison d'être conditionnel.
 ///
 /// Ce qu'elle sert est lu **une fois, à l'ouverture de la palette**, et figé
-/// dans les emplacements du gabarit au moment de la pose (décision D1 du
-/// 2026-09-01). Rien en aval ne la relit : c'est ce qui fait que tout lecteur
+/// dans les emplacements du gabarit au moment de la pose.
+/// Rien en aval ne la relit : c'est ce qui fait que tout lecteur
 /// voit l'heure que l'auteur a posée.
 public struct StickerPaletteClockKey: EnvironmentKey {
     public static let defaultValue: @Sendable () -> Date = { Date() }

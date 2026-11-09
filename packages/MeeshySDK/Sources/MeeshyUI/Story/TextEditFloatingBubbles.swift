@@ -12,7 +12,7 @@ import MeeshySDK
 /// Chaque bulle rend son état COURANT plutôt qu'un pictogramme figé, sans quoi
 /// parcourir quatorze couleurs au tap se ferait à l'aveugle.
 ///
-/// Icônes flottantes SANS arrière-plan explicite (directive user 2026-07-10) :
+/// Icônes flottantes SANS arrière-plan explicite :
 /// même langage que les actions du header — `glassControlForeground` +
 /// `adaptiveGlass`, l'outil dont le panneau est ouvert passant en verre
 /// proéminent teinté.

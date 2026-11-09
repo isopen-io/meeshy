@@ -134,7 +134,7 @@ struct ConversationRowAvatar: View {
             if showLastSeenTooltip, let text = conversation.lastSeenLabel {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(

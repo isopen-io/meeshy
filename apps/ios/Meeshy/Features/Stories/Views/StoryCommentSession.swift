@@ -24,7 +24,6 @@ final class StoryCommentSession: ObservableObject {
     /// `commentCount`). It is the one channel by which `StoryActionSidebarView`
     /// tells « the entry payload was stale » from « someone just commented
     /// while I read », and reopens its frozen rail for the comments button
-    /// (directive 2026-07-10: no button pops up during playback).
     @Published private(set) var reconciledCountPulse = 0
     /// The comment the main composer answers (« Répondre » on a row).
     @Published var replyTarget: FeedComment?

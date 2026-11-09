@@ -1,7 +1,7 @@
 import Foundation
 
 /// Miroir iOS de la loi d'audience de la republication : **même audience, ou
-/// plus restreinte, JAMAIS plus large** (règle produit, 2026-08-19).
+/// plus restreinte, JAMAIS plus large**.
 ///
 /// # Ce type n'est PAS la garantie
 ///

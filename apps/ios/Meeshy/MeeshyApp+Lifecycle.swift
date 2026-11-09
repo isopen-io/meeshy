@@ -38,7 +38,7 @@ extension MeeshyApp {
             // nôtre ne faisait que lire. Passe hors du fil principal, bornée
             // à une toutes les dix minutes.
             DiskPressureSweeper.shared.requestSweep()
-            // CALL-FIX 2026-06-06 — tell the gateway we're foreground so
+            // CALL-FIX — tell the gateway we're foreground so
             // incoming calls use the in-app banner (socket) instead of a
             // VoIP push / CallKit.
             MessageSocketManager.shared.emitAppForeground(true)
@@ -60,7 +60,7 @@ extension MeeshyApp {
     }
 
     static func applicationEnteredBackground() {
-            // CALL-FIX 2026-06-06 — tell the gateway we're backgrounded
+            // CALL-FIX — tell the gateway we're backgrounded
             // FIRST (while the socket is still alive, before the
             // coordinator may suspend it) so incoming calls fall back to
             // a VoIP push (CallKit) — a suspended socket can't ring.

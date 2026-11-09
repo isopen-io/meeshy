@@ -102,7 +102,7 @@ public struct PlayerBannerView: View {
     /// La cible tactile minimale d'une pièce.
     public static let pieceTarget: CGFloat = 44
 
-    /// Le MILIEU du bandeau (#11125, décision porteur 2026-10-20) : la Flamme et les Meeshes en haut, la mission et
+    /// Le MILIEU du bandeau (#11125) : la Flamme et les Meeshes en haut, la mission et
     /// la ligue dessous, entre les étincelles (à gauche) et la Gloire (à droite). Deux lignes de 24 pt — compromis
     /// demandé par le porteur pour que le bandeau tienne en 48 pt, ces pièces sortent de la cible de 44.
     public static let middlePieces: [GamePlayerBanner.Piece] = [.flame, .meesh, .mission, .league]
@@ -248,7 +248,7 @@ public struct PlayerBannerView: View {
                 if let name = texts.rank {
                     Text(name)
                         .font(.system(.footnote, design: .rounded).weight(.bold))
-                        .foregroundColor(palette.ink)
+                        .foregroundStyle(palette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
@@ -340,7 +340,7 @@ public struct PlayerBannerView: View {
     private func symbol(_ name: String, side: CGFloat = 22) -> some View {
         Image(systemName: name)
             .font(.system(size: side * 16 / 22, weight: .semibold))
-            .foregroundColor(palette.ink)
+            .foregroundStyle(palette.ink)
             .frame(width: side, height: side)
             .accessibilityHidden(true)
     }
@@ -424,7 +424,7 @@ public struct PlayerBannerView: View {
         Text(texts.points)
             .font(.system(.footnote, design: .rounded).weight(.bold))
             .monospacedDigit()
-            .foregroundColor(palette.ink)
+            .foregroundStyle(palette.ink)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .modifier(BannerNumericRoll())
@@ -483,7 +483,7 @@ public struct PlayerBannerView: View {
                 Text(text)
                     .font(.system(.footnote, design: .rounded).weight(.bold))
                     .monospacedDigit()
-                    .foregroundColor(palette.ink)
+                    .foregroundStyle(palette.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

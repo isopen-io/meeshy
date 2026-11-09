@@ -41,8 +41,8 @@ public struct FullscreenActionButton: View {
     /// l'hôte (appui long → glisser) — un `Button` consommerait le toucher et la
     /// séquence ne s'armerait jamais. Le tap bref reste servi, VoiceOver aussi.
     ///
-    /// `outlineTint` : le CONTOUR et le HALO d'une action flottante (directive porteur
-    /// 2026-10-01) — le même symbole agrandi derrière le glyphe, dans cette teinte, et
+    /// `outlineTint` : le CONTOUR et le HALO d'une action flottante
+    /// — le même symbole agrandi derrière le glyphe, dans cette teinte, et
     /// une ombre colorée. C'est l'effet du rail de la story d'avant #8878 : le son
     /// ouvert, le cœur posé, et chaque geste déjà fait (commenté, envoyé, republié).
     /// `nil` : aucun contour. Le glyphe garde son encre — le contour l'entoure.

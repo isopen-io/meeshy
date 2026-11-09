@@ -48,7 +48,7 @@ extension StoryEffects {
                 return stripped
             }
         }
-        // **L'AUDIO passe par le même filet** (2026-09-06).
+        // **L'AUDIO passe par le même filet**.
         //
         // Le sanitizer gardait une famille et laissait l'autre : un son dont la
         // pré-montée n'avait pas abouti partait avec son `file:///Users/…`,

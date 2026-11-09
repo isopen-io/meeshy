@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 
 /// **Une republication ne porte plus aucune puce « Reposté de @auteur »**
-/// (décision porteur 2026-10-13, #10524).
+/// (#10524).
 ///
 /// > « la puce « Reposté de @auteur » n'est plus nécessaire car on a cela dans
 /// > les en-têtes après la date ! Inutile d'avoir du texte supplémentaire, que

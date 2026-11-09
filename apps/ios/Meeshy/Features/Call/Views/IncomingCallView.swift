@@ -114,7 +114,7 @@ struct IncomingCallView: View {
         // L'écran ENTIER, avant d'y poser l'aperçu : sans ce cadre, le
         // `VStack` ne prenait que la largeur de ses boutons, et la vidéo de
         // l'appelant n'était peinte que dans cette colonne — les côtés
-        // montraient un autre fond (2026-09-30, appel réel iPhone → simulateur).
+        // montraient un autre fond (appel réel iPhone → simulateur).
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // #8480 — l'appelant, vu avant de décrocher
         .background { CallPreviewBackdrop(preview: .shared) }

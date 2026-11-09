@@ -7,7 +7,7 @@ import MeeshyUI
 /// panne, ou comme une intrusion.
 ///
 /// La fermeture décidée par l'administration se dit « par l'équipe Meeshy » :
-/// aucun administrateur n'est jamais nommé (décision serveur du 2026-10-08).
+/// aucun administrateur n'est jamais nommé.
 struct SessionClosedNoticeCopy: Equatable {
     let title: String
     let message: String

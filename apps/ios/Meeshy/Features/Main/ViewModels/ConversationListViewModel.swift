@@ -84,7 +84,7 @@ class ConversationListViewModel: ObservableObject {
     /// la combinaison ne vit pas ici mais dans `ConversationFilterComposition`,
     /// qui sait que deux TYPES s'additionnent et que deux ÉTATS se croisent.
     @Published var selectedFilters: Set<ConversationFilter> = ConversationFilterComposition.neutral
-    /// Filtre par ÉTIQUETTE (2026-08-21, carte de focus Lentille : toucher un
+    /// Filtre par ÉTIQUETTE (carte de focus Lentille: toucher un
     /// tag ⇒ « toutes les conversations avec ce tag ») — `nil` = aucun filtre.
     @Published var activeTagFilter: String? = nil
 
@@ -649,8 +649,7 @@ class ConversationListViewModel: ObservableObject {
             // mutation sur N'IMPORTE QUELLE AUTRE conversation, `commit()`
             // republiant tout le snapshot — regreffait sinon un `unreadCount`
             // périmé sur cette ligne pourtant déjà lue : le badge persistait
-            // indéfiniment jusqu'au prochain `reloadFromCache()` (bug user
-            // 2026-08-11). `applyReadReceipt` est LOCAL (jamais de réseau,
+            // indéfiniment jusqu'au prochain `reloadFromCache`. `applyReadReceipt` est LOCAL (jamais de réseau,
             // contrairement à `.markAsRead` — cf. `shouldDispatchListMarkAsRead` :
             // cet endpoint liste poste un mark-read « sans corps » auquel le
             // gateway retombe sur un repli par fenêtre temporelle, déclarant

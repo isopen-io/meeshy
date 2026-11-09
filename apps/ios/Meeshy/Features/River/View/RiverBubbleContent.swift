@@ -32,12 +32,12 @@ struct RiverBubbleContent: Equatable {
     /// `bubble.isSystem`. Défaut `nil` : les sites de montage antérieurs à
     /// le lot 2 (et leurs témoins) restent inchangés.
     let systemNotice: RiverSystemNotice?
-    /// Lot G (2026-08-22) — où la bulle se tient dans son groupe, déduit par
+    /// Lot G — où la bulle se tient dans son groupe, déduit par
     /// `RiverConversationMapping.groupPositions` (pur). Gouverne le CONTOUR :
     /// une bulle jointe partage son bord haut en pointillé et laisse son bas
     /// ouvert si la suivante la continue. Défaut `.solo` : contour fermé.
     let groupPosition: RiverGroupPosition
-    /// R-5 (2026-08-22) — l'identité VIVANTE de la voix : présence, cercle de
+    /// R-5 — l'identité VIVANTE de la voix: présence, cercle de
     /// story, avatar, fiche à ouvrir. Résolue par l'appelant (singletons de
     /// l'app), injectée ici — la vue n'en lit aucun. `nil` pour un avis
     /// système : il n'est la voix de personne.

@@ -17,7 +17,7 @@ protocol CallKitAnswerActionHoldProviding: AnyObject {
     func discardTimedOut(_ action: SettleableCallAction)
 }
 
-/// [Fix 2026-07-02] CallKit answer action held until the call actually
+/// [] CallKit answer action held until the call actually
 /// connects. CallKit starts the callee's elapsed timer the moment the
 /// answer action is fulfilled — fulfilling at tap time made the counter
 /// run while WebRTC was still connecting (user-reported "0:00 before the

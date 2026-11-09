@@ -31,7 +31,7 @@ extension OutboxDispatcher {
     }
 
     /// `BlockActionResponse`, comme son jumeau `dispatchBlockUser` — et
-    /// **c'est tout le correctif** du rapport porteur 2026-08-28 (« impossible
+    /// **c'est tout le correctif** du rapport (« impossible
     /// de débloquer les contacts bloqués »).
     ///
     /// Ce site attendait `[String: Bool]`. Le gateway répond

@@ -30,7 +30,7 @@ extension StoryComposerViewModel {
             guard let self, self.isTimelineVisible else { return }
             // Fin de lecture : le canvas quitte la preview et REVIENT à
             // l'état statique du design — tous les éléments posés, positions
-            // et opacités de base (retour user 2026-07-20). Le playhead a
+            // et opacités de base. Le playhead a
             // déjà été remis à 0 par le VM avant cette notification.
             self.canvasTimelineBridge.end()
         }

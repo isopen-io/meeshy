@@ -66,7 +66,7 @@ struct GlobalSearchView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
             .accessibilityLabel(String(localized: "accessibility.back", defaultValue: "Retour"))
 
@@ -84,7 +84,7 @@ struct GlobalSearchView: View {
 
                 TextField(String(localized: "search.global.placeholder", defaultValue: "Rechercher partout..."), text: $viewModel.searchText)
                     .focused($isSearchFieldFocused)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .autocorrectionDisabled()
                     .submitLabel(.search)
@@ -103,7 +103,7 @@ struct GlobalSearchView: View {
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
                     .transition(.scale.combined(with: .opacity))
@@ -173,7 +173,7 @@ struct GlobalSearchView: View {
                                     // .offset/.fixedSize — must not scale with Dynamic Type
                                     // or it clips out of its overlay anchor.
                                     .font(.system(size: 9, weight: NotificationBadge.fontWeight))
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(Color.white)
                                     .padding(.horizontal, MeeshySpacing.xs)
                                     .padding(.vertical, 1)
                                     .background(
@@ -305,10 +305,10 @@ struct GlobalSearchView: View {
             HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: failure.icon)
                     .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                 Text(failure.title)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(2)
                 Spacer(minLength: 8)
                 Button(String(localized: "common.retry")) {
@@ -340,7 +340,7 @@ struct GlobalSearchView: View {
                     .tint(MeeshyColors.indigo400)
                 Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xsPlus)
@@ -361,7 +361,7 @@ struct GlobalSearchView: View {
                 .scaleEffect(1.2)
             Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -400,7 +400,7 @@ struct GlobalSearchView: View {
                             .accessibilityHidden(true)
                         Text(String(localized: "search.recent", defaultValue: "Recherches récentes"))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .accessibilityAddTraits(.isHeader)
 
                         Spacer()
@@ -413,7 +413,7 @@ struct GlobalSearchView: View {
                         } label: {
                             Text(String(localized: "action.clear", defaultValue: "Effacer"))
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                                .foregroundColor(MeeshyColors.error)
+                                .foregroundStyle(MeeshyColors.error)
                         }
                         .accessibilityLabel(String(localized: "accessibility.clear_recent_searches", defaultValue: "Effacer les recherches récentes"))
                     }
@@ -441,12 +441,12 @@ struct GlobalSearchView: View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "clock")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
             Text(query)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
 
             Spacer()
@@ -456,7 +456,7 @@ struct GlobalSearchView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(11, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             // La rangée est un élément VoiceOver combiné (bouton « relancer la
             // recherche ») : le bouton de suppression imbriqué serait absorbé et
@@ -566,12 +566,12 @@ struct GlobalSearchView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(result.displayName ?? result.username)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(result.username)")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
             }
 
@@ -580,7 +580,7 @@ struct GlobalSearchView: View {
             if presence == .online {
                 Text(String(localized: "status.online", defaultValue: "En ligne"))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundStyle(MeeshyColors.success)
             }
         }
         .padding(MeeshySpacing.md)

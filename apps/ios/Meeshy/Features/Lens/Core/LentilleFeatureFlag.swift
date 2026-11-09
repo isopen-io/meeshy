@@ -5,9 +5,8 @@ import Foundation
 /// lecture du fil) et `riviereMode` (la sélectionnabilité de la Rivière, qui
 /// n'est qu'un mode de lecture de plus).
 ///
-/// **Sorties de bêta le 2026-09-14 (directive porteur, #6482).** Elles ont
-/// vécu derrière la préférence « Activer les bêta » (I-075, défaut OFF depuis
-/// le 2026-08-22). Elles sont désormais actives par défaut et ont chacune leur
+/// **Sorties de bêta (directive porteur, #6482).** Elles ont
+/// vécu derrière la préférence « Activer les bêta » (I-075). Elles sont désormais actives par défaut et ont chacune leur
 /// interrupteur dans les Réglages (section Apparence). Aucune migration de
 /// valeurs : les clés propres n'avaient jamais été écrites en production, et
 /// la clé de l'ancienne préférence est retirée au lancement
@@ -79,7 +78,7 @@ nonisolated enum LentilleFeatureFlag: CaseIterable {
     }
 
     /// La clé de l'ancienne préférence « Activer les bêta », qui ne gouverne
-    /// plus rien depuis le 2026-09-14.
+    /// plus rien.
     static let retiredBetaPreferenceKey = "meeshy.pref.beta_features_enabled"
 
     /// Appelée au lancement (`MeeshyApp.init`) ; sans effet quand la clé est
@@ -110,7 +109,7 @@ nonisolated enum LentilleFeatureFlag: CaseIterable {
 /// par défaut de `isEnabled(defaults:environment:)`, il était réévalué à
 /// chaque appel — et le drapeau `lentille_list` est lu par rang, par passe
 /// de body, par aperçu, par décision de carte : une allocation de
-/// dictionnaire par rangée et par passe (audit fluidité 2026-08-21, H1/H2).
+/// dictionnaire par rangée et par passe (H1/H2).
 /// L'environnement d'un processus ne change pas après son lancement ; les
 /// tests injectent le leur par paramètre et ne passent jamais par ici.
 nonisolated enum ProcessEnvironmentSnapshot {

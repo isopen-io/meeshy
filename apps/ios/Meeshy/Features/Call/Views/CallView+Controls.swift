@@ -30,7 +30,7 @@ extension CallView {
                 Image(systemName: "camera.filters")
                     // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
                     .font(MeeshyFont.fixedGlyph(24, weight: .medium))
-                    .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(hasActiveEffects ? MeeshyColors.indigo500 : Color.white.opacity(MeeshyOpacity.intense))
                     .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
 
                 Text(CallControlsCopy.effectsCaption)

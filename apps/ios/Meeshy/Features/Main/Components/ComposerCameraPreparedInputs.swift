@@ -3,9 +3,7 @@ import Foundation
 import MeeshySDK
 import QuartzCore
 
-/// **L'entrée de l'autre objectif, prête AVANT le toucher** (#9753, porteur
-/// 2026-10-09 : « changement de caméra trop long […] préparer la session de
-/// l'autre caméra, éviter la reconstruction complète »).
+/// **L'entrée de l'autre objectif, prête AVANT le toucher** (#9753, éviter la reconstruction complète »).
 ///
 /// Une bascule payait, sur la file de la session, la découverte de l'objectif
 /// et la création de son `AVCaptureDeviceInput` avant même de reconfigurer. La

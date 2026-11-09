@@ -155,9 +155,8 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// de la bascule du drapeau, la piste suit la nouvelle langue —
     /// `syncActiveTrack` décide selon l'état : bascule immédiate en lecture
     /// (`playVariant`, file et carte système conservées), tête mise à jour +
-    /// moteur déchargé en pause (la REPRISE rejoue la bonne piste — sans ça,
-    /// pause → toggle → play ressortait l'ancienne langue sous un karaoké
-    /// déjà basculé, revue adversariale 2026-08-18). Une bascule qui résout
+    /// moteur déchargé en pause (la REPRISE rejoue la bonne piste — sans ça, pause → toggle → play ressortait l'ancienne langue sous un karaoké
+    /// déjà basculé). Une bascule qui résout
     /// la piste déjà en tête est un no-op (jamais de replay à zéro).
     private func switchActiveAudioTrackIfNeeded(for messageId: String) {
         guard let context = audioCoordinator.activeContext,

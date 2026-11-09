@@ -89,7 +89,7 @@ private struct CallChromeVisibilityModifier: ViewModifier {
         // est composé par le conteneur, qui ignore l'opacité de ses enfants.
         // La pilule restait donc dessinée après le masquage automatique —
         // visible mais sourde : le premier toucher sur « Micro » ne faisait
-        // que rallumer le chrome (2026-09-30, simulateur). `hidden()` garde
+        // que rallumer le chrome (simulateur). `hidden` garde
         // sa place dans la mise en page : rien ne saute.
         Group {
             if accepts {

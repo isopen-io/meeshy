@@ -177,7 +177,7 @@ struct ShareSheetView: View {
         Toggle(isOn: $model.createsGroup) {
             Label(ShareSheetCopy.createGroup(model.groupCandidates.map(\.title).joined(separator: ", ")), systemImage: "person.3")
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .tint(accent)
         .padding(.horizontal, MeeshySpacing.lg)
@@ -197,7 +197,7 @@ struct ShareSheetView: View {
     func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, MeeshySpacing.xs)
             .accessibilityAddTraits(.isHeader)
@@ -230,14 +230,14 @@ struct ShareSheetView: View {
                             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                                 Text(community.name)
                                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                                    .foregroundColor(theme.textPrimary)
+                                    .foregroundStyle(theme.textPrimary)
                                 Text(ShareSheetCopy.channelsHint)
                                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                             }
                             Spacer()
                             Image(systemName: model.channels[community.id] == nil ? "chevron.down" : "chevron.up")
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .accessibilityHidden(true)
                         }
                         .padding(.horizontal, MeeshySpacing.lg)
@@ -250,7 +250,7 @@ struct ShareSheetView: View {
                         if channels.isEmpty {
                             Text(ShareSheetCopy.noChannel)
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .padding(.horizontal, MeeshySpacing.xxl)
                         }
                         ForEach(channels) { channel in row(channel).padding(.leading, MeeshySpacing.lg) }
@@ -278,12 +278,12 @@ struct ShareSheetView: View {
                 .accessibilityHidden(true)
             Text(ShareSheetCopy.signInTitle)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
             Text(ShareSheetCopy.signInBody)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: MeeshySpacing.md) {
@@ -301,7 +301,7 @@ struct ShareSheetView: View {
                 Button(action: prompt.onOpenApp) {
                     Text(ShareSheetCopy.openMeeshy)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.buttonHeight)
                         .background(Capsule().fill(accent))
                         .contentShape(Capsule())
@@ -324,11 +324,11 @@ struct ShareSheetView: View {
                 .accessibilityHidden(true)
             Text(ShareSheetCopy.blockedTitle)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(ShareSheetCopy.blockedBody(reason))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
             Button(ShareSheetCopy.understood) { close() }
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))

@@ -385,7 +385,7 @@ struct AchievementRevealView: View {
             Text(bandeau.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                 .tracking(1.2)
-                .foregroundColor(occasion.estObtenu ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                .foregroundStyle(occasion.estObtenu ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
 
             Text(titre)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))

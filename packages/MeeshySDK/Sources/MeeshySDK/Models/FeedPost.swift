@@ -159,8 +159,8 @@ public struct FeedPost: Identifiable, Sendable {
     /// at the first rank that is served — either because the original is
     /// already written in that language, or because a translation exists for
     /// it. The original language competes for ITS rank in the chain; it is
-    /// never a short-circuit tested ahead of the loop (Prisme rule 3,
-    /// 2026-08-10) — with `preferredLanguages == ["en", "fr"]`, original
+    /// never a short-circuit tested ahead of the loop
+    /// — with `preferredLanguages == ["en", "fr"]`, original
     /// `fr`, and an `en` translation available, the `en` translation wins
     /// because it occupies rank 1. Never fall back to an arbitrary
     /// translation if no preferred language matches.
@@ -385,7 +385,7 @@ public extension FeedPost {
     /// Mirrors `isReel`; used by `PostDetailView` to render the inline canvas.
     var isStory: Bool { (type ?? "").uppercased() == "STORY" }
 
-    /// **Comment ce post affiche ses médias (directive 2026-08-27).** Dérivé du
+    /// **Comment ce post affiche ses médias.** Dérivé du
     /// TYPE via `PostMediaPresentation.default(for:)` — carousel pour un POST,
     /// diapositives horizontales pour un RÉEL. Le poste DÉFINIT ainsi son
     /// affichage ; aucun autre choix ni interface pour l'instant, un futur champ

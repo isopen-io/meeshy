@@ -151,7 +151,7 @@ struct LocationPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { close() }
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                 }
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "location.title", defaultValue: "Choisir un lieu", bundle: .main))
@@ -332,7 +332,7 @@ struct LocationPickerView: View {
                 // à lire : le mettre à l'échelle du Dynamic Type le décrocherait
                 // de la grille de contrôles (doctrine 86i).
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: onMap.accent))
+                .foregroundStyle(Color(hex: onMap.accent))
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle())
                 .clipShape(Circle())
@@ -353,7 +353,7 @@ struct LocationPickerView: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .accessibilityHidden(true)
 
             TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu…", bundle: .main), text: $searchText)
@@ -400,7 +400,7 @@ struct LocationPickerView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
@@ -463,7 +463,7 @@ struct LocationPickerView: View {
                             // bas, au-dessus d'un fond de carte devenu
                             // imprévisible avec les styles satellite et
                             // hybride. Les tokens de thème y disparaissaient.
-                            .foregroundColor(Color(hex: onMap.accent))
+                            .foregroundStyle(Color(hex: onMap.accent))
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(Color(hex: onMap.accent).opacity(0.14)))
                             .accessibilityHidden(true)
@@ -471,13 +471,13 @@ struct LocationPickerView: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(item.name ?? String(localized: "location.unknown", defaultValue: "Lieu inconnu", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                                .foregroundColor(.primary)
+                                .foregroundStyle(Color.primary)
                                 .lineLimit(1)
 
                             if let subtitle = item.placemark.title {
                                 Text(subtitle)
                                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(Color.secondary)
                                     .lineLimit(1)
                             }
                         }
@@ -506,7 +506,7 @@ struct LocationPickerView: View {
             HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "location.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -520,7 +520,7 @@ struct LocationPickerView: View {
                     if let title = displayedTitle {
                         Text(title)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                            .foregroundColor(.primary)
+                            .foregroundStyle(Color.primary)
                             .lineLimit(2)
                     } else if viewModel.isGeocoding {
                         HStack(spacing: MeeshySpacing.xsPlus) {
@@ -528,12 +528,12 @@ struct LocationPickerView: View {
                                 .scaleEffect(0.7)
                             Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse…", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(Color.secondary)
                         }
                     } else {
                         Text(String(localized: "location.move-prompt", defaultValue: "Déplacez la carte pour choisir", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color.secondary)
                     }
 
                     if let place = displayedPlace {
@@ -541,22 +541,22 @@ struct LocationPickerView: View {
                             // Une paire de coordonnées est une valeur ATOMIQUE :
                             // coupée en plusieurs lignes elle devient illisible.
                             // Vérifié au simulateur en taille accessibilité XXXL
-                            // (2026-08-10) : « 20.00000, −0.00000 » se cassait
+                            // « 20.00000, −0.00000 » se cassait
                             // sur QUATRE lignes et faisait doubler la carte.
                             // Elle rétrécit donc au lieu de passer à la ligne, et
                             // sa croissance est plafonnée — le reste de la carte
                             // continue de suivre le Dynamic Type normalement.
                             Text(formattedCoordinates(of: place))
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(Color.secondary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                             Text(verbatim: "·")
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(Color.secondary)
                             Text(LocationSharingLabels.precisionBadge(precision))
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                                .foregroundColor(Color(hex: onMap.accent))
+                                .foregroundStyle(Color(hex: onMap.accent))
                                 .lineLimit(1)
                         }
                         // Plafond de croissance sur CETTE ligne seulement : une
@@ -784,7 +784,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // ce qui tire `objectWillChange`, ce qui re-rend `mapView` →
         // `ModernInteractiveMap.body`, ce qui fait rappeler `updateUIView`
         // par SwiftUI — un chemin de ré-entrance dans MapKit qui gèle le
-        // main thread. Preuve par process sampling (2026-07-30) : deux
+        // main thread. Preuve par process sampling: deux
         // occurrences imbriquées de
         // `-[MKMapView _performActionAsIfGoingToDefaultLocation:]` sur la
         // même pile.

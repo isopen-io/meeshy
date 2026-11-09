@@ -14,7 +14,7 @@ public nonisolated enum VideoPresentation: Sendable, Equatable {
     }
 }
 
-/// **PiP = plein écran** (#11041, décision porteur e du 2026-10-20).
+/// **PiP = plein écran** (#11041).
 ///
 /// Une vidéo qui n'est pas en plein écran — bulle de message, post du fil,
 /// page d'un post, profil visité, commentaire inline — ne configure JAMAIS de

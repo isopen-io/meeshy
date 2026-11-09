@@ -202,7 +202,7 @@ final class OutboxRetryScheduler {
 ///
 /// Elle s'appelait `serverKeyedCaptions` et ne servait qu'aux légendes. Le nom
 /// disait le premier appelant, jamais la règle — et le second appelant (le
-/// texte alternatif, 2026-09-05) aurait eu le choix entre appeler une fonction
+/// texte alternatif) aurait eu le choix entre appeler une fonction
 /// qui prétend faire autre chose, ou en écrire une jumelle. Les deux réponses
 /// sont mauvaises ; renommer coûte une ligne.
 ///

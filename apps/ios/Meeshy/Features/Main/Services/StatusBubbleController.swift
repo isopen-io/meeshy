@@ -140,8 +140,7 @@ struct StatusBubbleOverlayModifier: ViewModifier {
     /// les présentations modales (sheet / fullScreenCover) posent le leur.
     /// Poser le modificateur sur des vues sœurs (une carte de feed, une colonne
     /// iPad, un écran poussé) rendait une bulle PAR hôte, chacune convertissant
-    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes,
-    /// bug 2026-07-30).
+    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes).
     ///
     /// La frontière est la PRÉSENTATION, pas la hiérarchie de vues : une
     /// `.sheet` a son propre `PresentationHostingController` et l'overlay du
@@ -228,12 +227,12 @@ private struct MoodReplyConfirmationOverlay: View {
             VStack(spacing: MeeshySpacing.mdPlus) {
                 Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(moodSummary)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
 
@@ -241,7 +240,7 @@ private struct MoodReplyConfirmationOverlay: View {
                     Button(action: onCancel) {
                         Text(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                             .background(
@@ -253,7 +252,7 @@ private struct MoodReplyConfirmationOverlay: View {
                     Button(action: onReply) {
                         Text(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                             .background(

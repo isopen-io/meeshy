@@ -29,7 +29,7 @@ struct ConversationListScrollChrome: ViewModifier {
     /// `accessoryCollapsedHeight` (60) et non `collapsedHeight` (44) : ce
     /// header porte un `titleAccessory` (la trail compacte de stories), et
     /// replié il mesure 60 pt — la bande de stickers épinglée à 44 passait
-    /// SOUS la trail (chevauchement « P[avatar]ANCIEN », 2026-08-21).
+    /// SOUS la trail (chevauchement « P[avatar]ANCIEN »).
     private static var stickyHeaderInset: CGFloat {
         LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.accessoryCollapsedHeight : 0
     }
@@ -65,8 +65,7 @@ struct ConversationListScrollChrome: ViewModifier {
             // haut de la région visible du défilement (safe area comprise)
             // plus l'inset collant. Mesurée sur le CONTENEUR — qui ne bouge
             // pas au défilement, donc zéro écriture par tick — et lue par la
-            // pilule pour nommer la section réellement épinglée (2026-08-21 :
-            // « le sticker le plus haut » désignait une section déjà passée).
+            // pilule pour nommer la section réellement épinglée.
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.frame(in: .global).minY + proxy.safeAreaInsets.top
             } action: { visibleTop in

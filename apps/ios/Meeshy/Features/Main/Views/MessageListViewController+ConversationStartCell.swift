@@ -5,7 +5,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// Registration du marqueur « Début de la conversation », INERTE depuis le retrait Focal du 2026-08-18 : `applySnapshot` n'appende plus `.conversationStart` (#10758).
+// Registration du marqueur « Début de la conversation », INERTE depuis le retrait Focal: `applySnapshot` n'appende plus `.conversationStart` (#10758).
 
 extension MessageListViewController {
 

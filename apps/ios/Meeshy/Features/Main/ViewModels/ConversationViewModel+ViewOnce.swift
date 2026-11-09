@@ -62,8 +62,7 @@ extension ConversationViewModel {
 
     /// Referme toutes les vues uniques révélées — la sortie de conversation.
     ///
-    /// Ce que l'AUTEUR a révélé se referme sans être consommé (directive porteur
-    /// 2026-09-24) : la sortie de l'auteur consommait ses propres messages,
+    /// Ce que l'AUTEUR a révélé se referme sans être consommé: la sortie de l'auteur consommait ses propres messages,
     /// « sans geste » visible (#7578, § 6).
     func closeAllRevealedViewOnce() {
         for (messageId, isRevealed) in revealedViewOnceIds where isRevealed {

@@ -71,7 +71,7 @@ final class BackgroundTaskManager {
         // inferred @MainActor (class isolation + SWIFT_DEFAULT_ACTOR_ISOLATION),
         // so the Swift 6 runtime asserts the main queue when they run. With
         // `using: nil` BGTaskScheduler invoked them on its own serial queue —
-        // dispatch_assert_queue_fail, 4 device crashes 2026-06-10 (builds
+        // dispatch_assert_queue_fail, 4 device crashes (builds
         // 471/474, queues me.meeshy.app.conversation-sync/message-prefetch).
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.conversationSyncTaskId,

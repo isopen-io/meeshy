@@ -12,7 +12,7 @@ struct CallPanelHeader: View {
             headerButton(symbol: "chevron.backward", label: CallControlsCopy.backToMenu, action: onBack)
             Text(title)
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
@@ -51,7 +51,7 @@ struct CallPillRow<Content: View>: View {
             if let title {
                 Text(title)
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundStyle(Color.white.opacity(0.6))
                     .textCase(.uppercase)
                     .lineLimit(1)
                     .padding(.horizontal, MeeshySpacing.lg)
@@ -96,7 +96,7 @@ struct CallPillChip: View {
                 if let caption {
                     Text(caption)
                         .font(.caption2.weight(.medium))
-                        .foregroundColor(.white.opacity(isSelected ? 1 : 0.85))
+                        .foregroundStyle(Color.white.opacity(isSelected ? 1 : 0.85))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)

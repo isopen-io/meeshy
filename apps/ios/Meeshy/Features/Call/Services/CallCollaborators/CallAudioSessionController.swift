@@ -50,7 +50,7 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
         let videoUIActive = call.isVideoUIActive
         let configuration = RTCAudioSessionConfiguration.webRTC()
         configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-        // CALL-FIX 2026-06-06 (macOS) — on iOS-app-on-Mac the voice-processing I/O unit
+        // CALL-FIX (macOS) — on iOS-app-on-Mac the voice-processing I/O unit
         // (engaged by `.voiceChat`/`.videoChat`) faults on the mic uplink ("failed to
         // write uplink microphone input signal (state fault)") → the Mac mic captures
         // silence and the peer hears nothing. `.default` bypasses the voice processor;
@@ -87,8 +87,7 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
                 // #8269 — with CallKit, `provider:didActivate` owns activation and
                 // on an OUTGOING call it has already fired by now: the old
                 // `active: false` was `setActive(false)` on that session, which
-                // stopped the audio unit (no audio either way, video still
-                // flowing — incident 2026-09-27). Apply the configuration only.
+                // stopped the audio unit (no audio either way). Apply the configuration only.
                 // Without CallKit (Mac, foreground in-app call) WE own activation:
                 // activate now, or this would deactivate the session the
                 // ring-sound manager just brought up.
@@ -292,7 +291,7 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
             do {
                 let configuration = RTCAudioSessionConfiguration.webRTC()
                 configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-                // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
+                // CALL-FIX (macOS) — `.default` avoids the voice-processing
                 // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
                 configuration.mode = AVAudioSession.Mode.default.rawValue
                 configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]

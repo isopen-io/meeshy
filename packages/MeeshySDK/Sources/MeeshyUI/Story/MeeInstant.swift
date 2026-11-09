@@ -126,7 +126,7 @@ nonisolated public enum MeeInstantCatalog {
 
     /// **Une ligne de la section Instants** : le titre d'une famille, ou une
     /// rangée. Chaque ligne est un enfant DIRECT de la pile de la feuille —
-    /// une pile paresseuse imbriquée ne créait pas ses rangées (2026-10-02).
+    /// une pile paresseuse imbriquée ne créait pas ses rangées.
     nonisolated public enum Row: Hashable, Identifiable, Sendable {
         case title(MeeInstant.Kind)
         case instants([MeeInstant])

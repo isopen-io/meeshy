@@ -45,8 +45,7 @@ nonisolated enum ComposerTextStickerChoice {
             ?? catalog.first
     }
 
-    /// **L'ORDRE dans lequel la pastille fait défiler les cadres** (directive
-    /// porteur 2026-09-14, #6537 : « il faut que le sticker tourne et change
+    /// **L'ORDRE dans lequel la pastille fait défiler les cadres** (#6537: « il faut que le sticker tourne et change
     /// régulièrement »).
     ///
     /// Elle COMMENCE par `resolve` — le cadre que l'auteur emploie — puis

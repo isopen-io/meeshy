@@ -20,7 +20,7 @@ extension CallManager {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, remoteUserId != nil else { return }
 
-        // CALL-FIX 2026-06-06 — stop the ringtone the INSTANT the user declines.
+        // CALL-FIX — stop the ringtone the INSTANT the user declines.
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
 
@@ -42,7 +42,7 @@ extension CallManager {
 
     // MARK: - End Call
 
-    /// [Chaos-test prod 2026-07-02, EXIGENCE №1] A local hang-up that never
+    /// [Chaos-test prod, EXIGENCE №1] A local hang-up that never
     /// reaches the gateway leaves the PEER in a zombie call: the server keeps
     /// the CallSession active, keeps accepting the peer's re-joins, and never
     /// broadcasts participant-left — the peer only dies ~48s later on its own
@@ -88,7 +88,7 @@ extension CallManager {
     func endCall() {
         guard callState.isActive else { return }
 
-        // Refus lock-screen (arc reject 2026-07-12) : un `CXEndCallAction` sur
+        // Refus lock-screen: un `CXEndCallAction` sur
         // un entrant PRÉ-décroché est le bouton « Refuser » de CallKit — le
         // seul chemin de refus d'un appel reçu en background. Il aboutit ici,
         // pas dans rejectCall() : sans cette branche, l'end part sans raison,

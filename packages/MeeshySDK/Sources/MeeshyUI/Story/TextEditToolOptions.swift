@@ -143,7 +143,7 @@ public struct TextEditToolOptions: View {
     @Environment(\.colorScheme) private var colorScheme
 
     /// Gabarit commun des pastilles de choix. Compressé de 48 à 38 pt
-    /// (directive user 2026-07-26) pour qu'un maximum de valeurs tienne dans
+    /// pour qu'un maximum de valeurs tienne dans
     /// la largeur : les panneaux les plus fournis — 14 couleurs, 12 fonds —
     /// restent scrollables, décision assumée plutôt qu'un passage à la ligne.
     static let chipHeight: CGFloat = 38
@@ -200,7 +200,7 @@ public struct TextEditToolOptions: View {
 
     /// La taille coiffe la liste des polices : c'est une valeur continue, elle
     /// se règle là où on choisit la famille plutôt que derrière une bulle.
-    /// La graisse, elle, vit avec l'alignement (directive user 2026-07-28) —
+    /// La graisse, elle, vit avec l'alignement —
     /// sauf chez l'hôte qui la range avec la police (`omitting`).
 
     private var sizeSlider: some View {

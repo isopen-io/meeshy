@@ -15,7 +15,7 @@
 //  legible while the audio gets the bandwidth — then thaw once the link has
 //  clearly recovered.
 //
-//  L6-1 (2026-08-25) — this layer used to DROP the video: stop capture, detach
+// L6-1 — this layer used to DROP the video: stop capture, detach
 //  the track, flip the transceiver to recvOnly and renegotiate. That killed the
 //  picture at the peer, cost an SDP round-trip in each direction on the very
 //  link that couldn't carry one, and was announced as a deliberate camera-off.

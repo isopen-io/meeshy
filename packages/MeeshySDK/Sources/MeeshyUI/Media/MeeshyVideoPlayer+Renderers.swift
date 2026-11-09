@@ -617,7 +617,7 @@ internal struct _FullscreenRenderer: View {
 
     /// Un toucher sur l'image ramène le bouton central (la seconde repart) ET
     /// bascule le chrome, en un seul geste — y compris quand le bouton était
-    /// effacé (#9577, décision porteur 2026-10-08, alignée sur le web).
+    /// effacé (#9577).
     private func handleSurfaceTap() {
         withAnimation(fadeAnimation) { playPauseFade = playPauseFade.tappingMedia() }
         toggleControls()

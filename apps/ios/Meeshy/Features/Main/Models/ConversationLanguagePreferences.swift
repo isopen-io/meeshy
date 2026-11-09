@@ -23,7 +23,7 @@ import MeeshySDK
 /// (cf. `tasks/todo.md` P4.2). The struct replaces the
 /// `_cachedPreferredLanguages` ad-hoc memo inside the ViewModel.
 ///
-/// ### Phase 3 — device locale 4th priority (2026-05-26)
+/// ### Phase 3 — device locale 4th priority
 /// `resolved` now appends a 4th slot derived from the device locale:
 ///   1. `systemLanguage`
 ///   2. `regionalLanguage`
@@ -35,7 +35,7 @@ import MeeshySDK
 /// keeps the strict 3-level behaviour for determinism in unit tests that
 /// don't opt in to the 4th axis.
 ///
-/// ### UNE descente (2026-09-03) — `ReaderPrism`, au SDK
+/// ### UNE descente — `ReaderPrism`, au SDK
 /// La descente elle-même ne vit plus ici : `resolved` projette
 /// `ReaderPrism.resolve(...)`, la fonction que le chemin SOCKET
 /// (`MessagePersistenceActor.readerPrism()`) emploie pour graver

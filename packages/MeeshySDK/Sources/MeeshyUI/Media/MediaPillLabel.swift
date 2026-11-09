@@ -26,7 +26,7 @@ struct MediaPillLabel: View {
             Image(systemName: icon).meeshyScaledFont(MeeshyIconSize.xs, weight: .medium)
             Text(text).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         }
-        .foregroundColor(foreground)
+        .foregroundStyle(foreground)
         .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)

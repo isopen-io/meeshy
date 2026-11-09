@@ -114,7 +114,7 @@ struct StorySaveProgressRing: View {
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
         }
         .frame(width: diameter, height: diameter)
     }

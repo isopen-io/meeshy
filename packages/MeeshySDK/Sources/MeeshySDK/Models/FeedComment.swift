@@ -36,7 +36,7 @@ public struct FeedComment: Identifiable, Sendable {
     public var media: [FeedMedia]
     /// Lieu attaché au commentaire (`APIPostComment.location`, hissé par le
     /// gateway depuis `metadata.location`). Était décodé puis JETÉ au passage
-    /// domaine — même panne que `FeedPost.location`, corrigée le 2026-07-30.
+    /// domaine — même panne que `FeedPost.location`, corrigée.
     public var location: SharedPlace? = nil
     /// **Le média du POST que ce commentaire CITE** (#6578) — distinct de
     /// `media` ci-dessus, qui porte les pièces JOINTES au commentaire. Les deux

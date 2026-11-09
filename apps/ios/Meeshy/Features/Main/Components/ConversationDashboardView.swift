@@ -236,7 +236,7 @@ struct ConversationDashboardView: View {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                .foregroundColor(color)
+                .foregroundStyle(color)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
@@ -414,7 +414,7 @@ struct ConversationDashboardView: View {
                 } label: {
                     Text(period.shortLabel)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isSelected ? .bold : .medium))
-                        .foregroundColor(isSelected ? .white : theme.textMuted)
+                        .foregroundStyle(isSelected ? Color.white : theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.smPlus)
                         .padding(.vertical, MeeshySpacing.xs)
                         .background(
@@ -566,7 +566,7 @@ private struct StatRing: View {
                 Text(displayValue)
                     // Dynamic Type exception: value centered in a fixed 60pt ring (minimumScaleFactor shrinks-to-fit)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
             }
@@ -626,7 +626,7 @@ private struct ArcGauge: View {
                     Text("\(score)")
                         // Dynamic Type exception: score centered in the fixed-geometry arc gauge (position is radius-relative)
                         .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundColor(scoreColor)
+                        .foregroundStyle(scoreColor)
                 }
                 .position(x: center.x, y: center.y - radius * 0.35)
             }

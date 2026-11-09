@@ -13,7 +13,7 @@ import Foundation
 /// réécrite ici serait un bug de contrat.
 ///
 /// `riviereMode` (`LentilleFeatureFlag`) vaut OFF en l'absence de tout choix
-/// et suit la bascule « Activer les bêta » sinon (2026-08-21).
+/// et suit la bascule « Activer les bêta » sinon.
 /// `ConversationView.init` le câble dans son propre `resolveCapabilities` et
 /// monte `RiverConversationHost` derrière `mode == .river` dans le même
 /// fichier (chantier Rivière iOS, lot 1) : la porte s'ouvre par la LOI —

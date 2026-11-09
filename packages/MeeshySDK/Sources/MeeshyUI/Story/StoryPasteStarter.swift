@@ -25,7 +25,7 @@ public nonisolated enum StoryPasteStarter {
     /// passé. `.item` ferme la liste, comme sur la cible de dépôt de la barre de
     /// conversation : ce que le composer ne sait pas peindre est ANNONCÉ
     /// app-side, jamais avalé.
-    /// **RESTREINTE au #4378** (directive porteur 2026-08-30) :
+    /// **RESTREINTE au #4378** :
     ///
     /// > « que coller n'apparaisse que si on a une image, un texte ou vidéo dans
     /// > le presse-papier »

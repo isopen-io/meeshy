@@ -67,7 +67,7 @@ struct MagicLinkView: View {
     }
 
     /// UNE ligne visible par étape dit ce qu'on fait ; le COMMENT vit derrière
-    /// un (i) (directive porteur 2026-09-15, #6626) — le même que celui des
+    /// un (i) (#6626) — le même que celui des
     /// champs de l'inscription.
     private enum Hint {
         case howItWorks

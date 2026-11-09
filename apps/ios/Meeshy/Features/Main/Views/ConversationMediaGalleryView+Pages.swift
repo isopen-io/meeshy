@@ -117,7 +117,7 @@ struct GalleryImagePage: View, Equatable {
     private var emptyStateGlyph: some View {
         Image(systemName: "photo")
             .meeshyScaledFont(MeeshyIconSize.hero)
-            .foregroundColor(.white.opacity(MeeshyOpacity.medium))
+            .foregroundStyle(Color.white.opacity(MeeshyOpacity.medium))
             .accessibilityHidden(true)
     }
 
@@ -646,7 +646,7 @@ struct GalleryVideoPage: View, Equatable {
             guard isWindowed, isActive, poster == nil else { return }
             await resolvePosterIfNeeded()
         }
-        // Autoplay en plein écran (retour porteur 2026-08-27, cf. #4015) : la
+        // Autoplay en plein écran (cf. #4015): la
         // page vidéo ACTIVE et prête démarre la lecture d'elle-même — c'est ce
         // que le double-tap depuis la bulle attend (« ouvrir en plein écran ET
         // lire »). Ne rejoue pas si cette vidéo EST déjà le player actif

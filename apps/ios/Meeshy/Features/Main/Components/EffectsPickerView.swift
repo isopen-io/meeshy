@@ -94,7 +94,7 @@ struct EffectsPickerView: View {
                     } label: {
                         Text(String(localized: "effects.clear-all", defaultValue: "Tout effacer", bundle: .main))
                             .font(.caption2).fontWeight(.semibold)
-                            .foregroundColor(MeeshyColors.error.opacity(MeeshyOpacity.intense))
+                            .foregroundStyle(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                     }
                     .transition(.opacity)
                 }
@@ -124,7 +124,7 @@ struct EffectsPickerView: View {
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.caption2).fontWeight(.semibold)
-            .foregroundColor(muted)
+            .foregroundStyle(muted)
             .accessibilityAddTraits(.isHeader)
     }
 

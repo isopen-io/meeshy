@@ -4,8 +4,7 @@ import MeeshyUI
 
 // MARK: - MessageViewsSendAttemptsCard
 
-/// Historique local des tentatives d'envoi (spec 2026-07-08
-/// message-send-failure-retry-flow). Vide pour les messages reçus : l'hôte
+/// Historique local des tentatives d'envoi. Vide pour les messages reçus: l'hôte
 /// ne monte pas la carte.
 struct MessageViewsSendAttemptsCard: View {
     let attempts: [SendAttemptRecord]
@@ -84,7 +83,7 @@ struct MessageViewsSendAttemptsCard: View {
         return HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
             Image(systemName: isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.caption2.weight(.medium))
-                .foregroundColor(isSuccess ? MeeshyColors.success : MeeshyColors.error)
+                .foregroundStyle(isSuccess ? MeeshyColors.success : MeeshyColors.error)
                 .frame(width: 16)
                 .padding(.top, 1)
                 .accessibilityLabel(isSuccess

@@ -103,7 +103,7 @@ nonisolated enum RiverConversationMapping {
     ///
     /// Elle décide combien de temps une branche survit à sa dernière prise de
     /// parole, donc combien de voix tiennent SIMULTANÉMENT dans le plan.
-    /// Arbitrage produit 2026-08-21 : « il devrait aller jusqu'à 7 personnes
+    /// « il devrait aller jusqu'à 7 personnes
     /// alignées sur l'horizontal pour les communications de l'ordre des dix
     /// minutes — valeur configurable : dans une conversation peu causante on
     /// peut monter en heures ou en jours, là où dans une conversation très
@@ -176,7 +176,7 @@ nonisolated enum RiverConversationMapping {
     /// Une citation tient sur UNE ligne (§7ter A4) : retours à la ligne et
     /// blancs répétés repliés en un espace. `previewText` arrive brut du
     /// message cité — laissé tel quel, il faisait gonfler le bloc de citation
-    /// à la hauteur de toutes ses lignes (mesuré au simulateur 2026-08-22).
+    /// à la hauteur de toutes ses lignes.
     static func singleLine(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }

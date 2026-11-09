@@ -5,7 +5,7 @@ import MeeshyUI
 // MARK: - L'aperçu d'UNE pièce d'un message (#9907)
 
 /// **L'appui long sur une tuile montre CETTE pièce seule, avec le défilement
-/// vers les autres pièces du message** (directive porteur du 2026-10-10).
+/// vers les autres pièces du message**.
 ///
 /// L'aperçu du message entier (`MessageOverlayMenu`) montrait la grille — quatre
 /// images au plus, sans « +N », non navigable — et son menu agissait sur le

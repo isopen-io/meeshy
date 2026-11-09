@@ -101,7 +101,7 @@ struct InviteChoicesPanel: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.85)
-                .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
+                .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .background(
@@ -121,7 +121,7 @@ struct InviteChoicesPanel: View {
     private func caption(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-            .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+            .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .fixedSize(horizontal: false, vertical: true)
@@ -130,10 +130,10 @@ struct InviteChoicesPanel: View {
     private func notice(_ text: String) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "info.circle.fill")
-                .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+                .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
                 .accessibilityHidden(true)
             Text(text)
-                .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
+                .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))

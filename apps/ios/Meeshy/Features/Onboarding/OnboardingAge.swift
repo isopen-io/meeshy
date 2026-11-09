@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - La carte « âge » (#9929)
 //
-// Décision porteur 2026-10-10 (#9926) : l'âge se demande pendant l'onboarding,
+// (#9926): l'âge se demande pendant l'onboarding,
 // et l'étape se passe (âge inconnu = aucune restriction). Sous 13 ans, Meeshy
 // n'est pas ouvert ; de 13 à 17 ans, Global se lit sans s'écrire. La passerelle
 // décide de tout depuis la date — la carte ne fait que la recueillir.

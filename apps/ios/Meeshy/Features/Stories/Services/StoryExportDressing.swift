@@ -5,9 +5,9 @@ import MeeshyUI
 // MARK: - StoryExportDressing
 //
 // **L'HABILLAGE d'une vidéo qui sort de Meeshy se décide ICI, et nulle part
-// ailleurs** (#10536, demande porteur 2026-10-13 : « rétablir, lorsqu'on
-// sauvegarde une story, la pose du prélude et de l'interlude ; l'export utilisé
-// est celui des réels et postes ; préserver les deux types d'export »).
+// ailleurs** (#10536, lorsqu'on
+// sauvegarde une story, la pose du prélude et de l'interlude, l'export utilisé
+// est celui des réels et postes, préserver les deux types d'export »).
 //
 // Deux habillages coexistent :
 //   - STORY : interlude d'identité + signature sonore en tête, la story, la

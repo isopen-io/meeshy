@@ -62,7 +62,7 @@ extension StoryCanvasUIView {
             // UIImage entre le warm-hit et le re-stamp async, `contents` ne
             // change pas d'identité de référence. On fire `backgroundDidBecomeReady()`
             // directement, sans installer l'observer. Régression introduite
-            // par a60f636b5 (2026-05-20) — sans ce shortcut, le loader reste
+            // par a60f636b5 — sans ce shortcut, le loader reste
             // à 0% indéfiniment sur les stories image dès que le cache est
             // warmed (prefetcher ou première vue).
             if backgroundLayer.hasFinalContentStamped {
@@ -126,7 +126,6 @@ extension StoryCanvasUIView {
             // template — exiger l'item ici faisait rater l'armement et,
             // `displayLinkTick` étant gated sur `contentReadyFired`, plus
             // rien ne ré-évaluait jamais : slide gelée sur son thumbnail
-            // (bug user 2026-06-11).
             if backgroundLayer.avPlayer != nil {
                 armBackgroundVideoReadinessObservation(item: backgroundLayer.avPlayer?.currentItem)
             }
@@ -140,7 +139,7 @@ extension StoryCanvasUIView {
             // lent laissait `contentReadyFired` à false pour toujours →
             // thumbnail figé, progression sans frames ni audio, son qui ne
             // démarrait qu'au retour foreground via le bypass
-            // `handleDidBecomeActive` (bug user 2026-06-11).
+            // `handleDidBecomeActive`.
         }
     }
 
@@ -161,8 +160,8 @@ extension StoryCanvasUIView {
         // signal fiable : `isFileURL` ne prouve que la présence disque,
         // le decoder spinup (~50-150 ms, parfois bien plus sur un
         // fichier local lent/partiel) n'est PAS couvert — c'est ce qui
-        // faisait avancer la progression sur le flou ThumbHash (bug
-        // user-reporté 2026-06-09). Le ThumbHash reste visible pendant
+        // faisait avancer la progression sur le flou ThumbHash.
+        // Le ThumbHash reste visible pendant
         // le gap (UX inchangée), seul le timer attend la vraie frame.
         if waitBackgroundVideoFirstFrame() == false, let item {
             // Aucun `AVPlayerLayer` exploitable (cas rare) — repli sur le
@@ -267,7 +266,7 @@ extension StoryCanvasUIView {
         // lecture entre-temps — interstitiel d'identité, overlay commentaires,
         // appel — le démarrer ici faisait jouer la story sous le gel. On
         // entendait la story PENDANT l'interlude alors même que le canvas était
-        // né en pause (bug user 2026-07-25).
+        // né en pause.
         //
         // L'intention reste ARMÉE (`pendingBackgroundActivation` non consommé) :
         // `setStoryPlaybackPaused(false)` la reprend à la reprise, rien n'est

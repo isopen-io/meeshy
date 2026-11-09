@@ -18,7 +18,7 @@ struct SettingsSectionCard<Content: View>: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     /* L'ICÔNE EST DÉCORATIVE — relevé en revue
                        d'accessibilité : sans ce masque, VoiceOver
                        annonce le NOM DU SYMBOLE avant le titre, « waveform and
@@ -64,7 +64,7 @@ struct SettingsRowLabel<Trailing: View>: View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
@@ -74,7 +74,7 @@ struct SettingsRowLabel<Trailing: View>: View {
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 

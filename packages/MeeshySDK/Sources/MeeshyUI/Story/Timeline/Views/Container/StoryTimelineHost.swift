@@ -125,7 +125,7 @@ public struct StoryTimelineHost: View {
                 : MeeshyColors.indigo50.opacity(0.32)
         )
         // Surface d'édition complète : sélectionner un clip, un keyframe ou
-        // une transition ouvre son inspecteur en SHEET (item 8, 2026-07-25).
+        // une transition ouvre son inspecteur en SHEET.
         .timelineInspectorSheet(viewModel: viewModel)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.container", defaultValue: "Timeline", bundle: .module))

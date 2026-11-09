@@ -290,7 +290,7 @@ struct FocalQuotedReplyView: View, Equatable {
                 if let details = quotedDetails {
                     Text(details)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                        .foregroundColor(previewColor.opacity(0.8))
+                        .foregroundStyle(previewColor.opacity(0.8))
                         .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 }
             }
@@ -416,7 +416,7 @@ struct FocalQuotedReplyView: View, Equatable {
     private var titleLine: some View {
         Text(title)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(titleColor)
+            .foregroundStyle(titleColor)
             .lineLimit(QuotedReplyPresentation.titleLineLimit)
     }
 
@@ -436,14 +436,14 @@ struct FocalQuotedReplyView: View, Equatable {
             if glyphOpensTheMedia {
                 Image(systemName: kind.hasTimebasedTrack ? "play.circle.fill" : kind.sfSymbolName)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
                     .contentShape(Rectangle())
                     .onTapGesture { onQuotedMediaTap?(reference) }
                     .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reference))
             } else {
                 Image(systemName: kind.sfSymbolName)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
                     .accessibilityHidden(true)
             }
         }
@@ -458,17 +458,17 @@ struct FocalQuotedReplyView: View, Equatable {
                 Text(emoji).font(MeeshyFont.relative(MeeshyFont.captionSize))
                 Text(reference.previewText)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
             }
         } else if reference.isStoryReply {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "camera.fill")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
                     .accessibilityHidden(true)
                 Text(QuotedStoryLabel.text(for: reference))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(previewColor)
+                    .foregroundStyle(previewColor)
             }
         } else {
             HStack(spacing: MeeshySpacing.xs) {

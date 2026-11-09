@@ -25,7 +25,7 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        /// 64 → 84 le 2026-08-22 : la rangée porte TROIS lignes — nom (avec
+        /// 64 → 84: la rangée porte TROIS lignes — nom (avec
         /// la pile de non-lus en fin de ligne), « auteur : message », puis la
         /// date seule à droite. Le contenu mesure ~78,6 pt à la taille de
         /// texte par défaut : 64 n'en logeait que deux. Un essai à 92 a réservé
@@ -134,7 +134,7 @@ nonisolated public enum LentilleMetrics {
     /// `list.unreadDot` — `8`, couleur accent. §0 : diamètre de design, pas
     /// un token repris d'ailleurs — sa seule maison est ici.
     ///
-    /// **Plus AUCUN consommateur iOS depuis le lot 2 (2026-08-22)** : le
+    /// **Plus AUCUN consommateur iOS depuis le lot 2**: le
     /// point ouvrait la ligne du pont ✦ sous `showsBridge`, c'est-à-dire
     /// exactement sous `unreadCount > 0` — la pastille rouge CHIFFRÉE
     /// rétablie en queue de ligne de titre porte la même nouvelle, en sachant
@@ -152,7 +152,7 @@ nonisolated public enum LentilleMetrics {
 
     /// `list.focusCard` — fond `bg2` + ring INTERNE `1.5` accent, radius `16`.
     ///
-    /// **La peau iOS ne peint plus de CARTE depuis le 2026-08-23** (directive
+    /// **La peau iOS ne peint plus de CARTE** (directive
     /// produit : « pas de bordure, on complète juste les informations,
     /// directement sur le row existant ; l'objet reste le même »). Les valeurs
     /// ci-dessous restent le miroir FIDÈLE de `list.focusCard` dans
@@ -168,11 +168,11 @@ nonisolated public enum LentilleMetrics {
     nonisolated public enum FocusCard {
         public static let ringSize: CGFloat = 1.5
         public static let radius: CGFloat = 16
-        /// Carte MAGNIFIÉE (2026-08-21, accentuée le 22 : « une marge plus
+        /// Carte MAGNIFIÉE (accentuée le 22: « une marge plus
         /// importante et un padding suffisant en haut et en bas ») : déborde
         /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
         /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
-        /// 104 → 124 le 2026-08-22 : la carte loge les mêmes trois lignes que
+        /// 104 → 124: la carte loge les mêmes trois lignes que
         /// la rangée, avec un aperçu qui coule sur deux lignes.
         public static let height: CGFloat = 124
         public static let paddingVertical: CGFloat = 14
@@ -186,12 +186,12 @@ nonisolated public enum LentilleMetrics {
         // carte elle-même — elles n'avaient AUCUN token dans
         // `lentille-tokens.json` (contrairement au reste de cet enum) et plus
         // aucun consommateur. Une valeur de loi sans loi ni lecteur.
-        /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
+        /// Respiration (« le triple de l'espace actuel »): les
         /// rangées voisines s'écartent de la ligne de focus de ce montant
         /// pendant la scène — translation de compositor, zéro relayout.
-        /// 18 → 30 le 2026-08-22 : les chips d'étiquettes qui débordent
+        /// 18 → 30: les chips d'étiquettes qui débordent
         /// sous la carte gardent une marge avec la rangée suivante.
-        /// **30 → 18 le 2026-08-22 (soir)** : ce n'était pas une respiration,
+        /// **30 → 18 (soir)**: ce n'était pas une respiration,
         /// c'était un DÉGAGEMENT creusé pour la décoration qui débordait — et
         /// il est ANIMÉ, donc les trous s'ouvraient et se refermaient pendant
         /// le défilement. C'est la moitié « espaces compliqués » du retour
@@ -199,7 +199,7 @@ nonisolated public enum LentilleMetrics {
         /// Amplitude de la respiration : de combien les rangées voisines
         /// s'écartent de l'élue pendant la scène.
         ///
-        /// **ÉCRÊTÉE À LA MARGE** (arbitrage produit 2026-08-23). Elle valait
+        /// **ÉCRÊTÉE À LA MARGE**. Elle valait
         /// 18 pt pour une marge de 8 : une rangée poussée mangeait donc la
         /// marge et mordait le header suivant. Chevauchement mesuré à
         /// géométrie stabilisée, deux frontières, deux relevés indépendants —
@@ -228,10 +228,10 @@ nonisolated public enum LentilleMetrics {
         public static let loupeGain: CGFloat = 0.04
     }
 
-    // MARK: - Magnification EN PLACE (2026-08-23)
+    // MARK: - Magnification EN PLACE
 
     /// La rangée élue n'est plus RECOUVERTE par une carte : elle est
-    /// COMPLÉTÉE. Directive produit du 2026-08-23, mot pour mot : « pas de
+    /// COMPLÉTÉE., mot pour mot: « pas de
     /// bordure, on complète juste les informations, directement sur le row
     /// existant ; sans que l'utilisateur ne sente un changement si ce n'est le
     /// surplus d'information, l'objet reste le même ».

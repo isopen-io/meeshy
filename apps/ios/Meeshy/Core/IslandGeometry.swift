@@ -26,8 +26,7 @@ enum IslandGeometry {
 
     /// Air minimal entre le bas de l'îlot et le haut d'un élément posé
     /// dessous. Une pastille collée à l'îlot se lit comme une excroissance du
-    /// matériel, pas comme un élément d'interface (retour user 2026-08-13 :
-    /// « SANS Y ETRE COLLE »).
+    /// matériel, pas comme un élément d'interface.
     static let clearanceBelow: CGFloat = 12
 
     static func isPresent(safeAreaTop: CGFloat) -> Bool {

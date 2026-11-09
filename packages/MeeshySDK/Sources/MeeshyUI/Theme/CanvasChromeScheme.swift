@@ -7,7 +7,7 @@ import MeeshySDK
 ///
 /// Le fond de la slide appartient au CONTENU, pas au thème de l'app : une app
 /// en light mode sur une slide bleu nuit rendait les icônes `indigo950` de
-/// `glassControlForeground` illisibles (capture user 2026-07-11). Épingler
+/// `glassControlForeground` illisibles. Épingler
 /// `\.colorScheme` sur les grappes de contrôles fait suivre d'un coup les
 /// foregrounds adaptatifs ET les fallbacks matériau d'`adaptiveGlass`.
 ///

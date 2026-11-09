@@ -84,7 +84,7 @@ struct StarredMessagesView: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                     .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
                     .adaptiveGlass(in: Circle(), interactive: true)
                     .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)

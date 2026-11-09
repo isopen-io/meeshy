@@ -51,7 +51,7 @@ struct HashtagResultsView: View {
                 }
                 if viewModel.posts.isEmpty && !viewModel.isLoading {
                     Text(String(localized: "hashtag.results.empty", defaultValue: "Aucun post avec #\(viewModel.tag)", bundle: .main))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .padding(.top, 60)
                 }
             }

@@ -697,7 +697,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
     /// Called when a notification arrives while the app is in the foreground.
     ///
-    /// Policy (2026-05-24, simplified): the Socket.IO connection is the
+    /// Policy (simplified): the Socket.IO connection is the
     /// authoritative signal.
     /// - **Socket connected** → the in-app toast (driven by Socket.IO
     ///   `notification:new`) will fire. Suppress the iOS banner, list entry

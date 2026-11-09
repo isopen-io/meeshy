@@ -244,10 +244,10 @@ extension UserProfileSheet {
         HStack(alignment: .top, spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(Color(hex: resolvedAccent))
+                .foregroundStyle(Color(hex: resolvedAccent))
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -301,7 +301,7 @@ extension UserProfileSheet {
                 Text(label)
                     .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
             }
-            .foregroundColor(color)
+            .foregroundStyle(color)
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.md)
             .background(color.opacity(MeeshyOpacity.subtle))
@@ -360,10 +360,10 @@ extension UserProfileSheet {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
                         .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(Color(hex: resolvedAccent))
+                        .foregroundStyle(Color(hex: resolvedAccent))
                     Text(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                 }
 
                 AudioPlayerView(
@@ -439,13 +439,13 @@ extension UserProfileSheet {
         VStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(.system(size: MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(Color(hex: resolvedAccent))
+                .foregroundStyle(Color(hex: resolvedAccent))
             Text("\(value)")
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Text(label)
                 .font(.caption2)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -468,7 +468,7 @@ extension UserProfileSheet {
             SettingsRow(icon: icon, title: label, color: resolvedAccent) {
                 Text(value)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(SettingsRowMetrics.accessibilityLabel(title: label, value: value))

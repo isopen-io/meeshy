@@ -221,7 +221,7 @@ struct MyStoriesView: View {
                     } label: {
                         Text(String(localized: "common.ok", defaultValue: "OK"))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .padding(.horizontal, MeeshySpacing.mdPlus)
                             .padding(.vertical, MeeshySpacing.xsPlus)
                             .adaptiveGlassProminent(in: Capsule(), tint: accentColor)
@@ -295,7 +295,7 @@ struct MyStoriesView: View {
         )
     }
 
-    /// Deux onglets COMPLÈTEMENT distincts (directive user 2026-08-01). Un
+    /// Deux onglets COMPLÈTEMENT distincts. Un
     /// `Picker` segmenté plutôt qu'un `TabView` paginé : le geste horizontal
     /// d'un `TabView` entre en concurrence avec le balayage de fermeture de la
     /// sheet, et les deux onglets y seraient instanciés en permanence.
@@ -305,7 +305,7 @@ struct MyStoriesView: View {
         } label: {
             Image(systemName: "plus")
                 .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 32, height: 32)
                 .adaptiveGlassProminent(in: Circle(), tint: accentColor)
                 .meeshyTapTarget()
@@ -574,7 +574,7 @@ struct MyStoriesView: View {
         HStack {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
             Spacer()
         }
         .padding(.horizontal, MeeshySpacing.lg)

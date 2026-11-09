@@ -5,7 +5,7 @@ import Foundation
 /// Les pièces d'une ligne de la page Notifications, composées UNE fois par une
 /// règle pure — la vue les place, elle ne décide de rien.
 ///
-/// Trois défauts relevés par le porteur (2026-09-29) tiennent ici :
+/// Trois défauts relevés par le porteur tiennent ici :
 /// - **la répétition** : « Belva a réagi ❤️ à votre commentaire » montrait le
 ///   commentaire en corps PUIS en citation — chaque texte ne paraît qu'une fois
 ///   (`NotificationRowText.distinct`) ;

@@ -4,7 +4,7 @@ import UIKit.UIGestureRecognizerSubclass
 // MARK: - Rules
 
 public nonisolated enum SwipeRowRules {
-    /// Un côté balayé porte au plus trois actions (directive porteur 2026-10-14, #10579).
+    /// Un côté balayé porte au plus trois actions (#10579).
     public static let maxActionsPerSide = 3
 
     public static func capped<Action>(_ actions: [Action]) -> [Action] {

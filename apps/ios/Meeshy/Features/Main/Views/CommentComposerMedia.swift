@@ -264,8 +264,7 @@ enum CommentComposerStaging {
 /// réponse à une story (`PostDetailView`, `FeedCommentsSheet`,
 /// `StoryComposerBarView`) : les `.text` d'un dépôt sont fusionnés en UNE seule
 /// insertion, les `.file` sont routés par `ComposerIngestRouter` vers les
-/// pipelines EXISTANTS de ces surfaces. Réutilisation délibérée (spec
-/// 2026-07-30, lot 1) : toute nouvelle voie d'ingestion contournerait la
+/// pipelines EXISTANTS de ces surfaces. Réutilisation délibérée (lot 1): toute nouvelle voie d'ingestion contournerait la
 /// compression, l'affichage optimiste et le nettoyage des temporaires.
 enum CommentComposerIngestion {
 
