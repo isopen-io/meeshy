@@ -44,7 +44,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     if (!modelOnly) {
         implementation("com.google.crypto.tink:tink:1.15.0")
-        implementation("org.signal:libsignal-client:0.105.4")
+        implementation("org.signal:libsignal-client:0.106.2")
     }
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.4.4")
