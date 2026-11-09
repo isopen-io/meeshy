@@ -104,7 +104,9 @@ import {
   sendBadRequest,
   sendError,
   sendInternalError,
+  sendForbidden,
 } from '../../utils/response.js';
+import { isVoiceCloningAgeAdmitted } from '@meeshy/shared/utils/age';
 
 /**
  * Les QUATRE `purpose`, dans l'ORDRE de la hiérarchie de dépendance
@@ -486,6 +488,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
           },
           400: badRequestResponseSchema,
           401: errorResponseSchema,
+          403: errorResponseSchema,
           404: errorResponseSchema,
           409: policyConflictResponseSchema,
           429: errorResponseSchema,
@@ -559,11 +562,20 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       try {
         const existing = await fastify.prisma.user.findUnique({
           where: { id: userId },
-          select: CONSENT_SELECT,
+          select: { ...CONSENT_SELECT, birthDate: true },
         });
 
         if (!existing) {
           return sendNotFound(reply, 'USER_NOT_FOUND');
+        }
+
+        // #17309 — le clonage vocal ne s'accorde qu'à 18 ans révolus, au jour
+        // près ; sans date de naissance, refusé. Le retrait reste toujours libre.
+        if (purpose === 'voice-cloning' && body.granted && !isVoiceCloningAgeAdmitted(existing.birthDate, new Date())) {
+          return sendForbidden(reply, 'VOICE_CLONING_AGE_REQUIRED', {
+            code: 'VOICE_CLONING_AGE_REQUIRED',
+            message: 'Le clonage vocal est réservé aux personnes de 18 ans révolus.',
+          });
         }
 
         const existingColumns = existing as ConsentColumns;

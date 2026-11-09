@@ -25,7 +25,17 @@ object VoiceWizardRules {
     const val MINIMUM_AGE: Int = 18
     private const val DEFAULT_AGE_YEARS: Long = 20
 
-    fun isAdult(birthDate: LocalDate, today: LocalDate): Boolean = java.time.Period.between(birthDate, today).years >= MINIMUM_AGE
+    /**
+     * La date de naissance la plus récente admise au clonage vocal : aujourd'hui moins 18 années civiles, au jour
+     * près (#17309). `minusYears` ramène un 29 février au 28 quand l'année visée n'en a pas — même loi que la
+     * passerelle (`voiceCloningBirthDateLimit`, `packages/shared/utils/age.ts`), qui reste la garde finale.
+     */
+    fun voiceCloningBirthDateLimit(today: LocalDate): LocalDate = today.minusYears(MINIMUM_AGE.toLong())
+
+    fun isAdult(birthDate: LocalDate, today: LocalDate): Boolean = !birthDate.isAfter(voiceCloningBirthDateLimit(today))
+
+    /** Le sélecteur ne propose que des jours admis : sa date maximale est la limite du clonage vocal. */
+    fun isSelectableBirthDate(day: LocalDate, today: LocalDate): Boolean = isAdult(day, today)
 
     /** Le sélecteur s'ouvre sur un adulte (vingt ans), comme iOS. */
     fun defaultBirthDate(today: LocalDate): LocalDate = today.minusYears(DEFAULT_AGE_YEARS)
