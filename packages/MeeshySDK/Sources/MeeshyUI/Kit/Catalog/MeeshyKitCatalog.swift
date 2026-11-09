@@ -14,11 +14,21 @@ public nonisolated enum MeeshyKitCatalog {
     ]
 
     public static var listedEntries: [MeeshyKitCatalogEntry] {
+        listed(in: entries)
+    }
+
+    /// Les entrées LIVRÉES, dans l'ordre : une entrée sans état n'apparaît pas.
+    public static func listed(in entries: [MeeshyKitCatalogEntry]) -> [MeeshyKitCatalogEntry] {
         entries.filter(\.isDelivered)
     }
 
-    public static func listedEntry(matching key: String) -> MeeshyKitCatalogEntry? {
-        listedEntries.first { $0.key.caseInsensitiveCompare(key) == .orderedSame }
+    /// L'entrée livrée dont la clé est `key` (casse ignorée) ; `nil` pour une clé
+    /// inconnue ou non livrée.
+    public static func listedEntry(
+        matching key: String,
+        in entries: [MeeshyKitCatalogEntry] = MeeshyKitCatalog.entries
+    ) -> MeeshyKitCatalogEntry? {
+        listed(in: entries).first { $0.key.caseInsensitiveCompare(key) == .orderedSame }
     }
 
     @MainActor @ViewBuilder

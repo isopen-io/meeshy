@@ -73,7 +73,7 @@ Loi 13 : un composant non livré n'apparaît pas (ni ligne grisée, ni « à ven
 - K00 ne supprime rien. Les jumeaux de composants partent avec I1 à I10.
 
 ## 8. Témoins exigés
-Images, mêmes noms partout (`<Nom>/<id>-<variante>`) : `clair` et `sombre` par état, `presse` par état qui se touche, puis par composant une planche `grande-police` et une planche `rtl`.
+Images, mêmes noms partout (`<Nom>/<id>.<variante>`, le point imposé par la bibliothèque iOS qui fixe `<test>.<nom>.png` — Android et le web suivent ce nom, voir § 9) : `clair` et `sombre` par état, `presse` par état qui se touche, puis par composant une planche `grande-police` et une planche `rtl`.
 
 | | Où | Particularités |
 |---|---|---|

@@ -55,6 +55,16 @@ final class MeeshyKitCatalogEntryTests: XCTestCase {
         XCTAssertNil(MeeshyKitCatalog.listedEntry(matching: ""))
     }
 
+    func test_uneCleLivree_ouvreSonEntree_casseIgnoree() {
+        let entries = [
+            MeeshyKitCatalogEntry(key: "K01", name: "MeeshyGlassTone"),
+            entry([MeeshyKitCatalogState(id: "repos")]),
+        ]
+        XCTAssertEqual(MeeshyKitCatalog.listedEntry(matching: "k02", in: entries)?.key, "K02")
+        XCTAssertNil(MeeshyKitCatalog.listedEntry(matching: "K01", in: entries))
+        XCTAssertEqual(MeeshyKitCatalog.listed(in: entries).map(\.key), ["K02"])
+    }
+
     func test_lesVariantes_unEtatQuiSeTouche_aSaVarianteStatique() {
         XCTAssertEqual(SnapshotHelpers.kitVariants(for: MeeshyKitCatalogState(id: "a", isTouchable: true)), [.clair, .sombre, .presse])
         XCTAssertEqual(SnapshotHelpers.kitVariants(for: MeeshyKitCatalogState(id: "a")), [.clair, .sombre])

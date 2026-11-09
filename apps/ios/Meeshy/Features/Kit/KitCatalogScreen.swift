@@ -8,9 +8,8 @@ import MeeshyUI
 struct KitCatalogScreen: View {
     @State private var path: [String]
 
-    init(requestedKey: String? = KitCatalogLaunch.requestedKey) {
-        let opened = requestedKey.flatMap { MeeshyKitCatalog.listedEntry(matching: $0) }
-        _path = State(initialValue: opened.map { [$0.key] } ?? [])
+    init(initialPath: [String] = KitCatalogLaunch.initialPath) {
+        _path = State(initialValue: initialPath)
     }
 
     var body: some View {
@@ -24,19 +23,22 @@ struct KitCatalogScreen: View {
                     }
                 }
         }
+        .accessibilityAddTraits(.isModal)
     }
 }
 
 private struct KitCatalogList: View {
     private let entries = MeeshyKitCatalog.listedEntries
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         if entries.isEmpty {
             Text(verbatim: "Aucun composant livré")
                 .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: colorScheme == .dark))
                 .padding(MeeshySpacing.lg)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background { MeeshyColors.backgroundPrimary(isDark: colorScheme == .dark).ignoresSafeArea() }
         } else {
             List(entries) { entry in
                 NavigationLink(value: entry.key) {
@@ -58,6 +60,14 @@ private struct KitCatalogDetail: View {
     let entry: MeeshyKitCatalogEntry
     @State private var settings = KitCatalogSettings()
 
+    /// Grande police : `accessibility3` imposé ; sinon la taille du système
+    /// passe, au lieu d'être écrasée par une taille fixe.
+    private var typeSizes: ClosedRange<DynamicTypeSize> {
+        settings.isLargeFont
+            ? DynamicTypeSize.accessibility3 ... DynamicTypeSize.accessibility3
+            : DynamicTypeSize.xSmall ... DynamicTypeSize.accessibility5
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: MeeshySpacing.lg) {
@@ -70,7 +80,7 @@ private struct KitCatalogDetail: View {
         .background(MeeshyColors.backgroundPrimary(isDark: settings.isDark))
         .environment(\.colorScheme, settings.isDark ? .dark : .light)
         .environment(\.layoutDirection, settings.isRightToLeft ? .rightToLeft : .leftToRight)
-        .dynamicTypeSize(settings.isLargeFont ? .accessibility3 : .large)
+        .dynamicTypeSize(typeSizes)
         .navigationTitle(Text(verbatim: entry.accessibilityName))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { KitCatalogSettingsMenu(settings: $settings) }

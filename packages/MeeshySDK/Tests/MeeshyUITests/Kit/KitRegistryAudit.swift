@@ -20,17 +20,13 @@ enum KitRegistryAudit {
 
     static let witnessFolder = "packages/MeeshySDK/Tests/MeeshyUITests/Kit"
 
-    /// Les chemins que la garde demande au disque : la cible et le témoin de chaque
-    /// composant du registre.
-    static var candidatePaths: [String] {
-        MeeshyKitCatalog.entries.flatMap { [witnessPath(name: $0.name), targetPath(name: $0.name)] }
+    /// Les chemins que la garde demande au disque : la cible que le REGISTRE déclare
+    /// (`cible_ios`, jamais un chemin reconstruit du nom) et le témoin de chaque lot.
+    static func candidatePaths(lots: [Lot]) -> [String] {
+        lots.flatMap { [$0.target, witnessPath(name: $0.name)] }
     }
 
     static func witnessPath(name: String) -> String { "\(witnessFolder)/\(name)Tests.swift" }
-
-    static func targetPath(name: String) -> String {
-        "packages/MeeshySDK/Sources/MeeshyUI/Kit/\(name).swift"
-    }
 
     static func problems(
         lots: [Lot],

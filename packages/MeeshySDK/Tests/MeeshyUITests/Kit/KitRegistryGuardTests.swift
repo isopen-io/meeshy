@@ -17,11 +17,12 @@ final class KitRegistryGuardTests: XCTestCase {
     }
 
     func test_chaqueLotDuRegistre_estEnRegleAvecLeCatalogue() throws {
+        let lots = try Self.registryKitLots()
         let problems = KitRegistryAudit.problems(
-            lots: try Self.registryKitLots(),
+            lots: lots,
             entries: MeeshyKitCatalog.entries,
             boardViewIDs: try Self.boardViewIDs(),
-            disk: Self.repositoryDisk
+            disk: Self.repositoryDisk(lots: lots)
         )
         XCTAssertEqual(problems, [], problems.joined(separator: "\n"))
     }
@@ -108,6 +109,11 @@ final class KitRegistryGuardTests: XCTestCase {
         XCTAssertTrue(problems.contains { $0.contains("Z9") }, "\(problems)")
     }
 
+    func test_lesCheminsDemandesAuDisque_sontLaCibleDuRegistreEtLeTemoin() {
+        let lot = KitRegistryAudit.Lot(key: "K02", name: "MeeshyGlassButton", target: "ailleurs/Bouton.swift")
+        XCTAssertEqual(KitRegistryAudit.candidatePaths(lots: [lot]), ["ailleurs/Bouton.swift", Self.witness])
+    }
+
     func test_entreesQuiNeSuiventPasLeRegistre_sontUnProbleme() {
         let problems = KitRegistryAudit.problems(
             lots: [Self.lot()], entries: [], boardViewIDs: [], disk: .init(existing: [], images: [])
@@ -147,12 +153,12 @@ final class KitRegistryGuardTests: XCTestCase {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("__Snapshots__")
     }
 
-    private static var repositoryDisk: KitRegistryAudit.Disk {
+    private static func repositoryDisk(lots: [KitRegistryAudit.Lot]) -> KitRegistryAudit.Disk {
         let root = repositoryRoot
         let images = (FileManager.default.enumerator(at: snapshotsRoot, includingPropertiesForKeys: nil)?
             .compactMap { ($0 as? URL)?.path } ?? [])
             .map { String($0.dropFirst(snapshotsRoot.path.count + 1)) }
-        let existing = KitRegistryAudit.candidatePaths.filter {
+        let existing = KitRegistryAudit.candidatePaths(lots: lots).filter {
             FileManager.default.fileExists(atPath: root.appendingPathComponent($0).path)
         }
         return .init(existing: Set(existing), images: images)
