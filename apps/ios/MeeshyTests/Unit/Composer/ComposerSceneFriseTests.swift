@@ -552,7 +552,8 @@ final class ComposerSceneFrisePremiumTests: XCTestCase {
 
     func test_laFrise_neRelanceAucuneExtractionPendantLeGeste_etSaTeteSeule_suitLaLecture() throws {
         let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerSceneFrise.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerSceneFrise.swift",
+                                    alsoIncluding: ["Meeshy/Features/Composer/ComposerSceneFriseBarContent.swift"]))
         XCTAssertTrue(code.contains("ComposerSceneFriseBarKey(url: url, window: window)"),
                       "les vignettes et l'onde ne dépendent que du fichier et de la fenêtre de source")
         XCTAssertFalse(code.contains("ComposerSceneFriseBarKey(url: url, window: enCours"),

@@ -364,6 +364,10 @@
 		131B026947D015129E69505A /* StoryViewModel+MediaPreload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C2DFC5B503D363A7E10B09 /* StoryViewModel+MediaPreload.swift */; };
 		131DFD68AD85FC722B8C748E /* BloodRitualViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85EC9558F2BE7F45225FD54 /* BloodRitualViewModelTests.swift */; };
 		132C2FAEB995A0699188DCDA /* ComposerSceneFrise.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0CB3ECC1B129BCFF23CFC72 /* ComposerSceneFrise.swift */; };
+		A860CA494DAA73939AB4FFCC /* ComposerSceneFriseMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEC39AE8E8140D00B29E5405 /* ComposerSceneFriseMetrics.swift */; };
+		D3EA4CCB61FBDF5B5504C4F8 /* ComposerSceneFriseCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F8F6D6B08D4738830857F06 /* ComposerSceneFriseCopy.swift */; };
+		0766662795E11CE755977786 /* ComposerSceneFriseRuler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B1FC6B79481F297B2E525D /* ComposerSceneFriseRuler.swift */; };
+		84E90E7F8A6C206580B3CA1D /* ComposerSceneFriseBarContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F09017C2A7683D67B235EC /* ComposerSceneFriseBarContent.swift */; };
 		133000844460D2EBF47297CC /* EphemeralExpiryTriageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F879754A50CD166AE15B0A0 /* EphemeralExpiryTriageTests.swift */; };
 		1341B85E66760AC0BC5E18EB /* ConversationViewModelElapsedEphemeralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE9E53137EBA19C12894E12 /* ConversationViewModelElapsedEphemeralTests.swift */; };
 		135F90E31303C8FAC55FA48B /* StarredSnapshotFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF094CAEBDC3D735F5C02E84 /* StarredSnapshotFactory.swift */; };
@@ -7639,6 +7643,10 @@
 		B09F80C8CB8F965CC98046F8 /* GameLeagueDetailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLeagueDetailCard.swift; sourceTree = "<group>"; };
 		B0C1DF698FD44EAE82205CD1 /* CallControlsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallControlsController.swift; sourceTree = "<group>"; };
 		B0CB3ECC1B129BCFF23CFC72 /* ComposerSceneFrise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFrise.swift; sourceTree = "<group>"; };
+		DEC39AE8E8140D00B29E5405 /* ComposerSceneFriseMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFriseMetrics.swift; sourceTree = "<group>"; };
+		0F8F6D6B08D4738830857F06 /* ComposerSceneFriseCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFriseCopy.swift; sourceTree = "<group>"; };
+		F1B1FC6B79481F297B2E525D /* ComposerSceneFriseRuler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFriseRuler.swift; sourceTree = "<group>"; };
+		84F09017C2A7683D67B235EC /* ComposerSceneFriseBarContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFriseBarContent.swift; sourceTree = "<group>"; };
 		B11A139CC199D3DCC245CBE9 /* CallKitAnswerActionHoldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallKitAnswerActionHoldTests.swift; sourceTree = "<group>"; };
 		B11C0D9A3914BC52BFBF7472 /* ComposerThermalBudget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerThermalBudget.swift; sourceTree = "<group>"; };
 		B12D5073C648486ABA26DF93 /* acknowledgments-ios.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "acknowledgments-ios.plist"; sourceTree = "<group>"; };
@@ -12836,6 +12844,10 @@
 				677CA29030F8C3E639ED0130 /* ComposerSceneFloorRules.swift */,
 				748086EFE619C0EE4967235B /* ComposerSceneFraming.swift */,
 				B0CB3ECC1B129BCFF23CFC72 /* ComposerSceneFrise.swift */,
+				DEC39AE8E8140D00B29E5405 /* ComposerSceneFriseMetrics.swift */,
+				0F8F6D6B08D4738830857F06 /* ComposerSceneFriseCopy.swift */,
+				F1B1FC6B79481F297B2E525D /* ComposerSceneFriseRuler.swift */,
+				84F09017C2A7683D67B235EC /* ComposerSceneFriseBarContent.swift */,
 				BB91CF0E500B2F28CF2A8C60 /* ComposerSceneIntake.swift */,
 				AD01E4A9721C6CFE902ED572 /* ComposerSceneIntakeGhost.swift */,
 				13D0DA52E20B08D15820C47F /* ComposerSceneIntakePreview.swift */,
@@ -16038,6 +16050,10 @@
 				8DA719821B3433BEA300BDFA /* ComposerSceneFloorRules.swift in Sources */,
 				0BBF942BB89A9BF01F6B675B /* ComposerSceneFraming.swift in Sources */,
 				132C2FAEB995A0699188DCDA /* ComposerSceneFrise.swift in Sources */,
+				A860CA494DAA73939AB4FFCC /* ComposerSceneFriseMetrics.swift in Sources */,
+				D3EA4CCB61FBDF5B5504C4F8 /* ComposerSceneFriseCopy.swift in Sources */,
+				0766662795E11CE755977786 /* ComposerSceneFriseRuler.swift in Sources */,
+				84E90E7F8A6C206580B3CA1D /* ComposerSceneFriseBarContent.swift in Sources */,
 				93DDA9B1E6FF85E6F6599075 /* ComposerSceneIntake.swift in Sources */,
 				696A00246355E33545F24AB0 /* ComposerSceneIntakeGhost.swift in Sources */,
 				07D73BCD5C7DA71A693FA4B1 /* ComposerSceneIntakePreview.swift in Sources */,
