@@ -20,12 +20,14 @@ import MeeshyUI
 /// All inputs are plain values / closures so the row re-evaluates only when
 /// its own inputs change, not on every ConversationListView body pass.
 ///
-/// Menu d'appui long — deux chemins par version d'OS :
-/// - iOS 26+ : `.contextMenu(menuItems:preview:)` NATIF (rendu Liquid Glass
-///   système, exposé automatiquement à VoiceOver). Le contenu vient du
-///   builder `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
-/// - < iOS 26 : overlay custom (`RowPressBounceModifier` → `onLongPress` →
-///   `ConversationContextMenuView`), avec émergence/morph maison.
+/// Menu d'appui long — deux chemins, tranchés par `ConversationRowMenuRoute` :
+/// - iPhone, toutes versions d'iOS (#17242) : aperçu personnalisé
+///   (`RowPressBounceModifier` → `onLongPress` → `ConversationLongPressPeek`) —
+///   grande carte, menu compact qu'on tire vers le haut, émergence/morph maison.
+/// - iPad sous iOS 26 : `.contextMenu(menuItems:preview:)` NATIF (rendu Liquid
+///   Glass système, exposé automatiquement à VoiceOver), le seul qui coexiste
+///   avec le `.onDrag` système. Le contenu vient du builder
+///   `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
 struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
@@ -77,11 +79,11 @@ struct ConversationRowItem: View {
     /// on-demand via the long-press path (`onLongPress` →
     /// `loadPreviewMessages`, ConversationListView.swift).
     let enableAutoPreviewLoad: Bool
-    /// Fallback < iOS 26 : appui long → overlay de menu custom (dessine ses
-    /// icônes). Reçoit la frame GLOBALE de la ligne pressée — point de départ
+    /// Chemin personnalisé (iPhone, toutes versions d'iOS — #17242) : appui
+    /// long → aperçu `ConversationLongPressPeek`. Reçoit la frame GLOBALE de la ligne pressée — point de départ
     /// de l'émergence de l'aperçu (+Overlays). `.zero` quand la frame n'est
     /// pas connue (action de rotor accessibilité) : l'overlay retombe sur le
-    /// zoom centré 0.7 → 1.0. Jamais appelé sur iOS 26+ (menu natif).
+    /// zoom centré 0.7 → 1.0. Jamais appelé sur la route native (iPad iOS 26).
     let onLongPress: (CGRect) -> Void
     /// Chemin iOS 26+ : items du `.contextMenu` NATIF (rendu Liquid Glass
     /// système), résolus UNE fois à la construction de la row et stockés en
@@ -124,7 +126,7 @@ struct ConversationRowItem: View {
             leadingActions: leadingActions,
             trailingActions: trailingActions
         ) {
-            if #available(iOS 26.0, *) {
+            if #available(iOS 26.0, *), ConversationRowMenuRoute.current == .native {
                 // Menu contextuel NATIF (Liquid Glass) : le système possède le
                 // long-press, la preview et l'exposition VoiceOver ; l'avatar
                 // garde son propre `.contextMenu`, donc un appui maintenu dessus
@@ -144,7 +146,7 @@ struct ConversationRowItem: View {
                     // `.contextMenu` natif. C'est le long-press CUSTOM du
                     // fallback que `.onDrag` cassait (raison de son retrait,
                     // 135af8f2) — il ne doit donc JAMAIS être attaché sur la
-                    // branche < iOS 26. La source ne publie que l'id ; les
+                    // branche personnalisée. La source ne publie que l'id ; les
                     // headers (`SectionDropDelegate` → `handleDrop`) décident
                     // via `ChipDropResolver`, même sémantique que le drop de
                     // la chip du morph custom.

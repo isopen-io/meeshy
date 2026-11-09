@@ -145,6 +145,13 @@ struct ConversationPreviewView: View {
     var onSearch: (() -> Void)? = nil
     var onInfo: (() -> Void)? = nil
     var onProfileInfo: (() -> Void)? = nil
+    /// L'aperçu d'appui long (#17242) : la carte ne montre que ses messages,
+    /// SANS en-tête (directive porteur, #17242). Ils se mettent en page sur
+    /// la hauteur de REPOS de la carte, et la hauteur courante ne fait que les
+    /// découper par le haut — les plus récents restent visibles, rien ne se
+    /// remet en page pendant le geste. `nil` ⇒ la carte bornée du menu natif,
+    /// en-tête compris.
+    var peekHeights: ConversationPeekCardHeights? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     /// La largeur que la carte occupe vraiment : les bulles s'y mesurent.
@@ -167,13 +174,16 @@ struct ConversationPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-                .padding(MeeshySpacing.mdPlus)
-                .background(headerBackground)
+            // L'aperçu d'appui long ne montre que le CONTENU (directive porteur,
+            // #17242) : on sait déjà quelle conversation on presse.
+            if peekHeights == nil {
+                header
+                    .padding(MeeshySpacing.mdPlus)
+                    .background(headerBackground)
+            }
 
-            recentMessagesSection
-            .frame(minHeight: 120, maxHeight: 300)
-            .background(previewBackground)
+            sizedRecentMessages
+                .background(previewBackground)
         }
         // Largeur pilotée par le call site (overlay) — source de vérité unique.
         // La carte remplit la largeur proposée ; le conteneur la fixe à 340.
@@ -195,6 +205,23 @@ struct ConversationPreviewView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 20, y: 10)
+    }
+
+    @ViewBuilder
+    private var sizedRecentMessages: some View {
+        if let peekHeights {
+            recentMessagesSection
+                .frame(height: max(0, peekHeights.rest))
+                .frame(height: max(0, peekHeights.current), alignment: .bottom)
+                .clipped()
+                // Rien de visible ne nomme la conversation : VoiceOver, lui, la nomme.
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text(conversation.displayName))
+                .accessibilityIdentifier("conversation.peek.card")
+        } else {
+            recentMessagesSection
+                .frame(minHeight: 120, maxHeight: 300)
+        }
     }
 
     // MARK: - Header (avatar, titre, indicateurs, actions)

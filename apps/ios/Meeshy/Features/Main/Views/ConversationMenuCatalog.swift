@@ -160,7 +160,8 @@ nonisolated struct ConversationMenuGroup: Equatable, Identifiable, Sendable {
 /// même ordre :
 /// - `header` — Épingler, Sourdine, Lu : la tête COMPACTE (un `ControlGroup`
 ///   sur le menu natif, trois tuiles sur le menu custom) ;
-/// - `reach` — joindre la conversation autrement : fenêtre, recherche, appels ;
+/// - `reach` — Détails en premier, puis la fenêtre détachée (#17242 : ni
+///   appels ni recherche au menu d'une rangée, le fil les porte) ;
 /// - `organize` — la regarder et la ranger ;
 /// - `more` — « Plus d'options » ;
 /// - `departure` — ce qui la retire, en dernier.
@@ -221,19 +222,18 @@ nonisolated struct ConversationMenuCatalog: Equatable, Sendable {
                 input.isMuted ? .unmute : .mute,
                 input.hasUnread ? .markRead : .markUnread
             ],
+            // Détails d'abord, juste sous la tête ; ni appels ni recherche au menu
+            // d'une rangée — le fil les porte (directive porteur, #17242).
             reach: offered([
+                (.details, true),
                 // Une fenêtre détachée monte le fil sans repasser par le PIN.
-                (.detach, input.windowsAvailable && ConversationOpenRoute.mayDetach(isLocked: input.isLocked)),
-                (.search, true),
-                (.call, law.call),
-                (.videoCall, law.videoCall)
+                (.detach, input.windowsAvailable && ConversationOpenRoute.mayDetach(isLocked: input.isLocked))
             ]),
             organize: offered([
                 (.readingMode, input.offersReadingModes),
-                (.details, true),
                 (.groupSettings, law.groupSettings),
                 (.rename, law.rename),
-                // L'ordre du web : Détails, Renommer, Gérer les membres, Favori (#12631).
+                // L'ordre du web : Renommer, Gérer les membres, Favori (#12631).
                 (.manageMembers, law.manageMembers),
                 (.favorite, true),
                 (.move, true)

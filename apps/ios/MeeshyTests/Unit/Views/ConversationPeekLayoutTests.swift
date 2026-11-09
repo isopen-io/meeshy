@@ -49,7 +49,7 @@ final class ConversationPeekLayoutTests: XCTestCase {
         XCTAssertEqual(layout.menuHeight(progress: 0.5), 300, accuracy: 0.001)
     }
 
-    func test_expandedMenu_neverShrinksTheCardUnderItsHeader_andScrollsBeyond() {
+    func test_expandedMenu_neverShrinksTheCardUnderAFewMessages_andScrollsBeyond() {
         let layout = makeLayout(availableHeight: 600, naturalMenuHeight: 900)
         XCTAssertEqual(layout.cardHeight(progress: 1), ConversationPeekLayout.minimumCardHeight, accuracy: 0.001)
         XCTAssertTrue(layout.menuOverflows)
@@ -132,12 +132,12 @@ final class ConversationPeekLayoutTests: XCTestCase {
     // MARK: - Quel menu l'appui long ouvre
 
     func test_route_iPhone_usesTheCustomPeek_onEveryiOSVersion() {
-        XCTAssertEqual(ConversationRowMenuRoute.resolve(isPad: false, nativeMenuAvailable: true), .custom)
-        XCTAssertEqual(ConversationRowMenuRoute.resolve(isPad: false, nativeMenuAvailable: false), .custom)
+        XCTAssertEqual(ConversationRowMenuRoute.resolve(supportsMultipleWindows: false, nativeMenuAvailable: true), .custom)
+        XCTAssertEqual(ConversationRowMenuRoute.resolve(supportsMultipleWindows: false, nativeMenuAvailable: false), .custom)
     }
 
     func test_route_iPadOniOS26_keepsTheNativeMenu_andItsSystemDrag() {
-        XCTAssertEqual(ConversationRowMenuRoute.resolve(isPad: true, nativeMenuAvailable: true), .native)
-        XCTAssertEqual(ConversationRowMenuRoute.resolve(isPad: true, nativeMenuAvailable: false), .custom)
+        XCTAssertEqual(ConversationRowMenuRoute.resolve(supportsMultipleWindows: true, nativeMenuAvailable: true), .native)
+        XCTAssertEqual(ConversationRowMenuRoute.resolve(supportsMultipleWindows: true, nativeMenuAvailable: false), .custom)
     }
 }

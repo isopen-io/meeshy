@@ -235,7 +235,11 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
                             "ConversationListView+MoveToSectionMenuItems.swift"]
             .map { try source(of: $0) }.joined(separator: "\n")
         XCTAssertFalse((overlays + header + movedOut).contains(".frame(width: 340)"))
-        XCTAssertTrue(overlays.contains(".frame(maxWidth: .infinity).frame(maxWidth: ConversationPreviewWidthLaw.maximum)"))
+        // Depuis #17242 la carte suit la largeur de la colonne, marges comprises,
+        // par la loi de l'aperçu (`ConversationPeekLayout.cardWidth`).
+        XCTAssertTrue(overlays.contains("ConversationLongPressPeek("))
+        XCTAssertEqual(ConversationPeekLayout(availableHeight: 800, availableWidth: 200, compactMenuHeight: 100, naturalMenuHeight: 400).cardWidth,
+                       200 - 2 * ConversationPeekLayout.sideMargin, "la carte tient dans un volet de 200 pt")
         XCTAssertTrue(header.contains("ViewThatFits(in: .horizontal) {"))
         XCTAssertTrue(header.contains("headerActions(spacing: MeeshySpacing.xs)"))
     }

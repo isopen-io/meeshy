@@ -39,7 +39,7 @@ nonisolated struct ConversationPeekLayout: Equatable, Sendable {
     static let sideMargin: CGFloat = 12
     static let maximumWidth: CGFloat = 560
     static let spacing: CGFloat = 12
-    /// La carte réduite garde son en-tête lisible (avatar, titre, actions).
+    /// La carte réduite garde quelques messages lisibles (elle n'a pas d'en-tête).
     static let minimumCardHeight: CGFloat = 150
     static let settleThreshold: CGFloat = 0.5
 
@@ -56,7 +56,7 @@ nonisolated struct ConversationPeekLayout: Equatable, Sendable {
     }
 
     /// Le menu étendu montre tout son contenu, sans jamais réduire la carte
-    /// sous son en-tête ; au-delà, son contenu défile.
+    /// sous quelques messages lisibles ; au-delà, son contenu défile.
     var expandedMenuHeight: CGFloat {
         let ceiling = availableHeight - Self.spacing - Self.minimumCardHeight
         return max(compactMenuHeight, min(naturalMenuHeight, ceiling))

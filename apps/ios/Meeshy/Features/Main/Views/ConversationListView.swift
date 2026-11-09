@@ -164,8 +164,9 @@ struct ConversationListView: View {
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
     @State var contextMenuDismissSettle = Debouncer()
-    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0 = repliée via
-    /// le drag vers le haut sur la carte — `previewCollapseGesture`, +Overlays).
+    /// Scale de la carte d'aperçu de l'overlay pendant son émergence depuis la
+    /// ligne pressée (1.0 = posée). Tirer vers le haut ne la replie plus : le
+    /// geste agrandit le menu (`ConversationLongPressPeek`, #17242).
     /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
     /// plus (gate Equatable intact pendant le geste).
     @State var previewScale: CGFloat = 1.0
@@ -509,14 +510,7 @@ struct ConversationListView: View {
     private var swipeActions: ConversationSwipeActions {
         ConversationSwipeActions(
             viewModel: conversationViewModel,
-            lockManager: lockManager,
             currentUser: AuthManager.shared.currentUser,
-            onLockRequest: { conversation, mode in
-                lockSheetMode = mode
-                sheetTargets.lockSheet = conversation
-            },
-            onMasterPinMissing: { showNoMasterPinAlert = true },
-            onHide: { conversation in sheetTargets.deleteTarget = conversation },
             onObsolete: { conversation in sheetTargets.obsoleteTarget = conversation }
         )
     }
