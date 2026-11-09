@@ -26,6 +26,8 @@ type Options = {
   readonly presenceServed?: boolean;
   readonly recipient?: Record<string, unknown>;
   readonly sender?: Record<string, unknown>;
+  /** La voix est scellée sur l'appareil (#13949). */
+  readonly sealed?: boolean;
 };
 
 function db(options: Options = {}) {
@@ -70,7 +72,7 @@ const juger = async (options: Options = {}) => {
   const prisma = db(options);
   const presenceServed = jest.fn(async (_viewer: { userId: string; role: string }, _targetId: string) => options.presenceServed ?? true);
   const recipientConnected = jest.fn(async () => options.connected ?? true);
-  const verdict = await judgeTalkie({ prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed }, MOI, AUTRE);
+  const verdict = await judgeTalkie({ prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed }, MOI, AUTRE, { sealed: options.sealed ?? false });
   return { verdict, prisma, presenceServed, recipientConnected };
 };
 
@@ -226,5 +228,25 @@ describe('#17131 — chaque refus nomme sa cause exacte, pour le journal', () =>
     ]);
     const visibles = verdicts.map(({ verdict }) => (verdict.ok ? null : { code: verdict.code, message: verdict.message }));
     expect(new Set(visibles.map((v) => JSON.stringify(v))).size).toBe(1);
+  });
+});
+
+describe('#13949 — le talkie scellé passe dans une paire chiffrée, le clair jamais', () => {
+  it.each(['e2ee', 'E2EE', 'mls-futur'])('paire « %s » et voix scellée : la voix passe', async (directMode) => {
+    expect((await juger({ level: 'BLOOD', directMode, sealed: true })).verdict).toEqual({ ok: true });
+  });
+
+  it('paire chiffrée et voix en clair : refus TALKIE_E2EE_CONVERSATION (fail-closed)', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', sealed: false })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_E2EE_CONVERSATION' });
+  });
+
+  it('une voix scellée ne contourne ni la loi ni la présence', async () => {
+    expect((await juger({ level: 'COMMUNITY', directMode: 'e2ee', sealed: true })).verdict).toMatchObject({ ok: false, code: 'TALKIE_NOT_ALLOWED' });
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', sealed: true, connected: false })).verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE' });
+  });
+
+  it('une paire en clair accepte aussi une voix scellée', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'server', sealed: true })).verdict).toEqual({ ok: true });
   });
 });

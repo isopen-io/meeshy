@@ -8,6 +8,7 @@ import {
   TALKIE_ERROR_CODES,
   TALKIE_MAX_CHUNK_BYTES,
   TALKIE_MAX_DURATION_MS,
+  TALKIE_MAX_KEY_ENVELOPE_CHARS,
   talkieChunkPayloadSchema,
   talkieStartPayloadSchema,
 } from '../types/talkie';
@@ -46,5 +47,13 @@ describe('le contrat du talkie', () => {
   it('la réception directe est active par défaut, et se coupe par personne ou globalement', () => {
     expect(NOTIFICATION_PREFERENCE_DEFAULTS.talkieEnabled).toBe(true);
     expect(relationPersonSettingsUpdateSchema.safeParse({ talkieBlocked: true }).success).toBe(true);
+  });
+
+  it('#13949 — une voix scellée porte son enveloppe de clé, opaque, bornée et lisible en base64url', () => {
+    const base = { toUserId: 'b'.repeat(24), codec: 'aac-adts' as const };
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'AbC-_123' } }).success).toBe(true);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: '' } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'a b+/=' } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'a'.repeat(TALKIE_MAX_KEY_ENVELOPE_CHARS + 1) } }).success).toBe(false);
   });
 });
