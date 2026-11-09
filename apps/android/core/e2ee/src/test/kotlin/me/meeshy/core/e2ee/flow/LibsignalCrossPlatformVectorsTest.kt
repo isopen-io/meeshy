@@ -96,9 +96,22 @@ class LibsignalCrossPlatformVectorsTest {
 
     private fun ciphertext(message: JsonObject) = E2eeCiphertext(message.number("type"), message.bytes("body"))
 
-    private fun tampered(message: JsonObject): E2eeCiphertext {
-        val body = message.bytes("body")
-        return E2eeCiphertext(message.number("type"), body.copyOf().also { it[it.lastIndex] = (it[it.lastIndex].toInt() xor 0x01).toByte() })
+    /**
+     * Le premier octet porte la version dans son quartet HAUT : le quartet bas de
+     * l'enveloppe PreKeySignalMessage n'est couvert par aucun MAC et libsignal
+     * l'ignore, donc l'altération de version bascule le quartet haut.
+     */
+    private enum class TamperedByte(val index: (Int) -> Int, val mask: Int) {
+        VERSION({ 0 }, 0x10),
+        MIDDLE({ it / 2 }, 0x01),
+        LAST({ it - 1 }, 0x01),
+    }
+
+    private fun tampered(message: JsonObject, byte: TamperedByte): E2eeCiphertext {
+        val body = message.bytes("body").copyOf()
+        val target = byte.index(body.size)
+        body[target] = (body[target].toInt() xor byte.mask).toByte()
+        return E2eeCiphertext(message.number("type"), body)
     }
 
     private fun JsonObject.freshMessages(): List<JsonObject> = obj("freshSession").getValue("messages").jsonArray.map { it.jsonObject }
@@ -150,16 +163,16 @@ class LibsignalCrossPlatformVectorsTest {
     }
 
     @Test
-    fun `each payload altered by one byte is refused`() {
-        allSets.forEach { set ->
+    fun `each payload altered by one byte at the version, the middle or the end is refused`() {
+        allSets.flatMap { set -> TamperedByte.entries.map { set to it } }.forEach { (set, byte) ->
             val alice = set.obj("alice")
             val bob = set.obj("bob")
             val freshBob = bobWithPreKeys(set)
             val aliceDevice = persisted(alice, bob, set.reply().text("session"))
             val persistedBob = persisted(bob, alice, set.third().text("session"))
-            val alteredFirst = tampered(set.freshMessages().first())
-            val alteredReply = tampered(set.reply().obj("message"))
-            val alteredThird = tampered(set.third().obj("message"))
+            val alteredFirst = tampered(set.freshMessages().first(), byte)
+            val alteredReply = tampered(set.reply().obj("message"), byte)
+            val alteredThird = tampered(set.third().obj("message"), byte)
 
             assertThrows(Exception::class.java) { freshBob.open(alteredFirst, address(alice)) }
             assertThrows(Exception::class.java) { aliceDevice.open(alteredReply, address(bob)) }

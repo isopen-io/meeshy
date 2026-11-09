@@ -7,7 +7,8 @@
  * seules pré-clés, puis des sessions sérialisées rechargées (#9231). Les jeux
  * de `legacy/`, scellés par une version ANTÉRIEURE, s'ouvrent de même : une
  * session persistée avant une montée survit à la montée. La même charge
- * altérée d'un octet est refusée.
+ * altérée d'un octet est refusée, que l'octet soit le premier (version), au
+ * milieu du corps ou le dernier (MAC).
  *
  * @jest-environment node
  */
@@ -30,13 +31,14 @@ type Vectors = {
     bobOpensThird: { session: string; message: WireMessage };
   };
 };
+type TamperedByte = 'version' | 'middle' | 'last';
 type Report = {
   loaded: string;
   declared: string;
   fresh: string[];
   aliceOpensReply: string;
   bobOpensThird: string;
-  tamperedRefused: Record<'preKeyMessage' | 'aliceOpensReply' | 'bobOpensThird', boolean>;
+  tamperedRefused: Record<TamperedByte, Record<'preKeyMessage' | 'aliceOpensReply' | 'bobOpensThird', boolean>>;
 };
 
 const legacyFiles = (): string[] =>
@@ -79,8 +81,8 @@ describe('libsignal — les vecteurs croisés partagés avec iOS et Android (#17
       expect(report.bobOpensThird).toBe(bobOpensThird.message.plaintext);
     });
 
-    it('chaque charge altérée d’un octet est refusée', () => {
-      expect(report.tamperedRefused).toEqual({ preKeyMessage: true, aliceOpensReply: true, bobOpensThird: true });
+    it.each(['version', 'middle', 'last'] as const)('chaque charge altérée d’un octet (%s) est refusée', (byte) => {
+      expect(report.tamperedRefused[byte]).toEqual({ preKeyMessage: true, aliceOpensReply: true, bobOpensThird: true });
     });
   });
 });

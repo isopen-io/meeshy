@@ -135,9 +135,24 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
         E2EECiphertext(type: message.type, body: try bytes(message.body))
     }
 
-    private func tampered(_ message: WireMessage) throws -> E2EECiphertext {
+    /// Le premier octet porte la version dans son quartet HAUT : le quartet bas de
+    /// l'enveloppe PreKeySignalMessage n'est couvert par aucun MAC et libsignal
+    /// l'ignore, donc l'altération de version bascule le quartet haut.
+    private enum TamperedByte: CaseIterable {
+        case version, middle, last
+
+        func flip(_ body: inout Data) {
+            switch self {
+            case .version: body[body.startIndex] ^= 0x10
+            case .middle: body[body.startIndex + body.count / 2] ^= 0x01
+            case .last: body[body.index(before: body.endIndex)] ^= 0x01
+            }
+        }
+    }
+
+    private func tampered(_ message: WireMessage, at byte: TamperedByte) throws -> E2EECiphertext {
         var body = try bytes(message.body)
-        body[body.index(before: body.endIndex)] ^= 0x01
+        byte.flip(&body)
         return E2EECiphertext(type: message.type, body: body)
     }
 
@@ -185,21 +200,24 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
         }
     }
 
-    func test_eachPayloadAlteredByOneByte_isRefused() throws {
+    func test_eachPayloadAlteredByOneByte_atTheVersionTheMiddleOrTheEnd_isRefused() throws {
         for vectors in try allVectorSets() {
-            let reply = vectors.persistedSessions.aliceOpensReply
-            let third = vectors.persistedSessions.bobOpensThird
-            let first = try XCTUnwrap(vectors.freshSession.messages.first)
-            let freshBob = try bobWithPreKeys(vectors)
-            let alice = try device(vectors.alice, persisting: reply.session, with: vectors.bob.party)
-            let persistedBob = try device(vectors.bob.party, persisting: third.session, with: vectors.alice)
-            let alteredFirst = try tampered(first)
-            let alteredReply = try tampered(reply.message)
-            let alteredThird = try tampered(third.message)
+            for byte in TamperedByte.allCases {
+                let reply = vectors.persistedSessions.aliceOpensReply
+                let third = vectors.persistedSessions.bobOpensThird
+                let first = try XCTUnwrap(vectors.freshSession.messages.first)
+                let freshBob = try bobWithPreKeys(vectors)
+                let alice = try device(vectors.alice, persisting: reply.session, with: vectors.bob.party)
+                let persistedBob = try device(vectors.bob.party, persisting: third.session, with: vectors.alice)
+                let alteredFirst = try tampered(first, at: byte)
+                let alteredReply = try tampered(reply.message, at: byte)
+                let alteredThird = try tampered(third.message, at: byte)
+                let label = "\(vectors.libsignal) \(byte)"
 
-            XCTAssertThrowsError(try freshBob.cipher.decrypt(alteredFirst, from: address(vectors.alice)), vectors.libsignal)
-            XCTAssertThrowsError(try alice.cipher.decrypt(alteredReply, from: address(vectors.bob.party)), vectors.libsignal)
-            XCTAssertThrowsError(try persistedBob.cipher.decrypt(alteredThird, from: address(vectors.alice)), vectors.libsignal)
+                XCTAssertThrowsError(try freshBob.cipher.decrypt(alteredFirst, from: address(vectors.alice)), label)
+                XCTAssertThrowsError(try alice.cipher.decrypt(alteredReply, from: address(vectors.bob.party)), label)
+                XCTAssertThrowsError(try persistedBob.cipher.decrypt(alteredThird, from: address(vectors.alice)), label)
+            }
         }
     }
 }

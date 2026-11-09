@@ -6,7 +6,7 @@
 //   node libsignal-vectors.mjs <fichier de vecteurs>
 //
 // Imprime UN objet JSON : la version chargée, ce que chaque cas ouvre, et si la
-// même charge altérée d'un octet est refusée.
+// même charge altérée d'un octet (premier, milieu, dernier) est refusée.
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import * as signal from '@signalapp/libsignal-client';
@@ -50,9 +50,20 @@ const open = async (stores, local, remote, { type, body }) => text(
 
 const wire = (message) => ({ type: message.type, body: bytes(message.body) });
 
-const flipLastByte = (message) => {
+// Le premier octet porte la version du message dans son quartet HAUT ; le
+// quartet bas de l'enveloppe PreKeySignalMessage n'est couvert par aucun MAC et
+// libsignal l'ignore (mesuré : 0x44 → 0x45 s'ouvre, clair inchangé). L'altération
+// de version bascule donc le quartet haut.
+const TAMPERED_BYTES = {
+  version: { at: () => 0, mask: 0x10 },
+  middle: { at: (length) => Math.floor(length / 2), mask: 0x01 },
+  last: { at: (length) => length - 1, mask: 0x01 },
+};
+
+const flipByte = (message, { at, mask }) => {
   const body = wire(message).body;
-  return { type: message.type, body: body.map((value, index) => (index === body.length - 1 ? value ^ 0x01 : value)) };
+  const target = at(body.length);
+  return { type: message.type, body: body.map((value, index) => (index === target ? value ^ mask : value)) };
 };
 
 const refused = async (attempt) => {
@@ -80,15 +91,22 @@ const report = {
   fresh: await fresh(),
   aliceOpensReply: await open(withSession(vectors.alice, vectors.bob, aliceOpensReply.session), vectors.alice, vectors.bob, wire(aliceOpensReply.message)),
   bobOpensThird: await open(withSession(vectors.bob, vectors.alice, bobOpensThird.session), vectors.bob, vectors.alice, wire(bobOpensThird.message)),
-  tamperedRefused: {
-    preKeyMessage: await refused(() => open(bobWithPreKeys(), vectors.bob, vectors.alice, flipLastByte(vectors.freshSession.messages[0]))),
-    aliceOpensReply: await refused(() => open(
-      withSession(vectors.alice, vectors.bob, aliceOpensReply.session), vectors.alice, vectors.bob, flipLastByte(aliceOpensReply.message),
-    )),
-    bobOpensThird: await refused(() => open(
-      withSession(vectors.bob, vectors.alice, bobOpensThird.session), vectors.bob, vectors.alice, flipLastByte(bobOpensThird.message),
-    )),
-  },
+  tamperedRefused: Object.fromEntries(
+    await Promise.all(
+      Object.entries(TAMPERED_BYTES).map(async ([name, position]) => [
+        name,
+        {
+          preKeyMessage: await refused(() => open(bobWithPreKeys(), vectors.bob, vectors.alice, flipByte(vectors.freshSession.messages[0], position))),
+          aliceOpensReply: await refused(() => open(
+            withSession(vectors.alice, vectors.bob, aliceOpensReply.session), vectors.alice, vectors.bob, flipByte(aliceOpensReply.message, position),
+          )),
+          bobOpensThird: await refused(() => open(
+            withSession(vectors.bob, vectors.alice, bobOpensThird.session), vectors.bob, vectors.alice, flipByte(bobOpensThird.message, position),
+          )),
+        },
+      ]),
+    ),
+  ),
 };
 
 process.stdout.write(JSON.stringify(report));
