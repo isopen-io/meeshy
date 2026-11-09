@@ -33,7 +33,7 @@ struct ShareLinkArrivalsSection: View {
             if state == .unavailable {
                 Text(ShareLinkDetailCopy.statsUnavailable)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let stats, !stats.languageShares.isEmpty {
@@ -48,7 +48,7 @@ struct ShareLinkArrivalsSection: View {
                     if stats.recentArrivals.isEmpty {
                         Text(ShareLinkDetailCopy.noArrivals)
                             .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                            .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                            .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                     } else {
                         ForEach(stats.recentArrivals.prefix(Self.recentLimit)) { arrival in
                             ShareLinkArrivalRow(entry: ShareLinkArrivalEntry(arrival), avatarURL: arrival.avatar, isDark: isDark)
@@ -96,13 +96,13 @@ struct ShareLinkArrivalsSection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(verbatim: value.map { $0.formatted() } ?? "—")
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .redacted(reason: state == .loading ? .placeholder : [])
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
         }
@@ -124,7 +124,7 @@ struct ShareLinkArrivalsSection: View {
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
             .scriptSafeTracking(1.1)
             .textCase(.uppercase)
-            .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+            .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -151,7 +151,7 @@ struct ShareLinkArrivalRow: View, Equatable {
                 HStack(spacing: MeeshySpacing.sm) {
                     Text(entry.displayName)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                        .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                         .lineLimit(1)
                     if let flag {
                         Text(verbatim: flag)
@@ -159,7 +159,7 @@ struct ShareLinkArrivalRow: View, Equatable {
                     if entry.isAnonymous {
                         Text(ShareLinkDetailCopy.noAccountBadge)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
-                            .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
+                            .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
                             .lineLimit(1)
                             .padding(.horizontal, MeeshySpacing.sm)
                             .padding(.vertical, MeeshySpacing.xxs)
@@ -169,14 +169,14 @@ struct ShareLinkArrivalRow: View, Equatable {
                 if let languageName {
                     Text(verbatim: languageName)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                        .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
             Text(entry.joinedAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                 .lineLimit(1)
         }
         .accessibilityElement(children: .ignore)
