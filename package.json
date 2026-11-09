@@ -50,7 +50,7 @@
     "test:notification-serialization": "tsx scripts/test-notification-serialization.ts"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^2.31.1",
     "@phosphor-icons/core": "2.1.1",
     "@playwright/test": "^1.62.1",
     "concurrently": "^9.2.1",
