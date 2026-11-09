@@ -25,11 +25,11 @@ public nonisolated enum StoryFilterThumbnails {
         init(_ images: [String: UIImage]) { self.images = images }
     }
 
-    nonisolated(unsafe) private static let cache: NSCache<NSString, Tiles> = {
+    private nonisolated static let cache: LockedCache<NSString, Tiles> = LockedCache({
         let cache = NSCache<NSString, Tiles>()
         cache.countLimit = 6
         return cache
-    }()
+    }())
 
     /// La clé d'une source : le porteur (slide ou objet) ET l'instance d'image.
     public static func sourceKey(slideId: String, image: UIImage) -> String {
