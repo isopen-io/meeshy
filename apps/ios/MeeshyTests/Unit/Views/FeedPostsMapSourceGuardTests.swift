@@ -34,7 +34,11 @@ final class NearbyDiscoverModeSourceGuardTests: XCTestCase {
     /// même paire — c'est la divergence iPhone/iPad qui avait motivé la garde
     /// précédente, et elle vaut toujours.
     func test_feedHeader_carriesReelsAndNearbyOnly_noMapButton() throws {
-        for file in ["FeedView.swift", "RootViewComponents.swift"] {
+        let pushCalls = [
+            "FeedView.swift": "routerCommands.push(.nearbyDiscovery())",
+            "RootViewComponents.swift": "router.push(.nearbyDiscovery())"
+        ]
+        for (file, pushCall) in pushCalls {
             let feed = try source(file)
             let actions = try XCTUnwrap(
                 block(after: "private var feedHeaderActions: some View", in: feed),
@@ -54,7 +58,7 @@ final class NearbyDiscoverModeSourceGuardTests: XCTestCase {
             XCTAssertTrue(feed.contains("accessibilityIdentifier(\"feed.header.reels\")"), file)
             XCTAssertTrue(feed.contains("accessibilityIdentifier(\"feed.header.nearby\")"), file)
             XCTAssertTrue(
-                feed.contains("router.push(.nearbyDiscovery())"),
+                feed.contains(pushCall),
                 "\(file) : l'entrée de toolbar pousse la route SANS coordonnée."
             )
         }

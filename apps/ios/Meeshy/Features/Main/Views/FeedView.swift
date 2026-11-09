@@ -835,11 +835,11 @@ struct FeedView: View {
             .postEditCover(item: $editingPost) { post, draft in
                 await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
             }
-            .relayingMeeshyRouter(meeshyRouter) { $0.fullScreenCover(item: $quoteTargetPost) { quoted in
+            .relayingMeeshyRouter(meeshyRouter) { view, router in view.fullScreenCover(item: $quoteTargetPost) { quoted in
                 QuoteComposerDoor(
                     quoted: quoted,
                     storyViewModel: storyViewModel,
-                    router: $1,
+                    router: router,
                     conversationListViewModel: conversationListViewModel,
                     statusViewModel: statusViewModel,
                     onFinish: { quoteTargetPost = nil }
