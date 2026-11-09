@@ -62,10 +62,15 @@ describe('la boîte de la grappe', () => {
     expect(rest.card - open.card).toBe(open.menu - rest.menu);
   });
 
-  test('la carte garde son en-tête lisible : le menu étendu s’arrête à la hauteur minimale de la carte', () => {
+  test('la carte garde de quoi lire : le menu étendu s’arrête à la hauteur minimale de la carte', () => {
     const frame = peekSheetFrame(phone({ viewport: { width: 390, height: 560 }, itemCount: 16 }));
     const open = peekSheetHeights(frame, 1);
     expect(open.card).toBe(frame.cardMin);
+  });
+
+  test('un menu plus haut que la place laissée déborde, et défile une fois étendu', () => {
+    expect(peekSheetFrame(phone({ viewport: { width: 390, height: 560 }, itemCount: 16 })).menuOverflows).toBe(true);
+    expect(peekSheetFrame(phone()).menuOverflows).toBe(false);
   });
 
   test('un menu qui tient dans sa tête n’a pas de course', () => {

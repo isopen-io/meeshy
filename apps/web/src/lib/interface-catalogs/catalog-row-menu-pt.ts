@@ -22,6 +22,8 @@ const pt = {
   'rowMenu.peek.e2ee': 'Criptografada de ponta a ponta',
   'rowMenu.peek.empty': 'Ainda não há mensagens',
   'rowMenu.peek.failed': 'Não foi possível carregar as mensagens',
+  'rowMenu.peek.expand': 'Mostrar todas as ações',
+  'rowMenu.peek.collapse': 'Mostrar menos ações',
   'rowMenu.back': 'Voltar',
   'rowMenu.block.title': 'Bloquear este usuário?',
   'rowMenu.block.message': 'Esta pessoa não poderá mais enviar mensagens para você. A conversa vai para os seus arquivos.',

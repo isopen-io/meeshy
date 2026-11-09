@@ -22,6 +22,8 @@ const en = {
   'rowMenu.peek.e2ee': 'End-to-end encrypted',
   'rowMenu.peek.empty': 'No messages yet',
   'rowMenu.peek.failed': 'Couldn’t load the messages',
+  'rowMenu.peek.expand': 'Show all actions',
+  'rowMenu.peek.collapse': 'Show fewer actions',
   'rowMenu.back': 'Back',
   'rowMenu.block.title': 'Block this user?',
   'rowMenu.block.message': 'This person will no longer be able to send you messages. The conversation moves to your archives.',

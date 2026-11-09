@@ -22,6 +22,8 @@ const es = {
   'rowMenu.peek.e2ee': 'Cifrada de extremo a extremo',
   'rowMenu.peek.empty': 'Aún no hay mensajes',
   'rowMenu.peek.failed': 'No se pudieron cargar los mensajes',
+  'rowMenu.peek.expand': 'Mostrar todas las acciones',
+  'rowMenu.peek.collapse': 'Mostrar menos acciones',
   'rowMenu.back': 'Atrás',
   'rowMenu.block.title': '¿Bloquear este usuario?',
   'rowMenu.block.message': 'Esta persona ya no podrá enviarte mensajes. La conversación pasa a tus archivos.',

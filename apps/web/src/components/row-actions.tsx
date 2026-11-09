@@ -5,7 +5,9 @@ import type { Conversation } from '@/lib/api/types';
 import { navigate } from '@/lib/router';
 import { impact } from '@/lib/view/haptics';
 import { isContextMenuKey } from '@/lib/view/long-press';
-import { placeMessageMenuCluster, placePopover, placePopoverVertical } from '@/lib/view/popover';
+import { initialDetent, peekSheetFrame, type PeekDetent, type PeekOrigin, type PeekSheetFrame } from '@/lib/view/peek-sheet';
+import { placePopover, placePopoverVertical } from '@/lib/view/popover';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import {
@@ -20,6 +22,7 @@ import {
   type RowSubmenu,
   type RowSubmenuChoice,
 } from '@/lib/view/row-actions';
+import { swallowNextClick } from '@/lib/view/swallow-next-click';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { translate } from '@/lib/i18n-catalog';
@@ -27,6 +30,7 @@ import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { href } from '@/routes/route-table';
 
+import { ConversationPeekCluster } from './conversation-peek-cluster';
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
 import { ROW_MENU_GLYPHS, type RowMenuGlyphName } from './glyphs-row-menu';
@@ -151,19 +155,8 @@ function RowMenuBackDismiss({ onClose }: { readonly onClose: () => void }) {
   return null;
 }
 
-/**
- * LA GRAPPE DE L'APPUI LONG (#11211) — l'aperçu de la conversation au-dessus
- * de ses actions, comme le menu contextuel d'iOS. Ses cotes : 340 de large au
- * plus, 120 à 300 de haut, 16 des bords de l'écran, 8 entre la carte et la
- * liste. `placeMessageMenuCluster` (`popover.ts`), le site qui place déjà la
- * grappe d'un message, la tient dans l'écran ; son plancher d'échelle est 1 —
- * la carte ne se réduit JAMAIS, elle raccourcit, et reste nette.
- */
-const PEEK_WIDTH = 340;
-const PEEK_MAX_HEIGHT = 300;
+/** La carte d'attente, le temps que le chunk de l'aperçu arrive. */
 const PEEK_MIN_HEIGHT = 120;
-const PEEK_SIDE = 16;
-const PEEK_GAP = 8;
 
 /** La carte vient avec le premier appui : elle tire les rangées du fil, que la liste ne charge pas. */
 const loadConversationPeek = () => import('./conversation-peek-card');
@@ -185,35 +178,8 @@ export type RowPeek = {
 /** Le relais de l'appui long : `useLongPress`, posé sur la ligne par `LensRow`, ouvre la grappe par lui. */
 export type RowPeekOpener = MutableRefObject<(() => boolean) | null>;
 
-type PeekBox = {
-  readonly top: number;
-  readonly left: number;
-  readonly width: number;
-  readonly cardHeight: number;
-  readonly menuOffset: number;
-  readonly menuMaxHeight: number;
-};
-
-/**
- * LE CLIC QUI SUIT L'OUVERTURE AU DOIGT EST AVALÉ — le relâcher d'un appui long
- * tombe sur le lien de la ligne, et l'ouvrirait sous la grappe. Un seul clic,
- * celui qui vient ; un nouvel appui lève l'avalement, et rien n'en reste au
- * démontage.
- */
-function swallowNextClick(): () => void {
-  const swallow = (event: Event): void => {
-    event.preventDefault();
-    event.stopPropagation();
-    detach();
-  };
-  function detach(): void {
-    window.removeEventListener('click', swallow, true);
-    window.removeEventListener('pointerdown', detach, true);
-  }
-  window.addEventListener('click', swallow, true);
-  window.addEventListener('pointerdown', detach, true);
-  return detach;
-}
+/** La boîte de la grappe (`peek-sheet.ts`) et le cran où elle s'ouvre (#17243). */
+type PeekLayout = { readonly frame: PeekSheetFrame; readonly initial: PeekDetent };
 
 /** La peau d'une ligne : rouge qui retire (un filet au-dessus du premier), grise désactivée, en gras le retour. */
 function entryStyle(entry: PanelEntry, previous: PanelEntry | undefined): CSSProperties {
@@ -303,7 +269,7 @@ export function RowActions({
   const submenuItemsOf = (next: RowSubmenu, reading: RowReadingModeMenu | undefined = readingMenu) =>
     rowSubmenuItems({ submenu: next, favorite: more?.favorite, categoryId, categories, language, ...(reading === undefined ? {} : { readingMode: reading }) });
   const [mode, setMode] = useState<'panel' | 'peek'>('panel');
-  const [peekBox, setPeekBox] = useState<PeekBox>({ top: 0, left: 0, width: PEEK_WIDTH, cardHeight: PEEK_MAX_HEIGHT, menuOffset: 0, menuMaxHeight: 0 });
+  const [peekLayout, setPeekLayout] = useState<PeekLayout | null>(null);
   const submenuTitle = submenu === null ? undefined : items.find((item) => item.submenu === submenu)?.label;
   const menuLabel = submenuTitle ?? translate(language, 'rowActions.menu');
   const peekIds = useId();
@@ -383,44 +349,17 @@ export function RowActions({
   };
 
   /**
-   * LA GRAPPE (#11211) — centrée sur la ligne, la carte au-dessus de la liste.
-   * La hauteur de la carte est un PLAFOND (`cardHeight`) : une conversation de
-   * deux messages donne une carte courte, et la liste la suit dans le flux.
+   * LA GRAPPE (#11211, #17243) — la carte et le menu se partagent la hauteur
+   * de l'écran (`peekSheetFrame`), hors encoche et indicateur d'accueil
+   * (`safeAreaInsets`, revue #11211). Le cran d'ouverture ne se décide qu'à
+   * l'ouverture : entrer dans un sous-menu re-mesure la boîte, le cran reste.
    */
-  const placeCluster = (count: number = items.length) => {
-    const host = buttonRef.current?.closest('li') ?? buttonRef.current;
-    const row = host?.getBoundingClientRect();
-    if (row === undefined) return;
-    const width = Math.min(PEEK_WIDTH, Math.max(0, window.innerWidth - 2 * PEEK_SIDE));
-    const left = row.left + (row.width - width) / 2;
-    const menuHeight = count * MENU_ITEM_HEIGHT + MENU_PADDING + MENU_BORDER;
-    /* L'ENCOCHE ET L'INDICATEUR D'ACCUEIL (revue #11211) — lus comme le menu
-       d'un message les lit : dans la PWA iPhone, la grappe ne passe ni sous
-       l'île dynamique ni sous la barre du bas. */
-    const safe = safeAreaInsets();
-    const cluster = placeMessageMenuCluster({
-      anchor: { top: row.top, bottom: row.top + PEEK_MAX_HEIGHT, left, right: left + width, width, height: PEEK_MAX_HEIGHT },
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-      safe,
-      menuHeight,
-      isMine: false,
-      railHeight: 0,
-      railGap: 0,
-      menuGap: PEEK_GAP,
-      sidePadding: PEEK_SIDE,
-      menuWidth: MENU_WIDTH,
-      railWidth: 0,
-      previewScaleFloor: 1,
-      previewMinHeight: PEEK_MIN_HEIGHT,
-    });
-    setPeekBox({
-      top: cluster.previewTop,
-      left: cluster.previewLeft,
-      width: cluster.previewWidth,
-      cardHeight: Math.max(PEEK_MIN_HEIGHT, cluster.previewHeight),
-      menuOffset: Math.max(0, Math.min(cluster.menuLeft - cluster.previewLeft, cluster.previewWidth - MENU_WIDTH)),
-      menuMaxHeight: Math.max(MENU_ITEM_HEIGHT, window.innerHeight - safe.bottom - cluster.menuTop - PEEK_SIDE),
-    });
+  const placeCluster = (count: number = items.length, origin?: PeekOrigin) => {
+    const frame = peekSheetFrame({ viewport: { width: window.innerWidth, height: window.innerHeight }, safe: safeAreaInsets(), itemCount: count });
+    setPeekLayout((current) => ({
+      frame,
+      initial: origin === undefined && current !== null ? current.initial : initialDetent({ frame, reducedMotion: prefersReducedMotion(), origin: origin ?? 'pointer' }),
+    }));
   };
   const place = (count?: number) => (mode === 'peek' ? placeCluster(count) : measure(count));
 
@@ -516,7 +455,7 @@ export function RowActions({
     setOpen(true);
   };
   const detachSwallow = useRef<(() => void) | null>(null);
-  const openPeek = (fromPress: boolean): boolean => {
+  const openPeek = (origin: PeekOrigin): boolean => {
     if (peek === undefined) {
       openPanel();
       return true;
@@ -525,10 +464,10 @@ export function RowActions({
     const actions = actionsOf?.();
     setVerdict(actions);
     setMode('peek');
-    placeCluster(itemsFor(actions).length);
+    placeCluster(itemsFor(actions).length, origin);
     setOpen(true);
     detachSwallow.current?.();
-    detachSwallow.current = fromPress ? swallowNextClick() : null;
+    detachSwallow.current = origin === 'press' ? swallowNextClick() : null;
     return true;
   };
   useEffect(
@@ -555,22 +494,22 @@ export function RowActions({
    * posé plus bas. Un hôte à menu qui entrerait dans la ligne (un avatar)
    * devra passer par l'arbitrage `claims()` de `long-press.ts` (D-210).
    */
-  const gesture = useRef<(fromPress: boolean) => boolean>(openPeek);
+  const gesture = useRef<(origin: PeekOrigin) => boolean>(openPeek);
   gesture.current = openPeek;
-  if (peekOpener !== undefined) peekOpener.current = () => gesture.current(true);
+  if (peekOpener !== undefined) peekOpener.current = () => gesture.current('press');
   useEffect(() => {
     const row = buttonRef.current?.closest('li');
     if (row === null || row === undefined) return;
     const onContextMenu = (event: MouseEvent) => {
       if (event.defaultPrevented) return;
       event.preventDefault();
-      gesture.current(false);
+      gesture.current('pointer');
       impact('medium');
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || !isContextMenuKey(event)) return;
       event.preventDefault();
-      gesture.current(false);
+      gesture.current('keyboard');
       impact('medium');
     };
     row.addEventListener('contextmenu', onContextMenu);
@@ -726,7 +665,7 @@ export function RowActions({
 
       {open && typeof document !== 'undefined'
         ? createPortal(
-            mode === 'peek' && peek !== undefined ? (
+            mode === 'peek' && peek !== undefined && peekLayout !== null ? (
               /**
                * LA GRAPPE EST UNE COUCHE MODALE, VOILE COMPRIS (revue #11211).
                * Le voile vit DANS `menuRef` : l'appui sur lui n'est plus un
@@ -734,21 +673,18 @@ export function RowActions({
                * `pointerdown`. Il ferme au CLIC, le dernier événement du
                * toucher — retiré au `pointerdown`, Safari iOS synthétisait le
                * clic de compatibilité sur la ligne d'en dessous, qui s'ouvrait.
-               * Le lecteur d'écran lit une seule couche (`aria-modal`), nommée
-               * par la carte, et le menu se décrit par les derniers messages.
                */
-              <div
-                ref={menuRef}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={`${peekIds}-card`}
-                data-conversation-peek-cluster
-                className="conversation-peek-cluster"
+              <ConversationPeekCluster
+                frame={peekLayout.frame}
+                initial={peekLayout.initial}
+                language={language}
+                rootRef={menuRef}
+                ids={peekIds}
+                menuLabel={menuLabel}
                 onKeyDown={onMenuKeyDown}
-              >
-                <div aria-hidden data-conversation-peek-veil className="conversation-peek-veil" onClick={closeAndFocusButton} />
-                <div data-conversation-peek className="conversation-peek" style={{ top: peekBox.top, left: peekBox.left, width: peekBox.width }}>
-                  <RowMenuBackDismiss onClose={closeAndFocusButton} />
+                onDismiss={closeAndFocusButton}
+                backDismiss={<RowMenuBackDismiss onClose={closeAndFocusButton} />}
+                renderCard={(maxHeight) => (
                   <Suspense fallback={<div aria-hidden className="conversation-peek-card" style={{ height: PEEK_MIN_HEIGHT }} />}>
                     <ConversationPeekCard
                       conversation={peek.conversation}
@@ -756,30 +692,15 @@ export function RowActions({
                       languages={peek.languages}
                       isAnonymous={peek.isAnonymous}
                       interfaceLanguage={language}
-                      maxHeight={peekBox.cardHeight}
+                      maxHeight={maxHeight}
                       onOpen={openConversation}
                       idBase={peekIds}
                     />
                   </Suspense>
-                  <div
-                    role="menu"
-                    aria-label={menuLabel}
-                    aria-describedby={`${peekIds}-body`}
-                    className="overflow-hidden rounded-card py-1 shadow-cast"
-                    style={{
-                      width: MENU_WIDTH,
-                      marginLeft: peekBox.menuOffset,
-                      marginRight: 'auto',
-                      maxHeight: peekBox.menuMaxHeight,
-                      overflowY: 'auto',
-                      backgroundColor: 'var(--color-ios-card)',
-                      border: '1px solid var(--color-edge)',
-                    }}
-                  >
-                    {panelEntries}
-                  </div>
-                </div>
-              </div>
+                )}
+              >
+                {panelEntries}
+              </ConversationPeekCluster>
             ) : (
               <div
                 ref={menuRef}

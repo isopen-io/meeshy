@@ -22,6 +22,8 @@ const it = {
   'rowMenu.peek.e2ee': 'Crittografata end-to-end',
   'rowMenu.peek.empty': 'Ancora nessun messaggio',
   'rowMenu.peek.failed': 'Impossibile caricare i messaggi',
+  'rowMenu.peek.expand': 'Mostra tutte le azioni',
+  'rowMenu.peek.collapse': 'Mostra meno azioni',
   'rowMenu.back': 'Indietro',
   'rowMenu.block.title': 'Bloccare questo utente?',
   'rowMenu.block.message': 'Questa persona non potrà più inviarti messaggi. La conversazione passa nel tuo archivio.',

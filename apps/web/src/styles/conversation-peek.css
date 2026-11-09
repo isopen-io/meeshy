@@ -34,6 +34,73 @@
   animation: conversationPeekIn 220ms ease-out;
 }
 
+/*
+ * LA CARTE GRANDE, LE MENU QU'ON TIRE (#17243) — les deux hauteurs viennent de
+ * `peek-sheet.ts` : posées par le rendu au repos, écrites directement par le
+ * geste pendant le tirage. Elles ne glissent que vers un cran (relâcher,
+ * poignée, clavier) ; pendant le tirage, elles suivent le doigt sans retard.
+ * `contain` borne la mise en page de chaque changement de hauteur à sa boîte.
+ */
+.conversation-peek-card-slot,
+.conversation-peek-sheet {
+  flex: none;
+  contain: layout paint;
+  transition: height 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.conversation-peek-sheet[data-peek-dragging],
+.conversation-peek:has([data-peek-dragging]) > .conversation-peek-card-slot {
+  transition: none;
+}
+
+.conversation-peek-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 20px;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* La poignée : une cible de 44 de haut, la capsule au centre, au focus visible. */
+.conversation-peek-handle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 100%;
+  min-height: 44px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.conversation-peek-sheet[data-peek-dragging] .conversation-peek-handle {
+  cursor: grabbing;
+}
+
+.conversation-peek-handle:focus-visible {
+  outline: 2px solid var(--color-ios-brand);
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+
+.conversation-peek-capsule {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background-color: var(--color-ios-ink-3);
+  opacity: 0.6;
+}
+
+.conversation-peek-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px 0;
+  overscroll-behavior: contain;
+}
+
 .conversation-peek-card {
   position: relative;
   isolation: isolate;
@@ -45,14 +112,6 @@
   background-color: var(--color-ios-card);
   border: 1px solid var(--color-edge);
   box-shadow: var(--shadow-cast);
-}
-
-.conversation-peek-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 12px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* LE FOND DE LA CONVERSATION (#12633) — la couche du fil
@@ -89,20 +148,12 @@
   background-position: center;
 }
 
-/* Sur un fond peint, l'en-tête garde la SURFACE de la carte : le titre et la
-   ligne de membres tiennent le contraste qu'ils ont sur la carte unie, sur
-   toute photo et sans voile, en clair comme en sombre. Mesuré : la ligne
-   secondaire (`--color-ios-ink-3`) tombe sous AA (4,5:1) dès que 4 % d'une
-   photo noire ou blanche transparaît — aucune translucidité n'est donc sûre. */
-.conversation-peek-card[data-peek-backdrop] .conversation-peek-header {
-  background-color: var(--color-ios-card);
-}
-
 [dir='rtl'] .conversation-peek-card > .thread-backdrop[data-flip-rtl] {
   transform: scaleX(-1);
 }
 
-/* Les derniers messages tiennent par le BAS, comme le fil : un message
+/* Les derniers messages tiennent par le BAS, comme le fil, et prennent toute
+   la carte : sans en-tête (#17243), on sait déjà ce qu'on tient. Un message
    plus ancien que la carte ne peut montrer se fond par le haut. */
 .conversation-peek-body {
   display: flex;
@@ -112,7 +163,7 @@
   justify-content: flex-end;
   gap: 8px;
   overflow: hidden;
-  padding: 8px 12px 12px;
+  padding: 12px;
 }
 
 /* Le fondu ne se pose que si un message est réellement coupé par le haut, et
@@ -159,5 +210,10 @@
   .conversation-peek-veil,
   .conversation-peek {
     animation: none;
+  }
+
+  .conversation-peek-card-slot,
+  .conversation-peek-sheet {
+    transition: none;
   }
 }
