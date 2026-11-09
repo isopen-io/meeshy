@@ -123,7 +123,7 @@ nonisolated enum FocalAudioRouting {
 /// `FocalIdentityHeader`, WS-4) ET bande de drapeaux interne. `.empty`
 /// laissait passer cette bande (`audioFooter` la construit dès que le modèle
 /// est non-nil) : un SECOND basculeur de langue, local au widget, qui
-/// contredisait l'arbitrage user 2026-08-18 (« plus de bande de drapeaux —
+/// contredisait l' (« plus de bande de drapeaux —
 /// le seul indicateur est le drapeau-toggle de la rangée, l'exploration vit
 /// dans le menu d'appui long ») et pouvait diverger de la piste jouée par le
 /// coordinateur (état jamais remonté au VM).
@@ -143,8 +143,7 @@ struct FocalAudioBlock: View, Equatable {
     let conversationName: String
     /// Bascule manuelle du drapeau de la rangée (`activeDisplayLangCode`) —
     /// `nil` = résolution Prisme. Transmis au widget audio pour que la
-    /// piste jouée et les segments karaoké SUIVENT le drapeau (user
-    /// 2026-08-18 : « switcher le drapeau doit switcher l'audio »).
+    /// piste jouée et les segments karaoké SUIVENT le drapeau.
     var activeAudioLanguage: String? = nil
     var voiceConsentMissing: Bool = false
     var onPlayAudio: ((String) -> Void)? = nil

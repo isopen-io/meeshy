@@ -42,7 +42,7 @@ nonisolated enum FocalFocusCurve {
         /// vol. 4 fait foi — amendé dans la loi partagée PUIS dans ce miroir.
         case thread
         /// Liste (Lentille) : `f = min(1, d/400)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.10f`
-        /// — loupe accentuée le 2026-09-15 (#6586), amendée dans la loi partagée PUIS ici.
+        /// loupe accentuée (#6586), amendée dans la loi partagée PUIS ici.
         case list
     }
 
@@ -54,7 +54,7 @@ nonisolated enum FocalFocusCurve {
 
     // MARK: - Constantes gelées (miroir de FOCUS_CURVE_CONSTANTS)
 
-    /// Miroir de `FOCUS_CURVE_CONSTANTS.thread` — amendé 2026-08-18 sur la
+    /// Miroir de `FOCUS_CURVE_CONSTANTS.thread` — amendé sur la
     /// spec « Focal Grandeur Nature » §5 (`380 / 0.40 / 0.82`).
     static let threadMaxDistance: CGFloat = 380
     static let threadScaleDecay: CGFloat = 0.40

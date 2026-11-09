@@ -213,7 +213,7 @@ nonisolated protocol ReadingModePreferenceStoring: Sendable {
 /// `meeshy_readmode_<scopeKey>_<conversationId>`). Deux défauts en un — la
 /// préférence choisie dans la liste n'était pas celle qu'ouvrait le fil, et la
 /// clé non scopée faisait partager leurs préférences à deux comptes du même
-/// appareil (fuite privacy du 2026-05-26).
+/// appareil.
 ///
 /// L'arbitrage tranche : le stockage Focal est LE stockage. L'implémentation
 /// LOCALE de ce protocole est désormais

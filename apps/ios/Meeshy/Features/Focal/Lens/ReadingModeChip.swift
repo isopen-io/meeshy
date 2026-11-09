@@ -1,7 +1,7 @@
 import SwiftUI
 import MeeshyUI
 
-/// P2 du chantier Focal (spec Magnificence 2026-08-17) — LE chip de mode,
+/// P2 du chantier Focal — LE chip de mode,
 /// seule affordance du header : **tap = cycle** des modes disponibles
 /// (préférence collante via le contrôleur gelé F-080), **appui long = menu**
 /// natif listant tous les modes (`Menu` à action primaire, comme le bouton
@@ -43,7 +43,7 @@ struct ReadingModeChipModel: Equatable {
 
 struct ReadingModeChip: View {
     /// Mode clair : du blanc sur une capsule teintée à 28 % était illisible
-    /// (capture 2026-08-21) — le libellé prend la couleur de texte du thème.
+    /// le libellé prend la couleur de texte du thème.
     @Environment(\.colorScheme) private var colorScheme
     private var labelColor: Color {
         colorScheme == .dark ? .white : MeeshyColors.textPrimary(isDark: false)

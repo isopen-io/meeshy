@@ -10,7 +10,7 @@ import MeeshyUI
 /// « "Toi" en indigo » (critère §7) : `isMe` ⇒ nom = clé `focal.row.you`,
 /// tint `MeeshyColors.indigo500`.
 ///
-/// **Directive 2026-08-23 — cet en-tête ne date plus rien.** L'heure, les
+/// ** — cet en-tête ne date plus rien.** L'heure, les
 /// coches et le libellé « modifié » vivaient ICI pour les têtes de groupe et
 /// dans `FocalMetaRow` pour les rangées de suite : la même information
 /// changeait de bord selon la place du message dans son groupe, et se
@@ -57,7 +57,7 @@ struct FocalIdentityHeader: View, Equatable {
     /// et le toucher revient à l'avatar.
     var onMoodTap: ((CGPoint) -> Void)? = nil
 
-    // MARK: - Gabarit (directive 2026-08-24 — le focus réemploie cet en-tête)
+    // MARK: - Gabarit
 
     /// Diamètre de la pastille. Défaut : la cote de rangée. La bulle
     /// magnifiée passe la sienne, plus grande.

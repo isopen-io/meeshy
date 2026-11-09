@@ -51,7 +51,7 @@ nonisolated public enum RiverMetrics {
     /// reste un paramètre d'entrée de la loi, indépendant de cette largeur.
     nonisolated public enum Lane {
         public static let widthReference: CGFloat = 300
-        /// Bornes du PINCE (retour produit 2026-08-22). Le plancher garde une
+        /// Bornes du PINCE. Le plancher garde une
         /// bulle lisible — §7ter interdit de tronquer le texte pour gagner une
         /// colonne, et c'est bien la LARGEUR DE COULOIR qu'on fait varier, pas
         /// une échelle appliquée au rendu : un `scaleEffect` aurait rapetissé
@@ -67,7 +67,7 @@ nonisolated public enum RiverMetrics {
     /// `river.bubble` — rayon de contournement `14` (le trait épouse ce
     /// rayon en abordant/quittant la bulle), écart de base `8` (la ligne où
     /// vit l'heure quand la bulle n'est pas tête de groupe — amendement R,
-    /// « l'heure vit en base de bulle »). §7ter A.5/A.6 (2026-08-17) ajoutent
+    /// « l'heure vit en base de bulle »). §7ter A.5/A.6 ajoutent
     /// `identityNameMaxWidth` (borne du nom en tête de groupe — FRACTION,
     /// même convention que `LentilleMetrics.Row.transformOriginX` : le JSON
     /// porte `"44%"`, cette constante porte `0.44` — garantit que la
@@ -78,7 +78,7 @@ nonisolated public enum RiverMetrics {
     nonisolated public enum Bubble {
         public static let detourRadius: CGFloat = 14
         public static let baseGap: CGFloat = 8
-        /// Retrait INTÉRIEUR de la bulle — retour produit 2026-08-21 : « il
+        /// Retrait INTÉRIEUR de la bulle —: « il
         /// faut assurer une certaine distance entre les bords et le contenu ».
         /// `baseGap` en tenait lieu, à tort : c'est un ÉCART DE PILE entre les
         /// blocs d'une bulle (citation, texte, heure), pas une marge. Les
@@ -109,7 +109,7 @@ nonisolated public enum RiverMetrics {
 
     // MARK: - Rang
 
-    /// `river.row` — retour produit 2026-08-21. `gap` : la respiration
+    /// `river.row` —. `gap`: la respiration
     /// verticale entre DEUX RANGS ; sans elle les bulles s'empilaient bord à
     /// bord et l'axe du temps ne se lisait plus. `continuationDash*` : les
     /// tirets de la couture qui relie deux bulles CONSÉCUTIVES du même auteur
@@ -120,8 +120,8 @@ nonisolated public enum RiverMetrics {
     nonisolated public enum Row {
         public static let gap: CGFloat = 14
         /// Hauteur de la couture entre deux bulles CONSÉCUTIVES du même
-        /// auteur (arbitrage produit 2026-08-21). **Depuis le lot G
-        /// (2026-08-22), iOS ne la consomme plus** : la jointure n'est plus
+        /// auteur. **Depuis le lot G
+        /// iOS ne la consomme plus**: la jointure n'est plus
         /// une couture posée ENTRE deux contours fermés, c'est le bord haut
         /// PARTAGÉ de la bulle qui continue (`RiverBubbleOutline`,
         /// `RiverBubbleView.sharedEdge`), dessiné avec `continuationDash*`.

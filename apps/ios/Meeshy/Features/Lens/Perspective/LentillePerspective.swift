@@ -26,7 +26,7 @@ nonisolated enum LentilleFocusBand {
     /// Ordonnée du CENTRE de la bande, dans le même repère que le `midY` des
     /// rangs qu'on lui compare. `viewportBottom` est le bas de la région
     /// visible du défilement, exprimé dans ce même repère.
-    /// Centre de la bande (2026-08-21, directive user : « la magnificence
+    /// Centre de la bande (directive user: « la magnificence
     /// presque au centre de l'écran » et « doit pouvoir toucher la première
     /// conversation en tête ») : le CENTRE de la région visible — sauf près
     /// du haut de la liste : à `offsetFromTop == 0` (au repos en haut) la
@@ -121,8 +121,7 @@ struct LentillePerspective: ViewModifier {
 
     /// La passe elle-même, réduite à sa décision : déléguer, ou rendre
     /// l'identité. Aucune arithmétique de courbe ne vit ici.
-    /// Loi `.list` sur la distance ABSOLUE (règle de consommation 2026-08-21 :
-    /// la bande est au centre, les rangées du dessous ne sont plus « passées »
+    /// Loi `.list` sur la distance ABSOLUE (les rangées du dessous ne sont plus « passées »
     /// — le fondu court sous la bande du miroir, pensé pour une bande en bas
     /// d'écran, effacerait la moitié de la liste), fondue vers l'identité
     /// selon le niveau de scène (`LentilleSceneActivity.blend`).
