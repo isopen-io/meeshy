@@ -95,10 +95,10 @@ struct LinksHubView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
                         .font(.headline.weight(.bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(String(localized: "links.hub.banner.subtitle", defaultValue: "Partagez, suivez et monétisez votre audience", bundle: .main))
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
                 Spacer()
             }
@@ -194,10 +194,10 @@ struct LinksHubView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(description)
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(2)
                 }
 
@@ -223,7 +223,7 @@ struct LinksHubView: View {
 
                     Image(systemName: "chevron.forward")
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .accessibilityHidden(true)
                 }
             }

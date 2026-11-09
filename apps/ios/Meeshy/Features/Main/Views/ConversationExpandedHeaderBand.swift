@@ -317,7 +317,7 @@ struct ConversationFloatingHeaderSection<Anonymous: View, Typing: View, Band: Vi
 
 /// **La rangée catégorie, puis étiquettes colorées, défilable** (ex-`headerTagsRow`).
 ///
-/// F11 (revue adversariale 2026-08-25) : elle reçoit la conversation VIVANTE —
+/// F11: elle reçoit la conversation VIVANTE —
 /// un changement de mode de chiffrement ou un tag ajouté ou retiré se reflète
 /// sur CETTE bande sans réouverture, comme la bande d'avatars voisine.
 struct ConversationHeaderTagsRow: View {
@@ -394,7 +394,7 @@ struct ConversationHeaderTagsRow: View {
     private func tagChip(name: String, hex: String) -> some View {
         Text(name)
             .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-            .foregroundColor(Color(hex: hex))
+            .foregroundStyle(Color(hex: hex))
             .padding(.horizontal, MeeshySpacing.xs)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(chipBackground(hex: hex))

@@ -148,7 +148,7 @@ extension MessageListViewController {
         // fenêtre.
         timestampReveal.note(.scrolled(at: now))
 
-        // Magnificence (directive 2026-08-24) : elle ne s'arme ni au premier
+        // Magnificence: elle ne s'arme ni au premier
         // pixel ni sur un rebond. La vitesse du geste ouvre la porte tout de
         // suite ; un défilement lent mais SOUTENU l'ouvre passé le seuil de
         // durée. Le début de session se pose ici, au premier événement d'une

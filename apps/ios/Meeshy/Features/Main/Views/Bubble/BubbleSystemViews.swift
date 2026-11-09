@@ -19,11 +19,11 @@ struct BubbleDeletedView: View, Equatable {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "nosign")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .foregroundStyle(ThemeManager.shared.textMuted)
                 Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .italic()
-                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .foregroundStyle(ThemeManager.shared.textMuted)
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.sm)
@@ -76,13 +76,13 @@ struct BubbleSystemNoticeView: View, Equatable {
                 if let timeString, !timeString.isEmpty {
                     Text(timeString)
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
+                        .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
                         .accessibilityIdentifier("bubble-system-notice-time")
                 }
                 VStack(spacing: MeeshySpacing.xxs) {
                     Text(text)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .foregroundStyle(ThemeManager.shared.textMuted)
                         .multilineTextAlignment(.center)
                     greeting
                 }
@@ -155,7 +155,7 @@ struct BubbleJoinNoticeView: View, Equatable {
     /// Ce n'est pas non plus l'appui long, qui l'a porté un temps : ce geste-là
     /// ouvre, PARTOUT ailleurs dans le fil, les options d'un message. Une
     /// pastille système qui se l'approprie ne gagne pas un geste, elle en VOLE
-    /// un — et l'avis d'arrivée reste un message du fil (directive 2026-08-24).
+    /// un — et l'avis d'arrivée reste un message du fil.
     ///
     /// `==` est écrit à la main : une closure n'est pas `Equatable`, et la
     /// synthèse automatique refuserait de compiler. Elle est exclue de la
@@ -187,23 +187,23 @@ struct BubbleJoinNoticeView: View, Equatable {
                 if let timeString, !timeString.isEmpty {
                     Text(timeString)
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
+                        .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
                         .accessibilityIdentifier("bubble-join-notice-time")
                 }
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
                         .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                        .foregroundColor(notice.isAnonymous ? MeeshyColors.purple700 : ThemeManager.shared.textMuted)
+                        .foregroundStyle(notice.isAnonymous ? MeeshyColors.purple700 : ThemeManager.shared.textMuted)
 
                     Text(label(for: presentation))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .foregroundStyle(ThemeManager.shared.textMuted)
                         .multilineTextAlignment(.center)
 
                     if presentation.showsNoAccountBadge {
                         Text(String(localized: "bubble.joinNotice.noAccount", defaultValue: "sans compte", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.purple700)
+                        .foregroundStyle(MeeshyColors.purple700)
                         .padding(.horizontal, MeeshySpacing.xsPlus)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(MeeshyColors.purple700.opacity(isDark ? 0.22 : 0.12)))
@@ -216,14 +216,14 @@ struct BubbleJoinNoticeView: View, Equatable {
                         if let handle = presentation.handle {
                             Text(handle)
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                                .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.intense))
+                                .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.intense))
                                 .accessibilityIdentifier("bubble-join-notice-handle")
                         }
                         if let rules = presentation.rules {
                             if presentation.handle != nil {
                                 MetaSeparator()
                                     .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                                    .foregroundColor(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.strong))
+                                    .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.strong))
                             }
                             JoinNoticeRulesStrip(rules: rules)
                         }
@@ -331,7 +331,7 @@ struct JoinNoticeRulesStrip: View, Equatable {
     private func ruleGlyph(_ systemName: String, allowed: Bool, label: String) -> some View {
         Image(systemName: systemName)
             .font(MeeshyFont.relative(9.5, weight: .semibold))
-            .foregroundColor(allowed ? MeeshyColors.purple700 : ThemeManager.shared.textMuted.opacity(MeeshyOpacity.medium))
+            .foregroundStyle(allowed ? MeeshyColors.purple700 : ThemeManager.shared.textMuted.opacity(MeeshyOpacity.medium))
             .accessibilityLabel(label)
     }
 }

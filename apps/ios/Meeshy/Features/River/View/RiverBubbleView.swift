@@ -7,7 +7,7 @@ import MeeshyUI
 /// La bulle Rivière — anatomie GELÉE de la rangée plate du Fil (`thread.*`,
 /// §7ter A2) posée SUR la ligne de son auteur.
 ///
-/// **§7ter A.5 (amendement, 2026-08-17) — l'identité est AU-DESSUS de la
+/// **§7ter A.5 (amendement) — l'identité est AU-DESSUS de la
 /// bulle, HORS d'elle.** La première forme rendait la pastille+nom+heure
 /// DANS le haut de la bulle, pour éviter que le trait ne traverse un mot :
 /// la vraie réponse n'était pas de déplacer l'identité, c'est de BORNER le
@@ -31,7 +31,7 @@ import MeeshyUI
 /// d'auteur, même épaisseur que le trait), le reste neutre
 /// (`RiverMetrics.Bubble.flatBorderWidth`, 1pt).
 ///
-/// **Lot G (2026-08-22) — deux bulles d'un même groupe partagent UNE
+/// **Lot G — deux bulles d'un même groupe partagent UNE
 /// bordure.** Le contour suit la position de groupe (`RiverGroupPosition`,
 /// déduite purement par `RiverConversationMapping.groupPositions`) : fermé
 /// quand la bulle est seule, OUVERT du côté où la voisine se colle, et le
@@ -104,7 +104,7 @@ struct RiverBubbleView: View, Equatable {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Retour produit 2026-08-21 : « les messages s'empilent bord à
+            // « les messages s'empilent bord à
             // bord sans espace ». Chaque rang porte SA propre respiration en
             // tête — jamais un `spacing` sur la pile, qui ne saurait pas la
             // remplacer par une couture. Le rythme vertical reste donc
@@ -126,8 +126,7 @@ struct RiverBubbleView: View, Equatable {
     /// (`Row.gap`) ; la MÊME voix qui continue ne gagne RIEN — sa bulle vient
     /// se COLLER à la précédente, bord à bord, et c'est SON contour qui porte
     /// la jointure : un bord haut en pointillé, PARTAGÉ (`sharedEdge`), à la
-    /// place d'une couture posée entre deux contours fermés (directive produit
-    /// 2026-08-22 — la forme du 21/08, « bulles fermées + trait pointillé en
+    /// place d'une couture posée entre deux contours fermés (« bulles fermées + trait pointillé en
     /// plus », est retirée). Le groupement lui-même reste une décision de la
     /// LOI (`isFirstInGroup`) — cette vue ne fait que le dessiner.
     @ViewBuilder
@@ -382,7 +381,7 @@ struct RiverBubbleView: View, Equatable {
         // `gutter` reste au propriétaire de la COLONNE (`RiverStreamHost`,
         // l'espace EXTÉRIEUR à la bulle où passe le trait) — jamais dupliqué
         // ici. Le retrait INTÉRIEUR, lui, a son propre token depuis le retour
-        // produit du 2026-08-21 : `baseGap` (l'écart de pile entre les blocs)
+        // produit: `baseGap` (l'écart de pile entre les blocs)
         // en tenait lieu et laissait le texte coller au contour.
         .padding(.horizontal, RiverMetrics.Bubble.contentPadding)
         .padding(.vertical, RiverMetrics.Bubble.contentPadding)
@@ -512,7 +511,7 @@ struct RiverBubbleView: View, Equatable {
             // plus long s'élide (`.lineLimit(1)`), comme sur le Fil.
             Text(content.senderDisplayName)
                 .font(MeeshyFont.relative(FocalMetrics.Name.size, weight: FocalMetrics.Name.weight))
-                .foregroundColor(laneColor)
+                .foregroundStyle(laneColor)
                 .lineLimit(1)
                 .frame(
                     maxWidth: contentWidth * RiverMetrics.Bubble.identityNameMaxWidth,
@@ -521,7 +520,7 @@ struct RiverBubbleView: View, Equatable {
 
             Spacer(minLength: 0)
             // L'heure N'EST PLUS répétée ici : elle vit en base de bulle, pour
-            // TOUS les rangs (arbitrage produit 2026-08-21). La tête de groupe
+            // TOUS les rangs. La tête de groupe
             // ne porte plus que l'identité — la pastille et le nom.
         }
         // Même largeur que `messageBox` (`contentWidth`) : la pastille
@@ -574,7 +573,7 @@ struct RiverBubbleView: View, Equatable {
             Spacer(minLength: 0)
             Text(content.timeString)
                 .font(FocalMetrics.Time.font)
-                .foregroundColor(metaTint)
+                .foregroundStyle(metaTint)
         }
     }
 
@@ -652,7 +651,7 @@ struct RiverBubbleView: View, Equatable {
                 .frame(width: FocalMetrics.Quote.railWidth)
             Text("\(reply.authorDisplayName) · \(reply.text)")
                 .font(MeeshyFont.relative(FocalMetrics.Text.size - 2))
-                .foregroundColor(metaTint)
+                .foregroundStyle(metaTint)
                 .lineLimit(1)
                 .padding(.leading, MeeshySpacing.sm)
         }

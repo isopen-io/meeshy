@@ -307,9 +307,7 @@ extension ConversationListView {
 
     /// La carte de l'aperçu d'appui long = la carte des DERNIERS MESSAGES
     /// (bannière, avatar/logo, titre, icônes d'en-tête, fil récent) — drapeau
-    /// Lentille ON comme OFF (décision user 2026-08-21 : le menu des modes n'a
-    /// rien à faire dans l'aperçu ; le choix de mode garde ses deux portes,
-    /// l'encoche de la carte de focus et le sous-menu « Mode de lecture »).
+    /// Lentille ON comme OFF (le choix de mode garde ses deux portes, l'encoche de la carte de focus et le sous-menu « Mode de lecture »).
     func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights, reduceMotion: Bool) -> some View {
         ConversationPreviewView(
             conversation: conversation,
@@ -485,7 +483,7 @@ extension ConversationListView {
 
 /// Le mouvement de l'aperçu < iOS 26 : la carte ÉMERGE de la ligne pressée —
 /// départ lent, accélération à mi-course, rebond (overshoot 1.3, le rebond
-/// appartient au long-press, pas au swipe des lignes — feedback 2026-07-03) et
+/// appartient au long-press) et
 /// flou progressif. Sous Réduire les animations, un FONDU sur place, sans
 /// overshoot ni flou. Les deux moitiés du réglage (système et app) se lisent
 /// par `MeeshyMotion.shouldReduce`.

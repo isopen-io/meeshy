@@ -39,7 +39,7 @@ extension ConversationView {
         overlayState.selectedMessageIds = []
     }
 
-    /// Bascule UN message, plafonné à `selectionCap` (« maximum 100 messages », 2026-08-27) :
+    /// Bascule UN message, plafonné à `selectionCap` (« maximum 100 messages »):
     /// un 101ᵉ est un NO-OP signalé (haptique d'erreur + toast), jamais un dépassement silencieux.
     func toggleMessageSelection(_ messageId: String) {
         if overlayState.selectedMessageIds.contains(messageId) {

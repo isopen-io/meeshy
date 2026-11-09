@@ -143,7 +143,6 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     let mediaCaptions: [String?]
 
     /// **Le texte ALTERNATIF par média, dans le même ordre que les fichiers**
-    /// (2026-09-05).
     ///
     /// Jumeau de `mediaCaptions` dans sa FORME, et distinct dans son SENS : la
     /// légende s'adresse à qui VOIT le média, l'alternative à qui ne le voit
@@ -158,7 +157,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     let mediaAlts: [String?]
 
     /// **L'identifiant d'OBJET de canvas que chaque fichier représente**
-    /// (#5280, 2026-09-05).
+    /// (#5280).
     ///
     /// Ni un texte ni une donnée d'affichage : le chaînon qui permet au
     /// dispatcher d'ADOPTER, dans le canvas, l'identité serveur qu'il vient de
@@ -289,8 +288,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         // La règle de composition vit dans `ReelComposition`, jamais ici —
         // un `"REEL"`/`"POST"` codé en dur ferait diverger la surface
         // d'atterrissage d'un document de celle d'un vocal ou d'un média.
-        // **Un type DÉCLARÉ gagne sur un type déduit** (directive porteur
-        // 2026-09-01). `ReelComposition` répond à « qu'est-ce que cette
+        // **Un type DÉCLARÉ gagne sur un type déduit**. `ReelComposition` répond à « qu'est-ce que cette
         // composition RESSEMBLE à être ? » — une question de médias, qui ne
         // sait rendre que POST ou RÉEL. Depuis que la story se compose sur
         // cette surface, l'auteur peut avoir CHOISI son format dans

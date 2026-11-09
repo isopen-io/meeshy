@@ -47,8 +47,7 @@ struct BubbleBodyFooterLayout: Layout {
         }
         // `Layout.sizeThatFits` is a nonisolated protocol requirement and iOS 26
         // can invoke it on com.apple.SwiftUI.AsyncRenderer, NOT only on the main
-        // thread (5 device crashes 2026-06-10..12: dispatch_assert_queue_fail in
-        // this exact `assumeIsolated`). The cache is therefore a main-thread-only
+        // thread. The cache is therefore a main-thread-only
         // fast path: off-main passes fall through to a direct measure above, and
         // `assumeIsolated` below is only reached when the main thread is proven.
         return MainActor.assumeIsolated {

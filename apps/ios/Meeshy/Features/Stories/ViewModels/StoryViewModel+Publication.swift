@@ -795,7 +795,7 @@ extension StoryViewModel {
                         Task.detached { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
                     }
                 }
-                // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul
+                // succès serveur CONFIRMÉ — seul
                 // événement qui efface le brouillon gelé au hand-off. Ce
                 // chemin (upload online, piloté par `launchUploadTask`) ne
                 // passe pas par `publishSucceeded` (silencieux, cf. `dequeue`) :

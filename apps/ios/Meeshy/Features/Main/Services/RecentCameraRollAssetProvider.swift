@@ -128,7 +128,7 @@ enum RecentCameraRollAsset {
     // — elle trappe à l'instant où PhotoKit l'invoque depuis sa propre file,
     // avant même que le corps ne tourne. `Task { @MainActor in }` n'y change
     // rien : le piège est à l'entrée. C'est le crash de prod
-    // Meeshy-2026-07-11-131634.ips, vu 7× sur les builds 1201→1235.
+    // Meeshy--131634.ips, vu 7× sur les builds 1201→1235.
     //
     // Même seam, même raison que `RecentMediaStrip` et
     // `CallTranscriptionService.requestPermission()`.

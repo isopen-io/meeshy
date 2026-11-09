@@ -127,7 +127,7 @@ struct StoryExportShareSheet: View {
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .accessibilityHidden(true)
                 }
                 .padding(MeeshySpacing.md)
@@ -177,7 +177,7 @@ struct StoryExportShareSheet: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(MeeshyColors.brandGradient)
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             }
         case .ready, .sharing:

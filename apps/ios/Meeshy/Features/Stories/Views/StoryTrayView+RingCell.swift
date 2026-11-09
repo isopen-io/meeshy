@@ -107,7 +107,7 @@ struct StoryRingCell: View, Equatable {
             if showsUsername {
                 Text(group.username)
                     .font(MeeshyFont.relative(isCompact ? 9 : StoryEntryMetrics.labelFontSize, weight: group.hasUnviewed ? .semibold : .medium))
-                    .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
+                    .foregroundStyle(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
                     .frame(width: isCompact ? 56 : StoryEntryMetrics.labelWidth)
             }
@@ -126,7 +126,7 @@ struct StoryRingCell: View, Equatable {
 
 // MARK: - Ce qu'une cellule d'anneau affiche (#10574)
 
-/// Mesuré sur l'iPhone le 2026-10-13 : 7 409 recalculs de `StoryRingCell` en
+/// 7 409 recalculs de `StoryRingCell` en
 /// 4 min 30, une cinquantaine à chaque passe de la liste — ses fermetures
 /// changent d'identité à chaque passe, SwiftUI ne pouvait rien prouver.
 nonisolated struct StoryRingCellRenderInputs: Equatable {
@@ -190,7 +190,7 @@ fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
         if count > 5 {
             Text("+")
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                .foregroundColor(.white.opacity(MeeshyOpacity.strong))
+                .foregroundStyle(Color.white.opacity(MeeshyOpacity.strong))
         }
     }
     .accessibilityHidden(true)

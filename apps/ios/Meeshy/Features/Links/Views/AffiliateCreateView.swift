@@ -34,7 +34,7 @@ struct AffiliateCreateView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                 }
             }
         }
@@ -53,7 +53,7 @@ struct AffiliateCreateView: View {
                 // applies to the twin screen.
                 Text(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .accessibilityHidden(true)
 
                 TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex. : Invitation Twitter", bundle: .main), text: $name)
@@ -73,7 +73,7 @@ struct AffiliateCreateView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .accessibilityHidden(true)
 
                 TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimité", bundle: .main), text: $maxUses)
@@ -94,7 +94,7 @@ struct AffiliateCreateView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
             }
         }
     }

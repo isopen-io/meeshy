@@ -413,8 +413,7 @@ extension ConversationListViewModel {
     /// re-téléchargé tant que l'app est installée ». Les URLs médias sont
     /// immuables côté gateway (max-age=1 an) — si un avatar change, son URL
     /// change, donc invalider les octets ne rafraîchit rien de plus que le
-    /// refetch des métadonnées ci-dessus. (Audit 2026-07-10 : chaque pull
-    /// re-téléchargeait l'intégralité des avatars/covers, ~3 Mo minimum.)
+    /// refetch des métadonnées ci-dessus. (~3 Mo minimum.)
     private func invalidatePullRefreshScope() async {
         // Messages cached par conversation. Les previews dans la listing
         // viennent de l'API (forceRefresh), mais l'historique cached est

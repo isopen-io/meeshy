@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// Loads a call's transcript: the encrypted local cache first, the server
-/// replay as fallback (decision produit 2026-08-13), re-seeding the cache.
+/// replay as fallback, re-seeding the cache.
 /// App-side cascade (SDK Purity). Shared by both call detail sheets (#8698).
 enum CallTranscriptLoader {
     static func load(callId: String) async -> CallTranscript? {
@@ -79,7 +79,7 @@ struct CallTranscriptSection: View {
                     withAnimation { showOriginalText.toggle() }
                 } label: {
                     Image(systemName: showOriginalText ? "character.bubble.fill" : "captions.bubble.fill")
-                        .foregroundColor(Color(hex: accentHex))
+                        .foregroundStyle(Color(hex: accentHex))
                 }
                 .accessibilityLabel(showOriginalText
                     ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)

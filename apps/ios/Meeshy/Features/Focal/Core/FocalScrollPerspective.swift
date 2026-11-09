@@ -2,8 +2,8 @@ import UIKit
 import QuartzCore
 
 /// Focal — perspective MINIMALE, et SEULEMENT pendant le défilement
-/// (2026-08-21, directive user : « le cadre apparaît quand on scrolle, au
-/// repos il disparaît ; au bout de quelques secondes sans scroller, la vue
+/// (directive user: « le cadre apparaît quand on scrolle, au
+/// repos il disparaît, au bout de quelques secondes sans scroller, la vue
 /// redevient Script, tout se ré-aplatit naturellement »).
 ///
 /// Pour chaque cellule VISIBLE, une échelle et une opacité fonction de sa
@@ -25,7 +25,7 @@ nonisolated enum FocalScrollPerspective {
     /// Plancher d'opacité — règle de CONSOMMATION iOS (la loi partagée reste
     /// intacte) : une rangée lointaine reste LISIBLE, elle fait partie de la
     /// scène avant d'être proche — plus d'« arrivée » ni de « sortie » par
-    /// fondu aux bords (directive user 2026-08-21).
+    /// fondu aux bords.
     static let alphaFloor: CGFloat = 0.62
 
     struct Pose: Equatable {
@@ -145,7 +145,7 @@ nonisolated enum FocalScrollPerspective {
     /// 0,3 (et non 0,6) : chaque cellule pré-réalisée s'auto-dimensionne et
     /// l'entonnoir d'invalidation du layout n'en laisse passer que quatre par
     /// transaction pendant le mouvement — au-delà, une cellule garde sa
-    /// hauteur ESTIMÉE jusqu'à la pose (citation étirée, capture 2026-08-21).
+    /// hauteur ESTIMÉE jusqu'à la pose (citation étirée).
     /// La perte cumulée d'une demi-écran de rangées rétrécies (~20 %) tient
     /// largement dans 0,3 hauteur visible.
     static let overscanFraction: CGFloat = 0.3
@@ -166,9 +166,9 @@ nonisolated enum FocalScrollPerspective {
     /// en bas — la rangée porte `Row.paddingVertical` de chaque côté et, en
     /// tête de groupe, `Row.groupTopPadding` de plus en haut : la carte
     /// mange ces rembourrages asymétriques pour encadrer le message avec
-    /// les mêmes espaces qu'en Script (directive user 2026-08-21).
+    /// les mêmes espaces qu'en Script.
     ///
-    /// 4 → 9 le 2026-08-24 : « dans la bulle, l'espace entre le contenu et les
+    /// 4 → 9: « dans la bulle, l'espace entre le contenu et les
     /// bords doit être exactement le même que pour le premier message d'un
     /// groupe ; les messages suivants sont collés aux bordures ». La cause de
     /// l'écart est ailleurs — en tête de groupe, `FocalIdentityHeader` occupe
@@ -181,7 +181,7 @@ nonisolated enum FocalScrollPerspective {
     /// cette marge ; au-delà du rembourrage que la rangée porte, elle mordrait
     /// sur ses voisines — et `focusCardInsets` produirait des valeurs
     /// négatives, que le `max(0, …)` masque sans les rendre justes.
-    /// Portée à 9 le 2026-08-24 pour aérer la carte, ramenée le même jour :
+    /// Portée à 9 pour aérer la carte, ramenée le même jour:
     /// la CI a montré le conflit. Aérer DAVANTAGE demande d'écarter le contenu
     /// à l'intérieur de la carte, pas d'agrandir la carte — ce qui touche la
     /// hauteur de rangée et sort du périmètre.

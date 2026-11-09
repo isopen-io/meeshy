@@ -179,12 +179,12 @@ struct BlockedUsersView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
             }
             .accessibilityElement(children: .combine)
@@ -197,7 +197,7 @@ struct BlockedUsersView: View {
             } label: {
                 Text(String(localized: "blocked.users.unblock.action", defaultValue: "Débloquer", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(

@@ -17,7 +17,7 @@ import MeeshyUI
 /// titre ouvre les détails ; en conversation DIRECTE, l'appui long
 /// propose détails OU profil de l'utilisateur.
 struct ConversationHeaderTitleBlock<Tags: View>: View {
-    /// F11 (revue adversariale 2026-08-25) : le TITRE et le libellé
+    /// F11: le TITRE et le libellé
     /// d'accessibilité lisent la conversation VIVANTE (`liveConversation`,
     /// depuis #9359) : un pair renommé ou un enregistrement des réglages s'y
     /// voit sans quitter le fil, et le libellé dit le même nom que l'œil lit.
@@ -54,7 +54,7 @@ struct ConversationHeaderTitleBlock<Tags: View>: View {
 
     /// Le bouton-titre de la bande dépliée — tap = détails de la
     /// conversation ; en DIRECT, appui long = choix détails / profil
-    /// (arbitrage user 2026-08-18), par un `Menu` natif (#17095).
+    /// par un `Menu` natif (#17095).
     @ViewBuilder
     private var titleButton: some View {
         if isDirect {
@@ -121,9 +121,7 @@ struct ConversationHeaderTitleBlock<Tags: View>: View {
 /// Le bouton de recherche de l'en-tête. Le glyphe est la struct NOMINALE
 /// partagée par toutes les icônes de l'en-tête (`ConversationHeaderGlassGlyph`,
 /// #17095) : le type structurel du bouton reste trivial (crash stack-overflow
-/// du décodeur de métadonnées Swift au 1er rendu SUR DEVICE, .ips du 2026-07-30
-/// dans `expandedHeaderSearchButton.getter` — leçon 5cdde93c4 : couper au
-/// niveau du type qui est décodé), et la loupe répond au doigt comme l'appel.
+/// du décodeur de métadonnées Swift au 1er rendu SUR DEVICE), et la loupe répond au doigt comme l'appel.
 struct ConversationHeaderSearchButton: View {
     let accentColor: String
     let secondaryColor: String

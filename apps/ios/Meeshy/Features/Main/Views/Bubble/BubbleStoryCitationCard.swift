@@ -156,8 +156,7 @@ struct BubbleStoryCitationCard: View, Equatable {
         String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main)
     }
 
-    /// **Le texte ne se pose QUE sur une scène SANS vignette** (retour porteur
-    /// 2026-09-25). La vignette EST la scène, texte de la story compris : y
+    /// **Le texte ne se pose QUE sur une scène SANS vignette**. La vignette EST la scène, texte de la story compris: y
     /// peindre l'aperçu par-dessus doublait ce texte et le faisait chevaucher
     /// celui de l'image. Le libellé n'est qu'un remplaçant — comme sur le web.
     var overlaysSceneText: Bool { thumbnailUrlString == nil }

@@ -191,7 +191,7 @@ nonisolated enum QuotedReplyPresentation {
         )
     }
 
-    // MARK: - La miniature d'un média cité (retour porteur 2026-09-25)
+    // MARK: - La miniature d'un média cité
 
     /// **La largeur d'une scène citée** — celle de la carte d'une story
     /// répondue ET de la miniature d'une image ou d'une vidéo citée. Une

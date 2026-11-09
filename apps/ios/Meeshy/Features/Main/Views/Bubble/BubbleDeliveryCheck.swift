@@ -66,7 +66,7 @@ struct BubbleDeliveryCheck: View, Equatable {
                 .foregroundColor(tint.opacity(MeeshyOpacity.heavy))
                 .accessibilityLabel(Self.label(.sending))
         case .slow:
-            // Spec 2026-07-08 (message-send-failure-retry-flow, règle 2) : un
+            // (message-send-failure-retry-flow, règle 2): un
             // message encore en re-tentative automatique affiche une horloge
             // SIMPLE — le badge exclamation lisait comme un aperçu d'échec
             // alors que l'échec est un état terminal (`.failed`) atteint

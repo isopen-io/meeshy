@@ -299,7 +299,7 @@ struct ContactsFilterChip: View {
         Button(action: action) {
             Text(title)
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
+                .foregroundStyle(isSelected ? Color.white : MeeshyColors.indigo500)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))

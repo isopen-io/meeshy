@@ -48,7 +48,7 @@ struct WelcomeView: View {
 
                 Text(String(localized: "welcome.tagline", defaultValue: "Écrivez dans votre langue. Tout le monde vous lit dans la sienne.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, MeeshySpacing.xxxl)
@@ -110,7 +110,7 @@ struct WelcomeView: View {
             // texte grossit.
             Text(String(localized: "welcome.createAccount", defaultValue: "Créer un compte", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, minHeight: 52)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
@@ -133,7 +133,7 @@ struct WelcomeView: View {
             // bouton ne se touchait qu'au libellé et au liseré.
             Text(String(localized: "welcome.signIn", defaultValue: "Se connecter", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(maxWidth: .infinity, minHeight: 52)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)

@@ -39,7 +39,7 @@ struct FocalFocusChrome {
     /// LA chip du focus — une seule coquille pour l'identité, la date, la
     /// traduction, les drapeaux, le (+) et les réactions : capsule OPAQUE
     /// (posée sur la ligne de la carte), teintée à l'accent de la scène —
-    /// SANS contour (directive 2026-08-24). L'état se lit désormais au fond
+    /// SANS contour. L'état se lit désormais au fond
     /// seul : dense pour le drapeau affiché (`isActive`), plein pour une
     /// réaction qui est la mienne (`filled`).
     private func focusChip<Content: View>(
@@ -61,7 +61,7 @@ struct FocalFocusChrome {
     }
 
     /// Sur la ligne BASSE de la carte du message en focus, dans CET ordre
-    /// (directive 2026-08-22) : l'icône de traduction (détails), les
+    /// l'icône de traduction (détails), les
     /// drapeaux (afficher le contenu dans cette langue), le (+) emoji, puis
     /// les réactions — fond PLEIN quand j'ai réagi. Superposition : aucune
     /// hauteur réservée, donc affichage instantané au tick d'élection.
@@ -74,7 +74,7 @@ struct FocalFocusChrome {
                     focusChip {
                         Image(systemName: "character.bubble")
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(focusAccent)
+                            .foregroundStyle(focusAccent)
                     }
                 }
                 .buttonStyle(.plain)
@@ -114,7 +114,7 @@ struct FocalFocusChrome {
                 focusChip {
                     Image(systemName: "face.smiling")
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(focusAccent)
+                        .foregroundStyle(focusAccent)
                 }
             }
             .buttonStyle(.plain)
@@ -141,7 +141,7 @@ struct FocalFocusChrome {
                     if reaction.count > 1 {
                         Text("\(reaction.count)")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(mine ? .white : focusAccent)
+                            .foregroundStyle(mine ? Color.white : focusAccent)
                     }
                 }
             }
@@ -258,7 +258,7 @@ struct FocalFocusChrome {
                 HStack(spacing: 4) {
                     Text(headerTimeString)
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
-                        .foregroundColor(metaTint)
+                        .foregroundStyle(metaTint)
                         .lineLimit(1)
                     if content.isMe, let status = content.meta.deliveryStatus {
                         BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)

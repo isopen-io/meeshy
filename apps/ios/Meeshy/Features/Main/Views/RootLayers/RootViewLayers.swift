@@ -242,7 +242,7 @@ struct RootChromeLayer: ViewModifier {
             // bannière call-waiting) : le tick `callDuration` 1 Hz et les stats
             // qualité WebRTC n'invalident que `CallPresentationLayer`, jamais la
             // racine (cause du watchdog 0x8BADF00D en arrière-plan pendant un
-            // appel). Le mini-lecteur audio y est hoisté (2026-08-13, même point
+            // appel). Le mini-lecteur audio y est hoisté (même point
             // de montage que la bannière d'appel) ; son tap route par
             // `navigateToConversationById`, le chemin des deep links et des push.
             .modifier(CallPresentationLayer(
@@ -371,8 +371,7 @@ struct RootSheetsLayer: ViewModifier {
                     }
                 }
             }
-            // Accès rapide « Publier un post » (liste de conversations, tableau de
-            // bord — 2026-08-21) : le flux se montre, et `ThemedFeedOverlay`
+            // Accès rapide « Publier un post » (liste de conversations): le flux se montre, et `ThemedFeedOverlay`
             // consomme le drapeau en ouvrant son composeur.
             .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
                 guard pending, !showFeed else { return }

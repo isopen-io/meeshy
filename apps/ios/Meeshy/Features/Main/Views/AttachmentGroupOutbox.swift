@@ -7,7 +7,7 @@ import MeeshySDK
 // Extrait de `ConversationView+AttachmentHandlers.swift` (cohésion). Deux
 // chemins y mènent, qui écrivaient chacun deux fois le même couple
 // audio / média : la coupure réseau AVANT l'upload (write-ahead) et l'échec
-// d'un upload EN LIGNE (règle 4 de la spec 2026-07-08, message-send-failure-
+// d'un upload EN LIGNE (message-send-failure-
 // retry-flow). Le type porte ce que l'envoi a saisi UNE fois au tap — langue,
 // citation, protection — et le remet à chaque mise en file.
 

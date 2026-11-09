@@ -98,7 +98,7 @@ struct ConversationEncryptionDetailSheet: View {
                 if let errorMessage {
                     Section {
                         Text(errorMessage)
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                             .font(.caption)
                     }
                 }
@@ -143,7 +143,7 @@ struct ConversationEncryptionDetailSheet: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.shield.fill")
                     .font(.title2)
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundStyle(MeeshyColors.success)
                     // Decorative status glyph — the adjacent "Active encryption"
                     // title + mode subtitle carry the state, so hide the symbol
                     // from VoiceOver rather than reading its SF Symbol name.
@@ -155,7 +155,7 @@ struct ConversationEncryptionDetailSheet: View {
                         .font(.headline)
                     Text(modeLabel(mode))
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
             .padding(.vertical, MeeshySpacing.xs)
@@ -360,7 +360,7 @@ struct ConversationEncryptionDetailSheet: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.open")
                     .font(.title2)
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                     // Decorative status glyph — "Unencrypted conversation" title +
                     // subtitle carry the state, so hide the symbol from VoiceOver.
                     .accessibilityHidden(true)
@@ -393,7 +393,7 @@ struct ConversationEncryptionDetailSheet: View {
                             .font(.subheadline.weight(.semibold))
                         Text(modeDescription(mode))
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color.secondary)
                     }
                     .tag(mode)
                 }

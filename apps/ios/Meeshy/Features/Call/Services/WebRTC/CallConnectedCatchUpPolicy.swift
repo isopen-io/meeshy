@@ -8,7 +8,7 @@ extension CallReliabilityPolicy {
     /// `.connected`, so no edge comes back; and an edge that lands while the FSM
     /// is still `.ringing` is dropped. Either way the FSM sat in
     /// `.connecting`/`.reconnecting` — "Connexion…" on screen, the watchdog
-    /// escalating every 12 s — while media was flowing (incident 2026-09-27).
+    /// escalating every 12 s — while media was flowing.
     /// A still-negotiating FSM whose peer connection already reports
     /// `.connected` catches up.
     static func shouldCatchUpConnected(callState: CallState, peerState: PeerConnectionState) -> Bool {

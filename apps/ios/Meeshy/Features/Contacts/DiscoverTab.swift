@@ -67,12 +67,12 @@ struct DiscoverTab: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Label(String(localized: "contacts.discover.email.title", defaultValue: "Inviter par email", bundle: .main), systemImage: "envelope.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             HStack(spacing: MeeshySpacing.smPlus) {
                 TextField(String(localized: "contacts.discover.email.placeholder", defaultValue: "Adresse email", bundle: .main), text: $viewModel.emailText)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .keyboardType(.emailAddress)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -86,7 +86,7 @@ struct DiscoverTab: View {
                 } label: {
                     Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.vertical, MeeshySpacing.smPlus)
                         .background(
@@ -109,12 +109,12 @@ struct DiscoverTab: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Label(String(localized: "contacts.discover.sms.title", defaultValue: "Inviter par SMS", bundle: .main), systemImage: "message.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             HStack(spacing: MeeshySpacing.smPlus) {
                 TextField(String(localized: "contacts.discover.sms.placeholder", defaultValue: "Numéro de téléphone", bundle: .main), text: $viewModel.phoneText)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .keyboardType(.phonePad)
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.smPlus)
@@ -130,7 +130,7 @@ struct DiscoverTab: View {
                 } label: {
                     Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.vertical, MeeshySpacing.smPlus)
                         .background(
@@ -192,7 +192,7 @@ struct DiscoverTab: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 Label(String(localized: "contacts.discover.matches.title", defaultValue: "Déjà sur Meeshy", bundle: .main), systemImage: "person.2.wave.2.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 LazyVStack(spacing: 0) {
                     ForEach(Array(viewModel.contactMatches.enumerated()), id: \.element.id) { index, match in
@@ -238,17 +238,17 @@ struct DiscoverTab: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 if let contactName = match.contactDisplayName, contactName != displayName {
                     Text(String(format: String(localized: "contacts.discover.matches.in-contacts", defaultValue: "Dans tes contacts : %@", bundle: .main), contactName))
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 } else {
                     Text("@\(match.user.username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .contentShape(Rectangle())
@@ -293,11 +293,11 @@ struct DiscoverTab: View {
                 VStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(.title).weight(.light))
-                        .foregroundColor(theme.textMuted.opacity(0.4))
+                        .foregroundStyle(theme.textMuted.opacity(0.4))
                         .accessibilityHidden(true)
                     Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouvé", bundle: .main))
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, MeeshySpacing.xxxl)
@@ -355,11 +355,11 @@ struct DiscoverTab: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 Text("@\(user.username)")
                     .font(.caption.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .contentShape(Rectangle())
             .onTapGesture { router.openProfileSheet(profileUser) }

@@ -400,7 +400,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
-    // `sendComment` retiré (2026-07-24) : aucun call site. Les commentaires de
+    // `sendComment` retiré: aucun call site. Les commentaires de
     // cette liste passent par le viewer/détail hôte (PostDetailViewModel), pas
     // par un composer inline ici — la méthode était du code mort trompeur.
 

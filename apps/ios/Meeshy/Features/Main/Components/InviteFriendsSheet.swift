@@ -130,25 +130,25 @@ struct InviteFriendsSheet: View {
                         .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     Image(systemName: conversationIcon)
                         .font(.system(size: MeeshyIconSize.lg, weight: .semibold)) // glyph in fixed 44pt avatar circle — kept fixed to avoid clipping at large Dynamic Type
-                        .foregroundColor(Color(hex: conversation.accentColor))
+                        .foregroundStyle(Color(hex: conversation.accentColor))
                         .accessibilityHidden(true) // decorative avatar glyph — the conversation name carries the meaning
                 }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(conversation.name)
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     HStack(spacing: MeeshySpacing.xs) {
                         Text("\(conversation.memberCount) \(String(localized: "invite.members", defaultValue: "membres"))")
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                         MetaSeparator()
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                         Text(conversation.type.displayName)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                     }
                 }
 
@@ -160,12 +160,12 @@ struct InviteFriendsSheet: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "invite.messageLabel", defaultValue: "Message d'invitation"))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .textCase(.uppercase)
 
                 TextField(defaultInviteMessage, text: $inviteMessage, axis: .vertical)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(2...4)
                     .adaptiveOnChange(of: inviteMessage) { _, _ in optionsModified = true }
             }
@@ -178,12 +178,12 @@ struct InviteFriendsSheet: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "link")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(Color(hex: conversation.accentColor))
+                        .foregroundStyle(Color(hex: conversation.accentColor))
 
                     if let url = shareURL {
                         Text(url)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color(hex: conversation.accentColor))
+                            .foregroundStyle(Color(hex: conversation.accentColor))
                             .lineLimit(1)
                             .truncationMode(.middle)
                     } else if isCreating {
@@ -192,7 +192,7 @@ struct InviteFriendsSheet: View {
                                 .scaleEffect(0.7)
                             Text(String(localized: "invite.creatingLink", defaultValue: "Création du lien…"))
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                     }
 
@@ -242,31 +242,31 @@ struct InviteFriendsSheet: View {
         HStack(spacing: MeeshySpacing.sm) {
             Label(expirationOption.label, systemImage: "clock")
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
 
             MetaSeparator()
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             HStack(spacing: MeeshySpacing.xs) {
                 if allowMessages {
                     Image(systemName: "bubble.left.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
                 if allowImages {
                     Image(systemName: "photo.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
                 if allowFiles {
                     Image(systemName: "paperclip")
                         .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
                 if allowHistory {
                     Image(systemName: "clock.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
             }
 
@@ -348,10 +348,10 @@ struct InviteFriendsSheet: View {
             if let error = errorMessage {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                     Text(error)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                 }
             }
         }
@@ -417,7 +417,7 @@ struct InviteFriendsSheet: View {
                         Stepper(value: $maxUsesValue, in: 1...10000, step: maxUsesValue < 100 ? 1 : 10) {
                             Text("\(maxUsesValue)")
                                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                                .foregroundColor(Color(hex: conversation.accentColor))
+                                .foregroundStyle(Color(hex: conversation.accentColor))
                         }
                         .padding(MeeshySpacing.mdPlus)
                         .background(rowBackground)
@@ -482,7 +482,7 @@ struct InviteFriendsSheet: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                    .foregroundColor(Color(hex: conversation.accentColor))
+                    .foregroundStyle(Color(hex: conversation.accentColor))
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
@@ -502,10 +502,10 @@ struct InviteFriendsSheet: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             TextField(placeholder, text: text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .adaptiveOnChange(of: text.wrappedValue) { _, _ in optionsModified = true }
         }
         .padding(MeeshySpacing.mdPlus)
@@ -526,17 +526,17 @@ struct InviteFriendsSheet: View {
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold)) // glyph in fixed 32pt tile — kept fixed to avoid clipping at large Dynamic Type
-                    .foregroundColor(iconColor)
+                    .foregroundStyle(iconColor)
             }
             Toggle(isOn: isOn) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     if let subtitle {
                         Text(subtitle)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                     }
                 }
             }
@@ -560,7 +560,7 @@ struct InviteFriendsSheet: View {
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold)) // glyph in fixed 32pt tile — kept fixed to avoid clipping at large Dynamic Type
-                    .foregroundColor(iconColor)
+                    .foregroundStyle(iconColor)
             }
             content()
         }

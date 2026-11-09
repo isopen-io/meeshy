@@ -590,7 +590,7 @@ private struct MenuRowLabelStyle: LabelStyle {
 /// donnait aucun feedback. `Color.primary` suit automatiquement dark/light,
 /// comme le highlight natif.
 ///
-/// Type **interne partagé** (2026-07-14) : le menu d'appui long des MESSAGES
+/// Type **interne partagé**: le menu d'appui long des MESSAGES
 /// (`MessageActionsMenu`) l'applique aussi pour aligner sa liste d'actions sur
 /// le design système par version d'iOS — même parité UIMenu / Liquid Glass que
 /// le menu des lignes de conversation. Un seul style, deux consommateurs.

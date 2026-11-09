@@ -13,7 +13,7 @@ extension StoryViewerView {
                 intro: intro,
                 avatarURL: currentGroup?.avatarURL,
                 avatarColor: currentGroup?.avatarColor ?? "6366F1",
-                // Présence résolue AU switch (directive 2026-07-10) :
+                // Présence résolue AU switch:
                 // entrée realtime du PresenceManager si elle existe (socket,
                 // la plus fraîche), sinon le snapshot serveur embarqué par
                 // le payload stories (`StoryGroup.authorPresence`) — plus
@@ -42,8 +42,7 @@ extension StoryViewerView {
 // MARK: - Group intro (interstitiel d'identité inter-groupes)
 
 extension StoryViewerView {
-    /// Présente l'interstitiel d'identité au CHANGEMENT de groupe (jamais à
-    /// l'ouverture du viewer — directive 2026-08-20) : placeholder immédiat
+    /// Présente l'interstitiel d'identité au CHANGEMENT de groupe: placeholder immédiat
     /// (username/avatar du groupe, déjà en main — cache-first), enrichi async
     /// (nom complet, bannière, mood) par `resolveGroupIntro` PENDANT
     /// l'affichage. Dismiss auto au bout de `groupIntroDuration` (500 ms
@@ -82,7 +81,7 @@ extension StoryViewerView {
         // Présentation INSTANTANÉE (pas de fade-in) : l'interstitiel OPAQUE
         // prend l'écran dans la MÊME transaction que le swap de groupe — le
         // slide du nouveau groupe n'est JAMAIS visible sous/derrière l'intro
-        // (directive user 2026-07-10, IMG_0976). Seule la sortie est animée :
+        // (IMG_0976). Seule la sortie est animée:
         // c'est elle qui révèle le slide, et elle vit dans `dismissGroupIntro`.
         groupIntro.present(
             StoryViewModel.StoryGroupIntro(userId: group.id, username: group.username),
@@ -112,7 +111,7 @@ extension StoryViewerView {
     }
 
     /// Tap zone gauche sur l'interstitiel d'identité — annule ce switch de
-    /// groupe et revient au groupe précédent (directive user 2026-07-14).
+    /// groupe et revient au groupe précédent.
     /// `currentGroupIndex` a déjà été incrémenté au moment où l'intro
     /// s'affiche (elle masque visuellement le nouveau groupe pendant
     /// `groupIntroDuration`), donc "revenir en arrière" ici signifie

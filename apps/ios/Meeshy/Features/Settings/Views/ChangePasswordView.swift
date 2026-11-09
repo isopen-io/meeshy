@@ -172,7 +172,7 @@ struct ChangePasswordView: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: met ? "checkmark.circle.fill" : "circle")
                 .font(.subheadline)
-                .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
+                .foregroundStyle(met ? MeeshyColors.success : theme.textMuted)
                 // Statut porté par la couleur (vert=rempli) + la forme du glyphe. VoiceOver
                 // ne doit pas relire l'icône : l'état passe par le trait `.isSelected` de la
                 // rangée ci-dessous (« ne jamais reposer sur la couleur seule »).
@@ -180,7 +180,7 @@ struct ChangePasswordView: View {
 
             Text(text)
                 .font(.footnote.weight(.medium))
-                .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
+                .foregroundStyle(met ? MeeshyColors.success : theme.textMuted)
 
             Spacer()
         }
@@ -271,7 +271,7 @@ struct ChangePasswordView: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
             Text(title.uppercased())
                 .font(.system(.caption2, design: .rounded).weight(.bold))
                 .foregroundColor(Color(hex: color))
@@ -294,7 +294,7 @@ struct ChangePasswordView: View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)

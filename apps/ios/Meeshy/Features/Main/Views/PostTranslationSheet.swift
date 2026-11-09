@@ -58,7 +58,7 @@ struct PostTranslationSheet: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
                             .meeshyTapTarget()
@@ -86,18 +86,18 @@ struct PostTranslationSheet: View {
                     Text(LanguageFlagChip.flag(for: post.originalLanguage ?? ""))
                     Text("\(String(localized: "feed.post.translation.original", defaultValue: "Original", bundle: .main)) (\(display?.name ?? post.originalLanguage ?? "?"))")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "checkmark.circle.fill")
                         .font(.callout)
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
 
                 Text(post.content)
                     .font(.subheadline)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
             }
@@ -121,7 +121,7 @@ struct PostTranslationSheet: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "feed.post.translation.available", defaultValue: "Traductions disponibles", bundle: .main))
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             ForEach(Array(availableTranslations.keys.sorted()), id: \.self) { lang in
                 Button {
@@ -137,12 +137,12 @@ struct PostTranslationSheet: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
                                 .font(.subheadline.weight(.medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
 
                             if let text = availableTranslations[lang]?.text {
                                 Text(text)
                                     .font(.caption)
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                                     .lineLimit(1)
                             }
                         }
@@ -159,7 +159,7 @@ struct PostTranslationSheet: View {
 
                         Image(systemName: "chevron.forward")
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     .padding(MeeshySpacing.md)
                     .background(
@@ -182,7 +182,7 @@ struct PostTranslationSheet: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "feed.post.translation.other_languages", defaultValue: "Autres langues", bundle: .main))
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             ForEach(missingLanguages, id: \.self) { lang in
                 HStack(spacing: MeeshySpacing.smPlus) {
@@ -192,7 +192,7 @@ struct PostTranslationSheet: View {
 
                     Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Spacer()
 

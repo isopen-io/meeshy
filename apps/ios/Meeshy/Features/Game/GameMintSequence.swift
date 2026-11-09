@@ -3,7 +3,7 @@ import MeeshySDK
 
 // MARK: - La frappe depuis le compteur de Meeshes : l'animation d'abord, le compteur ensuite (#9537)
 //
-// Directive porteur 2026-10-06 : la feuille que le compteur de Meeshes (en haut à droite) ouvre montre Mee et Meo qui
+// la feuille que le compteur de Meeshes (en haut à droite) ouvre montre Mee et Meo qui
 // FRAPPENT une Meesh, et le compteur ne s'incrémente qu'APRÈS la fin de l'animation. La mise à jour reste OPTIMISTE
 // (`GameOptimistic.afterMint` change l'état à l'instant du toucher, un refus le restaure) : ce qui est SÉQUENCÉ, c'est
 // ce que l'écran MONTRE. Pendant les 1,2 s de la scène, il montre l'image d'avant le toucher ; la scène finie, il lâche

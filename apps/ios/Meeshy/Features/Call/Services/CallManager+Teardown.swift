@@ -47,8 +47,7 @@ extension CallManager {
     /// Sert (a) aux émissions périodiques `in_progress` pendant l'appel et
     /// (b) à l'émission finale de teardown. Le gateway persiste par
     /// updateMany : chaque envoi écrase le précédent — un kill de l'app en
-    /// background (vécu 2026-07-03 : row analytics perdue après 29 min
-    /// d'appel) ne perd plus que la dernière fenêtre.
+    /// background ne perd plus que la dernière fenêtre.
     private func emitCallAnalyticsSnapshot(callId: String, endReasonLabel: String) {
         let payload = analytics.payload(
             now: Date(),
@@ -84,7 +83,7 @@ extension CallManager {
         }
     }
 
-    /// Audit 2026-07-02 (bug 1) — shared failure teardown. `endCallInternal`
+    /// (bug 1) — shared failure teardown. `endCallInternal`
     /// never reports to CallKit on its own (its only CallKit side effect is
     /// failing a still-pending CXAnswerCallAction), so every failure path that
     /// reached it directly left the system call UI stranded on a call the app
@@ -94,7 +93,7 @@ extension CallManager {
     /// (endCall, handleRemoteEnd, …) keep doing their own CallKit teardown with
     /// end-specific reasons.
     ///
-    /// Audit 2026-07-08 — guard `callState.isActive` like its sibling paths
+    /// guard `callState.isActive` like its sibling paths
     /// (`endCall`, `handleRemoteEnd`). Several async call sites (SDP
     /// offer/answer handling, the participant-joined offer) only check
     /// `currentCallId == callId` for liveness, and `currentCallId` stays
@@ -127,7 +126,7 @@ extension CallManager {
 
     /// `reportsAnalytics: false` : effacé devant un autre appareil qui a décroché (#11468).
     func endCallInternal(reason: CallEndReason, reportsAnalytics: Bool = true) {
-        // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
+        // CALL-FIX — stop any ringing loop + play the "ended" cue, but
         // ONLY if the call was actually active (ringing/connecting/connected). The
         // `isActive` guard means a re-entrant endCallInternal (already .ended/.idle)
         // won't double-play the cue.

@@ -127,7 +127,7 @@ struct RiverStreamHost: View {
     @State private var hasLandedOnCursor = false
     /// **Un cadrage est une DEMANDE, pas un acte** — il tient jusqu'à ce que
     /// la cellule visée soit RÉELLEMENT apparue. Mesuré au simulateur
-    /// (2026-08-22) : un `scrollTo` lancé au premier `onAppear` ne bougeait
+    /// un `scrollTo` lancé au premier `onAppear` ne bougeait
     /// pas d'un point — le pane n'avait pas encore de hauteur
     /// (`GeometryReader` à 0), et la pile paresseuse ne connaissait pas
     /// encore la cellule. La demande est donc rejouée à chaque occasion
@@ -167,8 +167,7 @@ struct RiverStreamHost: View {
     /// displayName(of: message)` — EXACTEMENT `senderDisplayName`
     /// (`RiverConversationMapping.swift:229`/`:235`) : la graine EST le nom
     /// affiché, par construction, sans qu'il y ait de correspondance à
-    /// chercher parmi les voix déjà dites (F4, revue adversariale
-    /// 2026-08-25). Aucune couleur en dur : une peau ne redéclare jamais une
+    /// chercher parmi les voix déjà dites (F4). Aucune couleur en dur: une peau ne redéclare jamais une
     /// loi de couleur.
     private var typingAccentHex: String {
         DynamicColorGenerator.colorForName(typingParticipants.first?.displayName ?? "")
@@ -479,7 +478,7 @@ struct RiverStreamHost: View {
         // libellé et l'accessibilité — seul l'accent diverge ASSUMÉMENT
         // (couleur de VOIX ici, de conversation au Fil : voir `typingAccentHex`).
         //
-        // F3 (revue adversariale 2026-08-25) : la tenue plate n'a NI capsule
+        // F3: la tenue plate n'a NI capsule
         // ni fond — c'est le rendu voulu en cellule de flux (Fil), où elle
         // pousse le contenu. Ici elle est un CALQUE posé en `.overlay`, pile
         // sur la bande où le curseur ancré en bas (`landingAnchor`) fait

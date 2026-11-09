@@ -128,7 +128,7 @@ enum DefaultComposerLanguage {
 
 /// Rendu compact du bouton langue du composer de post : le bouton replié ne
 /// montre QUE le drapeau — le nom de la langue n'apparaît que dans la liste
-/// du picker (directive 2026-07-30). Le nom reste porté par l'accessibilité
+/// du picker. Le nom reste porté par l'accessibilité
 /// (`accessibilityValue`), VoiceOver ne lit pas un emoji de drapeau utilement.
 /// `nonisolated` au niveau du type : la cible app compile sous
 /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non.

@@ -67,7 +67,7 @@ struct TrackingLinksView: View {
 
             Text(String(localized: "tracking.links.title", defaultValue: "Liens de suivi", bundle: .main))
                 .font(.headline.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -103,10 +103,10 @@ struct TrackingLinksView: View {
                 .accessibilityHidden(true)
             Text(value)
                 .font(.title3.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Text(label)
                 .font(.caption2)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(MeeshySpacing.md)
@@ -172,14 +172,14 @@ struct TrackingLinksView: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(link.displayName).font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary).lineLimit(1)
+                    .foregroundStyle(theme.textPrimary).lineLimit(1)
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(String(localized: "tracking.links.row.clicks", defaultValue: "\(link.totalClicks) clics", bundle: .main))
                         .font(.caption).foregroundColor(accent)
                     Text(String(localized: "tracking.links.row.uniques", defaultValue: "· \(link.uniqueClicks) uniques", bundle: .main))
                         .font(.caption).foregroundColor(theme.textMuted)
                     if let c = link.campaign {
-                        Text("· \(c)").font(.caption).foregroundColor(theme.textMuted).lineLimit(1)
+                        Text("· \(c)").font(.caption).foregroundStyle(theme.textMuted).lineLimit(1)
                     }
                 }
             }
@@ -195,7 +195,7 @@ struct TrackingLinksView: View {
             }.padding(.horizontal, MeeshySpacing.xs)
             .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
 
-            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
         }
         .padding(MeeshySpacing.mdPlus)

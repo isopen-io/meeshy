@@ -11,7 +11,7 @@ import MeeshySDK
 /// puis l'annuaire dès la deuxième lettre.
 ///
 /// **Le relais `objectWillChange` est OBLIGATOIRE, pas cosmétique** (revue
-/// Opus, 2026-08-27) : `@StateObject private var mentionBox` n'abonne la vue
+/// Opus): `@StateObject private var mentionBox` n'abonne la vue
 /// hôte qu'au publisher de LA BOÎTE — `MentionComposerController` est un
 /// `ObservableObject` imbriqué, Combine ne le traverse jamais tout seul. Sans
 /// ce relais, lire `mentionBox.controller.activeQuery` dans un `body` ne

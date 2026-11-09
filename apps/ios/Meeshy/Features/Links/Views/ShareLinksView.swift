@@ -66,7 +66,7 @@ struct ShareLinksView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
@@ -74,7 +74,7 @@ struct ShareLinksView: View {
 
             Text(String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main))
                 .font(.headline.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -85,7 +85,7 @@ struct ShareLinksView: View {
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxl))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main))
         }
@@ -111,10 +111,10 @@ struct ShareLinksView: View {
                 .accessibilityHidden(true)
             Text(value)
                 .font(.title2.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Text(label)
                 .font(.caption2)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(MeeshySpacing.mdPlus)
@@ -210,7 +210,7 @@ struct ShareLinksView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(link.displayName)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(joinedCountLabel(link.currentUses))
@@ -219,14 +219,14 @@ struct ShareLinksView: View {
                     if let conv = link.conversationTitle {
                         Text("· \(conv)")
                             .font(.caption)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .lineLimit(1)
                     }
                 }
                 if let expiry = ShareLinkDetailCopy.rowExpiry(link.expiresAt) {
                     Text(expiry)
                         .font(.caption)
-                        .foregroundColor(MeeshyColors.warning)
+                        .foregroundStyle(MeeshyColors.warning)
                         .lineLimit(1)
                 }
             }
@@ -252,7 +252,7 @@ struct ShareLinksView: View {
 
             Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(MeeshyIconSize.xs))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
         }
         .padding(MeeshySpacing.mdPlus)

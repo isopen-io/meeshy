@@ -69,7 +69,7 @@ extension MessageListViewController {
     /// les messages dont le `changeVersion` a bougé depuis la dernière pose
     /// re-passent par la registration — l'égalité O(1) de `MessageRecord`
     /// (invariant grdb-04 : toute écriture visible bumpe la version) est le
-    /// pivot. AVANT (audit film user 2026-08-18) : TOUTES les cellules
+    /// pivot. AVANT: TOUTES les cellules
     /// visibles re-hébergeaient leur SwiftUI à CHAQUE mutation du store — la
     /// file hors-ligne en boucle de retry faisait donc tressauter la scène
     /// ENTIÈRE au repos (re-mesures ± sous-point, pulsation 0,7↔1,0 des
@@ -195,7 +195,7 @@ extension MessageListViewController {
             return true
         case .reconfigure:
             lastTypingRosterFingerprint = fingerprint
-            // JAMAIS de reconfigure HORS ÉCRAN (rouleau, user 2026-08-18) —
+            // JAMAIS de reconfigure HORS ÉCRAN (rouleau) —
             // la MÊME règle qu'`applySnapshot`, qui filtre sa portée sur
             // `indexPathsForVisibleItems`. Re-héberger une cellule invisible
             // fait transitoirement retomber sa hauteur à l'ESTIMÉE par le

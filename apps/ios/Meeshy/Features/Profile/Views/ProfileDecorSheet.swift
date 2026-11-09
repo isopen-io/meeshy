@@ -205,7 +205,7 @@ struct ProfileDecorSheet: View {
                     if model.failed {
                         Text(errorMessage)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                     }
                 }
                 .padding(MeeshySpacing.lg)
@@ -263,7 +263,7 @@ struct ProfileDecorSheet: View {
                     .frame(width: 68, height: 68)
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
             .padding(MeeshySpacing.xs)
@@ -290,7 +290,7 @@ struct ProfileDecorSheet: View {
             if bannerChoice.photoHidesDesigns {
                 Text(String(localized: "profile.decor.image.hidesDesigns", defaultValue: "Ton image de bannière passe devant les fonds.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             shopLink(.banner)
         }
@@ -328,7 +328,7 @@ struct ProfileDecorSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
             .padding(MeeshySpacing.xs)
@@ -380,7 +380,7 @@ struct ProfileDecorSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
             .padding(MeeshySpacing.xs)
@@ -405,7 +405,7 @@ struct ProfileDecorSheet: View {
     private func header(_ title: String) -> some View {
         Text(title)
             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .accessibilityAddTraits(.isHeader)
     }
 
@@ -416,7 +416,7 @@ struct ProfileDecorSheet: View {
         } label: {
             Label(String(localized: "profile.decor.shop", defaultValue: "Plus dans la boutique", bundle: .main), systemImage: "bag")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
@@ -465,21 +465,21 @@ struct ProfileDecorEntry: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "circle.dashed")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo300)
+                    .foregroundStyle(MeeshyColors.indigo300)
                     .frame(width: 28, height: 28)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "profile.decor.title", defaultValue: "Contour et bannière", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(String(localized: "profile.decor.subtitle", defaultValue: "Visibles de tous sur ton profil", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 Spacer()
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -606,14 +606,14 @@ struct ProfileBannerImageTile: View {
                             MeeshyColors.indigo500.opacity(0.12)
                             Image(systemName: "photo.badge.plus")
                                 .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .medium))
-                                .foregroundColor(MeeshyColors.indigo500)
+                                .foregroundStyle(MeeshyColors.indigo500)
                         }
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .lineLimit(1)
         }
         .padding(MeeshySpacing.xs)

@@ -138,11 +138,11 @@ extension ConversationView {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
 
                 TextField(String(localized: "conversation.view.search.placeholder", defaultValue: "Rechercher dans la conversation...", bundle: .main), text: $headerState.searchQuery)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .focused($isSearchFocused)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -157,7 +157,7 @@ extension ConversationView {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.md))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     .accessibilityLabel(String(localized: "conversation.view.search.clear", defaultValue: "Effacer la recherche", bundle: .main))
                 }
@@ -180,7 +180,7 @@ extension ConversationView {
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "conversation.view.search.close", defaultValue: "Fermer la recherche", bundle: .main))
         }
@@ -386,7 +386,7 @@ extension ConversationView {
     /// message hugs the composer — see `QuickReactionBarPlacement`. The
     /// full-screen `Color.clear` backdrop dismisses the bar on tap and also
     /// blocks the list from scrolling, so the captured anchor never drifts.
-    /// `AnyView` à la DÉCLARATION (2026-08-19) : c'était le chemin le PLUS
+    /// `AnyView` à la DÉCLARATION: c'était le chemin le PLUS
     /// PROFOND du type concret de `bodyContent` (GeometryReader → ZStack →
     /// VStack → EmojiReactionPicker + HStack de `Button<VStack<Image,Text>>`,
     /// ~30 niveaux). Ce type entrait dans le mangled name de `bodyContent`
@@ -548,10 +548,10 @@ struct QuickReactionActionsRow: View {
                 // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.md, weight: .medium))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                 Text(label)
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
             }
             .frame(width: 60, height: 44)
         }

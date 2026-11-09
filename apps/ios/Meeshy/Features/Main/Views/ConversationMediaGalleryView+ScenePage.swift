@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - La page SCÈNE du plein écran (#6709)
 //
-// Directive porteur 2026-09-15 : « lorsqu'on ouvre les scènes de poste, on doit
+// « lorsqu'on ouvre les scènes de poste, on doit
 // utiliser LE même composant qu'on utilise pour afficher les attachements de
 // conversation ! ».
 //

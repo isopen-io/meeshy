@@ -110,7 +110,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // re-configuring (CallManager's FSM enforces `.idle` first), but if
         // that invariant is ever violated, tear the stale connection down via
         // the same `disconnect()` used everywhere else — not just `.close()`.
-        // A bare `.close()` (audit 2026-07-03) left `audioTransceiver` /
+        // A bare `.close` left `audioTransceiver` /
         // `videoTransceiver` / local-track properties pointing at the closed
         // connection's objects; `addOffererTransceiversIfNeeded(on:)` guards
         // on `audioTransceiver == nil` and would then skip attaching media to

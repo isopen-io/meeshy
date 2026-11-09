@@ -209,8 +209,7 @@ struct StoryHeaderView: View {
     /// tick de la barre de progression (jusqu'à 60 Hz, cf.
     /// `StoryViewerView.storyCard(geometry:)`) — sans ce cache, `String
     /// (format:)` + plusieurs `String(localized:)` s'exécutaient des
-    /// dizaines de fois par seconde pour un contenu inchangé (post-revue
-    /// 2026-07-13, angle optimisation).
+    /// dizaines de fois par seconde pour un contenu inchangé (angle optimisation).
     @State private var cachedProfileLabel: String = ""
 
     /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
@@ -241,8 +240,8 @@ struct StoryHeaderView: View {
                     // Vue `2f` — l'heure appartient à la ligne du NOM : elle qualifie
                     // l'AUTEUR, le crédit du son (sa propre ligne, dessous) qualifie le
                     // CONTENU. Nom borné à 16 caractères comme dans les bulles de
-                    // conversation (directive user 2026-07-30). Republication : icône +
-                    // "@handle", sans « via » (directive user 2026-07-13).
+                    // conversation. Republication: icône +
+                    // "@handle", sans « via ».
                     FullscreenIdentityRow(
                         name: DisplayName.truncated(group.username),
                         subtitle: StoryHeaderTime.subtitle(of: currentStory),
@@ -252,8 +251,7 @@ struct StoryHeaderView: View {
 
                                 // Pas de bordure gradient autour de l'avatar dans la
                                 // slide : on est déjà dans la story de l'utilisateur,
-                                // l'anneau « story dispo » serait redondant (cf. user
-                                // request 2026-05-27). Le contexte `.storyViewer` suffit
+                                // l'anneau « story dispo » serait redondant. Le contexte `.storyViewer` suffit
                                 // déjà à masquer l'anneau via `showsStoryRing == false`.
                                 LivePresence { MeeshyAvatar(
                                     name: group.username,
@@ -310,7 +308,7 @@ struct StoryHeaderView: View {
                             // ne dépend JAMAIS du muet. Accent FIXE (pas `group.avatarColor`) :
                             // l'en-tête se pose sur un média arbitraire.
                             //
-                            // Directive porteur 2026-10-08 (#9677) : la NOTE coupe le son
+                            // (#9677): la NOTE coupe le son
                             // de fond et se barre — plus de baffle pour ce son. Le crédit
                             // vit dans le bouton du profil : le toucher passe par un geste
                             // PRIORITAIRE (comme le rail), VoiceOver par l'action nommée
@@ -336,7 +334,7 @@ struct StoryHeaderView: View {
                 // Le bouton porte un SEUL accessibilityLabel qui remplace tout
                 // le contenu de son label closure (icône repost + @handle
                 // inclus) — VoiceOver ne lirait jamais la republication sans
-                // l'inclure explicitement ici (post-revue 2026-07-13).
+                // l'inclure explicitement ici.
                 .accessibilityLabel(cachedProfileLabel)
                 .accessibilityAction(named: Text(BackgroundSoundMuteControl.accessibilityLabel(isMuted: isGlobalMuted))) {
                     guard BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement) else { return }

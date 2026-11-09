@@ -117,7 +117,7 @@ struct TopChromeTint: Equatable, Sendable {
 /// `.ignoresSafeArea()` et peint donc la fenêtre ENTIÈRE, bande status-bar
 /// comprise. Tout ce qui se pose DERRIÈRE ce contenu disparaît dessous. La
 /// preuve : un aplat ROUGE opaque de 200 pt posé en `.background` ne rend pas
-/// un pixel (capture 2026-09-14, Meeshy-FullscreenCluster, appel forcé).
+/// un pixel (Meeshy-FullscreenCluster, appel forcé).
 ///
 /// L'objection qui avait fait préférer `.background` — « par-dessus, la bande
 /// couvrirait la pilule et le mini-lecteur » — est réelle, et c'est l'OFFSET

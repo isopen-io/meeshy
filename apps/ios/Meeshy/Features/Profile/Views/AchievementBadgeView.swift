@@ -45,7 +45,7 @@ struct AchievementBadgeView: View {
 
             Text("\(achievement.current)/\(achievement.threshold)")
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium, design: .rounded))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .padding(.vertical, MeeshySpacing.md)
         .frame(maxWidth: .infinity)

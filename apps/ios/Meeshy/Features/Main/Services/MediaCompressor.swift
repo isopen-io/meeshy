@@ -348,7 +348,7 @@ actor MediaCompressor {
     /// **Le writer encode les pixel buffers RAW** (orientation capteur), pas
     /// l'image affichée : la rotation part en métadonnée (`transform`). Le budget
     /// du contexte s'exprime côté AFFICHAGE ; on ajuste là puis on revient en
-    /// RAW, sinon l'encodeur étire un 16:9 en 9:16 (régression du 2026-04-30).
+    /// RAW, sinon l'encodeur étire un 16:9 en 9:16.
     private func writerGeometry(of track: AVAssetTrack, within budget: CGSize) async throws -> WriterGeometry {
         let rawSourceSize = try await track.load(.naturalSize)
         let transform = try await track.load(.preferredTransform)

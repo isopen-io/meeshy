@@ -76,7 +76,7 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
     var capture: ContentExitLaw.CaptureVerdict { law.capture }
 
     func offers(_ exit: MessageExit) -> Bool {
-        // D8 (#10949, porteur 2026-10-18) : un flouté se TRANSFÈRE, son flou
+        // D8 (#10949): un flouté se TRANSFÈRE, son flou
         // hérité par la copie (la passerelle l'impose) ; rien d'autre ne sort.
         // E2EE ⇒ pas de transfert (`MessageActionPolicy.forward`) : le texte déchiffré
         // sur l'appareil partirait EN CLAIR vers le serveur et la cible. Une seule

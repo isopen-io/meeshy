@@ -49,7 +49,7 @@ struct ConversationDashboardSentimentSection: View {
                 .font(MeeshyFont.relative(MeeshyFont.titleSize))
             Text("\(pct)%")
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                .foregroundColor(color)
+                .foregroundStyle(color)
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundStyle(theme.textMuted)

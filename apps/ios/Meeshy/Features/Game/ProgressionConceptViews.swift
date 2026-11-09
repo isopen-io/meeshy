@@ -316,7 +316,7 @@ struct ProgressionConceptSectionTitle: View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             .textCase(.uppercase)
-            .foregroundColor(ThemeManager.shared.textMuted)
+            .foregroundStyle(ThemeManager.shared.textMuted)
             .accessibilityAddTraits(.isHeader)
     }
 }

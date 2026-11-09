@@ -44,8 +44,7 @@ struct FocalDeletedRow: View, Equatable {
 
 /// Notice système générique (ex. futur événement de conversation) — plate,
 /// sans capsule, CENTRÉE (matrice §5 « Notices d'appel et système = rangées
-/// centrées plates » — l'alignement au retrait 29 était un écart, corrigé
-/// 2026-08-18). `text` porte déjà le libellé localisé par l'appelant (même
+/// centrées plates » — l'alignement au retrait 29 était un écart). `text` porte déjà le libellé localisé par l'appelant (même
 /// contrat d'entrée que `BubbleSystemNoticeView.text`).
 struct FocalSystemNoticeRow: View, Equatable {
     let text: String

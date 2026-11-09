@@ -161,7 +161,7 @@ extension StoryCardView {
                 // largeur, l'overlay hérite de cette largeur trop grande et,
                 // le ZStack étant centré, ses rows (padding leading 28)
                 // démarrent à un x négatif → la ligne de commentaire sort du
-                // viewport à gauche (bug user 2026-06-08). On le borne à
+                // viewport à gauche. On le borne à
                 // geometry.size.width + clipped comme ses voisins.
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
                 .clipped()
@@ -170,7 +170,6 @@ extension StoryCardView {
                 // le texte des réponses restait blanc fixe, illisible sur un
                 // fond de story clair/blanc — seul un halo protégeait
                 // jusqu'ici, insuffisant sur un fond proche du blanc pur
-                // (capture user 2026-08-11).
                 .environment(\.colorScheme, readerChromeScheme)
         }
     }
@@ -236,7 +235,6 @@ extension StoryCardView {
                 // sidebar's vertical position (mid-screen). 6pt was
                 // visibly too tight — button labels « React », « Répondre »,
                 // « Envoyer », « Son » were clipped on the right
-                // (bug user 2026-05-28 « les elements sortent du viewport »).
                 .padding(.trailing, MeeshySpacing.lg)
         }
         .padding(.top, topReserved)
@@ -245,10 +243,10 @@ extension StoryCardView {
         // du canvas expanse le ZStack parent à ~491pt (cf. canvasFitSize
         // doc). Le sidebar à right edge tombait alors hors écran. Cap
         // dur du HStack à `geometry.size.width` + clip pour empêcher
-        // tout débordement (bug 2026-05-27). Le Spacer + l'alignement
+        // tout débordement. Le Spacer + l'alignement
         // .trailing dans le HStack interne suffisent pour pousser le
         // sidebar VStack au bord droit visible.
-        // `.bottomTrailing` (2026-07-10) : le rail s'ancre au BAS de sa
+        // `.bottomTrailing`: le rail s'ancre au BAS de sa
         // bande utile (juste au-dessus du composer) au lieu d'être centré
         // verticalement — les actions restent « à portée de pouce » et le
         // vide perçu au-dessus du composer disparaît (IMG_0984).
@@ -299,7 +297,7 @@ extension StoryCardView {
             // montée (structural identity) — `@State progress` reste à 1,
             // `onAppear` ne re-tique jamais (aucun mouvement, aucun
             // rebond), et l'`asyncAfter` du premier vol efface l'overlay
-            // en avance (revue fix round 1, 2026-08-11).
+            // en avance (revue fix round 1).
             .id(flight.id)
             // Même garde que les autres calques flottants (header, rail,
             // composer, pickers plein écran) : le canvas gonfle le ZStack
@@ -344,7 +342,7 @@ extension StoryCardView {
     var fullLanguagePickerLayer: some View {
         // === Layer 10: Explorateur de langues complet (Prisme) — remplace
         // l'ancien `LanguagePickerSheet` mal intégré au liquid glass et sans
-        // dark/light (directive user 2026-07-26). Reprend le visuel de la
+        // dark/light. Reprend le visuel de la
         // liste extraite de la vue de conversation : contenu de la langue
         // COURANTE en tête + liste avec aperçu, retraduire et « Traduire »
         // on-demand. La story reste visible derrière. ===
@@ -376,7 +374,7 @@ extension StoryCardView {
             // Idem : sans ce pin, la feuille remplissait les ~480 pt du
             // ZStack gonflé par le canvas et perdait ~39 pt de chaque côté
             // sous le `.clipped()` — titre amputé à gauche, boutons
-            // « Traduire » coupés à droite (bug user 2026-07-27).
+            // « Traduire » coupés à droite.
             .frame(maxWidth: geometry.size.width)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .zIndex(150)

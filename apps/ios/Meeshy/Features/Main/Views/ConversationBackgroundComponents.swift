@@ -118,7 +118,7 @@ struct ConvBgFixedAvatar: View {
 
             Image(systemName: "person.fill")
                 .font(.system(size: MeeshyIconSize.md))
-                .foregroundColor(color.opacity(MeeshyOpacity.strong))
+                .foregroundStyle(color.opacity(MeeshyOpacity.strong))
 
             Circle()
                 .stroke(color.opacity(glowPulse ? 0.45 : 0.30), lineWidth: MeeshyBorder.strong)
@@ -254,7 +254,7 @@ struct ConvBgSatellite: View {
 
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .font(.system(size: MeeshyIconSize.md, weight: .medium))
-                .foregroundColor(color.opacity(MeeshyOpacity.strong))
+                .foregroundStyle(color.opacity(MeeshyOpacity.strong))
 
             Circle()
                 .fill(color.opacity(signalPulse ? 0.60 : 0.22))

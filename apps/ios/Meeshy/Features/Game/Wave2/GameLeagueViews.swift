@@ -102,7 +102,7 @@ struct GameLeagueScreen: View {
         } label: {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(selected ? MeeshyColors.brandPrimary : theme.textPrimary)
+                .foregroundStyle(selected ? MeeshyColors.brandPrimary : theme.textPrimary)
                 .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
@@ -231,10 +231,10 @@ private struct GameLeaguePlacedCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(GameText.leagueName(current.league))
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(GameText.leagueRankLine(rank: GameCopy.formatCount(current.rank), size: GameCopy.formatCount(current.groupSize)))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(GameText.zoneLabel(current.zone) + " · " + gap(current))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(zoneColor(current.zone))
@@ -324,12 +324,12 @@ private struct LeagueStandingRow: View {
         HStack(spacing: MeeshySpacing.md) {
             Text(GameCopy.formatCount(entry.rank))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(minWidth: 28, alignment: .leading)
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(entry.displayName)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 if entry.isMe { GameChip(text: GameText.leagueMe) }
             }
@@ -341,7 +341,7 @@ private struct LeagueStandingRow: View {
             }
             Text(GameCopy.points(entry.weekPoints))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .frame(minHeight: MeeshyControlSize.tapTarget)
@@ -459,16 +459,16 @@ struct GameFriendsLeagueCard: View {
         return HStack(spacing: MeeshySpacing.md) {
             Text(GameCopy.formatCount(entry.rank))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(minWidth: 28, alignment: .leading)
             Text(name)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             Text(GameCopy.points(entry.weekPoints))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .frame(minHeight: MeeshyControlSize.tapTarget)

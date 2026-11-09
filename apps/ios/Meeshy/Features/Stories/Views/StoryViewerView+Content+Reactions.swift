@@ -8,7 +8,7 @@ extension StoryViewerView {
 
     /// `heartBouncePulse` n'est PLUS tiqué ici — il tique à l'ARRIVÉE du vol
     /// (`StoryReactionFlightView.onArrived`, +Canvas.swift Layer 9), c'est
-    /// l'impact qui fait rebondir le cœur (spec scrub 2026-08-11).
+    /// l'impact qui fait rebondir le cœur.
     func triggerStoryReaction(_ emoji: String, from originFrame: CGRect? = nil) {
         HapticFeedback.medium()
 
@@ -18,7 +18,7 @@ extension StoryViewerView {
             }
         }
         // La barre disparaît VITE (~120 ms) pour laisser la scène au vol
-        // (spec scrub 2026-08-11) — l'ancien écho de 0.5 s est supprimé.
+        // l'ancien écho de 0.5 s est supprimé.
         withAnimation(.easeOut(duration: 0.12)) {
             showEmojiStrip = false
         }

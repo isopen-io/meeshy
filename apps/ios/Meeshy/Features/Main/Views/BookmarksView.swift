@@ -236,16 +236,16 @@ struct BookmarksView: View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "bookmark")
                 .font(MeeshyFont.relative(MeeshyIconSize.hero, weight: .light))
-                .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.4))
+                .foregroundStyle(Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.4))
                 .accessibilityHidden(true)
 
             Text(bookmarksEmptyTitle)
                 .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(bookmarksEmptySubtitle)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)
         }

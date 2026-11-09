@@ -122,9 +122,7 @@ extension MessageListViewController {
         // §4.7ter — MÊME report que les reconfigures globaux et ciblés :
         // re-mesurer les cellules visibles EN PLEIN geste déclenche la
         // cascade d'invalidation du solveur self-sizing (récursion
-        // `_updateVisibleCellsNow` → SIGTRAP, crash reproduit sur long
-        // fling 2026-08-18 — le tick de présence ~30 s tombait au milieu du
-        // défilement). À la pose, le flush global re-servira l'état frais.
+        // `_updateVisibleCellsNow` → SIGTRAP). À la pose, le flush global re-servira l'état frais.
         if store.isUserScrolling {
             hasDeferredGlobalReconfigure = true
             return
@@ -140,7 +138,7 @@ extension MessageListViewController {
             // Focal : une reconfiguration remet la cellule à plat et sans
             // carte (registration) — la passe la repose aussitôt, sinon la
             // carte du message en focus disparaît jusqu'au prochain tick
-            // (à l'ouverture, avant tout défilement : capture 2026-08-21).
+            // (à l'ouverture).
             self?.applyFocalPerspectiveToVisibleCells()
         }
     }
@@ -170,7 +168,7 @@ extension MessageListViewController {
         // §4.7ter (volet ciblé) : pendant un geste, différer — re-mesurer une
         // cellule visible en plein défilement fait sauter le champ visuel ET
         // la perspective (visualMidY = f(center.y − offset)). Vaut dans TOUS
-        // les modes depuis le 2026-08-25 : l'exception `.bubbles` faisait du
+        // les modes: l'exception `.bubbles` faisait du
         // mode NOMINAL le seul où une traduction tardive sautait sous le
         // doigt. Le flush à la pose (`flushDeferredReconfigureAtSettle`) est
         // mode-agnostique — rien ne peut rester périmé.
@@ -204,7 +202,7 @@ extension MessageListViewController {
             // Focal : une reconfiguration remet la cellule à plat et sans
             // carte (registration) — la passe la repose aussitôt, sinon la
             // carte du message en focus disparaît jusqu'au prochain tick
-            // (à l'ouverture, avant tout défilement : capture 2026-08-21).
+            // (à l'ouverture).
             self?.applyFocalPerspectiveToVisibleCells()
         }
     }

@@ -37,9 +37,9 @@ struct CommunityLinkDetailView: View {
                     .foregroundColor(MeeshyColors.communityAccent)
                     .accessibilityHidden(true)
             }
-            Text(link.name).font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold)).foregroundColor(theme.textPrimary)
+            Text(link.name).font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold)).foregroundStyle(theme.textPrimary)
             Text(link.joinUrl).font(MeeshyFont.relative(MeeshyFont.smallSize, design: .monospaced))
-                .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
+                .foregroundStyle(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(MeeshySpacing.xl).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
@@ -97,10 +97,10 @@ struct CommunityLinkDetailView: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(MeeshyOpacity.light))
                     .frame(width: 52, height: 52)
                 // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
-                Image(systemName: icon).font(MeeshyFont.fixedGlyph(MeeshyIconSize.xxl)).foregroundColor(color)
+                Image(systemName: icon).font(MeeshyFont.fixedGlyph(MeeshyIconSize.xxl)).foregroundStyle(color)
                     .accessibilityHidden(true)
             }
-            Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -121,11 +121,11 @@ struct CommunityLinkDetailView: View {
 
     private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xxl)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xxl)).foregroundStyle(Color(hex: color))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textSecondary)
+                Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundStyle(theme.textPrimary)
+                Text(label).font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundStyle(theme.textSecondary)
             }
             Spacer()
         }
@@ -155,9 +155,9 @@ struct CommunityLinkDetailView: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(MeeshyFont.relative(MeeshyFont.labelSize)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(MeeshyFont.labelSize)).foregroundStyle(theme.textSecondary)
             Spacer()
-            Text(value).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium)).foregroundStyle(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, MeeshySpacing.lg).padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .combine)

@@ -144,13 +144,13 @@ struct RequestsTab: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = sender?.username {
                     Text("@\(username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 receivedIntent(request)
@@ -159,7 +159,7 @@ struct RequestsTab: View {
 
                 Text(request.createdAt.relativeTimeString)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             Spacer()
@@ -170,7 +170,7 @@ struct RequestsTab: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                         .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
@@ -181,7 +181,7 @@ struct RequestsTab: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                         .background(
                             Circle().fill(
@@ -237,27 +237,27 @@ struct RequestsTab: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = receiver?.username {
                     Text("@\(username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 levelCaption(for: request, key: String(localized: "circles.requests.outgoing", defaultValue: "En attente · %@", bundle: .main))
 
                 Text(request.createdAt.relativeTimeString)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             Spacer()
 
             Text(String(localized: "contacts.requests.pending", defaultValue: "En attente", bundle: .main))
                 .font(.caption2.weight(.semibold))
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
@@ -269,7 +269,7 @@ struct RequestsTab: View {
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
@@ -291,12 +291,12 @@ struct RequestsTab: View {
         if let message = request.message, !message.isEmpty {
             Text(message)
                 .font(.footnote)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(2)
         } else {
             Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
                 .font(.footnote)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(2)
         }
     }

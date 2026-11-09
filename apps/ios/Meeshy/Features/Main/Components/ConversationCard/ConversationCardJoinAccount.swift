@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 
 /// Le compte au nom duquel « Rejoindre » agit, tel que le bouton le NOMME
-/// (correction porteur 2026-09-29, #8726) : le nom d'affichage, comme partout
+/// (#8726): le nom d'affichage, comme partout
 /// où l'app nomme l'utilisateur connecté (`displayName ?? username`), sinon son
 /// pseudo. `handle` sert à VoiceOver (« Rejoindre avec le compte @pseudo »).
 nonisolated struct ConversationCardJoinAccount: Equatable {

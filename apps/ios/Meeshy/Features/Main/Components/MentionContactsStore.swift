@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// **Les contacts de la liste `@`, servis depuis le cache et réchauffés à la
-/// frappe** (#7847, directive porteur 2026-09-24).
+/// frappe** (#7847).
 ///
 /// > « `@` seul ⇒ la liste s'affiche IMMÉDIATEMENT depuis le CACHE, sans
 /// > réseau : les contacts de l'utilisateur d'abord […]. Le cache des contacts

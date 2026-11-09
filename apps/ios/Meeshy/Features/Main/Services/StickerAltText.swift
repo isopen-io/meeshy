@@ -2,8 +2,7 @@ import Foundation
 import MeeshySDK
 import MeeshyUI
 
-/// **LE TEXTE D'UN STICKER, POUR QUE SON IMAGE LE PORTE** (#6377, retour
-/// porteur 2026-09-14).
+/// **LE TEXTE D'UN STICKER, POUR QUE SON IMAGE LE PORTE** (#6377).
 ///
 /// Un sticker envoyé en conversation part comme un PNG : le fil ne reçoit
 /// qu'une image, et `MeeshyMessageAttachment.alt` / `.caption` restaient vides

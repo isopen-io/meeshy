@@ -285,7 +285,7 @@ struct GameRulesBadgesSection: View {
     private func paragraph(_ text: String, muted: Bool) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-            .foregroundColor(muted ? theme.textMuted : theme.textPrimary)
+            .foregroundStyle(muted ? theme.textMuted : theme.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
     }
 

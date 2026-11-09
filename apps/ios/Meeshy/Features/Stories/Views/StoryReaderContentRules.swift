@@ -93,8 +93,7 @@ enum StoryReaderContentRules {
     static func hasTranslatableContent(_ story: StoryItem?) -> Bool {
         guard let story else { return false }
         // Texte du canvas ET légende — une story faite de texte posé sur le
-        // canvas est traduisible même sans légende (corrigé 2026-07-25 : seule
-        // la légende comptait, donc le bouton restait absent sur le cas le plus
+        // canvas est traduisible même sans légende (donc le bouton restait absent sur le cas le plus
         // courant).
         if StoryTextLanguageAvailability.hasTranslatableText(
             effects: story.storyEffects, content: story.content) { return true }
@@ -117,7 +116,7 @@ enum StoryReaderContentRules {
         // a une entrée. Le badge « translate » doit donc refléter la même logique :
         // tester la chaîne entière, pas seulement la première. Sinon un viewer
         // voyant le contenu traduit dans sa langue SECONDAIRE ne voyait aucun
-        // indicateur (incohérent avec le texte/caption affichés — bug 2026-06-01).
+        // indicateur.
         return translations.contains { languageChain.contains($0.language) }
     }
 
@@ -126,10 +125,10 @@ enum StoryReaderContentRules {
     /// - Parameter isRequested: la transcription ne s'affiche QUE sur demande, via le menu « … ».
     static func voiceCaption(effects: StoryEffects?, isRequested: Bool, languageChain: [String]) -> String? {
         // La transcription ne s'affiche QUE sur demande, via le menu « … »
-        // (directive user 2026-07-25, item 7a).
+        // (item 7a).
         guard isRequested else { return nil }
         // Ne PAS gater sur `voiceAttachmentId` : ce champ n'est écrit par aucun
-        // producteur (vérifié sur tout le dépôt le 2026-07-26) — la voix vit
+        // producteur — la voix vit
         // dans `audioPlayerObjects`. S'y adosser rendait la bascule inerte pour
         // TOUTES les stories. La seule condition qui vaille est l'existence
         // d'une transcription, ce que tranche le moteur SDK.

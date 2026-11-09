@@ -7,7 +7,7 @@ import MeeshyUI
 
 // MARK: - Feed View
 struct FeedView: View {
-    /// **La dernière dépendance qui manquait au MEUBLE** (2026-09-06).
+    /// **La dernière dépendance qui manquait au MEUBLE**.
     ///
     /// `DocumentComposerDoor` en a besoin, et l'arbre iPad l'avait déjà sous
     /// la main (`iPadRootView.conversationViewModel`) — il ne descendait
@@ -452,8 +452,7 @@ struct FeedView: View {
     /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
     /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
     /// vont ensemble ; le chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`)
-    /// porte la même paire. La carte des posts du feed (bouton `map`,
-    /// 2026-08-13) a fusionné dans « À proximité » le 2026-08-26 — mode
+    /// porte la même paire. La carte des posts du feed (bouton `map`) a fusionné dans « À proximité » — mode
     /// Discover, réservé au staff de la plateforme.
     private var feedHeaderActions: some View {
         HStack(spacing: MeeshySpacing.sm) {
@@ -476,7 +475,7 @@ struct FeedView: View {
         } label: {
             Image(systemName: "play.rectangle.on.rectangle.fill")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
                 .meeshyTapTarget()
@@ -511,7 +510,7 @@ struct FeedView: View {
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
                 .meeshyTapTarget()
@@ -822,7 +821,7 @@ struct FeedView: View {
     // « Partager » et « Citer » ne produisaient rien. Pire, l'item restait armé
     // et bloquait les présentations suivantes du feed jusqu'au redémarrage.
     // Elles sont désormais ancrées au `body`, monté en permanence — et c'est cet
-    // ancrage qui a permis de retirer l'overlay (2026-09-06) sans rien emporter.
+    // ancrage qui a permis de retirer l'overlay sans rien emporter.
     private func postActionPresentations(_ content: some View) -> some View {
         content
             .sheet(item: $shareableLink) { link in

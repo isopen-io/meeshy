@@ -47,15 +47,15 @@ extension PostDetailView {
                 // d'état vide n'a pas de cadre fixe, donc rien ne justifie
                 // qu'elle ignore Dynamic Type.
                 .font(MeeshyFont.relative(40))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
             Text(cause.title)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(cause.message)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
                 HapticFeedback.light()

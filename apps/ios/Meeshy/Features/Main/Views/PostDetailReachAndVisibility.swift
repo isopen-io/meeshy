@@ -8,7 +8,7 @@ import Foundation
 /// "Vues" = `Post.viewCount` (EVERY view — a returning reader counts again, #10483;
 /// distinct people are `uniqueViewCount`) — the SAME metric the
 /// story viewer shows, so Detail / Reel / Story / Feed all report identical numbers for
-/// the same Post (unified 2026-07-14). `postOpenCount` stays server-side for analytics
+/// the same Post. `postOpenCount` stays server-side for analytics
 /// but is no longer the displayed "views" label.
 enum PostReachFormatter {
 
