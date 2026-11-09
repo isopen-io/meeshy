@@ -119,7 +119,7 @@ public struct MeeshyAudioEditorView: View {
             Text(String(localized: "audio.editor.preparing",
                         defaultValue: "Pr\u{00E9}paration de l'audio\u{2026}", bundle: .module))
                 .font(MeeshyFont.relative(13, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
     }
 
@@ -214,7 +214,7 @@ public struct MeeshyAudioEditorView: View {
                     .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                    .foregroundColor(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
+                    .foregroundStyle(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
             }
             .meeshyTapTarget()
             .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
@@ -298,7 +298,7 @@ public struct MeeshyAudioEditorView: View {
                 Spacer()
                 Text(MediaFormat.duration(controller.activeDuration))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
     }
@@ -339,7 +339,7 @@ public struct MeeshyAudioEditorView: View {
                         .shadow(color: accent.opacity(0.4), radius: 12)
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .offset(x: isPlaying ? 0 : 2)
                 }
             }
@@ -358,7 +358,7 @@ public struct MeeshyAudioEditorView: View {
         } label: {
             Image(systemName: icon)
                 .meeshyScaledFont(size, weight: .medium)
-                .foregroundColor(theme.textPrimary.opacity(0.65))
+                .foregroundStyle(theme.textPrimary.opacity(0.65))
         }
         .accessibilityLabel(label)
         .buttonStyle(.plain)
@@ -400,7 +400,7 @@ public struct MeeshyAudioEditorView: View {
                 }
                 Text(tool.title)
                     .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
-                    .foregroundColor(isActive ? theme.textPrimary : theme.textMuted)
+                    .foregroundStyle(isActive ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
             }
         }
@@ -436,7 +436,7 @@ public struct MeeshyAudioEditorView: View {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .lineLimit(1)
             }
-            .foregroundColor(isActive ? .white : theme.textSecondary)
+            .foregroundStyle(isActive ? .white : theme.textSecondary)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
@@ -465,7 +465,7 @@ public struct MeeshyAudioEditorView: View {
                  : String(localized: "audio.editor.use",
                           defaultValue: "Utiliser l'audio", bundle: .module))
                 .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(MeeshyColors.brandGradient)
@@ -480,17 +480,17 @@ public struct MeeshyAudioEditorView: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .meeshyScaledFont(MeeshyIconSize.xs)
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
             Text(message)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Spacer(minLength: 0)
             Button {
                 controller.lastError = nil
             } label: {
                 Image(systemName: "xmark")
                     .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "common.close", bundle: .module))
             .buttonStyle(.plain)
@@ -513,7 +513,7 @@ public struct MeeshyAudioEditorView: View {
                 Text(String(localized: "audio.editor.processing",
                             defaultValue: "Traitement\u{2026}", bundle: .module))
                     .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
             }
             .padding(MeeshySpacing.xxl)
             .background(

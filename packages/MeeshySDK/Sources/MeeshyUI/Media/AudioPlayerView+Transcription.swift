@@ -506,7 +506,7 @@ extension AudioPlayerView {
             } label: {
                 Text(single.text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
-                    .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                    .foregroundStyle(inlineSegmentColor(isActive: isActive, isPast: isPast))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -538,7 +538,7 @@ extension AudioPlayerView {
                     } label: {
                         Text(segment.text + " ")
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
-                            .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                            .foregroundStyle(inlineSegmentColor(isActive: isActive, isPast: isPast))
                             .padding(.horizontal, isActive ? 2 : 0)
                             .padding(.vertical, isActive ? 1 : 0)
                             .background(

@@ -189,7 +189,7 @@ internal struct _InlineOverlayControls: View {
             } label: {
                 Text(manager.playbackSpeed.label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
                     .adaptiveGlass(in: Capsule())
@@ -212,7 +212,7 @@ internal struct _InlineOverlayControls: View {
     private func topBarGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .frame(width: 28, height: 28)
             .adaptiveGlass(in: Circle(), interactive: true)
     }
@@ -249,7 +249,7 @@ internal struct _InlineOverlayControls: View {
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .meeshyTapTarget()
@@ -277,7 +277,7 @@ internal struct _InlineOverlayControls: View {
     private var playPauseIcon: some View {
         Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
             .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .offset(x: manager.isPlaying ? 0 : 2)
             .adaptiveSymbolReplace(id: manager.isPlaying)
     }
@@ -293,11 +293,11 @@ internal struct _InlineOverlayControls: View {
                 HStack {
                     Text(MediaFormat.duration(isSeeking ? seekValue * manager.duration : manager.currentTime))
                         .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.8))
                     Spacer()
                     Text(MediaFormat.duration(manager.duration))
                         .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.8))
                 }
                 .padding(.horizontal, MeeshySpacing.xxs)
             }
@@ -439,7 +439,7 @@ internal struct _FullscreenOverlayControls: View {
                 Spacer(minLength: 0)
             }
             .font(.system(size: MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
-            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+            .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             .lineLimit(1)
             .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityElement(children: .combine)
@@ -454,7 +454,7 @@ internal struct _FullscreenOverlayControls: View {
             if let fileName, !fileName.isEmpty {
                 Text(fileName)
                     .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }

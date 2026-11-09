@@ -229,7 +229,7 @@ public struct VideoTransportControls: View {
     private func timeLabel(_ seconds: Double) -> some View {
         Text(MediaFormat.duration(seconds))
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white.opacity(MeeshyOpacity.intense))
+            .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
             .lineLimit(1)
             .fixedSize()
     }

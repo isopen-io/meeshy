@@ -712,7 +712,7 @@ public struct AudioPlayerView: View {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .meeshyScaledFont(MeeshyIconSize.sm)
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                 }
