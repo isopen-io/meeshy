@@ -11,11 +11,12 @@
  * qu'elle porte elle-même. Une prise de parole ouverte APRÈS la coupure (un
  * déblocage, puis une nouvelle voix) n'est pas visée : seul l'instant compte.
  */
-import { TALKIE_MAX_DURATION_MS } from '@meeshy/shared/types/talkie';
+import { TALKIE_JOIN_WINDOW_MS, TALKIE_MAX_DURATION_MS } from '@meeshy/shared/types/talkie';
 import { getCacheStore, type CacheStore } from '../CacheStore';
 import type { TalkieRelay } from './talkieRelay';
 
-const CUT_TTL_SECONDS = Math.ceil(TALKIE_MAX_DURATION_MS / 1000) + 5;
+/** Une voix réveillée reste rejoignable la fenêtre de rattrapage après sa fin (#17142) : la coupure vit aussi longtemps. */
+const CUT_TTL_SECONDS = Math.ceil((TALKIE_MAX_DURATION_MS + TALKIE_JOIN_WINDOW_MS) / 1000) + 5;
 /** Casse libre d'un ObjectId : la clé est toujours en minuscules, qui qu'ait écrit l'identifiant. */
 const cutKey = (fromUserId: string, toUserId: string) => `talkie:cut:${fromUserId.toLowerCase()}:${toUserId.toLowerCase()}`;
 
@@ -31,6 +32,9 @@ let processRelay: TalkieRelay | null = null;
 export const registerProcessTalkieRelay = (relay: TalkieRelay | null): void => {
   processRelay = relay;
 };
+
+/** Le relais de ce processus, ou `null` tant que les sockets ne sont pas montées (la lecture de la voix gardée, #17142). */
+export const processTalkieRelay = (): TalkieRelay | null => processRelay;
 
 export const talkieCutDepsOf = (): TalkieCutDeps => ({
   cache: getCacheStore(),

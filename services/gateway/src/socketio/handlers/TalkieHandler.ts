@@ -1,19 +1,30 @@
 /**
  * La porte socket du TALKIE (#13935, D-4) : `talkie:start`, `talkie:send-chunk`,
- * `talkie:end`, et la fin d'une socket. Règles et raisons : `services/talkie/`.
+ * `talkie:end`, `talkie:join` (#17142) et la fin d'une socket. Règles et raisons :
+ * `services/talkie/`.
  *
  * Un compte INSCRIT seulement : un invité de lien n'a pas de cercle. Un relais par
  * processus, partagé par toutes les sockets de l'instance.
+ *
+ * Une voix réveillée vit sur l'instance de son ÉMETTEUR ; le destinataire réveillé peut
+ * se connecter sur une autre. Un `talkie:join` qu'aucune session locale ne connaît est
+ * donc relayé aux autres instances (`serverSideEmit`, adaptateur Redis) avec l'identité
+ * AUTHENTIFIÉE par l'instance qui l'a reçu ; celle qui porte la voix la rejoue à la
+ * socket nommée, que l'adaptateur atteint où qu'elle soit.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { TALKIE_ERROR_CODES, type TalkieStartAck } from '@meeshy/shared/types/talkie';
+import { TALKIE_ERROR_CODES, talkieJoinPayloadSchema, type TalkieStartAck } from '@meeshy/shared/types/talkie';
+import { z } from 'zod';
 import { getCacheStore } from '../../services/CacheStore';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { judgeTalkie } from '../../services/talkie/talkieGate';
 import { TalkieRelay } from '../../services/talkie/talkieRelay';
 import { readTalkieCut, registerProcessTalkieRelay } from '../../services/talkie/talkieCut';
+import { mostRecentSharedConversation } from '../../services/talkie/talkieFallback';
+import { sendTalkieWake, talkieWakeChannel } from '../../services/talkie/talkiePush';
+import { getPushNotificationService, type SendPushOptions } from '../../services/PushNotificationService';
 import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIOWithRooms } from '../serverEmit';
@@ -30,10 +41,25 @@ type TalkieSocket = {
 
 export type TalkieCaller = { readonly userId: string; readonly isAnonymous: boolean } | null;
 
+/** L'événement ENTRE instances qui relaie un `talkie:join` inconnu localement (jamais émis par un client). */
+export const TALKIE_JOIN_RELAY = 'talkie:join-relay';
+const joinRelaySchema = z.object({ socketId: z.string().min(1).max(64), userId: z.string().regex(/^[0-9a-fA-F]{24}$/), talkieId: talkieJoinPayloadSchema.shape.talkieId });
+export type TalkieJoinRelay = z.infer<typeof joinRelaySchema>;
+
 export type TalkieHandlerDeps = {
   readonly relay: TalkieRelay;
   readonly callerOf: (socketId: string) => TalkieCaller;
+  /** Relaie aux AUTRES instances un join dont la voix n'est pas ici ; absent ⇒ instance unique. */
+  readonly forwardJoin?: (join: TalkieJoinRelay) => void;
 };
+
+/** Ce que l'adaptateur de Socket.IO offre entre instances ; absent des doubles et sans adaptateur. */
+type InterServer = {
+  serverSideEmit(event: string, payload: TalkieJoinRelay): unknown;
+  on(event: string, listener: (payload: unknown) => void): unknown;
+};
+const interServerOf = (io: object): InterServer | null =>
+  'serverSideEmit' in io && typeof io.serverSideEmit === 'function' && 'on' in io && typeof io.on === 'function' ? (io as InterServer) : null;
 
 const NOT_ALLOWED: TalkieStartAck = { success: false, error: 'Talkie indisponible', code: TALKIE_ERROR_CODES.NOT_ALLOWED };
 
@@ -64,6 +90,18 @@ export function listenTalkie(socket: TalkieSocket, deps: TalkieHandlerDeps): voi
     if (userId) deps.relay.end(socket.id, userId, data);
   });
 
+  socket.on(CLIENT_EVENTS.TALKIE_JOIN, (data: unknown) => {
+    const userId = registered();
+    if (!userId) return;
+    deps.relay
+      .join(socket.id, userId, data)
+      .then((outcome) => {
+        const parsed = talkieJoinPayloadSchema.safeParse(data);
+        if (outcome === 'unknown' && parsed.success) deps.forwardJoin?.({ socketId: socket.id, userId, talkieId: parsed.data.talkieId });
+      })
+      .catch((error: unknown) => logger.error('[TALKIE_JOIN] Error', { error }));
+  });
+
   socket.on('disconnect', () => deps.relay.socketGone(socket.id));
 }
 
@@ -78,12 +116,29 @@ export function talkieHandlerDeps(params: {
 }): TalkieHandlerDeps {
   const existing = relays.get(params.io);
   const relay = existing ?? createRelay(params);
+  const interServer = interServerOf(params.io);
   if (!existing) {
     relays.set(params.io, relay);
     registerProcessTalkieRelay(relay);
+    interServer?.on(TALKIE_JOIN_RELAY, (payload) => {
+      const join = joinRelaySchema.safeParse(payload);
+      if (!join.success) return;
+      relay.join(join.data.socketId, join.data.userId, { talkieId: join.data.talkieId }).catch((error: unknown) => logger.error('[TALKIE_JOIN] Relay error', { error }));
+    });
   }
   return {
     relay,
+    ...(interServer
+      ? {
+          forwardJoin: (join: TalkieJoinRelay) => {
+            try {
+              interServer.serverSideEmit(TALKIE_JOIN_RELAY, join);
+            } catch (error) {
+              logger.debug('[TALKIE_JOIN] No inter-server channel', { error });
+            }
+          },
+        }
+      : {}),
     callerOf: (socketId) => {
       const userId = params.socketToUser.get(socketId);
       const user = userId ? params.connectedUsers.get(userId) : undefined;
@@ -104,8 +159,17 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
     return limiter.limiter;
   };
   const presence = getPresenceVisibilityService(params.prisma);
+  const wakeDeps = {
+    prisma: params.prisma,
+    push: { sendToUser: (options: SendPushOptions) => getPushNotificationService(params.prisma).sendToUser(options) },
+    now: () => new Date(),
+  };
   return new TalkieRelay({
     io: params.io,
+    wake: (wake) => sendTalkieWake(wakeDeps, { ...wake, phase: 'live' }),
+    followUp: ({ availableUntil, bytes, durationMs, ...pair }) => sendTalkieWake(wakeDeps, { ...pair, phase: 'ended', availableUntil, bytes, durationMs }),
+    fallbackConversation: (fromUserId, toUserId) => mostRecentSharedConversation(params.prisma, fromUserId, toUserId),
+    trace: (event, fields) => logger.info(event, fields),
     judge: async (fromUserId, toUserId) => {
       const verdict = await judgeTalkie(
         {
@@ -114,6 +178,7 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
           recipientConnected: async (userId) => (await params.io.in(ROOMS.user(userId)).fetchSockets()).length > 0,
           presenceServed: async (viewer, targetId) =>
             (await presence.resolveForTarget({ userId: viewer.userId, role: viewer.role as GlobalUserRoleType }, { id: targetId })).showOnline,
+          wakeChannel: (userId) => talkieWakeChannel(params.prisma, userId),
         },
         fromUserId,
         toUserId,
