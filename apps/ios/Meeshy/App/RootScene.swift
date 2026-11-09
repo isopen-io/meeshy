@@ -90,6 +90,9 @@ struct RootScene: View {
             if LinkSignInConfirmationPreviewLaunch.isActive {
                 LinkSignInConfirmationPreviewScreen().zIndex(2)
             }
+            if KitCatalogLaunch.isActive {
+                KitCatalogScreen().zIndex(2)
+            }
             #endif
         }
         .meeshyAnimation(.easeInOut(duration: 0.35), value: state.isCelebrating)
