@@ -29,7 +29,7 @@ type Options = {
   /** La voix est scellée sur l'appareil (#13949). */
   readonly sealed?: boolean;
   /** Le canal de réveil du destinataire (#17142) : absent ⇒ aucune dépendance de réveil. */
-  readonly wake?: 'pushtotalk' | 'push' | null | 'throws';
+  readonly wake?: 'pushtotalk' | 'push' | null | 'throws' | { readonly miss: 'no-token' | 'apns-not-configured' | 'fcm-not-configured' | 'push-disabled' };
 };
 
 function db(options: Options = {}) {
@@ -288,6 +288,37 @@ describe('#17142 — un Proche sans socket mais joignable par push : la voix le 
 
     expect(verdict).toEqual({ ok: true });
     expect(wakeChannel).not.toHaveBeenCalled();
+  });
+
+  it.each(['apns-not-configured', 'fcm-not-configured', 'push-disabled', 'no-token'] as const)(
+    '#17249 — aucun canal ne peut partir (%s) : le repli, et sa cause pour le journal',
+    async (miss) => {
+      const { verdict } = await juger({ level: 'CLOSE', connected: false, wake: { miss } });
+
+      expect(verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE', cause: 'not-connected', wakeMiss: miss });
+    },
+  );
+
+  it('#17249 — sans jeton (null) ou sur une lecture qui échoue, le repli nomme pourquoi personne n’est réveillé', async () => {
+    expect((await juger({ level: 'CLOSE', connected: false, wake: null })).verdict).toMatchObject({ wakeMiss: 'no-token' });
+    expect((await juger({ level: 'CLOSE', connected: false, wake: 'throws' })).verdict).toMatchObject({ wakeMiss: 'lookup-failed' });
+  });
+
+  it('#17249 — pushs coupés par le destinataire : le repli le dit, sans lire ses jetons', async () => {
+    const { verdict, wakeChannel } = await juger({ level: 'CLOSE', connected: false, wake: 'push', notification: { pushEnabled: false } });
+
+    expect(verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE', wakeMiss: 'recipient-push-off' });
+    expect(wakeChannel).not.toHaveBeenCalled();
+  });
+
+  it('#17249 — la cause du réveil manqué ne change rien de ce que voit le client', async () => {
+    const [manque, sansRaison] = await Promise.all([
+      juger({ level: 'CLOSE', connected: false, wake: { miss: 'apns-not-configured' } }),
+      juger({ level: 'CLOSE', connected: false }),
+    ]);
+    const visible = ({ verdict }: { verdict: { ok: boolean; code?: string; message?: string } }) => ({ code: verdict.code, message: verdict.message });
+
+    expect(visible(manque)).toEqual(visible(sansRaison));
   });
 
   it('le repli porte le message informatif du porteur', async () => {

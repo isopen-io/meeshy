@@ -31,9 +31,10 @@ import {
   type TalkieWakePushData,
 } from '@meeshy/shared/types/talkie';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
-import type { PushNotificationService, SendPushOptions } from '../PushNotificationService';
+import type { PushNotificationService, PushResult, SendPushOptions } from '../PushNotificationService';
+import type { PushTransports } from '../push-transport-config';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
-import type { TalkieWakeChannel } from './talkieGate';
+import type { TalkieWakeChannel, TalkieWakeLookup } from './talkieGate';
 import { talkieAudioUrl } from './talkieAudioToken';
 import { retireOrphanPushToTalkTokens, type PushToTalkPrisma } from './pushToTalkTokens';
 import { tokenRoutesPushType } from '../push-type-routing';
@@ -45,24 +46,49 @@ export const TALKIE_WAKE_TTL_MS = TALKIE_MAX_DURATION_MS + TALKIE_JOIN_WINDOW_MS
 export const TALKIE_AUDIO_MIME = 'audio/aac';
 
 const WAKE_TOKEN_TYPES = ['pushtotalk', 'apns', 'fcm'] as const;
+type WakeTokenType = (typeof WAKE_TOKEN_TYPES)[number];
+/** Le transport qui porte chaque jeton : PushToTalk part par APNs. */
+const TRANSPORT_OF: Readonly<Record<WakeTokenType, keyof PushTransports>> = { pushtotalk: 'apns', apns: 'apns', fcm: 'fcm' };
+const ALL_TRANSPORTS: PushTransports = { apns: true, fcm: true };
+const isWakeTokenType = (type: string): type is WakeTokenType => (WAKE_TOKEN_TYPES as readonly string[]).includes(type);
 
 /**
- * Le canal de réveil du destinataire : PushToTalk d'abord (seul un client neuf l'enregistre, session encore valide),
- * sinon un jeton APNs ou FCM d'un client qui sait router `talkie_incoming` (`push-type-routing.ts`), sinon `null`.
+ * Le canal de réveil qui PEUT partir (#17249) : PushToTalk d'abord (seul un client neuf l'enregistre, session encore
+ * valide), sinon un jeton APNs ou FCM d'un client qui sait router `talkie_incoming` (`push-type-routing.ts`) — et
+ * chaque jeton ne compte que si son TRANSPORT part (`PushNotificationService.deliveryTransports`). Sinon la cause :
+ * pushs coupés pour le processus, aucun jeton capable, ou le transport du premier jeton capable non configuré.
  */
-export async function talkieWakeChannel(
+export async function resolveTalkieWake(
   prisma: PushToTalkPrisma,
   userId: string,
+  transports: PushTransports,
   now: Date = new Date(),
-): Promise<TalkieWakeChannel | null> {
-  if (process.env.ENABLE_PUSH_NOTIFICATIONS === 'false') return null;
+): Promise<TalkieWakeLookup> {
+  if (process.env.ENABLE_PUSH_NOTIFICATIONS === 'false') return { miss: 'push-disabled' };
   await retireOrphanPushToTalkTokens(prisma, userId, now);
   const tokens = await prisma.pushToken.findMany({
     where: { userId, isActive: true, type: { in: [...WAKE_TOKEN_TYPES] } },
     select: { type: true, platform: true, appVersion: true, bundleId: true },
   });
-  if (tokens.some((token) => token.type === 'pushtotalk')) return 'pushtotalk';
-  return tokens.some((token) => token.type !== 'pushtotalk' && tokenRoutesPushType(token, TALKIE_PUSH_TYPES.INCOMING)) ? 'push' : null;
+  const capable = tokens
+    .filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, TALKIE_PUSH_TYPES.INCOMING))
+    .map((token) => token.type)
+    .filter(isWakeTokenType);
+  if (capable.length === 0) return { miss: 'no-token' };
+  const deliverable = capable.filter((type) => transports[TRANSPORT_OF[type]]);
+  if (deliverable.includes('pushtotalk')) return 'pushtotalk';
+  if (deliverable.length > 0) return 'push';
+  return { miss: `${TRANSPORT_OF[capable[0]]}-not-configured` as const };
+}
+
+/** Le canal que les jetons du destinataire offrent, transports supposés prêts (#17142) ; `null` sans jeton capable. */
+export async function talkieWakeChannel(
+  prisma: PushToTalkPrisma,
+  userId: string,
+  now: Date = new Date(),
+): Promise<TalkieWakeChannel | null> {
+  const found = await resolveTalkieWake(prisma, userId, ALL_TRANSPORTS, now);
+  return typeof found === 'string' ? found : null;
 }
 
 export type TalkieWakePhase =
@@ -152,11 +178,33 @@ export type TalkieWakeDeps = {
   readonly now: () => Date;
 };
 
-/** Résout le nom affichable et la langue du destinataire, puis envoie le réveil (ou son suivi). */
+/** L'issue d'un réveil (#17249) : `failure` nomme pourquoi AUCUN appareil ne l'a reçu, `null` dès qu'un l'a reçu. */
+export type TalkieWakeOutcome = { readonly sent: number; readonly failure: string | null };
+
+export function talkieWakeOutcome(results: readonly PushResult[]): TalkieWakeOutcome {
+  const sent = results.filter((result) => result.success).length;
+  if (sent > 0) return { sent, failure: null };
+  if (results.length === 0) return { sent: 0, failure: 'no-device-served' };
+  return { sent: 0, failure: [...new Set(results.map((result) => result.error ?? 'unknown'))].join('; ') };
+}
+
+/** Envoie le réveil (ou son suivi) et rend son issue ; ne lève jamais — une panne devient la cause. */
 export async function sendTalkieWake(
   deps: TalkieWakeDeps,
   params: { readonly talkieId: string; readonly fromUserId: string; readonly toUserId: string } & TalkieWakePhase,
-): Promise<void> {
+): Promise<TalkieWakeOutcome> {
+  try {
+    return talkieWakeOutcome(await sendTalkieWakePushes(deps, params));
+  } catch (error: unknown) {
+    return { sent: 0, failure: error instanceof Error ? error.message : 'error' };
+  }
+}
+
+/** Résout le nom affichable et la langue du destinataire, puis envoie les pushs du réveil. */
+async function sendTalkieWakePushes(
+  deps: TalkieWakeDeps,
+  params: { readonly talkieId: string; readonly fromUserId: string; readonly toUserId: string } & TalkieWakePhase,
+): Promise<PushResult[]> {
   const [sender, recipient, prefs] = await Promise.all([
     deps.prisma.user.findUnique({ where: { id: params.fromUserId }, select: { displayName: true, username: true } }),
     deps.prisma.user.findUnique({ where: { id: params.toUserId }, select: RECIPIENT_LANG_SELECT }),
@@ -171,5 +219,5 @@ export async function sendTalkieWake(
     language: recipientLanguage(recipient, 'fr'),
     audioUrl: talkieAudioUrl({ talkieId: params.talkieId, toUserId: params.toUserId, expiresAt }),
   });
-  await Promise.all(pushes.map((push) => deps.push.sendToUser(push)));
+  return (await Promise.all(pushes.map((push) => deps.push.sendToUser(push)))).flat();
 }
