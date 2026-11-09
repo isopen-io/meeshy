@@ -552,6 +552,8 @@ struct PostDetailView: View {
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(theme.inputBackground.opacity(0.6)))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .accessibilityLabel(String(localized: "a11y.post.more_options", defaultValue: "Plus d'options", bundle: .main))
         .accessibilityHint(String(localized: "a11y.post.more_options.hint", defaultValue: "Copier le lien, partager, signaler", bundle: .main))
@@ -600,6 +602,15 @@ struct PostDetailView: View {
 
     // MARK: - Text Zone
 
+    private func toggleTextExpansion() {
+        guard textTruncation.isTruncated else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTextExpanded.toggle()
+        }
+        guard isTextExpanded else { return }
+        EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
+    }
+
     @ViewBuilder
     private func textZone(_ post: FeedPost) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -633,6 +644,7 @@ struct PostDetailView: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
                         .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
+                        .accessibilityAction { selectedProfileUser = .from(feedPost: post) }
 
                     // @pseudo + portée (vues · impressions) — sous le nom, l'œil
                     // ne vit plus dans la barre d'actions du bas.
@@ -688,19 +700,10 @@ struct PostDetailView: View {
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
             .padding(.horizontal, MeeshySpacing.lg)
-            .onTapGesture {
-                if truncation.isTruncated {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isTextExpanded.toggle()
-                    }
-                    if isTextExpanded {
-                        // L'ouverture du détail a déjà compté sa vue
-                        // (`registerDetailOpen`) : déplier le texte n'en est
-                        // pas une seconde (#10483, viewCount = total).
-                        EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
-                    }
-                }
-            }
+            .onTapGesture { toggleTextExpansion() }
+            .accessibilityAction(named: Text(isTextExpanded
+                ? String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main)
+                : String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))) { toggleTextExpansion() }
 
             // Inline secondary translation panel
             if let content = secondaryContent, let code = secondaryLangCode {

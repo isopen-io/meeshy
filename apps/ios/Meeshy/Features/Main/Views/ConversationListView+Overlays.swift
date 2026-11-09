@@ -277,7 +277,6 @@ extension ConversationListView {
                     // devenue chip draggable.
                     LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0,
                                   onDismiss: { dismissContextMenu() })
-
                     // L'aperçu d'appui long (#17242) : grande carte, menu
                     // COMPACT qu'on tire vers le haut. La progression vit dans
                     // `ConversationLongPressPeek` : le geste ne ré-évalue pas
@@ -335,6 +334,7 @@ extension ConversationListView {
             dismissContextMenu()
             openConversation(conversation)
         }
+        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { dismissContextMenu(); openConversation(conversation) }
         // Frame de repos de la carte (mesurée overlay invisible, hors
         // transformation) — point d'arrivée de l'émergence.
         .background(

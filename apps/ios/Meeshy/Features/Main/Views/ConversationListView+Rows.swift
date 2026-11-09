@@ -140,7 +140,7 @@ struct ConversationRowItem: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main)).accessibilityAction { onTap() }
                     // Drag-to-section natif : press-and-hold = menu, press-and-
                     // move = drag — la coordination est SYSTÈME avec le
                     // `.contextMenu` natif. C'est le long-press CUSTOM du
@@ -565,6 +565,7 @@ private struct RowPressBounceModifier: ViewModifier {
                             HapticFeedback.light()
                             onTap()
                         }
+                        .accessibilityHidden(true)
                         // Détecteur d'état d'appui PUR : minimumDuration
                         // inatteignable, seul `onPressingChanged` sert (true au
                         // touch-down, false au relâchement/échec). Sa variante

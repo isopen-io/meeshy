@@ -189,6 +189,8 @@ struct MemberManagementSection: View {
                         .foregroundColor(theme.textMuted)
                         .frame(width: 32, height: 32)
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
                 }
                 .accessibilityLabel(String(format: String(localized: "member-management.options-a11y", defaultValue: "Options pour %@", bundle: .main), displayName))
             }
@@ -305,10 +307,8 @@ struct MemberManagementSection: View {
 
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            // Fixed 28pt: decorative empty-state hero glyph — the adjacent label carries
-            // the meaning, so it stays fixed and is hidden from VoiceOver (precedent 90i).
             Image(systemName: "person.slash")
-                .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
+                .meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
 

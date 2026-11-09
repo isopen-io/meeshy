@@ -522,6 +522,7 @@ struct FeedPostCard: View {
                 .onTapGesture {
                     onTapPost?(post)
                 }
+                .accessibilityAction(named: Text(String(localized: "feed.post.open", bundle: .main))) { onTapPost?(post) }
 
                 // « Avec … » + marqueur personnel — HORS de la zone tappable
                 // ci-dessus : ses chips ouvrent CHACUN un profil différent, pas
@@ -724,7 +725,6 @@ struct FeedPostCard: View {
                 .equatable()
             }
             .padding(MeeshySpacing.lg)
-
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview

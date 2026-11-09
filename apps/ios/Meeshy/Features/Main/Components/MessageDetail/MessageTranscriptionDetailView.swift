@@ -185,10 +185,8 @@ struct MessageTranscriptionDetailView: View {
 
             // Empty state with transcribe button
             VStack(spacing: MeeshySpacing.md) {
-                // Doctrine 84i/86i : glyphe hero d'etat vide (28pt) figé — decoratif,
-                // masqué à VoiceOver (le libellé « Aucune transcription » porte le sens).
                 Image(systemName: "text.word.spacing")
-                    .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
+                    .meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)
                     .foregroundStyle(theme.textMuted.opacity(0.4))
                     .accessibilityHidden(true)
 

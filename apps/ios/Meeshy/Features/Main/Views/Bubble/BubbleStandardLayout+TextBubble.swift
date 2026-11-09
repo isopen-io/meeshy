@@ -69,6 +69,7 @@ extension BubbleStandardLayout {
             quotedReplyView(reply.reference)
                 .padding(.bottom, MeeshySpacing.xs)
                 .onTapGesture { openQuotedTarget(reply) }
+                .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) { openQuotedTarget(reply) }
         }
 
         // « modifié » se dit dans le PIED, à côté de l'heure (#7620) — posé

@@ -176,6 +176,8 @@ struct MessageLanguageDetailView: View {
                                 .frame(width: 28, height: 28)
                                 .adaptiveGlass(in: Circle())
                                 .contentShape(Circle())
+                                .meeshyTapTarget()
+                                .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "message-detail.a11y.close-translation", defaultValue: "Fermer la traduction", bundle: .main))
@@ -202,12 +204,10 @@ struct MessageLanguageDetailView: View {
             Rectangle()
                 .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 .frame(height: 0.5)
-
             // Language list
             ForEach(LanguageDisplay.translationPickerLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
                 languageRow(lang, originalLang: originalLang)
             }
-
             if let translationError {
                 errorView(translationError)
                     .padding(.horizontal, MeeshySpacing.sm)
