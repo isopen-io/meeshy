@@ -32,8 +32,8 @@ final class ComposerMediaAdjustTests: XCTestCase {
         let video = ComposerMediaAdjustPanel.kinds(for: .video)
         XCTAssertFalse(video.contains(.sharpness))
         XCTAssertFalse(video.contains(.blur))
-        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: .image), AdjustmentKind.toneCases)
-        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: nil), AdjustmentKind.toneCases)
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: .image), AdjustmentKind.allCases.filter { $0.family == .tone })
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: nil), AdjustmentKind.allCases.filter { $0.family == .tone })
     }
 
     // MARK: - Les EFFETS de l'ancien éditeur (#9498)

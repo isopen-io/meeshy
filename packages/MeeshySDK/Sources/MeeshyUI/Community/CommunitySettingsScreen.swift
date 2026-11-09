@@ -84,10 +84,10 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         } message: {
             Text(String(localized: "community.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux canaux et messages de cette communauté.", bundle: .module))
         }
-        .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, maxSizeKB: 500) { data in
+        .entityImagePickerFlow(pickerItem: $avatarItem, format: .avatar, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
         }
-        .entityImagePickerFlow(pickerItem: $bannerItem, context: .banner, maxSizeKB: 800) { data in
+        .entityImagePickerFlow(pickerItem: $bannerItem, format: .banner, maxSizeKB: 800) { data in
             Task { await viewModel.uploadCompressedBanner(data) }
         }
     }

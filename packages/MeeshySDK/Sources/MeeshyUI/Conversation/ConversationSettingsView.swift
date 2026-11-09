@@ -99,10 +99,10 @@ public struct ConversationSettingsView: View {
         } message: {
             Text(String(localized: "conversation.settings.delete.confirm.message", defaultValue: "Cette conversation sera fermée pour tous les membres. Plus personne ne pourra écrire.", bundle: .module))
         }
-        .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, accentColor: viewModel.accentColor, maxSizeKB: 500) { data in
+        .entityImagePickerFlow(pickerItem: $avatarItem, format: .avatar, accentColor: viewModel.accentColor, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
         }
-        .entityImagePickerFlow(pickerItem: $bannerItem, context: .banner, accentColor: viewModel.accentColor, maxSizeKB: 800) { data in
+        .entityImagePickerFlow(pickerItem: $bannerItem, format: .banner, accentColor: viewModel.accentColor, maxSizeKB: 800) { data in
             Task { await viewModel.uploadCompressedBanner(data) }
         }
         .task {

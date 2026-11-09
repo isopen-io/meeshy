@@ -19,13 +19,9 @@ import MeeshyUI
 /// obtenue par le même chemin.
 extension ConversationView {
 
-    /// **1 024 px, la MÊME borne que le chemin nominal — et ce n'est pas un
-    /// réglage de confort.** `composerState.pendingThumbnails` alimente aussi
-    /// `MeeshyImageEditorView` (`ConversationView+Composer.swift`), dont la
-    /// sortie est RÉENREGISTRÉE sur le fichier de la pièce jointe. Une vignette
-    /// plus petite ici dégraderait l'image qu'on renvoie après édition : un
-    /// brouillon repris s'éditerait moins bien qu'un brouillon frais. Les deux
-    /// bornes doivent bouger ensemble ou pas du tout.
+    /// **1 024 px, la MÊME borne que le chemin nominal.** Une vignette plus
+    /// petite ici ferait qu'un brouillon repris montre une image moins nette
+    /// qu'un brouillon frais. Les deux bornes doivent bouger ensemble ou pas du tout.
     static let draftThumbnailMaxPixelSize: CGFloat = 1024
 
     /// Régénère les vignettes du tray pour les images d'un brouillon restauré.

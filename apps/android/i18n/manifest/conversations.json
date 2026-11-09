@@ -50,7 +50,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "swipe.lock",
+          "iosKey": "context.lock",
           "androidName": "conversations_action_lock",
           "status": "adopted"
         },

@@ -510,8 +510,7 @@ struct ConversationListView: View {
     private var swipeActions: ConversationSwipeActions {
         ConversationSwipeActions(
             viewModel: conversationViewModel,
-            currentUser: AuthManager.shared.currentUser,
-            onObsolete: { conversation in sheetTargets.obsoleteTarget = conversation }
+            currentUser: AuthManager.shared.currentUser
         )
     }
 

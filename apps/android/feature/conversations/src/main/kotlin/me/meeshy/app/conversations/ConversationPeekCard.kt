@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -60,7 +59,7 @@ internal fun ConversationPeekCardBody(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Lock,
+                    imageVector = MeeshyIcons.LockFilled,
                     contentDescription = null,
                     tint = tokens.textMuted,
                     modifier = Modifier.padding(end = MeeshySpacing.xs).size(16.dp),

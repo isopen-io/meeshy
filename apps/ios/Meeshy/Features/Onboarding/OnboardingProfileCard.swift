@@ -7,9 +7,9 @@ import MeeshyUI
 
 /// La carte « Montre-toi » : un aperçu du profil TEL QUE LES AUTRES LE VERRONT
 /// — bannière, avatar qui la chevauche, nom et pseudo — où chaque image se
-/// touche pour être choisie, recadrée et envoyée. Le sélecteur, le recadreur
-/// (`MeeshyImageEditorView`, contextes `.avatar` / `.banner`) et l'envoi
-/// (`ProfileImageUploading`) sont ceux de l'écran Profil.
+/// touche pour être choisie, retouchée et envoyée. Le sélecteur, la retouche
+/// de la capture caméra (`EntityImageRetouch`, formats `.avatar` / `.banner`,
+/// #17251) et l'envoi (`ProfileImageUploading`) sont ceux de l'écran Profil.
 ///
 /// Tant qu'aucune image n'est posée, la seule sortie est « Plus tard », au
 /// premier plan — jamais un « Continuer » inerte (même règle que la carte 4).
@@ -39,10 +39,10 @@ struct OnboardingProfileCard: View {
                 }
             }
         )
-        .modifier(OnboardingProfilePicker(item: $avatarItem, image: $avatarForEditor, context: .avatar) { edited in
+        .modifier(OnboardingProfilePicker(item: $avatarItem, image: $avatarForEditor, format: .avatar) { edited in
             Task { await profile.choose(edited, for: .avatar) }
         })
-        .modifier(OnboardingProfilePicker(item: $bannerItem, image: $bannerForEditor, context: .banner) { edited in
+        .modifier(OnboardingProfilePicker(item: $bannerItem, image: $bannerForEditor, format: .banner) { edited in
             Task { await profile.choose(edited, for: .banner) }
         })
     }
@@ -70,16 +70,19 @@ struct OnboardingProfileCard: View {
 
     // MARK: L'aperçu
 
+    /// Les deux sélecteurs sont FRÈRES, jamais l'un dans l'autre (#17251) :
+    /// toucher l'avatar n'ouvre que le sien, et rien n'enchaîne sur la bannière.
     private var preview: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            PhotosPicker(selection: $bannerItem, matching: .images) {
-                OnboardingProfileBannerTile(image: profile.banner.shown, isUploading: profile.banner.isUploading)
-            }
-            .buttonStyle(.plain)
-            .disabled(profile.banner.isUploading)
-            .accessibilityLabel(String(localized: "onboarding.profile.banner.pick", bundle: .main))
-            .accessibilityIdentifier("onboarding.profile.banner")
-            .overlay(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                PhotosPicker(selection: $bannerItem, matching: .images) {
+                    OnboardingProfileBannerTile(image: profile.banner.shown, isUploading: profile.banner.isUploading)
+                }
+                .buttonStyle(.plain)
+                .disabled(profile.banner.isUploading)
+                .accessibilityLabel(String(localized: "onboarding.profile.banner.pick", bundle: .main))
+                .accessibilityIdentifier("onboarding.profile.banner")
+                .padding(.bottom, OnboardingProfileAvatarTile.size / 2)
                 PhotosPicker(selection: $avatarItem, matching: .images) {
                     OnboardingProfileAvatarTile(name: model.userDisplayName, image: profile.avatar.shown,
                                                 isUploading: profile.avatar.isUploading, isDark: isDark)
@@ -88,9 +91,7 @@ struct OnboardingProfileCard: View {
                 .disabled(profile.avatar.isUploading)
                 .accessibilityLabel(String(localized: "onboarding.profile.avatar.pick", bundle: .main))
                 .accessibilityIdentifier("onboarding.profile.avatar")
-                .offset(y: OnboardingProfileAvatarTile.size / 2)
             }
-            .padding(.bottom, OnboardingProfileAvatarTile.size / 2)
             identity
         }
     }
@@ -241,12 +242,13 @@ private struct OnboardingProfileProgress: View {
     }
 }
 
-// MARK: - Choisir puis recadrer, comme l'écran Profil
+// MARK: - Choisir puis retoucher, comme l'écran Profil
 
+/// Annuler la retouche ne pose aucune image et n'envoie rien (#17251).
 private struct OnboardingProfilePicker: ViewModifier {
     @Binding var item: PhotosPickerItem?
     @Binding var image: UIImage?
-    let context: MediaPreviewContext
+    let format: EntityImageFormat
     let onAccept: (UIImage) -> Void
 
     func body(content: Content) -> some View {
@@ -260,19 +262,14 @@ private struct OnboardingProfilePicker: ViewModifier {
                 }
             }
             .fullScreenCover(item: $image) { picked in
-                MeeshyImageEditorView(
-                    image: picked,
-                    context: context,
-                    onAccept: { edited in
-                        image = nil
-                        item = nil
-                        onAccept(edited)
-                    },
-                    onCancel: {
-                        image = nil
-                        item = nil
-                    }
-                )
+                EntityImageRetouch(image: picked, format: format, onDone: { edited in
+                    image = nil
+                    item = nil
+                    onAccept(edited)
+                }, onCancel: {
+                    image = nil
+                    item = nil
+                })
             }
     }
 }
