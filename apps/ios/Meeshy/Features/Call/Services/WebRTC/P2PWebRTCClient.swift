@@ -895,23 +895,32 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         toggleVideoTask?.cancel()
         toggleVideoTask = nil
         stopDataChannelPing()
-        transcriptionDataChannel?.close()
-        transcriptionDataChannel = nil
         videoCapturer?.stopCapture()
         // Sans ce nil, le delegate (qui retient le RTCVideoSource du dernier
         // appel + DarkFrameDetector) survivait jusqu'au prochain appel vidéo.
         videoFilterDelegate = nil
-        localAudioTrack?.isEnabled = false
-        localVideoTrack_?.isEnabled = false
-        // Detach sender tracks before close() so libwebrtc releases its
-        // internal track references synchronously. Without this the ObjC
-        // bridge holds a strong reference to RTCMediaStreamTrack until the
-        // RTCPeerConnection object is deallocated, which can outlive the
-        // call if the peerConnection is retained by a pending callback.
-        audioTransceiver?.sender.track = nil
-        videoTransceiver?.sender.track = nil
-        peerConnection?.close()
+        // #17039 — couper les pistes, les détacher des émetteurs, fermer le canal
+        // et la connexion attendent les fils de libwebrtc (jusqu'à 1,24 s sur le
+        // fil principal, HangTracer). L'état Swift se vide ICI ; ces objets
+        // partent sur la file du moteur, dans le même ordre qu'avant : pistes
+        // détachées AVANT close(), pour que libwebrtc lâche ses références aux
+        // RTCMediaStreamTrack sans attendre la libération de la connexion. Les
+        // rappels de la connexion fermée sont écartés par identité
+        // (`self.peerConnection === peerConnection`, PeerDelegates).
+        let closing = (
+            peerConnection: peerConnection,
+            dataChannel: transcriptionDataChannel,
+            transceivers: [audioTransceiver, videoTransceiver].compactMap { $0 },
+            localTracks: [localAudioTrack as RTCMediaStreamTrack?, localVideoTrack_].compactMap { $0 }
+        )
+        transcriptionDataChannel = nil
         peerConnection = nil
+        CallEngineQueue.run {
+            closing.localTracks.forEach { $0.isEnabled = false }
+            closing.transceivers.forEach { $0.sender.track = nil }
+            closing.dataChannel?.close()
+            closing.peerConnection?.close()
+        }
         localAudioTrack = nil
         localVideoTrack_ = nil
         localVideoWithheld = false
