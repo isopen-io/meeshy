@@ -118,7 +118,7 @@ struct SupportView: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
             Text(title.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
@@ -144,7 +144,7 @@ struct SupportView: View {
         // adjacent row label carries the meaning, so the glyph is decorative to VoiceOver.
         Image(systemName: name)
             .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .medium))
-            .foregroundColor(Color(hex: color))
+            .foregroundStyle(Color(hex: color))
             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
@@ -168,7 +168,7 @@ struct SupportView: View {
 
                 Image(systemName: "arrow.up.right")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -195,7 +195,7 @@ struct SupportView: View {
 
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)

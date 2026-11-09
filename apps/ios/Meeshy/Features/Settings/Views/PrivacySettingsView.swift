@@ -280,7 +280,7 @@ struct PrivacySettingsView: View {
                 ) {
                     Text(String(localized: "settings.privacy.encryption.status_disabled", defaultValue: "Désactivé", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
         }
@@ -310,7 +310,7 @@ struct PrivacySettingsView: View {
             SettingsRow(icon: spec.icon, title: spec.title, color: spec.color) {
                 Text(String(localized: "settings.privacy.coming_soon", defaultValue: "Bientôt disponible", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             .opacity(0.55)
             .allowsHitTesting(false)
