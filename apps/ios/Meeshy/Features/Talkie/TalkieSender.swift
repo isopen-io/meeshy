@@ -97,6 +97,9 @@ final class TalkieSender: ObservableObject {
     /// Les voix réveillées closes, gardées jusqu'au verdict `joined` de la passerelle. Bornées : rien ne grossit.
     private var awaitingJoin: [(talkieId: String, toUserId: String, frames: [Data])] = []
     private static let awaitingJoinCap = 4
+    /// Les verdicts `joined` arrivés AVANT que leur voix soit rangée (#17248) : la passerelle peut fermer la voix
+    /// pendant que le micro de l'émetteur s'arrête encore. Le verdict attend la voix, il ne se perd plus. Bornés.
+    private var earlyVerdicts: [(talkieId: String, joined: Bool)] = []
     private var cancellables = Set<AnyCancellable>()
 
     nonisolated deinit {}
@@ -188,11 +191,28 @@ final class TalkieSender: ObservableObject {
     }
 
     private func copyIfUnjoined(_ talkieId: String, joined: Bool?) async {
-        guard let index = awaitingJoin.firstIndex(where: { $0.talkieId == talkieId }) else { return }
+        guard let index = awaitingJoin.firstIndex(where: { $0.talkieId == talkieId }) else {
+            keepEarly(talkieId, joined: joined)
+            return
+        }
         let kept = awaitingJoin.remove(at: index)
         guard joined == false else { return }
         let sent = await copier.send(kept.frames, toUserId: kept.toUserId, conversationId: nil)
         notice = sent ? .voice : .failed
+    }
+
+    /// Un verdict pour la voix réveillée encore en cours de fermeture : il l'attend.
+    private func keepEarly(_ talkieId: String, joined: Bool?) {
+        guard let joined, let opened = session?.opened, opened.talkieId == talkieId, opened.delivery == .waking else { return }
+        earlyVerdicts = Array((earlyVerdicts.filter { $0.talkieId != talkieId } + [(talkieId, joined)]).suffix(Self.awaitingJoinCap))
+    }
+
+    /// La voix vient d'être rangée : un verdict arrivé avant elle s'applique maintenant.
+    private func applyEarlyVerdict(_ current: Session) async {
+        guard let talkieId = current.opened?.talkieId,
+              let index = earlyVerdicts.firstIndex(where: { $0.talkieId == talkieId }) else { return }
+        let verdict = earlyVerdicts.remove(at: index)
+        await copyIfUnjoined(talkieId, joined: verdict.joined)
     }
 
     // MARK: - Interne
@@ -301,8 +321,12 @@ final class TalkieSender: ObservableObject {
         if let opened = current.opened, notify {
             if let rest = current.fragmenter.flush() { _ = transmit(current, rest) }
             emitter.end(talkieId: opened.talkieId)
+        } else if current.opened?.delivery == .waking, let rest = current.fragmenter.flush() {
+            // Fermée par la passerelle : la fin du fragment en cours ne part plus, mais elle reste dans la copie.
+            current.copied.append(rest.data)
         }
         settle(current, outcome)
+        await applyEarlyVerdict(current)
     }
 
     private func refuse(_ current: Session, _ outcome: TalkieSendOutcome) async {
