@@ -292,7 +292,7 @@ public final class MentionComposerController: ObservableObject {
         debounceTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await Task.sleep(nanoseconds: debounce)
+                try await Task.sleep(for: .nanoseconds(debounce))
                 guard !Task.isCancelled else { return }
                 let found = try await self.remoteCandidates(for: query)
                 guard !Task.isCancelled else { return }

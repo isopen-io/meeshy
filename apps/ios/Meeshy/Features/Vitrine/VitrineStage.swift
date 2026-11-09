@@ -212,7 +212,7 @@ enum VitrineStage {
 
     /// Le rendu est observé ; « prêt » tombe une fois la pose passée.
     private static func annoncer(_ scene: VitrineScene) async {
-        try? await Task.sleep(for: pose)
+        guard await cancellableSleep(for: pose) else { return }
         try? FileManager.default.createDirectory(at: VitrineLaunch.dossier, withIntermediateDirectories: true)
         try? Data(scene.rawValue.utf8).write(to: VitrineLaunch.marqueurPret)
     }

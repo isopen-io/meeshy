@@ -519,8 +519,7 @@ struct RiverStreamHost: View {
         isTimeHandleVisible = true
         timeHandleRest?.cancel()
         timeHandleRest = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(RiverTimeHandleMetrics.restDelay * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(RiverTimeHandleMetrics.restDelay)) else { return }
             isTimeHandleVisible = false
         }
     }

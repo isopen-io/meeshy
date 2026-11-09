@@ -33,7 +33,7 @@ enum VitrineReel {
     /// `nil` sinon — la requête de production part alors, inchangée.
     static func creerSiInstallee(_ corps: CreatePostBody, televerses: [VitrineTeleverse]) async throws -> APIPost? {
         guard let lecteur else { return nil }
-        try? await Task.sleep(for: delai)
+        guard await cancellableSleep(for: delai) else { throw CancellationError() }
         var servis: [VitrineTeleverse] = []
         for piece in televerses.map({ copieServie($0) }) {
             servis.append(await avecSonAffiche(piece))
