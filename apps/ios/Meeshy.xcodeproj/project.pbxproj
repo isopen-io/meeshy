@@ -4325,6 +4325,7 @@
 		F4DFCF01F39D6D8177E9F39F /* CallMontageRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE5F5CDD657F93F0091E59A1 /* CallMontageRecorderTests.swift */; };
 		F505053DF0D21C127F39FB58 /* LentilleFlatRowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98D7DA7BB1EBA8F24FA9955 /* LentilleFlatRowTests.swift */; };
 		F5153FB732829DB30D21E9DF /* CallManagerStopSystemPiPTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CE91FD1D43DDE6FA9EF3E4D /* CallManagerStopSystemPiPTests.swift */; };
+		F519806C0F885142A05F751C /* SyncPillBackgroundClockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE03C9E4DD1F12362B3F755 /* SyncPillBackgroundClockTests.swift */; };
 		F526B704CB1592FD6C094B24 /* MessageAliases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 065A181438F879CA597C26B5 /* MessageAliases.swift */; };
 		F53B248FCCE2A7D46A810B5D /* CallControlsLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA30DFD9AB60A55D5FA1AB8 /* CallControlsLayoutTests.swift */; };
 		F54CE085989A85353E72CE0F /* MemberManagementSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44DDC77AF274667637F0EB8 /* MemberManagementSection.swift */; };
@@ -4410,6 +4411,7 @@
 		FA14BFC68AAB8B84E2771F90 /* MessagePieceOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D672FCA7B0C88A9119471C /* MessagePieceOverlay.swift */; };
 		FA198B9E8095C93DCE259BAC /* VisualClockSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED42D5E6BCE1052C47EB987C /* VisualClockSourceGuardTests.swift */; };
 		FA1E8657C215ED9D1410ED50 /* CallPreviewPhaseRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA4A391E5143CCE31B4C11B /* CallPreviewPhaseRule.swift */; };
+		FA34B64C54BFA378405010F6 /* SyncPillDotClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C86C3B420BA2B4C06CFF2AB /* SyncPillDotClock.swift */; };
 		FA39FAEFFB4B26C7EB05B7AC /* LentilleFocusElectionHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B28F6D2A0CB0C03DBC41E3 /* LentilleFocusElectionHost.swift */; };
 		FA61A7D557EE3242D05FEC18 /* GameShowcaseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F277EB88935D3408AA0D5A /* GameShowcaseViews.swift */; };
 		FA68B9A6E0ACAFE2E28C298C /* ComposerSceneCameraFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BFE9D4723580F39F724321F /* ComposerSceneCameraFrame.swift */; };
@@ -5725,6 +5727,7 @@
 		3EABDF7FF3CE7A51B028FFD2 /* TalkieOutputPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieOutputPlan.swift; sourceTree = "<group>"; };
 		3EB9631A6C9972196A467FF0 /* GuestSessionCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestSessionCover.swift; sourceTree = "<group>"; };
 		3EDB439BA8D4DC157F08C2E1 /* ImagerAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagerAccessTests.swift; sourceTree = "<group>"; };
+		3EE03C9E4DD1F12362B3F755 /* SyncPillBackgroundClockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillBackgroundClockTests.swift; sourceTree = "<group>"; };
 		3F0E6C19F6C6918A49DDEE62 /* MessageListViewController+FocalScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+FocalScene.swift"; sourceTree = "<group>"; };
 		3F2F56581BDF3404D2821482 /* ConversationViewModel+ReplyContagion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewModel+ReplyContagion.swift"; sourceTree = "<group>"; };
 		3F316AF42AAFCF2528FC5148 /* ConversationEncryptionModeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationEncryptionModeText.swift; sourceTree = "<group>"; };
@@ -6824,6 +6827,7 @@
 		7C4AC0405FBE46DC1C980E65 /* MockGamePhotoNotebook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGamePhotoNotebook.swift; sourceTree = "<group>"; };
 		7C4FBE52812B6A28C59CB58D /* MockPreferenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPreferenceService.swift; sourceTree = "<group>"; };
 		7C7E3E90989541FDECF27F98 /* ConversationView+GuestAttachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+GuestAttachments.swift"; sourceTree = "<group>"; };
+		7C86C3B420BA2B4C06CFF2AB /* SyncPillDotClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillDotClock.swift; sourceTree = "<group>"; };
 		7C8BBDDF3853355DBC1A4424 /* SignupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupViewModel.swift; sourceTree = "<group>"; };
 		7C9E7898A4A16932FE689972 /* CallQualityDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallQualityDetailViewModel.swift; sourceTree = "<group>"; };
 		7CBA24288D42066429EFB1BE /* StickerOptimisticAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerOptimisticAttachment.swift; sourceTree = "<group>"; };
@@ -10010,6 +10014,7 @@
 				DCF1E582B7B5A4E4B53ED105 /* RecentMediaStripHeadTests.swift */,
 				510B4F35377A5D866B745A96 /* SectionFoldedUnreadTests.swift */,
 				FC261CE398BDE99B757D2509 /* StuckPublicationRetryTests.swift */,
+				3EE03C9E4DD1F12362B3F755 /* SyncPillBackgroundClockTests.swift */,
 				8A3E2A5F69D8339378B1606B /* SyncPillDestinationTests.swift */,
 				F2871206B30C4E163C104EEA /* SyncPillMarqueeTests.swift */,
 				13B6AFBDCA69220393EF2C4D /* SyncPillPauseGestureTests.swift */,
@@ -10254,6 +10259,7 @@
 				E0E3933177A6534B6797293D /* StuckPublicationRetry.swift */,
 				DC806A085948A69ACA059A4B /* SyncPill.swift */,
 				FFEBAA962A9728E3DEEF73B8 /* SyncPillDestination.swift */,
+				7C86C3B420BA2B4C06CFF2AB /* SyncPillDotClock.swift */,
 				E3A304EECE672DE9CF71432C /* SyncPillLabels.swift */,
 				C2AA38E59C9485B99FECB1CC /* SyncPillMarquee.swift */,
 				446C17DB44BE795C97E26474 /* SyncPillPlacement.swift */,
@@ -17671,6 +17677,7 @@
 				7795C8FF341501BFC7AC2B3F /* SyncPill.swift in Sources */,
 				41E0D91F92444968C5699B58 /* SyncPillDebugFeed.swift in Sources */,
 				44A707025E0C581D508F56A1 /* SyncPillDestination.swift in Sources */,
+				FA34B64C54BFA378405010F6 /* SyncPillDotClock.swift in Sources */,
 				195C0FE2DB8938BD046D6304 /* SyncPillLabels.swift in Sources */,
 				DBF0B29E269BA036FBCB2F1F /* SyncPillMarquee.swift in Sources */,
 				708A0A27E526D7AFEC203844 /* SyncPillPlacement.swift in Sources */,
@@ -19666,6 +19673,7 @@
 				3DF0365D9BFAD115D39FE6AD /* StuckPublicationRetryTests.swift in Sources */,
 				7E222AE9E3D47BECE7D5C5E0 /* SwallowedErrorSourceGuardTests.swift in Sources */,
 				D39C19AF92D2694A7E1022F4 /* SymbolicKeyInterpolationTests.swift in Sources */,
+				F519806C0F885142A05F751C /* SyncPillBackgroundClockTests.swift in Sources */,
 				55180CA6299087331FB52333 /* SyncPillDestinationTests.swift in Sources */,
 				A50AA0FD1B09C75252B5310F /* SyncPillLabelsTests.swift in Sources */,
 				15CF24751C94CDFBF22580AC /* SyncPillMarqueeTests.swift in Sources */,

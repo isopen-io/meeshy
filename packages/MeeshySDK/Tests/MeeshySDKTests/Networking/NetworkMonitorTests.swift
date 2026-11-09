@@ -101,4 +101,48 @@ final class NetworkMonitorTests: XCTestCase {
         lock.lock(); defer { lock.unlock() }
         XCTAssertEqual(trueEmissions, 1, "removeDuplicates must coalesce repeated true values into a single emission")
     }
+
+    // MARK: - Un chemin inchangé ne republie rien (#17250)
+
+    private final class Count: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0
+        func bump() { lock.lock(); value += 1; lock.unlock() }
+        var current: Int { lock.lock(); defer { lock.unlock() }; return value }
+    }
+
+    /// Relevé sur appareil, application en arrière-plan : `Network: online via wifi` toutes les ~2 s. Le système
+    /// rappelle `pathUpdateHandler` pour des changements qui ne touchent pas la photo (ou seulement sa qualité) ; chaque
+    /// rappel republiait `isOffline` / `connectionType` à l'identique, réveillant tous les observateurs.
+    func test_anUnchangedReading_republishesNothing() async {
+        let source = NetworkPathSource.makeForTesting()
+        source.publish(NetworkPathSnapshot(isSatisfied: true, usesWiFi: true))
+        let monitor = NetworkMonitor.makeForTesting(source: source)
+        let changes = Count()
+        monitor.objectWillChange.sink { changes.bump() }.store(in: &cancellables)
+
+        source.publish(NetworkPathSnapshot(isSatisfied: true, usesWiFi: true))
+        source.publish(NetworkPathSnapshot(isSatisfied: true, isExpensive: true, usesWiFi: true))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(changes.current, 0, "la lecture binaire n'a pas changé : rien ne doit être republié")
+
+        source.publish(NetworkPathSnapshot(isSatisfied: false))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertGreaterThan(changes.current, 0)
+        XCTAssertTrue(monitor.isOffline)
+    }
+
+    func test_theSource_neverRepublishesAnIdenticalSnapshot() {
+        let source = NetworkPathSource.makeForTesting()
+        let received = Count()
+        source.publisher.sink { _ in received.bump() }.store(in: &cancellables)
+
+        source.publish(NetworkPathSnapshot(isSatisfied: true))
+        source.publish(NetworkPathSnapshot(isSatisfied: true, usesWiFi: true))
+        source.publish(NetworkPathSnapshot(isSatisfied: true, usesWiFi: true))
+
+        XCTAssertEqual(received.current, 2, "la valeur courante, puis le seul changement")
+    }
 }
