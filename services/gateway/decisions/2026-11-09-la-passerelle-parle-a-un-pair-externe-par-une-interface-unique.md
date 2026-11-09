@@ -23,8 +23,10 @@ réutilise pas : il sera retiré.
   un `PeerStore` (sous-ensemble de `CacheStore` : Redis du staging, ou mémoire). Réservation ATOMIQUE de chaque
   pré-clé unique par `setnx` sur sa réservation ; une nouvelle `registrationId` efface les pré-clés de l'ancienne
   génération, et une nouvelle clé d'identité (même sous la même `registrationId`) efface toutes les pré-clés
-  uniques de l'appareil et leurs réservations — elles ne servent qu'à l'identité qui les a publiées ; rétention
-  30 jours (`E2EE_ENVELOPE_RETENTION_DAYS`). Aucun hôte appelé.
+  uniques de l'appareil et leurs réservations — elles ne servent qu'à l'identité qui les a publiées. Un appareil
+  dont le bundle a expiré repart de zéro de la même façon : les réservations survivent au bundle (elles datent de la
+  dernière demande), et sans cette purge une pré-clé republiée sous un numéro déjà réservé ne serait jamais servie ;
+  rétention 30 jours (`E2EE_ENVELOPE_RETENTION_DAYS`). Aucun hôte appelé.
 - **Choix par configuration** (`external-peer-selection.ts`) : `EXTERNAL_PEER_PROVIDER=fake-whatsapp` ouvre le
   faux en développement, en test (`NODE_ENV` dans une liste FERMÉE) ou au staging déclaré (`MEESHY_ENV=staging`) ;
   un `NODE_ENV` absent ou inconnu le laisse fermé, la production le garde fermé même demandé, et aucune autre
@@ -35,7 +37,9 @@ réutilise pas : il sera retiré.
 - **Modèles Prisma `DMASession`, `DMAEnrollment`, `PreKey`** : ni réutilisés ni modifiés. L'état du faux est celui
   des serveurs de WhatsApp, pas une donnée Meeshy ; le lot « retrait-moteur-maison » tranche leur sort.
 - **Garde de source** (`external-peer-isolation-guard.test.ts`) : aucun module de production n'importe
-  `dma-interoperability/`, et aucune source du pair externe ne porte d'URL, d'hôte de Meta ni de module réseau.
+  `dma-interoperability/`, et aucune source du pair externe ne porte d'URL, d'hôte de Meta ni de module réseau
+  (`child_process` compris, qui joindrait un hôte par un programme externe). Les motifs lisent toutes les formes
+  d'import : `from`, `import(…)`, `require(…)`, l'import pour effet (`import '…'`) et le chemin entre accents graves.
 
 ### Alternatives rejetées
 - *Réutiliser le moteur maison* : X3DH non authentifié et ratchet défectueux ; une seconde implémentation crypto à

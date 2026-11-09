@@ -52,12 +52,14 @@ const publication = (overrides: Partial<PreKeyBundlePublication> = {}): PreKeyBu
   ...overrides,
 });
 
-const gate = () => {
+const gate = (now: () => number = Date.now) => {
   const lines: string[] = [];
   const logger: ExternalPeerLogger = { warn: (message, context) => lines.push(JSON.stringify({ message, context })) };
-  const peer = admitExternalPeer(createFakeWhatsAppPeer({ store: memoryPeerStore() }), { libsignal: () => realLibsignalMessages, logger });
+  const peer = admitExternalPeer(createFakeWhatsAppPeer({ store: memoryPeerStore(now) }), { libsignal: () => realLibsignalMessages, logger });
   return { peer, lines };
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const refusalCode = async (attempt: () => Promise<unknown>): Promise<string> => {
   try {
@@ -225,6 +227,22 @@ describe('pair externe — la distribution des pré-clés', () => {
 
     const [bundle] = await peer.fetchPreKeyBundles(user);
 
+    expect(bundle.preKey).toEqual({ keyId: 1, publicKey: fakeKey(12) });
+  });
+
+  it('un appareil revenu après l’expiration de son bundle sert ses nouvelles pré-clés, même sous des numéros déjà réservés', async () => {
+    const clock = { now: Date.parse('2026-11-01T00:00:00Z') };
+    const { peer } = gate(() => clock.now);
+    const user = { side: 'external', network: 'whatsapp', handle: HANDLE } as const;
+    await peer.publishPreKeyBundle(publication());
+    clock.now += 29 * DAY_MS;
+    await peer.fetchPreKeyBundles(user);
+    clock.now += 2 * DAY_MS;
+    await peer.publishPreKeyBundle(publication({ identityKey: fakeKey(11), oneTimePreKeys: [{ keyId: 1, publicKey: fakeKey(12) }], kyberPreKeys: [] }));
+
+    const [bundle] = await peer.fetchPreKeyBundles(user);
+
+    expect(bundle.identityKey).toBe(fakeKey(11));
     expect(bundle.preKey).toEqual({ keyId: 1, publicKey: fakeKey(12) });
   });
 
