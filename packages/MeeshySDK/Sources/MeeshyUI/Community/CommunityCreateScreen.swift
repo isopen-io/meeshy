@@ -106,14 +106,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
             )
 
             if !viewModel.selectedEmoji.isEmpty {
-                Text(viewModel.selectedEmoji)
-                    .font(.system(size: 44))
-                    .rotationEffect(.degrees(-8))
-                    .offset(x: 8, y: 6)
-                    .opacity(0.85)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.trailing, MeeshySpacing.mdPlus)
-                    .padding(.top, MeeshySpacing.md)
+                CommunityEmojiMark(emoji: viewModel.selectedEmoji)
             }
 
             LinearGradient(
