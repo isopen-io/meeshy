@@ -673,12 +673,13 @@ public struct UserProfileSheet: View {
 
 // MARK: - Profile Tab Enum
 
+/// L'ordre des cas est celui des onglets (#17202) : Détails, Conversations, Publications.
 enum ProfileTab: String, CaseIterable {
-    case posts, conversations, details
+    case details, conversations, posts
 
     var title: String {
         switch self {
-        case .posts: return String(localized: "profile.tab.posts", defaultValue: "Postes", bundle: .module)
+        case .posts: return String(localized: "profile.tab.posts", defaultValue: "Publications", bundle: .module)
         case .conversations: return String(localized: "profile.tab.conversations", defaultValue: "Conversations", bundle: .module)
         case .details: return String(localized: "profile.tab.details", defaultValue: "Détails", bundle: .module)
         }

@@ -38,6 +38,11 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertFalse((model.levelAccessibilityLabel + model.rankAccessibilityLabel).contains(GameCopy.flameFormName(.brasier)))
     }
 
+    /// #17202 — le groupe du rang répond à celui du niveau : le titre du rang en haut, le blason, la Gloire en bas.
+    func test_rankGroup_readsTheRankTitleOnTop_andTheGloryAtTheBottom() {
+        XCTAssertEqual(GameBannerBadgeView.rankLines, [.name, .crest, .glory])
+    }
+
     // MARK: - Les étincelles en grand près du cercle, la Gloire près du blason — en glyphes, sans mot (#10913, #10951)
 
     private func sparked(points: Int? = nil, sparks: Int? = nil, lifetime: Int? = nil, glory: Int? = nil, level: Int = 3,
