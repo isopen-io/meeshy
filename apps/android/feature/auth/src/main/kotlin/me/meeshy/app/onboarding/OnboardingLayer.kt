@@ -28,9 +28,9 @@ import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.onboarding.OnboardingCard
 import me.meeshy.sdk.model.onboarding.OnboardingStepId
 import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
-import me.meeshy.ui.component.imageedit.ProfileImageEditorHost
-import me.meeshy.ui.component.imageedit.rememberProfileImageEditor
-import me.meeshy.ui.component.imageedit.rememberProfileImagePicker
+import me.meeshy.ui.component.retouch.EntityImageRetouchHost
+import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
+import me.meeshy.ui.component.retouch.rememberEntityImagePicker
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
 import me.meeshy.ui.component.permission.rememberPermissionFlow
@@ -116,11 +116,11 @@ fun OnboardingLayer(
         }
     }
 
-    // « Montre-toi » : le sélecteur et l'éditeur PARTAGÉS avec l'écran Profil ; la photo retouchée part par le modèle.
-    val profileEditor = rememberProfileImageEditor { target, item ->
+    // « Montre-toi » : le sélecteur et la retouche de la capture PARTAGÉS avec l'écran Profil (#17257) ; la photo retouchée part par le modèle.
+    val profileEditor = rememberEntityImageRetouch { target, item ->
         scope.launch { viewModel.pickProfileImage(target, item, item.localPreviewPath()) }
     }
-    val chooseProfileImage by rememberUpdatedState(rememberProfileImagePicker(profileEditor::offer))
+    val chooseProfileImage by rememberUpdatedState(rememberEntityImagePicker(profileEditor::offer))
 
     val visible = state.isPresented && !isStoryComposerOpen && !isCallOpen
     BackHandler(enabled = visible) { }
@@ -192,7 +192,7 @@ fun OnboardingLayer(
     ) {
         OnboardingCardContent(state = state, actions = actions, reduceMotion = rememberOnboardingReduceMotion())
     }
-    ProfileImageEditorHost(profileEditor)
+    EntityImageRetouchHost(profileEditor)
 }
 
 /** L'aperçu local d'une photo retouchée (le fichier du cache d'entrée), montré pendant son envoi ; vide s'il est en mémoire. */

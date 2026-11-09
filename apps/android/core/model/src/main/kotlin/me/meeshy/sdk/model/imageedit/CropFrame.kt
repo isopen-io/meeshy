@@ -1,19 +1,5 @@
 package me.meeshy.sdk.model.imageedit
 
-/** Ratios proposés par les chips du recadrage. Miroir d'iOS `CropRatio`. */
-public enum class CropRatio(public val aspectRatio: Double?, public val label: String?, public val proOnly: Boolean = false) {
-    FREE(null, null),
-    SQUARE(1.0, "1:1"),
-    RATIO_4_3(4.0 / 3.0, "4:3"),
-    RATIO_16_9(16.0 / 9.0, "16:9"),
-    RATIO_9_16(9.0 / 16.0, "9:16", proOnly = true),
-    ;
-
-    public companion object {
-        public fun available(isPro: Boolean): List<CropRatio> = entries.filter { isPro || !it.proOnly }
-    }
-}
-
 /** Décisions pures du cycle de vie du cadre : rectangle initial, changement de ratio, cuisson. */
 public object CropFrame {
 
