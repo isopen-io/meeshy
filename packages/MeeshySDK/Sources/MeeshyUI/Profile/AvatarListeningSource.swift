@@ -47,7 +47,7 @@ public struct AvatarListeningLive: View {
 }
 
 /// L'écoute posée sur un avatar, d'après la source de l'environnement : rien sans source, ni pour un avatar qui ne la
-/// montre pas (`userId` nil ou vide). Une liste, une fiche, un en-tête la posent de la même façon (#16733).
+/// montre pas (`userId` nil ou vide, ou trop petit pour le bandeau). Une liste, une fiche, un en-tête la posent de la même façon (#16733).
 public struct AvatarListeningOverlay: View {
     let userId: String?
     let avatarSize: CGFloat
@@ -58,8 +58,14 @@ public struct AvatarListeningOverlay: View {
         self.avatarSize = avatarSize
     }
 
+    /// Vrai quand une écoute se peint : une personne connue, sur un avatar assez grand pour que le bandeau se lise.
+    public static func paints(userId: String?, avatarSize: CGFloat) -> Bool {
+        guard let userId, !userId.isEmpty else { return false }
+        return AvatarListeningBand.isShown(avatarSize: avatarSize)
+    }
+
     public var body: some View {
-        if let source, let userId, !userId.isEmpty {
+        if let source, let userId, Self.paints(userId: userId, avatarSize: avatarSize) {
             AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: source)
         }
     }
