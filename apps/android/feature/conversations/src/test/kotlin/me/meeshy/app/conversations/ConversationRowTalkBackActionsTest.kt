@@ -26,23 +26,23 @@ class ConversationRowTalkBackActionsTest {
     fun `every swipe action is also a TalkBack custom action of the row`() {
         compose.setContent { SwipeTestHost(rows = listOf(swipeTestConversation("a", unreadCount = 1) to ConversationRowActions())) }
 
-        assertThat(customActionLabels()).containsAtLeast("Pin", "Mute", "Lock", "Archive", "Read", "Hide")
+        assertThat(customActionLabels()).containsAtLeast("Pin", "Archive", "Read")
     }
 
     @Test
     fun `a custom action runs the same callback as its button`() {
-        val muted = mutableListOf<String>()
+        val archived = mutableListOf<String>()
         compose.setContent {
-            SwipeTestHost(rows = listOf(swipeTestConversation("a") to ConversationRowActions(onToggleMute = { muted += "a" })))
+            SwipeTestHost(rows = listOf(swipeTestConversation("a") to ConversationRowActions(onToggleArchive = { archived += "a" })))
         }
 
         compose
             .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions), useUnmergedTree = true)
             .fetchSemanticsNodes()
             .flatMap { it.config[SemanticsActions.CustomActions] }
-            .first { it.label == "Mute" }
+            .first { it.label == "Archive" }
             .action()
 
-        assertThat(muted).containsExactly("a")
+        assertThat(archived).containsExactly("a")
     }
 }

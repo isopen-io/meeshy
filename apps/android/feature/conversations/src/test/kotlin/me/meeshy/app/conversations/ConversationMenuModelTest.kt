@@ -11,7 +11,7 @@ import org.junit.Test
 class ConversationMenuModelTest {
 
     private val allDestinations = ConversationMenuDestinations(
-        details = true, profile = true, call = true, manageMembers = true, admin = true,
+        details = true, profile = true, manageMembers = true, admin = true,
     )
 
     private fun user(role: String = "USER", isAnonymous: Boolean = false) =
@@ -64,19 +64,19 @@ class ConversationMenuModelTest {
     )
 
     @Test
-    fun `a direct offers search, call, block, report and hides under the word delete`() {
+    fun `a direct offers details, block, report and hides under the word delete`() {
         val entries = menu(conversation(type = "direct", peer = "peer"), isPeerBlocked = false).entries
 
-        assertThat(entries).containsAtLeast(SEARCH, CALL, DETAILS, BLOCK, REPORT, DELETE)
+        assertThat(entries).containsAtLeast(DETAILS, BLOCK, REPORT, DELETE)
         assertThat(entries).containsNoneOf(HIDE, LEAVE, RENAME, INVITE, MANAGE_MEMBERS)
     }
 
     @Test
-    fun `a group member hides the chat, leaves it and cannot call from the menu`() {
+    fun `a group member hides the chat and leaves it`() {
         val entries = menu(conversation(type = "group")).entries
 
         assertThat(entries).containsAtLeast(HIDE, LEAVE, REPORT)
-        assertThat(entries).containsNoneOf(DELETE, CALL, BLOCK, UNBLOCK, RENAME, INVITE)
+        assertThat(entries).containsNoneOf(DELETE, BLOCK, UNBLOCK, RENAME, INVITE)
     }
 
     @Test
@@ -119,10 +119,10 @@ class ConversationMenuModelTest {
     }
 
     @Test
-    fun `a conversation with oneself offers no report and no call`() {
+    fun `a conversation with oneself offers no report`() {
         val entries = menu(conversation(type = "direct", peer = "me"), isPeerBlocked = null).entries
 
-        assertThat(entries).containsNoneOf(REPORT, CALL, BLOCK, UNBLOCK)
+        assertThat(entries).containsNoneOf(REPORT, BLOCK, UNBLOCK)
     }
 
     @Test
@@ -149,7 +149,7 @@ class ConversationMenuModelTest {
             destinations = ConversationMenuDestinations(),
         ).entries
 
-        assertThat(entries).containsNoneOf(DETAILS, CALL, VIEW_PROFILE, ADMIN_OPEN)
+        assertThat(entries).containsNoneOf(DETAILS, VIEW_PROFILE, ADMIN_OPEN)
     }
 
     @Test
@@ -178,7 +178,7 @@ class ConversationMenuModelTest {
     @Test
     fun `an encrypted or announcement row still answers to the same capabilities, nothing local`() {
         val encrypted = conversation(type = "group").copy(encryptionMode = "e2ee")
-        assertThat(menu(encrypted).entries).containsAtLeast(PIN, SEARCH, HIDE)
+        assertThat(menu(encrypted).entries).containsAtLeast(PIN, DETAILS, HIDE)
     }
 
     @Test
@@ -213,5 +213,28 @@ class ConversationMenuModelTest {
     @Test
     fun `the reading mode slot is empty until its lot fills it`() {
         assertThat(menu().entries).doesNotContain(READING_MODE)
+    }
+
+    @Test
+    fun `the long press menu reveals every action once, the quick row staying on top`() {
+        val full = menu(hasUnread = true)
+        val revealed = full.withoutQuickActions()
+
+        assertThat(full.header).containsExactly(PIN, MUTE, MARK_READ).inOrder()
+        assertThat(revealed.groups.map { it.section }).doesNotContain(ConversationMenuSection.HEADER)
+        assertThat(full.header + revealed.entries).containsExactlyElementsIn(full.entries).inOrder()
+    }
+
+    @Test
+    fun `the row menu offers neither search nor calls, which live in the conversation itself`() {
+        assertThat(ConversationMenuEntry.entries.map { it.name }).containsNoneOf("SEARCH", "CALL")
+    }
+
+    @Test
+    fun `details opens the list right under the three header tiles`() {
+        val full = menu(conversation(type = "direct", peer = "peer"), isPeerBlocked = false)
+
+        assertThat(full.withoutQuickActions().entries.first()).isEqualTo(DETAILS)
+        assertThat(full.entries.take(4)).containsExactly(PIN, MUTE, MARK_UNREAD, DETAILS).inOrder()
     }
 }

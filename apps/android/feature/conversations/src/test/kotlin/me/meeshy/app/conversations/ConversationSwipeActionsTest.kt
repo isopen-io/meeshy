@@ -31,14 +31,14 @@ class ConversationSwipeActionsTest {
     }
 
     @Test
-    fun `swiping toward the reading start reveals pin, mute and lock and the panel stays open`() {
+    fun `swiping toward the reading start reveals pin alone, mute and lock living in the long press menu`() {
         compose.setContent { SwipeTestHost(rows = listOf(swipeTestConversation("a") to ConversationRowActions())) }
 
         swipeFirstRowOpen()
 
         compose.onNodeWithText("Pin").assertExists()
-        compose.onNodeWithText("Mute").assertExists()
-        compose.onNodeWithText("Lock").assertExists()
+        compose.onAllNodesWithText("Mute").assertCountEquals(0)
+        compose.onAllNodesWithText("Lock").assertCountEquals(0)
     }
 
     @Test

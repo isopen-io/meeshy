@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peek_menu_handle_expand">Mostra tutte le azioni</string>
+    <string name="peek_menu_handle_collapse">Mostra meno azioni</string>
+    <string name="peek_menu_state_compact">Azioni rapide</string>
+    <string name="peek_menu_state_expanded">Tutte le azioni</string>
+</resources>
