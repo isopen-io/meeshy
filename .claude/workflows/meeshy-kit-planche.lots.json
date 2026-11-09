@@ -36,8 +36,6 @@
   "integration": "opus"
  },
  "divergences_connues": [
-  "Android : ComposerEditGrammarGuardTest interdit le menu à l'appui long que la vue O2 demande.",
-  "iOS : la retouche d'une image de conversation suit la décision #11133 (ConversationPieceRetouch), la vue C1 demande la même grammaire que le composer.",
   "La planche compte quatre effets de texte ; StoryTextEffect en porte davantage (hors kit, à l'intégration I3).",
   "Android n'a ni catalogue, ni @Preview, ni test d'instantané (ADR-016 promet Roborazzi) : le lot K00 le pose."
  ],
@@ -329,7 +327,7 @@
     6,
     17
    ],
-   "contrat": "Un seul bloc de verre centré en bas, des emplacements opaques (boutons K02 + une action principale optionnelle), jamais de verre sur du verre, respecte la zone sûre et le clavier, se retire quand son hôte le demande. Le contenu (pilule de repos, pilule d'objet, pilule de retouche, pilule d'appel) est fourni par l'app.",
+   "contrat": "Un seul bloc de verre centré en bas, des emplacements opaques (boutons K02 + une action principale optionnelle), jamais de verre sur du verre, respecte la zone sûre et le clavier, se retire quand son hôte le demande. Le contenu (pilule de repos, pilule d'objet, pilule de retouche, pilule d'appel) est fourni par l'app. La pilule d'un objet porte TOUS ses outils et options (directive porteur du 2026-11-09) : ‹ · Modifier · Dupliquer · Temps · Retirer, et derrière son (…) Mettre en fond et Verrouiller. Aucun menu à l'appui long.",
    "ios_existant": "Appels : callControlsPill (CallView+Pill) + règles CallControlsLayout. Composer : seulement les règles (ComposerPillGrammar, ComposerPillSlot) ; AUCUNE vue de pilule, le socle la remplace",
    "android_existant": "Appels : CallControlsPill, CallPill (public). Composer : aucun, ScenePublishSocle + SceneToolColumn + SceneTopBar",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPill.swift",
@@ -574,30 +572,6 @@
    "depend": [
     "K00",
     "K02"
-   ]
-  },
-  {
-   "cle": "K18",
-   "type": "kit",
-   "nom": "MeeshyObjectMenu",
-   "titre": "Un appui long sur un objet ouvre un seul menu de verre, posé contre lui",
-   "planche": "classe .menu",
-   "vues": [
-    "O2"
-   ],
-   "lois": [
-    6
-   ],
-   "contrat": "Menu de verre ancré à l'objet, lignes titre + icône, ligne destructive en rouge en dernier, se replace pour rester à l'écran, fermé par un toucher dehors.",
-   "ios_existant": "SDK StoryCanvasUIView+ContextMenu (UIKit) ; app ComposerSceneContextMenu",
-   "android_existant": "Jumeaux : :sdk-ui SceneObjectMenu (sans appelant) et SceneObjectMenuPopup (stories) ; la garde ComposerEditGrammarGuardTest INTERDIT aujourd'hui le menu à l'appui long : divergence à trancher",
-   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyObjectMenu.swift",
-   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyObjectMenu.kt",
-   "modele_ios": "sonnet",
-   "modele_android": "sonnet",
-   "depend": [
-    "K00",
-    "K01"
    ]
   },
   {
@@ -977,10 +951,9 @@
   {
    "cle": "I5",
    "type": "integration",
-   "titre": "Choisir et modifier un objet du composer passe par le kit : pilule de l'objet, menu, halo, modes de retouche",
+   "titre": "Toucher un objet du composer montre ses outils et ses options dans la pilule, et le modifier ouvre les modes de retouche du kit",
    "vues": [
     "O1",
-    "O2",
     "O3",
     "O4",
     "O5",
@@ -999,16 +972,14 @@
     "K10",
     "K11",
     "K16",
-    "K18",
     "K19",
     "K21",
     "K23",
     "K05",
     "K08"
    ],
-   "contrat": "Sélection sans cadre, pilule de l'objet, menu à l'appui long (après arbitrage de la garde Android), Modifier en mode plein écran.",
+   "contrat": "Sélection sans cadre ; TOUCHER un objet affiche dans la pilule tous ses outils et options, Mettre en fond et Verrouiller compris (derrière le (…) de la pilule de l'objet). La vue O2 (menu à l'appui long) est RETIRÉE par le porteur le 2026-11-09 : l'appui long ne porte aucune action propre, et la garde Android ComposerEditGrammarGuardTest a raison. Modifier une photo ou une vidéo (O4 à O9) ouvre le mode plein écran du kit ; ses outils (filtres, cadres, effets, recadrage, coupe, son, description) sont ceux de la retouche de la prise (ComposerCaptureMount), DÉPLACÉS ici pour qu'il n'en existe qu'un jeu : c'est le même mode que le lot I9 ouvre depuis une conversation.",
    "depend": [
-    "K18",
     "K23",
     "K16",
     "K21",
@@ -1143,26 +1114,31 @@
   {
    "cle": "I9",
    "type": "integration",
-   "titre": "Retoucher une image ou une vidéo de conversation utilise le kit, en plus court",
+   "titre": "Retoucher une image ou une vidéo, d'où qu'elle vienne, ouvre le composer lui-même : la pièce est une scène, on y pose texte et stickers, et « Terminé » rend un média",
    "vues": [
     "C1",
     "C2"
    ],
    "lois": [
+    6,
+    9,
     17
    ],
    "consomme": [
     "K10",
     "K16",
     "K19",
-    "K21"
+    "K21",
+    "K23"
    ],
-   "contrat": "En-tête Quitter · Photos · Terminé, pilule courte, piste de coupe unique ; la décision #11133 (retouche iOS) reste à respecter ou à rouvrir par le porteur.",
+   "contrat": "UN seul éditeur : le composer, ouvert avec une MISSION (publier | retoucher). En mission « retoucher » : la pièce est le fond d'une scène d'une seule diapo, aux proportions du média (ou du format imposé d'une image d'identité, #17251) ; la pilule est celle de la vue C1 (Filtres · Cadres · Recadrer · Texte, plus Sticker, plus Couper et Son pour une vidéo) ; aucun rail de publication, aucune audience, aucun Publier ; « Terminé » APLATIT la scène et rend une image ou une vidéo au message (ComposerReturnedMedia), « Quitter » ne change rien. Ce qu'on pose (texte, sticker, dessin) se pose sur la scène exactement comme dans le composer, avec les mêmes composants et les mêmes gestes. Portes qui deviennent des appels minces au composer : iOS ConversationPieceRetouch, EntityImageRetouch, CommentSceneRetouch, ComposerRetouchSeries, la feuille de création d'un post ; Android ComposerRetouchScreen, ComposerVideoRetouchScreen, EntityImageRetouch. Le web le fait déjà (D-147 : « Éditer » ouvre le même studio en retouche et rend un JPEG). Garde-fous à tenir, chacun avec son témoin : (a) envoyer sans retoucher reste à un geste ; (b) une pièce NON modifiée repart telle quelle, sans réencodage ni perte ; (c) l'ouverture se fait directement sur la pièce, outils visibles, en moins de temps que la retouche actuelle (mesuré) ; (d) une vidéo sans ajout garde la coupe sans perte ; (e) plusieurs pièces se retouchent une à une (miniatures), sans scène supplémentaire. Ce lot REMPLACE la décision du 2026-10-20 (#11133, « la retouche de la prise est l'éditeur unique ») : une décision datée l'écrit dans apps/ios/decisions/ et dans le registre Android, et #11133 est mise à jour.",
    "depend": [
     "K10",
     "K16",
     "K19",
-    "K21"
+    "K21",
+    "K23",
+    "I5"
    ],
    "plateformes": [
     "ios",
@@ -1216,5 +1192,10 @@
    "modele_android": "opus",
    "recette_mac": true
   }
+ ],
+ "decisions_porteur": [
+  "2026-11-09 — Liquid Glass l'emporte quand l'OS le permet, verre dessiné sinon, réponse au toucher partout (K01).",
+  "2026-11-09 — La vue O2 est retirée : toucher un objet affiche ses outils et options dans la pilule ; pas de menu à l'appui long (K18 retiré, I5).",
+  "2026-11-09 — Un seul éditeur d'image et de vidéo : le composer, en mission « retoucher » ; la retouche de conversation y pose texte et stickers comme sur une scène (I9). Remplace la décision du 2026-10-20 (#11133)."
  ]
 }
