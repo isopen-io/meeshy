@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from '../CacheStore';
 import { blockedIdsAroundViewer } from '../ContactDirectoryService';
 import { loadFeedCircles } from './feedFriends';
+import { getReadableCommunityIds } from './communityVisibility';
 import { buildPostVisibilityOrFilter } from './postVisibility';
 
 /**
@@ -32,6 +33,13 @@ import { buildPostVisibilityOrFilter } from './postVisibility';
  * `PostFeedService` n'ont donc qu'un argument de plus (`cache`) et aucun ne peut
  * oublier la carte par niveau. Sans `cache`, la lecture se fait en direct.
  *
+ * ## Les communautés de la même façon (#16892)
+ *
+ * Une publication `COMMUNITY` posée DANS une communauté ne se lit que par les
+ * membres de celle-ci : le filtre lit lui-même les communautés lisibles du
+ * lecteur (`getReadableCommunityIds`), sans cache, pour que quitter une
+ * communauté privée la ferme aussitôt.
+ *
  * G5 — audience feed = friends ∪ contacts DM (divergence assumée vs
  * `PostService`, décision produit en attente — story-sota §4) : elle ne porte que
  * `FRIENDS` et `EXCEPT`, jamais les cercles, qui n'admettent aucun contact DM.
@@ -43,9 +51,10 @@ export async function buildFeedVisibilityFilter(
   communityCoMemberIds: string[] = [],
   cache?: CacheStore
 ) {
-  const [blockedAuthorIds, circles] = await Promise.all([
+  const [blockedAuthorIds, circles, readableCommunityIds] = await Promise.all([
     blockedIdsAroundViewer(prisma, viewerId),
     loadFeedCircles({ prisma, cache, userId: viewerId }),
+    getReadableCommunityIds(prisma, viewerId),
   ]);
-  return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds, blockedAuthorIds, circles);
+  return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds, blockedAuthorIds, circles, readableCommunityIds);
 }

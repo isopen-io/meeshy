@@ -19,6 +19,14 @@ enum NotificationDetailCategories {
         bundle: Bundle = InterfaceLanguageResolver.bundle()
     ) -> [UNNotificationCategory] {
         [
+            // #17143 — le réveil d'un talkie : aucun geste, le toucher ouvre l'app qui rejoint et rejoue ; la voix se
+            // joue dans la notification déployée quand la passerelle l'attache.
+            UNNotificationCategory(
+                identifier: MeeshyNotificationCategory.talkie.rawValue,
+                actions: [],
+                intentIdentifiers: [],
+                options: []
+            ),
             // #8859 — un vocal garde les gestes d'un message : l'écoute vit
             // dans la notification déployée, pas dans un bouton.
             UNNotificationCategory(

@@ -24,6 +24,11 @@ private extension Logger {
 @MainActor
 final class TalkieVoicePlayer: TalkieSink {
 
+    /// PushToTalk (#17143) : iOS a activé lui-même la session audio pour une voix qui réveille l'app. Le lecteur ne la
+    /// reconfigure ni ne la relâche : il joue dedans, puis le dit au canal (`onSystemSessionIdle`) une fois silencieux.
+    static var systemActivatedSession = false
+    static var onSystemSessionIdle: (() -> Void)?
+
     /// Le tampon de gigue avant le premier fragment : assez pour que le second arrive avant la fin du premier.
     private static let jitter: TimeInterval = 0.08
 
@@ -142,7 +147,7 @@ final class TalkieVoicePlayer: TalkieSink {
     // MARK: - Sortie
 
     private func prepareOutput() {
-        MediaSessionCoordinator.shared.activateMixableVoicePlayback()
+        if !Self.systemActivatedSession { MediaSessionCoordinator.shared.activateMixableVoicePlayback() }
         applyOutputPlan()
         observeOutputChanges()
     }
@@ -185,6 +190,10 @@ final class TalkieVoicePlayer: TalkieSink {
         engine.stop()
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
+        guard !Self.systemActivatedSession else {
+            Self.onSystemSessionIdle?()
+            return
+        }
         MediaSessionCoordinator.shared.releaseMixableVoicePlayback()
     }
 }

@@ -29,10 +29,12 @@ extension NotificationService {
         }
     }
 
-    static func downloadFile(from url: URL, budget: NSEBudget) async -> URL? {
+    static func downloadFile(from url: URL, budget: NSEBudget, token: String? = nil) async -> URL? {
         guard let timeout = budget.downloadTimeout() else { return nil }
+        let request = token.map { NSEAPIRequest.make(url: url, token: $0, timeout: timeout) } ?? URLRequest(url: url, timeoutInterval: timeout)
         do {
-            let (location, _) = try await URLSession.shared.download(for: URLRequest(url: url, timeoutInterval: timeout))
+            let delegate = token == nil ? nil : NSETokenRedirectGuard(apiBaseURL: NSEDataSync.trustedApiBaseURL)
+            let (location, _) = try await URLSession.shared.download(for: request, delegate: delegate)
             let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             try FileManager.default.moveItem(at: location, to: destination)
             return destination
@@ -54,12 +56,17 @@ extension NotificationService {
     }
 
     private static func attachmentFile(for source: NSEAttachmentSource, budget: NSEBudget) async -> NSEAttachmentFile? {
-        guard let file = await downloadFile(from: source.url, budget: budget) else { return nil }
+        let token = source.authenticated ? NSEDataSync.readAuthToken() : nil
+        guard let file = await downloadFile(from: source.url, budget: budget, token: token) else { return nil }
         guard NSEAttachmentPolicy.mayAttach(mimeType: source.mimeType, fileSize: fileSize(at: file)) else {
             try? FileManager.default.removeItem(at: file)
             return nil
         }
-        return NSEAttachmentFile(fileURL: file, originalURL: source.url, mimeType: source.mimeType)
+        guard NSEAdtsRemux.needsRemux(mimeType: source.mimeType) else {
+            return NSEAttachmentFile(fileURL: file, originalURL: source.url, mimeType: source.mimeType)
+        }
+        guard let remuxed = await NSEAdtsRemux.m4a(from: file) else { return nil }
+        return NSEAttachmentFile(fileURL: remuxed, originalURL: source.url, mimeType: NSEAdtsRemux.remuxedMimeType)
     }
 
     private static func detailFile(for detail: NSEEnrichmentRequest.Detail, budget: NSEBudget) async -> NSEAttachmentFile? {

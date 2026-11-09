@@ -338,3 +338,60 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         XCTAssertEqual(ComposerControlBounce.scale(pressed: false, reduceMotion: false), 1)
     }
 }
+
+/// LE NIVEAU D'HORIZON (CAM-10) : un trait paraît quand on est presque droit,
+/// devient l'accent une fois droit, et le doigt sent l'instant où il le devient.
+final class ComposerCaptureLevelTests: XCTestCase {
+    private func gravite(degrees: Double, flat: Double = 0) -> (x: Double, y: Double, z: Double) {
+        let r = degrees * .pi / 180
+        let reste = (1 - flat * flat).squareRoot()
+        return (sin(r) * reste, -cos(r) * reste, flat)
+    }
+
+    private func lecture(_ degrees: Double, flat: Double = 0, wasAligned: Bool = false) -> ComposerCaptureLevel.Reading? {
+        let g = gravite(degrees: degrees, flat: flat)
+        return ComposerCaptureLevel.reading(gravityX: g.x, gravityY: g.y, gravityZ: g.z, wasAligned: wasAligned)
+    }
+
+    func test_tilt_measuresFromTheNearestUprightHold_portraitOrLandscape() {
+        XCTAssertEqual(ComposerCaptureLevel.tilt(gravityX: 0, gravityY: -1), 0, accuracy: 0.001)
+        let paysage = gravite(degrees: 90 + 4)
+        XCTAssertEqual(ComposerCaptureLevel.tilt(gravityX: paysage.x, gravityY: paysage.y), 4, accuracy: 0.001)
+        let tete = gravite(degrees: 180 - 3)
+        XCTAssertEqual(ComposerCaptureLevel.tilt(gravityX: tete.x, gravityY: tete.y), -3, accuracy: 0.001)
+    }
+
+    func test_reading_showsUnderTenDegrees_hidesBeyond() {
+        XCTAssertNotNil(lecture(9))
+        XCTAssertNotNil(lecture(-9))
+        XCTAssertNil(lecture(12), "trop penché : le trait ne guide plus rien")
+    }
+
+    func test_reading_alignedWithinOneDegree() {
+        XCTAssertEqual(lecture(0.8)?.aligned, true)
+        XCTAssertEqual(lecture(-0.8)?.aligned, true)
+        XCTAssertEqual(lecture(1.3)?.aligned, false)
+    }
+
+    func test_reading_onceAligned_holdsUntilOneAndAHalfDegrees() {
+        XCTAssertEqual(lecture(1.3, wasAligned: true)?.aligned, true, "le tremblement au bord ne relâche pas")
+        XCTAssertEqual(lecture(1.7, wasAligned: true)?.aligned, false)
+    }
+
+    func test_reading_phoneLyingFlat_staysSilent() {
+        XCTAssertNil(lecture(0, flat: 0.95))
+    }
+
+    func test_ticks_onlyWhenEnteringAlignment() {
+        let penche = lecture(4)
+        let droit = lecture(0.5)
+        XCTAssertTrue(ComposerCaptureLevel.ticks(from: penche, to: droit))
+        XCTAssertTrue(ComposerCaptureLevel.ticks(from: nil, to: droit))
+        XCTAssertFalse(ComposerCaptureLevel.ticks(from: droit, to: droit), "rester droit ne tique pas")
+        XCTAssertFalse(ComposerCaptureLevel.ticks(from: droit, to: penche))
+    }
+
+    func test_levelled_feelsLikeASelectionTick() {
+        XCTAssertEqual(ComposerCaptureHaptic.levelled.feedback, .selection)
+    }
+}

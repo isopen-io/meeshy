@@ -14,7 +14,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility } from '@meeshy/shared/prisma/client';
 import { buildPostVisibilityOrFilter } from './postVisibility';
-import { getCommunityCoMemberIds } from './communityVisibility';
+import { getCommunityCoMemberIds, getReadableCommunityIds } from './communityVisibility';
 import { loadFeedCircles, loadFeedFriendIds } from './feedFriends';
 
 /** Le fragment Prisma `where` qui impose la visibilité d'un post à un viewer. */
@@ -22,11 +22,12 @@ export async function buildViewerVisibilityFilter(prisma: PrismaClient, viewerUs
   if (!viewerUserId) {
     return { visibility: PostVisibility.PUBLIC };
   }
-  const [friendIds, dmContactIds, communityCoMemberIds, circles] = await Promise.all([
+  const [friendIds, dmContactIds, communityCoMemberIds, circles, readableCommunityIds] = await Promise.all([
     loadFeedFriendIds({ prisma, userId: viewerUserId }),
     directConversationContactIds(prisma, viewerUserId),
     getCommunityCoMemberIds(prisma, viewerUserId),
     loadFeedCircles({ prisma, userId: viewerUserId }),
+    getReadableCommunityIds(prisma, viewerUserId),
   ]);
   const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
   /* LE BLOCAGE N'EST PAS POSÉ ICI, ET C'EST UNE DÉCISION (#7184).
@@ -40,7 +41,7 @@ export async function buildViewerVisibilityFilter(prisma: PrismaClient, viewerUs
      Le blocage des accès unitaires appartient donc à `canUserConsumePost`,
      et c'est un lot à part — nommé dans le commentaire de clôture de #7184
      plutôt que laissé à découvrir. */
-  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds, [], circles);
+  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds, [], circles, readableCommunityIds);
 }
 
 /**

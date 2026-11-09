@@ -329,7 +329,7 @@ extension LocalizationConsistencyTests {
             }
 
             let segment = ns.substring(with: NSRange(location: found.location, length: end - found.location + 1))
-            // Un appel qui nomme sa TABLE (`table: "MediaTrim"`, #17110) se mesure
+            // Un appel qui nomme sa TABLE (`table: "ComposerTime"`, #17110) se mesure
             // contre elle, pas contre `Localizable` : sa garde est
             // `LocalizationTableCatalogGuardTests`.
             if let key = firstKey(in: segment), !segment.contains("table:") {

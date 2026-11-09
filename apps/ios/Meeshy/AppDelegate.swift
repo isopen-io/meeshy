@@ -671,6 +671,9 @@ enum MeeshyNotificationCategory: String {
     /// #12655 — une conversation verrouillée par PIN : aucune action rapide
     /// (`NSEAttachmentPolicy.lockedConversationCategory`).
     case lockedConversation = "MEESHY_LOCKED_CONVERSATION"
+    /// #17143 — le réveil d'un talkie : la SEULE notification dont la voix se joue sur place
+    /// (`NotificationDetailPolicy.talkieCategory`, lecteur de la notification déployée).
+    case talkie = "MEESHY_TALKIE"
 }
 
 enum MeeshyNotificationAction: String {
@@ -712,6 +715,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
     ) {
         let userInfo = notification.request.content.userInfo
         if routeBringPush(userInfo) { return completionHandler([]) }
+        if routeTalkieWake(userInfo) { return completionHandler([]) }
         let convId = userInfo["conversationId"] as? String
         let messageId = userInfo["messageId"] as? String
 
@@ -801,7 +805,10 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         let actionIdentifier = response.actionIdentifier
         let replyText = (response as? UNTextInputNotificationResponse)?.userText
         logger.info("Notification response: action=\(actionIdentifier)")
-        if actionIdentifier != UNNotificationDismissActionIdentifier { _ = routeBringPush(userInfo) }
+        if actionIdentifier != UNNotificationDismissActionIdentifier {
+            _ = routeBringPush(userInfo)
+            _ = routeTalkieWake(userInfo)
+        }
 
         Task { @MainActor in
             // #10507 — « ouverte », ou « écartée » sur une catégorie qui le déclare.
@@ -834,6 +841,17 @@ extension AppDelegate {
         Task { @MainActor in
             BringCenter.shared.receive(push: ring, stopped: stopped, name: name, avatarURL: avatarURL)
         }
+        return true
+    }
+}
+
+extension AppDelegate {
+    /// #17143 — le réveil d'un talkie (`talkie_incoming`) : au premier plan comme au toucher de la notification, l'app
+    /// rejoint la prise de parole (`talkie:join`) et la passerelle rejoue la voix, que `TalkieCenter` lit. Au premier
+    /// plan, aucune bannière : la voix sort déjà. Rend `false` pour tout autre push.
+    fileprivate func routeTalkieWake(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard let push = TalkieWakePush(userInfo: userInfo) else { return false }
+        Task { @MainActor in TalkieWakeJoiner.shared.wake(push) }
         return true
     }
 }

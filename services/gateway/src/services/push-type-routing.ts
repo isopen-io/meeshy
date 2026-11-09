@@ -52,9 +52,20 @@ const BRING_STOPPED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> =
  * version de `@meeshy/web` construite après l'arrivée de `GAME_PHOTO_TYPES` dans `target.ts` et `sw-push.js`
  * (2026-10-25, 52e409b9d), soit la 2.23.0 : la 2.22.0 a été coupée avant. iOS et l'Android natif ne le routent pas encore.
  */
+/**
+ * `talkie_incoming` (#17142) : un réveil qui n'est utile qu'à un client qui sait émettre `talkie:join` et jouer la voix
+ * depuis la notification ; un ancien client n'en ferait qu'une bannière vide (Android data-only) ou inutile. Aucun
+ * client publié ne le route encore : chaque lot client pose ici sa première version. La porte du talkie lit la MÊME
+ * table (`talkieWakeChannel`) — sans appareil capable, la voix se replie en message vocal au lieu d'attendre en vain.
+ */
+const TALKIE_INCOMING_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
+  ios: '1.1.7', 'android-native': null, 'android-shell': null, web: null,
+};
+
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
   ['bring_stopped', BRING_STOPPED_FLOORS],
+  ['talkie_incoming', TALKIE_INCOMING_FLOORS],
 ]);
 
 const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;
