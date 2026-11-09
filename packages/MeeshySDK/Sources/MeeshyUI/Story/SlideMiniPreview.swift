@@ -270,7 +270,7 @@ public struct SlideMiniPreview: View {
         let fontSize = CGFloat(max(3, text.fontSize * Double(size.width) / Double(CanvasGeometry.designWidth)))
         Text(text.text.isEmpty ? " " : text.text)
             .font(.system(size: fontSize, weight: .medium))
-            .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
+            .foregroundStyle(Color(hex: text.textColor ?? "FFFFFF"))
             .lineLimit(1)
             // Fond du texte — parité avec le canvas (`StoryTextLayer`) et le
             // composite ThumbHash. Sans ça la mini-preview montrait les glyphes nus
@@ -424,7 +424,7 @@ public struct SlideMiniPreview: View {
                 Spacer()
                 Text("\(index + 1)")
                     .font(.system(size: 7, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 3)
                     .padding(.vertical, 1)
                     .background(Color.black.opacity(0.55))

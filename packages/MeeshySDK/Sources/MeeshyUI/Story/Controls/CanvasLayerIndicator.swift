@@ -47,7 +47,7 @@ struct CanvasLayerIndicator: View {
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isActive ? .semibold : .medium))
             }
-            .foregroundColor(isActive ? .white : mutedText)
+            .foregroundStyle(isActive ? .white : mutedText)
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
             .background(

@@ -332,7 +332,7 @@ public struct AudioForegroundChip: View {
         let icon = Image(systemName: iconName)
             .font(.system(size: MeeshyIconSize.sm, weight: .bold))
         if isUserMuted {
-            icon.foregroundColor(.white.opacity(MeeshyOpacity.strong))
+            icon.foregroundStyle(.white.opacity(MeeshyOpacity.strong))
         } else {
             icon.foregroundStyle(MeeshyColors.brandGradient)
         }

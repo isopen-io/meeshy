@@ -284,7 +284,7 @@ public struct StickerPickerView: View {
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
-                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                .foregroundStyle(colorScheme == .dark ? .white : MeeshyColors.indigo950)
             Spacer(minLength: 0)
         }
         // Le titre et le glyphe DISENT la même chose que le bouton qui a ouvert

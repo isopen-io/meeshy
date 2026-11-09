@@ -87,7 +87,7 @@ public struct OpeningEffectChips: View {
         } label: {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(fillColor))
