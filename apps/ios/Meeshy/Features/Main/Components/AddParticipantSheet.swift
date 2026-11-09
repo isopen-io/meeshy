@@ -209,7 +209,7 @@ struct AddParticipantSheet: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(isMember ? theme.textMuted : theme.textPrimary)
+                    .foregroundStyle(isMember ? theme.textMuted : theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")

@@ -172,7 +172,7 @@ struct MessageMoreSheet: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(width: 30, height: 30)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
@@ -264,7 +264,7 @@ struct MessageMoreSheet: View {
                 Text(title)
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.horizontal, MeeshySpacing.xs)
 
                 let columns = Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xsPlus), count: 5)
@@ -433,7 +433,7 @@ struct MessageMoreSheet: View {
                     .foregroundColor(color)
                 Text(item.verb.label)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Button {
                     HapticFeedback.light()
@@ -443,7 +443,7 @@ struct MessageMoreSheet: View {
                     // fermeture glass de l'app) — glyphe nu dans un cercle verre.
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 28, height: 28)
                         .adaptiveGlass(in: Circle())
                         .contentShape(Circle())

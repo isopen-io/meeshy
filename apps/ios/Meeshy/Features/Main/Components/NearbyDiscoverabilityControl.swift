@@ -393,7 +393,7 @@ struct NearbyDiscoverabilityControl: View {
         HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "mappin.and.ellipse")
                 .font(MeeshyFont.relative(13))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(placeName)

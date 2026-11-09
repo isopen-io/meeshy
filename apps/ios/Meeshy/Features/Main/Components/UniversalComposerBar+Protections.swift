@@ -102,7 +102,7 @@ extension UniversalComposerBar {
                 } label: {
                     Text(String(localized: "composer.ephemeral.off", defaultValue: "Désactivé", bundle: .main))
                         .font(.caption).fontWeight(.semibold)
-                        .foregroundColor(ephemeralChoice.wrappedValue == nil ? .white : iconTint)
+                        .foregroundStyle(ephemeralChoice.wrappedValue == nil ? Color.white : iconTint)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
@@ -371,12 +371,12 @@ extension UniversalComposerBar {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(iconTint)
+                    .foregroundStyle(iconTint)
 
                 if isActive {
                     Text("\(effectCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(iconTint)
+                        .foregroundStyle(iconTint)
                 }
             }
             .padding(.horizontal, MeeshySpacing.sm)
@@ -420,12 +420,12 @@ extension UniversalComposerBar {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(iconTint)
+                    .foregroundStyle(iconTint)
 
                 if isActive {
                     Text("\(activeCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(iconTint)
+                        .foregroundStyle(iconTint)
                 }
             }
             .padding(.horizontal, MeeshySpacing.sm)

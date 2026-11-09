@@ -41,7 +41,7 @@ struct ConversationLinkCardActionsRow: View {
         if isExpired {
             Label(ConversationLinkCardCopy.expiredTitle, systemImage: "clock.badge.xmark")
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .accessibilityIdentifier("conversation-link-card-expired")
         } else {
@@ -81,7 +81,7 @@ struct ConversationLinkCardActionsRow: View {
     private var joinPrompt: some View {
         Text(ConversationLinkCardCopy.joinPrompt)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-            .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+            .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             .lineLimit(1)
             .fixedSize()
             .accessibilityAddTraits(.isHeader)

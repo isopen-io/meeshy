@@ -31,7 +31,7 @@ extension UniversalComposerBar {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: attachment.type.glyph)
                 .font(.caption)
-                .foregroundColor(Color(hex: attachment.thumbnailColor))
+                .foregroundStyle(Color(hex: attachment.thumbnailColor))
 
             Text(attachment.name)
                 .font(.caption.weight(.medium))
@@ -335,11 +335,11 @@ extension UniversalComposerBar {
 
                     Image(systemName: tile.icon)
                         .font(.callout.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 Text(tile.label)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(style == .dark ? .white.opacity(0.85) : theme.textSecondary)
+                    .foregroundStyle(style == .dark ? Color.white.opacity(0.85) : theme.textSecondary)
                     .lineLimit(1)
             }
         }
@@ -457,21 +457,21 @@ extension UniversalComposerBar {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "doc.plaintext.fill")
                 .font(.body)
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papiers", bundle: .main))
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(style == .dark ? .white : theme.textPrimary)
+                    .foregroundStyle(style == .dark ? Color.white : theme.textPrimary)
 
                 Text(clip.truncatedPreview)
                     .font(.caption2)
-                    .foregroundColor(style == .dark ? .white.opacity(0.6) : theme.textSecondary)
+                    .foregroundStyle(style == .dark ? Color.white.opacity(0.6) : theme.textSecondary)
                     .lineLimit(2)
 
                 Text(String(localized: "composer.clipboard.charCount", defaultValue: "\(clip.charCount) caract\u{00E8}res", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
             }
 
             Spacer()
@@ -483,7 +483,7 @@ extension UniversalComposerBar {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.callout)
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
             }
             .accessibilityLabel(String(localized: "composer.a11y.removeClipboardContent", defaultValue: "Retirer le contenu du presse-papier", bundle: .main))
         }

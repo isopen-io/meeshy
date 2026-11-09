@@ -49,7 +49,7 @@ struct ConversationEngagementPill: View, Equatable {
             } else {
                 Text(verbatim: totalText)
                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold, design: .rounded).monospacedDigit())
-                    .foregroundColor(MeeshyColors.textMuted(isDark: colorScheme == .dark))
+                    .foregroundStyle(MeeshyColors.textMuted(isDark: colorScheme == .dark))
                     .lineLimit(1)
             }
         }

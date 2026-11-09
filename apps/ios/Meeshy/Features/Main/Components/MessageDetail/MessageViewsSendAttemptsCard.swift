@@ -84,7 +84,7 @@ struct MessageViewsSendAttemptsCard: View {
         return HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
             Image(systemName: isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.caption2.weight(.medium))
-                .foregroundColor(isSuccess ? MeeshyColors.success : MeeshyColors.error)
+                .foregroundStyle(isSuccess ? MeeshyColors.success : MeeshyColors.error)
                 .frame(width: 16)
                 .padding(.top, 1)
                 .accessibilityLabel(isSuccess

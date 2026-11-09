@@ -58,7 +58,7 @@ struct MessageTranscriptionDetailView: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "waveform.and.mic")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(langColor)
+                    .foregroundStyle(langColor)
                     .accessibilityHidden(true)
 
                 Text(MessageLanguageDetailView.languageName(for: transcription.language))
@@ -70,7 +70,7 @@ struct MessageTranscriptionDetailView: View {
                 if let conf = transcription.confidence {
                     Text(LocalizedNumber.percent(Int((conf * 100).rounded())))
                         .font(.system(.caption2, design: .monospaced).weight(.bold))
-                        .foregroundColor(langColor)
+                        .foregroundStyle(langColor)
                         .padding(.horizontal, MeeshySpacing.xsPlus)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(langColor.opacity(0.12)))

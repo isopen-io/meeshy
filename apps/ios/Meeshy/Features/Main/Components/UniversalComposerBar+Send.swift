@@ -350,7 +350,7 @@ extension UniversalComposerBar {
 
                 Image(systemName: icon)
                     .font(.callout.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .rotationEffect(isEditMode ? .zero : .degrees(sendBounce ? 55 : 45))
                     .offset(
                         x: isEditMode ? 0 : (sendBounce ? 2 : -1),

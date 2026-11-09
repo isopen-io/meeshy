@@ -192,7 +192,7 @@ extension UniversalComposerBar {
                         .frame(width: 32, height: 32)
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(MeeshyColors.errorStrong)
+                        .foregroundStyle(MeeshyColors.errorStrong)
                 }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -288,7 +288,7 @@ extension UniversalComposerBar {
                         )
                     Image(systemName: "arrow.up")
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 .opacity(canSend ? 1 : 0.4)
                 .frame(width: 44, height: 44)

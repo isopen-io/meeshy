@@ -544,7 +544,7 @@ struct RecentMediaStrip: View {
             HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)

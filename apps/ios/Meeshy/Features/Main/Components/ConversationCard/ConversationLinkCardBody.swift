@@ -50,7 +50,7 @@ struct ConversationLinkCardBody: View, Equatable {
             if let description = card.description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty {
                 Text(description)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -92,7 +92,7 @@ struct ConversationLinkCardBody: View, Equatable {
                 .padding(.top, -Self.avatarSide * 0.5)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .heavy, design: .rounded))
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -172,7 +172,7 @@ struct ConversationInviteQuote: View {
                             .lineLimit(1)
                         Text(ConversationLinkCardCopy.invitesYou)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                            .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -201,7 +201,7 @@ struct ConversationInviteQuote: View {
                 .accessibilityHidden(true)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium).italic())
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, MeeshySpacing.xs)
         }
@@ -254,7 +254,7 @@ struct ConversationCardStatsRow: View {
             if stats.languages.count > visible {
                 Text(verbatim: "+\(stats.languages.count - visible)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                     .fixedSize()
             }
         }

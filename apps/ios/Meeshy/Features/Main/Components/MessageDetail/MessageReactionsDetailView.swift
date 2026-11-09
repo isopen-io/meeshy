@@ -126,7 +126,7 @@ struct MessageReactionsDetailView: View {
                     .font(.subheadline.weight(.medium))
                 Text("\(count)")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textMuted)
+                    .foregroundStyle(isSelected ? Color(hex: contactColor) : theme.textMuted)
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xsPlus)
