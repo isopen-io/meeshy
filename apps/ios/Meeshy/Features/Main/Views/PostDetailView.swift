@@ -6,7 +6,7 @@ import MeeshySDK
 import MeeshyUI
 
 struct PostDetailView: View {
-    @State private var delayed = DelayedActions()
+    @State var delayed = DelayedActions()
     let postId: String
     var initialPost: FeedPost?
     var showComments: Bool = false

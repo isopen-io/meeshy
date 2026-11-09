@@ -18,6 +18,7 @@ struct SectionHeaderView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var isTapped = false
+    @State private var delayed = DelayedActions()
 
     private var isDark: Bool { colorScheme == .dark }
 
