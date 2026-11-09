@@ -694,3 +694,38 @@ socket jusqu'au client.
 2. #17173 et #17174 : petits lots sur `zmq_translation_handler.py`, à grouper.
 3. #17132 et #17133.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 18 — 2026-11-09
+
+- **Base** : `origin/dev` @ `ee28259f9`. La PR #17175 du cycle 17 (#16822) n'est **pas fusionnée**. La CI `workflow_dispatch` est verte sur sa tête (`7119ae8d6`, run 42536705135), sa base est la tête de `dev`, et j'ai relancé ses témoins (`67 passed, 1 xfailed` sur `test_enqueue_*` et `test_shutdown_*`). La fusion échoue : `405 Cannot change this locked branch`, car `dev` est verrouillée et rien n'y fusionne depuis 00:22 (heure de Paris). Le porteur est prévenu. Cette branche **inclut** la branche du cycle 17 (fusionnée dedans), pour que les deux journaux ne se contredisent pas.
+- **Branche** : `claude/determined-volta-ickams`.
+- **Objectif** : #17004, piste 1 du cycle 17. Un arrêt chargé du traducteur n'ouvre plus le disjoncteur de traduction de la passerelle.
+- **Constat** : `ZmqTranslationClient` appelait `_cbRecordError()` pour **chaque** `translation_error`, avant de tester « translation pool full ». Les trois chemins de refus du traducteur publient tous ce libellé, via `_pool_full_error` :
+  - file pleine ;
+  - arrivée pendant l'arrêt ;
+  - tâches restantes signalées à l'arrêt.
+  Huit refus de suite suffisaient donc à ouvrir le disjoncteur, qui rejetait alors **toutes** les traductions pendant 30 s.
+- **Livré** (seule la passerelle change, d'une ligne : ni le protocole ZMQ, ni le traducteur, ni le JSON) : un refus « translation pool full » ne compte plus au disjoncteur et ne remet pas la série à zéro, puisque ce n'est pas un succès. `errors_received`, `pool_full_rejections`, le maintien de la requête armée et l'émission de `translationError` sont inchangés.
+- **Tests** :
+  - Fichiers : `ZmqTranslationClient.circuitBreakerTransient.test.ts` (4 tests) et `..._qa.test.ts` (QA : 5 tests). Les tests QA font passer le JSON réel de `_pool_full_error` par le vrai `ZmqMessageHandler`.
+  - **Rouge avant le correctif** : `✕ laisse partir une traduction après vingt refus « pool full » consécutifs`, avec `Rejected to value: [Error: ZMQ circuit breaker OPEN …]`.
+  - **Vert** : relancé par moi, 9 sur 9. Les suites `ZmqTranslationClient*` et `zmq-translation/__tests__` donnent 18 suites et 413 tests (QA). `tsc --noEmit` passe.
+  - **Mutations QA** : 7 tuées sur 8. Celle qui survit, `includes('pool full')`, est équivalente.
+- **QA** : favorable avec réserves.
+  - R1 : le libellé est un contrat non déclaré, écrit en dur à quatre endroits. → #17189.
+  - R2 : en saturation durable, le disjoncteur ne déleste plus la charge. C'est voulu : le renvoi est borné à `maxRetries+1` = 5 envois espacés de 30 s, puis un seul échec est annoncé, ce que vérifie le témoin QA 5. Je le consigne ici sans issue.
+  - R3 : le témoin de l'auteur contournait le décodeur. Les tests QA comblent ce manque.
+
+### Limites connues
+
+- Le libellé « translation pool full » est un contrat implicite. → #17189, à coordonner avec la partie R2 de #17174.
+- Un traducteur saturé en permanence n'est plus délesté par le disjoncteur. Seul le renvoi borné le limite.
+
+### Cycle suivant : par où reprendre
+
+0. **Dès que `dev` est déverrouillée** :
+   - fusionner #17175, déjà verte, en relançant `workflow_dispatch` si `dev` a bougé ;
+   - puis fusionner la PR de ce cycle, qui contient #17175.
+1. #17173 et #17174 : petits lots sur `zmq_translation_handler.py`, à grouper. #17189 pourra les suivre.
+2. #17132 et #17133.
+3. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
