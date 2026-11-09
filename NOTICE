@@ -11,7 +11,8 @@ La rédaction finale de ce fichier, du paragraphe « Licences » du README et de
 
 Chaque fichier source écrit pour Meeshy dans ce dépôt est distribué sous la
 licence MIT (fichier LICENSE), sauf mention contraire en tête du fichier
-(par exemple `packages/libsignal-wasm/`, déclaré AGPL-3.0-only) ou dans le
+(par exemple le futur `packages/libsignal-wasm/`, #14592, qui sera déclaré
+AGPL-3.0-only) ou dans le
 dossier d'un composant tiers (par exemple `packages/LibSignalClient/`, copie
 non modifiée de libsignal, AGPL-3.0-only, voir son LICENSE).
 
@@ -33,14 +34,14 @@ l'AGPL-3.0-only. Sont concernés :
   |---------------------------------|------------------------------------------------------|---------|
   | application iOS (IPA)           | `packages/LibSignalClient` + `SignalFfi.xcframework` | 0.106.2 |
   | application Android (APK / AAB) | `org.signal:libsignal-android`                       | 0.106.2 |
-  | bundle web avec moteur WASM     | `packages/libsignal-wasm` (pont navigateur)          | 0.106.2 |
+  | bundle web avec moteur WASM     | aucun aujourd'hui : le pont WASM arrive avec #14592  | —       |
   | image Docker de la passerelle   | `@signalapp/libsignal-client` (prébuilds Node)       | 0.106.2 |
 
   Les versions sont celles épinglées au moment de la rédaction ; la version
   qui fait foi pour un build donné est celle que son commit déclare
   (`packages/LibSignalClient/LIBSIGNAL_VERSION`,
-  `apps/android/gradle/libs.versions.toml`, `packages/libsignal-wasm/Cargo.toml`,
-  `services/gateway/package.json`).
+  `apps/android/gradle/libs.versions.toml`, `services/gateway/package.json`, et
+  `packages/libsignal-wasm/Cargo.toml` quand le pont WASM existera, #14592).
 
 Le texte officiel de la licence est dans `LICENSES/AGPL-3.0.txt`. Il est
 identique octet pour octet à https://www.gnu.org/licenses/agpl-3.0.txt
@@ -76,8 +77,8 @@ sans frais, sur https://github.com/isopen-io/meeshy :
         par Signal pour le tag épinglé, dont la source est
         https://github.com/signalapp/libsignal/tree/v0.106.2 ;
       * web : `apps/web/Dockerfile`, `apps/web/vite.config.ts`,
-        `packages/libsignal-wasm/build.sh` (le pont WASM se reconstruit depuis
-        les sources, sans binaire téléchargé) ;
+        et, quand il existera (#14592), `packages/libsignal-wasm/build.sh` (le
+        pont WASM se reconstruira depuis les sources, sans binaire téléchargé) ;
       * passerelle : `services/gateway/Dockerfile`, `.github/workflows/docker.yml` ;
         les prébuilds de `@signalapp/libsignal-client` viennent de
         https://github.com/signalapp/libsignal/tree/v0.106.2.

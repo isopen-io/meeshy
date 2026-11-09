@@ -14,7 +14,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
- * Deux appareils, une passerelle qui ne voit que le fil : PQXDH (libsignal 0.105.4, vrai natif), Double Ratchet,
+ * Deux appareils, une passerelle qui ne voit que le fil : PQXDH (libsignal 0.106.2, vrai natif), Double Ratchet,
  * admission Sesame. Le témoin de confidentialité relit TOUT ce que la passerelle a reçu ou rangé.
  */
 class E2eeMessageExchangeTest {
