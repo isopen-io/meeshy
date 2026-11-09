@@ -197,9 +197,12 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
     static let shared = NearbyLocationProvider()
 
     private let manager = CLLocationManager()
-    private let lock = NSLock()
-    private var waiters: [CheckedContinuation<CLLocationCoordinate2D?, Never>] = []
-    private var isAwaitingFix = false
+    nonisolated private struct Pending {
+        var waiters: [CheckedContinuation<CLLocationCoordinate2D?, Never>] = []
+        var isAwaitingFix = false
+    }
+
+    private let pending = Locked(uncheckedState: Pending())
 
     override init() {
         super.init()
@@ -240,11 +243,11 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
             return nil
         }
         return await withCheckedContinuation { continuation in
-            lock.lock()
-            waiters.append(continuation)
-            let shouldRequest = !isAwaitingFix
-            isAwaitingFix = true
-            lock.unlock()
+            let shouldRequest = pending.mutateUnchecked { state -> Bool in
+                state.waiters.append(continuation)
+                defer { state.isAwaitingFix = true }
+                return !state.isAwaitingFix
+            }
             // Deux `requestLocation()` concurrents font annuler le premier par
             // CoreLocation, qui répond alors `kCLErrorLocationUnknown` — le
             // même piège que le picker a déjà payé. Et tant que la permission
@@ -260,12 +263,11 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
     }
 
     private func resumeWaiters(with coordinate: CLLocationCoordinate2D?) {
-        lock.lock()
-        let pending = waiters
-        waiters.removeAll()
-        isAwaitingFix = false
-        lock.unlock()
-        pending.forEach { $0.resume(returning: coordinate) }
+        let released = pending.mutateUnchecked { state -> [CheckedContinuation<CLLocationCoordinate2D?, Never>] in
+            defer { state = Pending() }
+            return state.waiters
+        }
+        released.forEach { $0.resume(returning: coordinate) }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -282,9 +284,7 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         if Self.isAuthorized(status) {
-            lock.lock()
-            let hasWaiters = !waiters.isEmpty
-            lock.unlock()
+            let hasWaiters = pending.mutateUnchecked { !$0.waiters.isEmpty }
             guard hasWaiters else { return }
             manager.requestLocation()
             return
@@ -453,15 +453,16 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     private func observeNetwork() {
         network.isOfflinePublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] offline in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.isOffline = offline
-                    guard !offline else { return }
-                    await self.load()
-                }
+            .relay(through: OrderedEventLane()) { [weak self] offline in
+                await self?.applyReachability(offline: offline)
             }
             .store(in: &cancellables)
+    }
+
+    private func applyReachability(offline: Bool) async {
+        isOffline = offline
+        guard !offline else { return }
+        await load()
     }
 
     // MARK: - Lecture

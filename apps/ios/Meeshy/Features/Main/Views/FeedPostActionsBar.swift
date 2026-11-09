@@ -11,6 +11,7 @@ import MeeshyUI
 /// rendues (jamais sur les fermetures, que la carte ignore déjà), plus
 /// `isDark` pour qu'un changement de thème repeigne la rangée.
 struct FeedPostActionsBar: View, Equatable {
+    @State private var delayed = DelayedActions()
     let postId: String
     let accentColor: String
     let isDark: Bool
@@ -126,7 +127,7 @@ struct FeedPostActionsBar: View, Equatable {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                     likeAnimating = true
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                delayed.run(after: .milliseconds(300)) {
                     likeAnimating = false
                 }
                 onLike?(postId)

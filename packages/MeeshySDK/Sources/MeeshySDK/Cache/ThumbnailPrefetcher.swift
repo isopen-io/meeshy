@@ -67,11 +67,11 @@ public actor ThumbnailPrefetcher {
     /// Mémo `key → nom de fichier` (SHA-256 hex complet, format historique des
     /// fichiers déjà présents sur les appareils — ne jamais le changer).
     /// Pattern `DiskCacheStore.fileKeyCache`.
-    nonisolated(unsafe) private static let fileNameCache: NSCache<NSString, NSString> = {
+    private static let fileNameCache: LockedCache<NSString, NSString> = LockedCache({
         let cache = NSCache<NSString, NSString>()
         cache.countLimit = 4000
         return cache
-    }()
+    }())
 
     private func thumbnailPath(forKey key: String) -> URL {
         let cacheKey = key as NSString

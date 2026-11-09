@@ -162,12 +162,26 @@ export async function checkRowMenuMore({ browser, base, check }) {
     };
   });
   check(
-    peek.dialog === true && peek.menu && peek.transform === 'none' && peek.filter === 'none' && peek.width <= 560 && peek.width >= Math.min(560, 390 - 24) && peek.left >= 12 && peek.right >= 12 && peek.path === '/chats',
-    `tenir « ${GROUP} » ouvre l'aperçu net (ni transform ni filtre), dans une couche modale qui porte ses actions, quasi pleine largeur (12 px des bords, 560 px au plus — #17243), au-dessus de ses actions, sans ouvrir le fil (${JSON.stringify(peek)})`,
+    peek.dialog === true && peek.menu && peek.transform === 'none' && peek.filter === 'none' && Math.abs(peek.width - Math.round(0.8 * (390 - 24))) <= 1 && Math.abs(peek.left - peek.right) <= 1 && peek.left >= 40 && peek.path === '/chats',
+    `tenir « ${GROUP} » ouvre l'aperçu net (ni transform ni filtre), dans une couche modale qui porte ses actions, à 80 % de la largeur utile et centré, la liste visible de chaque côté (#17274), au-dessus de ses actions, sans ouvrir le fil (${JSON.stringify(peek)})`,
   );
   await page.keyboard.press('Escape');
   const peekClosed = await page.evaluate((button) => ({ peek: document.querySelector('[data-conversation-peek]') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);
   check(!peekClosed.peek && peekClosed.focus, `Échap referme l'aperçu et rend le focus au bouton ⋮ (${JSON.stringify(peekClosed)})`);
+
+  // g. le voile qu'on voit autour de la carte se touche pour fermer (#17274)
+  await page.mouse.move(rowBox.x, rowBox.y);
+  await page.mouse.down();
+  await page.waitForSelector('[data-conversation-peek] [data-peek-card]', { timeout: 4000 });
+  await page.mouse.up();
+  const beside = await page.$eval('[data-conversation-peek] [data-peek-card]', (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.click(beside.x, beside.y);
+  await awaitCondition(page, () => document.querySelector('[data-conversation-peek]') === null).catch(() => {});
+  const veilClosed = await page.evaluate(() => ({ peek: document.querySelector('[data-conversation-peek]') !== null, path: location.pathname }));
+  check(!veilClosed.peek && veilClosed.path === '/chats', `toucher le voile à côté de la carte ferme l'aperçu sans ouvrir de fil (${JSON.stringify({ ...veilClosed, beside })})`);
 
   await context.close();
 }

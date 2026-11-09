@@ -198,42 +198,91 @@ final class TalkieVoicePlayer: TalkieSink {
     }
 }
 
+/// Ce que le décodeur AAC → PCM sait faire : `AVAudioConverter`, ou une doublure qui en reproduit un comportement.
+nonisolated protocol TalkieAacDecoding: AnyObject {
+    func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus
+}
+
+/// `AVAudioConverter` derrière le protocole : la signature importée de `convert(to:error:withInputFrom:)` change de
+/// forme d'un SDK à l'autre (bloc `@escaping` sous Xcode 26, non sous Xcode 27), une conformance directe ne compile
+/// donc que sous l'un des deux.
+nonisolated final class TalkieSystemAacDecoder: TalkieAacDecoding {
+    private let converter: AVAudioConverter
+
+    init?(from input: AVAudioFormat, to output: AVAudioFormat) {
+        guard let converter = AVAudioConverter(from: input, to: output) else { return nil }
+        self.converter = converter
+    }
+
+    func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus {
+        withoutActuallyEscaping(block) { converter.convert(to: buffer, error: error, withInputFrom: $0) }
+    }
+}
+
 /// Le décodeur d'UNE prise de parole (#17094) : les trames ADTS de chaque fragment entrent, en mémoire, dans un même
 /// convertisseur AAC → PCM qui garde son état d'un fragment à l'autre. Un fragment décodé seul repartait d'un décodeur
 /// vierge — un creux à chaque jointure — et passait par un fichier temporaire.
+///
+/// Les paquets entrent UN par demande, et la conversion se répète jusqu'à ce qu'ils soient tous sortis (#17255) : sur
+/// iPhone réel, un talkie de six fragments d'une seconde rendait une copie de 128 ms — un paquet de 1024 échantillons
+/// par fragment —, le décodeur s'arrêtant après un paquet là où celui du simulateur décode tout le tampon fourni.
 nonisolated final class TalkieAdtsStreamDecoder {
+    typealias ConverterFactory = (_ input: AVAudioFormat, _ output: AVAudioFormat) -> TalkieAacDecoding?
 
     private struct Stream {
-        let converter: AVAudioConverter
+        let converter: TalkieAacDecoding
         let input: AVAudioFormat
         let output: AVAudioFormat
         let layout: TalkieAdtsLayout
     }
 
     private static let framesPerPacket: AVAudioFrameCount = 1024
+    private let makeConverter: ConverterFactory
     private var stream: Stream?
 
+    init(makeConverter: @escaping ConverterFactory = TalkieAdtsStreamDecoder.systemConverter) {
+        self.makeConverter = makeConverter
+    }
+
     nonisolated deinit {}
+
+    static func systemConverter(_ input: AVAudioFormat, _ output: AVAudioFormat) -> TalkieAacDecoding? {
+        TalkieSystemAacDecoder(from: input, to: output)
+    }
 
     func pcm(_ data: Data) -> AVAudioPCMBuffer? {
         let frames = TalkieAdtsFrame.split(data)
         guard let layout = frames.first?.layout, let stream = stream(for: layout) else { return nil }
-        let packets = frames.filter { $0.layout == layout }.map(\.payload)
-        guard let compressed = Self.compressed(packets, format: stream.input),
-              let out = AVAudioPCMBuffer(pcmFormat: stream.output, frameCapacity: Self.framesPerPacket * AVAudioFrameCount(packets.count))
-        else { return nil }
-        var fed = false
-        var error: NSError?
-        _ = stream.converter.convert(to: out, error: &error) { _, status in
-            guard !fed else {
-                status.pointee = .noDataNow
-                return nil
+        let packets = frames.filter { $0.layout == layout }.compactMap { Self.compressed([$0.payload], format: stream.input) }
+        let capacity = Self.framesPerPacket * AVAudioFrameCount(packets.count)
+        guard !packets.isEmpty, let out = AVAudioPCMBuffer(pcmFormat: stream.output, frameCapacity: capacity) else { return nil }
+        var next = 0
+        while out.frameLength < capacity {
+            guard let chunk = AVAudioPCMBuffer(pcmFormat: stream.output, frameCapacity: capacity - out.frameLength) else { break }
+            var error: NSError?
+            let status = stream.converter.convert(to: chunk, error: &error) { _, inputStatus in
+                guard next < packets.count else {
+                    inputStatus.pointee = .noDataNow
+                    return nil
+                }
+                defer { next += 1 }
+                inputStatus.pointee = .haveData
+                return packets[next]
             }
-            fed = true
-            status.pointee = .haveData
-            return compressed
+            guard error == nil else { return nil }
+            Self.append(chunk, to: out)
+            guard status == .haveData, chunk.frameLength > 0 else { break }
         }
-        return error == nil && out.frameLength > 0 ? out : nil
+        return out.frameLength > 0 ? out : nil
+    }
+
+    private static func append(_ chunk: AVAudioPCMBuffer, to out: AVAudioPCMBuffer) {
+        guard let source = chunk.floatChannelData, let target = out.floatChannelData else { return }
+        let count = Int(min(chunk.frameLength, out.frameCapacity - out.frameLength))
+        (0..<Int(out.format.channelCount)).forEach { channel in
+            target[channel].advanced(by: Int(out.frameLength)).update(from: source[channel], count: count)
+        }
+        out.frameLength += AVAudioFrameCount(count)
     }
 
     private func stream(for layout: TalkieAdtsLayout) -> Stream? {
@@ -251,7 +300,7 @@ nonisolated final class TalkieAdtsStreamDecoder {
         )
         guard let input = AVAudioFormat(streamDescription: &description),
               let output = AVAudioFormat(standardFormatWithSampleRate: layout.sampleRate, channels: AVAudioChannelCount(layout.channels)),
-              let converter = AVAudioConverter(from: input, to: output) else { return nil }
+              let converter = makeConverter(input, output) else { return nil }
         let fresh = Stream(converter: converter, input: input, output: output, layout: layout)
         stream = fresh
         return fresh

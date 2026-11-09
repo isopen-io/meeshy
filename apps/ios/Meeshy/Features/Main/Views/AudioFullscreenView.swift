@@ -145,6 +145,7 @@ extension AudioFullscreenSource {
 /// que le lecteur partagé joue —, et les deux couches où l'on PARLE du vocal
 /// (rangée d'émojis, barre de réponse, #8916), au-dessus de tout.
 struct AudioFullscreenView: View {
+    @State private var delayed = DelayedActions()
     /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
     @Environment(\.sceneWindowSize) var sceneWindowSize
     private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
@@ -531,7 +532,7 @@ struct AudioFullscreenView: View {
             dragOffset = hostHeight
             isDismissing = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        delayed.run(after: .milliseconds(250)) {
             if let messageId = currentItem?.messageId {
                 onDismissToMessage?(messageId)
             }

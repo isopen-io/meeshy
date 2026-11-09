@@ -12,6 +12,7 @@ import MeeshyUI
 /// Struct extraite (et non une propriété calculée du rang) pour éviter les
 /// problèmes PAC entre `@State` et les closures échappantes.
 struct ConversationRowAvatar: View {
+    @State private var delayed = DelayedActions()
 
     /// Les quatre réglages qui distinguent les deux rangs.
     struct Style {
@@ -87,7 +88,7 @@ struct ConversationRowAvatar: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 showLastSeenTooltip = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            delayed.run(after: .seconds(2)) {
                 withAnimation(.easeOut(duration: 0.2)) {
                     showLastSeenTooltip = false
                 }

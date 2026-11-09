@@ -4,6 +4,7 @@ import MeeshySDK
 import MeeshyUI
 
 struct StatusBubbleOverlay: View {
+    @State private var delayed = DelayedActions()
     let status: StatusEntry
     let anchorPoint: CGPoint
     @Binding var isPresented: Bool
@@ -298,7 +299,7 @@ struct StatusBubbleOverlay: View {
     private func dismiss() {
         audioPlayer.stop()
         appearAnimation = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        delayed.run(after: .milliseconds(300)) {
             isPresented = false
         }
     }

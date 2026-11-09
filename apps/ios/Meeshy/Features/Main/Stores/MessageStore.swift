@@ -37,13 +37,18 @@ private final class WeakBox: @unchecked Sendable {
 
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
-private final class ObservationTokens: @unchecked Sendable {
+private nonisolated final class ObservationTokens: @unchecked Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    nonisolated(unsafe) var regionCancellable: AnyCancellable?
+    private let region = Locked<AnyCancellable?>(uncheckedState: nil)
+
+    var regionCancellable: AnyCancellable? {
+        get { region.mutateUnchecked { $0 } }
+        set { region.mutateUnchecked { $0 = newValue } }
+    }
 
     nonisolated func cancelAll() {
         regionCancellable?.cancel()

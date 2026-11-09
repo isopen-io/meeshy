@@ -15,48 +15,39 @@ extension CacheCoordinator {
     /// projection du serveur, jamais une somme de deltas locaux : deux surfaces
     /// ne peuvent plus dériver l'une de l'autre.
     func subscribeToPostEngagement() {
+        let lane = OrderedEventLane()
+        lane.store(in: &cancellables)
+
         socialSocket.postLiked
-            .sink { [weak self] data in
-                guard let self else { return }
-                Task {
-                    await self.applyPostLike(
-                        postId: data.postId, likeCount: data.likeCount,
-                        actorId: data.userId, liked: true
-                    )
-                }
+            .relay(through: lane) { [weak self] data in
+                await self?.applyPostLike(
+                    postId: data.postId, likeCount: data.likeCount,
+                    actorId: data.userId, liked: true
+                )
             }
             .store(in: &cancellables)
 
         socialSocket.postUnliked
-            .sink { [weak self] data in
-                guard let self else { return }
-                Task {
-                    await self.applyPostLike(
-                        postId: data.postId, likeCount: data.likeCount,
-                        actorId: data.userId, liked: false
-                    )
-                }
+            .relay(through: lane) { [weak self] data in
+                await self?.applyPostLike(
+                    postId: data.postId, likeCount: data.likeCount,
+                    actorId: data.userId, liked: false
+                )
             }
             .store(in: &cancellables)
 
         socialSocket.commentAdded
-            .sink { [weak self] data in
-                guard let self else { return }
-                Task {
-                    await self.feed.patchEverywhere(itemId: data.postId) {
-                        $0.commentCount = data.commentCount
-                    }
+            .relay(through: lane) { [weak self] data in
+                await self?.feed.patchEverywhere(itemId: data.postId) {
+                    $0.commentCount = data.commentCount
                 }
             }
             .store(in: &cancellables)
 
         socialSocket.commentDeleted
-            .sink { [weak self] data in
-                guard let self else { return }
-                Task {
-                    await self.feed.patchEverywhere(itemId: data.postId) {
-                        $0.commentCount = data.commentCount
-                    }
+            .relay(through: lane) { [weak self] data in
+                await self?.feed.patchEverywhere(itemId: data.postId) {
+                    $0.commentCount = data.commentCount
                 }
             }
             .store(in: &cancellables)
@@ -64,21 +55,17 @@ extension CacheCoordinator {
         // `post:bookmarked` n'est émis QUE vers le bookmarker (événement
         // personnel côté gateway) : pas de filtre d'acteur nécessaire.
         socialSocket.postBookmarked
-            .sink { [weak self] data in
-                guard let self else { return }
-                Task {
-                    await self.feed.patchEverywhere(itemId: data.postId) {
-                        $0.isBookmarkedByMe = data.bookmarked
-                        if let count = data.bookmarkCount { $0.bookmarkCount = count }
-                    }
+            .relay(through: lane) { [weak self] data in
+                await self?.feed.patchEverywhere(itemId: data.postId) {
+                    $0.isBookmarkedByMe = data.bookmarked
+                    if let count = data.bookmarkCount { $0.bookmarkCount = count }
                 }
             }
             .store(in: &cancellables)
 
         socialSocket.postDeleted
-            .sink { [weak self] postId in
-                guard let self else { return }
-                Task { await self.feed.removeEverywhere(itemId: postId) }
+            .relay(through: lane) { [weak self] postId in
+                await self?.feed.removeEverywhere(itemId: postId)
             }
             .store(in: &cancellables)
     }

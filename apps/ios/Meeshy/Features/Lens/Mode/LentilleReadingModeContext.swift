@@ -282,8 +282,7 @@ nonisolated final class LentilleScopedReadingModePreferenceStore: ReadingModePre
 
     private let store: FocalReadingModePreferenceStoring
     private let scopeProvider: @Sendable @concurrent () async -> ReadingModePreferenceScope
-    private let lock = NSLock()
-    private var subscribers: [UUID: @Sendable (String, ReadingModePreference) -> Void] = [:]
+    private let subscribers = Locked<[UUID: @Sendable (String, ReadingModePreference) -> Void]>(uncheckedState: [:])
 
     init(
         store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
@@ -342,22 +341,15 @@ nonisolated final class LentilleScopedReadingModePreferenceStore: ReadingModePre
     /// divergentes » : seule la seconde était un défaut.
     func onChange(_ callback: @escaping @Sendable (String, ReadingModePreference) -> Void) -> @Sendable () -> Void {
         let token = UUID()
-        lock.lock()
-        subscribers[token] = callback
-        lock.unlock()
+        subscribers.mutateUnchecked { $0[token] = callback }
 
         return { [weak self] in
-            guard let self else { return }
-            self.lock.lock()
-            self.subscribers.removeValue(forKey: token)
-            self.lock.unlock()
+            self?.subscribers.mutateUnchecked { $0.removeValue(forKey: token) }
         }
     }
 
     private func notifySubscribers(conversationId: String, value: ReadingModePreference) {
-        lock.lock()
-        let callbacks = Array(subscribers.values)
-        lock.unlock()
+        let callbacks = subscribers.mutateUnchecked { Array($0.values) }
         for callback in callbacks {
             callback(conversationId, value)
         }

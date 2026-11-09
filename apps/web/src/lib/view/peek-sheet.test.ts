@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  PEEK_SCALE,
   PEEK_SETTLE_VELOCITY,
   detentAfterKey,
   detentProgress,
@@ -28,22 +29,37 @@ const phone = (overrides: Partial<PeekSheetFrameInput> = {}): PeekSheetFrameInpu
 });
 
 describe('la boîte de la grappe', () => {
-  test('quasi pleine largeur sur un téléphone, 12 de chaque côté', () => {
+  test('#17274 — sur un téléphone, la grappe prend 80 % de la largeur utile et se centre : la liste reste visible des deux côtés', () => {
     const frame = peekSheetFrame(phone());
-    expect(frame.width).toBe(390 - 24);
-    expect(frame.left).toBe(12);
+    expect(frame.width).toBe(Math.round((390 - 24) * PEEK_SCALE));
+    expect(frame.left + frame.width / 2).toBe(390 / 2);
+    expect(frame.left).toBeGreaterThan(40);
   });
 
-  test('la largeur se plafonne sur un grand écran et la grappe se centre', () => {
+  test('#17274 — sur un grand écran, la largeur se plafonne à 80 % de 560 et la grappe se centre', () => {
     const frame = peekSheetFrame(phone({ viewport: { width: 1400, height: 900 }, safe: { top: 0, bottom: 0, left: 0, right: 0 } }));
-    expect(frame.width).toBe(560);
-    expect(frame.left).toBe((1400 - 560) / 2);
+    expect(frame.width).toBe(448);
+    expect(frame.left).toBe((1400 - 448) / 2);
   });
 
-  test('la hauteur évite l’encoche et l’indicateur d’accueil', () => {
+  test('#17274 — au cran compact, la carte fait 80 % de la hauteur qu’elle prenait en remplissant l’écran', () => {
     const frame = peekSheetFrame(phone());
-    expect(frame.top).toBe(47 + 12);
-    expect(frame.top + frame.height).toBe(844 - 34 - 12);
+    const full = 844 - 47 - 34 - 2 * 12;
+    expect(peekSheetHeights(frame, 0).card).toBe(Math.round((full - frame.gap - frame.menuCompact) * PEEK_SCALE));
+  });
+
+  test('la hauteur évite l’encoche et l’indicateur d’accueil, et la grappe se centre entre les deux en laissant voir la liste', () => {
+    const frame = peekSheetFrame(phone());
+    const above = frame.top - (47 + 12);
+    const below = 844 - 34 - 12 - (frame.top + frame.height);
+    expect(above).toBeGreaterThan(40);
+    expect(above).toBe(below);
+  });
+
+  test('#17274 — la réduction ne mange jamais la hauteur minimale de la carte', () => {
+    const frame = peekSheetFrame(phone({ viewport: { width: 390, height: 420 }, itemCount: 10 }));
+    expect(peekSheetHeights(frame, 0).card).toBeGreaterThanOrEqual(frame.cardMin);
+    expect(peekSheetHeights(frame, 1).card).toBeGreaterThanOrEqual(frame.cardMin);
   });
 
   test('au repos, la carte prend la plus grande part et le menu ne montre que sa tête', () => {

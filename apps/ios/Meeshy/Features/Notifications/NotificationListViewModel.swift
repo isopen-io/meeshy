@@ -18,13 +18,13 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
     private var offset = 0
     private let limit = 30
     private var cancellables = Set<AnyCancellable>()
-    private nonisolated(unsafe) var refreshTask: Task<Void, Never>?
+    private let refreshTask = TaskSlot()
     private let service: NotificationServiceProviding
     private let feed: NotificationFeedProviding
     private let log = MeeshyLog.logger(.ui)
 
     nonisolated deinit {
-        refreshTask?.cancel()
+        refreshTask.cancel()
     }
 
     var filteredNotifications: [APINotification] {
@@ -114,11 +114,10 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
     }
 
     private func scheduleRefresh() {
-        refreshTask?.cancel()
-        refreshTask = Task { [weak self] in
+        refreshTask.replace(with: Task { [weak self] in
             guard await cancellableSleep(for: .seconds(0.5)), !Task.isCancelled else { return }
             await self?.refreshFromAPI()
-        }
+        })
     }
 
     private func handleReadEvent(_ notificationId: String) {

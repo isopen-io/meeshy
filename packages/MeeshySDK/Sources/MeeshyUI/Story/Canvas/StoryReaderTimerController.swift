@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import QuartzCore
+import MeeshySDK
 
 /// Behaviour contract for the slide-duration timer that drives the
 /// reader's auto-advance arrow ring + countdown.
@@ -164,11 +165,12 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     /// drive the timer via `_advanceClockForTesting(by:)` never have
     /// to instantiate one. Created lazily on the first real
     /// `setCurrentSlide` call where `useDisplayLink == true`.
-    // `nonisolated(unsafe)` so the `nonisolated deinit` can invalidate it
-    // without crossing the MainActor isolation boundary. All mutations happen
-    // in MainActor methods (setCurrentSlide / startDisplayLinkIfNeeded /
-    // stopDisplayLink), so single-context mutation is preserved.
-    private nonisolated(unsafe) var displayLink: CADisplayLink?
+    // unchecked: touché par le main et par le deinit seulement
+    private nonisolated let displayLinkSlot = Locked<CADisplayLink?>(uncheckedState: nil)
+    private var displayLink: CADisplayLink? {
+        get { displayLinkSlot.mutateUnchecked { $0 } }
+        set { displayLinkSlot.mutateUnchecked { $0 = newValue } }
+    }
     private var lastTick: CFTimeInterval?
 
     /// `false` in tests (skips CADisplayLink instantiation so a single
@@ -202,7 +204,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     // le TaskLocal scope et abort (SIGABRT) — c'est ce crash qui faisait tomber
     // le bundle via le teardown de StoryCanvasUIView (qui possède ce controller).
     nonisolated deinit {
-        displayLink?.invalidate()
+        displayLinkSlot.mutateUnchecked { $0 }?.invalidate()
     }
 
     // MARK: - StoryReaderTimerControlling

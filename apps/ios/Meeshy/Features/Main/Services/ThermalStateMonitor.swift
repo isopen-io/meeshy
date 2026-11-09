@@ -22,8 +22,8 @@ final class ThermalStateMonitor: ThermalStateMonitorProviding {
     // Un propriétaire qui oublie `stopMonitoring()` ne laisse pas l'inscription
     // dans le NotificationCenter à jamais (#9349).
     nonisolated deinit {
-        if let thermalObserver {
-            NotificationCenter.default.removeObserver(thermalObserver)
+        thermalObserver.releaseNow { observer in
+            if let observer { NotificationCenter.default.removeObserver(observer) }
         }
     }
     weak var delegate: ThermalStateMonitorDelegate?
@@ -33,13 +33,13 @@ final class ThermalStateMonitor: ThermalStateMonitorProviding {
 
     /// Token de l'observateur bloc (l'API sélecteur ne permet pas de cibler la
     /// queue de livraison ni de hopper sur le main actor).
-    /// `nonisolated(unsafe)` : posé et retiré sur le MainActor, lu une fois
-    /// par le `deinit` non isolé, quand plus personne ne tient l'objet.
-    nonisolated(unsafe) private var thermalObserver: NSObjectProtocol?
+    /// Posé et retiré sur le MainActor, relâché une fois par le `deinit` non
+    /// isolé, quand plus personne ne tient l'objet.
+    private let thermalObserver = TeardownBox<NSObjectProtocol?>(nil)
 
     func startMonitoring() {
         currentState = ProcessInfo.processInfo.thermalState
-        guard thermalObserver == nil else { return }
+        guard thermalObserver.read({ $0 == nil }) else { return }
         // ⚠️ Crash SIGTRAP : le système poste `thermalStateDidChangeNotification`
         // sur une queue de FOND (com.apple.root.user-interactive-qos). Cette classe
         // est @MainActor (target app, SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor) et
@@ -48,19 +48,22 @@ final class ThermalStateMonitor: ThermalStateMonitorProviding {
         // échouer l'assertion d'isolation Swift 6 → l'app crashait après qu'un appel
         // long ait fait chauffer l'appareil (~5 min). On hoppe explicitement sur le
         // main actor (`MainActor.assumeIsolated` indispo en iOS 16 → `Task`).
-        thermalObserver = NotificationCenter.default.addObserver(
-            forName: ProcessInfo.thermalStateDidChangeNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.thermalStateChanged() }
+        thermalObserver.update { observer in
+            observer = NotificationCenter.default.addObserver(
+                forName: ProcessInfo.thermalStateDidChangeNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.thermalStateChanged() }
+            }
         }
     }
 
     func stopMonitoring() {
-        if let thermalObserver {
-            NotificationCenter.default.removeObserver(thermalObserver)
-            self.thermalObserver = nil
+        thermalObserver.update { observer in
+            guard let current = observer else { return }
+            NotificationCenter.default.removeObserver(current)
+            observer = nil
         }
     }
 

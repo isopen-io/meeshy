@@ -53,7 +53,7 @@ tink = "1.15.0"
 
 # lot: e2ee-libsignal (#14591, ADR-030) — même version que iOS (packages/LibSignalClient/LIBSIGNAL_VERSION)
 # et que la passerelle ; publiée sur le dépôt Maven de Signal, pas sur Maven Central.
-libsignal = "0.105.4"
+libsignal = "0.106.2"
 desugarJdkLibs = "2.1.4"
 
 # lot: calls-core-telecom-integration

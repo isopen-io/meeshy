@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import MeeshySDK
 
 struct CameraPreviewLayer: UIViewRepresentable {
     let session: AVCaptureSession
@@ -181,20 +182,11 @@ final class CameraPreviewFocusPoints {
 /// seconde fois — l'aperçu gèle, noircit, juste après chaque retournement.
 /// La bascule la règle désormais DANS sa transaction, d'après ce vœu.
 nonisolated final class ComposerPreviewMirroring: @unchecked Sendable {
-    private let lock = NSLock()
-    private var wanted = true
+    private let wanted = Locked(true)
 
     var isWanted: Bool {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return wanted
-        }
-        set {
-            lock.lock()
-            wanted = newValue
-            lock.unlock()
-        }
+        get { wanted.read { $0 } }
+        set { wanted.mutate { $0 = newValue } }
     }
 
     /// Dans la configuration ouverte par l'appelant : les connexions de couche

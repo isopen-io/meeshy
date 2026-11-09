@@ -239,7 +239,8 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         // par la loi de l'aperçu (`ConversationPeekLayout.cardWidth`).
         XCTAssertTrue(overlays.contains("ConversationLongPressPeek("))
         XCTAssertEqual(ConversationPeekLayout(availableHeight: 800, availableWidth: 200, compactMenuHeight: 100, naturalMenuHeight: 400).cardWidth,
-                       200 - 2 * ConversationPeekLayout.sideMargin, "la carte tient dans un volet de 200 pt")
+                       (200 - 2 * ConversationPeekLayout.sideMargin) * ConversationPeekLayout.footprint,
+                       "la carte tient dans un volet de 200 pt")
         XCTAssertTrue(header.contains("ViewThatFits(in: .horizontal) {"))
         XCTAssertTrue(header.contains("headerActions(spacing: MeeshySpacing.xs)"))
     }

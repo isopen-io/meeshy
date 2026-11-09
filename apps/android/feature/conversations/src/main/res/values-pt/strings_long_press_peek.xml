@@ -4,4 +4,5 @@
     <string name="peek_menu_handle_collapse">Mostrar menos ações</string>
     <string name="peek_menu_state_compact">Ações rápidas</string>
     <string name="peek_menu_state_expanded">Todas as ações</string>
+    <string name="peek_close">Fechar</string>
 </resources>

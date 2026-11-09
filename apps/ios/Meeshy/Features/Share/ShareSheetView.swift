@@ -36,6 +36,7 @@ struct ShareSignInPrompt {
 /// avec… » et toutes leurs portes ; l'extension de partage pourra monter la même
 /// vue en lui donnant ses propres `ShareRecipientSourcing` et `ShareDispatching`.
 struct ShareSheetView: View {
+    @State private var delayed = DelayedActions()
     @StateObject var model: ShareSheetViewModel
     let accentColor: String
     var actions = ShareSheetHostActions()
@@ -108,7 +109,7 @@ struct ShareSheetView: View {
         .adaptiveOnChange(of: model.isFinished) { _, finished in
             guard finished, model.failedIds.isEmpty else { return }
             HapticFeedback.success()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { close() }
+            delayed.run(after: .milliseconds(600)) { close() }
         }
         .onDisappear(perform: fireToast)
         .confirmationDialog(ShareSheetCopy.captureWarning, isPresented: captureBinding, titleVisibility: .visible) {

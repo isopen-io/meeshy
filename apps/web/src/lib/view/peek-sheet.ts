@@ -6,6 +6,11 @@
  * la carte rend exactement ce qu'il prend. Deux crans, compact et étendu :
  * relâcher conclut vers le plus proche, ou vers celui que la vélocité désigne.
  *
+ * La grappe ne remplit pas l'écran (#17274) : elle prend `PEEK_SCALE` de la
+ * largeur utile, et sa carte au repos `PEEK_SCALE` de la hauteur qu'elle
+ * aurait en remplissant la zone sûre. La liste reste visible tout autour, et
+ * ce voile qu'on voit se touche pour fermer.
+ *
  * Pure, sans DOM : le geste (`conversation-peek-cluster.tsx`) l'interroge à
  * chaque image et écrit ses deux hauteurs sans repasser par un rendu.
  */
@@ -24,6 +29,8 @@ export const PEEK_HANDLE_HEIGHT = 44;
 export const PEEK_MENU_CHROME = 10;
 export const PEEK_SIDE = 12;
 export const PEEK_GAP = 8;
+/** Ce que la grappe garde de la place qu'elle prenait en remplissant l'écran (#17274). */
+export const PEEK_SCALE = 0.8;
 export const PEEK_MAX_WIDTH = 560;
 export const PEEK_MAX_HEIGHT = 880;
 /** Deux rangées de messages : ce que la carte garde, toujours (elle n'a pas d'en-tête, #17243). */
@@ -59,19 +66,29 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 const menuHeightFor = (rows: number): number => PEEK_HANDLE_HEIGHT + rows * PEEK_ROW_HEIGHT + PEEK_MENU_CHROME;
 
-export function peekSheetFrame({ viewport, safe, itemCount }: PeekSheetFrameInput): PeekSheetFrame {
-  const safeLeft = safe.left ?? 0;
-  const innerWidth = Math.max(0, viewport.width - safeLeft - (safe.right ?? 0) - 2 * PEEK_SIDE);
-  const width = Math.min(PEEK_MAX_WIDTH, innerWidth);
-  const left = safeLeft + PEEK_SIDE + (innerWidth - width) / 2;
-  const innerHeight = Math.max(0, viewport.height - safe.top - safe.bottom - 2 * PEEK_SIDE);
-  const height = Math.min(PEEK_MAX_HEIGHT, innerHeight);
-  const top = safe.top + PEEK_SIDE + (innerHeight - height) / 2;
+type MenuHeights = { readonly menuCompact: number; readonly menuExpanded: number; readonly menuOverflows: boolean };
+
+const menuHeightsWithin = (height: number, itemCount: number): MenuHeights => {
   const menuRoom = Math.max(0, height - PEEK_GAP - PEEK_CARD_MIN);
   const menuNatural = menuHeightFor(itemCount);
   const menuExpanded = Math.min(menuNatural, menuRoom);
   const menuCompact = Math.min(menuHeightFor(Math.min(PEEK_COMPACT_ROWS, itemCount)), menuExpanded);
-  return { top, left, width, height, gap: PEEK_GAP, cardMin: PEEK_CARD_MIN, menuCompact, menuExpanded, menuOverflows: menuNatural > menuExpanded };
+  return { menuCompact, menuExpanded, menuOverflows: menuNatural > menuExpanded };
+};
+
+export function peekSheetFrame({ viewport, safe, itemCount }: PeekSheetFrameInput): PeekSheetFrame {
+  const safeLeft = safe.left ?? 0;
+  const innerWidth = Math.max(0, viewport.width - safeLeft - (safe.right ?? 0) - 2 * PEEK_SIDE);
+  const width = Math.round(Math.min(PEEK_MAX_WIDTH, innerWidth) * PEEK_SCALE);
+  const left = safeLeft + PEEK_SIDE + (innerWidth - width) / 2;
+  const innerHeight = Math.max(0, viewport.height - safe.top - safe.bottom - 2 * PEEK_SIDE);
+  const fullHeight = Math.min(PEEK_MAX_HEIGHT, innerHeight);
+  const full = menuHeightsWithin(fullHeight, itemCount);
+  const fullCard = fullHeight - PEEK_GAP - full.menuCompact;
+  const card = Math.min(fullCard, Math.max(PEEK_CARD_MIN, Math.round(fullCard * PEEK_SCALE)));
+  const height = card + PEEK_GAP + full.menuCompact;
+  const top = safe.top + PEEK_SIDE + (innerHeight - height) / 2;
+  return { top, left, width, height, gap: PEEK_GAP, cardMin: PEEK_CARD_MIN, ...menuHeightsWithin(height, itemCount) };
 }
 
 export function peekSheetHeights(frame: PeekSheetFrame, progress: number): PeekSheetHeights {

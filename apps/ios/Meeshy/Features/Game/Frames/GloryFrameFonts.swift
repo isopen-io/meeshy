@@ -80,8 +80,7 @@ nonisolated final class GloryFrameFonts: @unchecked Sendable {
 
     private static let weightAxis = 0x7767_6874 as UInt32
     private let bundle: Bundle
-    private let lock = NSLock()
-    private var registered: Set<GloryFrameFontFamily> = []
+    private let registered = Locked<Set<GloryFrameFontFamily>>(uncheckedState: [])
     private let logger = MeeshyLog.logger(.game)
 
     init(bundle: Bundle = .main) {
@@ -106,17 +105,17 @@ nonisolated final class GloryFrameFonts: @unchecked Sendable {
     /// Idempotent ; vrai si la famille est disponible au processus.
     @discardableResult
     func register(_ family: GloryFrameFontFamily) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if registered.contains(family) { return true }
-        let urls = family.files.compactMap { bundle.url(forResource: $0, withExtension: "ttf") }
-        guard urls.count == family.files.count else {
-            logger.error("Glory frame font missing in bundle: \(family.rawValue, privacy: .public)")
-            return false
+        registered.mutateUnchecked { known in
+            if known.contains(family) { return true }
+            let urls = family.files.compactMap { bundle.url(forResource: $0, withExtension: "ttf") }
+            guard urls.count == family.files.count else {
+                logger.error("Glory frame font missing in bundle: \(family.rawValue, privacy: .public)")
+                return false
+            }
+            let ok = urls.allSatisfy(Self.registerFile)
+            if ok { known.insert(family) }
+            return ok
         }
-        let ok = urls.allSatisfy(Self.registerFile)
-        if ok { registered.insert(family) }
-        return ok
     }
 
     private static func registerFile(_ url: URL) -> Bool {
