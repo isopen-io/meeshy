@@ -47,11 +47,11 @@ public struct ViewOnceChip: View, Equatable {
                       ? MessageProtectionSymbols.viewOnceFilled
                       : MessageProtectionSymbols.viewOnce)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(MeeshyColors.stateViewOnce.opacity(state == .sealed ? 1 : 0.6))
+                    .foregroundStyle(MeeshyColors.stateViewOnce.opacity(state == .sealed ? 1 : 0.6))
                 Text(verbatim: "·")
-                    .foregroundColor(labelColor.opacity(0.6))
+                    .foregroundStyle(labelColor.opacity(0.6))
                 Text(Self.label(for: state))
-                    .foregroundColor(labelColor)
+                    .foregroundStyle(labelColor)
             }
             .font(.footnote.weight(.semibold))
             .lineLimit(1)
