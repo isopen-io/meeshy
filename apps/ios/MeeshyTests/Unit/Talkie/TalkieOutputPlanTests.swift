@@ -147,6 +147,28 @@ final class TalkieAdtsStreamDecoderTests: XCTestCase {
         XCTAssertEqual(Double(written.length) / written.fileFormat.sampleRate, expected, accuracy: 0.1)
     }
 
+    func test_theVoiceCopy_isClosedAndComplete_assoonAsWriteReturns_beforeAnyAutoreleasePoolDrains() throws {
+        let frames = try encodedTalk(seconds: 3)
+        let fragments = stride(from: 0, to: frames.count, by: 47).map { start in
+            frames[start..<min(start + 47, frames.count)].reduce(Data()) { $0 + $1.data }
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("talkie-copy-test-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let size: () -> Int? = { (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int }
+
+        let (returned, readBack, sizeOnReturn): (TimeInterval?, TimeInterval?, Int?) = autoreleasepool {
+            let returned = TalkieVoiceCopyFile.write(fragments, to: url)
+            let sizeOnReturn = size()
+            let readBack = (try? AVAudioFile(forReading: url)).map { Double($0.length) / $0.fileFormat.sampleRate }
+            return (returned, readBack, sizeOnReturn)
+        }
+
+        let duration = try XCTUnwrap(returned)
+        XCTAssertEqual(duration, Double(frames.count * 1024) / Self.sampleRate, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(readBack), duration, accuracy: 0.001)
+        XCTAssertEqual(sizeOnReturn, size())
+    }
+
     func test_aFragment_splitsIntoItsFrames_andStopsAtATruncatedOne() throws {
         let frames = try encodedTalk(seconds: 0.1)
         let whole = frames.prefix(2).reduce(Data()) { $0 + $1.data }
