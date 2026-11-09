@@ -93,15 +93,18 @@ public struct TalkieEnded: Decodable, Sendable, Equatable {
     public let fromUserId: String
     public let toUserId: String
     public let reason: TalkieEndReason?
+    /// Une voix RÉVEILLÉE seulement : le destinataire l'a-t-il rejointe ? `false` : l'émetteur en crée la copie vocale.
+    public let joined: Bool?
 
-    public init(talkieId: String, fromUserId: String, toUserId: String, reason: TalkieEndReason?) {
+    public init(talkieId: String, fromUserId: String, toUserId: String, reason: TalkieEndReason?, joined: Bool? = nil) {
         self.talkieId = talkieId
         self.fromUserId = fromUserId
         self.toUserId = toUserId
         self.reason = reason
+        self.joined = joined
     }
 
-    private enum CodingKeys: String, CodingKey { case talkieId, fromUserId, toUserId, reason }
+    private enum CodingKeys: String, CodingKey { case talkieId, fromUserId, toUserId, reason, joined }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -110,6 +113,7 @@ public struct TalkieEnded: Decodable, Sendable, Equatable {
         toUserId = try c.decode(String.self, forKey: .toUserId)
         let raw = (try? c.decodeIfPresent(String.self, forKey: .reason)) ?? nil
         reason = raw.flatMap(TalkieEndReason.init(rawValue:))
+        joined = (try? c.decodeIfPresent(Bool.self, forKey: .joined)) ?? nil
     }
 
     /// `cut` fait taire SUR-LE-CHAMP ; toute autre fin laisse finir ce qui est déjà en file.

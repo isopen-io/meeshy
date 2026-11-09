@@ -8,7 +8,9 @@ import MeeshyUI
 /// - Présent dès Proche (`ProfileCircleViewModel.offersTalkie`) ; la passerelle rejuge à chaque appui et un
 ///   `TALKIE_NOT_ALLOWED` retire la ligne, ni grisée ni expliquée.
 /// - Relâcher, glisser hors du doigt ou quitter la fiche termine la prise de parole.
-/// - Les refus se disent sans fuite : un blocage et un repli rendent la même phrase (« envoyez un message vocal »).
+/// - Les refus se disent sans fuite : un blocage et un repli rendent la même INFORMATION, jamais en rouge — la voix part
+///   en message vocal dans la conversation la plus récente (#17141).
+/// - Un destinataire hors ligne se réveille : « Réveil de X… » ; le (i) dit l'usage d'urgence.
 struct ProfileTalkieRow: View {
     @StateObject private var sender: TalkieSender
     let userId: String
@@ -33,7 +35,10 @@ struct ProfileTalkieRow: View {
                         .font(.footnote)
                         .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    holdButton
+                    HStack(spacing: MeeshySpacing.xs) {
+                        holdButton
+                        TalkieInfoButton()
+                    }
                 }
                 .padding(MeeshySpacing.md)
                 .background(MeeshyColors.brandPrimary.opacity(MeeshyOpacity.subtle))
@@ -47,7 +52,7 @@ struct ProfileTalkieRow: View {
                 withdrawn = true
                 return
             }
-            FeedbackToastManager.shared.showError(ProfileTalkieWording.notice(new))
+            ProfileTalkieWording.present(new)
         }
     }
 
@@ -55,7 +60,9 @@ struct ProfileTalkieRow: View {
         switch sender.phase {
         case .idle: ProfileTalkieWording.hold
         case .starting: ProfileTalkieWording.connecting
+        case .talking where sender.waking: ProfileTalkieWording.waking(name: displayName)
         case .talking: ProfileTalkieWording.talking(name: displayName)
+        case .recordingCopy: ProfileTalkieWording.recordingCopy
         }
     }
 
@@ -106,9 +113,38 @@ enum ProfileTalkieWording {
         String(format: String(localized: "talkie.send.talking", defaultValue: "Vous parlez à %@…", bundle: .main), name)
     }
 
+    static func waking(name: String) -> String {
+        String(format: String(localized: "talkie.send.waking", defaultValue: "Réveil de %@…", bundle: .main), name)
+    }
+
+    static var recordingCopy: String {
+        String(localized: "talkie.send.recordingCopy", defaultValue: "Enregistrement du message vocal…", bundle: .main)
+    }
+
+    /// Une issue qui n'est pas une erreur : le repli fait partir la voix en message vocal (#17141).
+    static func isInformation(_ outcome: TalkieSendOutcome) -> Bool {
+        outcome == .voice
+    }
+
+    /// Dit l'issue : une information neutre pour le repli, une erreur pour le reste.
+    @MainActor
+    static func present(_ outcome: TalkieSendOutcome, toasts: FeedbackToastManager = .shared) {
+        guard isInformation(outcome) else {
+            toasts.showError(notice(outcome))
+            return
+        }
+        toasts.show(notice(outcome), type: .info)
+    }
+
     static func notice(_ outcome: TalkieSendOutcome) -> String {
         switch outcome {
-        case .voice, .notAllowed:
+        case .voice:
+            String(
+                localized: "talkie.send.voiceCopy",
+                defaultValue: "L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.",
+                bundle: .main
+            )
+        case .notAllowed:
             String(localized: "talkie.send.voice", defaultValue: "Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.", bundle: .main)
         case .e2ee:
             String(localized: "talkie.send.e2ee", defaultValue: "Le talkie n’est pas chiffré de bout en bout : il reste fermé avec une conversation chiffrée.", bundle: .main)

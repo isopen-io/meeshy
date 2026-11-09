@@ -660,31 +660,31 @@ enum MediaTrimCopy {
     }
     static func kept(_ duree: String) -> String {
         String(format: String(localized: "media.trim.kept", defaultValue: "Gardé %@",
-                              table: "MediaTrim", bundle: .module), duree)
+                              bundle: .module), duree)
     }
     static var volume: String {
-        String(localized: "media.trim.volume", defaultValue: "Volume", table: "MediaTrim", bundle: .module)
+        String(localized: "media.trim.volume", defaultValue: "Volume", bundle: .module)
     }
     static var mute: String {
-        String(localized: "media.trim.mute", defaultValue: "Muet", table: "MediaTrim", bundle: .module)
+        String(localized: "media.trim.mute", defaultValue: "Muet", bundle: .module)
     }
     static var loop: String {
-        String(localized: "media.trim.loop", defaultValue: "Boucle", table: "MediaTrim", bundle: .module)
+        String(localized: "media.trim.loop", defaultValue: "Boucle", bundle: .module)
     }
     static var ducking: String {
         String(localized: "media.trim.ducking", defaultValue: "Atténuer sous les voix",
-               table: "MediaTrim", bundle: .module)
+               bundle: .module)
     }
     static var language: String {
-        String(localized: "media.trim.language", defaultValue: "Langue du son", table: "MediaTrim", bundle: .module)
+        String(localized: "media.trim.language", defaultValue: "Langue du son", bundle: .module)
     }
     static var transcribe: String {
-        String(localized: "media.trim.transcribe", defaultValue: "Transcrire", table: "MediaTrim", bundle: .module)
+        String(localized: "media.trim.transcribe", defaultValue: "Transcrire", bundle: .module)
     }
     static var play: String {
-        String(localized: "media.trim.play", defaultValue: "Écouter la sélection", table: "MediaTrim", bundle: .module)
+        String(localized: "media.trim.play", defaultValue: "Écouter la sélection", bundle: .module)
     }
     static var pause: String {
-        String(localized: "media.trim.pause", defaultValue: "Arrêter", table: "MediaTrim", bundle: .module)
+        String(localized: "media.trim.pause", defaultValue: "Arrêter", bundle: .module)
     }
 }

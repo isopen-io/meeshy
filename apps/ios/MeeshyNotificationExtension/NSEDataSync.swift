@@ -321,7 +321,7 @@ enum NSEDataSync {
         return "\(teamPrefix).me.meeshy.app"
     }()
 
-    private static func readAuthToken() -> String? {
+    static func readAuthToken() -> String? {
         // Read active user ID from shared UserDefaults
         guard let defaults = UserDefaults(suiteName: appGroupId),
               let userId = defaults.string(forKey: "meeshy_active_user_id") else {

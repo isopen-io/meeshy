@@ -71,7 +71,7 @@ struct ComposerCaptureMount<Content: View>: View {
                             if aspect != nil {
                                 Color.black
                             } else if ComposerCapturePlacement.showsFloor(size: taille, screenFlash: screenFlash) {
-                                Color(white: session.floorWhite)
+                                ComposerFlashIntensity.floorTint(session.floorWhite).color
                             }
                             let cadre = aspect.map { editRect($0, in: proxy.size, insets: marges.safeAreaInsets) }
                             // **Hors du cadre, la prise voilée** (#15355), sous l'image qui seule part.
@@ -83,7 +83,7 @@ struct ComposerCaptureMount<Content: View>: View {
                             // En plein écran, l'écran ne blanchit qu'à la prise.
                             if aspect == nil,
                                ComposerCapturePlacement.showsBurst(bursting: session.screenFlashBurst, size: taille) {
-                                Color(white: session.floorWhite).allowsHitTesting(false)
+                                ComposerFlashIntensity.floorTint(session.floorWhite).color.allowsHitTesting(false)
                             }
                         }
                     }
@@ -154,4 +154,8 @@ struct ComposerCaptureMount<Content: View>: View {
             .frame(width: rect.width, height: rect.height)
             .position(x: rect.midX, y: rect.midY)
     }
+}
+
+extension ComposerFlashIntensity.FloorTint {
+    var color: Color { Color(.sRGB, red: red, green: green, blue: blue) }
 }

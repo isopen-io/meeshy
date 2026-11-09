@@ -99,7 +99,21 @@ describe('appuyer → parler → relâcher', () => {
     expect(h.sender.store.getState().phase).toEqual({ kind: 'starting', toUserId: PROCHE });
     await settle();
     expect(h.wire.emitted[0]).toEqual({ event: TALKIE_CLIENT_EVENTS.TALKIE_START, payload: { toUserId: PROCHE, codec: 'aac-adts' } });
-    expect(h.sender.store.getState().phase).toEqual({ kind: 'talking', toUserId: PROCHE, talkieId: TALKIE_ID });
+    expect(h.sender.store.getState().phase).toEqual({ kind: 'talking', toUserId: PROCHE, talkieId: TALKIE_ID, delivery: 'live' });
+  });
+
+  test('un destinataire hors ligne mais joignable : la prise de parole s’ouvre en réveil (#17144)', async () => {
+    const h = harness({ ack: () => Promise.resolve({ success: true, data: { talkieId: TALKIE_ID, maxDurationMs: 30_000, maxChunkBytes: 16_384, delivery: 'waking' } }) });
+    h.sender.press(PROCHE);
+    await settle();
+    expect(h.sender.store.getState().phase).toEqual({ kind: 'talking', toUserId: PROCHE, talkieId: TALKIE_ID, delivery: 'waking' });
+  });
+
+  test('une livraison inconnue d’une passerelle future se lit en direct', async () => {
+    const h = harness({ ack: () => Promise.resolve({ success: true, data: { talkieId: TALKIE_ID, maxDurationMs: 30_000, maxChunkBytes: 16_384, delivery: 'teleport' } }) });
+    h.sender.press(PROCHE);
+    await settle();
+    expect(h.sender.store.getState().phase).toMatchObject({ delivery: 'live' });
   });
 
   test('les trames sont regroupées en fragments de ~250 ms, numérotés dans l’ordre, binaires', async () => {

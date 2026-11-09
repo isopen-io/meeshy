@@ -1,7 +1,7 @@
 /**
  * #17022 — une séance « ensemble » s'arrête dans le geste qui ferme sa porte, pas au geste
  * suivant : chaque site UNIQUE qui ferme une porte demande la coupure de ce qu'il ferme.
- * - la fin d'une appartenance (départ, bannissement, retrait) : les séances du partant ;
+ * - la fin d'une appartenance (départ, bannissement, retrait) : les séances du partant dans ce fil ;
  * - le retrait d'un message audio ou vidéo : les séances de sa conversation ;
  * - la désactivation ou la suppression d'un compte : ses séances.
  * Ce que la coupure rejuge et émet est prouvé par `togetherRelay.test.ts`.
@@ -65,9 +65,9 @@ describe('le retrait d\'un message', () => {
 });
 
 describe('la fin d\'une appartenance', () => {
-  it('coupe les séances du partant, même sans socket ni gestionnaire', async () => {
+  it('coupe les séances du partant DANS cette conversation, même sans socket ni gestionnaire', async () => {
     await endConversationMembership({ io: null, manager: null, conversationId: CONVERSATION, userId: USER });
-    expect(cutTogetherWhere).toHaveBeenCalledWith({ userId: USER });
+    expect(cutTogetherWhere).toHaveBeenCalledWith({ userId: USER, conversationId: CONVERSATION });
   });
 });
 

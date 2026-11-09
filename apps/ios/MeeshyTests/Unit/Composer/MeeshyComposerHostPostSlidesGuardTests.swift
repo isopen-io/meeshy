@@ -365,7 +365,7 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         XCTAssertTrue(compacted.contains("ComposerOverflowPolicy.entries("),
             "Les entrées doivent venir de la RÈGLE, lue une seule fois.")
         XCTAssertTrue(
-            compacted.contains("overflow:documentOverflowEntries"),
+            compacted.contains("overflow:host.documentOverflowEntries"),
             "Le ⋯ de la scène lit les entrées de la RÈGLE — jamais une liste écrite ici."
         )
     }

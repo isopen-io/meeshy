@@ -54,7 +54,7 @@ describe('#13935 — ouvrir une prise de parole', () => {
     const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
     t.relay.dispose();
 
-    expect(ack).toEqual({ success: true, data: { talkieId: expect.stringMatching(/^[0-9a-f]{24}$/), maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES } });
+    expect(ack).toEqual({ success: true, data: { talkieId: expect.stringMatching(/^[0-9a-f]{24}$/), maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES, delivery: 'live' } });
     const incoming = of(t, 'talkie:incoming');
     expect(incoming.map((e) => e.room)).toEqual([`user:${TO}`]);
     expect(incoming[0].payload).toMatchObject({ fromUserId: FROM, codec: 'aac-adts', maxDurationMs: TALKIE_MAX_DURATION_MS });

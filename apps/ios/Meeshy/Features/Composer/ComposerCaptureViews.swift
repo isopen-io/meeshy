@@ -593,11 +593,13 @@ struct ComposerCaptureChrome: View {
         ZStack(alignment: .topLeading) {
             if ComposerCaptureGrid.shows(enabled: gridEnabled, editing: session.phase.isEditing) {
                 ComposerCaptureGridOverlay()
+                ComposerCaptureLevelLine()
             }
             focusRing
             ComposerCaptureCountdown(timer: session.selfTimer)
         }
         .onDisappear { session.selfTimer.cancel() }
+        .modifier(ComposerCaptureAnnouncer(camera: session.camera, stage: session.stage))
     }
 
     @ViewBuilder private var focusRing: some View {

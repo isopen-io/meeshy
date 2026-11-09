@@ -6,12 +6,18 @@ import {
   TALKIE_CODECS,
   TALKIE_END_REASONS,
   TALKIE_ERROR_CODES,
+  TALKIE_FALLBACK_VOICE_MESSAGE,
   TALKIE_MAX_CHUNK_BYTES,
   TALKIE_MAX_DURATION_MS,
+  TALKIE_DELIVERIES,
   TALKIE_SEAL_KEY_ID_CHARS,
   TALKIE_SEALED_CODEC,
+  TALKIE_JOIN_WINDOW_MS,
+  TALKIE_PUSH_TYPES,
   talkieChunkPayloadSchema,
+  talkieJoinPayloadSchema,
   talkieStartPayloadSchema,
+  type TalkieStartAck,
 } from '../types/talkie';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '../types/socketio-events';
 import { NOTIFICATION_PREFERENCE_DEFAULTS } from '../types/preferences/notification';
@@ -48,6 +54,30 @@ describe('le contrat du talkie', () => {
   it('la réception directe est active par défaut, et se coupe par personne ou globalement', () => {
     expect(NOTIFICATION_PREFERENCE_DEFAULTS.talkieEnabled).toBe(true);
     expect(relationPersonSettingsUpdateSchema.safeParse({ talkieBlocked: true }).success).toBe(true);
+  });
+
+  it('#17142 — rejoindre une voix réveillée : talkie:join, un talkieId lisible', () => {
+    expect(CLIENT_EVENTS.TALKIE_JOIN).toBe('talkie:join');
+    expect(talkieJoinPayloadSchema.safeParse({ talkieId: 'c'.repeat(24) }).success).toBe(true);
+    expect(talkieJoinPayloadSchema.safeParse({ talkieId: 'pas-un-id' }).success).toBe(false);
+    expect(talkieJoinPayloadSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('#17142 — la livraison est live ou waking, champ optionnel de l’accusé (un ancien accusé reste valide)', () => {
+    expect(TALKIE_DELIVERIES).toEqual(['live', 'waking']);
+    const ancien: TalkieStartAck = { success: true, data: { talkieId: 'a'.repeat(24), maxDurationMs: 1, maxChunkBytes: 1 } };
+    const nouveau: TalkieStartAck = { success: true, data: { talkieId: 'a'.repeat(24), maxDurationMs: 1, maxChunkBytes: 1, delivery: 'waking' } };
+    expect([ancien.success, nouveau.success]).toEqual([true, true]);
+    expect(TALKIE_JOIN_WINDOW_MS).toBe(60_000);
+    expect(TALKIE_PUSH_TYPES.INCOMING).toBe('talkie_incoming');
+  });
+
+  it('#17141 — le repli n’est plus une erreur : une information, la copie part dans la conversation la plus récente', () => {
+    const repli: TalkieStartAck = { success: false, error: 'x', code: TALKIE_ERROR_CODES.FALLBACK_VOICE, conversationId: 'd'.repeat(24) };
+    expect(repli.success).toBe(false);
+    expect(TALKIE_FALLBACK_VOICE_MESSAGE).toBe(
+      'L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.',
+    );
   });
 
   it('#13949 — une voix scellée a son PROPRE encodage, hors de ceux que les clients déployés jouent', () => {

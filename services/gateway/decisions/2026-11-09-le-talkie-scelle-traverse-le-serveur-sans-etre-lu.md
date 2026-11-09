@@ -27,9 +27,9 @@ La première version portait une `keyEnvelope` unique (4 096 caractères au plus
 6. `capturedAt` reste lisible à côté d'un fragment scellé (minutage, déjà observable par le serveur à la réception) ; un client scellé peut l'omettre ou le placer dans le chiffré.
 7. La copie vocale de repli suit le chemin des messages vocaux E2EE du client, jamais un envoi en clair.
 
-### Avec le talkie réveillé (#17165, non fusionné à cette date)
+### Avec le talkie réveillé (#17165, fusionné avant ce correctif)
 
-Une voix scellée mise en tampon pour un destinataire hors ligne reste des octets opaques. Le lot fusionné EN SECOND applique : le push de suivi d'une voix scellée porte `sealed.keyId` et ne déclare pas `audio/aac` (la NSE déchiffre avant de jouer) ; à défaut, une voix scellée ne passe pas en `waking` (repli vocal E2EE).
+Une voix scellée ne passe JAMAIS en `waking` : quand la porte rend `waking`, elle se replie en message vocal (`TALKIE_FALLBACK_VOICE`, avec la conversation la plus récente), et `audioFor` refuse une voix scellée. Le push de suivi et la lecture HTTP du tampon déclarent de l'AAC qu'elle n'est pas, et la NSE ne la déchiffre pas encore. Ouvrir le réveil à la voix scellée (push portant `sealed.keyId`, sans `audio/aac`, déchiffrement dans la NSE) est un lot à part, après les clients.
 
 ### Ce que cette décision ne prouve pas
 

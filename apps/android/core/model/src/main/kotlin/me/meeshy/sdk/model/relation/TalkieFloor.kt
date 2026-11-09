@@ -98,6 +98,16 @@ public object TalkieFloor {
         return TalkieStep(after, due.map { TalkieSound.Release(it) })
     }
 
+    /**
+     * « Lire » sur la notification de réveil (#17144) : une prise de parole CLOSE redevient ouvrable, pour que le
+     * rattrapage rejoué par la passerelle après un nouveau `talkie:join` sorte encore. Une prise de parole qui sort ne
+     * change pas.
+     */
+    public fun forget(state: TalkieFloorState, talkieId: String): TalkieFloorState {
+        if (talkieId !in state.closed) return state
+        return state.copy(closed = state.closed - talkieId)
+    }
+
     /** Le nom venu des caches, posé sur la prise de parole si elle sort encore. */
     public fun named(state: TalkieFloorState, talkieId: String, name: String?): TalkieFloorState {
         if (name.isNullOrBlank()) return state

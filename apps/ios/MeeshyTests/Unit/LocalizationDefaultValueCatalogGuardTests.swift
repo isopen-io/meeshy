@@ -306,9 +306,10 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
 }
 
 /// **Un appel qui nomme sa TABLE vit dans cette table, traduit dans les sept
-/// locales** (#17110). `ComposerTime.xcstrings` (app) et `MediaTrim.xcstrings`
-/// (SDK) portent les mots de la frise premium et de « Rogner et régler » ; les
-/// gardes de `Localizable` les ignorent, celle-ci les mesure.
+/// locales** (#17110). `ComposerTime.xcstrings` (app) porte les mots de la frise
+/// premium ; les gardes de `Localizable` l'ignorent, celle-ci la mesure. Les mots
+/// de « Rogner et régler » vivent dans le `Localizable` du SDK, que
+/// `CatalogCompletenessGuardTests` exige pour toute clé de MeeshyUI.
 final class LocalizationTableCatalogGuardTests: XCTestCase {
 
     private static let locales: Set<String> = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
@@ -375,7 +376,7 @@ final class LocalizationTableCatalogGuardTests: XCTestCase {
                 }
             }
         }
-        XCTAssertGreaterThanOrEqual(vus, 10, "le balayage doit voir les tables de #17110")
+        XCTAssertGreaterThanOrEqual(vus, 5, "le balayage doit voir les tables de #17110")
         XCTAssertTrue(fautes.isEmpty, fautes.joined(separator: "\n"))
     }
 
