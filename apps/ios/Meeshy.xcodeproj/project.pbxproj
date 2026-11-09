@@ -2122,6 +2122,7 @@
 		7693EA0E08871297D9BEF52C /* GatewayBridgeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F9B6D827545B032CDECED1D /* GatewayBridgeProvider.swift */; };
 		76B8CCB8A9B9297C6C205BAB /* CallBannerContrast.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1118910D0880BFB743EA43E /* CallBannerContrast.swift */; };
 		76BAA74CA7B2168E531BA079 /* SettingsFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35381B5279645BF152DA527 /* SettingsFocus.swift */; };
+		76BE61A57AFF28B6D4AB1D5B /* ComposerCaptureLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B8567367788200C18EF7B6 /* ComposerCaptureLevel.swift */; };
 		76C7A62264C8F3125A9BEB2C /* CallFrameDeclinationPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C252D61090B063233AC6113 /* CallFrameDeclinationPager.swift */; };
 		76D870A3159DD0437EBDB359 /* MockConversationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF935FD061577F5143449DD /* MockConversationService.swift */; };
 		771AAB787DD1E49CD1569D10 /* CallFrameCatalogue+Jovial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B0C4AF7CA7454122A3A062 /* CallFrameCatalogue+Jovial.swift */; };
@@ -5182,6 +5183,7 @@
 		20B42CE940AA26AA48714ED8 /* FeedPipelineIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPipelineIntegrationTests.swift; sourceTree = "<group>"; };
 		20B59D559D16BA9C86E0B7F7 /* StoryViewerView+PlaybackHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+PlaybackHold.swift"; sourceTree = "<group>"; };
 		20B6B1E8CA65208BA513D97E /* VideoDegradationPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDegradationPreference.swift; sourceTree = "<group>"; };
+		20B8567367788200C18EF7B6 /* ComposerCaptureLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureLevel.swift; sourceTree = "<group>"; };
 		20BA18D6D81524E33F3069EB /* ConversationListPaginationCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListPaginationCursor.swift; sourceTree = "<group>"; };
 		20C58A457E5ADCDA1FA1A11D /* ComposerPostTextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPostTextPolicy.swift; sourceTree = "<group>"; };
 		20FF9695C0C2F706C08F5425 /* morbide_memento_back.webp */ = {isa = PBXFileReference; path = morbide_memento_back.webp; sourceTree = "<group>"; };
@@ -12736,6 +12738,7 @@
 				5307E6123FB28DF46C62A0C3 /* ComposerCaptureFocusGeometry.swift */,
 				475925DE86425FB07727FC74 /* ComposerCaptureGesture.swift */,
 				DFCFDC5ED0811BD3D6964BD4 /* ComposerCaptureHold.swift */,
+				20B8567367788200C18EF7B6 /* ComposerCaptureLevel.swift */,
 				BC81FE6FCFAF99A8D3FD1C32 /* ComposerCaptureLockTrack.swift */,
 				F01D82A69C37D48C430D21D3 /* ComposerCaptureMotion.swift */,
 				8D65D8F6FBAFB99234AE4C65 /* ComposerCaptureMount.swift */,
@@ -15928,6 +15931,7 @@
 				A3291C49BFED338B0618EDB8 /* ComposerCaptureFocusGeometry.swift in Sources */,
 				58AD7B25A1C4A5802906A15B /* ComposerCaptureGesture.swift in Sources */,
 				BBAD024C881C7A3FA3E955BF /* ComposerCaptureHold.swift in Sources */,
+				76BE61A57AFF28B6D4AB1D5B /* ComposerCaptureLevel.swift in Sources */,
 				EEF3A299A635E71F0664C288 /* ComposerCaptureLockTrack.swift in Sources */,
 				C56528038A8B0A9B1238E7F8 /* ComposerCaptureMirrorRule.swift in Sources */,
 				2AB2FB076749CF42C770697A /* ComposerCaptureMotion.swift in Sources */,
