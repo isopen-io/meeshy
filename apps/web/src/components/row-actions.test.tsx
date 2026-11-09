@@ -125,6 +125,16 @@ describe('RowActions — le retour matériel consomme le menu, jamais la liste (
   });
 });
 
+describe('RowActions — #17243 : le panneau passe AU-DESSUS du chrome fixe du haut', () => {
+  test('ouvert près du haut, le panneau couvre la bannière du joueur (z-index 40) au lieu de passer dessous', () => {
+    mountRowActions();
+    openMenu();
+    const panel = document.body.querySelector<HTMLElement>('[role="menu"]');
+    expect(Number(panel?.style.zIndex)).toBeGreaterThan(40);
+    expect(panel?.className ?? '').not.toContain('z-30');
+  });
+});
+
 describe('RowActions — le menu de la ligne, au clic droit comme à l’appui long (#8109)', () => {
   const menuItem = (label: string): HTMLButtonElement | null =>
     [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === label) ?? null;

@@ -155,6 +155,9 @@ function RowMenuBackDismiss({ onClose }: { readonly onClose: () => void }) {
   return null;
 }
 
+/** L'étage du panneau ⋮ : au-dessus du chrome fixe (z-40), celui de la grappe. */
+const PANEL_Z_INDEX = 41;
+
 /** La carte d'attente, le temps que le chunk de l'aperçu arrive. */
 const PEEK_MIN_HEIGHT = 120;
 
@@ -703,8 +706,13 @@ export function RowActions({
                 role="menu"
                 aria-label={menuLabel}
                 onKeyDown={onMenuKeyDown}
-                className="fixed z-30 overflow-hidden rounded-card py-1 shadow-cast"
+                className="fixed overflow-hidden rounded-card py-1 shadow-cast"
                 style={{
+                  /* Au-dessus du chrome fixe de la coquille (bandeau du joueur, z-40) :
+                     le panneau peut monter jusqu'en haut de l'écran, et une action
+                     recouverte par la bannière ne se toucherait pas (#17243). Même
+                     étage que la grappe de l'aperçu (`conversation-peek.css`). */
+                  zIndex: PANEL_Z_INDEX,
                   top: box.top,
                   right: box.right,
                   width: box.width,
