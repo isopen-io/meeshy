@@ -216,6 +216,8 @@ public struct MeeshyAudioEditorView: View {
                     .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
             }
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
         }
         .accessibilityLabel(label)
         .buttonStyle(.plain)

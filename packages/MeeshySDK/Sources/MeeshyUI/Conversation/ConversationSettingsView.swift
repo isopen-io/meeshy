@@ -441,6 +441,8 @@ public struct ConversationSettingsView: View {
                         .foregroundColor(theme.textMuted)
                         .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
                 }
             }
         }
