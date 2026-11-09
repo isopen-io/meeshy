@@ -250,11 +250,24 @@ private struct RelayProbe: ViewModifier {
     func body(content: Content) -> some View {
         content
             .accessibilityElement(children: .ignore)
-            .accessibilityIdentifier("relay.base")
+            .modifier(BaseIdentifier(isBase: meeshyRouter == nil))
             .relayingMeeshyRouter(meeshyRouter) { view, router in
                 view
                     .accessibilityIdentifier("relay.on")
                     .accessibilityLabel(String(describing: ObjectIdentifier(router)))
             }
+    }
+}
+
+private struct BaseIdentifier: ViewModifier {
+    let isBase: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isBase {
+            content.accessibilityIdentifier("relay.base")
+        } else {
+            content
+        }
     }
 }
