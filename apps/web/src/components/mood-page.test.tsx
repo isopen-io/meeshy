@@ -136,12 +136,19 @@ describe('ce que la page peint', () => {
     const { host } = render({ banner: { image: '/b/nour.jpg', design: BUILTIN_BANNER_PACKS[0]!.items[0]!, ring: null } });
     expect(host.querySelector('[data-mood-backdrop] img')?.getAttribute('src')).toContain('/b/nour.jpg');
     expect(host.querySelector('[data-mood-backdrop] [data-banner-design]')).toBeNull();
+    expect(host.querySelector('[data-mood-backdrop-fill]')).toBeNull();
   });
 
-  test('sans bannière, un dégradé de l’accent — jamais un fond vide', () => {
+  test('sans bannière, le remplissage dérivé de l’accent — jamais un fond vide', () => {
+    // Le fond de repli DÉRIVE de l'accent, assombri vers le jeton
+    // `--color-media-backdrop` de la charte (le gate d'harmonie refuse `black`
+    // en dur). happy-dom ne sait pas parser `color-mix(…, var(…))` et vide la
+    // propriété ; le témoin atteste donc la BRANCHE peinte par son marqueur,
+    // indépendamment du parseur CSS, pas la chaîne du dégradé.
     const { host } = render();
     expect(host.querySelector('[data-mood-backdrop] img')).toBeNull();
-    expect(host.querySelector<HTMLElement>('[data-mood-backdrop] > span')?.style.background).toContain('linear-gradient');
+    expect(host.querySelector('[data-mood-backdrop] [data-banner-design]')).toBeNull();
+    expect(host.querySelector('[data-mood-backdrop-fill]')).not.toBeNull();
   });
 
   test('ma propre humeur n’a pas de champ de réponse', () => {
