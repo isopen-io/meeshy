@@ -16,19 +16,38 @@ nonisolated enum TalkieHeaderVoice: Equatable, Sendable {
     }
 }
 
+/// Ce que la voix devient pendant qu’on parle (#17337) — visible AVANT la fin : entendue à l'instant, ou gardée
+/// pour plus tard parce que l'autre est hors ligne.
+nonisolated enum TalkieHeaderDelivery: Equatable, Sendable {
+    /// L'autre écoute en ce moment : l'onde montre ce qui se dit, sur place.
+    case live
+    /// L'autre est hors ligne : la passerelle le réveille et lui rejouera la voix.
+    case relayed
+    /// Le talkie n'a pas pu passer : la voix s'enregistre et partira en message vocal.
+    case recorded
+
+    var isRealtime: Bool { self == .live }
+
+    /// Une voix qui arrive s'entend toujours en direct ; celle qui part suit ce que la passerelle a répondu.
+    static func resolve(voice: TalkieHeaderVoice, phase: TalkieSender.Phase, waking: Bool) -> TalkieHeaderDelivery {
+        guard voice == .outgoing else { return .live }
+        if case .recordingCopy = phase { return .recorded }
+        return waking ? .relayed : .live
+    }
+}
+
 /// Ce que l'en-tête montre selon la voix du talkie (#17310) : au repos, tout ; une voix en cours, le talkie prend
-/// toute la barre — retour, identité, actions et (i) lui cèdent la place.
+/// toute la barre — retour, identité et actions lui cèdent la place. Le (i) du talkie ne vit que sur la fiche.
 nonisolated struct ConversationHeaderTalkieChrome: Equatable, Sendable {
     let showsBackButton: Bool
     let showsIdentity: Bool
     let showsActions: Bool
-    let showsInfo: Bool
     let talkieSpansBar: Bool
 
     static func resolve(voice: TalkieHeaderVoice) -> ConversationHeaderTalkieChrome {
         let rest = voice == .none
         return ConversationHeaderTalkieChrome(
-            showsBackButton: rest, showsIdentity: rest, showsActions: rest, showsInfo: rest, talkieSpansBar: !rest
+            showsBackButton: rest, showsIdentity: rest, showsActions: rest, talkieSpansBar: !rest
         )
     }
 }
@@ -74,6 +93,24 @@ nonisolated enum TalkieWaveLaw {
         let recent = Array(levels.suffix(count))
         let padded = Array(repeating: Float(0), count: count - recent.count) + recent
         return padded.map { minHeight + (maxHeight - minHeight) * CGFloat(clamp($0)) }
+    }
+
+    /// L'onde du direct : un spectre miroir centré sur la voix de l'instant. Le centre mène, les bords suivent, et une
+    /// houle propre à chaque distance au centre l'anime sans briser la symétrie. Le silence pose toutes les barres au
+    /// plancher.
+    static func mirroredBarHeights(level: Float, barCount: Int, time: TimeInterval, minHeight: CGFloat, maxHeight: CGFloat) -> [CGFloat] {
+        let count = max(barCount, 0)
+        guard count > 0 else { return [] }
+        let voice = Double(clamp(level))
+        let centre = Double(count - 1) / 2
+        let reach = max(centre, 1)
+        return (0..<count).map { index in
+            let distance = abs(Double(index) - centre)
+            let envelope = 0.3 + 0.7 * pow(cos(distance / reach * .pi / 2), 2)
+            let swell = 0.78 + 0.22 * sin(time * 8.3 + distance * 1.9) * cos(time * 4.7 - distance * 0.8)
+            let fill = min(max(voice * envelope * swell, 0), 1)
+            return minHeight + (maxHeight - minHeight) * CGFloat(fill)
+        }
     }
 
     private static func clamp(_ value: Float) -> Float {
