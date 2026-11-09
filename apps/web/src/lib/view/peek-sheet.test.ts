@@ -7,6 +7,7 @@ import {
   initialDetent,
   peekSheetFrame,
   peekSheetHeights,
+  peekSheetOffsets,
   progressAfterDrag,
   settleDetent,
   type PeekSheetFrameInput,
@@ -62,10 +63,15 @@ describe('la boîte de la grappe', () => {
     expect(rest.card - open.card).toBe(open.menu - rest.menu);
   });
 
-  test('la carte garde son en-tête lisible : le menu étendu s’arrête à la hauteur minimale de la carte', () => {
+  test('la carte garde de quoi lire : le menu étendu s’arrête à la hauteur minimale de la carte', () => {
     const frame = peekSheetFrame(phone({ viewport: { width: 390, height: 560 }, itemCount: 16 }));
     const open = peekSheetHeights(frame, 1);
     expect(open.card).toBe(frame.cardMin);
+  });
+
+  test('un menu plus haut que la place laissée déborde, et défile une fois étendu', () => {
+    expect(peekSheetFrame(phone({ viewport: { width: 390, height: 560 }, itemCount: 16 })).menuOverflows).toBe(true);
+    expect(peekSheetFrame(phone()).menuOverflows).toBe(false);
   });
 
   test('un menu qui tient dans sa tête n’a pas de course', () => {
@@ -77,6 +83,28 @@ describe('la boîte de la grappe', () => {
     const frame = peekSheetFrame(phone());
     expect(peekSheetHeights(frame, -0.4)).toEqual(peekSheetHeights(frame, 0));
     expect(peekSheetHeights(frame, 1.7)).toEqual(peekSheetHeights(frame, 1));
+  });
+});
+
+describe('par transformations seulement (le geste ne remet rien en page)', () => {
+  test('compact : le menu est décalé de toute la course, le contenu en place', () => {
+    const frame = peekSheetFrame(phone());
+    const travel = frame.menuExpanded - frame.menuCompact;
+    expect(peekSheetOffsets(frame, 0)).toEqual({ sheet: travel, content: 0 });
+  });
+
+  test('étendu : le menu est en place, le contenu remonte de toute la course pour rester au-dessus de lui', () => {
+    const frame = peekSheetFrame(phone());
+    const travel = frame.menuExpanded - frame.menuCompact;
+    expect(peekSheetOffsets(frame, 1)).toEqual({ sheet: 0, content: travel });
+  });
+
+  test('les décalages suivent les hauteurs : la carte visible et le menu visible se partagent toujours la même hauteur', () => {
+    const frame = peekSheetFrame(phone());
+    const half = peekSheetOffsets(frame, 0.5);
+    const heights = peekSheetHeights(frame, 0.5);
+    expect(frame.menuExpanded - half.sheet).toBe(heights.menu);
+    expect(peekSheetHeights(frame, 0).card - half.content).toBe(heights.card);
   });
 });
 

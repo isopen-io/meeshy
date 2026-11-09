@@ -105458,7 +105458,6 @@
       }
     },
     "context.lock": {
-      "extractionState": "stale",
       "localizations": {
         "ar": {
           "stringUnit": {

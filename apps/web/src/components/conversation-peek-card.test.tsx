@@ -58,9 +58,9 @@ const messageOf = (index: number, overrides: Partial<Message> = {}): Message =>
     readCount: 1,
     reactionCount: 0,
     isEncrypted: false,
-    createdAt: new Date(`2026-09-24T09:0${index}:00.000Z`).toISOString(),
-    updatedAt: new Date(`2026-09-24T09:0${index}:00.000Z`).toISOString(),
-    timestamp: new Date(`2026-09-24T09:0${index}:00.000Z`).toISOString(),
+    createdAt: new Date(`2026-09-24T09:${String(index).padStart(2, '0')}:00.000Z`).toISOString(),
+    updatedAt: new Date(`2026-09-24T09:${String(index).padStart(2, '0')}:00.000Z`).toISOString(),
+    timestamp: new Date(`2026-09-24T09:${String(index).padStart(2, '0')}:00.000Z`).toISOString(),
     translations: [],
     sender: {
       id: 'p-nour',
@@ -216,14 +216,18 @@ describe('ConversationPeekCard — le mode et l’accent de la conversation', ()
     expect(card().getAttribute('style') ?? '').not.toContain('blur');
   });
 
-  test('l’en-tête dit le nombre de membres d’un groupe', () => {
+  test('#17243 — aucun en-tête visible : on sait déjà ce qu’on tient, le contenu prend toute la carte', () => {
     mount({ messages: THREE });
-    expect(card().querySelector('[data-peek-header]')?.textContent).toContain('4 membres');
+    expect(card().querySelector('[data-peek-header]')).toBeNull();
+    expect(card().querySelector('[data-avatar], img')).toBeNull();
+    expect(card().textContent ?? '').not.toContain('Équipe Lyon');
+    expect(card().textContent ?? '').not.toContain('4 membres');
   });
 
-  test('une conversation chiffrée de bout en bout porte son badge', () => {
+  test('#17243 — le chiffrement de bout en bout reste dit au lecteur d’écran, par le nom de la carte', () => {
     mount({ messages: THREE, conversation: conversationOf({ encryptionMode: 'e2ee' } as Partial<Conversation>) });
-    expect(card().querySelector('[data-peek-e2ee]')).not.toBeNull();
+    expect(card().getAttribute('aria-label')).toContain('Équipe Lyon');
+    expect(card().getAttribute('aria-label')).toContain('Chiffrée de bout en bout');
   });
 });
 
@@ -287,9 +291,12 @@ describe('ConversationPeekCard — le cache d’abord', () => {
     expect([...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message)).toEqual(['m-1', 'm-2', 'm-3']);
   });
 
-  test('au plus les cinq derniers', () => {
-    mount({ messages: [1, 2, 3, 4, 5, 6, 7].map((index) => messageOf(index)), sticky: 'bubbles' });
-    expect([...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message)).toEqual(['m-3', 'm-4', 'm-5', 'm-6', 'm-7']);
+  test('#17243 — la carte agrandie montre jusqu’aux vingt derniers, de quoi remplir sa hauteur', () => {
+    mount({ messages: Array.from({ length: 24 }, (_, index) => messageOf(index + 1)), sticky: 'bubbles' });
+    const shown = [...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message);
+    expect(shown).toHaveLength(20);
+    expect(shown[0]).toBe('m-5');
+    expect(shown.at(-1)).toBe('m-24');
   });
 
   test('#12992 — dans une conversation e2ee, un clair forgé après l’activation se dit chiffré, jamais son texte', () => {
@@ -430,50 +437,5 @@ describe('conversation-peek.css — le fond sous la carte (#12633)', () => {
 
   test('un modèle ancré en bas à droite se retourne en RTL, sans le chunk du fil', () => {
     expect(rule("[dir='rtl'] .conversation-peek-card > .thread-backdrop[data-flip-rtl]")).toContain('transform: scaleX(-1)');
-  });
-
-  test('sur un fond peint, l’en-tête garde la surface opaque de la carte', () => {
-    expect(rule('.conversation-peek-card[data-peek-backdrop] .conversation-peek-header')).toContain('background-color: var(--color-ios-card);');
-  });
-
-  test('l’en-tête tient AA (4,5:1) sur toute photo, en clair et en sombre', () => {
-    const TOKENS = readFileSync(new URL('../../../../packages/design-tokens/ios.css', import.meta.url), 'utf8');
-    const light = TOKENS.indexOf(':root.light');
-    const tokenOf = (name: string, scheme: 'dark' | 'light'): string => {
-      const scope = scheme === 'light' ? TOKENS.slice(light) : TOKENS.slice(0, light);
-      const found = new RegExp(`--${name}: ([^;]+);`).exec(scope);
-      if (found?.[1] === undefined) throw new Error(`jeton absent : ${name} (${scheme})`);
-      return found[1];
-    };
-    type Rgb = readonly [number, number, number];
-    const hex = (value: string): Rgb => {
-      const channel = (offset: number): number => Number.parseInt(value.replace('#', '').slice(offset, offset + 2), 16) / 255;
-      return [channel(0), channel(2), channel(4)];
-    };
-    const over = (top: Rgb, alpha: number, bottom: Rgb): Rgb => {
-      const blend = (index: 0 | 1 | 2): number => top[index] * alpha + bottom[index] * (1 - alpha);
-      return [blend(0), blend(1), blend(2)];
-    };
-    const ink = (value: string, surface: Rgb): Rgb => {
-      const mixed = /color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, transparent\)/i.exec(value);
-      return mixed?.[1] === undefined ? hex(value) : over(hex(mixed[1]), Number(mixed[2]) / 100, surface);
-    };
-    const luminance = (rgb: Rgb): number => {
-      const linear = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-      return 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2]);
-    };
-    const contrast = (a: Rgb, b: Rgb): number => {
-      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-      return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05);
-    };
-    const header = rule('.conversation-peek-card[data-peek-backdrop] .conversation-peek-header');
-    const opacity = header.includes('background-color: var(--color-ios-card);') ? 1 : 0;
-    const measured = (['dark', 'light'] as const).flatMap((scheme) =>
-      [hex('#000000'), hex('#ffffff')].flatMap((photo) => {
-        const surface = over(hex(tokenOf('ios-surface-card', scheme)), opacity, photo);
-        return [contrast(ink(tokenOf('ios-ink', scheme), surface), surface), contrast(ink(tokenOf('ios-ink-3', scheme), surface), surface)];
-      }),
-    );
-    expect(Math.min(...measured)).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -4,19 +4,18 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Consigne porteur du 2026-11-09 (#17244) : silence et verrou quittent le glissement vers la droite,
- * la suppression quitte le glissement vers la gauche — tous restent dans le menu d'appui long.
+ * Consigne porteur du 2026-11-09 (#17244) : silence et verrou quittent le glissement vers la droite ;
+ * supprimer et rendre obsolète vivent dans le menu SEULEMENT — le glissement vers la gauche ne garde
+ * qu'archiver et lu / non lu.
  */
 class ConversationSwipePlanTest {
 
     private fun plan(
         hasUnread: Boolean = false,
         canToggleArchive: Boolean = true,
-        obsolete: Boolean = false,
     ) = ConversationSwipePlan.of(
         hasUnread = hasUnread,
         canToggleArchive = canToggleArchive,
-        obsolete = obsolete,
     )
 
     @Test
@@ -43,21 +42,12 @@ class ConversationSwipePlanTest {
 
     @Test
     fun `each side stays within the actions a row can reveal`() {
-        val full = plan(obsolete = true)
-        assertThat(full.leading.size).isAtMost(1)
-        assertThat(full.trailing.size).isAtMost(3)
+        assertThat(plan().leading.size).isAtMost(1)
+        assertThat(plan().trailing.size).isAtMost(2)
     }
 
     @Test
-    fun `a conversation the gateway lets the viewer make obsolete offers it last`() {
-        assertThat(plan(obsolete = true).trailing).containsExactly(
-            SwipeKind.ARCHIVE, SwipeKind.MARK_UNREAD, SwipeKind.OBSOLETE,
-        ).inOrder()
-    }
-
-    @Test
-    fun `a conversation the gateway does not let the viewer make obsolete has no obsolete swipe`() {
-        assertThat(plan(obsolete = false).trailing).doesNotContain(SwipeKind.OBSOLETE)
-        assertThat(plan(obsolete = false).leading).doesNotContain(SwipeKind.OBSOLETE)
+    fun `no swipe removes a conversation, delete and make obsolete living in the long press menu only`() {
+        assertThat(SwipeKind.entries.map { it.name }).containsNoneOf("REMOVE", "OBSOLETE", "DELETE")
     }
 }

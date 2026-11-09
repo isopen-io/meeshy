@@ -149,76 +149,51 @@ final class ConversationObsoleteTests: XCTestCase {
         XCTAssertEqual(ConversationObsolescence.Refusal.of(isDirect: true, error: URLError(.notConnectedToInternet)), .other)
     }
 
-    // MARK: - Au balayage de fin (#14645)
+    // MARK: - Au balayage de fin (#14645, #17242)
 
-    // Le bord de fin ne supprime plus (directive porteur 2026-11-09, #17242) :
-    // la suppression reste au menu d'appui long, avec sa confirmation.
-    func test_trailingSwipePlan_obsoleteNotGranted_keepsArchiveAndRead() {
+    // Le bord de fin ne garde qu'Archiver et Lu / Non lu (directive porteur,
+    // #17242) : Supprimer et Rendre obsolète vivent au menu d'appui long
+    // seulement, avec leur confirmation.
+    func test_trailingSwipePlan_keepsOnlyArchiveAndRead() {
         XCTAssertEqual(
-            ConversationTrailingSwipe.plan(isArchived: false, isArchiveImposed: false, hasUnread: true, obsolete: false),
+            ConversationTrailingSwipe.plan(isArchived: false, isArchiveImposed: false, hasUnread: true),
             [.archive, .markRead]
         )
-    }
-
-    func test_trailingSwipePlan_obsoleteGranted_comesLast_andTheReadToggleStays() {
-        let plan = ConversationTrailingSwipe.plan(isArchived: false, isArchiveImposed: false, hasUnread: false, obsolete: true)
-
-        XCTAssertEqual(plan, [.archive, .markUnread, .obsolete])
-        XCTAssertLessThanOrEqual(plan.count, SwipeRowRules.maxActionsPerSide)
-    }
-
-    func test_trailingSwipePlan_archiveImposed_obsoleteFitsBesideTheReadToggle() {
         XCTAssertEqual(
-            ConversationTrailingSwipe.plan(isArchived: true, isArchiveImposed: true, hasUnread: false, obsolete: true),
-            [.markUnread, .obsolete]
+            ConversationTrailingSwipe.plan(isArchived: true, isArchiveImposed: false, hasUnread: false),
+            [.unarchive, .markUnread]
         )
     }
 
-    private func makeSwipeActions(
-        list: ConversationListViewModel,
-        currentUser: MeeshyUser?,
-        onObsolete: @escaping (Conversation) -> Void
-    ) -> ConversationSwipeActions {
-        ConversationSwipeActions(
-            viewModel: list,
-            currentUser: currentUser,
-            onObsolete: onObsolete
+    func test_trailingSwipePlan_archiveImposed_keepsOnlyTheReadToggle() {
+        XCTAssertEqual(
+            ConversationTrailingSwipe.plan(isArchived: true, isArchiveImposed: true, hasUnread: false),
+            [.markUnread]
         )
+    }
+
+    private func makeSwipeActions(list: ConversationListViewModel, currentUser: MeeshyUser?) -> ConversationSwipeActions {
+        ConversationSwipeActions(viewModel: list, currentUser: currentUser)
     }
 
     private let reader = MeeshyUser(id: "me", username: "me", displayName: "Me", role: "USER", isAnonymous: false)
 
-    func test_trailingSwipeActions_groupAdmin_lastActionArmsTheMenuConfirmation() {
+    func test_trailingSwipeActions_groupAdmin_neverMakesObsolete_theMenuDoes() {
         let service = MockConversationService()
-        let list = makeList(conversationService: service)
-        var armed: [String] = []
-        let sut = makeSwipeActions(list: list, currentUser: reader) { armed.append($0.id) }
+        let sut = makeSwipeActions(list: makeList(conversationService: service), currentUser: reader)
 
         let actions = sut.trailingSwipeActions(for: makeConversation(id: "c1"))
 
-        XCTAssertEqual(actions.last?.label, ConversationMenuEntry.obsolete.label)
-        XCTAssertEqual(actions.last?.icon, ConversationMenuEntry.obsolete.symbol)
-        XCTAssertLessThanOrEqual(actions.count, SwipeRowRules.maxActionsPerSide)
-        actions.last?.action()
-        XCTAssertEqual(armed, ["c1"], "le balayage arme la confirmation du menu")
-        XCTAssertEqual(service.obsoleteCallCount, 0, "jamais l'effet sans confirmation")
+        XCTAssertFalse(actions.map(\.label).contains(ConversationMenuEntry.obsolete.label))
+        XCTAssertEqual(actions.count, 2)
+        actions.forEach { $0.action() }
+        XCTAssertEqual(service.obsoleteCallCount, 0)
     }
 
-    func test_trailingSwipeActions_groupMember_offersNoObsolete() {
-        let list = makeList()
-        let member = MeeshyConversation(id: "c1", identifier: "c1", type: .group, title: "Groupe", currentUserRole: "member")
-        let sut = makeSwipeActions(list: list, currentUser: reader) { _ in }
-
-        let labels = sut.trailingSwipeActions(for: member).map(\.label)
-
-        XCTAssertFalse(labels.contains(ConversationMenuEntry.obsolete.label))
-        XCTAssertEqual(labels.count, 2)
-    }
-
-    // Le bord de tête ne garde qu'Épingler (directive porteur 2026-11-09, #17242) :
+    // Le bord de tête ne garde qu'Épingler (directive porteur, #17242) :
     // Sourdine et Verrouiller restent au menu d'appui long.
     func test_leadingSwipeActions_offerOnlyThePin() {
-        let sut = makeSwipeActions(list: makeList(), currentUser: reader) { _ in }
+        let sut = makeSwipeActions(list: makeList(), currentUser: reader)
 
         let actions = sut.leadingSwipeActions(for: makeConversation(id: "c1"))
 
@@ -226,17 +201,12 @@ final class ConversationObsoleteTests: XCTestCase {
     }
 
     func test_trailingSwipeActions_neverDelete() {
-        let sut = makeSwipeActions(list: makeList(), currentUser: reader) { _ in }
+        let sut = makeSwipeActions(list: makeList(), currentUser: reader)
 
-        let icons = sut.trailingSwipeActions(for: makeConversation(id: "c1")).map(\.icon)
+        let icons = sut.trailingSwipeActions(for: makeDirect(id: "d1")).map(\.icon)
 
         XCTAssertFalse(icons.contains("eye.slash.fill"), "Masquer / Supprimer ne se balaie plus.")
-    }
-
-    func test_trailingSwipeActions_readerNotLoaded_offersNoObsolete() {
-        let sut = makeSwipeActions(list: makeList(), currentUser: nil) { _ in }
-
-        XCTAssertFalse(sut.trailingSwipeActions(for: makeDirect(id: "d1")).map(\.label).contains(ConversationMenuEntry.obsolete.label))
+        XCTAssertFalse(icons.contains(ConversationMenuEntry.obsolete.symbol), "Rendre obsolète ne se balaie plus.")
     }
 
     // MARK: - conversation:obsoleted, fil ouvert

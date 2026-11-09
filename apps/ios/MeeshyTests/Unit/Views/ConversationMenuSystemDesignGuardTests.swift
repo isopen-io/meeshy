@@ -136,6 +136,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertFalse(swipeSource.contains("SwipeLabels.hide"), "Le bord de fin ne masque / supprime plus.")
         XCTAssertFalse(swipeSource.contains("onHide"), "Aucun balayage n'arme la suppression.")
         XCTAssertFalse(swipeSource.contains("deleteConversation"), "Aucun balayage ne supprime.")
+        XCTAssertFalse(swipeSource.contains("onObsolete"), "Rendre obsolète ne se balaie plus : le menu seul l'offre.")
         let listSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView.swift"))
         XCTAssertFalse(listSource.contains("onHide:"), "La liste ne câble plus de suppression au balayage.")
         let catalog = try source(Self.catalogPath)
