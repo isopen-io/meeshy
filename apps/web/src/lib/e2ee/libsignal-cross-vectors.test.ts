@@ -57,6 +57,7 @@ const bobPreKeys = (vectors: Vectors) => ({
   signedPreKeys: [entry(vectors.bob.signedPreKey)],
   kyberPreKeys: [entry(vectors.bob.kyberPreKey)],
   preKeys: [entry(vectors.bob.preKey)],
+  seenBaseKeys: [],
 });
 
 const flip = (message: WireMessage, at: (length: number) => number, mask: number): WireMessage => {
@@ -91,7 +92,7 @@ const openPersisted = async (owner: VectorParty, peer: VectorParty, persisted: {
         remote: addressOf(peer),
         session: bytes(persisted.session),
         remoteIdentity: null,
-        preKeys: { signedPreKeys: [], kyberPreKeys: [], preKeys: [] },
+        preKeys: { signedPreKeys: [], kyberPreKeys: [], preKeys: [], seenBaseKeys: [] },
         message: message ?? wire(persisted.message),
       })
     ).plaintext,

@@ -3,5 +3,5 @@
   "libsignal": "0.106.2",
   "rustToolchain": "1.98.1",
   "wasmBindgen": "0.2.130",
-  "wasmSha256": "622a26c042d6ba8f78dfaff6e2e7a0ff29362f9585c4fd0483bf976fe2fd2ded"
+  "wasmSha256": "f067cf1c07fef8f90dc9113433a67ace6c914262c7a574c2eb21e235f08438ff"
 }

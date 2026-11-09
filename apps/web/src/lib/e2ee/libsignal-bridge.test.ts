@@ -48,7 +48,7 @@ const bobWithBundle = async () => {
     kyberPreKey: { id: kyberPreKey.id, publicKey: kyberPreKey.publicKey, signature: kyberPreKey.signature },
     preKey: { id: preKey.id, publicKey: preKey.publicKey },
   };
-  const preKeys = { signedPreKeys: [signedPreKey], kyberPreKeys: [kyberPreKey], preKeys: [preKey] };
+  const preKeys = { signedPreKeys: [signedPreKey], kyberPreKeys: [kyberPreKey], preKeys: [preKey], seenBaseKeys: [] };
   return { identity, device: deviceOf(identity, BOB), bundle, preKeys };
 };
 
@@ -75,7 +75,7 @@ describe('le pont libsignal du web, entre deux appareils (#17114)', () => {
       remote: BOB,
       remoteIdentity: hello.remoteIdentity,
       session: hello.session,
-      preKeys: { signedPreKeys: [], kyberPreKeys: [], preKeys: [] },
+      preKeys: { signedPreKeys: [], kyberPreKeys: [], preKeys: [], seenBaseKeys: [] },
       message: reply.message,
     });
     expect(text(back.plaintext)).toBe('Reçu, le ratchet tourne');
@@ -116,6 +116,24 @@ describe('le pont libsignal du web, entre deux appareils (#17114)', () => {
     expect(await rejected(
       bridge.startSession({ local: alice, remote: BOB, remoteIdentity: null, bundle: { ...bob.bundle, signedPreKey: { ...bob.bundle.signedPreKey, signature } } }),
     )).toBe(true);
+  });
+
+  test('un premier message rejoué sur la pré-clé Kyber de dernier recours est refusé, vers le même expéditeur comme vers un autre (anti-rejeu)', async () => {
+    const bob = await bobWithBundle();
+    const alice = deviceOf(await bridge.generateIdentity(), ALICE);
+    const lastResort = { ...bob.preKeys, preKeys: [] };
+    const started = await bridge.startSession({ local: alice, remote: BOB, remoteIdentity: null, bundle: { ...bob.bundle, preKey: null } });
+    const hello = await bridge.seal({ local: alice, remote: BOB, remoteIdentity: null, session: started.session, plaintext: utf8('une seule fois') });
+
+    const opened = await bridge.open({ local: bob.device, remote: ALICE, remoteIdentity: null, session: null, preKeys: lastResort, message: hello.message });
+    expect(text(opened.plaintext)).toBe('une seule fois');
+    expect({ preKey: opened.usedPreKeyId, kyber: opened.usedKyberPreKeyId, signed: opened.usedSignedPreKeyId }).toEqual({ preKey: null, kyber: 8, signed: 7 });
+    expect(opened.usedBaseKey).not.toBeNull();
+
+    const seen = { ...lastResort, seenBaseKeys: [{ kyberPreKeyId: 8, signedPreKeyId: 7, baseKey: opened.usedBaseKey ?? new Uint8Array() }] };
+    const MALLORY: SignalAddress = { name: 'mallory', deviceId: 1 };
+    expect(await rejected(bridge.open({ local: bob.device, remote: ALICE, remoteIdentity: null, session: null, preKeys: seen, message: hello.message }))).toBe(true);
+    expect(await rejected(bridge.open({ local: bob.device, remote: MALLORY, remoteIdentity: null, session: null, preKeys: seen, message: hello.message }))).toBe(true);
   });
 
   test('une pré-clé à usage unique déjà consommée n’ouvre pas une seconde session', async () => {

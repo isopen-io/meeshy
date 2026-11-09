@@ -34,10 +34,19 @@ export type WireMessage = { readonly type: MessageType; readonly body: Uint8Arra
 
 export type PreKeyEntry = { readonly id: number; readonly record: Uint8Array };
 
+/**
+ * Une clé de base déjà acceptée sur un couple (Kyber, signée). L'appareil la
+ * persiste après chaque `open` d'un premier message (`usedBaseKey`) et la rend
+ * au suivant : c'est ce qui refuse le REJEU d'un premier message adressé à une
+ * pré-clé Kyber de dernier recours, que le magasin éphémère oublierait sinon.
+ */
+export type SeenBaseKey = { readonly kyberPreKeyId: number; readonly signedPreKeyId: number; readonly baseKey: Uint8Array };
+
 export type DevicePreKeys = {
   readonly signedPreKeys: readonly PreKeyEntry[];
   readonly kyberPreKeys: readonly PreKeyEntry[];
   readonly preKeys: readonly PreKeyEntry[];
+  readonly seenBaseKeys: readonly SeenBaseKey[];
 };
 
 export type DeviceIdentity = {
@@ -70,6 +79,8 @@ export type Opened = SessionState & {
   readonly plaintext: Uint8Array;
   readonly usedPreKeyId: number | null;
   readonly usedKyberPreKeyId: number | null;
+  readonly usedSignedPreKeyId: number | null;
+  readonly usedBaseKey: Uint8Array | null;
 };
 
 export type Sealed = SessionState & { readonly message: WireMessage };
@@ -87,7 +98,7 @@ export type LibsignalBridge = {
   readonly open: (options: Peer & { readonly session: Uint8Array | null; readonly preKeys: DevicePreKeys; readonly message: WireMessage }) => Promise<Opened>;
 };
 
-const NO_PRE_KEYS: DevicePreKeys = { signedPreKeys: [], kyberPreKeys: [], preKeys: [] };
+const NO_PRE_KEYS: DevicePreKeys = { signedPreKeys: [], kyberPreKeys: [], preKeys: [], seenBaseKeys: [] };
 
 const preKeyOf = (wasm: WasmPreKey): GeneratedPreKey => {
   try {
@@ -109,6 +120,7 @@ const withStore = <T>({ local, remote, remoteIdentity }: Peer, preKeys: DevicePr
     preKeys.signedPreKeys.forEach(({ id, record }) => store.addSignedPreKey(id, record));
     preKeys.kyberPreKeys.forEach(({ id, record }) => store.addKyberPreKey(id, record));
     preKeys.preKeys.forEach(({ id, record }) => store.addPreKey(id, record));
+    preKeys.seenBaseKeys.forEach(({ kyberPreKeyId, signedPreKeyId, baseKey }) => store.addSeenBaseKey(kyberPreKeyId, signedPreKeyId, baseKey));
     if (remoteIdentity !== null) store.trustIdentity(remote.name, remote.deviceId, remoteIdentity);
     if (session !== null) store.setSession(remote.name, remote.deviceId, session);
     return operate(store);
@@ -173,6 +185,8 @@ const createBridge = (): LibsignalBridge => ({
           plaintext: opened.plaintext,
           usedPreKeyId: opened.preKeyId ?? null,
           usedKyberPreKeyId: opened.kyberPreKeyId ?? null,
+          usedSignedPreKeyId: opened.signedPreKeyId ?? null,
+          usedBaseKey: opened.baseKey ?? null,
           ...sessionStateOf(store, peer.remote),
         };
       } finally {

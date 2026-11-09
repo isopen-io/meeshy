@@ -33,12 +33,16 @@ export class Opened {
     private constructor();
     free(): void;
     [Symbol.dispose](): void;
+    get baseKey(): Uint8Array | undefined;
+    set baseKey(value: Uint8Array | number[] | null | undefined);
     get kyberPreKeyId(): number | undefined;
     set kyberPreKeyId(value: number | null | undefined);
     get plaintext(): Uint8Array;
     set plaintext(value: Uint8Array | number[]);
     get preKeyId(): number | undefined;
     set preKeyId(value: number | null | undefined);
+    get signedPreKeyId(): number | undefined;
+    set signedPreKeyId(value: number | null | undefined);
 }
 
 /**
@@ -49,6 +53,14 @@ export class ProtocolStore {
     [Symbol.dispose](): void;
     addKyberPreKey(id: number, record: Uint8Array | number[]): void;
     addPreKey(id: number, record: Uint8Array | number[]): void;
+    /**
+     * Réinjecte une clé de base déjà acceptée sur ce couple de pré-clés (Kyber,
+     * signée) : libsignal refuse alors tout PreKeySignalMessage qui la
+     * présente de nouveau (`mark_kyber_pre_key_used`). Sans elle, un magasin
+     * éphémère accepterait le rejeu d'un premier message sur une pré-clé Kyber
+     * de dernier recours, vers son expéditeur comme vers une autre adresse.
+     */
+    addSeenBaseKey(kyber_pre_key_id: number, signed_pre_key_id: number, base_key: Uint8Array | number[]): void;
     addSignedPreKey(id: number, record: Uint8Array | number[]): void;
     identity(name: string, device_id: number): Uint8Array | undefined;
     constructor(identity_key_pair: Uint8Array | number[], registration_id: number, local_name: string, local_device_id: number);
@@ -97,9 +109,11 @@ export interface InitOutput {
     readonly __wbg_get_generatedprekey_publicKey: (a: number) => [number, number];
     readonly __wbg_get_generatedprekey_record: (a: number) => [number, number];
     readonly __wbg_get_generatedprekey_signature: (a: number) => [number, number];
+    readonly __wbg_get_opened_baseKey: (a: number) => [number, number];
     readonly __wbg_get_opened_kyberPreKeyId: (a: number) => number;
     readonly __wbg_get_opened_plaintext: (a: number) => [number, number];
     readonly __wbg_get_opened_preKeyId: (a: number) => number;
+    readonly __wbg_get_opened_signedPreKeyId: (a: number) => number;
     readonly __wbg_get_sealed_body: (a: number) => [number, number];
     readonly __wbg_get_sealed_messageType: (a: number) => number;
     readonly __wbg_opened_free: (a: number, b: number) => void;
@@ -112,9 +126,11 @@ export interface InitOutput {
     readonly __wbg_set_generatedprekey_publicKey: (a: number, b: number, c: number) => void;
     readonly __wbg_set_generatedprekey_record: (a: number, b: number, c: number) => void;
     readonly __wbg_set_generatedprekey_signature: (a: number, b: number, c: number) => void;
+    readonly __wbg_set_opened_baseKey: (a: number, b: number, c: number) => void;
     readonly __wbg_set_opened_kyberPreKeyId: (a: number, b: number) => void;
     readonly __wbg_set_opened_plaintext: (a: number, b: number, c: number) => void;
     readonly __wbg_set_opened_preKeyId: (a: number, b: number) => void;
+    readonly __wbg_set_opened_signedPreKeyId: (a: number, b: number) => void;
     readonly __wbg_set_sealed_body: (a: number, b: number, c: number) => void;
     readonly __wbg_set_sealed_messageType: (a: number, b: number) => void;
     readonly generateIdentity: () => [number, number, number];
@@ -124,6 +140,7 @@ export interface InitOutput {
     readonly libsignalVersion: () => [number, number];
     readonly protocolstore_addKyberPreKey: (a: number, b: number, c: number, d: number) => [number, number];
     readonly protocolstore_addPreKey: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly protocolstore_addSeenBaseKey: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly protocolstore_addSignedPreKey: (a: number, b: number, c: number, d: number) => [number, number];
     readonly protocolstore_identity: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly protocolstore_new: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];

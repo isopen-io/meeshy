@@ -144,6 +144,19 @@ pub struct Opened {
     pub pre_key_id: Option<u32>,
     #[wasm_bindgen(js_name = kyberPreKeyId)]
     pub kyber_pre_key_id: Option<u32>,
+    #[wasm_bindgen(js_name = signedPreKeyId)]
+    pub signed_pre_key_id: Option<u32>,
+    #[wasm_bindgen(js_name = baseKey)]
+    pub base_key: Option<Vec<u8>>,
+}
+
+/// Ce qu'un PreKeySignalMessage engage : les pré-clés qu'il consomme et sa clé
+/// de base, que l'appelant persiste pour refuser son rejeu (`addSeenBaseKey`).
+struct PreKeyUse {
+    pre_key_id: Option<u32>,
+    kyber_pre_key_id: Option<u32>,
+    signed_pre_key_id: Option<u32>,
+    base_key: Option<Vec<u8>>,
 }
 
 /// Le magasin ÉPHÉMÈRE d'un appareil, rempli par l'appelant pour UNE opération.
@@ -171,6 +184,18 @@ impl ProtocolStore {
     pub fn add_kyber_pre_key(&mut self, id: u32, record: &[u8]) -> Bridged<()> {
         let record = KyberPreKeyRecord::deserialize(record).map_err(fail)?;
         ready(self.inner.save_kyber_pre_key(KyberPreKeyId::from(id), &record))?.map_err(fail)
+    }
+
+    /// Réinjecte une clé de base déjà acceptée sur ce couple de pré-clés (Kyber,
+    /// signée) : libsignal refuse alors tout PreKeySignalMessage qui la
+    /// présente de nouveau (`mark_kyber_pre_key_used`). Sans elle, un magasin
+    /// éphémère accepterait le rejeu d'un premier message sur une pré-clé Kyber
+    /// de dernier recours, vers son expéditeur comme vers une autre adresse.
+    #[wasm_bindgen(js_name = addSeenBaseKey)]
+    pub fn add_seen_base_key(&mut self, kyber_pre_key_id: u32, signed_pre_key_id: u32, base_key: &[u8]) -> Bridged<()> {
+        let base_key = PublicKey::deserialize(base_key).map_err(fail)?;
+        ready(self.inner.mark_kyber_pre_key_used(KyberPreKeyId::from(kyber_pre_key_id), SignedPreKeyId::from(signed_pre_key_id), &base_key))?
+            .map_err(fail)
     }
 
     #[wasm_bindgen(js_name = addPreKey)]
@@ -277,7 +302,7 @@ impl ProtocolStore {
 
     pub fn open(&mut self, name: &str, device_id: u32, message_type: u8, body: &[u8]) -> Bridged<Opened> {
         let remote = address(name, device_id)?;
-        let (message, pre_key_id, kyber_pre_key_id) = parse(message_type, body)?;
+        let (message, used) = parse(message_type, body)?;
         let mut rng = OsRng.unwrap_err();
         let store = &mut self.inner;
         let plaintext = ready(message_decrypt(
@@ -292,19 +317,30 @@ impl ProtocolStore {
             &mut rng,
         ))?
         .map_err(fail)?;
-        Ok(Opened { plaintext, pre_key_id, kyber_pre_key_id })
+        Ok(Opened {
+            plaintext,
+            pre_key_id: used.pre_key_id,
+            kyber_pre_key_id: used.kyber_pre_key_id,
+            signed_pre_key_id: used.signed_pre_key_id,
+            base_key: used.base_key,
+        })
     }
 }
 
-fn parse(message_type: u8, body: &[u8]) -> Bridged<(CiphertextMessage, Option<u32>, Option<u32>)> {
+fn parse(message_type: u8, body: &[u8]) -> Bridged<(CiphertextMessage, PreKeyUse)> {
     if message_type == CiphertextMessageType::PreKey as u8 {
         let message = PreKeySignalMessage::try_from(body).map_err(fail)?;
-        let pre_key_id = message.pre_key_id().map(u32::from);
-        let kyber_pre_key_id = message.kyber_pre_key_id().map(u32::from);
-        return Ok((CiphertextMessage::PreKeySignalMessage(message), pre_key_id, kyber_pre_key_id));
+        let used = PreKeyUse {
+            pre_key_id: message.pre_key_id().map(u32::from),
+            kyber_pre_key_id: message.kyber_pre_key_id().map(u32::from),
+            signed_pre_key_id: Some(u32::from(message.signed_pre_key_id())),
+            base_key: Some(message.base_key().serialize().into_vec()),
+        };
+        return Ok((CiphertextMessage::PreKeySignalMessage(message), used));
     }
     if message_type == CiphertextMessageType::Whisper as u8 {
-        return Ok((CiphertextMessage::SignalMessage(SignalMessage::try_from(body).map_err(fail)?), None, None));
+        let used = PreKeyUse { pre_key_id: None, kyber_pre_key_id: None, signed_pre_key_id: None, base_key: None };
+        return Ok((CiphertextMessage::SignalMessage(SignalMessage::try_from(body).map_err(fail)?), used));
     }
     Err(fail(format!("type de message {message_type} hors du protocole à deux")))
 }

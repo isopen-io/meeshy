@@ -41,7 +41,7 @@ const BOB = await party('d4'.repeat(12));
 const signedPreKey = await bridge.generateSignedPreKey({ identityKeyPair: BOB.identity.identityKeyPair, id: 1, now: TIMESTAMP });
 const kyberPreKey = await bridge.generateKyberPreKey({ identityKeyPair: BOB.identity.identityKeyPair, id: 1, now: TIMESTAMP });
 const preKey = await bridge.generatePreKey({ id: 1 });
-const bobPreKeys: DevicePreKeys = { signedPreKeys: [signedPreKey], kyberPreKeys: [kyberPreKey], preKeys: [preKey] };
+const bobPreKeys: DevicePreKeys = { signedPreKeys: [signedPreKey], kyberPreKeys: [kyberPreKey], preKeys: [preKey], seenBaseKeys: [] };
 
 type Sent = { readonly message: WireMessage; readonly plaintext: string; readonly sender: SessionState };
 

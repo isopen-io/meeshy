@@ -173,6 +173,18 @@ export class Opened {
         wasm.__wbg_opened_free(ptr, 0);
     }
     /**
+     * @returns {Uint8Array | undefined}
+     */
+    get baseKey() {
+        const ret = wasm.__wbg_get_opened_baseKey(this.__wbg_ptr);
+        let v1;
+        if (ret[0] !== 0) {
+            v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        }
+        return v1;
+    }
+    /**
      * @returns {number | undefined}
      */
     get kyberPreKeyId() {
@@ -196,6 +208,21 @@ export class Opened {
         return ret === Number.MAX_SAFE_INTEGER ? undefined : ret;
     }
     /**
+     * @returns {number | undefined}
+     */
+    get signedPreKeyId() {
+        const ret = wasm.__wbg_get_opened_signedPreKeyId(this.__wbg_ptr);
+        return ret === Number.MAX_SAFE_INTEGER ? undefined : ret;
+    }
+    /**
+     * @param {Uint8Array | number[] | null} [arg0]
+     */
+    set baseKey(arg0) {
+        var ptr0 = isLikeNone(arg0) ? 0 : passArray8ToWasm0(arg0, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_opened_baseKey(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
      * @param {number | null} [arg0]
      */
     set kyberPreKeyId(arg0) {
@@ -214,6 +241,12 @@ export class Opened {
      */
     set preKeyId(arg0) {
         wasm.__wbg_set_opened_preKeyId(this.__wbg_ptr, isLikeNone(arg0) ? Number.MAX_SAFE_INTEGER : (arg0) >>> 0);
+    }
+    /**
+     * @param {number | null} [arg0]
+     */
+    set signedPreKeyId(arg0) {
+        wasm.__wbg_set_opened_signedPreKeyId(this.__wbg_ptr, isLikeNone(arg0) ? Number.MAX_SAFE_INTEGER : (arg0) >>> 0);
     }
 }
 if (Symbol.dispose) Opened.prototype[Symbol.dispose] = Opened.prototype.free;
@@ -254,6 +287,26 @@ export class ProtocolStore {
         const ptr0 = passArray8ToWasm0(record, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.protocolstore_addPreKey(this.__wbg_ptr, val2, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Réinjecte une clé de base déjà acceptée sur ce couple de pré-clés (Kyber,
+     * signée) : libsignal refuse alors tout PreKeySignalMessage qui la
+     * présente de nouveau (`mark_kyber_pre_key_used`). Sans elle, un magasin
+     * éphémère accepterait le rejeu d'un premier message sur une pré-clé Kyber
+     * de dernier recours, vers son expéditeur comme vers une autre adresse.
+     * @param {number} kyber_pre_key_id
+     * @param {number} signed_pre_key_id
+     * @param {Uint8Array | number[]} base_key
+     */
+    addSeenBaseKey(kyber_pre_key_id, signed_pre_key_id, base_key) {
+        const val2 = +kyber_pre_key_id;
+        const val3 = +signed_pre_key_id;
+        const ptr0 = passArray8ToWasm0(base_key, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.protocolstore_addSeenBaseKey(this.__wbg_ptr, val2, val3, ptr0, len0);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
