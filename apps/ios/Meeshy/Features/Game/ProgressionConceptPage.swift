@@ -59,7 +59,7 @@ struct ProgressionConceptPage: View {
                     guard ready, !focused, let section else { return }
                     focused = true
                     Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        guard await cancellableSleep(for: .milliseconds(300)) else { return }
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
                             proxy.scrollTo(section, anchor: GameRulesPage.focusAnchor)
                         }

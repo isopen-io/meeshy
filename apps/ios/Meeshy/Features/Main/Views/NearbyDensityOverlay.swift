@@ -304,12 +304,7 @@ final class NearbyMapCoordinator: NSObject, MKMapViewDelegate, UIGestureRecogniz
         let latitude = moved.latitude
         let longitude = moved.longitude
         recenterTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 600_000_000)
-            } catch {
-                return
-            }
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(600)), let self else { return }
             self.onRecenter?(CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
         }
     }

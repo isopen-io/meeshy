@@ -46,8 +46,8 @@ final class GameArchiveModel: ObservableObject {
         self.wasOffline = !networkMonitor.isOnline
         self.connectivity = networkMonitor.isOfflinePublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] offline in
-                Task { @MainActor [weak self] in await self?.connectivityChanged(offline: offline) }
+            .relay(through: OrderedEventLane()) { [weak self] offline in
+                await self?.connectivityChanged(offline: offline)
             }
     }
 

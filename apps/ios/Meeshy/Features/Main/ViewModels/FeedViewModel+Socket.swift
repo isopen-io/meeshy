@@ -35,9 +35,8 @@ extension FeedViewModel {
         // reel. Miroir de ConversationSyncEngine sur messageSocket.didReconnect.
         socialSocket.didReconnect
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                guard let self else { return }
-                Task { await self.refreshHeadKeepingLoadedPages() }
+            .relay(through: OrderedEventLane()) { [weak self] _ in
+                await self?.refreshHeadKeepingLoadedPages()
             }
             .store(in: &socketCancellables)
 

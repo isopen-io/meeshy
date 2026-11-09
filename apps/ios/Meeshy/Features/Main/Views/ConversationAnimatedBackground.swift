@@ -120,6 +120,7 @@ struct ConversationBackgroundConfig {
 // MARK: - Main View
 
 struct ConversationAnimatedBackground: View {
+    @State private var delayed = DelayedActions()
     let config: ConversationBackgroundConfig
 
     @State private var animate = false
@@ -236,7 +237,7 @@ struct ConversationAnimatedBackground: View {
         orbitPhase = 0
         groupColorPhase = false
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        delayed.run(after: .milliseconds(100)) {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 animate = true
             }
