@@ -151,24 +151,26 @@ final class ConversationObsoleteTests: XCTestCase {
 
     // MARK: - Au balayage de fin (#14645)
 
-    func test_trailingSwipePlan_obsoleteNotGranted_keepsArchiveReadHide() {
+    // Le bord de fin ne supprime plus (directive porteur 2026-11-09, #17242) :
+    // la suppression reste au menu d'appui long, avec sa confirmation.
+    func test_trailingSwipePlan_obsoleteNotGranted_keepsArchiveAndRead() {
         XCTAssertEqual(
             ConversationTrailingSwipe.plan(isArchived: false, isArchiveImposed: false, hasUnread: true, obsolete: false),
-            [.archive, .markRead, .hide]
+            [.archive, .markRead]
         )
     }
 
-    func test_trailingSwipePlan_obsoleteGranted_comesLastAndTheEdgeKeepsThree() {
+    func test_trailingSwipePlan_obsoleteGranted_comesLast_andTheReadToggleStays() {
         let plan = ConversationTrailingSwipe.plan(isArchived: false, isArchiveImposed: false, hasUnread: false, obsolete: true)
 
-        XCTAssertEqual(plan, [.archive, .hide, .obsolete])
+        XCTAssertEqual(plan, [.archive, .markUnread, .obsolete])
         XCTAssertLessThanOrEqual(plan.count, SwipeRowRules.maxActionsPerSide)
     }
 
     func test_trailingSwipePlan_archiveImposed_obsoleteFitsBesideTheReadToggle() {
         XCTAssertEqual(
             ConversationTrailingSwipe.plan(isArchived: true, isArchiveImposed: true, hasUnread: false, obsolete: true),
-            [.markUnread, .hide, .obsolete]
+            [.markUnread, .obsolete]
         )
     }
 
@@ -179,16 +181,7 @@ final class ConversationObsoleteTests: XCTestCase {
     ) -> ConversationSwipeActions {
         ConversationSwipeActions(
             viewModel: list,
-            lockManager: ConversationLockManager(
-                vault: InMemoryConversationLockVault(),
-                defaults: UserDefaults(suiteName: "swipe-obsolete-\(UUID().uuidString)")!,
-                biometrics: StubBiometricUnlocker(),
-                iterations: 1_000
-            ),
             currentUser: currentUser,
-            onLockRequest: { _, _ in },
-            onMasterPinMissing: {},
-            onHide: { _ in },
             onObsolete: onObsolete
         )
     }
@@ -219,7 +212,25 @@ final class ConversationObsoleteTests: XCTestCase {
         let labels = sut.trailingSwipeActions(for: member).map(\.label)
 
         XCTAssertFalse(labels.contains(ConversationMenuEntry.obsolete.label))
-        XCTAssertEqual(labels.count, 3)
+        XCTAssertEqual(labels.count, 2)
+    }
+
+    // Le bord de tête ne garde qu'Épingler (directive porteur 2026-11-09, #17242) :
+    // Sourdine et Verrouiller restent au menu d'appui long.
+    func test_leadingSwipeActions_offerOnlyThePin() {
+        let sut = makeSwipeActions(list: makeList(), currentUser: reader) { _ in }
+
+        let actions = sut.leadingSwipeActions(for: makeConversation(id: "c1"))
+
+        XCTAssertEqual(actions.map(\.label), [String(localized: "swipe.pin")])
+    }
+
+    func test_trailingSwipeActions_neverDelete() {
+        let sut = makeSwipeActions(list: makeList(), currentUser: reader) { _ in }
+
+        let icons = sut.trailingSwipeActions(for: makeConversation(id: "c1")).map(\.icon)
+
+        XCTAssertFalse(icons.contains("eye.slash.fill"), "Masquer / Supprimer ne se balaie plus.")
     }
 
     func test_trailingSwipeActions_readerNotLoaded_offersNoObsolete() {

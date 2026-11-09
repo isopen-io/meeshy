@@ -31,18 +31,17 @@ class ConversationMenuActionsTest {
     )
 
     @Test
-    fun `Rechercher, Appeler et Détails raisent chacun leur geste`() {
+    fun `Détails et Voir le profil raisent chacun leur geste`() {
         val actions = actions()
-        actions.perform(ConversationMenuEntry.SEARCH)
-        actions.perform(ConversationMenuEntry.CALL)
         actions.perform(ConversationMenuEntry.DETAILS)
+        actions.perform(ConversationMenuEntry.VIEW_PROFILE)
 
-        assertThat(calls).containsExactly("search", "call", "info").inOrder()
+        assertThat(calls).containsExactly("info", "profile").inOrder()
     }
 
     @Test
-    fun `Appeler sans destination ne fait rien`() {
-        actions(withDestinations = false).perform(ConversationMenuEntry.CALL)
+    fun `Détails sans destination ne fait rien`() {
+        actions(withDestinations = false).perform(ConversationMenuEntry.DETAILS)
 
         assertThat(calls).isEmpty()
     }

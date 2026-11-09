@@ -64,7 +64,9 @@ private fun sessionModel(gateway: SessionGateway) = OnboardingViewModel(gateway,
 
 private val storyFirst = ApiOnboardingState(
     eligible = true,
-    seenSteps = listOf(OnboardingStepId.LANGUAGES, OnboardingStepId.AGE, OnboardingStepId.EMAIL, OnboardingStepId.GLOBAL),
+    seenSteps = listOf(
+        OnboardingStepId.LANGUAGES, OnboardingStepId.AGE, OnboardingStepId.EMAIL, OnboardingStepId.PROFILE, OnboardingStepId.GLOBAL,
+    ),
     stepRewards = OnboardingStepRewards(14, 10, 7),
 )
 

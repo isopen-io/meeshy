@@ -180,12 +180,12 @@ const settle = () =>
   });
 const entry = (label: string) => [...document.body.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find((b) => b.textContent?.startsWith(label) === true);
 
-describe('LensRow — Rechercher et Mode de lecture ont un effet (#11226)', () => {
-  test('« Rechercher » ouvre le fil de la conversation sur sa recherche', () => {
+describe('LensRow — Mode de lecture a un effet (#11226)', () => {
+  test('#17243 — « Rechercher » n’est plus au menu de la ligne : la recherche se fait dans la conversation', () => {
     mount();
     openMenuOf('c-lyon');
-    act(() => entry('Rechercher')?.click());
-    expect(`${window.location.pathname}${window.location.search}`).toBe('/c/c-lyon?search=1');
+    expect(entry('Rechercher')).toBeUndefined();
+    expect(entry('Épingler')).not.toBeUndefined();
   });
 
   test('« Mode de lecture › Bulles » écrit la préférence de CETTE conversation, « Automatique » l’efface', async () => {

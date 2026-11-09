@@ -238,11 +238,13 @@ final class LongPressPreviewGuardTests: XCTestCase {
         XCTAssertTrue(normalized.contains(".contentShape(Rectangle()) .onTapGesture { dismissContextMenu() openConversation(conversation) }"))
     }
 
-    /// La loupe de l'aperçu et l'entrée « Rechercher » du menu natif passent la
-    /// même porte, en gardant la recherche pour après le PIN.
+    /// Le geste « Rechercher » passe la porte du verrou, en gardant la recherche
+    /// pour après le PIN. Depuis #17242, l'aperçu n'a plus d'en-tête (donc plus
+    /// de loupe) et le catalogue n'offre plus l'entrée : seul le geste partagé
+    /// reste, prêt pour tout chemin qui le rappellerait.
     func test_searchPaths_openThroughTheLock() throws {
         let normalized = normalizedCode(try source(Self.overlayPath))
-        XCTAssertEqual(occurrences(of: "openConversation(conversation, searching: true)", in: normalized), 2)
+        XCTAssertEqual(occurrences(of: "openConversation(conversation, searching: true)", in: normalized), 1)
         XCTAssertFalse(
             normalized.contains("router.pendingOpenSearch = true"),
             "la recherche ne s'arme qu'une fois le verrou franchi (`ConversationOpenRoute.armsSearchNow`)"

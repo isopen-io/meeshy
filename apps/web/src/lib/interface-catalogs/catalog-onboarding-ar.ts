@@ -37,16 +37,6 @@ const ar = {
   'onboarding.age.check': 'تحقّق من تاريخ ميلادك.',
   'onboarding.age.failed': 'لم يُحفظ تاريخك. حاول مجددًا.',
 
-  'onboarding.profile.title': 'أظهِر نفسك',
-  'onboarding.profile.body': 'وجهٌ ولافتة يجعلان ملفك أكثر ظهورًا: يتعرّف عليك الآخرون في الاقتراحات والمحادثات والقصص، وتتلقى طلبات تواصل أكثر.',
-  'onboarding.profile.visibility': 'ظهور أكبر',
-  'onboarding.profile.contacts': 'جهات اتصال أكثر',
-  'onboarding.profile.addBanner': 'أضف لافتة',
-  'onboarding.profile.pickBanner': 'اختر لافتة',
-  'onboarding.profile.pickAvatar': 'اختر صورة الملف الشخصي',
-  'onboarding.profile.failed': 'لم تُحفظ صورتك.',
-  'onboarding.profile.retry': 'أعد المحاولة',
-
   'onboarding.global.title': 'قل مرحبًا للعالم',
   'onboarding.global.body': 'Meeshy Global هو الصالون الذي يلتقي فيه الجميع. ألقِ التحية بلا ضغط.',
   'onboarding.global.field': 'تحيتك، قابلة للتعديل',

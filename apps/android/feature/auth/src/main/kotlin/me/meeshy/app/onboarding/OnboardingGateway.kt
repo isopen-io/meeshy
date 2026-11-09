@@ -1,7 +1,9 @@
 package me.meeshy.app.onboarding
 
 import java.util.Locale
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.BirthDateDeclarationError
+import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.media.MediaPermissionState
 import me.meeshy.sdk.model.onboarding.ApiOnboardingState
 import me.meeshy.sdk.model.onboarding.OnboardingStepId
@@ -44,6 +46,15 @@ interface OnboardingGateway {
      * pas les observer.
      */
     suspend fun sendingStoryPublications(): Set<String>? = null
+
+    /**
+     * Envoie l'avatar ou la bannière choisis par le trajet PARTAGÉ avec l'écran Profil (`ProfileImageUploader`) : la
+     * session est repeinte, le profil confirmé. L'adresse servie, ou `null` sur refus ou échec. Ne libère pas l'item.
+     */
+    suspend fun uploadProfileImage(target: ImageUploadTarget, item: MediaUploadItem): String? = null
+
+    /** Libère la copie locale d'une image choisie (cache d'entrée). */
+    fun releaseProfileImage(item: MediaUploadItem) = Unit
 
     fun isSettled(userId: String): Boolean
     fun markSettled(userId: String)

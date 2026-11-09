@@ -207,7 +207,6 @@ internal fun ConversationRowContainer(
                     destinations = ConversationMenuDestinations(
                         details = actions.onViewInfo != null,
                         profile = actions.onViewProfile != null,
-                        call = actions.onCall != null,
                         manageMembers = actions.onManageMembers != null,
                         admin = actions.adminReachable,
                     ),

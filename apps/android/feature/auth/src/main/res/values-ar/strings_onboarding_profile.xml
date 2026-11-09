@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_profile_title">أظهر نفسك</string>
+    <string name="onboarding_profile_body">الوجه واللافتة يجعلان ملفك الشخصي أكثر ظهورًا: يتعرّف عليك الآخرون في الاقتراحات والمحادثات والقصص، وتتلقى المزيد من طلبات التواصل.</string>
+    <string name="onboarding_profile_benefit_visibility">ظهور أكبر</string>
+    <string name="onboarding_profile_benefit_contacts">جهات اتصال أكثر</string>
+    <string name="onboarding_profile_banner_add">إضافة لافتة</string>
+    <string name="onboarding_profile_banner_a11y">اختيار لافتة</string>
+    <string name="onboarding_profile_avatar_a11y">اختيار صورة الملف الشخصي</string>
+    <string name="onboarding_profile_failed">تعذّر إرسال الصورة.</string>
+    <string name="onboarding_profile_retry">إعادة المحاولة</string>
+    <string name="onboarding_profile_uploading_a11y">جارٍ الإرسال</string>
+</resources>

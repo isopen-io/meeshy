@@ -126,45 +126,48 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    /// Le swipe « hide » (masquer/supprimer) passe lui aussi par la confirmation.
-    func test_swipeHideAction_requestsConfirmation() throws {
-        let swipeSource = try source("Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift")
+    /// Retournée le 2026-11-09 (#17242) : le swipe « hide » armait la
+    /// confirmation de suppression. Le porteur l'a retiré du bord de fin — la
+    /// suppression ne vit plus qu'au menu d'appui long, dont `onDelete` arme la
+    /// même confirmation (`test_contextMenuOverlay_onDelete_requestsConfirmation…`).
+    /// La garde tient le nouveau contrat : aucun balayage ne supprime.
+    func test_swipeActions_neverDelete_theDeletionLivesInTheMenuOnly() throws {
+        let swipeSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift"))
+        XCTAssertFalse(swipeSource.contains("SwipeLabels.hide"), "Le bord de fin ne masque / supprime plus.")
+        XCTAssertFalse(swipeSource.contains("onHide"), "Aucun balayage n'arme la suppression.")
+        XCTAssertFalse(swipeSource.contains("deleteConversation"), "Aucun balayage ne supprime.")
+        let listSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView.swift"))
+        XCTAssertFalse(listSource.contains("onHide:"), "La liste ne câble plus de suppression au balayage.")
+        let catalog = try source(Self.catalogPath)
+        XCTAssertTrue(catalog.contains("(law.removal == .hide ? .hide : .delete, law.removal != nil)"),
+                      "Supprimer / Masquer restent offerts au menu d'appui long.")
+    }
 
-        guard let hideRange = swipeSource.range(of: "SwipeLabels.hide") else {
-            XCTFail("La liste doit exposer l'action de swipe « hide »")
-            return
-        }
-        let end = swipeSource.index(hideRange.lowerBound, offsetBy: 300, limitedBy: swipeSource.endIndex) ?? swipeSource.endIndex
-        XCTAssertTrue(
-            String(swipeSource[hideRange.lowerBound ..< end]).contains("onHide(conversation)"),
-            "Le swipe « hide » ne supprime pas : il remet la conversation à la liste (onHide)."
-        )
-
-        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
-        guard let wiring = listSource.range(of: "onHide:") else {
-            XCTFail("La liste doit câbler onHide des actions de swipe")
-            return
-        }
-        let wiringEnd = listSource.index(wiring.lowerBound, offsetBy: 120, limitedBy: listSource.endIndex) ?? listSource.endIndex
-        let block = String(listSource[wiring.lowerBound ..< wiringEnd])
-        XCTAssertTrue(
-            armsAConfirmationTarget(block),
-            "Le swipe « hide » doit armer \(Self.confirmationTargetNames) — jamais de suppression directe."
-        )
+    /// Le bord de TÊTE ne garde qu'Épingler : Sourdine et Verrouiller restent
+    /// au menu d'appui long (directive porteur 2026-11-09, #17242).
+    func test_leadingSwipe_offersOnlyThePin() throws {
+        let swipeSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift"))
+        XCTAssertFalse(swipeSource.contains("toggleMute"), "Sourdine ne se balaie plus.")
+        XCTAssertFalse(swipeSource.contains("onLockRequest"), "Verrouiller ne se balaie plus.")
+        XCTAssertTrue(swipeSource.contains("viewModel.togglePin(for: conversation.id)"))
     }
 
     // MARK: - System design (Liquid Glass via Compatibility)
 
     /// Le conteneur du menu custom doit rester sur le wrapper Compatibility
     /// `adaptiveGlass` — vrai Liquid Glass iOS 26, fallback material avant —
-    /// jamais un fond opaque maison.
+    /// jamais un fond opaque maison. Depuis #17242, ce conteneur est celui de
+    /// l'aperçu d'appui long, qui découpe le contenu du menu à son cran.
     func test_conversationContextMenu_usesAdaptiveGlassContainer() throws {
-        let menuSource = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        let peekSource = try source("Meeshy/Features/Main/Views/ConversationLongPressPeek.swift")
         XCTAssertTrue(
-            menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
-            "ConversationContextMenuView doit appliquer .adaptiveGlass sur son conteneur " +
+            peekSource.contains(".adaptiveGlass(in: RoundedRectangle"),
+            "Le conteneur du menu de l'aperçu doit appliquer .adaptiveGlass " +
             "(gate iOS 26 réel + fallback, propriété des wrappers Compatibility du SDK)."
         )
+        let menuSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift"))
+        XCTAssertFalse(menuSource.contains(".frame(width: 260)"), "Le menu prend la largeur de la carte, jamais 260 pt.")
+        XCTAssertFalse(menuSource.contains(".background(.ultraThinMaterial)"), "Aucun fond maison sous le verre du conteneur.")
     }
 
     /// Les rows du menu doivent garder la parité système : highlight au press
@@ -183,29 +186,60 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Menu natif Liquid Glass (iOS 26) + fallback custom
+    // MARK: - Aperçu personnalisé sur iPhone, menu natif sur iPad iOS 26 (#17242)
 
-    /// La ligne doit préférer le `.contextMenu` NATIF (rendu Liquid Glass
-    /// système) quand l'OS le fournit, et garder l'overlay custom
-    /// (`RowPressBounceModifier` → `onLongPress`) comme fallback < iOS 26.
-    func test_conversationRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
+    /// Retournée le 2026-11-09 (#17242) : la ligne préférait le `.contextMenu`
+    /// NATIF dès iOS 26. Le menu natif ne laisse ni agrandir la carte, ni
+    /// réduire le menu, ni le tirer vers le haut : l'aperçu personnalisé sert
+    /// désormais l'iPhone sur TOUTES les versions d'iOS. Le natif ne reste que
+    /// pour l'iPad sous iOS 26, où il coexiste avec le glisser système qui
+    /// détache une conversation en fenêtre. La garde tient le nouveau contrat :
+    /// la route est UNE loi, et les deux chemins restent montés.
+    func test_conversationRow_routesThePress_customOnIPhone_nativeOnlyOnIPadIOS26() throws {
         let rowsSource = try source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift")
 
         XCTAssertTrue(
-            rowsSource.contains("if #available(iOS 26.0, *)"),
-            "ConversationRowItem doit gater le menu natif Liquid Glass derrière " +
-            "#available(iOS 26.0, *) — jamais de détection runtime maison."
+            rowsSource.contains("if #available(iOS 26.0, *), ConversationRowMenuRoute.current == .native {"),
+            "Le menu natif est gaté par l'OS ET par la route (iPad), jamais par l'OS seul."
         )
-        XCTAssertTrue(
-            rowsSource.contains(".contextMenu {"),
-            "Le chemin iOS 26 doit attacher le .contextMenu NATIF " +
-            "(rendu Liquid Glass système, preview comprise)."
+        XCTAssertFalse(
+            rowsSource.contains("if #available(iOS 26.0, *) {"),
+            "Plus aucun menu natif choisi par la seule version d'iOS : l'iPhone sous iOS 26 " +
+            "ouvrirait le petit aperçu natif au lieu de la grande carte."
         )
+        XCTAssertTrue(rowsSource.contains(".contextMenu {"), "La route native (iPad iOS 26) garde son .contextMenu.")
         XCTAssertTrue(
             rowsSource.contains("RowPressBounceModifier(onTap:"),
-            "Le fallback < iOS 26 doit rester l'overlay custom " +
-            "(RowPressBounceModifier → ConversationContextMenuView)."
+            "La route personnalisée garde l'appui long maison (RowPressBounceModifier → aperçu)."
         )
+        XCTAssertEqual(ConversationRowMenuRoute.resolve(supportsMultipleWindows: false, nativeMenuAvailable: true), .custom)
+    }
+
+    /// L'aperçu personnalisé monte la carte et le menu dans `ConversationLongPressPeek`,
+    /// dont la progression pilote les deux cadres (#17242).
+    func test_customOverlay_mountsThePeek_withTheSharedMenu() throws {
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("ConversationLongPressPeek("))
+        XCTAssertTrue(overlays.contains("func peekMenu(for conversation: Conversation) -> ConversationContextMenuView {"))
+        let peek = try source("Meeshy/Features/Main/Views/ConversationLongPressPeek.swift")
+        XCTAssertTrue(peek.contains("progress = layout.progress(from: start, translation: translation)"),
+                      "Le geste suit le doigt : onChanged pilote la progression rendue.")
+        XCTAssertTrue(peek.contains("settle(to: layout.settle(from: start, predictedEndTranslation:"),
+                      "onEnded ne fait que conclure, vers le cran projeté.")
+        XCTAssertTrue(peek.contains(".accessibilityIdentifier(\"conversation.peek.handle\")"))
+    }
+
+    /// « Inutile d'afficher le header, on sait déjà ce qu'on presse » (directive
+    /// porteur 2026-11-09, #17242) : la carte de l'aperçu ne montre que le
+    /// CONTENU ; seul VoiceOver nomme la conversation.
+    func test_peekCard_showsOnlyTheContent_andNamesTheConversationForVoiceOver() throws {
+        let helpers = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListHelpers.swift"))
+        XCTAssertTrue(helpers.contains("if peekHeights == nil {\n                header"),
+                      "L'en-tête n'est rendu que par la carte du menu natif, jamais par l'aperçu.")
+        XCTAssertTrue(helpers.contains(".accessibilityLabel(Text(conversation.displayName))"),
+                      "Le contenu de l'aperçu porte le nom de la conversation pour VoiceOver.")
+        let overlays = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        XCTAssertTrue(overlays.contains("peekHeights: heights"), "L'aperçu passe en mode contenu seul.")
     }
 
     /// CAUSE RACINE des « icônes absentes sur iOS 26 » (élucidée 2026-07-11) :
@@ -293,43 +327,24 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    /// iOS 26+ : le menu expose « Rechercher », « Appeler » et « Appel vidéo »
-    /// (décisions 2026-07-14 et #11230) — l'aperçu natif étant statique, ces
-    /// actions vivent dans le menu, câblées sur les MÊMES chemins que les
-    /// boutons de l'aperçu du fallback custom : Rechercher passe la porte du
-    /// verrou, qui arme `pendingOpenSearch` puis ouvre la conversation ;
-    /// Appeler passe par `requestPermissionsThenStartCall`.
-    func test_nativeContextMenuBuilder_offersSearchAndCall() throws {
-        let catalog = try source(Self.catalogPath)
-        XCTAssertTrue(
-            catalog.contains("context.search") && catalog.contains("magnifyingglass"),
-            "Le catalogue offre « Rechercher » (icône magnifyingglass)."
-        )
-        XCTAssertTrue(
-            catalog.contains("context.call") && catalog.contains("phone.fill"),
-            "Le catalogue offre « Appeler » (icône phone.fill, direct)."
-        )
-        XCTAssertTrue(
-            catalog.contains("context.video_call") && catalog.contains("video.fill"),
-            "Le catalogue offre « Appel vidéo » (icône video.fill, direct)."
-        )
-
-        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
-        XCTAssertTrue(
-            overlaysSource.contains("onSearch: { list.openConversation(conversation, searching: true) }"),
-            "« Rechercher » doit passer la porte du verrou `openConversation(_:searching:)`, " +
-            "qui arme router.pendingOpenSearch (après le PIN si la conversation est " +
-            "verrouillée) — même chemin que le bouton onSearch de l'aperçu custom (SSOT)."
-        )
-        XCTAssertTrue(
-            overlaysSource.contains("CallManager.shared.outgoingDial.requestPermissionsThenStartCall("),
-            "« Appeler » doit passer par CallManager.shared.requestPermissionsThenStartCall — " +
-            "même chemin que le bouton onCall de l'aperçu custom (SSOT). Depuis " +
-            "2026-07-23 ce point d'entrée tranche micro/caméra AVANT de composer ; " +
-            "`startCall` brut ne demande rien et connecterait un appel muet."
-        )
-        XCTAssertTrue(overlaysSource.contains("onCall: { startCall(to: conversation, isVideo: false) }"))
-        XCTAssertTrue(overlaysSource.contains("onVideoCall: { startCall(to: conversation, isVideo: true) }"))
+    /// Retournée le 2026-11-09 (#17242) : le menu exposait « Rechercher »,
+    /// « Appeler » et « Appel vidéo » (décisions 2026-07-14 et #11230). Le
+    /// porteur les a retirés du menu d'une rangée — le fil les porte — et a mis
+    /// « Détails » en première entrée, juste sous la tête compacte. La garde
+    /// tient le nouveau contrat à la SOURCE, le catalogue, que les deux chemins
+    /// lisent.
+    func test_catalog_offersDetailsFirst_andNeitherSearchNorCalls() throws {
+        let catalog = AppSourceGuard.stripComments(try source(Self.catalogPath))
+        guard let make = catalog.range(of: "static func make(_ input: Input) -> ConversationMenuCatalog {") else {
+            return XCTFail("ConversationMenuCatalog.make doit exister.")
+        }
+        let body = String(catalog[make.lowerBound...].prefix(1_400))
+        XCTAssertFalse(body.contains("(.search,"), "Rechercher n'est plus au menu de rangée.")
+        XCTAssertFalse(body.contains("(.call,"), "Appeler n'est plus au menu de rangée.")
+        XCTAssertFalse(body.contains("(.videoCall,"), "Appel vidéo n'est plus au menu de rangée.")
+        let reach = try XCTUnwrap(body.range(of: "reach: offered(["))
+        XCTAssertTrue(String(body[reach.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("(.details, true)"),
+                      "Détails ouvre la liste, juste sous la tête compacte.")
     }
 
     // MARK: - Menu de conversation gouverné par la loi partagée (#11215)
@@ -343,7 +358,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             return ""
         }
         let blockEnd = overlaysSource.range(
-            of: "// MARK: - Custom Context Menu Overlay",
+            of: "// MARK: - Aperçu d'appui long personnalisé",
             range: builderRange.lowerBound ..< overlaysSource.endIndex
         )?.lowerBound ?? overlaysSource.endIndex
         return String(overlaysSource[builderRange.lowerBound ..< blockEnd])
@@ -418,16 +433,12 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertTrue(try nativeBuilderBlock().contains("ConversationMenuCatalog.moreSymbol"))
     }
 
-    /// Le bouton d'appel de l'en-tête de l'aperçu suit la loi, comme l'entrée
-    /// « Appeler » : ni soi-même, ni une conversation terminée, ni un invité.
-    func test_previewCallButton_followsTheCatalog() throws {
-        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
-        guard let start = overlays.range(of: "func previewCallAction(for") else {
-            return XCTFail("previewCallAction(for:) doit exister.")
-        }
-        let body = String(overlays[start.lowerBound...].prefix(400))
-        XCTAssertTrue(body.contains("rowMenuCatalog(for: conversation).reach.contains(.call)"), "L'appel de l'aperçu lit le MÊME verdict que l'entrée du menu.")
-        XCTAssertFalse(body.contains("conversation.type == .direct"), "Plus de règle d'appel réécrite au type.")
+    /// Retournée le 2026-11-09 (#17242) : le bouton d'appel de l'en-tête de
+    /// l'aperçu suivait l'entrée « Appeler » ; l'en-tête et l'entrée sont partis.
+    func test_peekCard_offersNoCallButton_likeTheMenu() throws {
+        let overlays = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        XCTAssertFalse(overlays.contains("func previewCallAction(for"), "L'aperçu n'a plus d'en-tête, donc plus de bouton d'appel (#17242).")
+        XCTAssertFalse(overlays.contains("onCall: previewCallAction"))
     }
 
     /// La feuille des réglages s'ouvre au rang EFFECTIF qui a fait offrir l'entrée.

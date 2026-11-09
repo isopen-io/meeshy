@@ -7,8 +7,8 @@ import org.junit.Test
 class ConversationMenuHapticsTest {
 
     @Test
-    fun `pin, call, lock, archive and invite answer with a medium tap`() {
-        listOf(PIN, UNPIN, CALL, LOCK, UNLOCK, ARCHIVE, UNARCHIVE, INVITE).forEach {
+    fun `pin, lock, archive and invite answer with a medium tap`() {
+        listOf(PIN, UNPIN, LOCK, UNLOCK, ARCHIVE, UNARCHIVE, INVITE).forEach {
             assertThat(it.haptic).isEqualTo(ConversationMenuHaptic.MEDIUM)
         }
     }
@@ -22,7 +22,7 @@ class ConversationMenuHapticsTest {
 
     @Test
     fun `the other entries answer with a light tap`() {
-        listOf(MUTE, MARK_READ, SEARCH, DETAILS, RENAME, FAVORITE, MOVE, REPORT, ADMIN_OPEN, TAGS).forEach {
+        listOf(MUTE, MARK_READ, DETAILS, RENAME, FAVORITE, MOVE, REPORT, ADMIN_OPEN, TAGS).forEach {
             assertThat(it.haptic).isEqualTo(ConversationMenuHaptic.LIGHT)
         }
     }

@@ -15,7 +15,8 @@ struct ConversationMenuCategory: Identifiable, Equatable {
 // MARK: - Conversation Context Menu (custom, icon-drawing)
 
 /// Menu contextuel custom pour une ligne de la liste de conversations — le
-/// chemin de repli < iOS 26 du menu natif.
+/// contenu du menu de l'aperçu d'appui long (`ConversationLongPressPeek`),
+/// sur toutes les versions d'iOS côté iPhone (#17242).
 ///
 /// Il dessine le MÊME catalogue que le menu natif (`ConversationMenuCatalog`,
 /// #11230) : la tête compacte Épingler · Sourdine · Lu en trois tuiles, puis
@@ -64,10 +65,10 @@ struct ConversationContextMenuView: View {
             }
         }
         .padding(.vertical, MeeshySpacing.xsPlus)
-        .frame(width: 260)
-        // Liquid Glass natif iOS 26 (`.regular` pur, sans teinte ni ombre
-        // manuelle) pour matcher le rendu système ; fallback material < 26.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
+        // La largeur et le conteneur de verre sont ceux de l'aperçu d'appui
+        // long (`ConversationLongPressPeek`, #17242), qui découpe ce contenu
+        // au cran compact puis le révèle quand on tire le menu vers le haut.
+        .frame(maxWidth: .infinity)
         .animation(.easeInOut(duration: 0.2), value: panel)
         .accessibilityElement(children: .contain)
         // Toutes les entrées, favoris et destinations de « Déplacer vers »
@@ -134,6 +135,16 @@ struct ConversationContextMenuView: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.sm)
+        // Le bas de la tête, dans l'espace du contenu : ce que le cran
+        // compact de l'aperçu laisse voir (#17242).
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ConversationPeekLeadHeightKey.self,
+                    value: geo.frame(in: .named(ConversationPeekLeadHeightKey.coordinateSpace)).maxY
+                )
+            }
+        )
     }
 
     /// Les entrées que ce menu DESSINE : celles du catalogue, moins « Mode de

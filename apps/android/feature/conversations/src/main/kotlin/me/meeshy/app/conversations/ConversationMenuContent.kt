@@ -159,6 +159,24 @@ private fun RootPanel(
     }
 }
 
+/**
+ * La rangée de tête du menu (Épingler · Silence · Lu), seule visible quand le menu de l'appui long
+ * est compact (#17244). Même haptique et même geste que dans le menu complet.
+ */
+@Composable
+internal fun ConversationQuickActions(
+    model: ConversationMenuModel,
+    accent: Color,
+    onEntry: (ConversationMenuEntry) -> Unit,
+) {
+    if (model.header.isEmpty()) return
+    val haptics = rememberMeeshyHaptics()
+    HeaderTiles(model.header, accent) { entry ->
+        haptics.feel(entry.haptic)
+        onEntry(entry)
+    }
+}
+
 internal const val MORE_TEST_TAG = "conversation-menu-MORE"
 
 @Composable
@@ -347,8 +365,6 @@ internal fun ConversationMenuEntry.labelRes(): Int = when (this) {
     ConversationMenuEntry.UNMUTE -> R.string.conversations_action_unmute
     ConversationMenuEntry.MARK_READ -> R.string.conversations_action_mark_read
     ConversationMenuEntry.MARK_UNREAD -> R.string.conversations_action_mark_unread
-    ConversationMenuEntry.SEARCH -> R.string.context_search
-    ConversationMenuEntry.CALL -> R.string.context_call
     ConversationMenuEntry.READING_MODE -> R.string.lentille_mode_menu_title
     ConversationMenuEntry.DETAILS -> R.string.context_details
     ConversationMenuEntry.VIEW_PROFILE -> R.string.row_menu_view_profile
@@ -382,8 +398,6 @@ private fun ConversationMenuEntry.icon(): ImageVector = when (this) {
     ConversationMenuEntry.UNMUTE -> MeeshyIcons.BellFilled
     ConversationMenuEntry.MARK_READ -> MeeshyIcons.MarkChatRead
     ConversationMenuEntry.MARK_UNREAD -> MeeshyIcons.MarkChatUnread
-    ConversationMenuEntry.SEARCH -> MeeshyIcons.Search
-    ConversationMenuEntry.CALL -> MeeshyIcons.Call
     ConversationMenuEntry.READING_MODE -> MeeshyIcons.EyeFilled
     ConversationMenuEntry.DETAILS -> MeeshyIcons.InfoFilled
     ConversationMenuEntry.VIEW_PROFILE -> MeeshyIcons.PersonFilled

@@ -876,9 +876,27 @@
     "onboarding": {
       "pattern": "^assets/onboarding-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
-        "value": 12,
+        "value": 14,
         "status": "CIBLE -- MESUREE PAR #7729, NON ARBITREE",
-        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9) : 8,70 Ko gzip -9 pour les deux fichiers `assets/onboarding-<hash>.js` -- l ECRAN des cinq cartes et du recapitulatif (`routes/onboarding*.tsx`, 7,80 Ko) et son PORT (`lib/api/onboarding.ts` + la loi `lib/onboarding/*`, 0,90 Ko). Hors chunk : `onboarding-<hash>.css` (4,22 Ko, la peau), `fixtures-onboarding-` (0,65 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`), et les partages (`avatar-`, `language-sheet`, `zod-`). Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge. Remesure du 2026-09-25 (#7907, #7908, #7909, #7910) : 10,43 Ko -- la carte du courriel et son renvoi de lien, la relecture du credit (`lib/onboarding/credit.ts`), l emplacement stable du recapitulatif ; arrondi au Ko SUPERIEUR (11) + 1 Ko de marge."
+        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9) : 8,70 Ko gzip -9 pour les deux fichiers `assets/onboarding-<hash>.js` -- l ECRAN des cinq cartes et du recapitulatif (`routes/onboarding*.tsx`, 7,80 Ko) et son PORT (`lib/api/onboarding.ts` + la loi `lib/onboarding/*`, 0,90 Ko). Hors chunk : `onboarding-<hash>.css` (4,22 Ko, la peau), `fixtures-onboarding-` (0,65 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`), et les partages (`avatar-`, `language-sheet`, `zod-`). Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge. Remesure du 2026-09-25 (#7907, #7908, #7909, #7910) : 10,43 Ko -- la carte du courriel et son renvoi de lien, la relecture du credit (`lib/onboarding/credit.ts`), l emplacement stable du recapitulatif ; arrondi au Ko SUPERIEUR (11) + 1 Ko de marge. Remesure du 2026-11-09 (#17237, `bun run build` puis `node scripts/measure-weight.mjs`) : 12,40 Ko -- l etape facultative « Montre-toi » (`profile`) ajoute a l ECRAN son aiguillage seul (l etape dans l ordre du parcours, le filet photo ET banniere deja posees, le prechargement et le `lazy()` de la carte) ; la CARTE, son chemin de televersement et son catalogue sont SORTIS dans leur propre chunk (`onboarding_profile`, `interface_catalogs_onboarding_profile`) pour ne pas peser ici. Le reste de l ecart (12 -> 12,40) est ce cablage, qui ne peut vivre que dans l ecran qui ordonne les cartes. Arrondi au Ko SUPERIEUR (13) + 1 Ko de marge, meme regle que les releves precedents."
+      }
+    },
+    "onboarding_profile": {
+      "pattern": "^assets/onboarding-profile-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #17237, NON ARBITREE",
+        "source": "Mesure du 2026-11-09 (`bun run build` puis gzip -9) : 2,00 Ko gzip -9 -- la carte facultative « Montre-toi » de l accueil (`routes/onboarding-profile.tsx` : l apercu du profil, les deux selecteurs de fichiers, le televersement optimiste et son « Reessayer », l adaptateur vers `performImageUpdate`), chargee A LA DEMANDE par `routes/onboarding.tsx` (prechargee des que l etape est encore a venir). Hors chunk : sa feuille `onboarding-profile-<hash>.css` (0,86 Ko) et les partages (`profile-actions`, `avatar-`, `glyph`). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
+    "interface_catalogs_onboarding_profile": {
+      "pattern": "^assets/catalog-onboarding-profile-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #17237, NON ARBITREE",
+        "source": "Mesure du 2026-11-09 (`bun run build` puis gzip -9 de chaque fichier) : 2,19 Ko pour les SEPT catalogues de « Montre-toi » (`onboarding.profile.*`, 9 cles), de 0,33 Ko (en) a 0,41 Ko (ar). Sortis du catalogue de l accueil (`interface_catalogs_onboarding`, a son plafond) et charges AVEC la carte : un lecteur n en telecharge qu UN (~0,35 Ko), et seulement si la carte lui est proposee. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
     "chat_join": {
