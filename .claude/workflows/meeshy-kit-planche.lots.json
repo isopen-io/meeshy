@@ -19,6 +19,7 @@
  "regles": [
   "Un composant du kit est un atome agnostique : paramètres opaques, aucun type du composer ni des appels, aucun singleton nommé Meeshy (règle SDK Purity). L'orchestration reste côté app.",
   "On EXTRAIT avant de créer : le jumeau le plus complet devient le composant, les autres sont supprimés par le lot d'intégration. Un composant redessiné alors qu'un jumeau existait est un échec de revue.",
+  "Le verre a UNE entrée, et Liquid Glass l'emporte (directive porteur du 2026-11-09). iOS 26 et plus : le vrai Liquid Glass du système (glassEffect), INTERACTIF sur tout ce qui se touche, avec la réponse au toucher des boutons de l'en-tête de conversation (ConversationListHeaderActions : adaptiveGlass(in:interactive: true)), et les verres voisins fondus dans un même conteneur. iOS 16 à 25 : le verre DESSINÉ (LiquidGlassFallbackRecipe : flou, reflet, liseré, ombre), avec une réponse au toucher dessinée qui imite celle du système. Android : le verre dessiné (LiquidGlassRecipe, MeeshyGlassSurface) et la même réponse au toucher. Aucun composant du kit ne choisit lui-même entre les deux : il passe par K01.",
   "Pas de légende sous un bouton rond : le nom vit dans l'accessibilité. Petits boutons de verre séparés, aucune bande vide, seulement l'outil utile à cet instant (loi 13).",
   "Conformité = disposition, hiérarchie, états et gestes. Polices, rayons et teintes viennent du design system (MeeshyColors, tokens) : aucune couleur en dur.",
   "iOS d'abord. Android reproduit la FICHE et le composant iOS fusionné, pas la planche seule : mêmes états, mêmes noms d'accessibilité, mêmes gestes.",
@@ -35,8 +36,6 @@
   "integration": "opus"
  },
  "divergences_connues": [
-  "Android : ComposerEditGrammarGuardTest interdit le menu à l'appui long que la vue O2 demande.",
-  "iOS : la retouche d'une image de conversation suit la décision #11133 (ConversationPieceRetouch), la vue C1 demande la même grammaire que le composer.",
   "La planche compte quatre effets de texte ; StoryTextEffect en porte davantage (hors kit, à l'intégration I3).",
   "Android n'a ni catalogue, ni @Preview, ni test d'instantané (ADR-016 promet Roborazzi) : le lot K00 le pose."
  ],
@@ -46,7 +45,7 @@
    "type": "socle",
    "nom": "Catalogue",
    "titre": "Chaque composant du kit se voit dans un catalogue et se prouve par un instantané, sur iOS et Android",
-   "contrat": "iOS : écran catalogue (debug) listant chaque composant dans tous ses états + helper d'instantané (swift-snapshot-testing est déjà câblé à MeeshyUITests) + garde KitRegistryGuardTests qui lit ce registre (chaque composant livré a fichier, témoin, instantané, entrée) + cliquet interdisant un nouveau bouton de verre dessiné à la main hors du kit. Android : module catalogue, test d'instantané (Roborazzi sur Robolectric, version réelle à vérifier), garde miroir.",
+   "contrat": "iOS : écran catalogue (debug) listant chaque composant dans tous ses états + helper d'instantané (swift-snapshot-testing est déjà câblé à MeeshyUITests) + garde KitRegistryGuardTests qui lit ce registre (chaque composant livré a fichier, témoin, instantané, entrée) + cliquet interdisant un nouveau bouton de verre dessiné à la main hors du kit. Android : module catalogue, test d'instantané (Roborazzi sur Robolectric, version réelle à vérifier), garde miroir. Second cliquet : hors du kit, plus aucun nouvel appel direct à glassEffect, adaptiveGlass ou adaptiveLiquidGlass sur un contrôle qui se touche sans réponse au toucher. Le catalogue montre chaque composant au repos ET pressé, et se capture sur un simulateur iOS 26 (Liquid Glass) et sur un simulateur antérieur (verre dessiné).",
    "vues": [],
    "lois": [
     13
@@ -61,17 +60,17 @@
    "cle": "K01",
    "type": "kit",
    "nom": "MeeshyGlassTone",
-   "titre": "Le verre de l'application s'assombrit tout seul sur un contenu clair, par une seule loi",
+   "titre": "Le verre de l'application est le Liquid Glass du système quand l'appareil le permet, un verre dessiné sinon, et il répond au toucher partout",
    "planche": "classes .glass / .deep / .onlight",
    "vues": [
-    "R13"
+    "toutes"
    ],
    "lois": [
     4
    ],
-   "contrat": "Loi pure : luminance du contenu sous le contrôle → ton (plain, deep, onLight) + un seul échantillonneur. Aucun verre posé sur du verre. Repli « réduire la transparence ».",
-   "ios_existant": "SDK Compatibility/AdaptiveGlass (adaptiveGlass, AdaptiveGlassContainer), Theme/CanvasChromeScheme ; TROIS échantillonneurs app : MediaChromeScheme, ComposerCaptureChromeLegibility, CallBannerContrast",
-   "android_existant": ":sdk-ui chrome/MeeshyGlassSurface + LiquidGlassRecipe ; ton adaptatif seulement dans :feature:calls (CallGlassTone, CallGlassToneUi) ; voiles en dur SCENE_VEIL / SOCLE_VEIL",
+   "contrat": "Une seule entrée pour tout verre du kit. (1) Matière : iOS 26+ ⇒ glassEffect réel, interactif dès que la surface se touche, regroupé par AdaptiveGlassContainer pour que les verres voisins fusionnent ; iOS 16 à 25 ⇒ verre dessiné de LiquidGlassFallbackRecipe ; Android ⇒ verre dessiné de LiquidGlassRecipe. Liquid Glass l'emporte toujours quand il existe : aucun site ne force le verre dessiné sur iOS 26+. (2) Réponse au toucher : sur iOS 26+ celle du système (.interactive()), référence visuelle = les boutons de l'en-tête de conversation ; sous iOS 26 et sur Android, une réponse DESSINÉE qui l'imite (léger agrandissement, reflet qui s'éclaire, retour élastique), coupée si « réduire les animations ». Aujourd'hui le repli ignore le paramètre interactive : c'est l'écart à fermer. (3) Ton : luminance du contenu sous le contrôle → plain, deep, onLight, par un seul échantillonneur. Jamais de verre posé sur du verre. Repli opaque si « réduire la transparence ». Témoins : la recette choisie par version d'OS et par état (repos, pressé) se lit comme des valeurs, pas dans un modificateur opaque.",
+   "ios_existant": "SDK Compatibility/AdaptiveLiquidGlass (adaptiveLiquidGlass(in:tint:interactive:) : glassEffect sur iOS 26+, verre dessiné dessous, MAIS interactive ignoré dans le repli), Compatibility/AdaptiveGlass (adaptiveGlass : repli simple matière, makeMeeshyGlass, AdaptiveGlassContainer), Theme/CanvasChromeScheme ; référence du toucher : ConversationListHeaderActions ; TROIS échantillonneurs app : MediaChromeScheme, ComposerCaptureChromeLegibility, CallBannerContrast ; dans Composer et Call, 51 appels de verre dont 13 seulement interactifs",
+   "android_existant": ":sdk-ui chrome/MeeshyGlassSurface + LiquidGlassRecipe ; ton adaptatif seulement dans :feature:calls (CallGlassTone, CallGlassToneUi) ; voiles en dur SCENE_VEIL / SOCLE_VEIL ; aucune réponse au toucher sur le verre",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassTone.swift",
    "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyGlassTone.kt",
    "modele_ios": "sonnet",
@@ -93,7 +92,7 @@
     1,
     13
    ],
-   "contrat": "Disque 44 pt (tailles 36, 40, 44, 48), icône seule, nom porté par l'accessibilité (jamais de légende). États : normal (sans fond dans un conteneur de verre, verre seul hors conteneur), actif = disque blanc plein à icône sombre, destructif rouge, doux. Cible tactile ≥ 44 pt / 48 dp. Retour haptique par le site unique.",
+   "contrat": "Disque 44 pt (tailles 36, 40, 44, 48), icône seule, nom porté par l'accessibilité (jamais de légende). États : normal (sans fond dans un conteneur de verre, verre seul hors conteneur), actif = disque blanc plein à icône sombre, destructif rouge, doux. Cible tactile ≥ 44 pt / 48 dp. Retour haptique par le site unique. Le verre et sa réponse au toucher viennent de K01 (interactif par défaut) : le bouton ne dessine aucun verre lui-même.",
    "ios_existant": "Jumeaux : CallPillButton / CallPillGlyph / CallPillButtonKind (la grammaire complète), ComposerSceneRoundGlyph, glassControl (ComposerSceneCameraBar), CallSelfTileControlButton, SDK FullscreenChromeDisc / FullscreenChromeButton, MeeshyIconButton ; ~45 fichiers appellent adaptiveGlass(in: Circle()) en direct",
    "android_existant": "Jumeaux : CallPillButton + CallPillKind (calls, interne), SceneRoundButton, StoryRailButton, :sdk-ui FullscreenChromeDisc, ComposerRailButton, FloatingDisc privé",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassButton.swift",
@@ -328,7 +327,7 @@
     6,
     17
    ],
-   "contrat": "Un seul bloc de verre centré en bas, des emplacements opaques (boutons K02 + une action principale optionnelle), jamais de verre sur du verre, respecte la zone sûre et le clavier, se retire quand son hôte le demande. Le contenu (pilule de repos, pilule d'objet, pilule de retouche, pilule d'appel) est fourni par l'app.",
+   "contrat": "Un seul bloc de verre centré en bas, des emplacements opaques (boutons K02 + une action principale optionnelle), jamais de verre sur du verre, respecte la zone sûre et le clavier, se retire quand son hôte le demande. Le contenu (pilule de repos, pilule d'objet, pilule de retouche, pilule d'appel) est fourni par l'app. La pilule d'un objet : ‹ · Modifier · Dupliquer · Temps · (…) ; le (…) ouvre le menu K18, Retirer en dernier. Aucun bouton rouge au repos.",
    "ios_existant": "Appels : callControlsPill (CallView+Pill) + règles CallControlsLayout. Composer : seulement les règles (ComposerPillGrammar, ComposerPillSlot) ; AUCUNE vue de pilule, le socle la remplace",
    "android_existant": "Appels : CallControlsPill, CallPill (public). Composer : aucun, ScenePublishSocle + SceneToolColumn + SceneTopBar",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPill.swift",
@@ -579,7 +578,7 @@
    "cle": "K18",
    "type": "kit",
    "nom": "MeeshyObjectMenu",
-   "titre": "Un appui long sur un objet ouvre un seul menu de verre, posé contre lui",
+   "titre": "Le (…) d'un objet ouvre un seul menu de verre, où Retirer est toujours le dernier",
    "planche": "classe .menu",
    "vues": [
     "O2"
@@ -587,9 +586,9 @@
    "lois": [
     6
    ],
-   "contrat": "Menu de verre ancré à l'objet, lignes titre + icône, ligne destructive en rouge en dernier, se replace pour rester à l'écran, fermé par un toucher dehors.",
-   "ios_existant": "SDK StoryCanvasUIView+ContextMenu (UIKit) ; app ComposerSceneContextMenu",
-   "android_existant": "Jumeaux : :sdk-ui SceneObjectMenu (sans appelant) et SceneObjectMenuPopup (stories) ; la garde ComposerEditGrammarGuardTest INTERDIT aujourd'hui le menu à l'appui long : divergence à trancher",
+   "contrat": "Menu de verre ancré au bouton (…) qui l'ouvre (jamais à l'appui long), lignes titre + icône, la ligne destructive en rouge TOUJOURS en dernier, se replace pour rester à l'écran, fermé par un toucher dehors. Lignes opaques fournies par l'app.",
+   "ios_existant": "SDK StoryCanvasUIView+ContextMenu (UIKit, à l'appui long : à retirer à l'intégration) ; app ComposerSceneContextMenu, ComposerSceneMoreMenu",
+   "android_existant": "Jumeaux : :sdk-ui SceneObjectMenu (sans appelant) et SceneObjectMenuPopup (stories, à l'appui long : à retirer) ; la garde ComposerEditGrammarGuardTest interdit le menu à l'appui long et reste vraie",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyObjectMenu.swift",
    "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyObjectMenu.kt",
    "modele_ios": "sonnet",
@@ -776,6 +775,34 @@
    "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyContextLines.kt",
    "modele_ios": "haiku",
    "modele_android": "haiku",
+   "depend": [
+    "K00",
+    "K01"
+   ]
+  },
+  {
+   "cle": "K25",
+   "type": "kit",
+   "nom": "MeeshyDragTargets",
+   "titre": "Glisser un élément fait apparaître deux cibles, la duplication en haut et la poubelle en bas, et les lâcher dessus agit",
+   "planche": "dropZone()",
+   "vues": [
+    "O3",
+    "O12",
+    "O13",
+    "C3"
+   ],
+   "lois": [
+    6,
+    13
+   ],
+   "contrat": "Pendant un glisser, deux cibles rondes de verre apparaissent : duplication en haut, poubelle en bas à la place de la pilule. La cible survolée grossit (la poubelle rougit), retour haptique à l'entrée ; l'élément rétrécit au-dessus de la poubelle. Lâcher sur la poubelle = retirer (annulable) ; lâcher sur la duplication = l'hôte crée une copie identique un rang au-dessus et l'original revient à sa place. Le composant ne connaît que des rectangles, un point de doigt et deux rappels ; il sert aussi hors du composer (toute surface où l'on glisse un élément). Équivalent accessible : les mêmes actions existent dans la pilule et le menu de l'objet.",
+   "ios_existant": "Aucune cible de dépôt sur la scène ; à rapprocher de ComposerSlideRowJiggle (réordonner) et des corbeilles éventuelles du canvas (à relever par la fiche)",
+   "android_existant": "Aucune cible de dépôt sur la scène (à relever par la fiche)",
+   "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyDragTargets.swift",
+   "cible_android": "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/MeeshyDragTargets.kt",
+   "modele_ios": "sonnet",
+   "modele_android": "sonnet",
    "depend": [
     "K00",
     "K01"
@@ -976,11 +1003,13 @@
   {
    "cle": "I5",
    "type": "integration",
-   "titre": "Choisir et modifier un objet du composer passe par le kit : pilule de l'objet, menu, halo, modes de retouche",
+   "titre": "Toucher un objet du composer montre ses outils et ses options dans la pilule, et le modifier ouvre les modes de retouche du kit",
    "vues": [
     "O1",
     "O2",
     "O3",
+    "O12",
+    "O13",
     "O4",
     "O5",
     "O6",
@@ -1002,13 +1031,15 @@
     "K19",
     "K21",
     "K23",
+    "K25",
     "K05",
     "K08"
    ],
-   "contrat": "Sélection sans cadre, pilule de l'objet, menu à l'appui long (après arbitrage de la garde Android), Modifier en mode plein écran.",
+   "contrat": "Sélection sans cadre ; TOUCHER un objet affiche sa pilule ‹ · Modifier · Dupliquer · Temps · (…) ; le (…) ouvre le menu (Mettre devant, Mettre en fond, Verrouiller, Retirer en dernier). Pas de menu à l'appui long : il commence le glisser. GLISSER fait apparaître la duplication en haut et la poubelle en bas (K25) ; la copie se pose un rang au-dessus de l'original. Modifier une photo ou une vidéo (O4 à O9) ouvre le mode plein écran du kit ; ses outils sont ceux de la retouche de la prise (ComposerCaptureMount), DÉPLACÉS ici pour qu'il n'en existe qu'un jeu : c'est le même mode que le lot I9 ouvre depuis une conversation.",
    "depend": [
     "K18",
     "K23",
+    "K25",
     "K16",
     "K21",
     "I2"
@@ -1142,26 +1173,35 @@
   {
    "cle": "I9",
    "type": "integration",
-   "titre": "Retoucher une image ou une vidéo de conversation utilise le kit, en plus court",
+   "titre": "Retoucher une image ou une vidéo, d'où qu'elle vienne, ouvre le composer lui-même : la pièce est une scène, on y pose texte et stickers, et « Terminé » rend un média",
    "vues": [
     "C1",
-    "C2"
+    "C2",
+    "C3",
+    "C4"
    ],
    "lois": [
+    6,
+    9,
     17
    ],
    "consomme": [
     "K10",
     "K16",
+    "K18",
     "K19",
-    "K21"
+    "K21",
+    "K23",
+    "K25"
    ],
-   "contrat": "En-tête Quitter · Photos · Terminé, pilule courte, piste de coupe unique ; la décision #11133 (retouche iOS) reste à respecter ou à rouvrir par le porteur.",
+   "contrat": "UN seul éditeur : le composer, ouvert en MODE SIMPLE (mission « retoucher »). La pièce est le fond d'une scène d'une seule diapo, aux proportions du média (ou du format imposé d'une image d'identité, #17251) ; pilule Looks · Recadrer · Texte · Sticker · Dessin, plus Couper et Son pour une vidéo ; aucun rail de publication, aucune audience, aucun Publier. Ce qu'on pose est un objet de la scène : même pilule d'objet, mêmes gestes, mêmes cibles au glisser. RIEN N'EST APLATI AVANT L'ENVOI (directive porteur du 2026-11-09) : « Terminé » rend au message, au statut ou à la publication une pièce EN ATTENTE qui garde son document de scène ; la toucher rouvre la scène avec chaque élément déplaçable et modifiable ; l'aplatissement en image ou en vidéo se fait au moment de l'envoi, et seulement si la scène porte autre chose que la pièce d'origine. Le brouillon de message garde le document de scène tant que la pièce n'est pas partie (survit à la fermeture de la conversation). Portes qui deviennent des appels minces au composer : iOS ConversationPieceRetouch, EntityImageRetouch, CommentSceneRetouch, ComposerRetouchSeries, la feuille de création d'un post ; Android ComposerRetouchScreen, ComposerVideoRetouchScreen, EntityImageRetouch. Le web le fait déjà pour l'ouverture (D-147) mais aplatit à « Terminé » : il s'aligne. Garde-fous, chacun avec son témoin : (a) envoyer sans retoucher reste à un geste ; (b) une pièce NON modifiée part telle quelle, sans réencodage ni perte ; (c) l'ouverture se fait directement sur la pièce, outils visibles, pas plus lente que la retouche actuelle (mesuré) ; (d) une vidéo seulement coupée reste sans perte ; (e) plusieurs pièces se retouchent une à une ; (f) l'aplatissement à l'envoi ne retarde pas la bulle : elle apparaît tout de suite (optimistic), l'aplatissement et l'envoi suivent, et un échec garde la scène modifiable. Ce lot REMPLACE la décision du 2026-10-20 (#11133) : une décision datée l'écrit dans apps/ios/decisions/ et côté Android, et #11133 est mise à jour.",
    "depend": [
     "K10",
     "K16",
     "K19",
-    "K21"
+    "K21",
+    "K23",
+    "I5"
    ],
    "plateformes": [
     "ios",
@@ -1215,5 +1255,12 @@
    "modele_android": "opus",
    "recette_mac": true
   }
+ ],
+ "decisions_porteur": [
+  "2026-11-09 — Liquid Glass l'emporte quand l'OS le permet, verre dessiné sinon, réponse au toucher partout (K01).",
+  "2026-11-09 — Un seul éditeur d'image et de vidéo : le composer, en mission « retoucher » ; la retouche de conversation y pose texte et stickers comme sur une scène (I9). Remplace la décision du 2026-10-20 (#11133).",
+  "2026-11-09 — Toucher un objet affiche sa pilule ‹ · Modifier · Dupliquer · Temps · (…) ; le (…) ouvre un menu dont Retirer est le dernier ; pas de menu à l'appui long (K18, I5).",
+  "2026-11-09 — Glisser un objet fait apparaître la duplication en haut et la poubelle en bas à la place de la pilule ; la copie se pose un rang au-dessus de l'original (K25).",
+  "2026-11-09 — Rien n'est aplati avant l'envoi : la pièce en attente garde sa scène et se rouvre modifiable, en conversation comme en statut (I9)."
  ]
 }

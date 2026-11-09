@@ -95,6 +95,8 @@ Vues de la planche : ${(l.vues || []).join(' ') || '(transverse)'} — captures 
 Règles qui ne se discutent pas :
 - composant AGNOSTIQUE (paramètres opaques, aucun type du composer ni des appels, aucun singleton nommé Meeshy) ; l'orchestration reste côté app ;
 - EXTRAIRE avant de créer : le jumeau le plus complet devient le composant ; ne supprime un jumeau que si ton lot est une intégration ;
+- le verre passe par K01 et par lui seul : Liquid Glass du système sur iOS 26+ (interactif sur ce qui se touche, verres voisins fondus dans un
+  conteneur), verre dessiné avec réponse au toucher dessinée sous iOS 26 et sur Android ; Liquid Glass l'emporte toujours quand il existe ;
 - pas de légende sous un bouton rond (le nom vit dans l'accessibilité), aucune couleur ni rayon en dur, cible tactile 44 pt / 48 dp ;
 - TDD : témoin rouge d'abord ; un composant livré a sa fiche, son témoin de comportement, son instantané (clair, sombre, grande police, RTL)
   et son entrée au catalogue ;
@@ -214,7 +216,7 @@ const relire = (l, plateforme, f) => agent(`${socle(l, plateforme)}
 Tu RELIS le lot poussé sur ${branche(l.cle, plateforme)} (git diff origin/${BASE}...HEAD après merge de origin/${BASE}) et tu CORRIGES toi-même.
 Confronte, point par point : la fiche (${fiche(l)}${f ? ', reprise ci-dessous' : ''}), la fonction de la planche et les captures des vues, les règles du registre.
 Cherche d'abord ce qui n'est pas là : un état de la fiche sans témoin, un nom d'accessibilité absent, un jumeau recopié au lieu d'être
-absorbé, un type du composer ou des appels entré dans le kit, une couleur en dur, une légende sous un bouton, un écran modifié par un lot de kit.
+absorbé, un type du composer ou des appels entré dans le kit, un verre dessiné hors de K01 ou sans réponse au toucher, un verre posé sur du verre, une couleur en dur, une légende sous un bouton, un écran modifié par un lot de kit.
 ${plateforme === 'android' ? "Compare aussi au composant iOS fusionné : tout écart d'état, de nom ou de geste est un écart, sauf imposé par la plateforme (dis lequel)." : ''}
 Pousse tes corrections ; ce que tu ne peux pas fermer va dans « ecarts_restants » avec la raison.
 ${f ? 'FICHE :\n' + f.fiche_markdown : ''}`,
@@ -339,8 +341,8 @@ Chaque écart « bloquant » ou « a_corriger » devient une issue (titre séman
 
 phase('Couvrir')
 const couverture = await agent(`
-Lecture seule sur origin/${BASE} de ${REPO}, sauf les issues que tu ouvres. Matrice de couverture de la planche ${PLANCHE} : ses 64 vues
-(R1–R13, A1–A18, O1–O11, S1–S10, P1–P6, I1–I4, C1–C2) × iOS et Android.
+Lecture seule sur origin/${BASE} de ${REPO}, sauf les issues que tu ouvres. Matrice de couverture de la planche ${PLANCHE} : ses vues
+(lis leurs identifiants dans la planche elle-même : chaque « id » de la table S) × iOS et Android.
 Pour chaque vue : l'écran qui la réalise existe-t-il, se compose-t-il des composants du kit SEULS (${FICHES}/), et respecte-t-il les lois citées
 par la vue dans ${LOIS} (disposition, hiérarchie, états, gestes) ? Appuie-toi sur le code, les témoins et les instantanés, pas sur les titres d'issues.
 Une vue en écart sans issue ouverte en reçoit une (même milestone). Relève les cliquets de la garde du kit sur chaque plateforme
