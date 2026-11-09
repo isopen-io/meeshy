@@ -320,14 +320,16 @@
     "C1",
     "C2",
     "O1",
-    "O2"
+    "O2",
+    "O14",
+    "O15"
    ],
    "lois": [
     1,
     6,
     17
    ],
-   "contrat": "Un seul bloc de verre centré en bas, des emplacements opaques (boutons K02 + une action principale optionnelle), jamais de verre sur du verre, respecte la zone sûre et le clavier, se retire quand son hôte le demande. Le contenu (pilule de repos, pilule d'objet, pilule de retouche, pilule d'appel) est fourni par l'app. La pilule d'un objet : ‹ · Modifier · Dupliquer · Temps · (…) ; le (…) ouvre le menu K18, Retirer en dernier. Aucun bouton rouge au repos.",
+   "contrat": "Un seul bloc de verre centré en bas, des emplacements opaques (boutons K02 + une action principale optionnelle), jamais de verre sur du verre, respecte la zone sûre et le clavier, se retire quand son hôte le demande. Le contenu (pilule de repos, pilule d'objet, pilule de retouche, pilule d'appel) est fourni par l'app. La pilule d'un objet porte DIRECTEMENT les outils de son type, sans étape « Modifier » : ‹ · outils · (…) (sticker : Remplacer, Miroir, Temps ; texte : Aa, couleur, alignement, fond ; photo : Looks, Recadrer, Réglages, Pivoter ; vidéo : Looks, Recadrer, Couper, Son). La liste d'outils par type est UNE table fournie par l'app, partagée avec la retouche. Toucher un outil ouvre ses options dans K11 au-dessus ; le (…) ouvre le menu K18, Retirer en dernier. Aucun bouton rouge au repos.",
    "ios_existant": "Appels : callControlsPill (CallView+Pill) + règles CallControlsLayout. Composer : seulement les règles (ComposerPillGrammar, ComposerPillSlot) ; AUCUNE vue de pilule, le socle la remplace",
    "android_existant": "Appels : CallControlsPill, CallPill (public). Composer : aucun, ScenePublishSocle + SceneToolColumn + SceneTopBar",
    "cible_ios": "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPill.swift",
@@ -716,7 +718,9 @@
    "vues": [
     "O1",
     "O3",
-    "O11"
+    "O11",
+    "O14",
+    "O15"
    ],
    "lois": [
     6,
@@ -762,7 +766,9 @@
     "A18",
     "A9",
     "R2",
-    "R9"
+    "R9",
+    "O14",
+    "O15"
    ],
    "lois": [
     2,
@@ -1017,7 +1023,9 @@
     "O8",
     "O9",
     "O10",
-    "O11"
+    "O11",
+    "O14",
+    "O15"
    ],
    "lois": [
     6,
@@ -1035,7 +1043,7 @@
     "K05",
     "K08"
    ],
-   "contrat": "Sélection sans cadre ; TOUCHER un objet affiche sa pilule ‹ · Modifier · Dupliquer · Temps · (…) ; le (…) ouvre le menu (Mettre devant, Mettre en fond, Verrouiller, Retirer en dernier). Pas de menu à l'appui long : il commence le glisser. GLISSER fait apparaître la duplication en haut et la poubelle en bas (K25) ; la copie se pose un rang au-dessus de l'original. Modifier une photo ou une vidéo (O4 à O9) ouvre le mode plein écran du kit ; ses outils sont ceux de la retouche de la prise (ComposerCaptureMount), DÉPLACÉS ici pour qu'il n'en existe qu'un jeu : c'est le même mode que le lot I9 ouvre depuis une conversation.",
+   "contrat": "Sélection sans cadre ; TOUCHER un objet affiche DIRECTEMENT ses outils dans la pilule, sans étape « Modifier » ni mode plein écran : ‹ · outils du type · (…) (vues O1, O14, O4, O15) ; un outil ouvre ses options dans la pilule qui grandit (O5 à O8). Le (…) ouvre le menu (Dupliquer, Mettre devant, Mettre en fond, Verrouiller ; Temps, Description, Faire un sticker pour un média ; Retirer en dernier). Pas de menu à l'appui long : il commence le glisser. GLISSER fait apparaître la duplication en haut et la poubelle en bas (K25) ; la copie se pose un rang au-dessus de l'original. Les outils d'une photo ou d'une vidéo (O4 à O9) sont ceux de la retouche de la prise (ComposerCaptureMount), DÉPLACÉS ici pour qu'il n'en existe qu'un jeu : c'est la même table d'outils que le lot I9 montre depuis une conversation.",
    "depend": [
     "K18",
     "K23",
@@ -1259,7 +1267,8 @@
  "decisions_porteur": [
   "2026-11-09 — Liquid Glass l'emporte quand l'OS le permet, verre dessiné sinon, réponse au toucher partout (K01).",
   "2026-11-09 — Un seul éditeur d'image et de vidéo : le composer, en mission « retoucher » ; la retouche de conversation y pose texte et stickers comme sur une scène (I9). Remplace la décision du 2026-10-20 (#11133).",
-  "2026-11-09 — Toucher un objet affiche sa pilule ‹ · Modifier · Dupliquer · Temps · (…) ; le (…) ouvre un menu dont Retirer est le dernier ; pas de menu à l'appui long (K18, I5).",
+  "2026-11-09 — Toucher un objet affiche sa pilule ‹ · outils · (…) ; le (…) ouvre un menu dont Retirer est le dernier ; pas de menu à l'appui long (K18, I5).",
+  "2026-11-09 21:45 — La pilule d'un objet porte DIRECTEMENT les outils de son type : pas de bouton « Modifier », pas de Dupliquer ni Temps en bas par défaut (Dupliquer vit dans le (…) et au glisser) ; un outil ouvre ses options dans la pilule, sans mode plein écran (K10, K11, I5, I9).",
   "2026-11-09 — Glisser un objet fait apparaître la duplication en haut et la poubelle en bas à la place de la pilule ; la copie se pose un rang au-dessus de l'original (K25).",
   "2026-11-09 — Rien n'est aplati avant l'envoi : la pièce en attente garde sa scène et se rouvre modifiable, en conversation comme en statut (I9)."
  ]

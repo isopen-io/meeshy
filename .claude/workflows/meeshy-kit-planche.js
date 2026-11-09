@@ -1,7 +1,7 @@
 export const meta = {
   name: 'meeshy-kit-planche',
   description:
-    "Le kit de composants de la planche « Composer, vue finale » : chaque composant de la planche devient UN composant réutilisable dans toute l'application, sur iOS d'abord (MeeshyUI/Kit) puis reproduit sur Android (:sdk-ui component/kit), et les écrans l'adoptent. Registre des lots, fiche de contrat par composant (fable), exécution (haiku ou sonnet selon le lot), relecture, divergences iOS ↔ Android ↔ planche et intégrations (opus), preuve par la CI, couverture des 64 vues",
+    "Le kit de composants de la planche « Composer, vue finale » : chaque composant de la planche devient UN composant réutilisable dans toute l'application, sur iOS d'abord (MeeshyUI/Kit) puis reproduit sur Android (:sdk-ui component/kit), et les écrans l'adoptent. Registre des lots, fiche de contrat par composant (fable), exécution (haiku ou sonnet selon le lot), relecture, divergences iOS ↔ Android ↔ planche et intégrations (opus), preuve par la CI, couverture des 70 vues",
   whenToUse:
     "Lancer ou reprendre le chantier du kit depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), date, etape ('kit' par défaut : socle + composants ; 'integration' : adoption par les écrans ; 'verifier' : aucune écriture, seulement divergences et couverture ; 'tout'), plateformes (['ios','android']), seulement [clés], sauter [clés], devPar (2), maxFix (3), run ('/home/user/meeshy-kit-run'), base ('dev') }.",
   phases: [
@@ -16,7 +16,7 @@ export const meta = {
     { title: 'Livrer', detail: 'kit : fusion au vert, issue close avec preuve ; intégration : PR ouverte, arrêt pour captures simulateur et accord du porteur', model: 'sonnet' },
     { title: 'Diverger', detail: 'composant par composant : iOS contre Android contre fiche contre planche, et jumeaux restants', model: 'opus' },
     { title: 'Intégrer', detail: "un écran adopte le kit, ses jumeaux sont supprimés, conflits avec dev résolus", model: 'opus' },
-    { title: 'Couvrir', detail: 'les 64 vues de la planche × les composants : chaque vue se compose du kit seul, cliquets relevés', model: 'opus' },
+    { title: 'Couvrir', detail: 'les 70 vues de la planche × les composants : chaque vue se compose du kit seul, cliquets relevés', model: 'opus' },
     { title: 'Bilan', detail: "commentaire daté sur l'issue du chantier", model: 'haiku' },
   ],
 }
@@ -362,7 +362,7 @@ const bilan = {
 await agent(`
 Poste UN commentaire daté (${DATE}) sur l'issue du chantier #${etat.chantier || '(lis le champ chantier de ' + REGISTRE + ')'} de ${GH} : compte rendu de ce tour du workflow
 meeshy-kit-planche, en français, phrases complètes. Sections : lots livrés (PR), lots en attente de captures et d'accord du porteur, lots rouges ou
-bloqués avec la raison, divergences iOS ↔ Android ouvertes, couverture des 64 vues, ce qui est à lancer ensuite. Le commentaire est un compte
+bloqués avec la raison, divergences iOS ↔ Android ouvertes, couverture des 70 vues, ce qui est à lancer ensuite. Le commentaire est un compte
 rendu daté : l'état fait foi dans les issues. Pied Claude Code obligatoire.
 DONNÉES : ${JSON.stringify(bilan)}`,
   { label: 'bilan', phase: 'Bilan', model: MODELE.mecanique, effort: 'low' })
