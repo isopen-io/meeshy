@@ -124,7 +124,7 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
   });
   const users = Object.assign(base.users, {
     update: async (args: { where: { id: string }; data: Row }) => {
-      const [found] = userRows.filter((row) => row.id === args.where.id);
+      const [found] = base.users.rows.filter((row) => row.id === args.where.id);
       return found ? Object.assign(found, args.data) : null;
     },
   });

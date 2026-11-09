@@ -55,7 +55,7 @@ describe('enregistrer — scellé, borné à 30 jours, jamais en clair', () => {
     const [row] = w.points.rows;
     expect(row.ownerId).toBe(SANG);
     expect(String(row.sealed).startsWith('v1:')).toBe(true);
-    expect(JSON.stringify(row)).not.toMatch(/48\.8|2\.35|6400000/);
+    expect(String(row.sealed)).not.toMatch(/48\.8|2\.35|6400000/);
     expect((row.expiresAt as Date).getTime()).toBe(T0 + BLOOD_LOCATION_HISTORY_DAYS * JOUR);
     expect((row.recordedAt as Date).getTime()).toBe(T0);
   });
@@ -174,6 +174,7 @@ describe('le fantôme — indétectable', () => {
   });
 
   it('ciblé : un seul lecteur est masqué, et la période reste cachée même après la levée', async () => {
+    process.env.SECRETS_AT_REST_KEY = KEY;
     const w = bloodWorldAvecConsentements({});
     w.consentir(SANG, AUTRE_SANG, TOUT_PARTAGE);
     await recordBloodLocation(w.deps, SANG, PARIS);

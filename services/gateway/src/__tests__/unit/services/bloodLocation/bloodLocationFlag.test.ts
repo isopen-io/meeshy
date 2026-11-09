@@ -6,7 +6,7 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import { bloodLocationEnabledFor } from '../../../services/bloodLocation/bloodLocationFlag';
+import { bloodLocationEnabledFor } from '../../../../services/bloodLocation/bloodLocationFlag';
 
 const COMPTE = '6400000000000000000000a1';
 const AUTRE = '6400000000000000000000a2';

@@ -815,6 +815,7 @@ export type {
   NowPlayingSnapshot,
 } from './now-playing.js';
 export * from './shared-location-constants.js';
+export * from './blood-location.js';
 export type {
   SharedLocationPosition,
   SharedLocationStartPayload,

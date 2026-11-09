@@ -22,4 +22,6 @@ export const SHARED_LOCATION_SERVER_EVENTS = {
   SHARED_LOCATION_CHANGED: 'location:share-changed',
   /** À un destinataire : le partage est arrêté, ou ne lui est plus servi. */
   SHARED_LOCATION_ENDED: 'location:share-ended',
+  /** À chacun de deux Sangs consentants proches l'un de l'autre : « X est près de toi », sans coordonnée (#13937). */
+  BLOOD_PROXIMITY: 'location:blood-proximity',
 } as const;
