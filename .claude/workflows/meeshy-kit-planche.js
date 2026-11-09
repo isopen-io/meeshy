@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Le kit de composants de la planche « Composer, vue finale » : chaque composant de la planche devient UN composant réutilisable dans toute l'application, sur iOS d'abord (MeeshyUI/Kit) puis reproduit sur Android (:sdk-ui component/kit) et sur le web (apps/web/src/components/kit), et les écrans l'adoptent. Registre des lots, fiche de contrat par composant (fable), exécution (haiku ou sonnet selon le lot), relecture, divergences iOS ↔ Android ↔ web ↔ planche et intégrations (opus), preuve par la CI, couverture des 70 vues",
   whenToUse:
-    "Lancer ou reprendre le chantier du kit depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), date, etape ('kit' par défaut : socle + composants ; 'integration' : adoption par les écrans ; 'verifier' : aucune écriture, seulement divergences et couverture ; 'tout'), plateformes (['ios','android','web']), seulement [clés], sauter [clés], devPar (2), maxFix (3), run ('/home/user/meeshy-kit-run'), base ('dev') }.",
+    "Lancer ou reprendre le chantier du kit depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), attributionPR (le bloc de deux lignes que la session doit poser en tête de chaque PR, s'il existe), date, etape ('kit' par défaut : socle + composants ; 'integration' : adoption par les écrans ; 'verifier' : aucune écriture, seulement divergences et couverture ; 'tout'), plateformes (['ios','android','web']), seulement [clés], sauter [clés], devPar (2), maxFix (3), run ('/home/user/meeshy-kit-run'), base ('dev') }.",
   phases: [
     { title: 'Préparer', detail: 'dev à jour, registre lu, état de chaque lot par plateforme (livré, en PR, à faire)', model: 'haiku' },
     { title: 'Spécifier', detail: 'la fiche de contrat du composant : API, états, gestes, accessibilité, jumeaux à absorber, sur les trois plateformes', model: 'fable' },
@@ -38,6 +38,7 @@ const GH = 'isopen-io/meeshy'
 const RUN = typeof A.run === 'string' && A.run ? A.run.replace(/\/$/, '') : '/home/user/meeshy-kit-run'
 const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
 const DATE = typeof A.date === 'string' && A.date ? A.date : '(lis la date avec date -I)'
+const ATTR_PR = typeof A.attributionPR === 'string' && A.attributionPR.includes('claude-projects-attribution') ? A.attributionPR.trim() : ''
 const ATTR = typeof A.attribution === 'string' && /Claude-Session: \S+/.test(A.attribution) ? A.attribution.trim() : ''
 const ETAPE = ['kit', 'integration', 'verifier', 'tout'].includes(A.etape) ? A.etape : 'kit'
 const TOUTES = ['ios', 'android', 'web']
@@ -119,8 +120,10 @@ Règles qui ne se discutent pas :
   tes fichiers, tu cèdes et tu le dis (statut « cede ») ;
 - commits terminés par :
 ${ATTR}
-- PR vers ${BASE} : les deux premières lignes du corps sont le bloc d'attribution du projet s'il t'est fourni par la session,
-  et le corps finit par la ligne « 🤖 Generated with [Claude Code](https://claude.com/claude-code) ».
+- PR vers ${BASE} : ${ATTR_PR ? `les deux premières lignes du corps sont EXACTEMENT ce bloc d'attribution du projet :
+${ATTR_PR}
+  puis, après la PR créée, assigne-la et demande la relecture au porteur (issue_write update assignees, update_pull_request reviewers, login lu dans le bloc) ;` : "pas de bloc d'attribution de projet fourni ;"}
+  le corps finit par la ligne « 🤖 Generated with [Claude Code](https://claude.com/claude-code) ».
 Clone de travail :
 ${clone(l.cle, plateforme)}
 ${GATES[plateforme]}

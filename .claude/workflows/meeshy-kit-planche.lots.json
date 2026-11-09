@@ -1374,6 +1374,7 @@
   "2026-11-09 21:45 — La pilule d'un objet porte DIRECTEMENT les outils de son type : pas de bouton « Modifier », pas de Dupliquer ni Temps en bas par défaut (Dupliquer vit dans le (…) et au glisser) ; un outil ouvre ses options dans la pilule, sans mode plein écran (K10, K11, I5, I9).",
   "2026-11-09 — Glisser un objet fait apparaître la duplication en haut et la poubelle en bas à la place de la pilule ; la copie se pose un rang au-dessus de l'original (K25).",
   "2026-11-09 — Rien n'est aplati avant l'envoi : la pièce en attente garde sa scène et se rouvre modifiable, en conversation comme en statut (I9).",
-  "2026-11-09 21:57 — Le chantier vise TOUTES les vues sur iOS, Android ET le web, de manière sophistiquée et optimisée ; le workflow reçoit la plateforme web."
+  "2026-11-09 21:57 — Le chantier vise TOUTES les vues sur iOS, Android ET le web, de manière sophistiquée et optimisée ; le workflow reçoit la plateforme web.",
+  "2026-11-09 22:11 — Les actions de l'appel gardent Journal, Réagir, Capture et Image dans l'image ; Messages reste à droite comme la vue P2 le dessine (I1)."
  ]
 }
