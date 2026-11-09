@@ -32,13 +32,16 @@ struct ConversationPieceRetouch: View {
 
     /// Un média de la bande des récents, retouché AVANT la pose : rien n'est
     /// encore au message, « Abandonner » referme simplement.
-    init(source: ConversationRetouchSource, onDone: @escaping (ComposerReturnedMedia) -> Void,
+    /// Une image d'identité (#17251) y entre avec son FORMAT : la scène en prend
+    /// les proportions, et le recadrage libre se retire.
+    init(source: ConversationRetouchSource, format: EntityImageFormat? = nil,
+         onDone: @escaping (ComposerReturnedMedia) -> Void,
          onRemove: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.source = source
         self.onDone = onDone
         self.onRemove = onRemove
         self.onCancel = onCancel
-        _session = StateObject(wrappedValue: ConversationPieceRetouchOpening.session())
+        _session = StateObject(wrappedValue: ConversationPieceRetouchOpening.session(format: format))
     }
 
     var body: some View {
@@ -141,13 +144,14 @@ enum ConversationPieceRetouchOpening {
     /// Une session de retouche sans objectif : jamais d'enregistrement
     /// automatique en galerie, le média choisi y est déjà.
     static func session(gallery: any ComposerGalleryProviding = ComposerGallery.shared,
+                        format: EntityImageFormat? = nil,
                         loopPlayerFactory: (@MainActor (URL) async -> (any ComposerLoopPlayerProviding)?)? = nil)
         -> ComposerCaptureSession {
-        guard let loopPlayerFactory else {
-            return ComposerCaptureSession(stage: .armed, gallery: gallery, savePolicy: { .standard })
-        }
-        return ComposerCaptureSession(stage: .armed, gallery: gallery, savePolicy: { .standard },
-                                      loopPlayerFactory: loopPlayerFactory)
+        let session = loopPlayerFactory.map {
+            ComposerCaptureSession(stage: .armed, gallery: gallery, savePolicy: { .standard }, loopPlayerFactory: $0)
+        } ?? ComposerCaptureSession(stage: .armed, gallery: gallery, savePolicy: { .standard })
+        session.imageFormat = format
+        return session
     }
 
     /// La pièce entre en retouche. Une vidéo y entre par une COPIE : la retouche
