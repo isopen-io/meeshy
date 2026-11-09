@@ -208,4 +208,53 @@ final class RouterCommandsTests: XCTestCase {
         inert.requestHighlight(messageId: "m-1", inConversation: "c-1")
         inert.openPackShop(domain: nil)
     }
+
+    func test_relayingMeeshyRouter_underInjection_handsTheInjectedRouter() throws {
+        let router = makeRouter()
+        let ecran = RenderedScreen(
+            Color.clear.frame(width: 40, height: 40).modifier(RelayProbe()).modifier(MeeshyRouterInjection(router: router))
+        )
+        defer { ecran.dismount() }
+
+        let relais = try XCTUnwrap(ecran.node("relay.on"))
+
+        XCTAssertEqual(relais.label, String(describing: ObjectIdentifier(router)))
+    }
+
+    func test_relayingMeeshyRouter_withoutInjection_rendersTheContentUntouched() {
+        let ecran = RenderedScreen(Color.clear.frame(width: 40, height: 40).modifier(RelayProbe()))
+        defer { ecran.dismount() }
+
+        XCTAssertNil(ecran.node("relay.on"))
+        XCTAssertNotNil(ecran.node("relay.base"))
+    }
+
+    func test_meeshyRouter_crossesAFullScreenCover() {
+        let router = makeRouter()
+        let ecran = RenderedScreen(
+            Color.clear
+                .fullScreenCover(isPresented: .constant(true)) {
+                    Color.clear.frame(width: 40, height: 40).modifier(RelayProbe())
+                }
+                .modifier(MeeshyRouterInjection(router: router))
+        )
+        defer { ecran.dismount() }
+
+        XCTAssertNotNil(ecran.frame(of: "relay.on", borne: 30))
+    }
+}
+
+private struct RelayProbe: ViewModifier {
+    @Environment(\.meeshyRouter) private var meeshyRouter
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("relay.base")
+            .relayingMeeshyRouter(meeshyRouter) { view, router in
+                view
+                    .accessibilityIdentifier("relay.on")
+                    .accessibilityLabel(String(describing: ObjectIdentifier(router)))
+            }
+    }
 }
