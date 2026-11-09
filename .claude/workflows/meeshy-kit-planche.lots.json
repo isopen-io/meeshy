@@ -19,6 +19,7 @@
   "catalogue_web": "apps/web/src/routes/ (route /kit, hors production) + apps/web/scripts/check-kit.mjs"
  },
  "regles": [
+  "AUCUNE RÉGRESSION DE FEATURE (directive porteur 2026-11-09 22:22). Quand le code et la planche divergent, la planche garde sa disposition, sa simplicité et son épure, ET chaque feature que le code porte en plus est conservée : on l'ajoute à la planche, à la place où elle s'intègre le plus sobrement (menu (…), options d'un outil, réglages), sans la dupliquer si la planche la rend déjà autrement. Un lot qui retire un comportement existant sans équivalent sur la planche est un écart bloquant ; le doute se tranche par la conservation, et la place choisie se dit dans la PR.",
   "Un composant du kit est un atome agnostique : paramètres opaques, aucun type du composer ni des appels, aucun singleton nommé Meeshy (règle SDK Purity). L'orchestration reste côté app.",
   "On EXTRAIT avant de créer : le jumeau le plus complet devient le composant, les autres sont supprimés par le lot d'intégration. Un composant redessiné alors qu'un jumeau existait est un échec de revue.",
   "Le verre a UNE entrée, et Liquid Glass l'emporte (directive porteur du 2026-11-09). iOS 26 et plus : le vrai Liquid Glass du système (glassEffect), INTERACTIF sur tout ce qui se touche, avec la réponse au toucher des boutons de l'en-tête de conversation (ConversationListHeaderActions : adaptiveGlass(in:interactive: true)), et les verres voisins fondus dans un même conteneur. iOS 16 à 25 : le verre DESSINÉ (LiquidGlassFallbackRecipe : flou, reflet, liseré, ombre), avec une réponse au toucher dessinée qui imite celle du système. Android : le verre dessiné (LiquidGlassRecipe, MeeshyGlassSurface) et la même réponse au toucher. Aucun composant du kit ne choisit lui-même entre les deux : il passe par K01.",
@@ -1375,6 +1376,8 @@
   "2026-11-09 — Glisser un objet fait apparaître la duplication en haut et la poubelle en bas à la place de la pilule ; la copie se pose un rang au-dessus de l'original (K25).",
   "2026-11-09 — Rien n'est aplati avant l'envoi : la pièce en attente garde sa scène et se rouvre modifiable, en conversation comme en statut (I9).",
   "2026-11-09 21:57 — Le chantier vise TOUTES les vues sur iOS, Android ET le web, de manière sophistiquée et optimisée ; le workflow reçoit la plateforme web.",
-  "2026-11-09 22:11 — Les actions de l'appel gardent Journal, Réagir, Capture et Image dans l'image ; Messages reste à droite comme la vue P2 le dessine (I1)."
+  "2026-11-09 22:11 — Les actions de l'appel gardent Journal, Réagir, Capture et Image dans l'image ; Messages reste à droite comme la vue P2 le dessine (I1).",
+  "2026-11-09 22:22 — Aucune régression de feature : la planche est préservée et s'enrichit de ce que le code porte en plus, sans doublon de ce qu'elle rend déjà autrement (règle en tête de « regles »).",
+  "2026-11-09 22:20 — Lecture consolidée de la liste de l'appel (#17329, #17333) : tout est gardé, rien n'est en double. Liste « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture ; en-tête : Réduire, Image dans l'image, Conversation. Remplace la ligne de 22:11 sur la place de Messages et d'Image dans l'image (I1)."
  ]
 }
