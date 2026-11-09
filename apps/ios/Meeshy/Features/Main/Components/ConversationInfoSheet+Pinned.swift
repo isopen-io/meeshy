@@ -124,6 +124,8 @@ extension ConversationInfoSheet {
                             .foregroundColor(theme.textMuted)
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }

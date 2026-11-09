@@ -207,6 +207,8 @@ struct MediaReplyComposerBar: View {
                     .foregroundStyle(Color.white.opacity(0.6))
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(Color.white.opacity(0.12)))
+                    .meeshyTapTarget()
+                    .padding(-MeeshyTapTarget.inset(forVisualSide: 22))
             }
             .accessibilityLabel(String(localized: "media.reply.cancel",
                                        defaultValue: "Annuler la réponse", bundle: .main))

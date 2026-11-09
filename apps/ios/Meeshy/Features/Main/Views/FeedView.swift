@@ -479,6 +479,8 @@ struct FeedView: View {
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         // Les réels dans leur propre fenêtre (iPad) : le fil des publications reste dans la fenêtre principale.
@@ -512,6 +514,8 @@ struct FeedView: View {
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))

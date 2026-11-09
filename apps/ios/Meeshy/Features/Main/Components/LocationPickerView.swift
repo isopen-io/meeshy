@@ -341,7 +341,7 @@ struct LocationPickerView: View {
                 // visible (40 pt). L'ORDRE compte : `frame` d'abord, puis
                 // `contentShape` — l'inverse découperait la zone tactile sur
                 // le disque de 40 et la cible resterait sous-dimensionnée.
-                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                .meeshyTapTarget()
                 .contentShape(Circle())
         }
         .accessibilityLabel(label)
