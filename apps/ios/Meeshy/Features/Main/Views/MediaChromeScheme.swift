@@ -131,7 +131,7 @@ nonisolated enum MediaChromeScheme {
 /// la fait pas grossir sans fin.
 nonisolated enum MediaLuminanceSampler {
 
-    nonisolated private static let memoire: NSCache<NSString, NSNumber> = {
+    nonisolated(unsafe) private static let memoire: NSCache<NSString, NSNumber> = {
         let cache = NSCache<NSString, NSNumber>()
         cache.countLimit = 512
         return cache
