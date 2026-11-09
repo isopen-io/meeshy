@@ -112,6 +112,8 @@ struct CommentQuotationChip: View {
                         .foregroundColor(theme.textMuted)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: 22))
                 }
                 .accessibilityLabel(Text(String(localized: "comment.quote.remove",
                                                 defaultValue: "Retirer la citation",

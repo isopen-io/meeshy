@@ -9,23 +9,31 @@ enum MeeshyUISourceScan {
 
     static let sourcesRoot: URL = ComposerSourceGuard.packageRoot.appendingPathComponent("Sources/MeeshyUI")
 
+    static let appFeaturesMainRoot: URL = ComposerSourceGuard.packageRoot
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("apps/ios/Meeshy/Features/Main")
+
     static func allSources() throws -> [Source] {
-        let files = try XCTUnwrapEnumerator()
-        return try files
-            .filter { $0.pathExtension == "swift" }
-            .map { url in
-                let relative = String(url.path.dropFirst(sourcesRoot.path.count + 1))
-                let raw = try String(contentsOf: url, encoding: .utf8)
-                return Source(path: relative, text: ComposerSourceGuard.stripComments(raw))
-            }
-            .sorted { $0.path < $1.path }
+        try sources(under: sourcesRoot)
     }
 
-    private static func XCTUnwrapEnumerator() throws -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(at: sourcesRoot, includingPropertiesForKeys: nil) else {
+    static func sources(under root: URL) throws -> [Source] {
+        let base = root.resolvingSymlinksInPath().pathComponents
+        return try swiftFiles(under: root).map { url in
+            let components = url.resolvingSymlinksInPath().pathComponents
+            let relative = components.dropFirst(base.count).joined(separator: "/")
+            let raw = try String(contentsOf: url, encoding: .utf8)
+            return Source(path: relative, text: ComposerSourceGuard.stripComments(raw))
+        }
+        .sorted { $0.path < $1.path }
+    }
+
+    private static func swiftFiles(under root: URL) throws -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
             throw CocoaError(.fileReadNoSuchFile)
         }
-        return enumerator.compactMap { $0 as? URL }
+        return enumerator.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
     static func lineNumber(of offset: Int, in bytes: [UInt8]) -> Int {
@@ -66,13 +74,20 @@ enum MeeshyUISourceScan {
             var name = dot + 1
             while name < bytes.count, isIdentifierByte(bytes[name]) { name += 1 }
             var stop = name
-            if name < bytes.count, bytes[name] == 40 || bytes[name] == 123, let close = closing(bytes, openAt: name) {
+            if name < bytes.count, bytes[name] == 40, let close = closing(bytes, openAt: name) {
                 stop = close + 1
             }
+            while let close = trailingClosureEnd(bytes, after: stop) { stop = close + 1 }
             chain += String(decoding: bytes[dot..<stop], as: UTF8.self)
             cursor = stop
         }
         return chain
+    }
+
+    private static func trailingClosureEnd(_ bytes: [UInt8], after position: Int) -> Int? {
+        let next = skipSpaces(bytes, from: position)
+        guard next < bytes.count, bytes[next] == 123 else { return nil }
+        return closing(bytes, openAt: next)
     }
 
     struct ButtonSite {
@@ -133,6 +148,7 @@ enum MeeshyUISourceScan {
     static func isIconOnlyAndMute(_ site: ButtonSite) -> Bool {
         guard site.label.contains("Image(systemName") else { return false }
         if site.label.contains("Text(") || site.label.contains("Label(") { return false }
+        if site.label.contains("accessibilityHidden(true)") || site.chain.contains("accessibilityHidden(true)") { return false }
         return !site.label.contains("accessibilityLabel") && !site.chain.contains("accessibilityLabel")
     }
 

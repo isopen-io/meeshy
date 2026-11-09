@@ -598,6 +598,7 @@ struct ThemedCommunityCard: View, Equatable {
             + "\(community.conversationCount) " + String(localized: "tab.conversations", defaultValue: "Conversations")
         )
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action?() }
     }
 }
 

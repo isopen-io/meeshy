@@ -35,6 +35,7 @@ struct ContactCardDetailSheet: View {
                 .onTapGesture { close() }
                 .accessibilityLabel(String(localized: "contact-card.detail.close", defaultValue: "Fermer la fiche", bundle: .main))
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { close() }
 
             if isVisible {
                 card

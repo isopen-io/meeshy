@@ -412,6 +412,8 @@ private struct OpenGesture: ViewModifier {
                 HapticFeedback.light()
                 action()
             }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { action() }
         } else {
             content
         }

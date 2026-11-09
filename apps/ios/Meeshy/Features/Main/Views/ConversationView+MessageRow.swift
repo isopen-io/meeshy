@@ -408,6 +408,9 @@ extension ConversationView {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture { closeReactionBar() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { closeReactionBar() }
 
                 quickReactionBar(for: messageId)
                     .padding(.horizontal, MeeshySpacing.lg)

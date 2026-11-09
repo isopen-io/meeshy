@@ -335,6 +335,8 @@ struct ThemedFeedOverlay: View {
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.large))
         }
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
         .accessibilityIdentifier("feed.header.reels")
@@ -354,6 +356,8 @@ struct ThemedFeedOverlay: View {
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.large))
         }
         .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
         .accessibilityHint(String(localized: "feed.nearby.open.hint", defaultValue: "Ouvre la carte des publications trouvables autour de vous", bundle: .main))

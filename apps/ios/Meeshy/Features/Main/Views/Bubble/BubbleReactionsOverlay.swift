@@ -141,6 +141,8 @@ struct BubbleReactionsOverlay: View, Equatable {
             // is rendered, so visually nothing changes.
             .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
             .contentShape(Circle())
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.large))
             .onTapGesture {
                 HapticFeedback.light()
                 onAddReaction?(messageId)

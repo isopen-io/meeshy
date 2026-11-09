@@ -211,6 +211,7 @@ struct PostSceneCard: View {
         // qui mène quelque part. Un tap sans effet serait pire que le mauvais
         // effet — c'est la loi 4.
         .onTapGesture { (onTapScene ?? { onTapPost?(post) })() }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { (onTapScene ?? { onTapPost?(post) })() }
     }
 }
 

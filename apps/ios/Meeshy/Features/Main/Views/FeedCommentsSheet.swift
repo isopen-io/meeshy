@@ -304,7 +304,6 @@ struct CommentsSheetView: View {
                     }
                     .keepsReplyTargetInView(replyingTo?.id, proxy: commentsProxy)
                     } // ScrollViewReader
-
                     VStack(spacing: 0) {
                         if editingComment != nil {
                             editingBanner
@@ -337,7 +336,6 @@ struct CommentsSheetView: View {
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
-
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         dismiss()
@@ -348,6 +346,8 @@ struct CommentsSheetView: View {
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
                     }
                     .accessibilityLabel(String(localized: "a11y.comment.close", defaultValue: "Fermer", bundle: .main))
                 }

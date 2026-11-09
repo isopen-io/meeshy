@@ -19,7 +19,23 @@ final class AppTapTargetSweepSourceGuardTests: XCTestCase {
         "Features/Stories/Views/StoryTrayView.swift",
         "Features/Stories/Views/MyStoriesView.swift",
         "Features/Stories/Views/StoryLanguageDetailView.swift",
-        "Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift"
+        "Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",
+        "Features/Main/Views/CommentQuotedMediaViews.swift",
+        "Features/Main/Views/ConversationView+ComposerBanners.swift",
+        "Features/Main/Views/FeedCommentsSheet.swift",
+        "Features/Main/Views/FeedView.swift",
+        "Features/Main/Views/RootViewComponents.swift",
+        "Features/Main/Views/ConversationListHeaderActions.swift",
+        "Features/Main/Views/MediaReplyComposerBar.swift",
+        "Features/Main/Views/NearbyDiscoveryView.swift",
+        "Features/Main/Views/PostDetailView.swift",
+        "Features/Main/Views/PostTranslationSheet.swift",
+        "Features/Main/Views/Bubble/BubbleReactionsOverlay.swift",
+        "Features/Main/Components/ComposerFormatBar.swift",
+        "Features/Main/Components/ConversationInfoSheet+Pinned.swift",
+        "Features/Main/Components/MemberManagementSection.swift",
+        "Features/Main/Components/MessageMoreSheet.swift",
+        "Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift"
     ]
 
     private static let coverageMarkers = [
@@ -253,6 +269,20 @@ final class AppTapTargetSweepSourceGuardTests: XCTestCase {
         XCTAssertEqual(Self.violations(in: navigationLink).map(\.reason), ["missing tap target"])
         XCTAssertEqual(Self.violations(in: notAnOpener), [])
         XCTAssertEqual(Self.violations(in: trailing), [])
+    }
+
+    private static let featuresMainMissingCeiling = 11
+
+    func test_featuresMain_missingTapTargets_stayUnderCeiling() throws {
+        let root = Self.sourcesRoot.appendingPathComponent("Features/Main")
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+        let missing = try files.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .reduce(0) { total, url in
+                let source = try String(contentsOf: url, encoding: .utf8)
+                return total + Self.violations(in: source).filter { $0.reason == "missing tap target" }.count
+            }
+        XCTAssertLessThanOrEqual(missing, Self.featuresMainMissingCeiling, "Contrôles de Features/Main sous 44 pt sans cible : \(missing)")
     }
 
     func test_migratedFiles_stillExist() {

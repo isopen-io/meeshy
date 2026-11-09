@@ -73,10 +73,8 @@ struct MessageDetailEmptyState: View {
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            // Decorative empty-state glyph — kept at a fixed 28pt (illustration,
-            // not text) and hidden from VoiceOver via the `.combine` parent.
             Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
+                .meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)
                 .foregroundStyle(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(text)

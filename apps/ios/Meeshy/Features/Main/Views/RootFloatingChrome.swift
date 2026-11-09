@@ -32,6 +32,9 @@ struct RootFloatingChrome: View {
                     .onTapGesture {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
                     }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }
                     .zIndex(99)
             }
 

@@ -1,6 +1,7 @@
 import SwiftUI
 import XCTest
 import MeeshyUI
+@testable import Meeshy
 
 /// **Une doctrine tenue à la main est tenue jusqu'au jour où elle ne l'est plus.**
 ///
@@ -136,15 +137,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/InviteFriendsSheet.swift",
         "Features/Main/Components/LocationPickerView.swift",
         "Features/Main/Components/MemberManagementSection.swift",
-        // RELOCALISATION pure : `MessageEditsDetailView.emptyStateView` (son
-        // seul site figé, un glyphe 28pt dans un cadre fixe) a fusionné avec sa
-        // jumelle de `MessageViewsDetailView` dans `MessageDetailChrome.swift`
-        // (dédoublonnage audit L3-17). La POPULATION ne bouge pas — ni
-        // `totalCeiling` ni `textCeiling` — seul le NOM change ; le fichier
-        // d'origine n'en porte plus aucun et sort de la liste.
-        "Features/Main/Components/MessageDetail/MessageDetailChrome.swift",
-        "Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
-        "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
         "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
@@ -387,10 +379,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // (règle 4).
     // 171 → 160 (#15628) : les onze glyphes figés de la feuille du fil et de sa
     // rangée de pièces quittent le dépôt avec elles ; aucun texte.
-    // 160 → 98 (#17297) : le reste de l'app hors Features/Main déclare ses
-    // glyphes figés par `MeeshyFont.fixedGlyph` et fait suivre Dynamic Type
-    // à ses trois glyphes en ligne ; il ne fige plus que quatre textes encadrés.
-    private static let totalCeiling = 98
+    // 160 → 92 (#17297, GMAIN #17296) : le reste de l'app déclare ses glyphes
+    // figés par `MeeshyFont.fixedGlyph` (−62), six glyphes de `Features/Main`
+    // passent par `meeshyScaledFont` (−6) ; il ne fige plus que des textes encadrés.
+    private static let totalCeiling = 92
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
