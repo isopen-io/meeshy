@@ -11,12 +11,13 @@
 ## Les lois
 
 1. **Une seule pilule de verre, en bas : (…) · Micro · Sortie · Fin.** Fin est en rouge. Un bouton actif est un disque blanc plein à icône sombre.
-   - **Les boutons sont en Liquid Glass quand la version d'iOS le permet, en verre dessiné sinon** (directive porteur du 2026-11-09, #17323). Elle supplante « un bouton inactif n'a pas de fond » et « jamais de verre posé sur du verre », que les captures montrent encore jusqu'à leur régénération.
+   - **Les boutons sont en Liquid Glass quand la version d'iOS le permet, en verre dessiné sinon** (directive porteur du 2026-11-09, #17323). Elle supplante « un bouton inactif n'a pas de fond » et « jamais de verre posé sur du verre » ; les captures montrent désormais le disque de verre de chaque bouton.
    - Le Liquid Glass l'emporte : sur iOS 26 et plus, chaque bouton est un verre interactif, avec l'effet au toucher des boutons de l'en-tête de conversation (`ConversationHeaderGlassGlyph`), et les verres voisins se composent dans un même conteneur.
    - Sur iOS 16 à 25, le bouton est le verre dessiné de `adaptiveLiquidGlass`. Android transpose par `MeeshyGlassSurface`.
 2. **(…) fait sortir les actions, et les range.**
    - En duo, deux rails verticaux sortent vers les bords. **Gauche = mon image** : Caméra, Retourner, Effets, Écran. **Droite = l'appel** : Sous-titres, Enregistrer, Ajouter, Messages.
    - En groupe, les mêmes huit actions montent dans la pilule, qui s'agrandit en deux rangées légendées (mon image, puis l'appel).
+   - **Les deux dispositions se tiennent selon le nombre de participants** (directive porteur du 2026-11-09, #17327) : à plusieurs, aucun rail ne se pose par-dessus la grille, pour ne masquer aucune vignette.
    - L'ordre et le vocabulaire sont les mêmes sur les trois plateformes.
 3. **Le verre est adaptatif.** Sur un contenu clair (un écran partagé), il s'assombrit pour garder le contraste, en-tête et pilule compris.
 4. **Chaque personne a UNE couleur, partout dans l'appel et après** (#16612, #16614, précisée par le porteur le 2026-11-07, #16662).
@@ -189,6 +190,7 @@ Ce tableau est un compte rendu daté. L'état vivant est dans les issues du mile
 | Loi / vue | Web | iOS | Android natif |
 |---|---|---|---|
 | Pilule, rails, groupe (lois 1–3) | livré | livré ; le verre qui s'assombrit sur un écran reçu (loi 3) reste à porter, #16972 ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` | livré dans le code, verre de la loi 3 compris (#16952) ; à vérifier sur capture |
+| Relevé du 2026-11-09 (#17311) : boutons en Liquid Glass (loi 1) et rails en duo (loi 2) | à vérifier | boutons en disques dessinés, #17323 ; le duo range ses actions en rangées comme le groupe, #17327 | même écart qu'iOS, #17323 et #17327 |
 | Sous-titre coloré, original puis traduction (lois 4–5) | livré (#16613, #16614) | livré | livré (`CallSpeakerColor`) |
 | Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`) ; duo : liseré de 2 pt à la couleur de qui est montré, livré dans le code (`CallSelfTileStroke`), à recouper avec #16973 | livré dans le code, duo compris, celle de l'autre après permutation (#16952) |
 | Journal pendant l'appel coloré (lois 4, 7) | livré, nom et phrase (#16634) ; bascule Traduit / Original dans l'en-tête (#16942) | livré (`CallCaptionRow`) | livré (`CallCaptionRow`) |
