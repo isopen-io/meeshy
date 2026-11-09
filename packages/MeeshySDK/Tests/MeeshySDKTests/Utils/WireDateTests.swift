@@ -35,6 +35,18 @@ struct WireDateTests {
 
     // MARK: - Aller-retour
 
+    @Test func string_puisDate_resteStableSurMilleDatesPseudoAleatoires() {
+        var state: UInt64 = 0x9E37_79B9_7F4A_7C15
+        let echecs = (0..<1_000).compactMap { _ -> String? in
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            let milliseconds = Int64(state >> 33) % 4_000_000_000_000
+            let date = Date(timeIntervalSince1970: Double(milliseconds) / 1_000)
+            let ecrite = WireDate.string(from: date)
+            return WireDate.date(from: ecrite).map(WireDate.string(from:)) == ecrite ? nil : ecrite
+        }
+        #expect(echecs.isEmpty, "\(echecs.prefix(3))")
+    }
+
     @Test func string_puisDate_allerRetourExactSurChaqueMillisecondeDUneSeconde() {
         let echecs = (0..<1_000).compactMap { ms -> Int? in
             let date = Date(timeIntervalSince1970: 1_789_464_863 + Double(ms) / 1_000)

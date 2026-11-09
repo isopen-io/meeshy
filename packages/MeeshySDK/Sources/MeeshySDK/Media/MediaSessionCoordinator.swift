@@ -89,7 +89,8 @@ public actor MediaSessionCoordinator {
     /// que par `activatePlaybackSync` (vidéo, story) ne recevait jamais
     /// d'interruption (#11040).
     private nonisolated let _systemObserversLock = OSAllocatedUnfairLock(initialState: false)
-    nonisolated(unsafe) private var observerTokens: [any NSObjectProtocol] = []
+    // unchecked: jetons d'observateurs, écrits sous _systemObserversLock et lus par deinit
+    private nonisolated let observerTokens = Locked<[any NSObjectProtocol]>(uncheckedState: [])
 
     /// `true` tant qu'un contenu AUDIBLE de Meeshy a activé la session
     /// `.playback` et que rien ne l'a rendue depuis. Une vidéo muette lit ce
@@ -163,13 +164,13 @@ public actor MediaSessionCoordinator {
     }
 
     #if DEBUG
-    /// Test seam: increments `deactivateCount` from callers that want to
-    /// assert whether `deactivateForBackground()` was reached via the
-    /// background transition path. `nonisolated(unsafe)` so a synchronous
-    /// `MediaSessionCoordinator.shared.testProbe = probe` assignment from a
-    /// test running on `@MainActor` does not require an `await` hop. The
-    /// probe is only read/written from `@MainActor` callers in this codebase.
-    public nonisolated(unsafe) var testProbe: MediaSessionCoordinatorTestProbe?
+    /// Test seam: lets a synchronous `MediaSessionCoordinator.shared.testProbe = probe`
+    /// assignment from a `@MainActor` test land without an `await` hop.
+    private nonisolated let probeSlot = Locked<MediaSessionCoordinatorTestProbe?>(nil)
+    public nonisolated var testProbe: MediaSessionCoordinatorTestProbe? {
+        get { probeSlot.read { $0 } }
+        set { probeSlot.mutate { $0 = newValue } }
+    }
     #endif
 
     private nonisolated let scheduleAfter: DelayedScheduler
@@ -273,7 +274,7 @@ public actor MediaSessionCoordinator {
 
     deinit {
         let center = NotificationCenter.default
-        for token in observerTokens {
+        for token in observerTokens.mutateUnchecked({ $0 }) {
             center.removeObserver(token)
         }
     }
@@ -864,16 +865,17 @@ public actor MediaSessionCoordinator {
             guard !installed else { return }
             installed = true
             let center = NotificationCenter.default
-            observerTokens.append(center.addObserver(
+            let interruption = center.addObserver(
                 forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
             ) { [weak self] notification in
                 self?.forward(Self.parseInterruption(notification))
-            })
-            observerTokens.append(center.addObserver(
+            }
+            let routeChange = center.addObserver(
                 forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
             ) { [weak self] notification in
                 self?.forward(Self.parseRouteChange(notification))
-            })
+            }
+            observerTokens.mutateUnchecked { $0 += [interruption, routeChange] }
         }
     }
 

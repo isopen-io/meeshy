@@ -66,10 +66,15 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// coup l'accès au contenu.
     public internal(set) var editingKnowsDeclaredReferences = false
 
-    // Cancellable preload Task started by `init(reposting:authorHandle:)`.
-    // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
-    // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
-    nonisolated(unsafe) var preloadTask: Task<Void, Never>?
+    private nonisolated struct ComposerTasks: Sendable {
+        var preload: Task<Void, Never>?
+        var videoMeasure: [String: Task<Void, Never>] = [:]
+    }
+    private nonisolated let tasks = Locked(ComposerTasks())
+    var preloadTask: Task<Void, Never>? {
+        get { tasks.read { $0.preload } }
+        set { tasks.mutate { $0.preload = newValue } }
+    }
 
     // MARK: - Références
 
@@ -343,15 +348,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// slide ID survives any reorder/insert/remove operation.
     var backgroundTransformCache: [String: BackgroundTransform] = [:]
 
-    /// **Une tâche de mesure PAR objet vidéo** (#5418). Une poignée unique
-    /// (`preloadTask`) suffisait à la graine, qui pose UNE vidéo ; le pont
-    /// document → canvas en pose autant que l'auteur en ingère, et elles se
-    /// voleraient leur poignée. Annulées au `deinit` comme `preloadTask`.
-    ///
-    /// `nonisolated(unsafe)` pour la MÊME raison que `preloadTask`, écrite à
-    /// son site : le `deinit` est `nonisolated` et doit pouvoir annuler sans
-    /// saut vers le main actor — l'annulation est `Sendable` et sûre.
-    nonisolated(unsafe) var videoMeasureTasks: [String: Task<Void, Never>] = [:]
+    /// **Une tâche de mesure PAR objet vidéo** (#5418) : plusieurs vidéos ingérées
+    /// ensemble ne se volent pas leur poignée. Annulées au `deinit`, comme `preloadTask`.
+    var videoMeasureTasks: [String: Task<Void, Never>] {
+        get { tasks.read { $0.videoMeasure } }
+        set { tasks.mutate { $0.videoMeasure = newValue } }
+    }
 
     // MARK: - Media Storage (pre-publication)
 
@@ -633,13 +635,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         loadedImagesVersion &+= 1
     }
 
-    /// Default initializer (kept explicit so the convenience init below has a designated
-    /// init to delegate to). All stored properties default-initialise, so the body is empty.
     public init() {}
 
     nonisolated deinit {
-        preloadTask?.cancel()
-        // #5418 — une session refermée ne finit pas de mesurer ses vidéos.
-        for tache in videoMeasureTasks.values { tache.cancel() }
+        let held = tasks.read { $0 }
+        held.preload?.cancel()
+        for tache in held.videoMeasure.values { tache.cancel() }
     }
 }

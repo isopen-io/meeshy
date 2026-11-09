@@ -43,11 +43,11 @@ nonisolated public enum LottieLayerSource {
     }
 
     /// `NSCache` est sûr d'un fil à l'autre ; borné, il se vide de lui-même sous la pression mémoire.
-    nonisolated(unsafe) private static let memory: NSCache<NSString, LottieFilmSource> = {
+    private nonisolated static let memory: LockedCache<NSString, LottieFilmSource> = LockedCache({
         let cache = NSCache<NSString, LottieFilmSource>()
         cache.countLimit = 16
         return cache
-    }()
+    }())
 }
 
 /// Les lectures de film en cours, une par empreinte : qui arrive pendant une lecture
