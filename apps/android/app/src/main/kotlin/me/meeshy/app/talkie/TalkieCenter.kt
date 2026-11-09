@@ -77,6 +77,14 @@ class TalkieCenter internal constructor(
         apply(TalkieFloor.mute(_floor.value, talkieId))
     }
 
+    /**
+     * « Lire » sur la notification de réveil (#17144) : une prise de parole close redevient ouvrable, pour que le
+     * rattrapage rejoué après un nouveau `talkie:join` sorte encore.
+     */
+    fun forget(talkieId: String) {
+        _floor.value = TalkieFloor.forget(_floor.value, talkieId)
+    }
+
     private fun handle(event: TalkieEvent) {
         when (event) {
             is TalkieEvent.Opened -> open(event)

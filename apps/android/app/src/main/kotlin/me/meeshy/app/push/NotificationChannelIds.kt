@@ -62,6 +62,9 @@ object NotificationChannelIds {
      */
     const val CHANNEL_BRING: String = "meeshy_bring"
 
+    /** Le réveil du talkie d'urgence (#17144) : « X vous parle », visible, muet (la voix est le son). */
+    const val CHANNEL_TALKIE: String = "meeshy_talkie"
+
     /** Les notifications en cours (envoi long, vocal en cours d'enregistrement) : discrètes, sans son. */
     const val CHANNEL_ONGOING: String = "meeshy_ongoing"
 

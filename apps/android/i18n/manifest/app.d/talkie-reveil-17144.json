@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "androidName": "talkie_wake_channel_description", "status": "android-only" },
+        { "androidName": "talkie_wake_channel_name", "status": "android-only" },
+        { "androidName": "talkie_wake_play", "status": "android-only" }
+      ]
+    }
+  }
+}

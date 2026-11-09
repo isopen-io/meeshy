@@ -30,7 +30,12 @@ import { BRAND, BRAND_FILL, FOCUS, INK_2 } from './user-profile-style';
  *   Entrée maintenue au clavier. Relâcher, quitter le bouton ou perdre le focus
  *   termine la prise de parole.
  * - **Les refus se disent sans fuite** : un blocage et un repli rendent la même
- *   phrase neutre (« envoyez un message vocal »).
+ *   INFORMATION, jamais une erreur (précision porteur 2026-11-08, #17141) : la
+ *   personne n'est pas disponible pour un accès d'urgence, un message part dans
+ *   la conversation la plus récente avec elle.
+ * - **Réveil** (#17144) : un destinataire hors ligne mais joignable par push —
+ *   « Réveil de X… » tant que l'on parle.
+ * - **Le (i)** dit à qui le talkie est destiné et quand s'en servir.
  */
 
 const LEVELS_WITH_TALKIE: ReadonlySet<string> = new Set(['CLOSE', 'BLOOD']);
@@ -52,6 +57,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   name,
   supported,
   phase,
+  waking = false,
   onPress,
   onRelease,
 }: {
@@ -59,9 +65,11 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   readonly name: string;
   readonly supported: boolean;
   readonly phase: TalkieSendPhase['kind'];
+  readonly waking?: boolean;
   readonly onPress: () => void;
   readonly onRelease: () => void;
 }) {
+  const [info, setInfo] = useState(false);
   if (!supported) {
     return (
       <p data-talkie-unsupported="" className="rounded-card px-3.5 py-3 text-caption" style={{ color: INK_2, backgroundColor: BRAND_FILL }}>
@@ -70,7 +78,10 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
     );
   }
   const live = phase !== 'idle';
-  const label = phase === 'talking' ? translateCircles(language, 'talkie.send.talking', { name }) : phase === 'starting' ? translateCircles(language, 'talkie.send.connecting') : translateCircles(language, 'talkie.send.hold');
+  const label =
+    phase === 'talking'
+      ? translateCircles(language, waking ? 'talkie.send.waking' : 'talkie.send.talking', { name })
+      : phase === 'starting' ? translateCircles(language, 'talkie.send.connecting') : translateCircles(language, 'talkie.send.hold');
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
     if (!HOLD_KEYS.has(event.key)) return;
     event.preventDefault();
@@ -83,9 +94,28 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   };
   return (
     <div data-talkie-row="" className="grid gap-2 rounded-card px-3.5 py-3" style={{ backgroundColor: BRAND_FILL }}>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {translateCircles(language, 'talkie.send.explain', { name })}
-      </p>
+      <div className="flex items-start gap-2">
+        <p className="flex-1 text-caption" style={{ color: INK_2 }}>
+          {translateCircles(language, 'talkie.send.explain', { name })}
+        </p>
+        <button
+          type="button"
+          data-talkie-info=""
+          aria-expanded={info}
+          aria-controls="talkie-info"
+          aria-label={translateCircles(language, 'talkie.send.info.a11y')}
+          onClick={() => setInfo((open) => !open)}
+          className={`grid shrink-0 place-items-center rounded-full text-body font-bold ${FOCUS}`}
+          style={{ width: 48, height: 48, color: BRAND, outlineColor: BRAND }}
+        >
+          <span aria-hidden="true">ⓘ</span>
+        </button>
+      </div>
+      {info ? (
+        <p id="talkie-info" data-talkie-info-text="" className="text-caption" style={{ color: INK_2 }}>
+          {translateCircles(language, 'talkie.send.info')}
+        </p>
+      ) : null}
       <button
         type="button"
         data-talkie-send=""
@@ -160,7 +190,8 @@ export function ProfileTalkieRow({
 }: {
   readonly language: InterfaceLanguage;
   readonly person: PersonSummary;
-  readonly onNotice: (message: string) => void;
+  /** `failed` : vrai pour un échec ; un repli vers le message vocal est une INFORMATION, jamais une erreur. */
+  readonly onNotice: (message: string, failed: boolean) => void;
   readonly deps?: RelationDeps;
   readonly watch?: WatchRealtime;
   readonly capture?: TalkieCaptureFactory;
@@ -185,10 +216,11 @@ export function ProfileTalkieRow({
 
   const onOutcome = (outcome: TalkieSendOutcome): void => {
     if (outcome === 'not-allowed') return setRefused(true);
-    onNotice(translateCircles(language, TALKIE_OUTCOME_NOTICE[outcome]));
+    onNotice(translateCircles(language, TALKIE_OUTCOME_NOTICE[outcome]), outcome !== 'voice');
   };
   const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome });
   const phase = useStore(sender.store, (state) => state.phase.kind);
+  const waking = useStore(sender.store, (state) => state.phase.kind === 'talking' && state.phase.delivery === 'waking');
 
   if (!ready || encodes === null || refused || level === null || !LEVELS_WITH_TALKIE.has(level)) return null;
   const name = person.displayName ?? person.username;
@@ -198,6 +230,7 @@ export function ProfileTalkieRow({
       name={name}
       supported={encodes}
       phase={phase}
+      waking={waking}
       onPress={() => sender.press(person.id)}
       onRelease={() => void sender.release()}
     />
