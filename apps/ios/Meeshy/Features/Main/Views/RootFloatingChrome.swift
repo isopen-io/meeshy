@@ -17,6 +17,8 @@ struct RootFloatingChrome: View {
     @Binding var menuButtonPosition: String
     @Binding var floatingGeometry: FloatingButtonGeometry?
     let unreadCount: Int
+    /// L'aperçu d'appui long ouvert : les bulles lui cèdent la place (#17260).
+    let peekPresence: LongPressPeekPresence
     let onPush: (Route) -> Void
 
     var body: some View {
@@ -35,6 +37,9 @@ struct RootFloatingChrome: View {
 
             menuLadder
         }
+        // L'aperçu d'appui long d'une conversation passe au-dessus de tout :
+        // les bulles s'effacent et ne captent aucun de ses touchers (#17260).
+        .modifier(ConcealedUnderLongPressPeek(presence: peekPresence))
     }
 
     // MARK: - Draggable Floating Buttons (Free Position)

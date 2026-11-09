@@ -202,6 +202,9 @@ struct RootChromeLayer: ViewModifier {
     let onMiniPlayerTap: () -> Void
     let showFeed: Bool
     let showMenu: Bool
+    /// L'aperçu d'appui long ouvert : la bannière du joueur et la pastille de
+    /// synchronisation lui cèdent la place (#17260).
+    @ObservedObject var peekPresence: LongPressPeekPresence
 
     func body(content: Content) -> some View {
         content
@@ -232,6 +235,7 @@ struct RootChromeLayer: ViewModifier {
                     // `SyncPillPlacement`, plus chez chaque hôte (#5941,
                     // #5944, #5835).
                     .inSyncPillBand()
+                    .modifier(ConcealedUnderLongPressPeek(presence: peekPresence))
                 }
             }
             // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
@@ -251,7 +255,8 @@ struct RootChromeLayer: ViewModifier {
                 // flottants — ni un fil, ni Progression elle-même, ni le lecteur de réels. Une primitive
                 // calculée ICI, où le routeur et le lecteur de réels sont observés.
                 playerBannerHosted: PlayerBannerPlacement.hosts(
-                    routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil),
+                    routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil,
+                    peekIsOpen: peekPresence.isOpen),
                 onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)

@@ -3,6 +3,8 @@ import { QueryClient } from '@tanstack/react-query';
 
 import type { OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
 
+import type { EntityImageEditProps } from '@/components/entity-image-retouch';
+
 import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@/lib/api/onboarding';
 
 import { BIRTH_DATE_PATH } from '@/lib/api/birth-date';
@@ -15,6 +17,16 @@ import type { GreetingSend } from '@/routes/onboarding-cards';
 import type { OnboardingScreenDeps } from '@/routes/onboarding';
 
 import { scriptedTransport } from './scripted-transport';
+
+/** La retouche de la capture réduite à « Terminé » — son vrai comportement est
+ * témoigné par `components/entity-image-retouch.test.tsx`. */
+function HarnessRetouch({ file, format, onDone }: EntityImageEditProps) {
+  return (
+    <div data-harness-retouch={format}>
+      <button type="button" data-harness-retouch-done onClick={() => onDone(file)} />
+    </div>
+  );
+}
 
 /**
  * LE BANC DE L'ACCUEIL POST-INSCRIPTION (#7729) — partagé par les témoins
@@ -148,6 +160,7 @@ export function harness(options: HarnessOptions = {}) {
       saves.push(patch);
       return 'saved';
     },
+    profileImageEditor: HarnessRetouch,
     uploadProfileImage: async (kind) => {
       uploads.push(kind);
       return options.upload ?? { status: 'saved', url: `https://cdn.test/${kind}.jpg` };

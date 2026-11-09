@@ -357,6 +357,75 @@ describe('#17142 — la voix lisible sans socket (extension de notification) et 
   });
 });
 
+describe('#17255 — les derniers fragments, encore en lecture de coupure au relâchement, restent dans la voix gardée', () => {
+  /** La lecture de coupure tenue ouverte : `talkie:end` arrive pendant qu’elle attend, comme sur un vrai réseau. */
+  function heldCutRead() {
+    const pending: Array<() => void> = [];
+    let holding = false;
+    return {
+      cutAt: async () => (holding ? new Promise<number | null>((resolve) => { pending.push(() => resolve(null)); }) : null),
+      hold: () => { holding = true; },
+      release: async () => {
+        holding = false;
+        pending.splice(0).forEach((resolve) => resolve());
+        await new Promise((r) => setImmediate(r));
+      },
+    };
+  }
+
+  it('un fragment encore en vol quand l’émetteur relâche est gardé, et la lecture HTTP le rend', async () => {
+    const held = heldCutRead();
+    const r = relayWith({ cutAt: held.cutAt });
+    const opened = await r.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
+    if (!opened.success) throw new Error('refus');
+    const id = opened.data.talkieId;
+    held.hold();
+    const first = say(r, id, 0);
+    const last = say(r, id, 1);
+    r.relay.end(SENDER_SOCKET, FROM, { talkieId: id });
+    await held.release();
+    await Promise.all([first, last]);
+
+    const audio = await r.relay.audioFor(id, TO);
+    expect(audio.ok && audio.data.byteLength).toBe(2000);
+    r.relay.dispose();
+  });
+
+  it('une voix dont TOUS les fragments étaient en vol au relâchement envoie quand même son suivi, avec leurs octets', async () => {
+    const held = heldCutRead();
+    const t = relayWith({ cutAt: held.cutAt });
+    const opened = await t.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
+    if (!opened.success) throw new Error('refus');
+    const id = opened.data.talkieId;
+    held.hold();
+    const chunks = [say(t, id, 0), say(t, id, 1)];
+    t.relay.end(SENDER_SOCKET, FROM, { talkieId: id });
+    await held.release();
+    await Promise.all(chunks);
+
+    expect(t.followUp).toHaveBeenCalledTimes(1);
+    expect(t.followUp).toHaveBeenCalledWith(expect.objectContaining({ talkieId: id, bytes: 2000 }));
+    t.relay.dispose();
+  });
+
+  it('une voix coupée pendant que ses fragments étaient en vol n’en garde aucun', async () => {
+    const held = heldCutRead();
+    const t = relayWith({ cutAt: held.cutAt });
+    const opened = await t.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
+    if (!opened.success) throw new Error('refus');
+    const id = opened.data.talkieId;
+    held.hold();
+    const chunk = say(t, id, 0);
+    t.relay.cutPair(FROM, TO);
+    await held.release();
+    await chunk;
+
+    expect(t.relay.bufferedBytes).toBe(0);
+    expect(t.followUp).not.toHaveBeenCalled();
+    t.relay.dispose();
+  });
+});
+
 describe('#17141 — le repli informe, et dit où partira la copie vocale', () => {
   it('TALKIE_FALLBACK_VOICE porte la conversation la plus récente avec le destinataire', async () => {
     const fallbackConversation = jest.fn(async (_from: string, _to: string) => 'd'.repeat(24));

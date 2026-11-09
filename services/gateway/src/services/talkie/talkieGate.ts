@@ -27,7 +27,9 @@
  *    destinataire a gardé ses pushs et un jeton actif (PushToTalk, APNs ou FCM), la
  *    prise de parole s'ouvre en mode `waking` : un push le réveille, sa voix l'attend.
  *    Appel, Ne pas déranger et présence masquée gardent le repli : ces gardes
- *    passent AVANT le réveil.
+ *    passent AVANT le réveil. Un jeton ne suffit pas (#17249) : il faut que son
+ *    TRANSPORT parte (APNs complet pour PushToTalk ou APNs, FCM pour Android). Sinon le
+ *    repli, et le refus porte `wakeMiss`, la cause que le journal nomme.
  *
  * Les étapes 2 et 3 ne se jugent qu'APRÈS la loi : un inconnu n'apprend ni le
  * chiffrement d'une paire, ni la disponibilité de quelqu'un. Le chiffrement et la
@@ -68,14 +70,26 @@ export type TalkieRefusalCause =
   | 'not-connected'
   | 'dnd';
 
+/** Pourquoi personne n'est réveillé (#17249) — pour le journal du serveur seulement, comme `cause`. */
+export type TalkieWakeMiss =
+  | 'push-disabled'
+  | 'recipient-push-off'
+  | 'no-token'
+  | 'apns-not-configured'
+  | 'fcm-not-configured'
+  | 'lookup-failed';
+
 export type TalkieRefusal = {
   readonly ok: false;
   readonly code: TalkieErrorCode;
   readonly message: string;
   readonly cause?: TalkieRefusalCause;
+  readonly wakeMiss?: TalkieWakeMiss;
 };
 /** `pushtotalk` : un jeton PushToTalk iOS est enregistré ; `push` : un jeton APNs ou FCM ordinaire. */
 export type TalkieWakeChannel = 'pushtotalk' | 'push';
+/** Le canal qui PEUT partir, ou la raison pour laquelle aucun ne le peut ; `null` ⇒ aucun jeton. */
+export type TalkieWakeLookup = TalkieWakeChannel | { readonly miss: TalkieWakeMiss } | null;
 export type TalkieWaking = { readonly ok: true; readonly delivery: 'waking'; readonly channel: TalkieWakeChannel };
 export type TalkieVerdict = { readonly ok: true; readonly delivery?: undefined } | TalkieWaking | TalkieRefusal;
 
@@ -141,14 +155,23 @@ export type TalkieGateDeps = {
   readonly recipientConnected: (userId: string) => Promise<boolean>;
   /** La présence du destinataire est-elle SERVIE à l'émetteur (`resolvePresenceVisibility`) ? */
   readonly presenceServed: (viewer: { readonly userId: string; readonly role: string }, targetId: string) => Promise<boolean>;
-  /** Le canal par lequel réveiller le destinataire, ou `null` (#17142). Absent : jamais de réveil. */
-  readonly wakeChannel?: (userId: string) => Promise<TalkieWakeChannel | null>;
+  /** Le canal par lequel réveiller le destinataire, ou pourquoi aucun ne part (#17142, #17249). Absent : jamais de réveil. */
+  readonly wakeChannel?: (userId: string) => Promise<TalkieWakeLookup>;
 };
 
-/** Un doute sur les jetons ne réveille personne et n'empêche rien : le repli vocal. */
-async function wakeChannelOf(deps: TalkieGateDeps, userId: string): Promise<TalkieWakeChannel | null> {
-  if (!deps.wakeChannel) return null;
-  return deps.wakeChannel(userId).catch(() => null);
+const PUSH_OFF = { miss: 'recipient-push-off' } as const;
+const NO_TOKEN = { miss: 'no-token' } as const;
+const LOOKUP_FAILED = { miss: 'lookup-failed' } as const;
+
+/** Un doute sur les jetons ne réveille personne et n'empêche rien : le repli vocal, sa cause nommée. */
+async function wakeOf(
+  wakeChannel: NonNullable<TalkieGateDeps['wakeChannel']>,
+  userId: string,
+  pushEnabled: boolean,
+): Promise<TalkieWakeChannel | { readonly miss: TalkieWakeMiss }> {
+  if (!pushEnabled) return PUSH_OFF;
+  const found = await wakeChannel(userId).catch((): TalkieWakeLookup => LOOKUP_FAILED);
+  return found ?? NO_TOKEN;
 }
 
 export async function judgeTalkie(
@@ -208,7 +231,8 @@ export async function judgeTalkie(
   const dnd = isWithinDnd(prefs, now);
   const cause = unavailability(busy, connected, dnd);
   if (cause === null) return OPEN;
-  const wakeable = cause === 'not-connected' && !dnd && prefs.pushEnabled !== false;
-  const channel = wakeable ? await wakeChannelOf(deps, toUserId) : null;
-  return channel ? { ok: true, delivery: 'waking', channel } : because(FALLBACK, cause);
+  const { wakeChannel } = deps;
+  if (cause !== 'not-connected' || dnd || !wakeChannel) return because(FALLBACK, cause);
+  const wake = await wakeOf(wakeChannel, toUserId, prefs.pushEnabled !== false);
+  return typeof wake === 'string' ? { ok: true, delivery: 'waking', channel: wake } : { ...because(FALLBACK, cause), wakeMiss: wake.miss };
 }

@@ -1,4 +1,5 @@
 import XCTest
+import os
 import MeeshySDK
 @testable import Meeshy
 
@@ -67,5 +68,33 @@ final class TalkiePushToTalkChannelTests: XCTestCase {
 
         let unregistered = await registrar.unregistered
         XCTAssertTrue(unregistered.isEmpty)
+    }
+
+    /// Recette du 2026-11-09 : sans environnement déclaré, la passerelle rangeait le jeton d'une build de
+    /// développement en `production`, Apple répondait `BadEnvironmentKeyInToken` et le réveil n'arrivait jamais.
+    func test_registrationBody_declaresTheBuildApnsEnvironmentAndBundle() throws {
+        let body = TalkiePushToTalkRegistration(token: "abcdef0123456789")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(body)) as? [String: Any])
+
+        XCTAssertEqual(json["token"] as? String, "abcdef0123456789")
+        XCTAssertEqual(json["apnsEnvironment"] as? String, PushNotificationManager.apnsEnvironment)
+        XCTAssertEqual(json["bundleId"] as? String, Bundle.main.bundleIdentifier)
+    }
+
+    /// Recette du 2026-11-09 : le push PushToTalk arrivait, iOS affichait l'orateur, mais `didActivate` n'était
+    /// jamais appelé — la session n'était pas en `.playAndRecord` — et la voix n'était jamais rejointe.
+    func test_receivingAWakePush_preparesTheAudioSessionBeforeTheSystemActivatesIt() {
+        let prepared = OSAllocatedUnfairLock(initialState: 0)
+        let delegate = TalkiePushToTalkDelegate(
+            fallbackName: "Quelqu’un",
+            onToken: { _ in },
+            onLeft: {},
+            prepareAudio: { prepared.withLock { $0 += 1 } }
+        )
+
+        let name = delegate.receive(pushPayload: ["talkieId": "a1b2c3d4e5f6a1b2c3d4e5f6", "fromUserId": "u1", "fromName": "Talkie Un"])
+
+        XCTAssertEqual(name, "Talkie Un")
+        XCTAssertEqual(prepared.withLock { $0 }, 1)
     }
 }

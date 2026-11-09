@@ -45,6 +45,11 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
     /// Glisser vers le bas depuis le cran compact : le morph en pastille.
     let onChipDragChanged: (DragGesture.Value) -> Void
     let onChipDragEnded: (DragGesture.Value) -> Void
+    /// Fermer l'aperçu : action « Fermer » de VoiceOver, Échap (#17258).
+    let onDismiss: () -> Void
+
+    /// Ce que l'aperçu annonce au chrome de la racine (#17260) ; écrit, jamais observé ici.
+    var presence: LongPressPeekPresence = .shared
 
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @State private var detent: ConversationPeekDetent = .compact
@@ -63,20 +68,29 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let layout = self.layout(in: geometry.size)
+            let band = ConversationPeekLayout.veilBand(forHeight: geometry.size.height)
+            let layout = self.layout(in: CGSize(width: geometry.size.width, height: geometry.size.height - band))
             VStack(spacing: ConversationPeekLayout.spacing) {
                 card(ConversationPeekCardHeights(rest: layout.cardHeight(progress: 0), current: layout.cardHeight(progress: progress)))
                     .frame(width: layout.cardWidth, height: layout.cardHeight(progress: progress), alignment: .top)
                     .simultaneousGesture(drag(onCard: true, layout: layout))
+                    .accessibilityAction(named: Text(Self.closeLabel)) { onDismiss() }
                 menuContainer(layout: layout)
             }
             .frame(maxWidth: .infinity)
+            // La bande du haut reste au voile : visible, et un toucher la ferme
+            // (`LongPressVeil`, sous l'aperçu, la reçoit — #17258).
+            .padding(.top, band)
         }
         .padding(.vertical, MeeshySpacing.sm)
+        .dismissOnEscape(onDismiss)
         .onAppear { reset() }
-        .adaptiveOnChange(of: isVisible) { _, visible in
+        .adaptiveOnChange(of: isVisible, initial: true) { _, visible in
             if visible { reset() }
+            // Le chrome flottant de la racine cède la place à l'aperçu ouvert (#17260).
+            presence.update(isOpen: visible)
         }
+        .onDisappear { presence.update(isOpen: false) }
     }
 
     private func layout(in size: CGSize) -> ConversationPeekLayout {
@@ -132,10 +146,15 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
         .buttonStyle(.plain)
         .accessibilityLabel(detent == .compact ? Self.moreActionsLabel : Self.fewerActionsLabel)
         .accessibilityIdentifier("conversation.peek.handle")
+        .accessibilityAction(named: Text(Self.closeLabel)) { onDismiss() }
     }
 
     static var moreActionsLabel: String {
         String(localized: "conversation.peek.more_actions", defaultValue: "Plus d'actions", bundle: .main)
+    }
+
+    static var closeLabel: String {
+        String(localized: "common.close", defaultValue: "Fermer", bundle: .main)
     }
 
     static var fewerActionsLabel: String {
@@ -183,5 +202,44 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
         cardRoute = nil
         detent = openingDetent
         progress = openingDetent.progress
+    }
+}
+
+// MARK: - Rien ne passe au-dessus de l'aperçu (#17260)
+
+/// L'aperçu d'appui long est-il ouvert ? Écrit par la liste qui le porte, lu
+/// par le chrome de la racine (bulles flottantes, pastille de synchronisation,
+/// bannière du joueur) qui lui cède la place : ces surfaces vivent AU-DESSUS
+/// du contenu, donc au-dessus de l'aperçu, et y captaient ses touchers.
+@MainActor
+final class LongPressPeekPresence: ObservableObject {
+    static let shared = LongPressPeekPresence()
+
+    @Published private(set) var isOpen = false
+
+    func update(isOpen: Bool) {
+        guard self.isOpen != isOpen else { return }
+        self.isOpen = isOpen
+    }
+}
+
+/// Ce que devient une surface flottante pendant que l'aperçu est ouvert.
+nonisolated enum LongPressPeekConcealment {
+    static func opacity(peekIsOpen: Bool) -> Double { peekIsOpen ? 0 : 1 }
+    static func admitsTouches(peekIsOpen: Bool) -> Bool { !peekIsOpen }
+}
+
+/// Une surface flottante s'efface sous l'aperçu ouvert : invisible, sourde au
+/// toucher et absente de VoiceOver. Seul ce modificateur observe la présence :
+/// la surface qu'il porte n'est pas ré-évaluée.
+struct ConcealedUnderLongPressPeek: ViewModifier {
+    @ObservedObject var presence: LongPressPeekPresence
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(LongPressPeekConcealment.opacity(peekIsOpen: presence.isOpen))
+            .allowsHitTesting(LongPressPeekConcealment.admitsTouches(peekIsOpen: presence.isOpen))
+            .accessibilityHidden(presence.isOpen)
+            .animation(.easeOut(duration: 0.18), value: presence.isOpen)
     }
 }

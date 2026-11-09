@@ -1,5 +1,5 @@
 import { useQuery, type InfiniteData } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
@@ -32,6 +32,7 @@ import { translateCommunitySettings, type CommunitySettingsCatalogKey } from '@/
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
+import { useEntityImageEdit } from '@/lib/profile/use-entity-image-edit';
 import { useParams } from '@/lib/router';
 import { COMMUNITIES_HEADER_HEIGHT, CommunitiesOfflineNotice, CommunityDetailSkeleton, CommunityRefused, PrivacyToggle } from '@/routes/communities-parts';
 import { SettingsCreatorOnly, SettingsDangerZone, SettingsImages, SettingsSaveButton, type UploadingImages } from '@/routes/community-settings-parts';
@@ -152,10 +153,8 @@ export default function CommunitySettingsScreen() {
     setNotice(null);
   };
 
-  const uploadImage = async (kind: CommunityImageKind, event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (file === undefined || community === undefined) return;
+  const uploadImage = async (kind: CommunityImageKind, file: File) => {
+    if (community === undefined) return;
     const preview = URL.createObjectURL(file);
     const controller = new AbortController();
     uploads.current[kind]?.abort();
@@ -177,6 +176,10 @@ export default function CommunitySettingsScreen() {
         : { key: 'community.settings.image.error', tone: 'alert', field: null },
     );
   };
+
+  /* #17256 — l'image choisie passe par la retouche de la capture, au format
+     de sa cible ; seule l'image retouchée part, Annuler ne pose rien. */
+  const retouch = useEntityImageEdit<CommunityImageKind>({ deliver: (kind, file) => void uploadImage(kind, file) });
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -345,9 +348,10 @@ export default function CommunitySettingsScreen() {
           tabIndex={-1}
           aria-hidden="true"
           hidden
-          onChange={(event) => void uploadImage(kind, event)}
+          onChange={(event) => retouch.pick(kind, event)}
         />
       ))}
+      {retouch.layer}
       {confirmingDelete && community !== undefined ? (
         <ConfirmDialog
           name="community-delete"

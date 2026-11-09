@@ -95,7 +95,7 @@ const AUDIO = `https://gate.test/api/v1/talkie/${'c'.repeat(24)}/audio?e=1&t=x`;
 const wake = (channel: 'pushtotalk' | 'push', fromName: string | null = 'Awa') =>
   buildTalkieWakePushes({ talkieId: TALKIE, toUserId: 'u-to', fromUserId: 'u-from', fromName, language: 'fr', phase: 'live', channel, audioUrl: AUDIO });
 
-async function service() {
+async function service(overrides: Record<string, string | undefined> = {}) {
   process.env = {
     ...originalEnv,
     ENABLE_PUSH_NOTIFICATIONS: 'true',
@@ -103,6 +103,7 @@ async function service() {
     ENABLE_APNS_PUSH: 'true',
     FIREBASE_ADMIN_CREDENTIALS_PATH: '/fake/firebase-creds.json',
     APNS_KEY_ID: 'k', APNS_TEAM_ID: 't', APNS_KEY_PATH: '/fake/key.p8', APNS_BUNDLE_ID: 'me.meeshy.app',
+    ...overrides,
   };
   jest.resetModules();
   const { PushNotificationService } = await import('../../../services/PushNotificationService');
@@ -208,6 +209,43 @@ describe('#17142 — le réveil du talkie au chokepoint', () => {
       attachmentUrl: AUDIO, attachmentMimeType: 'audio/aac', attachmentFileSize: '4200', attachmentDurationMs: '3100', attachmentId: TALKIE, attachmentLanguage: '',
     });
     expect(pushes[1].payload.data).toEqual(pushes[0].payload.data);
+  });
+});
+
+describe('#17249 — les transports qui peuvent RÉELLEMENT partir', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockExistsSync.mockReturnValue(true);
+    mockStatSync.mockReturnValue({ isFile: () => true });
+    mockReadFileSync.mockReturnValue(JSON.stringify({ type: 'service_account', project_id: 'p', private_key: 'k', client_email: 'e@p.iam.gserviceaccount.com' }));
+  });
+  afterEach(() => { process.env = originalEnv; });
+
+  it('APNs complet et FCM configuré : les deux partent (cas nominal)', async () => {
+    expect(await (await service()).deliveryTransports()).toEqual({ apns: true, fcm: true });
+  });
+
+  it('aucune variable APNS_* (le staging du 2026-11-09) : APNs ne part pas, aucun client créé', async () => {
+    const svc = await service({ APNS_KEY_ID: undefined, APNS_TEAM_ID: undefined, APNS_KEY_PATH: undefined, APNS_BUNDLE_ID: undefined, ENABLE_APNS_PUSH: undefined });
+
+    expect(await svc.deliveryTransports()).toEqual({ apns: false, fcm: true });
+    expect(MockApnsProvider).not.toHaveBeenCalled();
+  });
+
+  it('Key ID et Team ID sans clé : APNs incomplet, aucun client créé', async () => {
+    const svc = await service({ APNS_KEY_PATH: undefined, APNS_KEY_CONTENT: undefined });
+
+    expect(await svc.deliveryTransports()).toEqual({ apns: false, fcm: true });
+    expect(MockApnsProvider).not.toHaveBeenCalled();
+  });
+
+  it('pushs coupés pour le processus : rien ne part', async () => {
+    expect(await (await service({ ENABLE_PUSH_NOTIFICATIONS: 'false' })).deliveryTransports()).toEqual({ apns: false, fcm: false });
+  });
+
+  it('identifiants Firebase introuvables : FCM ne part pas', async () => {
+    mockExistsSync.mockReturnValue(false);
+    expect(await (await service()).deliveryTransports()).toEqual({ apns: true, fcm: false });
   });
 });
 

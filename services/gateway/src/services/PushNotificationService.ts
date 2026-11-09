@@ -24,6 +24,7 @@ import { applyUserPreferences, isCallPushDataType } from './push-delivery-prefer
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
 import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
+import { apnsReady, pushTransportConfigFromEnv, type PushTransports } from './push-transport-config';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -136,27 +137,7 @@ export interface SendPushOptions {
 // CONFIGURATION
 // ============================================
 
-const config = {
-  // Feature flags
-  enabled: process.env.ENABLE_PUSH_NOTIFICATIONS !== 'false',
-  apnsEnabled: process.env.ENABLE_APNS_PUSH !== 'false',
-  fcmEnabled: process.env.ENABLE_FCM_PUSH !== 'false',
-  voipEnabled: process.env.ENABLE_VOIP_PUSH !== 'false',
-
-  // Firebase
-  firebaseCredentialsPath: process.env.FIREBASE_ADMIN_CREDENTIALS_PATH,
-
-  // APNS
-  apns: {
-    keyId: process.env.APNS_KEY_ID,
-    teamId: process.env.APNS_TEAM_ID,
-    keyPath: process.env.APNS_KEY_PATH,
-    keyContent: process.env.APNS_KEY_CONTENT,
-    bundleId: process.env.APNS_BUNDLE_ID || 'me.meeshy.app',
-    voipBundleId: process.env.APNS_VOIP_BUNDLE_ID || 'me.meeshy.app.voip',
-    environment: (process.env.APNS_ENVIRONMENT || 'development') as 'development' | 'production',
-  },
-};
+const config = pushTransportConfigFromEnv(process.env);
 
 // ============================================
 // TRANSIENT ERROR CLASSIFICATION
@@ -307,7 +288,7 @@ export class PushNotificationService {
     }
 
     // Initialize APNS clients (one per environment)
-    if (config.apnsEnabled && config.apns.keyId && config.apns.teamId) {
+    if (apnsReady(config)) {
       try {
         const apn = await import('@parse/node-apn').catch(() => null);
 
@@ -339,6 +320,12 @@ export class PushNotificationService {
     }
 
     this.initialized = true;
+  }
+
+  /** Les transports qui peuvent RÉELLEMENT partir (#17249) : un client initialisé, pas une variable posée. */
+  async deliveryTransports(): Promise<PushTransports> {
+    await this.initialize();
+    return { apns: config.enabled && !!this.apnsClientProduction && !!this.apnsClientSandbox, fcm: config.enabled && !!this.firebaseMessaging };
   }
 
   /**

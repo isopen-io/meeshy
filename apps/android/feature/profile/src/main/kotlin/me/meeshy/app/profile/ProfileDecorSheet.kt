@@ -1,9 +1,5 @@
 package me.meeshy.app.profile
 
-import me.meeshy.sdk.media.readMediaUploadItem
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,6 +55,9 @@ import coil.compose.AsyncImage
 import java.util.Locale
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.ImageUploadTarget
+import me.meeshy.ui.component.retouch.EntityImageRetouchHost
+import me.meeshy.ui.component.retouch.rememberEntityImagePicker
+import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
 import me.meeshy.sdk.model.ProfileDecorRef
 import me.meeshy.sdk.model.ProfileDecorSide
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
@@ -84,10 +83,6 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.meeshyText
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import androidx.compose.runtime.rememberCoroutineScope
 
 private val RING_TILE_WIDTH = 84.dp
 private val RING_AVATAR = 56.dp
@@ -99,7 +94,7 @@ private const val BANNER_COLUMNS = 2
  * « Contour et bannière » (miroir de `ProfileDecorSheet` iOS, #10632) : choisir le contour d'avatar, la bannière de
  * design et le cadre posé sur la bannière, visibles des autres. Seuls les packs installés et possédés sont proposés ;
  * équiper est optimiste et la passerelle fait foi (un refus rétablit LE CÔTÉ touché, et le dit). La tuile « Image »
- * ouvre la photothèque : la photo de bannière gagne toujours sur les fonds.
+ * ouvre la photothèque puis la retouche de la capture au format 3:1 (#17257) : la photo de bannière gagne toujours sur les fonds.
  */
 @Composable
 fun ProfileDecorSheet(
@@ -113,7 +108,9 @@ fun ProfileDecorSheet(
     val uploadingBanner = upload.uploading == ImageUploadTarget.BANNER
     val uploadError = upload.error?.let { stringResource(it.messageRes()) }
     val haptics = rememberMeeshyHaptics()
-    val pickBanner = rememberBannerPicker(uploadViewModel)
+    val bannerRetouch = rememberEntityImageRetouch(uploadViewModel::onImagePicked)
+    val pickImage = rememberEntityImagePicker(bannerRetouch::offer)
+    val pickBanner = { pickImage(ImageUploadTarget.BANNER) }
     val errorText = stringResource(R.string.profile_decor_error)
     val view = LocalView.current
     LaunchedEffect(ui.failed) { if (ui.failed) view.announceForAccessibility(errorText) }
@@ -149,6 +146,7 @@ fun ProfileDecorSheet(
             }
         }
     }
+    EntityImageRetouchHost(bannerRetouch)
 }
 
 @Composable
@@ -168,17 +166,6 @@ private fun DecorHeader(onDone: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun rememberBannerPicker(uploadViewModel: AvatarBannerUploadViewModel): () -> Unit {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { uploadViewModel.onImagePicked(ImageUploadTarget.BANNER, it) } }
-    }
-    return { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 }
 
 /** « Plus dans la boutique » d'une section, ou rien : sans destination qui l'accueille, le lien n'est pas posé (un contrôle existe s'il a un effet). */

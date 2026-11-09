@@ -62,8 +62,10 @@ struct ConversationHeaderTalkieButton: View {
 
     private var look: TalkieHoldLook { TalkieHoldLook.resolve(pressed: pressed, phase: sender.phase) }
 
+    /// Une pile, jamais un `Group` : vide tant que le talkie n'est pas proposé, elle existe quand même, et c'est elle
+    /// qui porte le chargement de l'offre (#17247). Sans largeur ni espacement, la mise en page de l'en-tête ne bouge pas.
     var body: some View {
-        Group {
+        HStack(spacing: 0) {
             if offer.offered && !withdrawn {
                 glyph
                     .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed))

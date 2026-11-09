@@ -608,6 +608,8 @@ targets:
       - path: MeeshyNotificationExtension/NSEDelivery.swift
       - path: MeeshyNotificationExtension/NSEDeadline.swift
       - path: MeeshyNotificationExtension/NSEEnrichmentPlan.swift
+      # #17255 — la remise en .m4a de la voix ADTS d'un talkie (`NSEEnrichmentPlanTests`).
+      - path: MeeshyNotificationExtension/NSEAdtsRemux.swift
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
       - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
       - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift

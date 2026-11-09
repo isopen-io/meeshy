@@ -114,3 +114,25 @@ describe('une image pas encore mesurée se mesure au rendu', () => {
     expect(blob).not.toBeNull();
   });
 });
+
+/** UNE IMAGE D'IDENTITÉ (#17256) — la retouche rend la scène à la taille du
+ * format imposé, jamais à celle d'une scène 9:16 ni d'un recadrage. */
+describe('le rendu à un format imposé', () => {
+  test('le canvas prend la taille demandée, même sur une image recadrée', async () => {
+    let size: readonly number[] = [];
+    const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', asset({ crop: { x: 0.125, y: 0, width: 0.75, height: 1 } }));
+    const blob = await renderStudioRetouch(
+      page,
+      {
+        createCanvas: (width, height) => {
+          size = [width, height];
+          return { context: recordingCanvas().context, toBlob: async (type) => new Blob(['x'], { type }) };
+        },
+        loadImage: async () => ({ naturalWidth: 400, naturalHeight: 300 }) as unknown as CanvasImageSource,
+      },
+      { size: { width: 1500, height: 500 } },
+    );
+    expect(blob?.type).toBe('image/jpeg');
+    expect(size).toEqual([1500, 500]);
+  });
+});

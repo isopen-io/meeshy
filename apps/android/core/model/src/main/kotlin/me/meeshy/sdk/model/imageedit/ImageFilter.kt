@@ -15,16 +15,7 @@ public enum class ImageFilter(public val wireName: String) {
     PROCESS("process"),
     INSTANT("instant");
 
-    /** Filtres offerts en mode Simple ; le mode Pro les montre tous. */
-    public val isEssential: Boolean
-        get() = this in ESSENTIALS
-
     public companion object {
-        private val ESSENTIALS = setOf(ORIGINAL, VIVID, DRAMATIC, MONO, WARM, COOL)
-
-        public fun rail(mode: ImageEditorMode): List<ImageFilter> =
-            if (mode.isPro) entries.toList() else entries.filter { it.isEssential }
-
         public fun fromWireName(name: String?): ImageFilter =
             entries.firstOrNull { it.wireName == name } ?: ORIGINAL
     }

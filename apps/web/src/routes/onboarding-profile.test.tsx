@@ -8,6 +8,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { ProfileCard, type ProfileImageUpload } from './onboarding-profile';
 import type { ProfileImageKind } from '@/lib/api/profile';
+import type { EntityImageEditProps } from '@/components/entity-image-retouch';
 
 /**
  * « MONTRE-TOI » (#17237) — la carte facultative de l'accueil qui conseille
@@ -34,6 +35,20 @@ afterEach(() => unmountAll());
 
 type Call = { readonly kind: ProfileImageKind; readonly file: Blob; readonly resolve: (outcome: ProfileImageUpload) => void };
 
+/** Ce que la retouche rend : une image NEUVE, jamais le fichier choisi. */
+const edited = (kind: ProfileImageKind) => new File(['jpeg'], `${kind}-retouche.jpg`, { type: 'image/jpeg' });
+
+/** La retouche de la capture, remplacée par ses deux issues — son vrai
+ * comportement est témoigné par `entity-image-retouch.test.tsx`. */
+function FakeRetouch({ file, format, onDone, onCancel }: EntityImageEditProps) {
+  return (
+    <div data-fake-retouch={format} data-fake-source={file.name}>
+      <button type="button" data-fake-done onClick={() => onDone(edited(format))} />
+      <button type="button" data-fake-cancel onClick={onCancel} />
+    </div>
+  );
+}
+
 function bench() {
   const calls: Call[] = [];
   const outcomes: ('done' | 'skipped')[] = [];
@@ -51,6 +66,8 @@ function bench() {
       banner={null}
       upload={upload}
       preview={async () => 'blob:local'}
+      editor={FakeRetouch}
+      undecodable={async () => false}
       onDone={() => outcomes.push('done')}
       onLater={() => outcomes.push('skipped')}
     />
@@ -63,7 +80,7 @@ const picker = (host: ParentNode, kind: ProfileImageKind) => host.querySelector<
 const shown = (host: ParentNode, kind: ProfileImageKind) =>
   host.querySelector<HTMLImageElement>(`[data-onb-profile-pick="${kind}"] img`)?.getAttribute('src') ?? null;
 
-async function choose(host: ParentNode, kind: ProfileImageKind) {
+async function pick(host: ParentNode, kind: ProfileImageKind) {
   const input = host.querySelector<HTMLInputElement>(`[data-onb-profile-input="${kind}"]`);
   if (input === null) throw new Error(`champ ${kind} absent`);
   const file = new File(['x'], `${kind}.jpg`, { type: 'image/jpeg' });
@@ -73,6 +90,15 @@ async function choose(host: ParentNode, kind: ProfileImageKind) {
   });
   await settle();
   return file;
+}
+
+/** Choisir une image, puis « Terminé » dans la retouche : rend l'image retouchée. */
+async function choose(host: ParentNode, kind: ProfileImageKind) {
+  await pick(host, kind);
+  const done = document.querySelector<HTMLButtonElement>(`[data-fake-retouch="${kind}"] [data-fake-done]`);
+  if (done === null) throw new Error(`retouche ${kind} absente`);
+  await click(done);
+  await settle();
 }
 
 describe('« Montre-toi » — le conseil et l’aperçu', () => {
@@ -102,8 +128,8 @@ describe('« Montre-toi » — le téléversement optimiste', () => {
   test('la bannière choisie s’affiche AUSSITÔT, puis l’image servie ; « Continuer » vaut « faite »', async () => {
     const { element, calls, outcomes } = bench();
     const host = await mount(element);
-    const file = await choose(host, 'banner');
-    expect(calls.map((call) => ({ kind: call.kind, file: call.file }))).toEqual([{ kind: 'banner', file }]);
+    await choose(host, 'banner');
+    expect(calls.map((call) => ({ kind: call.kind, name: (call.file as File).name }))).toEqual([{ kind: 'banner', name: 'banner-retouche.jpg' }]);
     expect(shown(host, 'banner')).toBe('blob:local');
     expect(host.querySelector('[data-onb-profile-pending="banner"]')).not.toBeNull();
     expect(action(host, 'profile.continue')?.textContent).toBe('Continuer');
@@ -129,7 +155,8 @@ describe('« Montre-toi » — le téléversement optimiste', () => {
   test('l’échec rend l’état d’avant, le dit, et « Réessayer » renvoie le MÊME fichier', async () => {
     const { element, calls } = bench();
     const host = await mount(element);
-    const file = await choose(host, 'avatar');
+    await choose(host, 'avatar');
+    const file = calls[0]?.file;
     expect(shown(host, 'avatar')).toBe('blob:local');
     await act(async () => calls[0]?.resolve({ status: 'failed' }));
     await settle();
@@ -151,5 +178,54 @@ describe('« Montre-toi » — le téléversement optimiste', () => {
     await settle();
     expect(shown(host, 'banner')).toBeNull();
     expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+describe('« Montre-toi » — l’image passe par la retouche de la capture (#17256)', () => {
+  test('choisir une photo ouvre la retouche AU FORMAT de l’avatar, et rien ne part avant « Terminé »', async () => {
+    const { element, calls } = bench();
+    const host = await mount(element);
+    await pick(host, 'avatar');
+    const editor = document.querySelector<HTMLElement>('[data-fake-retouch]');
+    expect(editor?.dataset.fakeRetouch).toBe('avatar');
+    expect(editor?.dataset.fakeSource).toBe('avatar.jpg');
+    expect(calls).toEqual([]);
+    expect(host.querySelector('[data-onb-profile-pending]')).toBeNull();
+  });
+
+  test('seule l’image RETOUCHÉE part, jamais le fichier choisi', async () => {
+    const { element, calls } = bench();
+    const host = await mount(element);
+    await choose(host, 'avatar');
+    expect(calls.map((call) => ({ kind: call.kind, name: (call.file as File).name }))).toEqual([{ kind: 'avatar', name: 'avatar-retouche.jpg' }]);
+    expect(document.querySelector('[data-fake-retouch]')).toBeNull();
+  });
+
+  test('Annuler la retouche n’envoie rien et ne pose rien', async () => {
+    const { element, calls } = bench();
+    const host = await mount(element);
+    await pick(host, 'banner');
+    await click(document.querySelector<HTMLButtonElement>('[data-fake-cancel]'));
+    await settle();
+    expect(document.querySelector('[data-fake-retouch]')).toBeNull();
+    expect(calls).toEqual([]);
+    expect(shown(host, 'banner')).toBeNull();
+    expect(action(host, 'profile.continue')?.textContent).toBe('Plus tard');
+  });
+
+  test('toucher l’avatar n’ouvre jamais le sélecteur de la bannière', async () => {
+    const { element } = bench();
+    const host = await mount(element);
+    const opened: string[] = [];
+    host.querySelectorAll<HTMLInputElement>('[data-onb-profile-input]').forEach((input) =>
+      input.addEventListener('click', (event) => {
+        event.preventDefault();
+        opened.push(input.dataset.onbProfileInput ?? '');
+      }),
+    );
+    await click(picker(host, 'avatar'));
+    expect(opened).toEqual(['avatar']);
+    await pick(host, 'avatar');
+    expect([...document.querySelectorAll<HTMLElement>('[data-fake-retouch]')].map((editor) => editor.dataset.fakeRetouch)).toEqual(['avatar']);
   });
 });
