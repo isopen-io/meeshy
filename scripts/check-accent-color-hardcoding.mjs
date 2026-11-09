@@ -441,10 +441,7 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // d'une vignette de la couleur de la personne qu'elle montre (`CallSpeakerColor.hex(for:)`), site UNIQUE partagé par
 // ma vignette d'appel entrant et la vignette du duo établi, qui portait un trait blanc (loi 4). Identité d'une
 // PERSONNE, pas d'une conversation. Valeur MESURÉE le 2026-11-08 en local.
-// 470 (2026-11-08, #17112, l'effet Flamme) : `StoryTextEffectStyle.swift` (1) dégrade le texte en feu par les arrêts de
-// la palette du feu (`StoryFlameTextRenderer`), une matière, ni une conversation ni une personne ; l'aperçu (A2) et
-// le rendu partagent cette table unique. Valeur MESURÉE le 2026-11-08 en local après les fusions du jour.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 470;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 469;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
