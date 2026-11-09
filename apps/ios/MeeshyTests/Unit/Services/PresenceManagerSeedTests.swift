@@ -155,43 +155,95 @@ final class PresenceManagerSeedTests: XCTestCase {
 
     // MARK: - #14023 — une présence que le serveur ne sert plus quitte la carte vivante
 
-    func test_reconcileServed_afterRupture_purgesTheLiveEntry_andTheIdentityCardShowsNoDot() {
+    func test_reconcileServed_afterRupture_theLiveEntryCarriesNothingMore_andTheIdentityCardShowsNoDot() {
         sut.presenceMap["ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        let readMark = sut.presenceMap
         let served = servedGroup("ex", presence: UserPresence(isOnline: false, lastActiveAt: nil))
 
-        sut.reconcile(withServed: [served])
+        sut.reconcile(withServed: [served], readFrom: readMark)
 
-        XCTAssertNil(sut.presenceMap["ex"], "l'entrée vivante d'un lien rompu est purgée")
+        XCTAssertEqual(sut.presenceState(for: "ex"), PresenceState.offline, "l'entrée vivante d'un lien rompu ne brille plus")
+        XCTAssertNil(sut.presenceMap["ex"]?.lastActiveAt, "aucun « vu il y a » ne survit à ce que le serveur a retiré")
         XCTAssertEqual(StoryExportAuthor.served(from: served).presence, PresenceState.offline,
                        "l'export n'affiche aucun point")
         XCTAssertEqual(sut.servedPresence(for: "ex", fallback: served.authorPresence)?.state, PresenceState.offline,
                        "la carte d'identité de la visionneuse n'affiche aucun point")
     }
 
-    func test_reconcileServed_withoutAnyServedPresence_purgesTheLiveEntry() {
-        sut.presenceMap["ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
+    func test_reconcileServed_afterLoweringFromCloseToFriend_theDetailedEntryBecomesBinary() {
+        sut.presenceMap["was-close"] = UserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-120))
+        let readMark = sut.presenceMap
 
-        sut.reconcile(withServed: [servedGroup("ex", presence: nil)])
+        sut.reconcile(withServed: [servedGroup("was-close", presence: UserPresence(isOnline: false, lastActiveAt: nil))],
+                      readFrom: readMark)
 
-        XCTAssertNil(sut.presenceMap["ex"])
+        XCTAssertEqual(sut.presenceState(for: "was-close"), PresenceState.offline,
+                       "un Ami hors ligne n'a ni away ni idle (#13928)")
     }
 
-    func test_reconcileServed_whenTheServerStillServesPresence_keepsTheFresherLiveEntry() {
-        let live = UserPresence(isOnline: true, lastActiveAt: Date())
-        sut.presenceMap["friend"] = live
+    func test_reconcileServed_closeOffline_theServedLastSeenReplacesTheStaleLiveOne() {
+        let servedAt = Date().addingTimeInterval(-600)
+        sut.presenceMap["close"] = UserPresence(isOnline: true, lastActiveAt: Date().addingTimeInterval(-3_600))
+        let readMark = sut.presenceMap
 
-        sut.reconcile(withServed: [servedGroup("friend", presence: UserPresence(isOnline: true, lastActiveAt: nil))])
+        sut.reconcile(withServed: [servedGroup("close", presence: UserPresence(isOnline: false, lastActiveAt: servedAt))],
+                      readFrom: readMark)
 
-        XCTAssertEqual(sut.presenceMap["friend"]?.isOnline, true)
+        XCTAssertEqual(sut.presenceMap["close"]?.lastActiveAt, servedAt,
+                       "un Proche hors ligne garde le « vu il y a » que le serveur sert")
+    }
+
+    func test_reconcileServed_whenAStatusArrivedDuringTheRead_keepsTheLiveEntry() {
+        sut.presenceMap["friend"] = UserPresence(isOnline: false, lastActiveAt: nil)
+        let readMark = sut.presenceMap
+        sut.presenceMap["friend"] = UserPresence(isOnline: true, lastActiveAt: nil)
+
+        sut.reconcile(withServed: [servedGroup("friend", presence: UserPresence(isOnline: false, lastActiveAt: nil))],
+                      readFrom: readMark)
+
+        XCTAssertEqual(sut.presenceState(for: "friend"), PresenceState.online,
+                       "un user:status reçu pendant la lecture est plus frais que la charge")
+    }
+
+    func test_reconcileServed_whenTheChargeServesNoPresence_keepsTheLiveEntry() {
+        sut.presenceMap["close"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        let readMark = sut.presenceMap
+
+        sut.reconcile(withServed: [servedGroup("close", presence: nil)], readFrom: readMark)
+
+        XCTAssertEqual(sut.presenceState(for: "close"), PresenceState.online,
+                       "une story annoncée en direct ne porte aucune présence : elle n'en retire aucune")
+    }
+
+    func test_reconcileServed_whenTheServerStillServesPresence_staysOnline() {
+        sut.presenceMap["friend"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        let readMark = sut.presenceMap
+
+        sut.reconcile(withServed: [servedGroup("friend", presence: UserPresence(isOnline: true, lastActiveAt: nil))],
+                      readFrom: readMark)
+
         XCTAssertEqual(sut.presenceState(for: "friend"), PresenceState.online)
     }
 
     func test_reconcileServed_leavesPeopleTheGroupsDoNotNameUntouched() {
         sut.presenceMap["bystander"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        let readMark = sut.presenceMap
 
-        sut.reconcile(withServed: [servedGroup("ex", presence: nil)])
+        sut.reconcile(withServed: [servedGroup("ex", presence: UserPresence(isOnline: false, lastActiveAt: nil))],
+                      readFrom: readMark)
 
         XCTAssertEqual(sut.presenceState(for: "bystander"), PresenceState.online)
+        XCTAssertNil(sut.presenceMap["ex"], "la relecture ne sème pas d'entrée : la charge servie reste le repli")
+    }
+
+    func test_forget_afterTheReaderLowersBelowFriend_theCardFallsBackToTheServedPresence() {
+        sut.presenceMap["ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.forget("ex")
+
+        XCTAssertNil(sut.presenceMap["ex"])
+        XCTAssertEqual(sut.presenceState(for: "ex", served: UserPresence(isOnline: false, lastActiveAt: nil)),
+                       PresenceState.offline)
     }
 
     private func servedGroup(_ userId: String, presence: UserPresence?) -> StoryGroup {

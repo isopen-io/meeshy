@@ -427,7 +427,7 @@ final class StoryViewModelTests: StoryViewModelTestCase {
         XCTAssertNotNil(merged?.updatedAt, "updatedAt must survive the merge — it advances the next delta cursor")
     }
 
-    func test_deltaRefresh_servedWithoutPresence_purgesTheLiveEntryOfAnAuthorTheServerNoLongerShows() async {
+    func test_deltaRefresh_servedMasked_theLiveEntryOfAnAuthorTheServerNoLongerShowsStopsShining() async {
         PresenceManager.shared.presenceMap["u-ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
         defer { PresenceManager.shared.presenceMap.removeValue(forKey: "u-ex") }
         mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
@@ -438,8 +438,39 @@ final class StoryViewModelTests: StoryViewModelTestCase {
 
         await sut.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 5_000))
 
-        XCTAssertNil(PresenceManager.shared.presenceMap["u-ex"],
-                     "la relecture servie purge la présence vivante que le serveur ne sert plus")
+        XCTAssertEqual(PresenceManager.shared.presenceState(for: "u-ex"), PresenceState.offline,
+                       "la relecture servie retire la présence vivante que le serveur ne sert plus")
+        XCTAssertNil(PresenceManager.shared.presenceMap["u-ex"]?.lastActiveAt)
+    }
+
+    func test_fullRefresh_servedMasked_theLiveEntryOfAnAuthorTheServerNoLongerShowsStopsShining() async {
+        PresenceManager.shared.presenceMap["u-ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        defer { PresenceManager.shared.presenceMap.removeValue(forKey: "u-ex") }
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
+        {"id":"s-ex","type":"STORY","content":"x","createdAt":"\(Self.iso(-1800))",
+         "updatedAt":"\(Self.iso(-1800))","expiresAt":"\(Self.iso(72000))",
+         "author":{"id":"u-ex","username":"ex","isOnline":false}}
+        """))
+
+        await sut.fetchStoriesFromNetwork()
+
+        XCTAssertEqual(PresenceManager.shared.presenceState(for: "u-ex"), PresenceState.offline,
+                       "le remplacement complet du plateau fait foi lui aussi")
+    }
+
+    func test_deltaRefresh_authorWithoutServedPresence_keepsTheLiveEntry() async {
+        PresenceManager.shared.presenceMap["u-close"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        defer { PresenceManager.shared.presenceMap.removeValue(forKey: "u-close") }
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
+        {"id":"s-close","type":"STORY","content":"x","createdAt":"\(Self.iso(-1800))",
+         "updatedAt":"\(Self.iso(-1800))","expiresAt":"\(Self.iso(72000))",
+         "author":{"id":"u-close","username":"close"}}
+        """))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 5_000))
+
+        XCTAssertEqual(PresenceManager.shared.presenceState(for: "u-close"), PresenceState.online,
+                       "une charge muette sur la présence ne la retire pas")
     }
 
     func test_deltaRefresh_insertsBrandNewStoryGroup() async {
