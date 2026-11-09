@@ -110,7 +110,7 @@ public struct ConnectionActionView: View {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
         }
-        .foregroundColor(color)
+        .foregroundStyle(color)
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.vertical, MeeshySpacing.xs)
         .background(Capsule().fill(color.opacity(MeeshyOpacity.light)))
