@@ -292,6 +292,7 @@ struct ComposerLookStrip: View {
             guard !tenu else { return }
             session.releaseStaleHold()
         }
+        .environment(\.composerCaptureProgress, captureProgress)
         .adaptiveOnChange(of: session.openFamily) { _, famille in
             guard let famille else { return }
             focus = ComposerLookStripFilterRule.focus(opening: famille, look: session.look)
@@ -306,12 +307,7 @@ struct ComposerLookStrip: View {
     /// porte le carré d'arrêt. Il garde les gestes de la miniature choisie.
     private var shutter: some View {
         let cellule = ComposerLookStripRule.cellSize
-        return ComposerShutterRing(recording: recording,
-                                   progress: ComposerCaptureRecordingBudget.fraction(
-                                       elapsed: ComposerCaptureSegments.elapsed(segments: session.segments,
-                                                                               live: recordingTime,
-                                                                               recording: recording),
-                                       budget: session.recordingBudget))
+        return ComposerShutterRing(recording: captureProgress.capturing, progress: captureProgress.fraction)
         .frame(width: ComposerShutterRing.diameter + 2 * ComposerTriggerOutline.outset, height: cellule.height)
         .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
         .modifier(ComposerShutterPulse(tick: session.camera.shutterPresses))
@@ -323,6 +319,19 @@ struct ComposerLookStrip: View {
             : ComposerSceneCameraCopy.shutterLabel(mode: .photo, stage: .armed))
         .accessibilityAddTraits(.isButton)
         .composerCaptureAccessibilityActions(zone: .shutter, context: context) { performAccessible($0) }
+    }
+
+    /// **La prise est à l'écran dès la tenue** (#17268) : l'anneau, et le cadre
+    /// de la miniature choisie — seule ou dans la bande ouverte —, tournent dès
+    /// que le doigt tient, segments déjà pris compris.
+    private var captureProgress: ComposerCaptureProgress {
+        let capturing = ComposerCaptureProgressDisplay.isCapturing(stage: context.stage,
+                                                                   holding: session.holdStartedAt != nil)
+        return ComposerCaptureProgress(
+            capturing: capturing,
+            fraction: ComposerCaptureProgressDisplay.ringProgress(segments: session.segments, rawLive: recordingTime,
+                                                                  stage: context.stage,
+                                                                  budget: session.recordingBudget))
     }
 
     // MARK: - Repliée : la miniature choisie, seule

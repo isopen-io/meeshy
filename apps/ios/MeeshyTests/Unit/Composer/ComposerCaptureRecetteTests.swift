@@ -13,9 +13,11 @@ final class ComposerCaptureRecetteTests: XCTestCase {
         let debut = try XCTUnwrap(bande.range(of: "private var shutter: some View {"))
         let fin = try XCTUnwrap(bande.range(of: "private var chosenAlone", range: debut.upperBound..<bande.endIndex))
         let declencheur = String(bande[debut.upperBound..<fin.lowerBound])
-        XCTAssertTrue(declencheur.contains("ComposerShutterRing(recording: recording"), "le déclencheur à anneau blanc")
-        XCTAssertTrue(declencheur.contains("ComposerCaptureRecordingBudget.fraction("),
+        XCTAssertTrue(declencheur.contains("ComposerShutterRing(recording: captureProgress.capturing"),
+                      "le déclencheur à anneau blanc, rouge dès la tenue (#17268)")
+        XCTAssertTrue(declencheur.contains("progress: captureProgress.fraction"),
                       "l'anneau rouge dit la part du maximum déjà filmée")
+        XCTAssertTrue(bande.contains("ComposerCaptureProgressDisplay.ringProgress("))
         XCTAssertFalse(declencheur.contains("circle.slash"), "plus de case « Aucun » à la place du déclencheur")
         XCTAssertTrue(declencheur.contains(".gesture(triggerGestures(zone: .shutter))"), "il garde les gestes de la prise")
     }
