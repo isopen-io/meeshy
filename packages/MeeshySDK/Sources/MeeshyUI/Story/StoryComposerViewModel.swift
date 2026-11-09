@@ -66,7 +66,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// coup l'accès au contenu.
     public internal(set) var editingKnowsDeclaredReferences = false
 
-    private struct ComposerTasks: Sendable {
+    private nonisolated struct ComposerTasks: Sendable {
         var preload: Task<Void, Never>?
         var videoMeasure: [String: Task<Void, Never>] = [:]
     }
