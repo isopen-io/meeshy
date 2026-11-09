@@ -19,7 +19,7 @@ import {
   type JourneyContext,
 } from './journey';
 
-const state = (overrides: Partial<OnboardingState> = {}): OnboardingState => ({
+const bare = (overrides: Partial<OnboardingState> = {}): OnboardingState => ({
   eligible: true,
   completedAt: null,
   seenSteps: [],
@@ -30,6 +30,12 @@ const state = (overrides: Partial<OnboardingState> = {}): OnboardingState => ({
   suggestions: [],
   ...overrides,
 });
+
+/** Un compte dont la photo et la bannière sont déjà posées : le serveur
+ * pré-coche « Montre-toi » (#17237), que les témoins des AUTRES étapes ne
+ * regardent pas. Ceux de « Montre-toi » partent de `bare`. */
+const state = (overrides: Partial<OnboardingState> = {}): OnboardingState =>
+  bare({ ...overrides, prefilledSteps: ['profile', ...(overrides.prefilledSteps ?? [])] });
 
 const context = (overrides: Partial<JourneyContext> = {}): JourneyContext => ({
   state: state(),
@@ -45,6 +51,28 @@ describe('resumeStep — la reprise rouvre la PREMIÈRE étape manquante', () =>
 
   test('les étapes vues sont sautées', () => {
     expect(resumeStep(context({ state: state({ seenSteps: ['languages'] }) }))).toBe('global');
+  });
+
+  test('« Montre-toi » vient juste après les langues et le courriel, avant Meeshy Global (#17237)', () => {
+    const fresh = context({ state: bare({ seenSteps: ['languages'] }) });
+    expect(resumeStep(fresh)).toBe('profile');
+    expect(nextStepAfter('languages', context({ state: bare({ emailVerified: false }) }))).toBe('email');
+    expect(nextStepAfter('email', fresh)).toBe('profile');
+    expect(nextStepAfter('profile', fresh)).toBe('global');
+  });
+
+  test('« Montre-toi » vue (passée) ou pré-cochée (photo ET bannière déjà posées) n’est pas rouverte (#17237)', () => {
+    expect(resumeStep(context({ state: bare({ seenSteps: ['languages', 'profile'] }) }))).toBe('global');
+    expect(resumeStep(context({ state: bare({ seenSteps: ['languages'], prefilledSteps: ['profile'] }) }))).toBe('global');
+  });
+
+  test('« Montre-toi » faite ici, avant que le serveur l’ait vue : réglée (#17237)', () => {
+    expect(resumeStep(context({ state: bare({ seenSteps: ['languages'] }), progress: withDone(EMPTY_PROGRESS, 'profile') }))).toBe('global');
+  });
+
+  test('« Montre-toi » n’est pas une production : seule, elle n’ouvre pas la carte des notifications (#17237)', () => {
+    const allButLast = bare({ seenSteps: ['languages', 'profile', 'global', 'story', 'friends'] });
+    expect(resumeStep(context({ state: allButLast, progress: withDone(EMPTY_PROGRESS, 'profile') }))).toBe('recap');
   });
 
   test('les étapes déjà faites ailleurs (pré-cochées par le serveur) sont sautées', () => {

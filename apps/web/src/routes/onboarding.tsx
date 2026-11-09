@@ -16,8 +16,9 @@ import {
   type OnboardingState,
   type OnboardingStepId,
 } from '@/lib/api/onboarding';
+import { MY_PROFILE_QUERY_KEY, type MyProfile, type ProfileImageKind } from '@/lib/api/profile';
 import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
-import { performProfileEdit } from '@/lib/api/profile-actions';
+import { performImageUpdate, performProfileEdit } from '@/lib/api/profile-actions';
 import { retrySendAction, sendAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { fetchEngagementProgress, loadEngagementProgress } from '@/lib/api/engagement';
@@ -67,6 +68,7 @@ import {
   type ResendLink,
 } from './onboarding-cards';
 import { AgeCard, type AgeSubmit } from './onboarding-age';
+import { ProfileCard, type ProfileImageUpload } from './onboarding-profile';
 import { RecapCard, type RecapNumbers } from './onboarding-recap';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
 import { href, navigate } from './route-table';
@@ -107,6 +109,8 @@ export type OnboardingScreenDeps = {
   }) => Promise<GreetingSend>;
   readonly addFriend: (suggestion: OnboardingSuggestion, viewerId: string | null) => Promise<FriendActionOutcome>;
   readonly saveLanguages: (patch: { readonly systemLanguage: string; readonly regionalLanguage: string }) => Promise<LanguagesSave>;
+  /** « Montre-toi » (#17237) — le chemin de l'écran Profil, la session et le cache du profil suivent la valeur servie. */
+  readonly uploadProfileImage: (kind: ProfileImageKind, file: Blob) => Promise<ProfileImageUpload>;
   readonly notificationsAskable: () => boolean;
   readonly askNotifications: () => Promise<void>;
   readonly loadRecap: () => Promise<RecapNumbers | null>;
@@ -152,6 +156,10 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
       deps: appProfileActionDeps(),
     });
     return outcome.status === 'saved' ? 'saved' : outcome.status === 'offline' ? 'offline' : 'failed';
+  },
+  uploadProfileImage: async (kind, file) => {
+    const outcome = await performImageUpdate({ kind, file, deps: appProfileActionDeps() });
+    return outcome.status === 'saved' ? { status: 'saved', url: outcome.url } : outcome.status === 'cancelled' ? { status: 'cancelled' } : { status: 'failed' };
   },
   /* La carte 5 ne s'ouvre que là où un ABONNEMENT push peut suivre le
      « Oui » (`notifications-offer.ts`) — aujourd'hui nulle part : l'abonné
@@ -535,6 +543,18 @@ export function OnboardingJourney({
           <EmailCard host={host} resend={resend} onLater={() => advance('email', 'skipped')} />
         ) : step === 'age' ? (
           <AgeCard host={host} today={today} submit={submitAge} onSkip={() => advance('age', 'skipped')} />
+        ) : step === 'profile' ? (
+          <ProfileCard
+            host={host}
+            userId={viewer.id}
+            name={displayName}
+            handle={account?.username ?? viewer.handle ?? null}
+            avatar={avatar ?? null}
+            banner={deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.banner ?? null}
+            upload={deps.uploadProfileImage}
+            onDone={() => advance('profile', 'done')}
+            onLater={() => advance('profile', 'skipped')}
+          />
         ) : step === 'global' ? (
           <GlobalCard
             host={host}

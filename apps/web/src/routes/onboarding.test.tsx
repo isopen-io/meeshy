@@ -6,7 +6,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { harness, served, signIn } from '@/test-support/onboarding-harness';
+import { bareServed, harness, served, signIn } from '@/test-support/onboarding-harness';
 
 import { OnboardingJourney } from './onboarding';
 
@@ -380,5 +380,42 @@ describe('accessibilité et langue', () => {
     const { deps, visits } = harness({ state: served({ eligible: false, completedAt: '2026-09-24T10:00:00.000Z' }) });
     await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     expect(visits).toEqual([{ path: '/chats', replace: true }]);
+  });
+});
+
+describe('« Montre-toi » (#17237) — après le courriel, avant le salut, jamais bloquante', () => {
+  test('un compte sans photo ni bannière la voit après les langues, comptée dans les étapes ; « Plus tard » la passe et mène au salut', async () => {
+    signIn();
+    const { deps, patches } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(card(host)).toBe('profile');
+    expect(host.textContent).toContain('@maya');
+    await click(action(host, 'profile.continue'));
+    expect(patches).toEqual([{ step: 'profile', outcome: 'skipped' }]);
+    expect(card(host)).toBe('global');
+  });
+
+  test('une photo posée : « Continuer » enregistre l’étape faite', async () => {
+    signIn();
+    const { deps, patches, uploads } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    const input = host.querySelector<HTMLInputElement>('[data-onb-profile-input="avatar"]');
+    if (input === null) throw new Error('champ de la photo absent');
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 'moi.png', { type: 'image/png' })], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+    expect(uploads).toEqual(['avatar']);
+    await click(action(host, 'profile.continue'));
+    expect(patches).toEqual([{ step: 'profile', outcome: 'done' }]);
+    expect(card(host)).toBe('global');
+  });
+
+  test('pré-cochée par la passerelle (photo ET bannière déjà là) : jamais montrée', async () => {
+    signIn();
+    const { deps } = harness({ state: bareServed({ seenSteps: ['languages'], prefilledSteps: ['profile'] }) });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(card(host)).toBe('global');
   });
 });
