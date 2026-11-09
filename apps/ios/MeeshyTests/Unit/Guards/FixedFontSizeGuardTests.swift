@@ -128,15 +128,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/InviteFriendsSheet.swift",
         "Features/Main/Components/LocationPickerView.swift",
         "Features/Main/Components/MemberManagementSection.swift",
-        // RELOCALISATION pure : `MessageEditsDetailView.emptyStateView` (son
-        // seul site figé, un glyphe 28pt dans un cadre fixe) a fusionné avec sa
-        // jumelle de `MessageViewsDetailView` dans `MessageDetailChrome.swift`
-        // (dédoublonnage audit L3-17). La POPULATION ne bouge pas — ni
-        // `totalCeiling` ni `textCeiling` — seul le NOM change ; le fichier
-        // d'origine n'en porte plus aucun et sort de la liste.
-        "Features/Main/Components/MessageDetail/MessageDetailChrome.swift",
-        "Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
-        "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
         "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
@@ -466,7 +457,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // (règle 4).
     // 171 → 160 (#15628) : les onze glyphes figés de la feuille du fil et de sa
     // rangée de pièces quittent le dépôt avec elles ; aucun texte.
-    private static let totalCeiling = 160
+    // 160 → 154 (GMAIN, #17296) : six glyphes d'état vide ou d'en-tête de
+    // `Features/Main` passent par `meeshyScaledFont` ; trois fichiers sortent de
+    // `bearingFiles` (règle 4) ; aucun texte.
+    private static let totalCeiling = 154
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
