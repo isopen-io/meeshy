@@ -29,6 +29,7 @@ import { boundCaptureNoticesNaming } from './captureNoticeRetention';
 import { eraseSharedTranslations } from './sharedTranslationErasure';
 import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
 import { cutTogetherWhere } from '../together/togetherDeps';
+import { togetherMediaOf } from '../together/togetherGate';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -402,9 +403,7 @@ export async function applyMessageRemovalEffects(
   // Une séance « ensemble » qui lisait une pièce de ce message s'arrête chez les deux
   // (#17022). Rejuger la conversation suffit : la porte refuse un message supprimé, et les
   // séances des autres pièces continuent. Ne rejette jamais.
-  if (message.attachmentMimeTypes.some(isPlayableTogether)) {
+  if (message.attachmentMimeTypes.some((mimeType) => togetherMediaOf(mimeType) !== null)) {
     await cutTogetherWhere({ conversationId: message.conversationId });
   }
 }
-
-const isPlayableTogether = (mimeType: string): boolean => /^(audio|video)\//i.test(mimeType);

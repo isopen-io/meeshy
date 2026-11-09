@@ -7,6 +7,11 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
+
+const cutTogetherWhere = jest.fn(async (_scope: unknown) => undefined);
+jest.mock('../../../../services/together/togetherDeps', () => ({
+  cutTogetherWhere: (scope: unknown) => cutTogetherWhere(scope),
+}));
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
   OBSOLETE_PURGE_DELAY_MS,
@@ -206,5 +211,20 @@ describe('#14643 — un message admis avant l\'obsolescence mais écrit pendant 
       { id: 'm-old', deletedAt: NOW },
       { id: 'm-late', deletedAt: NOW },
     ]);
+  });
+});
+
+describe('#17022 — une conversation rendue obsolète arrête ses séances « ensemble »', () => {
+  it('demande la coupure de la conversation, après l\'effacement de ses messages', async () => {
+    cutTogetherWhere.mockClear();
+    const { prisma } = await rendreObsolete();
+    expect(cutTogetherWhere).toHaveBeenCalledWith({ conversationId: CONV });
+    expect(cutTogetherWhere.mock.invocationCallOrder[0]).toBeGreaterThan(prisma.$transaction.mock.invocationCallOrder[0]);
+  });
+
+  it('une conversation protégée ou déjà obsolète ne rejuge rien', async () => {
+    cutTogetherWhere.mockClear();
+    await rendreObsolete({ deletedAt: new Date(NOW.getTime() - 1000), purgeAfter: new Date(NOW.getTime() + 1000) });
+    expect(cutTogetherWhere).not.toHaveBeenCalled();
   });
 });

@@ -38,6 +38,8 @@ import {
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { AttachmentDeletedEventData } from '@meeshy/shared/types/socketio-events/attachment';
+import { cutTogetherWhere } from '../../services/together/togetherDeps';
+import { togetherMediaOf } from '../../services/together/togetherGate';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -569,6 +571,10 @@ export async function registerMetadataRoutes(
         }
         await attachmentService.deleteAttachment(attachmentId);
         await broadcastAttachmentDeleted(fastify, prisma, { messageId, attachmentId });
+        // #17022 — une séance « ensemble » qui lisait cette pièce s'arrête chez les deux.
+        if (carrier && togetherMediaOf(attachment.mimeType)) {
+          await cutTogetherWhere({ conversationId: carrier.conversationId });
+        }
 
         return sendSuccess(reply, { message: 'Attachment deleted successfully' });
       } catch (error: unknown) {
