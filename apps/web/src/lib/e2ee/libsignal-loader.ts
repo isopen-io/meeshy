@@ -12,8 +12,8 @@ export type LibsignalBridgeImport = () => Promise<LibsignalBridge>;
 
 const importBridge: LibsignalBridgeImport = () => import('./libsignal-bridge').then(({ openLibsignalBridge }) => openLibsignalBridge());
 
-export const libsignalBridgeLoader = (load: LibsignalBridgeImport = importBridge): LibsignalBridgeImport => {
-  const settled = new Map<'bridge', Promise<LibsignalBridge>>();
+export const libsignalBridgeLoader = <T>(load: () => Promise<T>): (() => Promise<T>) => {
+  const settled = new Map<'bridge', Promise<T>>();
   return () => {
     const known = settled.get('bridge');
     if (known !== undefined) return known;
@@ -26,4 +26,4 @@ export const libsignalBridgeLoader = (load: LibsignalBridgeImport = importBridge
   };
 };
 
-export const loadLibsignalBridge: LibsignalBridgeImport = libsignalBridgeLoader();
+export const loadLibsignalBridge: LibsignalBridgeImport = libsignalBridgeLoader(importBridge);

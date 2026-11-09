@@ -3,8 +3,9 @@
  * `packages/shared/fixtures/libsignal/cross-platform.vectors.json`, scellé par
  * la passerelle et rejoué par le SDK iOS et `:core:e2ee` Android, s'ouvre ici
  * avec le pont WASM de libsignal, le même que charge le navigateur. Les jeux de
- * `legacy/` (sessions sérialisées par une version antérieure, #9231) aussi.
- * Une charge altérée d'un octet est refusée.
+ * `legacy/` (sessions sérialisées par une version antérieure, #9231) aussi, et
+ * ceux de `sealed-by/`, que la passerelle rejoue à son tour (le web scelle, la
+ * bibliothèque native ouvre). Une charge altérée d'un octet est refusée.
  */
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -19,6 +20,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, '..', '..', '..', '..', '..', 'packages', 'shared', 'fixtures', 'libsignal');
 const CURRENT = join(FIXTURES, 'cross-platform.vectors.json');
 const LEGACY = join(FIXTURES, 'legacy');
+const SEALED_BY = join(FIXTURES, 'sealed-by');
 
 type VectorMessage = { readonly type: number; readonly body: string; readonly plaintext: string };
 type VectorParty = { readonly name: string; readonly deviceId: number; readonly registrationId: number; readonly identityKeyPair: string };
@@ -37,11 +39,13 @@ type Vectors = {
 const bytes = (base64: string): Uint8Array => new Uint8Array(Buffer.from(base64, 'base64'));
 const text = (raw: Uint8Array): string => new TextDecoder().decode(raw);
 const vectorsOf = (file: string): Vectors => JSON.parse(readFileSync(file, 'utf8')) as Vectors;
-const legacyFiles = (): readonly string[] =>
-  (existsSync(LEGACY) ? readdirSync(LEGACY) : [])
+const vectorFilesIn = (directory: string): readonly string[] =>
+  (existsSync(directory) ? readdirSync(directory) : [])
     .filter((name) => name.endsWith('.vectors.json'))
     .sort()
-    .map((name) => join(LEGACY, name));
+    .map((name) => join(directory, name));
+const legacyFiles = (): readonly string[] => vectorFilesIn(LEGACY);
+const sealedByFiles = (): readonly string[] => vectorFilesIn(SEALED_BY);
 
 const bridge: LibsignalBridge = await openLibsignalBridge(readFileSync(join(HERE, '..', '..', '..', LIBSIGNAL_WASM_FILE)));
 
@@ -109,7 +113,11 @@ describe('libsignal sur le web — les vecteurs croisés de la passerelle, iOS e
     expect(legacyFiles().some((file) => vectorsOf(file).libsignal !== bridge.version)).toBe(true);
   });
 
-  describe.each([CURRENT, ...legacyFiles()].map((file) => [vectorsOf(file).libsignal, file] as const))('jeu scellé en %s', (_version, file) => {
+  test('le jeu scellé par le web lui-même est rejoué, à la version courante', () => {
+    expect(sealedByFiles().map((file) => [file.slice(SEALED_BY.length + 1), vectorsOf(file).libsignal])).toContainEqual(['web.vectors.json', bridge.version]);
+  });
+
+  describe.each([CURRENT, ...legacyFiles(), ...sealedByFiles()].map((file) => [`${vectorsOf(file).libsignal} (${file.slice(FIXTURES.length + 1)})`, file] as const))('jeu scellé en %s', (_label, file) => {
     const vectors = vectorsOf(file);
     const { aliceOpensReply, bobOpensThird } = vectors.persistedSessions;
 

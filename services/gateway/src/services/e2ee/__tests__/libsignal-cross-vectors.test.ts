@@ -6,7 +6,9 @@
  * bibliothèque (processus à part, `libsignal-vectors.mjs`) : PQXDH depuis les
  * seules pré-clés, puis des sessions sérialisées rechargées (#9231). Les jeux
  * de `legacy/`, scellés par une version ANTÉRIEURE, s'ouvrent de même : une
- * session persistée avant une montée survit à la montée. La même charge
+ * session persistée avant une montée survit à la montée. Ceux de `sealed-by/`
+ * ont été scellés par un AUTRE binding (le pont WASM du web, #17114) : la
+ * bibliothèque native les ouvre. La même charge
  * altérée d'un octet est refusée, que l'octet soit le premier (version), au
  * milieu du corps ou le dernier (MAC).
  *
@@ -20,6 +22,7 @@ import { join } from 'path';
 const FIXTURES = join(__dirname, '../../../../../../packages/shared/fixtures/libsignal');
 const CURRENT = join(FIXTURES, 'cross-platform.vectors.json');
 const LEGACY = join(FIXTURES, 'legacy');
+const SEALED_BY = join(FIXTURES, 'sealed-by');
 const BENCH = join(__dirname, 'libsignal-vectors.mjs');
 
 type WireMessage = { type: number; body: string; plaintext: string };
@@ -42,11 +45,13 @@ type Report = {
   tamperedRefused: Record<TamperedByte, Record<'preKeyMessage' | 'aliceOpensReply' | 'bobOpensThird', boolean>>;
 };
 
-const legacyFiles = (): string[] =>
-  (existsSync(LEGACY) ? readdirSync(LEGACY) : [])
+const vectorFilesIn = (directory: string): string[] =>
+  (existsSync(directory) ? readdirSync(directory) : [])
     .filter((name) => name.endsWith('.vectors.json'))
     .sort()
-    .map((name) => join(LEGACY, name));
+    .map((name) => join(directory, name));
+const legacyFiles = (): string[] => vectorFilesIn(LEGACY);
+const sealedByFiles = (): string[] => vectorFilesIn(SEALED_BY);
 
 const vectorsOf = (file: string): Vectors => JSON.parse(readFileSync(file, 'utf8')) as Vectors;
 const replay = (file: string): Report => JSON.parse(execFileSync(process.execPath, [BENCH, file]).toString()) as Report;
@@ -65,7 +70,12 @@ describe('libsignal — les vecteurs croisés partagés avec iOS et Android (#17
     );
   });
 
-  describe.each([CURRENT, ...legacyFiles()].map((file) => [vectorsOf(file).libsignal, file] as const))('jeu scellé en %s', (_version, file) => {
+  it('la passerelle rejoue le jeu scellé par le pont WASM du web, à la version courante (#17114)', () => {
+    const current = vectorsOf(CURRENT).libsignal;
+    expect(sealedByFiles().map((file) => [file.slice(SEALED_BY.length + 1), vectorsOf(file).libsignal])).toContainEqual(['web.vectors.json', current]);
+  });
+
+  describe.each([CURRENT, ...legacyFiles(), ...sealedByFiles()].map((file) => [`${vectorsOf(file).libsignal} (${file.slice(FIXTURES.length + 1)})`, file] as const))('jeu scellé en %s', (_label, file) => {
     const vectors = vectorsOf(file);
     const report = replay(file);
 
