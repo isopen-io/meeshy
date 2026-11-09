@@ -1,7 +1,7 @@
 /**
  * **LES ONGLETS DU PROFIL** (#6330) — miroir de `ProfileTab`
  * (`packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet.swift`) :
- * Publications, Conversations, Détails, Détails ouvert d'abord.
+ * Détails, Conversations, Publications, Détails ouvert d'abord (#17202).
  *
  * L'onglet ouvert se lit dans l'adresse (`?tab=`) pour qu'un retour arrière,
  * un lien partagé ou un rechargement rouvre le même. Une adresse est une
@@ -12,7 +12,7 @@
 
 export type ProfileTabId = 'posts' | 'conversations' | 'details' | 'activity';
 
-export const USER_PROFILE_TABS = ['posts', 'conversations', 'details'] as const satisfies readonly ProfileTabId[];
+export const USER_PROFILE_TABS = ['details', 'conversations', 'posts'] as const satisfies readonly ProfileTabId[];
 
 export const MY_PROFILE_TABS = ['details', 'posts', 'activity'] as const satisfies readonly ProfileTabId[];
 

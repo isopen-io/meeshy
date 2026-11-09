@@ -86,7 +86,7 @@ const record = (visibility: string, authorId = AUTHOR): PostVisibilityRecord => 
   authorId,
   visibility: visibility as never,
   visibilityUserIds: [],
-  expiresAt: null,
+  expiresAt: null, communityId: null,
 });
 
 const CIRCLES = ['ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const;

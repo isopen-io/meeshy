@@ -28,9 +28,9 @@ import { href, navigate } from '@/routes/route-table';
  * « Créer la communauté ». Créée, elle REMPLACE cet écran par son détail — le
  * retour arrière ramène à la liste, comme `router.pop()` puis `push(detail)`.
  *
- * **Une absence assumée** (D-60). Le choix d'emoji d'iOS ne part nulle part
- * (`selectedEmoji` n'est ni envoyé ni stocké) : c'est un contrôle sans effet,
- * suivi côté iOS (#6380).
+ * **Une absence assumée** (D-60). L'emoji d'iOS et d'Android reste sur
+ * l'APPAREIL qui l'a choisi (`CommunityLocalAppearance`, #6380) : aucun champ
+ * de la passerelle ne le porte, le web n'a donc rien à écrire ni à relire.
  *
  * **Ajouter des membres** (#6376), comme iOS : les personnes choisies sont
  * invitées APRÈS la création, par le port de la feuille « Inviter » ; le

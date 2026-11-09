@@ -40,4 +40,52 @@ final class CommunityCreateViewModelTests: XCTestCase {
         XCTAssertTrue(sut.showError)
         XCTAssertEqual(sut.errorMessage, "pris")
     }
+
+    private func isolatedDefaults() throws -> UserDefaults {
+        let suite = "community-create-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    func test_createCommunity_emojiChoisi_seRetrouveDansLeDetail() async throws {
+        let defaults = try isolatedDefaults()
+        let service = MockCommunityService()
+        service.createResult = .success(CommunityStubs.community(id: "c-emoji"))
+        let sut = CommunityCreateViewModel(communityService: service, userService: MockUserService(), appearanceDefaults: defaults)
+        sut.name = "Alpha"
+        sut.selectedEmoji = "🚀"
+
+        let created = await sut.createCommunity()
+
+        XCTAssertEqual(created?.emoji, "🚀")
+        XCTAssertEqual(CommunityLocalAppearance.read(communityId: "c-emoji", from: defaults).emoji, "🚀",
+                       "Le détail relit l'emoji par CommunityLocalAppearance : la création doit l'y écrire.")
+    }
+
+    func test_createCommunity_sansEmoji_nEcritRien() async throws {
+        let defaults = try isolatedDefaults()
+        let service = MockCommunityService()
+        service.createResult = .success(CommunityStubs.community(id: "c-plain"))
+        let sut = CommunityCreateViewModel(communityService: service, userService: MockUserService(), appearanceDefaults: defaults)
+        sut.name = "Alpha"
+
+        let created = await sut.createCommunity()
+
+        XCTAssertEqual(created?.emoji, "")
+        XCTAssertNil(CommunityLocalAppearance.read(communityId: "c-plain", from: defaults).emoji)
+    }
+
+    func test_createCommunity_echec_nEcritPasDEmoji() async throws {
+        let defaults = try isolatedDefaults()
+        let service = MockCommunityService()
+        service.createResult = .failure(MeeshyError.server(statusCode: 409, message: "pris"))
+        let sut = CommunityCreateViewModel(communityService: service, userService: MockUserService(), appearanceDefaults: defaults)
+        sut.name = "Alpha"
+        sut.selectedEmoji = "🚀"
+
+        _ = await sut.createCommunity()
+
+        XCTAssertTrue(defaults.dictionaryRepresentation().keys.allSatisfy { !$0.hasPrefix("community.emoji.") })
+    }
 }

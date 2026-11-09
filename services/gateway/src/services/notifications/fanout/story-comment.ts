@@ -240,6 +240,11 @@ export type StoryCommentFanoutParams = {
   visibility: string | null | undefined;
   /** Liste d'IDs pour les modes ONLY (autorisés) / EXCEPT (exclus). */
   visibilityUserIds?: string[];
+  /**
+   * `Post.communityId` — REQUIS (#17178) : une publication `COMMUNITY` posée dans
+   * une communauté ne prévient que ses lecteurs. `null` = sans communauté.
+   */
+  communityId: string | null;
 };
 
 /**
@@ -290,6 +295,7 @@ export async function createStoryCommentNotificationsBatch(
       authorId: params.storyAuthorId,
       visibility,
       visibilityUserIds: params.visibilityUserIds,
+      communityId: params.communityId,
       candidateUserIds: friendIds,
     })
   ).filter((id) => id !== params.storyAuthorId && id !== params.commenterId);
@@ -311,6 +317,7 @@ export async function createStoryCommentNotificationsBatch(
     authorId: params.storyAuthorId,
     visibility,
     visibilityUserIds: params.visibilityUserIds,
+    communityId: params.communityId,
     candidateUserIds: previousCommenterIds,
   });
 

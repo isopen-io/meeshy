@@ -65,8 +65,8 @@ struct ComposerCapturePreview: View {
                     let proportions = ComposerLookPainter.aspect(of: exterieur.size)
                     let canevas = ComposerLookPainter.previewCanvas(aspect: proportions)
                     ZStack {
-                        CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
-                                           mirrorsFrames: mirrorsSystemLayer,
+                        CameraPreviewLayer(session: session.camera.session, sessionQueue: session.camera.sessionQueue,
+                                           focusPoints: session.focusPoints, mirrorsFrames: mirrorsSystemLayer,
                                            connectionEpoch: session.camera.inputEpoch)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
@@ -593,11 +593,13 @@ struct ComposerCaptureChrome: View {
         ZStack(alignment: .topLeading) {
             if ComposerCaptureGrid.shows(enabled: gridEnabled, editing: session.phase.isEditing) {
                 ComposerCaptureGridOverlay()
+                ComposerCaptureLevelLine()
             }
             focusRing
             ComposerCaptureCountdown(timer: session.selfTimer)
         }
         .onDisappear { session.selfTimer.cancel() }
+        .modifier(ComposerCaptureAnnouncer(camera: session.camera, stage: session.stage))
     }
 
     @ViewBuilder private var focusRing: some View {

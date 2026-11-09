@@ -9,8 +9,8 @@ import MeeshyUI
 //  · au DÉBUT (à gauche ; à droite en RTL) : le nom du palier au-dessus du cercle — qui porte le niveau, sa
 //    progression et le prestige — et à droite les étincelles en grand, par leur glyphe (« ✦ 18 347 » — porteur
 //    2026-10-19, #10951) ; le record ne se lit qu'à VoiceOver ;
-//  · à la FIN : la Gloire (« ♛ 18 790 »), puis le blason du rang, son nom et sa division dessous (« Murmure V ») —
-//    la Gloire fait le rang, elle se lit à côté de lui.
+//  · à la FIN : le nom du rang et sa division en haut (« Murmure V »), le blason, puis la Gloire dessous
+//    (« ♛ 18 790 », #17202) — la Gloire fait le rang, elle se lit à côté de lui.
 // Ce que le serveur sert du jeu de ce membre selon SES réglages (`GET /users/:userId/game`, réglage `rank`) — la
 // sienne comprise — et rien d'autre : ni trésor, ni vitrine, ni Flamme. Les points ne sont servis qu'à soi et aux
 // amis (#9541) : absents, rien ne se dessine à leur place. La Flamme n'a aucun réglage de visibilité : son
@@ -198,16 +198,34 @@ struct GameBannerBadgeView: View {
         }
     }
 
-    /// En colonne : la Gloire au-dessus du blason du rang, son nom et sa division dessous (porteur 2026-10-19, #10951).
+    /// Les lignes du groupe du rang, de haut en bas.
+    enum RankLine { case name, crest, glory }
+
+    /// Le titre du rang en haut, le blason, la Gloire en bas (porteur 2026-11-09, #17202) — le même ordre que le groupe
+    /// du niveau d'en face : le nom, l'emblème, le compte.
+    static let rankLines: [RankLine] = [.name, .crest, .glory]
+
     private var rankGroup: some View {
         VStack(spacing: MeeshySpacing.xxs) {
-            if let gloryText = model.gloryText {
-                amount(gloryText, size: MeeshyFont.bodySize)
+            ForEach(Self.rankLines, id: \.self) { line in
+                rankLine(line)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func rankLine(_ line: RankLine) -> some View {
+        switch line {
+        case .name:
+            caption(model.rankName)
+        case .crest:
             RankBlasonView(rank: model.rank, division5: model.division, level: model.level,
                            mythic: model.mythic, title: nil, figures: nil)
                 .frame(width: emblemSize * 1.1, height: emblemSize * 1.1 * 0.93)
-            caption(model.rankName)
+        case .glory:
+            if let gloryText = model.gloryText {
+                amount(gloryText, size: MeeshyFont.bodySize)
+            }
         }
     }
 

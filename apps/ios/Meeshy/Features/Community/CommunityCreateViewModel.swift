@@ -27,12 +27,15 @@ final class CommunityCreateViewModel: ObservableObject, CommunityCreateModeling 
     private let communityService: CommunityServiceProviding
     private let userService: UserServiceProviding
     private let currentUserId: @MainActor () -> String
+    private let appearanceDefaults: UserDefaults
 
     init(
         communityService: CommunityServiceProviding = CommunityService.shared,
         userService: UserServiceProviding = UserService.shared,
-        currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" }
+        currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
+        appearanceDefaults: UserDefaults = .standard
     ) {
+        self.appearanceDefaults = appearanceDefaults
         self.communityService = communityService
         self.userService = userService
         self.currentUserId = currentUserId
@@ -86,7 +89,10 @@ final class CommunityCreateViewModel: ObservableObject, CommunityCreateModeling 
                 )
             }
 
-            return apiCommunity.toCommunity()
+            CommunityLocalAppearance.writeEmoji(selectedEmoji, communityId: apiCommunity.id, to: appearanceDefaults)
+            var community = apiCommunity.toCommunity()
+            community.emoji = CommunityLocalAppearance.read(communityId: apiCommunity.id, from: appearanceDefaults).emoji ?? ""
+            return community
         } catch {
             errorMessage = error.localizedDescription
             showError = true

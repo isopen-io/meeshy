@@ -130,10 +130,11 @@ final class LottieLayerTests: XCTestCase {
 
     // MARK: - Ce qu'elle montre à l'arrêt
 
-    func test_stillFrame_isTheFirstImage_notTheMiddleOne() throws {
+    func test_stillFrame_isTheFirstImage_notTheMiddleOne() async throws {
         let film = try XCTUnwrap(LottieLayerSource.film(data: data))
         let still = try XCTUnwrap(LottieFilm.still(film, pixelSize: 100))
-        let decoded = try XCTUnwrap(LottieFilm.decodedNow(film, pixelSize: 100, framesPerSecond: 2))
+        let rendered = await LottieFilm.decoded(film, pixelSize: 100, framesPerSecond: 2)
+        let decoded = try XCTUnwrap(rendered)
         let first = try XCTUnwrap(centroidX(still))
         let middle = try XCTUnwrap(centroidX(decoded.frames[decoded.frames.count / 2]))
         XCTAssertEqual(first, 20, accuracy: 4)

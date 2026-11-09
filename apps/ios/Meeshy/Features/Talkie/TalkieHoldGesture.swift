@@ -13,6 +13,7 @@ nonisolated enum TalkieHoldLook: Equatable {
 
     static func resolve(pressed: Bool, phase: TalkieSender.Phase) -> TalkieHoldLook {
         if case .talking = phase { return .live }
+        if case .recordingCopy = phase { return .live }
         return pressed ? .pressed : .idle
     }
 
@@ -53,6 +54,7 @@ struct TalkieHoldModifier: ViewModifier {
         pressedAt = Date()
         HapticFeedback.medium()
         sender.press(toUserId: userId)
+        Task { await TalkiePushToTalkChannel.shared.activate() }
     }
 
     private func end() {

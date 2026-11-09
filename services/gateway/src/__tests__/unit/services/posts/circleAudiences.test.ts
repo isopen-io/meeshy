@@ -100,7 +100,7 @@ const record = (visibility: string): PostVisibilityRecord => ({
   authorId: AUTHOR,
   visibility: visibility as never,
   visibilityUserIds: [],
-  expiresAt: null,
+  expiresAt: null, communityId: null,
 });
 
 const ALL_READERS = [ACQ, FRI, CLS, BLD, DM, STR, ASYM] as const;

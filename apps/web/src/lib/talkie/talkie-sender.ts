@@ -52,7 +52,14 @@ export type TalkieSendOutcome = 'not-allowed' | 'voice' | 'e2ee' | 'rate-limited
 export type TalkieSendPhase =
   | { readonly kind: 'idle' }
   | { readonly kind: 'starting'; readonly toUserId: string }
-  | { readonly kind: 'talking'; readonly toUserId: string; readonly talkieId: string };
+  | { readonly kind: 'talking'; readonly toUserId: string; readonly talkieId: string; readonly delivery: TalkieDelivery };
+
+/**
+ * `live` : le destinataire est connecté, sa voix sort tout de suite. `waking` (#17144) : il ne l'est pas mais il est
+ * joignable par push — la passerelle garde la voix et le réveille (« Réveil de X… »). Absent (passerelle antérieure) :
+ * `live`.
+ */
+export type TalkieDelivery = 'live' | 'waking';
 
 export type TalkieSenderState = { readonly phase: TalkieSendPhase };
 
@@ -74,7 +81,7 @@ const REFUSALS: Readonly<Record<string, TalkieSendOutcome>> = {
 
 export const outcomeOfRefusal = (code: unknown): TalkieSendOutcome => (typeof code === 'string' ? REFUSALS[code] : undefined) ?? 'failed';
 
-type Opened = { readonly talkieId: string; readonly maxDurationMs: number; readonly maxChunkBytes: number };
+type Opened = { readonly talkieId: string; readonly maxDurationMs: number; readonly maxChunkBytes: number; readonly delivery: TalkieDelivery };
 
 type Wire = Readonly<Record<string, unknown>>;
 const objectOf = (raw: unknown): Wire | null => (typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Wire) : null);
@@ -88,6 +95,7 @@ function decodeStartAck(raw: unknown): Opened | { readonly refused: TalkieSendOu
     talkieId: data.talkieId,
     maxDurationMs: Math.min(positive(data.maxDurationMs, TALKIE_MAX_DURATION_MS), TALKIE_MAX_DURATION_MS),
     maxChunkBytes: Math.min(positive(data.maxChunkBytes, TALKIE_MAX_CHUNK_BYTES), TALKIE_MAX_CHUNK_BYTES),
+    delivery: data.delivery === 'waking' ? 'waking' : 'live',
   };
 }
 
@@ -219,7 +227,7 @@ export function createTalkieSender({
   const opened = (s: Session, ack: Opened): void => {
     s.opened = ack;
     if (s.finishing) return;
-    store.setState({ phase: { kind: 'talking', toUserId: s.toUserId, talkieId: ack.talkieId } });
+    store.setState({ phase: { kind: 'talking', toUserId: s.toUserId, talkieId: ack.talkieId, delivery: ack.delivery } });
     s.cancelLimit = schedule(() => void finish(s, 'limit'), ack.maxDurationMs);
     const pending = s.queue;
     s.queue = [];

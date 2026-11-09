@@ -124,6 +124,22 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         XCTAssertEqual(ComposerFlashIntensity.clamped(.nan), ComposerFlashIntensity.defaultLevel)
     }
 
+    func test_flashAvant_lumiereDouce_blancCremeChaud() {
+        let plein = ComposerFlashIntensity.floorTint(1)
+        XCTAssertEqual(plein.red, 1, "le rouge reste plein : le visage est éclairé, pas teinté")
+        XCTAssertGreaterThan(plein.red, plein.green)
+        XCTAssertGreaterThan(plein.green, plein.blue, "le bleu cède le plus : une lumière chaude")
+        XCTAssertGreaterThan(plein.blue, 0.6, "un blanc crème, jamais une lumière orange")
+    }
+
+    func test_flashAvant_teinteSuitLIntensite_etGardeLePlancher() {
+        let moitie = ComposerFlashIntensity.floorTint(0.5)
+        XCTAssertEqual(moitie.red, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(moitie.blue, ComposerFlashIntensity.warmth.blue * 0.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerFlashIntensity.floorTint(0), ComposerFlashIntensity.floorTint(ComposerFlashIntensity.range.lowerBound),
+                       "jamais une lumière qui n'éclaire plus")
+    }
+
     func test_intensite_voiceOverAjuste_parPasDeDixPourCent() {
         XCTAssertEqual(ComposerFlashIntensity.stepped(0.5, up: true), 0.6, accuracy: 0.0001)
         XCTAssertEqual(ComposerFlashIntensity.stepped(1, up: true), 1)

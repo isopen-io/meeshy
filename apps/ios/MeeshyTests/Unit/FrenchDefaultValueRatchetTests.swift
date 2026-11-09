@@ -57,14 +57,18 @@ final class FrenchDefaultValueRatchetTests: XCTestCase {
         return Self.frenchMarkers.firstMatch(in: value, range: range) != nil
     }
 
-    /// Clés utilisées en code avec un `defaultValue`, mais absentes du catalogue.
+    /// Clés utilisées en code avec un `defaultValue`, mais absentes de tout
+    /// catalogue de l'app : `Localizable` et les tables nommées (`ComposerTime`,
+    /// `ComposerShell`, `ComposerCamera`, #17110), dont
+    /// `LocalizationTableCatalogGuardTests` vérifie les sept locales.
     private func untranslatedFrenchKeys() throws -> Set<String> {
-        let catalogURL = iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings")
-        let data = try Data(contentsOf: catalogURL)
-        let catalogued = Set(
-            ((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"]
-                as? [String: Any] ?? [:]).keys
-        )
+        let dossier = iosRoot.appendingPathComponent("Meeshy")
+        let catalogues = try FileManager.default.contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "xcstrings" && $0.lastPathComponent != "InfoPlist.xcstrings" }
+        let catalogued = try catalogues.reduce(into: Set<String>()) { cles, url in
+            let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+            cles.formUnion((json?["strings"] as? [String: Any] ?? [:]).keys)
+        }
 
         // Le tiret DOIT figurer dans la classe de caractères de la clé.
         // Sans lui, `location.move-prompt`, `common.clear-search`,

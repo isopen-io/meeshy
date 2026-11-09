@@ -29,7 +29,7 @@ struct TogetherTests {
         TogetherStarted(
             sessionId: Self.sessionId, hostUserId: host, guestUserId: guest,
             conversationId: Self.conversation, attachmentId: Self.attachment, media: .video,
-            playback: playback(rev: rev, at: at)
+            playback: playback(at: at, rev: rev)
         )
     }
 
@@ -163,7 +163,7 @@ struct TogetherTests {
             .started(started(at: 1_000_500), viewerId: Self.me, at: t0)
         #expect(state.invitation == nil)
         #expect(state.session?.partnerId == Self.proche)
-        #expect(state.clockOffsetMs == 1_000_500 - 999_000)
+        #expect(abs((state.clockOffsetMs ?? .nan) - (1_000_500 - 999_000)) < 0.001)
     }
 
     @Test func uneSeanceOuJeNeSuisPas_neSOuvrePas() {

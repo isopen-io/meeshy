@@ -10,7 +10,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Cámara" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Caméra" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Fotocamera" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Câmera" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Câmera" } }
       }
     },
     "composer.shell.concealed.hint" : {
@@ -22,7 +22,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca la escena para recuperar las herramientas" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Touchez la scène pour retrouver les outils" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Tocca la scena per ritrovare gli strumenti" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Toque na cena para recuperar as ferramentas" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Toque na cena para recuperar as ferramentas" } }
       }
     },
     "composer.shell.duplicate" : {
@@ -34,7 +34,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Duplicar la escena" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dupliquer la scène" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Duplica la scena" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Duplicar a cena" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Duplicar a cena" } }
       }
     },
     "composer.shell.reorder.done" : {
@@ -46,7 +46,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Listo" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Fine" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Concluído" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Concluído" } }
       }
     },
     "composer.shell.moveEarlier" : {
@@ -58,7 +58,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Mover antes" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer avant" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Sposta prima" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Mover para antes" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mover para antes" } }
       }
     },
     "composer.shell.moveLater" : {
@@ -70,7 +70,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Mover después" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer après" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Sposta dopo" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Mover para depois" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mover para depois" } }
       }
     },
     "composer.shell.rail.scene" : {
@@ -82,7 +82,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Escena" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Scène" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Scena" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Cena" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Cena" } }
       }
     },
     "composer.shell.rail.selection" : {
@@ -94,7 +94,7 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "SELECCIÓN" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "SÉLECTION" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "SELEZIONE" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "SELEÇÃO" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "SELEÇÃO" } }
       }
     }
   },

@@ -9,7 +9,7 @@ import { withMentions } from '../../services/posts/postReferences';
 import { withViewerPostState } from '../../services/posts/viewerPostState';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
-import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
+import { getCommunityCoMemberIds, getReadableCommunityIds } from '../../services/posts/communityVisibility';
 import { depreciee } from '../../utils/deprecation';
 import { rankedListingPage } from '../../services/social/listingContext';
 
@@ -82,7 +82,10 @@ export async function chargerPostsParHashtag(
     return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
   }
 
-  const communityCoMemberIds = await getCommunityCoMemberIds(prisma, viewerUserId);
+  const [communityCoMemberIds, readableCommunityIds] = await Promise.all([
+    getCommunityCoMemberIds(prisma, viewerUserId),
+    getReadableCommunityIds(prisma, viewerUserId),
+  ]);
 
   // `hasMore` se calcule APRÈS le filtrage d'audience, jamais avant (#4339,
   // critère 3 de #4149). L'ancienne forme lisait `limit + 1` LIENS
@@ -125,7 +128,12 @@ export async function chargerPostsParHashtag(
         OR: [
           { authorId: viewerUserId },
           { visibility: 'PUBLIC' },
-          { visibility: 'COMMUNITY', authorId: { in: communityCoMemberIds } },
+          {
+            visibility: 'COMMUNITY',
+            authorId: { in: communityCoMemberIds },
+            OR: [{ communityId: null }, { communityId: { isSet: false } }],
+          },
+          { visibility: 'COMMUNITY', communityId: { in: readableCommunityIds } },
         ],
       },
       select: postInclude,
