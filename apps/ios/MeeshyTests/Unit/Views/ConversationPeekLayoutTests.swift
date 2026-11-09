@@ -26,16 +26,35 @@ final class ConversationPeekLayoutTests: XCTestCase {
 
     func test_cardHeight_atRest_takesTheLargestShareOfTheScreen() {
         let layout = makeLayout()
-        XCTAssertEqual(layout.cardHeight(progress: 0), 800 - ConversationPeekLayout.spacing - 100)
         XCTAssertGreaterThan(layout.cardHeight(progress: 0), layout.menuHeight(progress: 0) * 5)
     }
 
-    func test_cardWidth_isNearlyTheFullWidth_withSideMargins() {
-        XCTAssertEqual(makeLayout(availableWidth: 430).cardWidth, 430 - 2 * ConversationPeekLayout.sideMargin)
+    // MARK: - Plus petit que l'écran (#17274)
+
+    func test_cardHeight_atRest_isEightyPercentOfWhatTheScreenOffers() {
+        let offered: CGFloat = 800 - ConversationPeekLayout.spacing - 100
+        XCTAssertEqual(makeLayout().cardHeight(progress: 0), offered * 0.8, accuracy: 0.001)
+    }
+
+    func test_cardWidth_isEightyPercentOfTheWidthBetweenTheMargins() {
+        XCTAssertEqual(makeLayout(availableWidth: 430).cardWidth, (430 - 2 * ConversationPeekLayout.sideMargin) * 0.8, accuracy: 0.001)
     }
 
     func test_cardWidth_isCapped_onAWideWindow() {
-        XCTAssertEqual(makeLayout(availableWidth: 1_200).cardWidth, ConversationPeekLayout.maximumWidth)
+        XCTAssertEqual(makeLayout(availableWidth: 1_200).cardWidth, ConversationPeekLayout.maximumWidth * 0.8, accuracy: 0.001)
+    }
+
+    func test_menuWidth_isEightyPercentOfItsFormerWidth_compactAsExpanded_andMatchesTheCard() {
+        let layout = makeLayout(availableWidth: 430)
+        XCTAssertEqual(layout.menuWidth, (430 - 2 * ConversationPeekLayout.sideMargin) * 0.8, accuracy: 0.001)
+        XCTAssertEqual(layout.menuWidth, layout.cardWidth)
+    }
+
+    func test_theStack_leavesTheListVisibleAroundIt_aVeilToTouchToClose() {
+        let layout = makeLayout()
+        XCTAssertGreaterThan(layout.verticalSlack, 44)
+        XCTAssertEqual(layout.stackHeight + layout.verticalSlack, 800, accuracy: 0.001)
+        XCTAssertGreaterThanOrEqual(430 - layout.menuWidth, 2 * 44)
     }
 
     // MARK: - Tirer le menu
@@ -47,7 +66,8 @@ final class ConversationPeekLayoutTests: XCTestCase {
     func test_progress_drivesBothHeights_theCardShrinksByWhatTheMenuGains() {
         let layout = makeLayout()
         let total = layout.menuHeight(progress: 0.5) + layout.cardHeight(progress: 0.5)
-        XCTAssertEqual(total, 800 - ConversationPeekLayout.spacing, accuracy: 0.001)
+        XCTAssertEqual(total, layout.stackHeight - ConversationPeekLayout.spacing, accuracy: 0.001)
+        XCTAssertEqual(total, layout.menuHeight(progress: 0) + layout.cardHeight(progress: 0), accuracy: 0.001)
         XCTAssertEqual(layout.menuHeight(progress: 0.5), 300, accuracy: 0.001)
     }
 
