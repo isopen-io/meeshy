@@ -17,9 +17,18 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 const NOW = new Date();
 const ADULT_BIRTH_DATE = new Date('1990-01-01T00:00:00.000Z');
 
-function birthDateYearsAgo(now: Date, years: number, dayOffset = 0): Date {
-  return new Date(Date.UTC(now.getUTCFullYear() - years, now.getUTCMonth(), now.getUTCDate() + dayOffset));
-}
+// Horloge GELÉE un 29 février (#17309) : 18 n'étant pas multiple de 4, la date
+// limite tombe le 28 février 2010 — le cas que l'horloge réelle n'atteint qu'une
+// fois tous les quatre ans. Seule la date est gelée ; les minuteries restent vraies.
+const FROZEN_NOW = new Date('2028-02-29T12:00:00.000Z');
+const EIGHTEENTH_BIRTHDAY = new Date('2010-02-28T00:00:00.000Z');
+const DAY_BEFORE_EIGHTEEN = new Date('2010-03-01T00:00:00.000Z');
+const FIFTEEN_YEARS_OLD = new Date('2013-02-28T00:00:00.000Z');
+const freezeClock = () =>
+  jest.useFakeTimers({
+    now: FROZEN_NOW,
+    doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+  });
 
 const FULL_CLONING_CHAIN = {
   dataProcessingConsentAt: NOW,
@@ -198,6 +207,9 @@ describe('ConsentValidationService', () => {
     });
 
     describe('#17309 — le clonage vocal exige 18 ans révolus, au jour près', () => {
+      beforeEach(freezeClock);
+      afterEach(() => jest.useRealTimers());
+
       it('lit birthDate dans la même requête que les consentements', async () => {
         const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: ADULT_BIRTH_DATE });
         await makeSut(prisma).getConsentStatus('u1');
@@ -207,14 +219,14 @@ describe('ConsentValidationService', () => {
       });
 
       it('ouvre le clonage le jour exact des 18 ans', async () => {
-        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: birthDateYearsAgo(new Date(), 18) });
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: EIGHTEENTH_BIRTHDAY });
         const status = await makeSut(prisma).getConsentStatus('u1');
 
         expect(status.canUseVoiceCloning).toBe(true);
       });
 
       it('ferme le clonage la veille des 18 ans, consentement accordé ou non', async () => {
-        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: birthDateYearsAgo(new Date(), 18, 1) });
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: DAY_BEFORE_EIGHTEEN });
         const status = await makeSut(prisma).getConsentStatus('u1');
 
         expect(status.canUseVoiceCloning).toBe(false);
@@ -228,7 +240,7 @@ describe('ConsentValidationService', () => {
       });
 
       it('ne touche à aucune autre capacité audio d’un mineur', async () => {
-        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: birthDateYearsAgo(new Date(), 15) });
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: FIFTEEN_YEARS_OLD });
         const status = await makeSut(prisma).getConsentStatus('u1');
 
         expect(status.canTranscribeAudio).toBe(true);

@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { EventEmitter } from 'events';
 
 jest.mock('../../../utils/logger-enhanced', () => {
@@ -18,10 +18,18 @@ jest.mock('../../../utils/logger-enhanced', () => {
 
 import { VoiceProfileService } from '../../../services/VoiceProfileService';
 
-function utcDayYearsAgo(years: number, dayOffset = 0): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear() - years, now.getUTCMonth(), now.getUTCDate() + dayOffset));
-}
+// Horloge GELÉE un 29 février (#17309) : 18 n'étant pas multiple de 4, la date
+// limite tombe le 28 février 2010 — le cas que l'horloge réelle n'atteint qu'une
+// fois tous les quatre ans. Seule la date est gelée ; les minuteries restent vraies.
+const FROZEN_NOW = new Date('2028-02-29T12:00:00.000Z');
+const EIGHTEENTH_BIRTHDAY = new Date('2010-02-28T00:00:00.000Z');
+const DAY_BEFORE_EIGHTEEN = new Date('2010-03-01T00:00:00.000Z');
+const FIFTEEN_YEARS_OLD = new Date('2013-02-28T00:00:00.000Z');
+const freezeClock = () =>
+  jest.useFakeTimers({
+    now: FROZEN_NOW,
+    doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+  });
 
 const wire = (date: Date): string => date.toISOString().slice(0, 10);
 
@@ -47,8 +55,11 @@ function setup(existingBirthDate: Date | null) {
 const written = (update: jest.Mock) => (update.mock.calls[0]?.[0] as { data: Record<string, unknown> } | undefined)?.data;
 
 describe('VoiceProfileService.updateConsent — clonage vocal à 18 ans révolus (#17309)', () => {
+  beforeEach(freezeClock);
+  afterEach(() => jest.useRealTimers());
+
   it('accorde à une date déjà posée le jour exact des 18 ans', async () => {
-    const { service, update } = setup(utcDayYearsAgo(18));
+    const { service, update } = setup(EIGHTEENTH_BIRTHDAY);
     const result = await service.updateConsent('u1', { voiceRecordingConsent: true, voiceCloningConsent: true });
 
     expect(result.success).toBe(true);
@@ -56,7 +67,7 @@ describe('VoiceProfileService.updateConsent — clonage vocal à 18 ans révolus
   });
 
   it('refuse une date déjà posée la veille des 18 ans, sans rien écrire', async () => {
-    const { service, update, updateMany } = setup(utcDayYearsAgo(18, 1));
+    const { service, update, updateMany } = setup(DAY_BEFORE_EIGHTEEN);
     const result = await service.updateConsent('u1', { voiceRecordingConsent: true, voiceCloningConsent: true });
 
     expect(result).toMatchObject({ success: false, errorCode: 'VOICE_CLONING_AGE_REQUIRED' });
@@ -77,7 +88,7 @@ describe('VoiceProfileService.updateConsent — clonage vocal à 18 ans révolus
     const result = await service.updateConsent('u1', {
       voiceRecordingConsent: true,
       voiceCloningConsent: true,
-      birthDate: wire(utcDayYearsAgo(18)),
+      birthDate: wire(EIGHTEENTH_BIRTHDAY),
     });
 
     expect(result.success).toBe(true);
@@ -89,7 +100,7 @@ describe('VoiceProfileService.updateConsent — clonage vocal à 18 ans révolus
     const result = await service.updateConsent('u1', {
       voiceRecordingConsent: true,
       voiceCloningConsent: true,
-      birthDate: wire(utcDayYearsAgo(18, 1)),
+      birthDate: wire(DAY_BEFORE_EIGHTEEN),
     });
 
     expect(result).toMatchObject({ success: false, errorCode: 'VOICE_CLONING_AGE_REQUIRED' });
@@ -97,7 +108,7 @@ describe('VoiceProfileService.updateConsent — clonage vocal à 18 ans révolus
   });
 
   it('une date posée prime sur une date redéclarée majeure (#9927)', async () => {
-    const { service, update } = setup(utcDayYearsAgo(15));
+    const { service, update } = setup(FIFTEEN_YEARS_OLD);
     const result = await service.updateConsent('u1', {
       voiceRecordingConsent: true,
       voiceCloningConsent: true,
@@ -112,7 +123,7 @@ describe('VoiceProfileService.updateConsent — clonage vocal à 18 ans révolus
     const recording = setup(null);
     expect((await recording.service.updateConsent('u1', { voiceRecordingConsent: true })).success).toBe(true);
 
-    const withdrawal = setup(utcDayYearsAgo(15));
+    const withdrawal = setup(FIFTEEN_YEARS_OLD);
     expect((await withdrawal.service.updateConsent('u1', { voiceCloningConsent: false })).success).toBe(true);
     expect(written(withdrawal.update)?.voiceCloningEnabledAt).toBeNull();
   });

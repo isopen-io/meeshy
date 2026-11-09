@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import Fastify, { FastifyRequest } from 'fastify';
 import { meConsentsRoutes, CONSENT_POLICY_VERSION } from '../../../../routes/me/consents';
 
@@ -15,10 +15,18 @@ jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 
 const USER_ID = '68a000000000000000000001';
 
-function birthDateYearsAgo(years: number, dayOffset = 0): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear() - years, now.getUTCMonth(), now.getUTCDate() + dayOffset));
-}
+// Horloge GELÉE un 29 février (#17309) : 18 n'étant pas multiple de 4, la date
+// limite tombe le 28 février 2010 — le cas que l'horloge réelle n'atteint qu'une
+// fois tous les quatre ans. Seule la date est gelée ; les minuteries restent vraies.
+const FROZEN_NOW = new Date('2028-02-29T12:00:00.000Z');
+const EIGHTEENTH_BIRTHDAY = new Date('2010-02-28T00:00:00.000Z');
+const DAY_BEFORE_EIGHTEEN = new Date('2010-03-01T00:00:00.000Z');
+const FIFTEEN_YEARS_OLD = new Date('2013-02-28T00:00:00.000Z');
+const freezeClock = () =>
+  jest.useFakeTimers({
+    now: FROZEN_NOW,
+    doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+  });
 
 function makePrisma(birthDate: Date | null, voiceCloningEnabledAt: Date | null = null) {
   const row = {
@@ -55,8 +63,11 @@ async function putVoiceCloning(prisma: ReturnType<typeof makePrisma>, granted: b
 }
 
 describe('PUT /me/consents/voice-cloning — 18 ans révolus au jour près (#17309)', () => {
+  beforeEach(freezeClock);
+  afterEach(() => jest.useRealTimers());
+
   it('accorde le jour exact des 18 ans', async () => {
-    const prisma = makePrisma(birthDateYearsAgo(18));
+    const prisma = makePrisma(EIGHTEENTH_BIRTHDAY);
     const res = await putVoiceCloning(prisma, true);
 
     expect(res.statusCode).toBe(200);
@@ -64,7 +75,7 @@ describe('PUT /me/consents/voice-cloning — 18 ans révolus au jour près (#173
   });
 
   it('refuse la veille des 18 ans, sans rien écrire', async () => {
-    const prisma = makePrisma(birthDateYearsAgo(18, 1));
+    const prisma = makePrisma(DAY_BEFORE_EIGHTEEN);
     const res = await putVoiceCloning(prisma, true);
 
     expect(res.statusCode).toBe(403);
@@ -82,14 +93,14 @@ describe('PUT /me/consents/voice-cloning — 18 ans révolus au jour près (#173
   });
 
   it('demande la date de naissance dans la même lecture', async () => {
-    const prisma = makePrisma(birthDateYearsAgo(30));
+    const prisma = makePrisma(new Date('1998-01-01T00:00:00.000Z'));
     await putVoiceCloning(prisma, true);
 
     expect(prisma.user.findUnique.mock.calls[0][0].select.birthDate).toBe(true);
   });
 
   it('laisse un mineur RETIRER un clonage accordé avant la règle', async () => {
-    const prisma = makePrisma(birthDateYearsAgo(15), new Date('2026-01-01T00:00:00.000Z'));
+    const prisma = makePrisma(FIFTEEN_YEARS_OLD, new Date('2026-01-01T00:00:00.000Z'));
     const res = await putVoiceCloning(prisma, false);
 
     expect(res.statusCode).toBe(200);
