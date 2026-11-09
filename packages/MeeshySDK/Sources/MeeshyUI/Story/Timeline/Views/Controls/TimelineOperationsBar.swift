@@ -88,7 +88,7 @@ public struct TimelineOperationsBar: View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Image(systemName: "plus")
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                 Text(String(format: String(localized: "story.timeline.ops.extend.label",
                                            defaultValue: "%@ s", bundle: .module),
                             "\(Int(Self.extendStepSeconds))"))

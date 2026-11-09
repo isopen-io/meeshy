@@ -300,6 +300,7 @@ private struct SettingsInfoOverlay: ViewModifier {
                                 bundle: .module
                             ))
                             .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { dismiss() }
 
                         card(presented)
                             .padding(.horizontal, MeeshySpacing.xxl)

@@ -134,7 +134,7 @@ public struct PackShopView: View {
             if showsFailure {
                 Text(failureText ?? String(localized: "sticker.shop.failed",
                             defaultValue: "Le pack n’a pas pu changer d’état. Réessaie.", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundStyle(MeeshyColors.error)
             }
             if let rows {
@@ -219,7 +219,7 @@ public struct PackShopView: View {
             if !row.author.isEmpty {
                 Text(String(format: String(localized: "sticker.sheet.pack.by", defaultValue: "par %@",
                                            bundle: .module), row.author))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundStyle(.secondary)
             }
             if let usage = row.usageText {
@@ -230,7 +230,7 @@ public struct PackShopView: View {
             if Self.showsOwned(row) {
                 Label(String(localized: "shop.owned", defaultValue: "Possédé", bundle: .module),
                       systemImage: "checkmark.seal.fill")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("shop.owned.\(row.slug)")
             }

@@ -44,7 +44,23 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         "community.settings.color.swatch.a11y",
         "media.image.open.a11y",
         "userIdentity.language.show.a11y",
-        "story.timeline.transition.select.a11y"
+        "story.timeline.transition.select.a11y",
+        "story.text.align.left.a11y",
+        "story.text.align.center.a11y",
+        "story.text.align.right.a11y",
+        "story.text.background.toggle.a11y",
+        "story.timeline.step.decrease.a11y",
+        "story.timeline.step.increase.a11y",
+        "community.react.a11y",
+        "reaction.picker.more.a11y",
+        "audio.transcript.show.a11y",
+        "audio.transcript.hide.a11y",
+        "media.code.copy.a11y",
+        "audio.editor.skip.backward.a11y",
+        "audio.editor.skip.forward.a11y",
+        "media.controls.toggle.a11y",
+        "media.image.zoom.toggle.a11y",
+        "avatar.presence.details.a11y"
     ]
 
     private static let catalogLanguages = ["fr", "en", "es", "de", "it", "ar", "pt-BR"]
@@ -218,5 +234,34 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         XCTAssertFalse(text.contains("isPressed"))
         XCTAssertFalse(text.contains("opacity"))
         XCTAssertFalse(text.contains("scaleEffect"))
+    }
+
+    func test_aucunBoutonAIconeSeuleDuSDKNEstMuet() throws {
+        let offenders = try MeeshyUISourceScan.allSources().flatMap { source in
+            MeeshyUISourceScan.buttons(in: source.text)
+                .filter(MeeshyUISourceScan.isIconOnlyAndMute)
+                .map { "\(source.path):\($0.line)" }
+        }
+        XCTAssertEqual(offenders, [], "Bouton à icône seule sans libellé VoiceOver")
+    }
+
+    func test_leScannerDIconeSeuleReconnaitLesFormes() {
+        let bare = MeeshyUISourceScan.buttons(in: "Button { go() } label: { Image(systemName: \"xmark\") }")
+        let named = MeeshyUISourceScan.buttons(in: "Button { go() } label: { Image(systemName: \"xmark\") }\n.accessibilityLabel(\"x\")")
+        let inner = MeeshyUISourceScan.buttons(in: "Button(action: go) { Image(systemName: \"xmark\").accessibilityLabel(\"x\") }")
+        let withText = MeeshyUISourceScan.buttons(in: "Button(action: go) { HStack { Image(systemName: \"xmark\"); Text(\"x\") } }")
+        let roleBare = MeeshyUISourceScan.buttons(in: "Button(role: .destructive) { go() } label: { Image(systemName: \"trash\") }")
+        XCTAssertEqual(bare.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 1)
+        XCTAssertEqual(named.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(inner.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(withText.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(roleBare.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 1)
+    }
+
+    func test_toutOnTapGestureDuSDKEstExposeAVoiceOver() throws {
+        let offenders = try MeeshyUISourceScan.allSources().flatMap { source in
+            MeeshyUISourceScan.ungatedTapGestures(in: source.text).map { "\(source.path):\($0)" }
+        }
+        XCTAssertEqual(offenders, [], ".onTapGesture ni bouton ni action nommée pour VoiceOver")
     }
 }

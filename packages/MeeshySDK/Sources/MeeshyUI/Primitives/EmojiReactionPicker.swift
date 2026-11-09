@@ -231,6 +231,7 @@ public struct EmojiReactionPicker: View {
                 .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
                 .background(tileFrameReader(index: quickEmojis.count))
             }
+            .accessibilityLabel(String(localized: "reaction.picker.more.a11y", bundle: .module))
             // La tuile "+" cloture la vague — son index est place juste
             // apres le dernier emoji pour qu'elle arrive en derniere.
             .modifier(WaveTileModifier(index: quickEmojis.count, hasEntered: hasEntered))
@@ -460,7 +461,7 @@ public struct EmojiFullPickerSheet: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { dismiss() }
+                Color.black.opacity(0.4).ignoresSafeArea().meeshyTapAction(label: String(localized: "common.close", bundle: .module)) { dismiss() }
                 VStack(spacing: 0) {
                     dragHandle
                     categoryTabs
@@ -503,9 +504,9 @@ public struct EmojiFullPickerSheet: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
                         VStack(spacing: MeeshySpacing.xxs) {
-                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
@@ -626,9 +627,9 @@ public struct CategorizedEmojiPickerSheet: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
                         VStack(spacing: MeeshySpacing.xxs) {
-                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
@@ -690,9 +691,9 @@ public struct EmojiKeyboardPanel: View {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                         } label: {
                             VStack(spacing: MeeshySpacing.xxs) {
-                                Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                                Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                                 Text(category.name)
-                                    .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                    .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                     .foregroundColor(selectedCategory == index
                                         ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                         : (style == .dark ? .white.opacity(0.4) : .gray))

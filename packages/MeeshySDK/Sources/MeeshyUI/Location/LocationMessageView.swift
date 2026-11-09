@@ -87,12 +87,12 @@ public struct LocationMessageView: View {
         HStack(spacing: MeeshySpacing.sm) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(infoLines.title ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 if let subtitle = infoLines.subtitle {
                     Text(subtitle)
-                        .font(.system(size: MeeshyFont.captionSize))
+                        .meeshyScaledFont(MeeshyFont.captionSize)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }

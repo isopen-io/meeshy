@@ -299,7 +299,7 @@ extension UserProfileSheet {
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 Text(label)
-                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
             }
             .foregroundColor(color)
             .frame(maxWidth: .infinity)

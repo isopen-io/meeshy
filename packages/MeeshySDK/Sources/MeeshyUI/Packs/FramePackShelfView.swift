@@ -158,7 +158,7 @@ public struct FramePackShelfView: View {
                 .aspectRatio(SceneShape.aspect, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             Text(tile.name)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .meeshyScaledFont(14, weight: .semibold, design: .rounded)
                 .lineLimit(1)
             Label(tile.usageText, systemImage: "checkmark.seal")
                 .font(MeeshyFont.relative(11, weight: .medium))
@@ -170,7 +170,7 @@ public struct FramePackShelfView: View {
 
     private func notice(_ text: String, symbol: String) -> some View {
         Label(text, systemImage: symbol)
-            .font(.system(size: 14, weight: .medium))
+            .meeshyScaledFont(14, weight: .medium)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MeeshySpacing.md)

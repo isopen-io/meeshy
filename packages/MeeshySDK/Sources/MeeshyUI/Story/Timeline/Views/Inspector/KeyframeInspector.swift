@@ -166,14 +166,14 @@ public struct KeyframeInspector: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.time",
                         defaultValue: "Instant", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(9, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(spacing: MeeshySpacing.xsPlus) {
-                timeStepButton(systemName: "minus.circle.fill") { onTimeAdjusted(-Self.timeStep) }
+                timeStepButton(systemName: "minus.circle.fill", label: String(localized: "story.timeline.step.decrease.a11y", bundle: .module)) { onTimeAdjusted(-Self.timeStep) }
                 Text(String(format: "%.2fs", keyframe.absoluteTime))
                     .font(.system(.callout, design: .monospaced))
                     .monospacedDigit()
-                timeStepButton(systemName: "plus.circle.fill") { onTimeAdjusted(Self.timeStep) }
+                timeStepButton(systemName: "plus.circle.fill", label: String(localized: "story.timeline.step.increase.a11y", bundle: .module)) { onTimeAdjusted(Self.timeStep) }
             }
         }
         .accessibilityElement(children: .combine)
@@ -182,20 +182,21 @@ public struct KeyframeInspector: View {
         .accessibilityValue(String(format: "%.2fs", keyframe.absoluteTime))
     }
 
-    private func timeStepButton(systemName: String, action: @escaping () -> Void) -> some View {
+    private func timeStepButton(systemName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.title3)
                 .foregroundStyle(MeeshyColors.indigo400)
                 .contentShape(Rectangle().inset(by: -8))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 
     private var positionSliders: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "story.timeline.keyframe.position", bundle: .module).uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(spacing: MeeshySpacing.md) {
                 axisSlider(label: "X", value: $posX, range: 0...1) {
@@ -222,7 +223,7 @@ public struct KeyframeInspector: View {
     private var scaleSlider: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.scale", bundle: .module).uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             Slider(value: $scale, in: Self.scaleSliderRange(current: keyframe.scale, floor: keyframe.scaleFloor)) { editing in
                 if !editing { onScaleChanged(scale) }
@@ -235,7 +236,7 @@ public struct KeyframeInspector: View {
     private var opacitySlider: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.opacity", bundle: .module).uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             Slider(value: $opacity, in: 0...1, step: 0.01) { editing in
                 if !editing { onOpacityChanged(opacity) }

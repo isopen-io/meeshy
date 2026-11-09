@@ -43,9 +43,9 @@ struct CanvasLayerIndicator: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
                 Text(label)
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: isActive ? .semibold : .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isActive ? .semibold : .medium))
             }
             .foregroundColor(isActive ? .white : mutedText)
             .padding(.horizontal, MeeshySpacing.sm)

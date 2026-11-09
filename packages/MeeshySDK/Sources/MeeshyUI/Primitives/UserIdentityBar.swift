@@ -188,14 +188,14 @@ public struct UserIdentityBar: View {
         case .name:
             if let name {
                 Text(name)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
             }
 
         case .username(let value):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
 
@@ -203,17 +203,17 @@ public struct UserIdentityBar: View {
             if role != .member {
                 Label {
                     Text(role.displayName)
-                        .font(.system(size: MeeshyFont.footnoteSize))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 } icon: {
                     Image(systemName: role.icon)
-                        .font(.system(size: MeeshyIconSize.xxs))
+                        .meeshyScaledFont(MeeshyIconSize.xxs)
                 }
                 .foregroundColor(roleBadgeColor(for: role))
             }
 
         case .time(let value):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(tintColor ?? theme.textSecondary)
 
         case .delivery(let status):
@@ -235,21 +235,21 @@ public struct UserIdentityBar: View {
                         .fill(state.dotColor)
                         .frame(width: 6, height: 6)
                     Text(state.localizedLabel)
-                        .font(.system(size: MeeshyFont.footnoteSize))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(state.dotColor)
                 }
             }
 
         case .memberSince(let value):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
 
         case .actionButton(let label, let action):
             Button(action: action) {
                 Text(label)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo500)
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xs)
@@ -276,9 +276,9 @@ public struct UserIdentityBar: View {
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(label)
-                        .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .medium))
+                        .meeshyScaledFont(8, weight: .medium)
                 }
                 .foregroundColor(MeeshyColors.indigo500)
                 .padding(.horizontal, MeeshySpacing.smPlus)
@@ -291,7 +291,7 @@ public struct UserIdentityBar: View {
 
         case .text(let value, _):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
         }
@@ -376,7 +376,7 @@ public struct UserIdentityBar: View {
     private func translateButton(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "translate")
-                .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
+                .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
                 .foregroundColor(MeeshyColors.brandPrimary)
         }
         .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))

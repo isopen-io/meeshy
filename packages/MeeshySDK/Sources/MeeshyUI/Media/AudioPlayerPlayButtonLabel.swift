@@ -70,7 +70,7 @@ struct AudioPlayerPlayButtonLabel: View {
                 let label = AudioPlayerView.formattedNeedsDownloadLabel(fileSize: fileSize)
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -83,7 +83,7 @@ struct AudioPlayerPlayButtonLabel: View {
                 )
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
