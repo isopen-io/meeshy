@@ -7,6 +7,7 @@ import { processTalkieRelay } from '../../services/talkie/talkieCut';
 import { verifyTalkieAudioToken } from '../../services/talkie/talkieAudioToken';
 import { TALKIE_AUDIO_MIME } from '../../services/talkie/talkiePush';
 import type { TalkieRelay } from '../../services/talkie/talkieRelay';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess, sendUnauthorized } from '../../utils/response';
 import { retireSurplusTokens } from '../push-tokens';
@@ -63,7 +64,12 @@ export async function talkieRoutes(fastify: FastifyInstance): Promise<void> {
       summary: 'Waking talkie audio',
       params: { type: 'object', required: ['talkieId'], properties: { talkieId: { type: 'string', maxLength: 24 } } },
       querystring: { type: 'object', properties: { e: { type: 'string', maxLength: 16 }, t: { type: 'string', maxLength: 64 } } },
-      response: { 401: errorResponseSchema, 404: errorResponseSchema, 500: errorResponseSchema },
+      response: {
+        200: { description: 'Les octets de la voix gardée, fragments ADTS concaténés (audio/aac)', type: 'string', format: 'binary' },
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema,
+      },
     },
   }, async (request: AudioRequest, reply: FastifyReply) => {
     try {
@@ -113,7 +119,7 @@ export async function talkieRoutes(fastify: FastifyInstance): Promise<void> {
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = registeredUserOf(request);
-    if (!userId) return sendUnauthorized(reply, 'Authentication required');
+    if (!userId) return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
     const parsed = pushToTalkTokenSchema.safeParse(request.body);
     if (!parsed.success) return sendBadRequest(reply, 'Invalid request data');
     const body = parsed.data;
@@ -170,7 +176,7 @@ export async function talkieRoutes(fastify: FastifyInstance): Promise<void> {
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = registeredUserOf(request);
-    if (!userId) return sendUnauthorized(reply, 'Authentication required');
+    if (!userId) return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
     const parsed = pushToTalkUnregisterSchema.safeParse(request.body ?? {});
     if (!parsed.success) return sendBadRequest(reply, 'Invalid request data');
     try {

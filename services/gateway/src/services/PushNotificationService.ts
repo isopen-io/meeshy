@@ -23,6 +23,7 @@ import {
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
+import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -841,47 +842,15 @@ export class PushNotificationService {
     }
   }
 
-  /**
-   * Le réveil PushToTalk (#17142) : `apns-push-type: pushtotalk`, topic `<bundle>.voip-ptt`, priorité 10,
-   * expiration 0 (une voix périmée ne réveille personne), ni alerte ni son — le framework PushToTalk rend
-   * lui-même l'orateur actif à partir des clés de `data`.
-   */
-  private async sendViaPushToTalk(
-    tokenRecord: { id: string; token: string; bundleId?: string | null; apnsEnvironment?: string | null },
-    payload: PushNotificationPayload,
-  ): Promise<PushResult> {
-    const env = tokenRecord.apnsEnvironment === 'development' ? 'sandbox' : 'production';
-    const client = env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction;
-    if (!client) {
-      return { success: false, tokenId: tokenRecord.id, error: `APNS ${env} client not initialized` };
-    }
-    try {
-      const apn = await import('@parse/node-apn');
-      const notification = new apn.Notification();
-      notification.alert = undefined as never;
-      notification.sound = undefined as never;
-      notification.badge = undefined as never;
-      notification.topic = `${tokenRecord.bundleId || config.apns.bundleId}.voip-ptt`;
-      notification.pushType = 'pushtotalk';
-      notification.priority = 10;
-      notification.expiry = 0;
-      notification.payload = { ...(payload.data ?? {}) };
-      const corr = { tokenId: tokenRecord.id, apnsEnv: env, topic: notification.topic, pushType: 'pushtotalk' };
-      const result = await this.apnsCircuitBreaker.execute(() =>
-        performanceLogger.withTiming('push.sendViaPushToTalk', () => this.sendApnsWithRetry(client, notification, tokenRecord.token, corr), corr)
-      );
-      if (result.failed.length > 0) {
-        const reason = result.failed[0].response?.reason || 'APNS delivery failed';
-        pushLogger.warn('push.sendViaPushToTalk.failure', { ...corr, reason, statusCode: result.failed[0].status });
-        return { success: false, tokenId: tokenRecord.id, error: reason, transient: isTransientApnsReason(reason) };
-      }
-      pushLogger.info('push.sendViaPushToTalk.success', corr);
-      return { success: true, tokenId: tokenRecord.id };
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'APNS error';
-      pushLogger.warn('push.sendViaPushToTalk.failure', { tokenId: tokenRecord.id, apnsEnv: env, errorMessage: message });
-      return { success: false, tokenId: tokenRecord.id, error: message };
-    }
+  private sendViaPushToTalk(tokenRecord: PushToTalkTokenRecord, payload: PushNotificationPayload): Promise<PushResult> {
+    return sendViaPushToTalk({
+      hasClient: (env) => !!(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction),
+      send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming('push.sendViaPushToTalk',
+        () => this.sendApnsWithRetry(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction, notification, token, corr), corr)),
+      isTransient: isTransientApnsReason,
+      defaultBundleId: config.apns.bundleId,
+      log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.sendViaPushToTalk.${event}`, fields),
+    }, tokenRecord, payload);
   }
 
   /**

@@ -42,7 +42,7 @@ function prismaDouble() {
         rows.push(args.create);
         return { id: 'tok-1', type: args.create.type };
       }),
-      deleteMany: jest.fn(async () => ({ count: 1 })),
+      deleteMany: jest.fn(async (_args: unknown) => ({ count: 1 })),
     },
   };
 }

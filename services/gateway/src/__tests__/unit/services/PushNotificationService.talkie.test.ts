@@ -213,7 +213,7 @@ describe('#17142 — le réveil du talkie au chokepoint', () => {
 
 describe('#17142 — le canal de réveil d’un destinataire', () => {
   const prismaWith = (types: string[]) => ({
-    pushToken: { findMany: jest.fn(async () => types.map((type) => ({ id: type, type, sessionId: 'sess-ok' }))), deleteMany: jest.fn(async () => ({ count: 0 })) },
+    pushToken: { findMany: jest.fn(async (_args: unknown) => types.map((type) => ({ id: type, type, sessionId: 'sess-ok' }))), deleteMany: jest.fn(async () => ({ count: 0 })) },
     userSession: { findMany: jest.fn(async () => [{ id: 'sess-ok' }]) },
   });
 
