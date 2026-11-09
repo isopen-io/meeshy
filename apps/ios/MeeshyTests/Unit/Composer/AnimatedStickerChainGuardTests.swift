@@ -72,8 +72,10 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
 
         XCTAssertTrue(pose.contains("animatedData: item.animatedData"),
                       "poser depuis « Mes stickers » doit emporter les octets du sticker.")
-        XCTAssertTrue(pose.contains("animatedData: film"),
+        XCTAssertTrue(pose.contains("LateStickerAnimation.attach(film, to: id, on: viewModel)"),
                       "poser un Mee doit emporter son film — sinon la scène le fige.")
+        XCTAssertTrue(pose.contains("await MeeStickerCatalog.animatedImageData(for: mee)"),
+                      "le film d'un Mee se rasterise APRÈS le toucher, jamais pendant (#17040).")
         XCTAssertTrue(pose.contains("animatedData: loaded.isAnimated ? loaded.data : nil"),
                       "un sticker de pack cinématique garde son mouvement.")
     }

@@ -78,9 +78,11 @@ final class MeeStickerCatalogTests: XCTestCase {
         XCTAssertEqual(sansFilm.map(\.id), [])
     }
 
-    func test_film_decodes_andAnimatesWhenDeclaredAnimated() throws {
+    func test_film_decodes_andAnimatesWhenDeclaredAnimated() async throws {
         let anime = try XCTUnwrap(MeeStickerCatalog.all.first(where: \.animated))
-        let decoded = try XCTUnwrap(MeeStickerCatalog.decoded(anime, maxPixelSize: 120))
+        let url = try XCTUnwrap(MeeStickerCatalog.fileURL(for: anime))
+        let entry = await MeeStickerCatalog.film(at: url, maxPixelSize: 120)
+        let decoded = try XCTUnwrap(entry?.decoded)
         XCTAssertGreaterThan(decoded.frames.count, 1)
         XCTAssertNotNil(decoded.stillImage)
     }
