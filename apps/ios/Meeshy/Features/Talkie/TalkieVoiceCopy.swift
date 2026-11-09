@@ -141,8 +141,8 @@ nonisolated enum TalkieVoiceCopyFile {
 final class TalkieVoiceCopySender: TalkieVoiceCopying {
     typealias SharedConversations = @MainActor (String) async throws -> [TalkieCopyCandidate]
     typealias DirectOpener = @MainActor (String) async throws -> String
-    /// Le fichier, la conversation, et le `clientMessageId` sous lequel la file enverra le message.
-    typealias Enqueuer = @MainActor (URL, String, String) async throws -> Void
+    /// Le fichier, la conversation, le `clientMessageId` sous lequel la file enverra le message, et le nom de la pièce.
+    typealias Enqueuer = @MainActor (URL, String, String, String) async throws -> Void
 
     private let shared: SharedConversations
     private let openDirect: DirectOpener
@@ -150,6 +150,7 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
     private let writeFile: ([Data], URL) -> TimeInterval?
     private let directory: URL
     private let newClientMessageId: () -> String
+    private let now: () -> Date
     private let failed = PassthroughSubject<Void, Never>()
     /// Les copies confiées à la file et pas encore tranchées : seul leur abandon se dit.
     private var queued: Set<String> = []
@@ -164,7 +165,8 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
         writeFile: @escaping ([Data], URL) -> TimeInterval? = TalkieVoiceCopyFile.write,
         directory: URL = FileManager.default.temporaryDirectory,
         exhausted: AnyPublisher<String, Never> = TalkieVoiceCopySender.liveExhausted,
-        newClientMessageId: @escaping () -> String = ClientMessageId.generate
+        newClientMessageId: @escaping () -> String = ClientMessageId.generate,
+        now: @escaping () -> Date = Date.init
     ) {
         self.shared = shared
         self.openDirect = openDirect
@@ -172,6 +174,7 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
         self.writeFile = writeFile
         self.directory = directory
         self.newClientMessageId = newClientMessageId
+        self.now = now
         exhaustion = exhausted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] clientMessageId in
@@ -184,12 +187,13 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
     @discardableResult
     func send(_ frames: [Data], toUserId: String, conversationId named: String?) async -> Bool {
         let url = directory.appendingPathComponent("talkie-copy-\(UUID().uuidString).m4a")
+        let name = TalkieVoiceCopyName.of(now())
         guard !frames.isEmpty, writeFile(frames, url) != nil else { return false }
         let clientMessageId = newClientMessageId()
         do {
             let conversationId = if let named { named } else { try await destination(for: toUserId) }
             queued.insert(clientMessageId)
-            try await enqueue(url, conversationId, clientMessageId)
+            try await enqueue(url, conversationId, clientMessageId, name)
             Logger.talkieCopy.info("talkie · copie vocale confiée à la file d'envoi")
             return true
         } catch {
@@ -227,7 +231,7 @@ extension TalkieVoiceCopySender {
         OfflineQueue.shared.retryExhausted.publisher.map(\.clientMessageId).eraseToAnyPublisher()
     }
 
-    static func liveEnqueue(_ url: URL, _ conversationId: String, _ clientMessageId: String) async throws {
+    static func liveEnqueue(_ url: URL, _ conversationId: String, _ clientMessageId: String, _ name: String) async throws {
         _ = try await OfflineQueue.shared.enqueueMedia(
             sourceMediaURLs: [url],
             kinds: [AttachmentKind.audio.rawValue],
@@ -240,7 +244,21 @@ extension TalkieVoiceCopySender {
             forwardedFromConversationId: nil,
             copyAttachmentsFromClientMessageId: nil,
             deletesSourceFiles: true,
-            createdAt: Date()
+            createdAt: Date(),
+            originalNames: [name]
         )
+    }
+}
+
+/// Le nom sous lequel la copie vocale part : `talkie_AAAA-MM-JJ_HHmm.m4a`, à l'heure locale de la prise de parole
+/// (#17308). Le fichier local garde un nom unique ; seul ce nom voyage avec la pièce jointe.
+enum TalkieVoiceCopyName {
+    static func of(_ date: Date, timeZone: TimeZone = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let day = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+        let minute = String(format: "%02d%02d", parts.hour ?? 0, parts.minute ?? 0)
+        return "talkie_\(day)_\(minute).m4a"
     }
 }
