@@ -46,7 +46,7 @@ public struct RepostRequest: Encodable {
     ///
     /// La phrase « PUBLIC, seule visibilité qu'un original repostable puisse
     /// avoir » qui closait ce commentaire n'est plus vraie depuis le
-    /// 2026-08-19 : la republication est ouverte aux originaux non publics. La
+    /// La republication est ouverte aux originaux non publics. La
     /// valeur envoyée ici est VÉRIFIÉE par le serveur contre la loi d'audience
     /// — même audience ou plus restreinte, jamais plus large (403
     /// `REPOST_AUDIENCE_WIDENING`). Le miroir client de cette loi est

@@ -39,8 +39,8 @@ public struct MessageProtectionIntent: Equatable, Sendable {
         isViewOnce: Bool = false,
         maxViewOnceCount: Int? = nil
     ) {
-        // Flou et vue unique sont EXCLUSIFS au choix de l'auteur (directive
-        // porteur 2026-09-24, #7667) : le composeur éteint l'un quand on allume
+        // Flou et vue unique sont EXCLUSIFS au choix de l'auteur (#7667):
+        // le composeur éteint l'un quand on allume
         // l'autre, et ce site-ci est le second verrou que traverse tout chemin
         // d'envoi. La vue unique, plus forte, gagne. Seul un flou IMPOSÉ par le
         // message cité s'y ajoute (`contaminated(by:)`, #8567).

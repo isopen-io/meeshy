@@ -53,7 +53,7 @@ extension StoryEffects {
     /// Wire-only : id de l'objet qui portait, sur SON PROPRE payload, à la
     /// fois une référence média (`mediaId`/`postMediaId`) et le cadrage de
     /// fond (`transform`/`background`) — un objet `plane: bg` servi par la
-    /// passerelle sous cette forme (revue 2026-09-17). Le réencodage replace
+    /// passerelle sous cette forme. Le réencodage replace
     /// ces deux clés sur ce MÊME objet plutôt que sur un second objet
     /// synthétique : les scinder en deux les dédouble (deux objets pour un),
     /// ou perd le cadrage (quand l'id du synthétique collisionne avec le

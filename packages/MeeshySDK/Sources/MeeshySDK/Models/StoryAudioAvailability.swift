@@ -47,8 +47,8 @@ public enum StoryAudioAvailability {
         return false
     }
 
-    /// **Le baffle du lecteur a-t-il encore un son à couper ?** (#9677,
-    /// directive porteur 2026-10-08) Quand le son de FOND s'annonce, c'est la
+    /// **Le baffle du lecteur a-t-il encore un son à couper ?** (#9677)
+    /// Quand le son de FOND s'annonce, c'est la
     /// note du crédit qui le coupe ; le baffle ne reste que pour ce que cette
     /// note ne dit pas — une note vocale, une piste qui n'est PAS le fond, la
     /// piste propre d'une vidéo. Sans fond annoncé, la règle est inchangée.

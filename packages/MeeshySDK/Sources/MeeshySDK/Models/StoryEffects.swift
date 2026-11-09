@@ -332,7 +332,7 @@ public struct StoryEffects: Codable, Sendable {
     /// neuve (aucun document servi) et une story éditée émettent donc l'une
     /// comme l'autre l'état réel du canvas.
     ///
-    /// **Les scènes SUIVANTES, elles, viennent du document** (2026-09-06). Le
+    /// **Les scènes SUIVANTES, elles, viennent du document**. Le
     /// runtime ne décrit qu'une slide : partir de lui seul jetait tout ce qui
     /// vivait au-delà — une publication à trois scènes rouverte, éditée puis
     /// renvoyée en émettait UNE. Détail : `CanvasV3.init(migrating:keeping:)`.
@@ -437,8 +437,8 @@ public struct StoryEffects: Codable, Sendable {
     /// Dans ce cas, aucun fond coloré (`background` solidColor/gradient) ne doit être
     /// peint — le média couvre le canvas (reader, composer, mini-preview, preview).
     /// Le fond coloré ne s'affiche QUE sans média de fond visuel (texte, dessin,
-    /// foreground media, son). Source de vérité unique du Prisme visuel des stories
-    /// (user 2026-06-03). NB : le fond legacy `StorySlide.mediaURL` est géré au niveau
+    /// foreground media, son). Source de vérité unique du Prisme visuel des stories.
+    /// NB : le fond legacy `StorySlide.mediaURL` est géré au niveau
     /// `StorySlide`/`StoryRenderer.renderBackground` (cet `effects` ne le porte pas).
     public var hasVisualBackgroundMedia: Bool {
         resolvedBackgroundMedia != nil
