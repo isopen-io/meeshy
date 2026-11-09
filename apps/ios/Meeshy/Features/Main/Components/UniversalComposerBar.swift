@@ -207,8 +207,7 @@ struct UniversalComposerBar: View {
     /// de tuile (loi 4 : une porte sans effet n'est pas rendue).
     var onRequestStickerPicker: (() -> Void)? = nil
 
-    /// **L'emplacement d'envoi devient un CADRE À MOTS** (#5326, directive
-    /// porteur 2026-09-06). L'hôte reçoit le gabarit choisi et le texte tapé,
+    /// **L'emplacement d'envoi devient un CADRE À MOTS** (#5326). L'hôte reçoit le gabarit choisi et le texte tapé,
     /// et les envoie comme un message-sticker (`ConversationView.sendTemplateSticker`).
     ///
     /// `nil` = la pastille n'est pas rendue et le bouton d'envoi reste :
@@ -337,7 +336,7 @@ struct UniversalComposerBar: View {
     /// par la mise en forme qui la replace elle-même (#8791).
     @State var selectionText = ""
     /// La feuille des dix cadres à mots, ouverte par un appui long sur le
-    /// bouton d'envoi (#5326, directive porteur 2026-09-25).
+    /// bouton d'envoi (#5326).
     @State var showTextStickerSheet = false
     /// La feuille des emojis, ouverte par un appui long sur un emoji rapide
     /// (#7931).

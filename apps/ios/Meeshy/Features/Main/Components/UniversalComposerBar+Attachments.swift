@@ -309,7 +309,7 @@ extension UniversalComposerBar {
     }
 
     /// Le disque d'une tuile d'action du (+) : 58 pt réduits de 20 %
-    /// (directive porteur 2026-09-25), la gouttière dans la même proportion.
+    /// la gouttière dans la même proportion.
     /// Avec son libellé, la tuile garde une cible tactile au-dessus de 44 pt.
     static let carouselTileDiameter: CGFloat = 46
     static let carouselTileSpacing: CGFloat = 11

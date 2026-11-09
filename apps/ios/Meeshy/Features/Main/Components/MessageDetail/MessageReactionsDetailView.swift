@@ -24,7 +24,7 @@ struct MessageReactionsDetailView: View {
 
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
-            // Ajouter une réaction (req 2026-07-24 : « Réactions » = voir + ajouter).
+            // Ajouter une réaction.
             // Bande rapide partagée (mêmes emojis que la pastille de l'appui long).
             if let onReact {
                 EmojiReactionPicker(

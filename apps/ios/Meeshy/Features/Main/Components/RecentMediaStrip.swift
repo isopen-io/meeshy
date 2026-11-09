@@ -200,7 +200,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     // `PHImageManager.h` documents the video handlers verbatim as "The result
     // handler is called on an arbitrary queue" — so `requestAVAsset` and
     // `requestPlayerItem` trapped every single time. That is the crash in
-    // Meeshy-2026-07-11-131634.ips (thread `com.apple.photos.requestAVAsset`,
+    // Meeshy--131634.ips (thread `com.apple.photos.requestAVAsset`,
     // EXC_BREAKPOINT in `closure #1 in closure #1 in resolveVideo(_:)`), seen
     // 7× across builds 1201→1235: tapping any video in the strip killed the app.
     //

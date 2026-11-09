@@ -4,8 +4,7 @@ import MeeshyUI
 
 // MARK: - MessageViewsSendAttemptsCard
 
-/// Historique local des tentatives d'envoi (spec 2026-07-08
-/// message-send-failure-retry-flow). Vide pour les messages reçus : l'hôte
+/// Historique local des tentatives d'envoi. Vide pour les messages reçus: l'hôte
 /// ne monte pas la carte.
 struct MessageViewsSendAttemptsCard: View {
     let attempts: [SendAttemptRecord]

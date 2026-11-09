@@ -404,7 +404,7 @@ extension UniversalComposerBar {
             // source (`composerText.text = ""`), et la synchro différée y
             // re-pousserait l'ancien `text`. Le texte réapparaît, l'auteur tape
             // la suite, et l'envoi suivant emporte tout — un message par
-            // accumulation, mesuré le 2026-09-10.
+            // accumulation.
             //
             // Le dépôt connaissait ce piège : le doc-comment de
             // `sendQuickEmoji` le décrit mot pour mot et le referme, pour

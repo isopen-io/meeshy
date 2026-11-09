@@ -541,7 +541,7 @@ struct LocationPickerView: View {
                             // Une paire de coordonnées est une valeur ATOMIQUE :
                             // coupée en plusieurs lignes elle devient illisible.
                             // Vérifié au simulateur en taille accessibilité XXXL
-                            // (2026-08-10) : « 20.00000, −0.00000 » se cassait
+                            // « 20.00000, −0.00000 » se cassait
                             // sur QUATRE lignes et faisait doubler la carte.
                             // Elle rétrécit donc au lieu de passer à la ligne, et
                             // sa croissance est plafonnée — le reste de la carte
@@ -784,7 +784,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // ce qui tire `objectWillChange`, ce qui re-rend `mapView` →
         // `ModernInteractiveMap.body`, ce qui fait rappeler `updateUIView`
         // par SwiftUI — un chemin de ré-entrance dans MapKit qui gèle le
-        // main thread. Preuve par process sampling (2026-07-30) : deux
+        // main thread. Preuve par process sampling: deux
         // occurrences imbriquées de
         // `-[MKMapView _performActionAsIfGoingToDefaultLocation:]` sur la
         // même pile.

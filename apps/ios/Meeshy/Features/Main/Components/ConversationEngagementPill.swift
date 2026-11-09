@@ -10,7 +10,7 @@ import MeeshyUI
 ///   total des points depuis toujours, abrégé (« 1,2 k », `CompactCountLabel`),
 ///   en chiffres rouges cerclés de blanc (`HeaderFlameCount`) ;
 /// - aucune série : le cumul SEUL, sans flamme, à l'encre tertiaire — le rouge
-///   reste la couleur de la série (directive porteur 2026-10-07) ;
+/// reste la couleur de la série;
 /// - cumul nul : rien.
 /// Les points du jour vivent sous l'avatar replié (`HeaderFlameDecoration`),
 /// qui ne paraît que si une série court. Feuille PURE : primitives seulement,
@@ -126,8 +126,7 @@ struct ConversationEngagementBadge: View {
 // MARK: - La marque dans la liste « 🔥4 · 120 » / « 120 » (#9025, #9044, #9571)
 
 /// À côté de l'heure de la rangée : tant qu'une série court, la série en jours
-/// et le total des points, en ROUGE, sans capsule (directive porteur
-/// 2026-10-01) ; sans série, le cumul SEUL, sans flamme, à l'encre tertiaire de
+/// et le total des points, en ROUGE, sans capsule; sans série, le cumul SEUL, sans flamme, à l'encre tertiaire de
 /// l'heure ; cumul nul : rien (`ConversationPointsForm`). Feuille PURE,
 /// portillon `Equatable`.
 struct ConversationStreakMark: View, Equatable {

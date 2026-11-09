@@ -50,8 +50,7 @@ struct ConversationLinkCardActionsRow: View {
                 EmptyView()
             case .join(_, let allowsAnonymous):
                 // « Rejoindre ? » puis « Anonyme » | le compte, dans le gabarit
-                // arrondi de Quitter | Ouvrir (#8726, correction porteur
-                // 2026-09-29) : côte à côte quand ils tiennent, empilés sinon.
+                // arrondi de Quitter | Ouvrir (#8726): côte à côte quand ils tiennent, empilés sinon.
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     joinPrompt
                     ViewThatFits(in: .horizontal) {
@@ -68,7 +67,7 @@ struct ConversationLinkCardActionsRow: View {
         }
     }
 
-    /// Quitter EN PREMIER, puis Ouvrir (directive porteur 2026-09-26).
+    /// Quitter EN PREMIER, puis Ouvrir.
     @ViewBuilder
     private var memberButtons: some View {
         secondary(ConversationLinkCardCopy.leave, icon: "rectangle.portrait.and.arrow.right",

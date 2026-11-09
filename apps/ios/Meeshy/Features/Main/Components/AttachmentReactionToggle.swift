@@ -3,7 +3,7 @@ import Foundation
 // MARK: - La bascule d'une réaction sur une pièce (#9910)
 
 /// **Poser ou retirer un émoji sur UNE pièce** — la règle des multi-réactions
-/// (2026-08-18) : les émojis s'empilent, et le même émoji re-touché se retire.
+/// les émojis s'empilent, et le même émoji re-touché se retire.
 ///
 /// Extraite du ViewModel (#9910) : la réaction d'une pièce hors de la fenêtre
 /// chargée — que seul l'index des médias porte — doit basculer EXACTEMENT

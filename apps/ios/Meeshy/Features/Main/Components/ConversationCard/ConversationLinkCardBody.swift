@@ -188,8 +188,7 @@ struct ConversationInviteQuote: View {
         .accessibilityIdentifier("conversation-link-card-invite")
     }
 
-    /// Le message du lien en CITATION mise en valeur (correction porteur
-    /// 2026-09-29, #8726) : un grand guillemet décoratif, puis le texte. Absent,
+    /// Le message du lien en CITATION mise en valeur (#8726): un grand guillemet décoratif, puis le texte. Absent,
     /// rien ne se dessine — aucune place réservée.
     private func inviteMessage(_ text: String) -> some View {
         HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
@@ -244,7 +243,7 @@ struct ConversationCardStatsRow: View {
             // Pas de `ForEach` : sa fermeture hérite de l'isolation @MainActor,
             // et iOS 26 la rappelle sur `com.apple.SwiftUI.AsyncRenderer` en
             // mesurant la bulle — le contrôle d'isolation de Swift 6 y trappe
-            // (`.ips` du 2026-09-29, `closure #1 in closure #1 in row`). Au plus
+            // (`closure #1 in closure #1 in row`). Au plus
             // quatre pastilles, posées sans fermeture.
             let shown = Array(stats.languages.prefix(visible))
             if shown.count > 0 { languagePill(shown[0]) }

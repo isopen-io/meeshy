@@ -106,8 +106,7 @@ nonisolated enum NearbyDiscoverabilityLabels {
         String(localized: "feed.nearby.place.remove", defaultValue: "Retirer le lieu", bundle: .main)
     }
 
-    /// **Le hint du bouton de repli, distinct de `hint` (revue Opus
-    /// 2026-08-27).** `hint` décrit ce que fait la FEATURE (la portée de la
+    /// **Le hint du bouton de repli, distinct de `hint`.** `hint` décrit ce que fait la FEATURE (la portée de la
     /// recherche à proximité) — c'est le hint légitime du `Toggle` dans
     /// `header`. Le bouton de résumé, lui, DÉPLIE/REPLIE ; lui donner le même
     /// hint que le `Toggle` fait annoncer deux éléments identiquement nommés
@@ -334,7 +333,7 @@ struct NearbyDiscoverabilityControl: View {
     ///
     /// **Ce que #4034 SUPERSÈDE de #3905** : la bascule était gatée par
     /// `isExpanded`, précisément pour que l'état replié ne montre qu'un résumé.
-    /// La demande porteur du 2026-08-27 la ramène dans l'entête — c'est le
+    /// La demande la ramène dans l'entête — c'est le
     /// DÉTAIL (grain, notices) que le pli cache désormais, pas l'état.
     private var placeHeader: some View {
         HStack(spacing: MeeshySpacing.sm) {

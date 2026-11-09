@@ -50,7 +50,7 @@ struct MessageOverlayMenu: View {
     /// le même état de présentation que le second déclencheur (la feuille de
     /// transfert). Un montage ici en ferait un second contrat d'envoi.
     var onCompose: (() -> Void)? = nil
-    /// **Sélectionner** (#4005, primaire depuis le 2026-08-27) — entre en mode
+    /// **Sélectionner** (#4005) — entre en mode
     /// sélection multiple, sème le message qui a déclenché le longpress.
     var onSelect: (() -> Void)? = nil
     /// **Supprimer le message** (`.deleteMessage`) — l'hôte ouvre la confirmation
@@ -82,7 +82,7 @@ struct MessageOverlayMenu: View {
     /// Ouvre la feuille de détail d'un appel — action `.callDetail`, présente
     /// uniquement pour un message qui porte un `callSummary`. Cette
     /// destination vivait sur l'appui long de la carte d'appel ; l'appui long
-    /// étant rendu au menu du message (directive 2026-08-24), elle entre dans
+    /// étant rendu au menu du message, elle entre dans
     /// le menu plutôt que de disparaître.
     var onShowCallDetail: (() -> Void)? = nil
     /// Ouvre la carte d'export — `true` pour l'« Export rapide » (format par défaut).
@@ -595,8 +595,7 @@ struct MessageOverlayMenu: View {
 
     /// La largeur de la bande AVANT l'allongement.
     static let emojiBandReferenceWidth: CGFloat = 280
-    /// **La bande d'emojis s'allonge de ×1,4** (directive porteur 2026-10-01,
-    /// #9043) — la bande, pas les emojis : leur taille ne change pas, la
+    /// **La bande d'emojis s'allonge de ×1,4** (#9043) — la bande, pas les emojis: leur taille ne change pas, la
     /// bande en montre davantage. Bornée à la largeur disponible. Miroir web :
     /// `RAIL_LENGTH_FACTOR`.
     static let emojiBandLengthFactor: CGFloat = 1.4
@@ -611,7 +610,7 @@ struct MessageOverlayMenu: View {
         // garder les deux surfaces visuellement identiques (padding interne,
         // cascade d'entree gauche→droite `WaveTileModifier`).
         //
-        // **Sans capsule** (directive porteur 2026-10-01, #9043 — « enlever le
+        // **Sans capsule** (#9043 — « enlever le
         // cadre comme pour les story ») : la story pose cette MÊME rangée nue
         // sur sa scène (`FullscreenReactionStrip`, `chrome: .none`). Ici le
         // voile est la scène. Seule la bande perd son cadre : le menu du bas

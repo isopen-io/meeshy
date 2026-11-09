@@ -67,7 +67,7 @@ struct MessageMoreSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Bouton de fermeture Liquid Glass en HAUT À DROITE (req 2026-07-25)
+            // Bouton de fermeture Liquid Glass en HAUT À DROITE
             // — parité avec le « Close » du sheet réactions et le « X » de la vue
             // Traduire. Remplace l'ancienne capsule « Annuler » épinglée en bas.
             HStack {
@@ -80,7 +80,7 @@ struct MessageMoreSheet: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: MeeshySpacing.lg) {
                     if let selectedItem, isExploration(selectedItem) {
-                        // Morph (req 2026-07-24) : au tap d'un item explorable, la
+                        // Morph: au tap d'un item explorable, la
                         // grille complète se replie en une BANDE D'ICÔNES horizontale
                         // scrollable (Liquid Glass) — le contenu de l'item sélectionné
                         // s'affiche dessous, laissant la place au détail.
@@ -163,8 +163,7 @@ struct MessageMoreSheet: View {
     /// Bouton de fermeture en cercle Liquid Glass, aligné en HAUT À DROITE —
     /// même chrome que le « X » des vues de détail (`MessageLanguageDetailView`,
     /// composer story) et le « Close » du sheet réactions. Glyphe nu dans un
-    /// cercle verre. Remplace l'ancienne capsule « Annuler » du bas (req
-    /// 2026-07-25). Ferme la feuille.
+    /// cercle verre. Remplace l'ancienne capsule « Annuler » du bas. Ferme la feuille.
     private var closeButton: some View {
         Button {
             HapticFeedback.light()
@@ -202,7 +201,7 @@ struct MessageMoreSheet: View {
     // MARK: - Bande d'icônes horizontale (morph)
 
     /// TOUS les items des sections — la bande horizontale (morph) les affiche
-    /// tous (feedback 2026-07-24 : « il faut toute la liste en horizontal »).
+    /// tous.
     /// Les actions s'exécutent au tap, les explorables basculent le contenu.
     private var allMoreItems: [MoreItem] {
         sections.flatMap { section -> [MoreItem] in
