@@ -95,6 +95,8 @@ Vues de la planche : ${(l.vues || []).join(' ') || '(transverse)'} — captures 
 Règles qui ne se discutent pas :
 - composant AGNOSTIQUE (paramètres opaques, aucun type du composer ni des appels, aucun singleton nommé Meeshy) ; l'orchestration reste côté app ;
 - EXTRAIRE avant de créer : le jumeau le plus complet devient le composant ; ne supprime un jumeau que si ton lot est une intégration ;
+- le verre passe par K01 et par lui seul : Liquid Glass du système sur iOS 26+ (interactif sur ce qui se touche, verres voisins fondus dans un
+  conteneur), verre dessiné avec réponse au toucher dessinée sous iOS 26 et sur Android ; Liquid Glass l'emporte toujours quand il existe ;
 - pas de légende sous un bouton rond (le nom vit dans l'accessibilité), aucune couleur ni rayon en dur, cible tactile 44 pt / 48 dp ;
 - TDD : témoin rouge d'abord ; un composant livré a sa fiche, son témoin de comportement, son instantané (clair, sombre, grande police, RTL)
   et son entrée au catalogue ;
@@ -214,7 +216,7 @@ const relire = (l, plateforme, f) => agent(`${socle(l, plateforme)}
 Tu RELIS le lot poussé sur ${branche(l.cle, plateforme)} (git diff origin/${BASE}...HEAD après merge de origin/${BASE}) et tu CORRIGES toi-même.
 Confronte, point par point : la fiche (${fiche(l)}${f ? ', reprise ci-dessous' : ''}), la fonction de la planche et les captures des vues, les règles du registre.
 Cherche d'abord ce qui n'est pas là : un état de la fiche sans témoin, un nom d'accessibilité absent, un jumeau recopié au lieu d'être
-absorbé, un type du composer ou des appels entré dans le kit, une couleur en dur, une légende sous un bouton, un écran modifié par un lot de kit.
+absorbé, un type du composer ou des appels entré dans le kit, un verre dessiné hors de K01 ou sans réponse au toucher, un verre posé sur du verre, une couleur en dur, une légende sous un bouton, un écran modifié par un lot de kit.
 ${plateforme === 'android' ? "Compare aussi au composant iOS fusionné : tout écart d'état, de nom ou de geste est un écart, sauf imposé par la plateforme (dis lequel)." : ''}
 Pousse tes corrections ; ce que tu ne peux pas fermer va dans « ecarts_restants » avec la raison.
 ${f ? 'FICHE :\n' + f.fiche_markdown : ''}`,
