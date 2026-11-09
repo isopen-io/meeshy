@@ -34,6 +34,7 @@ from utils.audio_format_converter import convert_to_wav_if_needed
 
 # Import stages
 from .transcription_guards import is_blank_transcription
+from .voice_cloning_guards import takes_multi_speaker_path
 from .transcription_stage import (
     TranscriptionStage,
     AudioMessageMetadata,
@@ -597,11 +598,11 @@ class AudioMessagePipeline:
         # ═══════════════════════════════════════════════════════════════
         # CHOIX DE LA MÉTHODE: Multi-speaker ou simple
         # ═══════════════════════════════════════════════════════════════
-        is_multi_speaker = (
-            transcription.speaker_count is not None and
-            transcription.speaker_count > 1 and
-            source_segments and
-            len(source_segments) > 0
+        # #17309 — un modèle de voix par locuteur : seulement si la passerelle autorise le clonage.
+        is_multi_speaker = takes_multi_speaker_path(
+            speaker_count=transcription.speaker_count,
+            segments=source_segments,
+            generate_voice_clone=final_generate_voice_clone,
         )
 
         if is_multi_speaker:
