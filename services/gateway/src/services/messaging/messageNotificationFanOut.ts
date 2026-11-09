@@ -392,12 +392,37 @@ async function listeningRegularRecipients(
  * l'hypothèse) mais « l'est-il AUTREMENT que par son chiffrement ? ». La loi
  * partagée est appelée plutôt que ses drapeaux relus, pour qu'un canal de
  * protection ajouté à `effectFlags` arrive ici sans qu'on y pense.
+ *
+ * **Les cinq champs de protection sont REQUIS, et c'est la garde elle-même.**
+ * Ils l'étaient d'abord par un `Pick<FanOutMessage, …>` — or `FanOutMessage` les
+ * déclare tous optionnels, et un `Pick` de champs optionnels reste optionnel :
+ * `deviceEnvelopeForPush({ encryptedContent, encryptionMode }, 'e2ee')`
+ * COMPILAIT et rendait l'enveloppe d'un message à vue unique. C'est mot pour mot
+ * l'interdit du cycle 123 bis — « une garde de confidentialité se relit CHEZ
+ * ELLE, pas dans ses paramètres : un paramètre dont l'absence désactive une
+ * garde est un demi-correctif ».
+ *
+ * Aucun appelant du dépôt ne la désarmait (les deux producteurs de fan-out
+ * remettent la ligne Prisma entière, qui porte les cinq colonnes) : c'était un
+ * PIÈGE ARMÉ, pas une panne — et le dépôt ne laisse pas un piège armé au motif
+ * que personne n'a encore marché dessus (cycle 84). Un type pur ne peut pas
+ * relire la base ; ce qu'il peut, c'est refuser de compiler quand l'appelant ne
+ * s'est pas prononcé. `null` reste permis, mais il s'ÉCRIT.
+ *
+ * Le second verrou — ré-affirmer la protection depuis la relecture VIVANTE que
+ * les trois créateurs font déjà (`loadMessagePrismSource`, qui sélectionne
+ * `effectFlags`, `expiresAt` et `ephemeralDuration`) — est #17195.
  */
 export function deviceEnvelopeForPush(
-  message: Pick<
-    FanOutMessage,
-    'encryptedContent' | 'encryptionMode' | 'isViewOnce' | 'isBlurred' | 'effectFlags' | 'expiresAt' | 'ephemeralDuration'
-  >,
+  message: {
+    readonly encryptedContent?: string | null;
+    readonly encryptionMode?: string | null;
+    readonly isViewOnce: boolean | null;
+    readonly isBlurred: boolean | null;
+    readonly effectFlags: number | null;
+    readonly expiresAt: Date | null;
+    readonly ephemeralDuration: number | null;
+  },
   conversationMode: string | null | undefined,
 ): string | undefined {
   if (!message.encryptedContent) return undefined;
@@ -736,7 +761,23 @@ export async function notifyMessageRecipients(params: {
     // Aucune audience n'est élargie : les destinataires de ces deux lots sortent
     // de `memberIds`, et ce sont exactement ceux que `regular` aurait servis si
     // `alreadyNotified` ne les en avait pas retirés.
-    const deviceEnvelope = deviceEnvelopeForPush(message, conversation.encryptionMode);
+    // Les cinq champs de protection sont ÉNUMÉRÉS ici parce que la garde les
+    // exige : un appelant qui n'en dit rien ne compile pas (cf. le doc-comment
+    // de `deviceEnvelopeForPush`). `FanOutMessage` les déclare optionnels, donc
+    // la coercition vers `null` se fait AU SITE, visible, et non en silence
+    // dans la garde.
+    const deviceEnvelope = deviceEnvelopeForPush(
+      {
+        encryptedContent: message.encryptedContent,
+        encryptionMode: message.encryptionMode,
+        isViewOnce: message.isViewOnce ?? null,
+        isBlurred: message.isBlurred ?? null,
+        effectFlags: message.effectFlags ?? null,
+        expiresAt: message.expiresAt ?? null,
+        ephemeralDuration: message.ephemeralDuration ?? null,
+      },
+      conversation.encryptionMode,
+    );
 
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
@@ -745,8 +786,31 @@ export async function notifyMessageRecipients(params: {
     // sans cela, un éventail entièrement tombé continuerait d'annoncer son
     // audience comme si elle avait été servie.
 
+    // #17194 — l'auteur du message CITÉ est-il encore membre ?
+    //
+    // Les deux lectures qui décident de cette audience étaient ASYMÉTRIQUES, et
+    // c'est l'asymétrie qui portait le défaut : `memberIds` vient de
+    // `conversation.participants` sous `where: { isActive: true, type: 'user' }`,
+    // quand le destinataire de la réponse vient d'un
+    // `participant.findUnique({ where: { id: … } })` SANS aucun filtre. Un
+    // auteur qui a quitté la conversation, en a été retiré, banni, ou dont la
+    // participation a été désactivée par une action souveraine admin reste donc
+    // résolu — et le lot `reply` le servait, seul des trois : le lot de mentions
+    // pose la question (`NotificationService.createMentionNotificationsBatch`),
+    // et `regular` ne lit que `memberIds`.
+    //
+    // Ce que ça coûtait AVANT ce cycle : une bannière `🔒 💬` et des métadonnées
+    // (le défaut de métadonnées est HÉRITÉ, et il a son issue). Ce que ça
+    // coûterait APRÈS : l'ENVELOPPE, que la clé de session de l'ex-membre ouvre
+    // — elle est par PAIR, indépendante de la conversation, et rien ne la rote
+    // quand quelqu'un part. Le texte entier d'un message écrit après son départ
+    // s'afficherait sur son écran verrouillé.
+    //
+    // C'est pourquoi la garde part dans le MÊME lot que #17080 : l'audience
+    // d'un éventail se vérifie AVANT de lui confier du contenu déchiffrable.
     const owesReplyNotification =
       !!originalMessageAuthorUserId &&
+      memberIds.includes(originalMessageAuthorUserId) &&
       !silenced.has(originalMessageAuthorUserId) &&
       originalMessageAuthorUserId !== sender.actorId &&
       !validatedMentionUserIds.includes(originalMessageAuthorUserId);

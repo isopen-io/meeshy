@@ -202,6 +202,87 @@ describe('#17191 — une protection PLUS FORTE que le chiffrement retient l’en
   });
 });
 
+describe('#17194 — l’éventail RÉPONSE ne sert pas un auteur qui n’est plus MEMBRE', () => {
+  // Les deux lectures qui décidaient de cette audience étaient asymétriques :
+  // `memberIds` filtre `isActive: true`, le destinataire de la réponse venait
+  // d'un `findUnique({ where: { id } })` nu. Le lot `reply` était le SEUL des
+  // trois sans la question — et #17080 allait lui confier l'enveloppe, que la
+  // clé de session de l'ex-membre (par PAIR, jamais rotée au départ) ouvre.
+  async function servedToExMember() {
+    const prisma = makePrisma('e2ee') as any;
+    // L'auteur du message cité a quitté : sa ligne `Participant` existe encore
+    // (c'est ce que la résolution lit), mais la conversation ne le compte plus
+    // parmi ses participants ACTIFS.
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
+      title: 'Salon',
+      type: 'group',
+      encryptionMode: 'e2ee',
+      participants: [{ userId: SENDER_USER_ID }, { userId: PLAIN_MEMBER_ID }],
+    });
+
+    const createReplyNotification = jest.fn<any>().mockResolvedValue({ id: 'reply' });
+    const createMessageNotification = jest.fn<any>().mockResolvedValue({ id: 'notif' });
+
+    await notifyMessageRecipients({
+      prisma,
+      notificationService: {
+        createReplyNotification,
+        createMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
+        createMessageNotification,
+      },
+      message: {
+        id: MSG_ID,
+        messageType: 'text',
+        replyToId: REPLIED_MSG_ID,
+        isEncrypted: true,
+        encryptionMode: 'e2ee',
+        isViewOnce: false,
+        isBlurred: false,
+        effectFlags: 0,
+        expiresAt: null,
+        createdAt: SERVER_CLOCK,
+        encryptedContent: ENVELOPE,
+        metadata: null,
+      } as any,
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '',
+    });
+
+    return {
+      replyCalls: createReplyNotification.mock.calls.map((c) => c[0] as Record<string, unknown>),
+      regularRecipients: createMessageNotification.mock.calls.map(
+        (c) => (c[0] as { recipientUserId?: string }).recipientUserId
+      ),
+    };
+  }
+
+  // Les deux moitiés s'assertent SÉPARÉMENT, parce que la séparation est le
+  // diagnostic : la première était déjà vraie, la seconde est le correctif.
+  it('le lot `regular` ne le servait déjà pas', async () => {
+    const { regularRecipients } = await servedToExMember();
+
+    expect(regularRecipients).not.toContain(PEER_USER_ID);
+  });
+
+  it('et le lot `reply` ne le sert plus — donc aucune enveloppe ne lui part', async () => {
+    const { replyCalls } = await servedToExMember();
+
+    expect(replyCalls.map((call) => call.recipientUserId)).not.toContain(PEER_USER_ID);
+    for (const call of replyCalls) expect(JSON.stringify(call)).not.toContain(ENVELOPE);
+  });
+
+  it('un auteur ENCORE membre reçoit bien sa réponse (non-régression)', async () => {
+    // Le mode d'échec du correctif, et le témoin qui ne pouvait PAS tomber sous
+    // le défaut : sur un membre actif, la garde manquante et la garde posée
+    // rendent le même verdict.
+    const { reply } = await servedLots('e2ee');
+
+    expect(reply?.recipientUserId).toBe(PEER_USER_ID);
+    expect(reply?.encryptedContent).toBe(ENVELOPE);
+  });
+});
+
 // ── Le fil push — qui AFFICHE ce que l'éventail élit ───────────────────────
 
 function makeServicePrisma() {
