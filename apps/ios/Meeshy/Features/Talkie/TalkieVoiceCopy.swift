@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import Foundation
 import MeeshySDK
 import os
@@ -15,9 +16,13 @@ protocol TalkieVoiceCopying: AnyObject {
     /// `conversationId` : celle que la passerelle a choisie pour le repli ; `nil`, le client choisit.
     @discardableResult
     func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool
+    /// Une copie confiée à la file d'envoi que celle-ci a fini par abandonner : l'émetteur doit le voir (#17255).
+    var failures: AnyPublisher<Void, Never> { get }
 }
 
 extension TalkieVoiceCopying {
+    var failures: AnyPublisher<Void, Never> { Empty().eraseToAnyPublisher() }
+
     @discardableResult
     func send(_ frames: [Data], toUserId: String) async -> Bool {
         await send(frames, toUserId: toUserId, conversationId: nil)
@@ -109,17 +114,28 @@ nonisolated enum TalkieVoiceCopyFile {
 }
 
 /// Le câblage de la copie : écrire le fichier, choisir la conversation, la confier à la file d'envoi durable.
+///
+/// La file rejoue un message sous son `clientMessageId`, que la passerelle exige au format `cid_<uuid v4>` : un autre
+/// format était refusé à la validation du `message:send-with-attachments`, et la file retéléversait la voix à chaque
+/// essai sans jamais créer le message (#17255). Le cid vient donc de `ClientMessageId`, et l'abandon d'une copie par la
+/// file remonte en `failures`.
 @MainActor
 final class TalkieVoiceCopySender: TalkieVoiceCopying {
     typealias SharedConversations = @MainActor (String) async throws -> [TalkieCopyCandidate]
     typealias DirectOpener = @MainActor (String) async throws -> String
-    typealias Enqueuer = @MainActor (URL, String) async throws -> Void
+    /// Le fichier, la conversation, et le `clientMessageId` sous lequel la file enverra le message.
+    typealias Enqueuer = @MainActor (URL, String, String) async throws -> Void
 
     private let shared: SharedConversations
     private let openDirect: DirectOpener
     private let enqueue: Enqueuer
     private let writeFile: ([Data], URL) -> TimeInterval?
     private let directory: URL
+    private let newClientMessageId: () -> String
+    private let failed = PassthroughSubject<Void, Never>()
+    /// Les copies confiées à la file et pas encore tranchées : seul leur abandon se dit.
+    private var queued: Set<String> = []
+    private var exhaustion: AnyCancellable?
 
     nonisolated deinit {}
 
@@ -128,29 +144,48 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
         openDirect: @escaping DirectOpener = TalkieVoiceCopySender.liveOpenDirect,
         enqueue: @escaping Enqueuer = TalkieVoiceCopySender.liveEnqueue,
         writeFile: @escaping ([Data], URL) -> TimeInterval? = TalkieVoiceCopyFile.write,
-        directory: URL = FileManager.default.temporaryDirectory
+        directory: URL = FileManager.default.temporaryDirectory,
+        exhausted: AnyPublisher<String, Never> = TalkieVoiceCopySender.liveExhausted,
+        newClientMessageId: @escaping () -> String = ClientMessageId.generate
     ) {
         self.shared = shared
         self.openDirect = openDirect
         self.enqueue = enqueue
         self.writeFile = writeFile
         self.directory = directory
+        self.newClientMessageId = newClientMessageId
+        exhaustion = exhausted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] clientMessageId in
+                MainActor.assumeIsolated { self?.abandoned(clientMessageId) }
+            }
     }
+
+    var failures: AnyPublisher<Void, Never> { failed.eraseToAnyPublisher() }
 
     @discardableResult
     func send(_ frames: [Data], toUserId: String, conversationId named: String?) async -> Bool {
         let url = directory.appendingPathComponent("talkie-copy-\(UUID().uuidString).m4a")
         guard !frames.isEmpty, writeFile(frames, url) != nil else { return false }
+        let clientMessageId = newClientMessageId()
         do {
             let conversationId = if let named { named } else { try await destination(for: toUserId) }
-            try await enqueue(url, conversationId)
+            queued.insert(clientMessageId)
+            try await enqueue(url, conversationId, clientMessageId)
             Logger.talkieCopy.info("talkie · copie vocale confiée à la file d'envoi")
             return true
         } catch {
+            queued.remove(clientMessageId)
             try? FileManager.default.removeItem(at: url)
             Logger.talkieCopy.error("talkie · copie vocale non partie : \(error.localizedDescription, privacy: .public)")
             return false
         }
+    }
+
+    private func abandoned(_ clientMessageId: String) {
+        guard queued.remove(clientMessageId) != nil else { return }
+        Logger.talkieCopy.error("talkie · copie vocale abandonnée par la file d'envoi")
+        failed.send(())
     }
 
     private func destination(for userId: String) async throws -> String {
@@ -170,13 +205,17 @@ extension TalkieVoiceCopySender {
         return try await ConversationCreator().createDirectConversation(with: userId, currentUserId: currentUserId).id
     }
 
-    static func liveEnqueue(_ url: URL, _ conversationId: String) async throws {
+    static var liveExhausted: AnyPublisher<String, Never> {
+        OfflineQueue.shared.retryExhausted.publisher.map(\.clientMessageId).eraseToAnyPublisher()
+    }
+
+    static func liveEnqueue(_ url: URL, _ conversationId: String, _ clientMessageId: String) async throws {
         _ = try await OfflineQueue.shared.enqueueMedia(
             sourceMediaURLs: [url],
             kinds: [AttachmentKind.audio.rawValue],
             conversationId: conversationId,
             content: nil,
-            clientMessageId: UUID().uuidString,
+            clientMessageId: clientMessageId,
             originalLanguage: nil,
             replyToId: nil,
             forwardedFromId: nil,

@@ -122,6 +122,10 @@ final class TalkieSender: ObservableObject {
             .relay(through: lane) { [weak self] ended in await self?.ended(ended.talkieId, reason: ended.reason, joined: ended.joined) }
             .store(in: &cancellables)
         lane.store(in: &cancellables)
+        // #17255 — une copie que la file d'envoi abandonne après coup se dit, comme celle qui ne part pas.
+        self.copier.failures
+            .sink { [weak self] in self?.notice = .failed }
+            .store(in: &cancellables)
     }
 
     static func sleepingDeadline(_ delay: TimeInterval, _ run: @escaping @MainActor () -> Void) -> () -> Void {

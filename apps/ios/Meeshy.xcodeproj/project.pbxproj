@@ -2278,6 +2278,7 @@
 		7EED12F989F787CD5017B9F5 /* GamePhotoCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD1518F7F8F55242CFAFFAA /* GamePhotoCanvasView.swift */; };
 		7EEED1A81BE404B3639ABC47 /* ConversationListReaderAnonymityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BA922FC7913D8DF9B59E27 /* ConversationListReaderAnonymityTests.swift */; };
 		7EF55DC3E24A6D29C91E92F3 /* NSEAdtsRemux.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92B60CE2552E4B8924B6015 /* NSEAdtsRemux.swift */; };
+		A17255A0ADB5E3A1C2D4F601 /* NSEAdtsRemux.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92B60CE2552E4B8924B6015 /* NSEAdtsRemux.swift */; };
 		7F218DCA32F9DD7BA37318F9 /* iPadRootView+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2459C9439C3ECBA9783BCF63 /* iPadRootView+Navigation.swift */; };
 		7F5592079F3F4351900356A0 /* QuotedMediaFaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6563DAC3060C3E0DCADF37 /* QuotedMediaFaceTests.swift */; };
 		7F5E33E9C7679D54078C011D /* PrefetcherHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD8541600597AA63B93C8DC /* PrefetcherHostView.swift */; };
@@ -19148,6 +19149,7 @@
 				205AA5059A6EA13D6C5F4279 /* NSEDecryptorTests.swift in Sources */,
 				FEA03123C52A4A3EA01A7DB6 /* NSEDelivery.swift in Sources */,
 				CC227022D6864DDF54AFFBE3 /* NSEDeliveryTests.swift in Sources */,
+				A17255A0ADB5E3A1C2D4F601 /* NSEAdtsRemux.swift in Sources */,
 				AA8D310C7F0FEA538E0AAE89 /* NSEEnrichmentPlan.swift in Sources */,
 				06410DC2D83B340235DED0EF /* NSEEnrichmentPlanTests.swift in Sources */,
 				C6AC1E254FADD3C2B926EBEF /* NSELocationSnapshot.swift in Sources */,

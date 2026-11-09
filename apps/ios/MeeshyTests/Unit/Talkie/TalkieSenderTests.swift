@@ -87,6 +87,8 @@ final class TalkieSenderTests: XCTestCase {
         var sent: [(frames: [Data], toUserId: String)] = []
         var conversations: [String?] = []
         var succeeds = true
+        let failed = PassthroughSubject<Void, Never>()
+        var failures: AnyPublisher<Void, Never> { failed.eraseToAnyPublisher() }
 
         func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool {
             sent.append((frames, toUserId))
@@ -282,6 +284,23 @@ final class TalkieSenderTests: XCTestCase {
         rig.emitter.resolve(.refused(.voice))
         await settle()
         await rig.sut.release()
+
+        XCTAssertEqual(rig.sut.notice, .failed)
+    }
+
+    /// #17255 — la copie est partie dans la file, puis la file l'a abandonnée : l'émetteur le voit.
+    func test_aVoiceCopyAbandonedLaterByTheQueue_isAFailure() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+        await rig.sut.release()
+        XCTAssertEqual(rig.sut.notice, .voice)
+        rig.sut.notice = nil
+
+        rig.copier.failed.send(())
 
         XCTAssertEqual(rig.sut.notice, .failed)
     }
