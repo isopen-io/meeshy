@@ -191,6 +191,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .clipShape(Circle())
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.back", bundle: .module))
 
             Spacer()
 
@@ -233,6 +234,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .clipShape(Circle())
                         .meeshyTapTarget()
                 }
+                .accessibilityLabel(String(localized: "community.react.a11y", bundle: .module))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))

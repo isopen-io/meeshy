@@ -424,13 +424,13 @@ public struct TextEditToolOptions: View {
 
     private var alignRow: some View {
         HStack(spacing: 10) {
-            alignButton("left", "text.alignleft")
-            alignButton("center", "text.aligncenter")
-            alignButton("right", "text.alignright")
+            alignButton("left", "text.alignleft", label: String(localized: "story.text.align.left.a11y", bundle: .module))
+            alignButton("center", "text.aligncenter", label: String(localized: "story.text.align.center.a11y", bundle: .module))
+            alignButton("right", "text.alignright", label: String(localized: "story.text.align.right.a11y", bundle: .module))
         }
     }
 
-    private func alignButton(_ value: String, _ symbol: String) -> some View {
+    private func alignButton(_ value: String, _ symbol: String, label: String) -> some View {
         let isSel = (textObject.textAlign ?? "center") == value
         return Button {
             textObject.textAlign = value
@@ -447,6 +447,7 @@ public struct TextEditToolOptions: View {
                                     : AnyShapeStyle(Color.gray.opacity(0.18)))
                 )
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 

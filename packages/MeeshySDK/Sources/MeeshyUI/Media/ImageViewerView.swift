@@ -143,6 +143,7 @@ public struct ImageViewerView: View {
                             .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                     .padding(MeeshySpacing.xsPlus)
                 }
                 Spacer()

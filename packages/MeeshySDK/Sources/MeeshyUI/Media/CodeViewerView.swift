@@ -86,6 +86,7 @@ public struct CodeViewerView: View {
                             .foregroundStyle(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                     .offset(x: 6, y: -6)
                 }
             }
@@ -267,6 +268,7 @@ public struct CodeFullSheet: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(hex: accentColor))
                     }
+                    .accessibilityLabel(String(localized: "common.close", bundle: .module))
                 }
 
                 ToolbarItem(placement: .principal) {
@@ -295,6 +297,7 @@ public struct CodeFullSheet: View {
                             Image(systemName: "doc.on.doc")
                                 .foregroundColor(Color(hex: accentColor))
                         }
+                        .accessibilityLabel(String(localized: "media.code.copy.a11y", bundle: .module))
                     }
                 }
             }

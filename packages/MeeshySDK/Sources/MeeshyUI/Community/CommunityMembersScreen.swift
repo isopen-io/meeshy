@@ -55,6 +55,7 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
                         Image(systemName: "person.badge.plus")
                             .foregroundColor(MeeshyColors.indigo500)
                     }
+                    .accessibilityLabel(String(localized: "community.detail.action.invite", bundle: .module))
                 }
             }
         }

@@ -169,11 +169,11 @@ public struct KeyframeInspector: View {
                 .meeshyScaledFont(9, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(spacing: MeeshySpacing.xsPlus) {
-                timeStepButton(systemName: "minus.circle.fill") { onTimeAdjusted(-Self.timeStep) }
+                timeStepButton(systemName: "minus.circle.fill", label: String(localized: "story.timeline.step.decrease.a11y", bundle: .module)) { onTimeAdjusted(-Self.timeStep) }
                 Text(String(format: "%.2fs", keyframe.absoluteTime))
                     .font(.system(.callout, design: .monospaced))
                     .monospacedDigit()
-                timeStepButton(systemName: "plus.circle.fill") { onTimeAdjusted(Self.timeStep) }
+                timeStepButton(systemName: "plus.circle.fill", label: String(localized: "story.timeline.step.increase.a11y", bundle: .module)) { onTimeAdjusted(Self.timeStep) }
             }
         }
         .accessibilityElement(children: .combine)
@@ -182,13 +182,14 @@ public struct KeyframeInspector: View {
         .accessibilityValue(String(format: "%.2fs", keyframe.absoluteTime))
     }
 
-    private func timeStepButton(systemName: String, action: @escaping () -> Void) -> some View {
+    private func timeStepButton(systemName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.title3)
                 .foregroundStyle(MeeshyColors.indigo400)
                 .contentShape(Rectangle().inset(by: -8))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 

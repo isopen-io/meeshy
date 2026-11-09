@@ -228,6 +228,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                             .foregroundStyle(Color.white)
                     }
                 }
+                .accessibilityLabel(recorder.isRecording ? String(localized: "story.voiceRecorder.stop", bundle: .module) : String(localized: "story.voiceRecorder.start", bundle: .module))
 
                 if recorder.isRecording {
                     Spacer()
@@ -285,6 +286,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                             .meeshyScaledFont(MeeshyIconSize.md)
                             .foregroundStyle(MeeshyColors.tileCoral.opacity(0.7))
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                 }
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)

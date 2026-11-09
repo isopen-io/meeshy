@@ -53,6 +53,7 @@ public struct ErrorBannerView: View {
                     .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.close", bundle: .module))
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.md)

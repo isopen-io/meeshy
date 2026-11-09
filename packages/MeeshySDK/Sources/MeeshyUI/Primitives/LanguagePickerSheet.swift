@@ -241,6 +241,7 @@ public struct LanguagePickerSheet: View {
                         .meeshyScaledFont(MeeshyIconSize.xxl)
                         .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
                 }
+                .accessibilityLabel(String(localized: "common.close", bundle: .module))
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.bottom, MeeshySpacing.sm)

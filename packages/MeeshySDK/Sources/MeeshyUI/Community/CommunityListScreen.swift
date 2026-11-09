@@ -110,6 +110,7 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
                         .font(.system(size: MeeshyIconSize.sm))
                         .foregroundStyle(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "common.clear_input", bundle: .module))
             }
         }
         .padding(MeeshySpacing.smPlus)

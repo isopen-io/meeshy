@@ -305,6 +305,7 @@ extension AudioPlayerView {
                 .frame(maxWidth: .infinity)
                 .frame(height: 20)
         }
+        .accessibilityLabel(isTranscriptionExpanded ? String(localized: "audio.transcript.hide.a11y", bundle: .module) : String(localized: "audio.transcript.show.a11y", bundle: .module))
     }
 
     /// Coupe de la carte : 255 caractères, ellipse sur le segment coupé.

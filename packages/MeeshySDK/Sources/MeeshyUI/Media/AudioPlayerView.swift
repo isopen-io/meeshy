@@ -706,6 +706,7 @@ public struct AudioPlayerView: View {
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                             .frame(width: 26, height: 26)
                     }
+                    .accessibilityLabel(String(localized: "media.audio.edit", bundle: .module))
                 }
                 if let onDelete = onDelete {
                     Button { onDelete() } label: {
@@ -713,6 +714,7 @@ public struct AudioPlayerView: View {
                             .meeshyScaledFont(MeeshyIconSize.sm)
                             .foregroundColor(MeeshyColors.error)
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                 }
             }
         }

@@ -231,6 +231,7 @@ public struct EmojiReactionPicker: View {
                 .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
                 .background(tileFrameReader(index: quickEmojis.count))
             }
+            .accessibilityLabel(String(localized: "reaction.picker.more.a11y", bundle: .module))
             // La tuile "+" cloture la vague — son index est place juste
             // apres le dernier emoji pour qu'elle arrive en derniere.
             .modifier(WaveTileModifier(index: quickEmojis.count, hasEntered: hasEntered))

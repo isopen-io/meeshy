@@ -61,6 +61,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
                     .clipShape(Circle())
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.back", bundle: .module))
 
             Spacer()
 
@@ -307,6 +308,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
                             .font(.system(size: MeeshyIconSize.sm))
                             .foregroundStyle(theme.textMuted)
                     }
+                    .accessibilityLabel(String(localized: "common.clear_input", bundle: .module))
                 }
             }
             .padding(MeeshySpacing.md)
@@ -358,6 +360,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Color.white.opacity(0.8))
             }
+            .accessibilityLabel(String(localized: "community.members.remove", bundle: .module))
         }
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.vertical, MeeshySpacing.xsPlus)

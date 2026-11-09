@@ -254,6 +254,7 @@ internal struct _InlineOverlayControls: View {
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .meeshyTapTarget()
         }
+        .accessibilityLabel(seconds < 0 ? String(localized: "media.video.seek.backward", bundle: .module) : String(localized: "media.video.seek.forward", bundle: .module))
     }
 
     private var playPauseButton: some View {

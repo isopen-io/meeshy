@@ -368,6 +368,7 @@ public struct ConversationSettingsView: View {
                                 .font(.system(size: MeeshyIconSize.sm))
                                 .foregroundColor(theme.textMuted)
                         }
+                        .accessibilityLabel(String(localized: "common.clear_input", bundle: .module))
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)

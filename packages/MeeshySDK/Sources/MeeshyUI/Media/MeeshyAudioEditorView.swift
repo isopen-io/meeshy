@@ -184,19 +184,16 @@ public struct MeeshyAudioEditorView: View {
 
     private var header: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            circleButton(icon: "xmark") { cancelEditing() }
-                .accessibilityLabel(String(localized: "audio.editor.close",
-                                           defaultValue: "Fermer", bundle: .module))
+            circleButton(icon: "xmark", label: String(localized: "audio.editor.close",
+                                                      defaultValue: "Fermer", bundle: .module)) { cancelEditing() }
 
             if controller.document.hasHistory {
                 circleButton(icon: "arrow.uturn.backward",
+                             label: String(localized: "audio.editor.undo", defaultValue: "Annuler", bundle: .module),
                              enabled: controller.canUndo) { controller.undo() }
-                    .accessibilityLabel(String(localized: "audio.editor.undo",
-                                               defaultValue: "Annuler", bundle: .module))
                 circleButton(icon: "arrow.uturn.forward",
+                             label: String(localized: "audio.editor.redo", defaultValue: "R\u{00E9}tablir", bundle: .module),
                              enabled: controller.canRedo) { controller.redo() }
-                    .accessibilityLabel(String(localized: "audio.editor.redo",
-                                               defaultValue: "R\u{00E9}tablir", bundle: .module))
             }
 
             Spacer()
@@ -205,7 +202,7 @@ public struct MeeshyAudioEditorView: View {
         }
     }
 
-    private func circleButton(icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    private func circleButton(icon: String, label: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button {
             guard enabled else { return }
             HapticFeedback.light()
@@ -220,6 +217,7 @@ public struct MeeshyAudioEditorView: View {
                     .foregroundColor(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
             }
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
         .disabled(!enabled)
     }
@@ -328,7 +326,7 @@ public struct MeeshyAudioEditorView: View {
 
     private var transportControls: some View {
         HStack(spacing: 34) {
-            transportButton(icon: "gobackward.5", size: 21) { skip(by: -5) }
+            transportButton(icon: "gobackward.5", size: 21, label: String(localized: "audio.editor.skip.backward.a11y", bundle: .module)) { skip(by: -5) }
             Button {
                 togglePlayback()
             } label: {
@@ -347,11 +345,11 @@ public struct MeeshyAudioEditorView: View {
             .accessibilityLabel(isPlaying
                 ? String(localized: "audio.editor.pause", defaultValue: "Pause", bundle: .module)
                 : String(localized: "audio.editor.play", defaultValue: "Lire", bundle: .module))
-            transportButton(icon: "goforward.5", size: 21) { skip(by: 5) }
+            transportButton(icon: "goforward.5", size: 21, label: String(localized: "audio.editor.skip.forward.a11y", bundle: .module)) { skip(by: 5) }
         }
     }
 
-    private func transportButton(icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    private func transportButton(icon: String, size: CGFloat, label: String, action: @escaping () -> Void) -> some View {
         Button {
             HapticFeedback.light()
             action()
@@ -360,6 +358,7 @@ public struct MeeshyAudioEditorView: View {
                 .meeshyScaledFont(size, weight: .medium)
                 .foregroundColor(theme.textPrimary.opacity(0.65))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 
@@ -491,6 +490,7 @@ public struct MeeshyAudioEditorView: View {
                     .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", bundle: .module))
             .buttonStyle(.plain)
         }
         .padding(.horizontal, MeeshySpacing.md)

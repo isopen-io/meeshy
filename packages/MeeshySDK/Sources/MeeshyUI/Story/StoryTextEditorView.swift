@@ -115,6 +115,7 @@ public struct StoryTextEditorView: View {
                         .frame(width: 34, height: 34)
                         .background(Circle().fill(MeeshyColors.error.opacity(0.12)))
                 }
+                .accessibilityLabel(String(localized: "common.delete", bundle: .module))
             }
         }
         .padding(.horizontal, 14)
@@ -198,6 +199,7 @@ public struct StoryTextEditorView: View {
                     .frame(width: 34, height: 30)
                     .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
+            .accessibilityLabel(String(localized: "story.textEdit.tool.align", bundle: .module))
 
             // Background toggle
             Button {
@@ -210,6 +212,7 @@ public struct StoryTextEditorView: View {
                     .frame(width: 34, height: 30)
                     .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
+            .accessibilityLabel(String(localized: "story.text.background.toggle.a11y", bundle: .module))
 
             Spacer()
 
