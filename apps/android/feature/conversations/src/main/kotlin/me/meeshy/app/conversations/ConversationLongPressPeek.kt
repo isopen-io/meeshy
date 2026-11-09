@@ -42,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -51,6 +53,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -69,8 +72,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.conversationlist.ConversationPeekGeometry
+import me.meeshy.sdk.model.conversationlist.ConversationPeekPullDown
 import me.meeshy.sdk.model.conversationlist.ConversationPeekSizing
 import me.meeshy.sdk.model.conversationlist.PeekMenuDetent
+import me.meeshy.sdk.model.conversationlist.PeekPullDownRelease
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyTheme
 import kotlin.math.roundToInt
@@ -82,11 +87,15 @@ internal const val PEEK_HANDLE_TEST_TAG = "conversation-peek-handle"
 private val CardMargin = 14.dp
 private val CardMenuGap = 8.dp
 private val MinCardBody = 96.dp
+private val PullDownDistance = 140.dp
 private val PanelShape = RoundedCornerShape(22.dp)
 
 /**
- * **L'appui long sur une rangée** (#17244) : une grande carte d'aperçu, presque pleine largeur, au-dessus
- * d'un menu COMPACT (poignée + rangée de tête). Tirer le menu vers le haut l'agrandit jusqu'à montrer toutes
+ * **L'appui long sur une rangée** (#17244) : une carte d'aperçu au-dessus d'un menu COMPACT (poignée + rangée
+ * de tête). Carte et menu font 80 % de la largeur entre les marges, centrés, et la carte au repos 80 % de la
+ * hauteur que le menu lui laisse (#17274) : la liste reste visible autour, et la toucher ferme (#17258).
+ * Glisser la carte vers le bas la fait suivre le doigt et ferme au-delà de 79 % de la course
+ * ([ConversationPeekPullDown]) ; en deçà, elle revient. Tirer le menu vers le haut l'agrandit jusqu'à montrer toutes
  * ses actions et réduit la carte d'autant ; [ConversationPeekGeometry] décide des deux hauteurs depuis UNE
  * progression 0 → 1 que le doigt déplace image par image.
  *
@@ -116,6 +125,7 @@ internal fun ConversationLongPressPeek(
     val motion = rememberPeekMotion(progress, geometry, reduceMotion)
     val appear = remember { Animatable(if (reduceMotion) 1f else 0f) }
     LaunchedEffect(Unit) { if (!reduceMotion) appear.animateTo(1f, tween(durationMillis = 180)) }
+    val pullDown = rememberPeekPullDown(onDismiss, reduceMotion)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -137,12 +147,15 @@ internal fun ConversationLongPressPeek(
             PeekLayout(
                 progress = progress,
                 geometry = geometry,
+                pullDown = pullDown,
+                onDismiss = onDismiss,
                 cardLabel = cardLabel,
                 cardBody = cardBody,
                 menu = { onCompactMeasured ->
                     PeekMenuPanel(
                         progress = progress,
                         motion = motion,
+                        onDismiss = onDismiss,
                         onCompactMeasured = onCompactMeasured,
                         quickActions = quickActions,
                         allActions = allActions,
@@ -213,33 +226,98 @@ private fun rememberPeekMotion(
     }
 }
 
+/** Le glissé vers le bas de la carte : un décalage qui suit le doigt, puis ferme ou revient. */
+private class PeekPullDown(
+    val offset: MutableFloatState,
+    val distance: Float,
+    val drag: (downwardDelta: Float) -> Unit,
+    val release: (downwardVelocity: Float) -> Unit,
+)
+
+@Composable
+private fun rememberPeekPullDown(onDismiss: () -> Unit, reduceMotion: Boolean): PeekPullDown {
+    val scope = rememberCoroutineScope()
+    val distance = with(LocalDensity.current) { PullDownDistance.toPx() }
+    val offset = remember { mutableFloatStateOf(0f) }
+    var returning by remember { mutableStateOf<Job?>(null) }
+    return remember(distance, reduceMotion, onDismiss) {
+        PeekPullDown(
+            offset = offset,
+            distance = distance,
+            drag = { delta ->
+                returning?.cancel()
+                offset.floatValue = ConversationPeekPullDown.offsetAfterDrag(offset.floatValue, delta)
+            },
+            release = { velocity ->
+                when (ConversationPeekPullDown.release(offset.floatValue, velocity, distance)) {
+                    PeekPullDownRelease.Dismiss -> onDismiss()
+                    PeekPullDownRelease.Restore -> if (reduceMotion) {
+                        offset.floatValue = 0f
+                    } else {
+                        returning = scope.launch {
+                            animate(
+                                initialValue = offset.floatValue,
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMedium),
+                            ) { value, _ -> offset.floatValue = value }
+                        }
+                    }
+                }
+            },
+        )
+    }
+}
+
 /**
  * Trois enfants : fond de carte, corps, menu. Tous mesurés à taille constante sauf le fond ;
  * la lecture de [progress] n'a lieu qu'ici, en phase de mise en page : le geste ne recompose rien.
+ * Le panneau, centré, laisse le voile au-dessus et sur les côtés : aucun enfant n'y capte de toucher,
+ * donc le toucher descend au fond de l'aperçu, qui ferme.
  */
 @Composable
 private fun PeekLayout(
     progress: MutableFloatState,
     geometry: PeekGeometryHolder,
+    pullDown: PeekPullDown,
+    onDismiss: () -> Unit,
     cardLabel: String,
     cardBody: @Composable () -> Unit,
     menu: @Composable (onCompactMeasured: (Int) -> Unit) -> Unit,
 ) {
     val tokens = MeeshyTheme.tokens
     val compactHeight = remember { mutableIntStateOf(0) }
+    val closeLabel = stringResource(R.string.peek_close)
+    val pullState = rememberDraggableState { delta -> pullDown.drag(delta) }
     Layout(
-        modifier = Modifier.fillMaxSize().clipToBounds(),
+        modifier = Modifier
+            .fillMaxSize()
+            .clipToBounds()
+            .graphicsLayer {
+                translationY = pullDown.offset.floatValue
+                alpha = 1f - 0.3f * ConversationPeekPullDown.progress(pullDown.offset.floatValue, pullDown.distance)
+            },
         content = {
             Box(
                 Modifier
                     .clip(PanelShape)
                     .background(tokens.backgroundPrimary)
-                    .swallowTaps(),
+                    .swallowTaps()
+                    .draggable(
+                        state = pullState,
+                        orientation = Orientation.Vertical,
+                        onDragStopped = { velocity -> pullDown.release(velocity) },
+                    ),
             )
             Box(
                 Modifier
-                    .swallowTaps()
-                    .semantics(mergeDescendants = false) { contentDescription = cardLabel }
+                    .drawWithContent {
+                        val visible = geometry.value?.heightsAt(progress.floatValue)?.card ?: size.height
+                        clipRect(top = size.height - visible) { this@drawWithContent.drawContent() }
+                    }
+                    .semantics(mergeDescendants = false) {
+                        contentDescription = cardLabel
+                        customActions = listOf(CustomAccessibilityAction(closeLabel) { onDismiss(); true })
+                    }
                     .testTag(PEEK_CARD_TEST_TAG),
             ) { cardBody() }
             Box(Modifier.swallowTaps()) { menu { compactHeight.intValue = it } }
@@ -247,29 +325,33 @@ private fun PeekLayout(
     ) { measurables, constraints ->
         val width = constraints.maxWidth
         val available = constraints.maxHeight.toFloat()
-        val margin = CardMargin.roundToPx()
         val gap = CardMenuGap.toPx()
-        val panelWidth = (width - 2 * margin).coerceAtLeast(0)
+        val panelWidth = ConversationPeekSizing.panelWidth(width.toFloat(), CardMargin.toPx()).roundToInt()
+        val x = ConversationPeekSizing.panelOffset(width.toFloat(), panelWidth.toFloat()).roundToInt()
         val minCard = MinCardBody.toPx()
-        val menuCeiling = (available - gap - minCard).roundToInt().coerceAtLeast(0)
-        val menu = measurables[2].measure(Constraints(minWidth = panelWidth, maxWidth = panelWidth, maxHeight = menuCeiling))
+        val measuredCompact = compactHeight.intValue.toFloat()
+        val ceiling = ConversationPeekGeometry(available, gap, minCard, measuredCompact, naturalMenu = 0f).menuCeiling
+        val menu = measurables[2].measure(
+            Constraints(minWidth = panelWidth, maxWidth = panelWidth, maxHeight = ceiling.roundToInt().coerceAtLeast(0)),
+        )
         val g = ConversationPeekGeometry(
             available = available,
             gap = gap,
             minCard = minCard,
-            compactMenu = compactHeight.intValue.takeIf { it > 0 }?.toFloat() ?: menu.height.toFloat(),
+            compactMenu = measuredCompact.takeIf { it > 0f } ?: menu.height.toFloat(),
             naturalMenu = menu.height.toFloat(),
         )
         geometry.value = g
         val bodyHeight = g.restingCard.roundToInt().coerceAtLeast(0)
         val body = measurables[1].measure(Constraints.fixed(panelWidth, bodyHeight))
         val heights = g.heightsAt(progress.floatValue)
+        val top = g.veil.roundToInt()
         val cardHeight = heights.card.roundToInt()
         val background = measurables[0].measure(Constraints.fixed(panelWidth, cardHeight))
         layout(width, constraints.maxHeight) {
-            background.place(margin, 0)
-            body.place(margin, cardHeight - body.height)
-            menu.place(margin, (heights.card + gap).roundToInt())
+            background.place(x, top)
+            body.place(x, top + cardHeight - body.height)
+            menu.place(x, top + (heights.card + gap).roundToInt())
         }
     }
 }
@@ -278,6 +360,7 @@ private fun PeekLayout(
 private fun PeekMenuPanel(
     progress: MutableFloatState,
     motion: PeekMotion,
+    onDismiss: () -> Unit,
     onCompactMeasured: (Int) -> Unit,
     quickActions: @Composable () -> Unit,
     allActions: @Composable () -> Unit,
@@ -303,7 +386,7 @@ private fun PeekMenuPanel(
                     onDragStopped = { velocity -> motion.settle(-velocity) },
                 ),
         ) {
-            PeekHandle(progress, motion)
+            PeekHandle(progress, motion, onDismiss)
             quickActions()
         }
         HorizontalDivider()
@@ -347,7 +430,7 @@ private class PeekNestedScroll(
 }
 
 @Composable
-private fun PeekHandle(progress: MutableFloatState, motion: PeekMotion) {
+private fun PeekHandle(progress: MutableFloatState, motion: PeekMotion, onDismiss: () -> Unit) {
     val tokens = MeeshyTheme.tokens
     val expanded by remember(progress) {
         derivedStateOf { progress.floatValue >= ConversationPeekSizing.SETTLE_THRESHOLD }
@@ -356,6 +439,7 @@ private fun PeekHandle(progress: MutableFloatState, motion: PeekMotion) {
     val collapseLabel = stringResource(R.string.peek_menu_handle_collapse)
     val stateLabel = stringResource(if (expanded) R.string.peek_menu_state_expanded else R.string.peek_menu_state_compact)
     val label = if (expanded) collapseLabel else expandLabel
+    val closeLabel = stringResource(R.string.peek_close)
     Box(
         Modifier
             .fillMaxWidth()
@@ -365,7 +449,10 @@ private fun PeekHandle(progress: MutableFloatState, motion: PeekMotion) {
                 role = Role.Button
                 contentDescription = label
                 stateDescription = stateLabel
-                customActions = listOf(CustomAccessibilityAction(label) { motion.toggle(); true })
+                customActions = listOf(
+                    CustomAccessibilityAction(label) { motion.toggle(); true },
+                    CustomAccessibilityAction(closeLabel) { onDismiss(); true },
+                )
             }
             .testTag(PEEK_HANDLE_TEST_TAG),
         contentAlignment = Alignment.Center,
@@ -379,7 +466,7 @@ private fun PeekHandle(progress: MutableFloatState, motion: PeekMotion) {
     }
 }
 
-/** Un toucher sur la carte ou le menu ne ferme pas l'aperçu (seul le toucher hors carte/menu le ferme). */
+/** Un toucher sur la carte ou le menu ne ferme pas l'aperçu (seul le toucher sur le voile le ferme). */
 private fun Modifier.swallowTaps(): Modifier = pointerInput(Unit) { detectTapGestures { } }
 
 /** TalkBack (exploration au toucher) tourne-t-il ? Suivi en direct. */

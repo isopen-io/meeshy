@@ -10,7 +10,7 @@ enum class PeekMenuDetent(val progress: Float) {
     Expanded(1f),
 }
 
-/** Les deux hauteurs que la progression pilote ; leur somme, écart compris, reste celle de l'écran. */
+/** Les deux hauteurs que la progression pilote ; leur somme, écart et voile compris, reste celle de l'écran. */
 data class PeekHeights(val card: Float, val menu: Float)
 
 /**
@@ -18,6 +18,11 @@ data class PeekHeights(val card: Float, val menu: Float)
  * qu'on tire vers le haut. Une seule valeur, la progression 0 → 1, décide des deux hauteurs ; le
  * geste ne fait que la déplacer, image par image. Toutes les longueurs sont dans la même unité
  * (pixels côté Compose).
+ *
+ * Au repos, la carte ne prend que [ConversationPeekSizing.CARD_SHARE] de la place que le menu
+ * compact lui laisse (#17274) : le reste est un [veil] constant au-dessus d'elle, où la liste
+ * reste visible et qu'on touche pour fermer (#17258). Le voile ne bouge pas pendant le tirage :
+ * la carte perd exactement ce que le menu gagne.
  *
  * @param available hauteur que se partagent la carte, l'écart et le menu.
  * @param minCard hauteur sous laquelle la carte ne descend jamais (son en-tête reste lisible).
@@ -35,18 +40,26 @@ data class ConversationPeekGeometry(
 
     private val compact: Float get() = min(max(0f, compactMenu), room)
 
+    /** La carte au repos, la plus haute qu'elle sera jamais : on la mesure une fois à cette taille. */
+    val restingCard: Float get() = (room - compact) * ConversationPeekSizing.CARD_SHARE
+
+    /** La bande laissée au-dessus de la carte, la même à tous les crans. */
+    val veil: Float get() = room - compact - restingCard
+
+    private val stack: Float get() = room - veil
+
+    /** La plus haute que le menu puisse être sans réduire la carte sous [minCard]. */
+    val menuCeiling: Float get() = max(compact, stack - minCard)
+
     /** Le menu étendu : tout son contenu, sans jamais réduire la carte sous [minCard]. */
-    val expandedMenu: Float get() = max(compact, min(naturalMenu, room - minCard))
+    val expandedMenu: Float get() = min(max(compact, naturalMenu), menuCeiling)
 
     /** La course du geste : ce que le menu gagne entre ses deux crans. */
     val travel: Float get() = expandedMenu - compact
 
-    /** La carte au repos, la plus haute qu'elle sera jamais : on la mesure une fois à cette taille. */
-    val restingCard: Float get() = room - compact
-
     fun heightsAt(progress: Float): PeekHeights {
         val menu = compact + travel * progress.coerceIn(0f, 1f)
-        return PeekHeights(card = max(0f, room - menu), menu = menu)
+        return PeekHeights(card = max(0f, stack - menu), menu = menu)
     }
 
     /** [upwardDelta] positif quand le doigt monte ; la progression reste entre les deux crans. */
@@ -70,6 +83,16 @@ data class ConversationPeekGeometry(
 }
 
 object ConversationPeekSizing {
+    /** La carte et le menu sont 20 % plus petits que la place offerte (#17274). */
+    const val CARD_SHARE: Float = 0.8f
+
+    /** Le panneau (carte et menu) : 80 % de la largeur entre les marges. */
+    fun panelWidth(available: Float, margin: Float): Float =
+        max(0f, available - 2 * margin) * CARD_SHARE
+
+    /** Le décalage qui centre le panneau dans la largeur offerte. */
+    fun panelOffset(available: Float, panelWidth: Float): Float = max(0f, (available - panelWidth) / 2)
+
     /** Relâché lentement, le menu passe étendu à partir de la moitié de la course. */
     const val SETTLE_THRESHOLD: Float = 0.5f
 
@@ -82,4 +105,29 @@ object ConversationPeekSizing {
      */
     fun initialDetent(screenReader: Boolean, reduceMotion: Boolean): PeekMenuDetent =
         if (screenReader || reduceMotion) PeekMenuDetent.Expanded else PeekMenuDetent.Compact
+}
+
+/** Ce que conclut le relâcher d'un glissé vers le bas sur la carte. */
+enum class PeekPullDownRelease { Restore, Dismiss }
+
+/**
+ * Glisser la carte vers le BAS ferme l'aperçu (#17258), comme sur iOS : la carte suit le doigt,
+ * remonter avant de relâcher la ramène, et le relâcher ferme au-delà de [DISMISS_FRACTION] de la
+ * course, position projetée (la vitesse comprise) ; en deçà, elle revient en place.
+ */
+object ConversationPeekPullDown {
+    const val DISMISS_FRACTION: Float = 0.79f
+
+    /** Le temps sur lequel la vitesse au relâcher prolonge la position. */
+    const val PROJECTION_SECONDS: Float = 0.1f
+
+    fun offsetAfterDrag(offset: Float, downwardDelta: Float): Float = max(0f, offset + downwardDelta)
+
+    fun progress(offset: Float, distance: Float): Float =
+        if (distance <= 0f) 0f else (offset / distance).coerceIn(0f, 1f)
+
+    fun release(offset: Float, downwardVelocity: Float, distance: Float): PeekPullDownRelease {
+        val projected = offset + downwardVelocity * PROJECTION_SECONDS
+        return if (projected >= distance * DISMISS_FRACTION) PeekPullDownRelease.Dismiss else PeekPullDownRelease.Restore
+    }
 }

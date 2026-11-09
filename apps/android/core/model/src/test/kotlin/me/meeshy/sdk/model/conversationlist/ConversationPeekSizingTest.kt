@@ -5,6 +5,10 @@ import org.junit.Test
 
 class ConversationPeekSizingTest {
 
+    private companion object {
+        const val TOLERANCE = 0.01f
+    }
+
     private fun geometry(
         available: Float = 800f,
         gap: Float = 8f,
@@ -24,33 +28,91 @@ class ConversationPeekSizingTest {
         val heights = geometry().heightsAt(progress = 0f)
 
         assertThat(heights.menu).isEqualTo(100f)
-        assertThat(heights.card).isEqualTo(692f)
+        assertThat(heights.card).isWithin(TOLERANCE).of(553.6f)
         assertThat(heights.card).isGreaterThan(heights.menu)
     }
 
     @Test
+    fun `au repos la carte ne fait que 80 pour cent de la place que le menu compact lui laisse`() {
+        val g = geometry()
+
+        assertThat(g.heightsAt(0f).card).isWithin(TOLERANCE).of((800f - 8f - 100f) * ConversationPeekSizing.CARD_SHARE)
+    }
+
+    @Test
+    fun `un voile reste visible au-dessus de la carte a tous les crans et se touche pour fermer`() {
+        val g = geometry()
+
+        assertThat(g.veil).isWithin(TOLERANCE).of(138.4f)
+        listOf(0f, 0.5f, 1f).forEach { p ->
+            val h = g.heightsAt(p)
+            assertThat(g.veil + h.card + 8f + h.menu).isWithin(TOLERANCE).of(800f)
+        }
+    }
+
+    @Test
     fun `tire jusqu'au bout le menu montre tout et la carte se reduit d'autant`() {
-        val heights = geometry().heightsAt(progress = 1f)
+        val g = geometry()
+        val rest = g.heightsAt(progress = 0f)
+        val heights = g.heightsAt(progress = 1f)
 
         assertThat(heights.menu).isEqualTo(500f)
-        assertThat(heights.card).isEqualTo(292f)
+        assertThat(rest.card - heights.card).isWithin(TOLERANCE).of(400f)
     }
 
     @Test
     fun `a mi-course les deux hauteurs suivent la progression et leur somme ne bouge pas`() {
         val g = geometry()
         val half = g.heightsAt(progress = 0.5f)
+        val rest = g.heightsAt(progress = 0f)
 
         assertThat(half.menu).isEqualTo(300f)
-        assertThat(half.card + half.menu + 8f).isEqualTo(800f)
+        assertThat(half.card + half.menu).isWithin(TOLERANCE).of(rest.card + rest.menu)
     }
 
     @Test
     fun `un menu plus haut que l'ecran s'arrete la ou la carte garde son minimum`() {
         val g = geometry(naturalMenu = 2_000f)
 
-        assertThat(g.expandedMenu).isEqualTo(672f)
-        assertThat(g.heightsAt(1f).card).isEqualTo(120f)
+        assertThat(g.expandedMenu).isWithin(TOLERANCE).of(800f - 8f - 138.4f - 120f)
+        assertThat(g.heightsAt(1f).card).isWithin(TOLERANCE).of(120f)
+        assertThat(g.menuCeiling).isEqualTo(g.expandedMenu)
+    }
+
+    @Test
+    fun `le panneau fait 80 pour cent de la largeur entre les marges et reste centre`() {
+        val width = ConversationPeekSizing.panelWidth(available = 400f, margin = 14f)
+
+        assertThat(width).isWithin(TOLERANCE).of(297.6f)
+        assertThat(ConversationPeekSizing.panelOffset(available = 400f, panelWidth = width)).isWithin(TOLERANCE).of(51.2f)
+        assertThat(ConversationPeekSizing.panelWidth(available = 20f, margin = 14f)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `glisser la carte vers le bas la suit et ne remonte jamais au-dessus de sa place`() {
+        assertThat(ConversationPeekPullDown.offsetAfterDrag(offset = 0f, downwardDelta = 60f)).isEqualTo(60f)
+        assertThat(ConversationPeekPullDown.offsetAfterDrag(offset = 60f, downwardDelta = -100f)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `relachee au-dela de 79 pour cent de la course projetee l'apercu se ferme sinon il revient`() {
+        val distance = 140f
+
+        assertThat(ConversationPeekPullDown.release(offset = 112f, downwardVelocity = 0f, distance = distance))
+            .isEqualTo(PeekPullDownRelease.Dismiss)
+        assertThat(ConversationPeekPullDown.release(offset = 100f, downwardVelocity = 0f, distance = distance))
+            .isEqualTo(PeekPullDownRelease.Restore)
+        assertThat(ConversationPeekPullDown.release(offset = 40f, downwardVelocity = 2_000f, distance = distance))
+            .isEqualTo(PeekPullDownRelease.Dismiss)
+        assertThat(ConversationPeekPullDown.release(offset = 130f, downwardVelocity = -2_000f, distance = distance))
+            .isEqualTo(PeekPullDownRelease.Restore)
+    }
+
+    @Test
+    fun `la progression du glisse vers le bas reste entre 0 et 1`() {
+        assertThat(ConversationPeekPullDown.progress(offset = 70f, distance = 140f)).isEqualTo(0.5f)
+        assertThat(ConversationPeekPullDown.progress(offset = 500f, distance = 140f)).isEqualTo(1f)
+        assertThat(ConversationPeekPullDown.progress(offset = 10f, distance = 0f)).isEqualTo(0f)
     }
 
     @Test
