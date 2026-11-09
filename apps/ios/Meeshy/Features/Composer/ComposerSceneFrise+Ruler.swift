@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// **La règle graduée de la frise** (#14211) : un pas MAJEUR choisi sur une
