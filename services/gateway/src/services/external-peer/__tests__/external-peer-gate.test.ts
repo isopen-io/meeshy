@@ -203,6 +203,30 @@ describe('pair externe — la distribution des pré-clés', () => {
     expect(bundle.kyberPreKey.lastResort).toBe(true);
   });
 
+  it('une nouvelle clé d’identité sous la MÊME registrationId ne sert plus aucune pré-clé unique de l’ancienne identité', async () => {
+    const { peer } = gate();
+    await peer.publishPreKeyBundle(publication());
+    await peer.publishPreKeyBundle(publication({ identityKey: fakeKey(11), oneTimePreKeys: [], kyberPreKeys: [] }));
+    const user = { side: 'external', network: 'whatsapp', handle: HANDLE } as const;
+
+    const [bundle] = await peer.fetchPreKeyBundles(user);
+
+    expect(bundle.identityKey).toBe(fakeKey(11));
+    expect(bundle.preKey).toBeNull();
+    expect(bundle.kyberPreKey.lastResort).toBe(true);
+  });
+
+  it('republier la MÊME identité garde les pré-clés uniques encore libres', async () => {
+    const { peer } = gate();
+    await peer.publishPreKeyBundle(publication());
+    await peer.publishPreKeyBundle(publication({ oneTimePreKeys: [{ keyId: 3, publicKey: fakeKey(8) }], kyberPreKeys: [] }));
+    const user = { side: 'external', network: 'whatsapp', handle: HANDLE } as const;
+
+    const served = await Promise.all([1, 2, 3].map(() => peer.fetchPreKeyBundles(user)));
+
+    expect(served.map(([bundle]) => bundle.preKey?.keyId ?? null).sort()).toEqual([1, 2, 3]);
+  });
+
   it('chaque appareil d’un utilisateur a son bundle, et un utilisateur sans bundle est inconnu', async () => {
     const { peer } = gate();
     await peer.publishPreKeyBundle(publication());
