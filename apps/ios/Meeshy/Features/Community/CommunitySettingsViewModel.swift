@@ -70,8 +70,9 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
         self.originalAvatarUrl = avatarStr
         self.originalBannerUrl = bannerStr
 
-        let savedColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? MeeshyColors.brandPrimaryHex
-        let savedEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? ""
+        let saved = CommunityLocalAppearance.read(communityId: community.id)
+        let savedColor = saved.color ?? MeeshyColors.brandPrimaryHex
+        let savedEmoji = saved.emoji ?? ""
         self.localColor = savedColor
         self.localEmoji = savedEmoji
         self.originalLocalColor = savedColor
@@ -95,8 +96,8 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
                 banner: newBanner
             )
 
-            UserDefaults.standard.set(localColor, forKey: "community.color.\(communityId)")
-            UserDefaults.standard.set(localEmoji, forKey: "community.emoji.\(communityId)")
+            CommunityLocalAppearance.writeColor(localColor, communityId: communityId)
+            CommunityLocalAppearance.writeEmoji(localEmoji, communityId: communityId)
 
             var community = apiCommunity.toCommunity()
             community.color = localColor

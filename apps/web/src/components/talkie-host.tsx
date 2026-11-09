@@ -11,6 +11,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { knownPersonByIdInConversations } from '@/lib/profile/known-people-cache';
 import { bindTalkieLive, talkieStore, type LiveTalkie, type TalkieStoreApi } from '@/lib/talkie/talkie-live';
 import { talkiePlayer, type TalkieSink } from '@/lib/talkie/talkie-player';
+import { bindTalkieWake } from '@/lib/talkie/talkie-wake-intent';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 
 /**
@@ -25,7 +26,8 @@ import { useCirclesCatalog } from '@/lib/use-circles-catalog';
  *   plus l'entendre du tout, c'est « Couper son talkie » sur la fiche du lien.
  * - L'émetteur est nommé par les caches de l'onglet ; inconnu, il est
  *   « Quelqu'un », jamais inventé.
- * - Onglet fermé : rien ne joue ici, la copie en message vocal prend le relais.
+ * - Onglet fermé : la notification du worker (« X vous parle ») rouvre l'app,
+ *   qui rattrape la voix (`talkie-wake-intent.ts`, #17144).
  */
 
 const viewerIdOf = (): string | null => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? null;
@@ -89,7 +91,18 @@ export function TalkieHost({
   const talkie = useStore(store, (state) => state.active[0] ?? null);
   const count = useStore(store, (state) => state.active.length);
 
-  useEffect(() => watch((socket) => bindTalkieLive({ socket, store, sink, viewerId: viewerIdOf })), [watch, store, sink]);
+  useEffect(
+    () =>
+      watch((socket) => {
+        const unbindLive = bindTalkieLive({ socket, store, sink, viewerId: viewerIdOf });
+        const unbindWake = bindTalkieWake({ socket, sink });
+        return () => {
+          unbindWake();
+          unbindLive();
+        };
+      }),
+    [watch, store, sink],
+  );
 
   useEffect(() => {
     const wait = store.getState().msUntilExpiry();

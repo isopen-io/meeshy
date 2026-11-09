@@ -113,9 +113,9 @@ final class ComposerLimitCapsule: ObservableObject {
 
     @Published private(set) var message: String?
     private var generation = 0
-    private let sleep: @Sendable (Duration) async throws -> Void
+    private let sleep: @concurrent @Sendable (Duration) async throws -> Void
 
-    init(sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
+    init(sleep: @escaping @concurrent @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.sleep = sleep
     }
 

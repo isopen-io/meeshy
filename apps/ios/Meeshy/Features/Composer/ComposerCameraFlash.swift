@@ -185,6 +185,23 @@ nonisolated enum ComposerFlashIntensity {
         clamped(level)
     }
 
+    /// **Le flash avant est une lumière DOUCE** (CAM-11, doc 08 § R8) : un blanc
+    /// crème chaud, vers 4000 K, plutôt que le blanc bleuté d'un écran, qui
+    /// durcit la peau. Le bleu cède le plus, le rouge reste plein.
+    static let warmth = FloorTint(red: 1, green: 0.88, blue: 0.74)
+
+    /// La lumière du sol au niveau `level` : la teinte chaude, à cette intensité.
+    static func floorTint(_ level: Double) -> FloorTint {
+        let niveau = clamped(level)
+        return FloorTint(red: warmth.red * niveau, green: warmth.green * niveau, blue: warmth.blue * niveau)
+    }
+
+    nonisolated struct FloorTint: Equatable, Sendable {
+        let red: Double
+        let green: Double
+        let blue: Double
+    }
+
     /// La puissance de la torche, bornée à ce que l'appareil sert et jamais
     /// nulle (`setTorchModeOn(level:)` refuse 0).
     static func torchLevel(_ level: Double, maxAvailable: Float) -> Float {

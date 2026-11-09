@@ -1630,6 +1630,8 @@ export class NotificationService {
     notificationLocKey?: string;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
+    /** Cf. `createMessageNotification.encryptedContent` — élue par `deviceEnvelopeForPush` (#17080). */
+    encryptedContent?: string;
   }): Promise<Notification | null> {
     // Anti-spam : le budget de la paire, CONSOMMÉ ici et nulle part ailleurs
     // (#17073). Le filtre du lot ne fait que poser la question.
@@ -1742,6 +1744,8 @@ export class NotificationService {
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
+        // #17080 — cf. `createReplyNotification` : l'enveloppe que la NSE ouvre.
+        encryptedContent: params.encryptedContent,
         ...this.messageClockFields(prismSource),
       },
 
@@ -1775,6 +1779,8 @@ export class NotificationService {
       previewBasis?: PreviewPrismBasis;
       /** Cf. `createMentionNotification.notificationLocKey`. */
       notificationLocKey?: string;
+      /** Cf. `createMentionNotification.encryptedContent` — #17080. */
+      encryptedContent?: string;
       /** Cf. `createMessageNotification.contentDetail` — #8857. */
       contentDetail?: NotificationContentDetail;
       /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
@@ -2321,6 +2327,8 @@ export class NotificationService {
     notificationLocKey?: string;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
+    /** Cf. `createMessageNotification.encryptedContent` — élue par `deviceEnvelopeForPush` (#17080). */
+    encryptedContent?: string;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -2418,6 +2426,9 @@ export class NotificationService {
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
+        // #17080 — l'enveloppe que la NSE ouvre. Sans elle, cette bannière
+        // restait « 🔒 💬 » à vie.
+        encryptedContent: params.encryptedContent,
         ...this.messageClockFields(prismSource),
       },
 

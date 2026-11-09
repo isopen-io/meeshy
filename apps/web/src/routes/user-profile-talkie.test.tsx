@@ -52,8 +52,10 @@ const link = (effectiveLevel: RelationLink['effectiveLevel']): RelationLink => (
   eligibleFor: null,
 });
 
-const view = (props: { readonly supported?: boolean; readonly phase?: 'idle' | 'starting' | 'talking' } = {}) =>
-  renderToStaticMarkup(<ProfileTalkieRowView language="fr" name="Ada" supported={props.supported ?? true} phase={props.phase ?? 'idle'} onPress={noop} onRelease={noop} />);
+const view = (props: { readonly supported?: boolean; readonly phase?: 'idle' | 'starting' | 'talking'; readonly waking?: boolean } = {}) =>
+  renderToStaticMarkup(
+    <ProfileTalkieRowView language="fr" name="Ada" supported={props.supported ?? true} phase={props.phase ?? 'idle'} waking={props.waking ?? false} onPress={noop} onRelease={noop} />,
+  );
 
 describe('ProfileTalkieRowView', () => {
   test('au repos : « Maintenir pour parler », nommé pour le lecteur d’écran avec le geste clavier', () => {
@@ -68,6 +70,21 @@ describe('ProfileTalkieRowView', () => {
     expect(html).toContain('Vous parlez à Ada…');
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-pressed="true"');
+  });
+
+  test('un destinataire réveillé par push : « Réveil de Ada… » (#17144)', () => {
+    const html = view({ phase: 'talking', waking: true });
+    expect(html).toContain('Réveil de Ada…');
+    expect(html).not.toContain('Vous parlez à Ada…');
+  });
+
+  test('le (i) est un bouton de 48 px, nommé et fermé au repos', () => {
+    const html = view();
+    expect(html).toContain('data-talkie-info=""');
+    expect(html).toContain('aria-label="À propos du talkie d’urgence"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('width:48px;height:48px');
+    expect(html).not.toContain('extrême urgence');
   });
 
   test('navigateur sans AAC : AUCUN bouton, le message vocal est proposé', () => {
@@ -98,18 +115,22 @@ function harness(ack: unknown) {
   const transport = (async () => ({ ok: true, data: null })) as unknown as HttpTransport;
   transport.request = (async () => ({ ok: true, data: appQueryClient.getQueryData(RELATION_LINKS_QUERY_KEY) ?? [] })) as HttpTransport['request'];
   const notices: string[] = [];
+  const tones: boolean[] = [];
   const row = (
     <ProfileTalkieRow
       language="fr"
       person={{ id: PROCHE, username: 'ada', displayName: 'Ada', avatar: null }}
-      onNotice={(message) => notices.push(message)}
+      onNotice={(message, failed) => {
+        notices.push(message);
+        tones.push(failed);
+      }}
       deps={{ source: 'gateway', transport }}
       watch={watch}
       capture={capture}
       supported={async () => true}
     />
   );
-  return { row, emitted, notices };
+  return { row, emitted, notices, tones };
 }
 
 const settle = async () => {
@@ -157,13 +178,29 @@ describe('ProfileTalkieRow', () => {
     expect(notices).toEqual([]);
   });
 
-  test('un blocage se dit comme un repli : le message vocal, sans raison', async () => {
+  test('un blocage se dit comme un repli : une INFORMATION neutre, jamais une erreur', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
-    const { row, notices } = harness({ success: false, error: 'x', code: 'TALKIE_BLOCKED' });
+    const { row, notices, tones } = harness({ success: false, error: 'x', code: 'TALKIE_BLOCKED' });
     const node = await mount(row);
     await settle();
     await press(node);
-    expect(notices).toEqual(['Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.']);
+    expect(notices).toEqual(['L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.']);
+    expect(tones).toEqual([false]);
     expect(node.querySelector('[data-talkie-send]')).not.toBeNull();
+  });
+
+  test('le (i) s’ouvre au toucher et dit à qui le talkie est destiné', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    const { row } = harness({ success: true, data: { talkieId: 'a'.repeat(24), maxDurationMs: 30_000, maxChunkBytes: 16_384 } });
+    const node = await mount(row);
+    await settle();
+    const info = node.querySelector<HTMLButtonElement>('[data-talkie-info]');
+    await act(async () => {
+      info?.click();
+    });
+    expect(info?.getAttribute('aria-expanded')).toBe('true');
+    expect(node.querySelector('[data-talkie-info-text]')?.textContent).toBe(
+      'Disponible pour vos très proches. À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan.',
+    );
   });
 });

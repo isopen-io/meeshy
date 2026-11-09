@@ -14,6 +14,8 @@ export const TALKIE_CLIENT_EVENTS = {
   TALKIE_SEND_CHUNK: 'talkie:send-chunk',
   /** Fin de la prise de parole (bouton relâché). */
   TALKIE_END: 'talkie:end',
+  /** Le destinataire réveillé par push rejoint une prise de parole `waking` (#17142). */
+  TALKIE_JOIN: 'talkie:join',
 } as const;
 
 export const TALKIE_SERVER_EVENTS = {

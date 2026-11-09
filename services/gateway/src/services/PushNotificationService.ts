@@ -23,6 +23,7 @@ import {
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
+import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -114,8 +115,8 @@ export interface PushResult {
 export interface SendPushOptions {
   userId: string;
   payload: PushNotificationPayload;
-  // Optional: target specific token types
-  types?: ('apns' | 'fcm' | 'voip')[];
+  // Optional: target specific token types. `pushtotalk` (#17142) is never a default: only the talkie wake asks for it.
+  types?: ('apns' | 'fcm' | 'voip' | 'pushtotalk')[];
   // Optional: target specific platforms
   platforms?: ('ios' | 'android' | 'web')[];
   // Skip the DND-hours/days check in `isPushAllowed` — for call-management
@@ -398,9 +399,10 @@ export class PushNotificationService {
       },
     });
 
-    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`).
+    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`). Un jeton
+    // PushToTalk (#17142) n'est enregistré QUE par un client qui sait le traiter : il porte sa capacité.
     const pushType = effectivePayload.data?.type;
-    const tokens = activeTokens.filter((token) => tokenRoutesPushType(token, pushType));
+    const tokens = activeTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
 
     if (tokens.length === 0) {
       pushLogger.debug('No active tokens found for user', { userId, pushType, excluded: activeTokens.length });
@@ -424,6 +426,8 @@ export class PushNotificationService {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, false);
           } else if (tokenRecord.type === 'voip') {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, true);
+          } else if (tokenRecord.type === 'pushtotalk') {
+            result = await this.sendViaPushToTalk(tokenRecord, effectivePayload);
           } else {
             result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
           }
@@ -836,6 +840,17 @@ export class PushNotificationService {
       });
       return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error' };
     }
+  }
+
+  private sendViaPushToTalk(tokenRecord: PushToTalkTokenRecord, payload: PushNotificationPayload): Promise<PushResult> {
+    return sendViaPushToTalk({
+      hasClient: (env) => !!(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction),
+      send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming('push.sendViaPushToTalk',
+        () => this.sendApnsWithRetry(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction, notification, token, corr), corr)),
+      isTransient: isTransientApnsReason,
+      defaultBundleId: config.apns.bundleId,
+      log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.sendViaPushToTalk.${event}`, fields),
+    }, tokenRecord, payload);
   }
 
   /**

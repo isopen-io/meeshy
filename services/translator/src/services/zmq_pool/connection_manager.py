@@ -246,7 +246,8 @@ class ConnectionManager:
             'batches_created': 0,
             'fast_track_count': 0,
             'caption_fast_lane_overflow': 0,
-            'shutdown_rejections': 0
+            'shutdown_rejections': 0,
+            'enqueue_error_rejections': 0
         }
 
         logger.info(
@@ -392,12 +393,13 @@ class ConnectionManager:
             return await self._enqueue_single_task(task)
 
         except Exception as e:
-            logger.error(f"Error enqueueing task {task.task_id}: {e}")
+            logger.error(f"[TRANSLATOR] Error enqueueing task {task.task_id}: {type(e).__name__}")
             return False
 
     async def _accumulate(self, task: TranslationTask) -> List[TranslationTask]:
         """Range la tâche dans l'accumulateur, sous `_batch_lock` ; un lot plein
-        part aussitôt. Rend les tâches d'un lot refusé par une file pleine."""
+        part aussitôt. Rend les tâches d'un lot refusé (file pleine ou entrée
+        qui lève, #16822)."""
         batch_key = self._get_batch_key(task)
         self._batch_accumulator.setdefault(batch_key, []).append(task)
         if len(self._batch_accumulator[batch_key]) < self.batch_max_size:
@@ -406,9 +408,22 @@ class ConnectionManager:
         logger.debug(
             f"⚡ [BATCH] Max size reached, immediate flush of {len(tasks_to_flush)} tasks"
         )
-        if await self._enqueue_batch(tasks_to_flush):
-            return []
-        return tasks_to_flush
+        return await self._enqueue_batch_or_refused(tasks_to_flush)
+
+    async def _enqueue_batch_or_refused(self, tasks: List[TranslationTask]) -> List[TranslationTask]:
+        """#16822 — enfile un lot déjà retiré de l'accumulateur ; rend ses
+        tâches à signaler si la file est pleine OU si l'entrée lève, sans
+        jamais journaliser le message de l'exception."""
+        try:
+            if await self._enqueue_batch(tasks):
+                return []
+        except Exception as e:
+            self.stats['enqueue_error_rejections'] += len(tasks)
+            logger.error(
+                f"[TRANSLATOR] Batch enqueue failed for "
+                f"{summarize_task_ids(tasks)}: {type(e).__name__}"
+            )
+        return tasks
 
     async def _enqueue_live_caption(self, task: TranslationTask) -> bool:
         """
@@ -540,7 +555,7 @@ class ConnectionManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[BATCH] Flush loop error: {e}")
+                logger.error(f"[TRANSLATOR] [BATCH] Flush loop error: {type(e).__name__}")
 
     async def _flush_batches(self):
         """Transfère les batches accumulés vers les queues de traitement"""
@@ -553,8 +568,9 @@ class ConnectionManager:
                 if not tasks:
                     continue
 
-                if not await self._enqueue_batch(tasks):
-                    rejected_batches.append(tasks)
+                refused = await self._enqueue_batch_or_refused(tasks)
+                if refused:
+                    rejected_batches.append(refused)
                     continue
                 logger.debug(
                     f"⚡ [BATCH] Flushed {len(tasks)} tasks to "
