@@ -1,5 +1,102 @@
 # @meeshy/translator
 
+## 1.95.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - NSETokenRedirectGuard sans nonisolated redondant
+  - les gardes de dépôt et iOS repassent au vert sur main
+  - check-profile suit l'ordre Détails · Conversations · Publications
+  - l'index de paire de UserRelation se convertit en place, jamais supprimé puis recréé
+  - l'écran d'humeur lit son chrome immersif dans la charte (82w)
+  - l'enveloppe push se ré-affirme depuis la relecture vivante, et la vivacité voit ses trois preuves
+  - titre du rang au-dessus de la Gloire, onglets Détails · Conversations · Publications
+  - les notifications, le temps réel et les traductions de story d'une publication réservée à une communauté ne partent qu'à ses membres (#17178)
+  - la table de la caméra s'écrit en clair et le témoin du repos suit host.
+  - une voix « scellée » ne passe plus dans une paire chiffrée tant qu'aucun client ne la déchiffre
+  - le gestionnaire ne journalise plus d'exception brute, et une requête qui lève avant la file est signalée et sa réserve libérée
+  - la clé d'une voix scellée voyage par le relais des signaux E2EE, par appareil — talkie:start n'en porte que l'identifiant
+  - l'app déclare l'entitlement Push to Talk
+  - l'entrée du talkie scellé n'a qu'un titre de niveau 2 — Refs #13949
+  - une voix scellée sur l'appareil passe dans une paire chiffrée, le serveur la relaie sans la lire — Refs #13949
+  - la porte vidéo d'appel se conforme à RTCVideoRenderer hors de l'acteur principal
+  - un refus « pool full » n'ouvre plus le disjoncteur (#17004)
+  - la règle de la frise importe MeeshySDK (MediaFormat)
+  - après une baisse, la fiche ne propose plus le talkie, l'ensemble ni le Bring d'un niveau quitté — sauf entre deux comptes de l'équipe (Refs #16623)
+  - la capsule dort hors de l'acteur principal, ComposerShell parle pt-BR, l'étiquette du vocal cherché vient de MediaKindLabel
+  - [xcodegen] la frise se découpe sous les 1000 lignes, trois gardes suivent le composer
+  - le texte des annonces du viseur lit ses libellés sur l'acteur principal (CAM-12)
+  - l'écart d'horloge du témoin « ensemble » se compare en Double, pas en Int (Refs #17084)
+  - le PushToTalk repart sans alerte, son ni badge
+  - une republication reste dans la communauté de sa source (#16892)
+  - cliquets — envoi PushToTalk extrait, 200 binaire déclaré, refus 401 nommés, tests typés
+  - une publication réservée à une communauté ne se lit que par ses membres, au fil, au profil, au détail, à la recherche et aux hashtags (#16892)
+  - le viseur annonce objectif, cran de zoom, photo et vidéo à VoiceOver (CAM-12) [xcodegen]
+  - les mots de « Rogner et régler » rejoignent le catalogue Localizable du SDK
+  - catégorie MEESHY_TALKIE et plancher iOS 1.1.7 pour talkie_incoming
+  - l'entrée en file ne journalise plus l'exception brute et ne perd plus un lot qui lève
+  - TogetherTests compile — at précède rev dans l'appel du helper playback
+  - poser un Mee et exporter la carte de fin ne figent plus le fil principal
+  - routes régénérées et classées après le contrat serveur du talkie réveillé
+  - raccrocher, quitter un groupe ou changer l'encodage ne bloque plus le fil principal
+  - la garde de redirection prend la forme à rappel du délégué (la forme async faisait planter swift-frontend)
+  - l'aperçu se rattache à la session depuis sa file, plus jamais sur le fil principal
+  - le jeton de session ne suit aucune redirection hors de la passerelle, et le client parle le contrat #17165
+  - le contrat serveur fait foi — `talkie:join` partagé, le push de suivi porte la voix
+  - le flash avant éclaire en blanc crème chaud (CAM-11)
+  - le témoin d'écart d'horloge d'« ensemble » compare à une tolérance
+  - le témoin d'écoute hors MainActor transporte son flux dans une boîte Sendable
+  - la voix d'un talkie ne vient que de la passerelle configurée, avec le jeton et plafonnée
+  - le témoin « ensemble » passe at puis rev, l'ordre du helper — la cible de tests SDK recompile
+  - le niveau d'horizon prend le nom ComposerCaptureLevel, ComposerCaptureHorizon existe déjà (CAM-10) [xcodegen]
+  - dev revient au vert — second témoin d'écoute Sendable, dégradé du talkie d'en-tête factorisé
+  - « Lire » ne joue que l'audio servi par la passerelle configurée
+  - l'audio d'urgence ne passe jamais par l'adresse de la page, et ne vient que de la passerelle
+  - dev recompile après les fusions du 2026-11-08
+  - niveau d'horizon discret au viseur, grille activée (CAM-10) [xcodegen]
+  - l'emoji choisi en créant une communauté se retrouve dans son détail (#6380)
+  - le jeton PushToTalk est retiré du serveur AVANT l'effacement des identifiants à la déconnexion
+  - « Réveil de X… », le (i) d'urgence, l'information neutre, et la notification du talkie qui rattrape la voix
+  - le relais des coupures existe dès le démarrage, et la suppression d'une pièce ou d'une conversation coupe aussi (#17022)
+  - le talkie réveille l'iPhone en arrière-plan, sa copie vocale part dans la conversation la plus récente, et un (i) dit l'usage d'urgence
+  - « Lire » joue l'audio porté par le push avec le lecteur des vocaux existant
+  - gardes iOS de l'effet Flamme
+  - un talkie réveille l'appareil en arrière-plan, et « Lire » joue sa voix depuis la notification
+  - une séance « ensemble » s'arrête dans le geste qui ferme sa porte — compte parti, membre banni, média supprimé (#17022)
+  - gardes iOS de la coque [xcodegen]
+  - la garde des arêtes ignore les commentaires et lit les trois écritures d'une dépendance, l'ADR-003 ne promet plus un plugin absent
+  - la capsule de limite tient les règles maison — singleton injecté, sommeil sans try?, commentaire non daté
+  - l'en-tête pose le bandeau par la même porte que la liste et la fiche, plus rien sous 40 pt
+  - gardes iOS de la frise — décodage @concurrent, couleurs de famille de la palette
+  - l'export MP4 fait monter le feu du texte, textures de flamme cuites une fois
+  - capsule au-dessus de la pilule, retour du masque au doigt et à VoiceOver, rangée à partir de deux scènes
+  - la caméra d'abord a une entrée, sa photo est réduite pour le canvas, et un maximum atteint ne relance pas de prise [xcodegen]
+  - « Quitter » défait la session même sur une pile pleine, un seul curseur de volume
+  - le graphe des features et l'ADR-003 disent la même chose, une garde le tient. Closes #17018
+  - la pastille-glyphe sans appelant est retirée, le bandeau ne se pose qu'à 40 pt (Closes #17084)
+  - le texte en feu brûle sur les lettres, quatre effets au sélecteur
+  - état masqué en letterbox 9:16, rangée des scènes en overlay, porte Caméra et capsule de limite
+  - le chrome du viseur respire après 3 s sans toucher (CAM-8)
+  - un lot refusé va au bout de son report malgré l'arrêt, et les refus d'arrivée tardive ne remplissent plus le journal
+  - la caméra s'arme plein écran, « Quitter · ✓ Valider », capsule centrée et caméra d'abord (A8–A10)
+  - un seul « Rogner et régler » pour le son et la vidéo, frise premium et réactive
+  - l'accusé de LIVRAISON d'un invité de lien n'est plus enterré sous un `if (!isAnonymous)`
+  - l'éventail RÉPONSE vérifie l'appartenance avant de confier l'enveloppe
+  - l'enveloppe E2EE part sur les trois éventails, et se retient sous une protection plus forte
+  - corrections de l'audit adversarial du talkie réveillé
+  - jeton PushToTalk lié à sa session, talkie:join relayé entre instances, conversation du repli
+  - voix du talkie lisible sans socket (capacité signée), push de suivi qui porte l'audio, jeton PushToTalk
+  - talkie réveillé — porte waking, tampon borné, talkie:join, push PushToTalk / TALKIE
+  - le cliquet « émission vivante avant enfilage » ne se laisse plus tromper par son appariement, et le verdict à trois valeurs n'a qu'une déclaration
+  - la PORTE du lien échu manquait aux statistiques, et le pli n'était pas borné
+  - le `label` d'une émission voyage avec sa panne — « NOMMÉE » était un mot, et deux témoins le gelaient
+  - le lot de mentions est borné comme l'éventail regular
+  - l'agrégat de statistiques est borné par le plancher du lecteur
+  - le chemin NOMINAL de `message:new` enrobe chaque audience pour SA part, et l'émission par langue a un site unique
+  - contrat du talkie réveillé — delivery, talkie:join, push talkie_incoming, repli informatif
+
 ## 1.94.0
 
 ### Minor Changes
