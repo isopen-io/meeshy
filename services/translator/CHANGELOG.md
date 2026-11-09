@@ -1,5 +1,121 @@
 # @meeshy/translator
 
+## 1.96.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'aperçu d'appui long se pose sur un voile léger, et l'appui qui l'a montré n'ouvre plus la conversation
+  - talkie actif, le bouton prend toute la barre d'en-tête et son onde suit la voix en direct
+  - une décision produit par question, et un écart imposé par une garde est une décision
+  - la conformité d'une planche de vues se vérifie composant par composant, iOS puis Android
+  - la copie vocale part sous le nom talkie_AAAA-MM-JJ_HHmm.m4a
+  - Lens, Focal, River et Onboarding rend ses couleurs par foregroundStyle
+  - Main/Components et Services rend ses couleurs par foregroundStyle
+  - Main/Views rend ses couleurs par foregroundStyle
+  - Stories rend ses couleurs par foregroundStyle
+  - Call rend ses couleurs par foregroundStyle
+  - Share rend ses couleurs par foregroundStyle
+  - Game rend ses couleurs par foregroundStyle
+  - Contacts rend ses couleurs par foregroundStyle
+  - Auth rend ses couleurs par foregroundStyle
+  - Profile rend ses couleurs par foregroundStyle
+  - Links rend ses couleurs par foregroundStyle
+  - Settings rend ses couleurs par foregroundStyle
+  - l'entrée du décodeur passe sous Locked, sans @unchecked Sendable
+  - MeeshyUI (Location, Auth, VoiceProfile, Navigation) rend ses couleurs par foregroundStyle
+  - MeeshyUI/Settings rend ses couleurs par foregroundStyle
+  - MeeshyUI/Notifications rend ses couleurs par foregroundStyle
+  - MeeshyUI/Game rend ses couleurs par foregroundStyle
+  - MeeshyUI/Story rend ses couleurs par foregroundStyle
+  - MeeshyUI/Conversation rend ses couleurs par foregroundStyle
+  - MeeshyUI/Community rend ses couleurs par foregroundStyle
+  - MeeshyUI/Profile rend ses couleurs par foregroundStyle
+  - MeeshyUI/JoinFlow rend ses couleurs par foregroundStyle
+  - MeeshyUI/Primitives rend ses couleurs par foregroundStyle
+  - MeeshyUI/Media rend ses couleurs par foregroundStyle
+  - la réaction rapide VoiceOver n'est exposée que si le geste est actif
+  - chaque geste du reste de l'app se dit à VoiceOver
+  - chaque geste actionnable de Features/Main est un bouton pour VoiceOver (S11)
+  - les contrôles isolés de Features/Main sous 44 pt se touchent (S9)
+  - les glyphes d'état vide et d'en-tête de Features/Main suivent Dynamic Type (S7)
+  - six contrôles de moins de 44 pt reçoivent leur cible tactile
+  - sort cinq contrôles des fonctions épinglées avant d'y toucher
+  - l'entrée du décodeur AAC n'est plus le bloc @Sendable de Xcode 26
+  - le reste de l'app suit Dynamic Type et déclare ses glyphes figés
+  - ownerDefaults se reconstruit depuis le nom de sa suite — plus de nonisolated(unsafe), la règle maison revient à 58
+  - les contrôles isolés du SDK sous 44 pt se touchent (S9)
+  - chaque geste actionnable du SDK est un bouton pour VoiceOver (S11)
+  - ownerDefaults compile sous Xcode 26, où UserDefaults n'est pas Sendable
+  - chaque bouton à icône seule du SDK se dit à VoiceOver (S8)
+  - nomme les paramètres du relais de QuoteComposerDoor et aligne la garde du header feed
+  - les textes et glyphes en ligne du SDK suivent Dynamic Type (S7)
+  - dix relais lisent le routeur par l'environnement sans s'abonner
+  - quatre couvertures lisent le routeur sans l'observer
+  - ajoute le relais du routeur sans abonnement
+  - un clone frais porte la déclaration de la colle du pont libsignal
+  - AVAudioConverter passe par un adaptateur, la signature importée diffère entre Xcode 26 et 27
+  - la passerelle ouvre avec la bibliothèque native ce que le web a scellé
+  - DelayedActions déclaré là où il est lu (SectionHeaderView) et visible des extensions (iPadRootView, PostDetailView)
+  - le décodeur AAC compile sous Swift 6.2 (Xcode 26.1 de la CI)
+  - le web ouvre avec libsignal 0.106.2 ce que la passerelle, iOS et Android ont scellé
+  - ComposerTasks est nonisolated et les calques texte et lieu reviennent hors périmètre
+  - les actions différées d'une vue meurent avec elle (DelayedActions)
+  - les abonnements de socket et de réseau de l'app passent par OrderedEventLane
+  - les caches NSCache statiques ne portent plus nonisolated(unsafe)
+  - les tâches et observateurs de l'app se libèrent par TaskSlot et TeardownBox
+  - les temporisations de vues passent par DelayedUI et .settling, le délai d'expiration du préchargement vidéo par une Task annulable
+  - les verrous de l'app passent par Locked<State>
+  - les flux Combine du SDK relaient par une voie ordonnée au lieu de lancer une Task depuis un sink
+  - état partagé du SDK sous Locked, flux d'engagement sur une voie ordonnée
+  - les sommeils de l'app passent par cancellableSleep et des durées typées
+  - TaskSlot, l'emplacement d'une tâche annulable depuis un deinit nonisolated
+  - LockedCache enveloppe NSCache et remplace dix-sept nonisolated(unsafe) de caches
+  - le menu d'appui long d'un message prend la largeur de l'aperçu de conversation
+  - l'aperçu d'appui long rétrécit de 20 % et se ferme par le voile, un glissé vers le bas ou « Fermer »
+  - l'aperçu d'appui long et son menu tiennent sur 80 % de l'écran
+  - LongPressPeekPresence a une deinit nonisolated, et l'encre AA du menu entre au cliquet des couleurs
+  - la copie vocale n'est remise à la file qu'une fois son fichier fermé
+  - [xcodegen] la barre de prise ne remplit plus ses cases une à une, slotFills quitte le code
+  - chaque fragment se décode en entier, et la copie vocale dure autant que la voix
+  - [xcodegen] la caméra s'arme à l'ouverture, la photothèque s'ouvre à mi-hauteur, deux réglages
+  - une seule bande de looks, triée en direct par des puces [xcodegen]
+  - les segments paraissent en haut et l'anneau tourne dès la tenue
+  - [xcodegen] règles de progression de la prise et du plan d'ouverture
+  - la bande de looks mêle filtres, effets et cadres — règle du tri [xcodegen]
+  - avatar et bannière se retouchent avec l'outil de la capture, rond 1:1 et bandeau 3:1
+  - au réveil PushToTalk, la session audio passe en playAndRecord pour que le système l'active
+  - la copie vocale d'une voix non rejointe part une fois, sous un cid que la passerelle accepte
+  - avatar et bannière se retouchent avec l'outil de la capture ; l'ancien éditeur d'image quitte le dépôt
+  - l'aperçu d'appui long se ferme d'un geste évident, ses actions se lisent actives, rien ne passe au-dessus
+  - un destinataire joignable rejoint le canal PushToTalk à l'ouverture de session
+  - les derniers fragments d'une voix réveillée relâchée restent gardés, et son suivi part
+  - le jeton PushToTalk déclare l'environnement APNs de la build
+  - l'ancien éditeur d'image plein écran quitte le dépôt
+  - avatar et bannière se retouchent avec l'outil de la capture caméra
+  - en arrière-plan, ni chemin réseau republié à l'identique, ni battement de pastille
+  - les gardes de dépôt acceptent l'aperçu d'appui long — chaînes classées, icône MeeshyIcons
+  - un verdict « personne n'a rejoint » arrivé avant la voix rangée l'attend, et la copie part
+  - story_reader ne compte plus le chunk partagé story-return
+  - « Rendre obsolète » au menu seulement ; le panneau ⋮ passe au-dessus du bandeau du joueur
+  - le bouton talkie de l'en-tête charge son offre depuis une pile qui existe toujours
+  - « Rendre obsolète » quitte le glissement vers la gauche, menu seulement
+  - le glissement de fin ne garde qu'Archiver et Lu / Non lu
+  - « waking » seulement si un réveil peut partir ; sinon repli et cause journalisée
+  - « Verrouiller » du menu lit context.lock, swipe_unlock retiré avec le glissement
+  - menu de rangée allégé, glissements réduits, aperçu tiré par transformations
+  - appui long — grande carte sans en-tête, menu compact qu'on tire vers le haut
+  - appui long — grande carte de contenu, menu compact qu'on tire vers le haut ; menu et glissements allégés
+  - « Montre-toi » dans son propre chunk, avec son catalogue
+  - appui long — grande carte de contenu, menu compact qu'on tire vers le haut, menu et glissements allégés
+  - le délai de SessionEndingHooks naît hors de l'acteur principal sans Task.detached
+  - loi de dimensionnement de l'aperçu d'appui long — progression 0→1, deux crans, seuil et lancer
+  - loi de l'aperçu d'appui long — grande carte, menu compact qu'on tire vers le haut
+  - la loi de l'aperçu tenu — carte grande, menu compact, deux crans
+  - carte d'onboarding « Montre-toi » — avatar et bannière dès l'inscription
+  - le second chemin multi-locuteur ne clone plus aucune voix sans l'accord de la passerelle
+
 ## 1.95.0
 
 ### Minor Changes
