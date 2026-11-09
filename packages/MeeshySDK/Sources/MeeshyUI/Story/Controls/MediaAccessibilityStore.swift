@@ -9,7 +9,7 @@ import MeeshySDK
 /// (`CreatePostSchema.mediaAlt` / `.allowSoundExtraction`,
 /// `services/gateway/src/routes/posts/types.ts`), SDK
 /// (`PostService.create/update(… allowSoundExtraction: mediaAlt:)`) — mais
-/// rien ne les COLLECTAIT côté UI avant ce fichier (C7-UI, 2026-08-23).
+/// rien ne les COLLECTAIT côté UI avant ce fichier.
 ///
 /// Ce store est la SURFACE de collecte, pas le point de persistance final :
 /// `payload(.alt)` rend exactement la forme attendue par
@@ -91,7 +91,7 @@ public final class MediaAccessibilityStore: ObservableObject {
 
     public func setCaption(_ value: String, for mediaId: String) { setText(value, .caption, for: mediaId) }
 
-    /// Défaut `true` (directive porteur 2026-09-26, #8012) : un contenu PUBLIC
+    /// Défaut `true` (#8012) : un contenu PUBLIC
     /// verse la bande-son de ses vidéos à la bibliothèque, et la passerelle lit
     /// l'ABSENCE de choix comme un accord (`videoSoundExtractionAllowed`).
     /// L'interrupteur affiche donc ce qui se passera ; seul un refus explicite

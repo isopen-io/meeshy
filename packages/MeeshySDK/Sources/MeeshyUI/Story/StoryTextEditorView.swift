@@ -19,8 +19,7 @@ public struct StoryTextEditorView: View {
     @State private var expandedSection: TextEditorSection?
     /// Handle `@…` en cours de frappe dans le texte de CE calque, `nil` sinon.
     /// Même règle pure que le composer de post — écrire `@alice` dans une story
-    /// n'ouvrait aucune liste, donc ne vérifiait aucun pseudo (retour user
-    /// 2026-08-18).
+    /// n'ouvrait aucune liste, donc ne vérifiait aucun pseudo.
     @State private var mentionQuery: String?
     @Environment(\.colorScheme) private var colorScheme
 

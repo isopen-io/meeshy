@@ -84,7 +84,7 @@ public enum StoryExportIntro {
 
     /// L'interlude tient à PLEINE opacité pendant `holdDuration`, puis se fond
     /// vers la story sur `crossfadeDuration` — la story se RÉVÈLE, jamais une
-    /// coupure brutale (directive user 2026-07-26). La story démarre donc à
+    /// coupure brutale. La story démarre donc à
     /// `holdDuration`, et le fondu chevauche ses `crossfadeDuration` premières
     /// secondes sans jamais la rallonger.
     public static let holdDuration: TimeInterval = 1.2
@@ -155,8 +155,8 @@ public enum StoryExportIntro {
     /// stays legible over any banner.
     ///
     /// Package-internal (pas `private`) : `StoryExportOutro` réutilise le MÊME
-    /// voile + la MÊME carte d'identité pour la carte de fin d'auteur (Part D
-    /// 2026-07-26), garantissant qu'ouverture et fermeture montrent une identité
+    /// voile + la MÊME carte d'identité pour la carte de fin d'auteur,
+    /// garantissant qu'ouverture et fermeture montrent une identité
     /// peinte à l'identique.
     static func drawScrim(in cg: CGContext, size: CGSize) {
         let rect = CGRect(origin: .zero, size: size)

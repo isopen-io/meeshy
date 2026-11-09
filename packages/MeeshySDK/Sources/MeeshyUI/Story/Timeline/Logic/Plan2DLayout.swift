@@ -49,7 +49,7 @@ public nonisolated struct Plan2DTrack: Equatable, Identifiable, Sendable {
     /// image posé par le composer, id préfixé
     /// `StoryComposerViewModel.syntheticTimelineClipIdPrefix`) est
     /// verrouillé : sa fenêtre début/durée est ignorée en lecture, la
-    /// déplacer au doigt mentirait (retour user 2026-07-11). Restauré par la
+    /// déplacer au doigt mentirait. Restauré par la
     /// revue Opus, constat 3 — l'ancien conteneur le portait déjà via
     /// `isImmovableBackground` (`StoryTimelineView.swift:631`). Verrouillé =
     /// NI poignées de bord NI déplacement temporel (D2) — jamais un obstacle

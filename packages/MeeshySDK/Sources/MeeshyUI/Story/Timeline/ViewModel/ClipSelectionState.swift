@@ -24,8 +24,8 @@ public struct ClipSelectionState: Equatable, Sendable {
     public nonisolated private(set) var selectedClipId: String?
 
     /// Clip dont la FICHE d'édition est présentée. Distinct du surlignage :
-    /// toucher une piste la surligne, la fiche ne s'ouvre qu'au double tap
-    /// (directive user 2026-07-27). Auparavant la sheet était pilotée par un
+    /// toucher une piste la surligne, la fiche ne s'ouvre qu'au double tap.
+    /// Auparavant la sheet était pilotée par un
     /// binding sur `selectedClipId` — sélectionner, c'était présenter, et le
     /// moindre tap recouvrait la timeline qu'on était en train de lire.
     ///

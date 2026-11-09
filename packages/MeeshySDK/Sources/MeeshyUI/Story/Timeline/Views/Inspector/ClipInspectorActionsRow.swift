@@ -15,7 +15,7 @@ struct ClipInspectorActionsRow: View {
     /// demande confirmation avant la suppression définitive. Icône + TEXTE
     /// obligatoires — les pastilles icône-seule teintées (losange indigo sur
     /// verre indigo, corbeille rouge sur verre rouge) ne portaient ni leur
-    /// sens ni leur contraste (capture user 2026-07-20).
+    /// sens ni leur contraste.
     ///
     /// Composition Liquid Glass (iOS 26 via `Compatibility/AdaptiveGlass`) :
     /// la SURFACE de la modale reste en matériau (le verre ne peut pas

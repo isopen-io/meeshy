@@ -152,7 +152,7 @@ extension StoryCanvasUIView {
         // (viewer fermé mais instance vivante, canvas sortant de cross-fade)
         // reçoit aussi cette notification — sans le guard, ses AVPlayer
         // foreground + le fond vidéo rejouaient à la réouverture de l'app
-        // alors qu'aucun viewer n'était visible (bug user 2026-06-11).
+        // alors qu'aucun viewer n'était visible.
         guard mode == .play, window != nil else { return }
         // Une story mise en pause AVANT le passage en arrière-plan doit revenir
         // en pause : sans ce gate, quitter l'app puis y revenir relançait les
