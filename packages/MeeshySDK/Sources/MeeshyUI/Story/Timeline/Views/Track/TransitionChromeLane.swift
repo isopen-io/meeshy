@@ -8,7 +8,7 @@ import MeeshySDK
 /// lets the user configure them. Both badges are sized to the same fixed
 /// `StoryRenderer.slideTransitionDuration` (1.2s) every effect actually
 /// animates over — not editable here; tap-to-edit stays out of scope for
-/// this pass (design doc 2026-07-18) to avoid duplicating
+/// this pass to avoid duplicating
 /// `OpeningEffectChips`' UI.
 public struct TransitionChromeLane: View {
     public let openingEffect: StoryTransitionEffect?
@@ -68,7 +68,7 @@ public struct TransitionChromeLane: View {
             Image(systemName: effect.iconName)
                 .font(.system(size: 8, weight: .semibold))
             Text(Self.displayName(effect))
-                .font(.system(size: 8, weight: .semibold))
+                .meeshyScaledFont(8, weight: .semibold)
                 .lineLimit(1)
         }
         .padding(.horizontal, MeeshySpacing.xsPlus)

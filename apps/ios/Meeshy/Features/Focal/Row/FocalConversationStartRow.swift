@@ -16,7 +16,7 @@ struct FocalConversationStartRow: View, Equatable {
     /// séparateurs — jamais un second formateur ici). `nil` = premier message
     /// pas encore réalisé : le nom seul, comportement d'avant.
     /// Spec §5 « Premier message lisible » : « Début de la conversation ·
-    /// {date} » — la date manquait (lot 3.4, 2026-08-18).
+    /// {date} » — la date manquait (lot 3.4).
     var firstMessageDayLabel: String? = nil
 
     var body: some View {

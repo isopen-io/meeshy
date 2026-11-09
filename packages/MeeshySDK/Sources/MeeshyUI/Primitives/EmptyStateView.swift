@@ -39,7 +39,7 @@ public struct EmptyStateView: View {
 
             Image(systemName: icon)
                 .font(MeeshyFont.relative(compact ? 36 : 52, weight: .light))
-                .foregroundColor(Color(hex: accentColor).opacity(0.4))
+                .foregroundStyle(Color(hex: accentColor).opacity(0.4))
                 .padding(.bottom, compact ? 0 : MeeshySpacing.xs)
 
             if let actionLabel, let onAction, compact {

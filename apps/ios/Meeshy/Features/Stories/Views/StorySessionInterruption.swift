@@ -1,8 +1,7 @@
 import Foundation
 import MeeshySDK
 
-/// **Une interruption de la lecture fige l'horloge de la story** (#11040,
-/// décision porteur g du 2026-10-20).
+/// **Une interruption de la lecture fige l'horloge de la story** (#11040).
 ///
 /// Un appel téléphonique, Siri, une alarme, l'audio d'une autre app : le
 /// système retire la session à Meeshy, et la story s'arrêtait de SONNER

@@ -10,7 +10,7 @@ import MeeshySDK
 // des lanes) → aperçu jouable + partage. L'export sert à PRÉVISUALISER le
 // rendu final de la timeline — il ne publie rien.
 //
-// Task 9 (2026-07-26) : cet export bakait le filigrane SANS pseudo et
+// Task 9 : cet export bakait le filigrane SANS pseudo et
 // n'ajoutait jamais l'interlude de marque — divergence avec les 3 autres
 // chemins d'export de story (`StoryPhotoSaveService`,
 // `StoryExportShareViewModel`, `StoryVideoExportService`). Fixé en appelant
@@ -19,7 +19,7 @@ import MeeshySDK
 // « bake, puis prépose l'interlude » que `StoryVideoExportService.
 // prepareExport` — voir `SystemTimelineStoryExporter` ci-dessous.
 //
-// Revue finale (2026-07-26, item 1) : la CARTE DE FIN (`StoryExportOutro`)
+// Revue finale : la CARTE DE FIN (`StoryExportOutro`)
 // manquait encore sur ce chemin — la même story se terminait sur le logo
 // Meeshy + signature sonore depuis « Mes stories », et sur sa dernière frame
 // depuis le composer timeline. Elle est désormais appliquée ici, avec le même
@@ -336,7 +336,7 @@ struct TimelineSheetContent: View {
 
     /// L'export terminé se présente en PLEIN ÉCRAN — la vidéo se consulte
     /// comme n'importe quelle vidéo : lecture immersive, Enregistrer dans
-    /// Photos, Partager (retour user 2026-07-11). Pin testé par
+    /// Photos, Partager. Pin testé par
     /// `TimelineExportPreviewTests`.
     static let presentsFinishedExportFullscreen = true
 
@@ -495,7 +495,7 @@ struct TimelineExportPreviewSheet: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xxxl))
+                        .meeshyScaledFont(MeeshyIconSize.xxxl)
                         .foregroundStyle(Color.white.opacity(0.85))
                         .padding()
                 }
@@ -534,6 +534,8 @@ struct TimelineExportPreviewSheet: View {
             .foregroundStyle(Color.white.opacity(0.9))
             .frame(width: 40, height: 40)
             .background(Circle().fill(Color.white.opacity(0.2)))
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
         }
         .disabled(Self.isSaveDisabled(saveState))
         .accessibilityLabel(String(localized: saveState == .saved

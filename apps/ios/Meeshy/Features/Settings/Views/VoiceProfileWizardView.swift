@@ -8,7 +8,7 @@ struct VoiceProfileWizardView: View {
 
     /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
     /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
-    /// (+3 introduits par #6481, 2026-09-14).
+    /// (+3 introduits par #6481).
     private var accent: Color { Color(hex: accentColor) }
 
     @Environment(\.dismiss) private var dismiss
@@ -117,7 +117,7 @@ struct VoiceProfileWizardView: View {
                 Spacer().frame(height: 20)
 
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
+                    .font(MeeshyFont.fixedGlyph(64)) // icône héros décorative — figée (≥40pt)
                     .foregroundStyle(
                         LinearGradient(
                             colors: [accent, accent.opacity(MeeshyOpacity.heavy)],
@@ -129,12 +129,12 @@ struct VoiceProfileWizardView: View {
 
                 Text(String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .multilineTextAlignment(.center)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .padding(.horizontal, MeeshySpacing.xxl)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
@@ -153,7 +153,7 @@ struct VoiceProfileWizardView: View {
                 if let error = viewModel.error {
                     Text(error)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .padding(.horizontal, MeeshySpacing.xl)
                 }
 
@@ -194,7 +194,7 @@ struct VoiceProfileWizardView: View {
                 .accessibilityHidden(true) // glyphe décoratif — le texte porte l'information
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
         }
     }
 
@@ -205,18 +205,18 @@ struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "person.badge.shield.checkmark.fill")
-                .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
+                .font(MeeshyFont.fixedGlyph(64)) // icône héros décorative — figée (≥40pt)
                 .foregroundColor(accent)
                 .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Vérification de l'âge", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(String(localized: "voice.profile.wizard.ageVerification.description", defaultValue: "Le clonage vocal nécessite une vérification d'âge pour les mineurs.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .multilineTextAlignment(.center)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.xxxl)
 
             DatePicker(String(localized: "voice.profile.wizard.birthDate", defaultValue: "Date de naissance", bundle: .main), selection: $viewModel.birthDate, displayedComponents: .date)
@@ -249,7 +249,7 @@ struct VoiceProfileWizardView: View {
             if let error = viewModel.error {
                 Text(error)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .padding(.horizontal, MeeshySpacing.xl)
             }
 
@@ -266,12 +266,12 @@ struct VoiceProfileWizardView: View {
 
                 Text(String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Minimum 3 échantillons de 10 secondes.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .multilineTextAlignment(.center)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .padding(.horizontal, MeeshySpacing.xxl)
 
                 VoiceRecordingView(
@@ -288,7 +288,7 @@ struct VoiceProfileWizardView: View {
                 if let error = viewModel.error {
                     Text(error)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .padding(.horizontal, MeeshySpacing.xl)
                 }
 
@@ -309,12 +309,12 @@ struct VoiceProfileWizardView: View {
 
             Text(String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours…", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             if viewModel.totalToUpload > 0 {
                 Text(String(localized: "voice.profile.wizard.uploadProgress", defaultValue: "Envoi \(viewModel.uploadedCount)/\(viewModel.totalToUpload) échantillons", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium, design: .monospaced))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
 
                 ProgressView(value: Double(viewModel.uploadedCount), total: Double(viewModel.totalToUpload))
                     .tint(accent)
@@ -324,13 +324,13 @@ struct VoiceProfileWizardView: View {
             Text(String(localized: "voice.profile.wizard.creating", defaultValue: "Votre profil vocal est en cours de création. Cela peut prendre quelques instants.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .multilineTextAlignment(.center)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .padding(.horizontal, MeeshySpacing.xxxl)
 
             if let error = viewModel.error {
                 Text(error)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
             }
 
             Spacer()
@@ -344,13 +344,13 @@ struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 72)) // icône héros décorative — figée (≥40pt)
-                .foregroundColor(MeeshyColors.success)
+                .font(MeeshyFont.fixedGlyph(72)) // icône héros décorative — figée (≥40pt)
+                .foregroundStyle(MeeshyColors.success)
                 .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal créé !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             if let profile = viewModel.profile {
                 VStack(spacing: MeeshySpacing.sm) {
@@ -372,7 +372,7 @@ struct VoiceProfileWizardView: View {
             Text(String(localized: "voice.profile.wizard.success.message", defaultValue: "Vos messages audio traduits utiliseront désormais votre voix clonée.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .multilineTextAlignment(.center)
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.xxxl)
 
             Button {
@@ -381,7 +381,7 @@ struct VoiceProfileWizardView: View {
             } label: {
                 Text(String(localized: "voice.profile.wizard.finish", defaultValue: "Terminer", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.lg)
                     .background(
@@ -399,11 +399,11 @@ struct VoiceProfileWizardView: View {
         HStack {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Spacer()
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .accessibilityElement(children: .combine)
     }

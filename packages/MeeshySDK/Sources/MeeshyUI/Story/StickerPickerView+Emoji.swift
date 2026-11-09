@@ -25,7 +25,7 @@ extension StickerPickerView {
                       spacing: 8) {
                 ForEach(category.emojis, id: \.self) { emoji in
                     Button {
-                        // **Poser, c'est se souvenir** (2026-09-05). L'onglet
+                        // **Poser, c'est se souvenir**. L'onglet
                         // RÉCENTS n'a pas d'autre source : il ne devine pas ce
                         // qu'on a posé, on le lui dit ici, au seul endroit qui
                         // le sait.
@@ -45,7 +45,7 @@ extension StickerPickerView {
                     .accessibilityIdentifier(StickerAccessibilityID.emoji(emoji))
                 }
             }
-            // **Plus de marge horizontale ICI** (2026-09-05) : la feuille est
+            // **Plus de marge horizontale ICI** : la feuille est
             // plate, et c'est son défilement qui pose les 20 points. Une marge
             // de grille s'y ajoutait pour en faire 32, et la rangée d'emoji y
             // perdait une colonne entière.
@@ -113,7 +113,7 @@ extension StickerPickerView {
                     defaultValue: "Collez une image pour commencer votre bibliothèque",
                     bundle: .module
                 ))
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)
@@ -128,7 +128,7 @@ extension StickerPickerView {
                             Button {
                                 // **« Mes stickers » alimente les RÉCENTS et
                                 // les FAVORIS comme les deux autres grilles**
-                                // (2026-09-05). L'oublier ici aurait fait un
+                                // L'oublier ici aurait fait un
                                 // troisième chemin de pose sans mémoire, et
                                 // l'auteur aurait conclu que les récents ne
                                 // marchent « que parfois » — le pire mode de
@@ -172,7 +172,7 @@ extension StickerPickerView {
 /// Le budget de décodage est celui de la CASE (52 pt), jamais celui de la
 /// scène : trente images de 512 px pour une vignette coûteraient trente bitmaps
 /// dont on n'utiliserait qu'un dixième des pixels.
-/// `internal` depuis le 2026-09-05 : les onglets FAVORIS et RÉCENTS rendent les
+/// `internal` : les onglets FAVORIS et RÉCENTS rendent les
 /// mêmes vignettes depuis un autre fichier d'extension. La recopier y aurait
 /// donné deux dessins de la même chose, à faire converger à chaque retouche.
 struct LibraryStickerThumbnail: View {

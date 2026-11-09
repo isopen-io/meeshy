@@ -91,6 +91,11 @@ nonisolated enum TalkieCopyDestination {
 
 /// La copie vocale sur le disque : les trames ADTS décodées puis réécrites en AAC dans un conteneur `.m4a`, le format
 /// des vocaux de Meeshy.
+///
+/// Le fichier est FERMÉ avant de rendre la main, et la durée rendue est celle qu'on relit sur le disque (#17255) : la
+/// passerelle a reçu une copie de 820 octets lue « 128 ms » pendant que l'iPhone en affichait 7 s — la file d'envoi
+/// copiait un `.m4a` dont les derniers paquets et l'atome `moov` n'étaient pas encore écrits. La fermeture d'un
+/// `AVAudioFile` attend sa désallocation (avant iOS 18), qu'une référence autoreleasée peut repousser au-delà du retour.
 nonisolated enum TalkieVoiceCopyFile {
     static func write(_ frames: [Data], to url: URL) -> TimeInterval? {
         let decoder = TalkieAdtsStreamDecoder()
@@ -101,15 +106,28 @@ nonisolated enum TalkieVoiceCopyFile {
             AVSampleRateKey: first.format.sampleRate,
             AVNumberOfChannelsKey: first.format.channelCount,
         ]
-        do {
-            let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: first.format.commonFormat, interleaved: first.format.isInterleaved)
-            try buffers.filter { $0.format == first.format }.forEach(file.write(from:))
-        } catch {
+        let written: Bool = autoreleasepool {
+            do {
+                let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: first.format.commonFormat, interleaved: first.format.isInterleaved)
+                try buffers.filter { $0.format == first.format }.forEach(file.write(from:))
+                if #available(iOS 18.0, *) { file.close() }
+                return true
+            } catch {
+                return false
+            }
+        }
+        guard written, let duration = recordedDuration(of: url) else {
             try? FileManager.default.removeItem(at: url)
             return nil
         }
-        let frameCount = buffers.reduce(0) { $0 + Double($1.frameLength) }
-        return frameCount / first.format.sampleRate
+        return duration
+    }
+
+    private static func recordedDuration(of url: URL) -> TimeInterval? {
+        autoreleasepool {
+            guard let file = try? AVAudioFile(forReading: url), file.length > 0 else { return nil }
+            return Double(file.length) / file.fileFormat.sampleRate
+        }
     }
 }
 

@@ -9,7 +9,7 @@ import MeeshySDK
 /// montre à gousset — parce que c'est l'objet que l'œil reconnaît du coin de
 /// la palette, avant de lire l'heure qu'il porte.
 ///
-/// **Rien ici ne lit l'horloge** (décision D1 du 2026-09-01) : chaque gabarit
+/// **Rien ici ne lit l'horloge** : chaque gabarit
 /// dessine ce que ses emplacements portent, et une valeur absente laisse une
 /// boîte non nulle — l'objet sans son heure, jamais un vide.
 extension TimeStickerTemplates {

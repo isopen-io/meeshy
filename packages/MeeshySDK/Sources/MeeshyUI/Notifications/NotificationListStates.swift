@@ -120,7 +120,7 @@ struct NotificationListErrorState: View {
 
             Image(systemName: "wifi.exclamationmark")
                 .font(.system(size: MeeshyIconSize.hero))
-                .foregroundColor(MeeshyColors.error.opacity(0.6))
+                .foregroundStyle(MeeshyColors.error.opacity(0.6))
                 .accessibilityHidden(true)
 
             Text(
@@ -130,8 +130,8 @@ struct NotificationListErrorState: View {
                     bundle: .module
                 )
             )
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(theme.textPrimary)
+            .font(MeeshyFont.relative(16, weight: .semibold))
+            .foregroundStyle(theme.textPrimary)
             .multilineTextAlignment(.center)
 
             Text(
@@ -141,8 +141,8 @@ struct NotificationListErrorState: View {
                     bundle: .module
                 )
             )
-            .font(.system(size: 13))
-            .foregroundColor(theme.textMuted)
+            .font(MeeshyFont.relative(13))
+            .foregroundStyle(theme.textMuted)
             .multilineTextAlignment(.center)
 
             Button(action: retry) {
@@ -153,8 +153,8 @@ struct NotificationListErrorState: View {
                         bundle: .module
                     )
                 )
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
+                .meeshyScaledFont(14, weight: .semibold)
+                .foregroundStyle(.white)
                 .padding(.horizontal, MeeshySpacing.xl)
                 .padding(.vertical, MeeshySpacing.smPlus)
                 .background(Capsule().fill(brandColor))

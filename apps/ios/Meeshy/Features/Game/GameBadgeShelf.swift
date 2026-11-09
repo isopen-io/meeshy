@@ -294,7 +294,7 @@ struct GameBadgeStarsView: View {
             ForEach(0..<model.starsMax, id: \.self) { index in
                 Image(systemName: "star.fill")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary.opacity(index < model.stars ? 1 : 0.25))
+                    .foregroundStyle(MeeshyColors.brandPrimary.opacity(index < model.stars ? 1 : 0.25))
             }
             Text(ConceptText.ratio(GameCopy.formatCount(model.stars), GameCopy.formatCount(model.starsMax)))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -328,7 +328,7 @@ struct GameBadgeLadderView: View {
                                 .foregroundColor(rung.state == .reached ? theme.textPrimary : theme.textMuted)
                             Text(rung.line)
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: rung.state == .next ? .semibold : .regular))
-                                .foregroundColor(rung.state == .next ? MeeshyColors.brandPrimary : theme.textMuted)
+                                .foregroundStyle(rung.state == .next ? MeeshyColors.brandPrimary : theme.textMuted)
                         }
                         .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)

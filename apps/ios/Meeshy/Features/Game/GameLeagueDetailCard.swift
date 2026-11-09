@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - Le détail de ligue, avant la frappe (#9541)
 //
-// Directive porteur 2026-10-06 : dans Engagement / Progression, le DÉTAIL DE LIGUE — la gemme, la place, les points de
+// dans Engagement / Progression, le DÉTAIL DE LIGUE — la gemme, la place, les points de
 // la semaine, le temps jusqu'à la fermeture — se place AVANT le bouton de frappe des Meeshes. La frappe est le geste
 // qui coûte ; la ligue est ce qui se joue cette semaine : on la lit avant de décider.
 //

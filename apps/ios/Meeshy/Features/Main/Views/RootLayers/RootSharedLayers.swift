@@ -142,7 +142,7 @@ struct RootNotificationToastOverlay: View {
 ///
 /// La bulle se rend dans le repère de CE conteneur — poser l'hôte plus bas
 /// (liste, carte de feed, tray…) faisait rendre une bulle par hôte frère,
-/// chacune décalée dans son propre repère (bug 2026-07-30). Les présentations
+/// chacune décalée dans son propre repère. Les présentations
 /// modales gardent leur propre pose : l'overlay racine est invisible sous
 /// elles. Cf. `StatusBubbleOverlayModifier`.
 struct RootStatusBubbleLayer: ViewModifier {

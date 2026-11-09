@@ -61,7 +61,7 @@ public struct MediaAltTextField: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(labels.label)
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             TextField(
@@ -71,7 +71,7 @@ public struct MediaAltTextField: View {
             )
             .lineLimit(1...3)
             .textFieldStyle(.roundedBorder)
-            .font(.system(size: 13))
+            .font(MeeshyFont.relative(13))
             .focused($isFocused)
             .onSubmit { commitIfChanged() }
             .accessibilityLabel(labels.label)

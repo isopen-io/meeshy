@@ -23,6 +23,7 @@ import MeeshyUI
 //   iPadRootView+Navigation.swift   — all navigation & notification handlers
 
 struct iPadRootView: View {
+    @State var delayed = DelayedActions()
     @ObservedObject var storyViewModel: StoryViewModel
     @ObservedObject var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :
@@ -155,7 +156,7 @@ struct iPadRootView: View {
         //
         // Hôte UNIQUE de la bulle de mood pour toute la fenêtre iPad : couvre
         // les DEUX colonnes dans un seul repère. Les colonnes sont des vues
-        // SŒURS — un hôte par colonne rendait DEUX bulles (bug 2026-07-30). La
+        // SŒURS — un hôte par colonne rendait DEUX bulles. La
         // bulle se ferme dès que le panneau droit navigue.
         .modifier(RootStatusBubbleLayer(
             navigationToken: AnyHashable(rightPanelRoute),

@@ -12,7 +12,7 @@ import MeeshySDK
 /// Chaque bulle rend son état COURANT plutôt qu'un pictogramme figé, sans quoi
 /// parcourir quatorze couleurs au tap se ferait à l'aveugle.
 ///
-/// Icônes flottantes SANS arrière-plan explicite (directive user 2026-07-10) :
+/// Icônes flottantes SANS arrière-plan explicite :
 /// même langage que les actions du header — `glassControlForeground` +
 /// `adaptiveGlass`, l'outil dont le panneau est ouvert passant en verre
 /// proéminent teinté.
@@ -75,7 +75,7 @@ struct TextEditFloatingBubbles: View {
             // 36 pt ne peut pas montrer l'effet ET la couleur, et la bulle
             // Couleur montre déjà la sienne.
             Text(letter)
-                .font(.system(size: MeeshyFont.bodySize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .glassControlForeground()
                 .storyTextEffect(effect, fontSize: 15, textColor: .white)
         case .colorDot(let hex):
@@ -87,7 +87,7 @@ struct TextEditFloatingBubbles: View {
             backgroundSwatch(hex: hex, isGlass: isGlass)
         case .code(let code):
             Text(code)
-                .font(.system(size: MeeshyFont.smallSize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                 .glassControlForeground()
         case .symbol(let name, let emphasis, let tint):
             symbolIndicator(name: name, emphasis: emphasis, tint: tint)
@@ -122,7 +122,7 @@ struct TextEditFloatingBubbles: View {
                         .stroke(Color.white.opacity(0.6), lineWidth: 1))
         } else {
             Image(systemName: isGlass ? "square.on.square.dashed" : "square.slash")
-                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
+                .meeshyScaledFont(MeeshyIconSize.sm, weight: .semibold)
                 .glassControlForeground()
         }
     }

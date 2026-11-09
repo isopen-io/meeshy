@@ -68,11 +68,12 @@ nonisolated enum ComposerEditScene {
     /// **Une famille ouverte descend AU NIVEAU de son rail** (#10311, porteur
     /// 2026-10-12 : « ses éléments descendent au niveau du rail, pas un panneau
     /// flottant plus haut ») : Filtres · Effets · Cadres en colonne, la bande à
-    /// leur droite, sur une seule rangée — elle prend la place des outils.
+    /// leur droite, sur une seule rangée — elle prend la place des outils. Les
+    /// puces qui la trient se posent dessous (#17267).
     static var familyRow: CGFloat {
         let familles = CGFloat(ComposerLookFamily.allCases.count)
         let rail = familles * MeeshyControlSize.tapTarget + (familles - 1) * MeeshySpacing.sm
-        return max(bandHeight + 2 * ComposerTriggerOutline.outset, rail)
+        return max(bandHeight + 2 * ComposerTriggerOutline.outset, rail) + ComposerLookStripRule.chipsHeight
     }
 
     /// Ce que le bas retient sous la scène : les outils, et chaque panneau

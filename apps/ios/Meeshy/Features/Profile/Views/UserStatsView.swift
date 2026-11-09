@@ -46,12 +46,12 @@ struct UserStatsView: View {
             if let errorMessage = viewModel.errorMessage {
                 HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                        .foregroundColor(MeeshyColors.error)
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                        .foregroundStyle(MeeshyColors.error)
                         .accessibilityHidden(true)
                     Text(errorMessage)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                     Spacer()
                 }
                 .padding(MeeshySpacing.md)
@@ -95,8 +95,8 @@ struct UserStatsView: View {
             // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
             // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
             Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xl, weight: .semibold))
+                .foregroundStyle(Color(hex: color))
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
@@ -107,11 +107,11 @@ struct UserStatsView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(value)
                     .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
 
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             Spacer()
@@ -135,7 +135,7 @@ struct UserStatsView: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "chart.xyaxis.line")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(MeeshyColors.info)
+                    .foregroundStyle(MeeshyColors.info)
                     .accessibilityHidden(true)
                 Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITÉ", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
@@ -167,7 +167,7 @@ struct UserStatsView: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "trophy.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                     .accessibilityHidden(true)
                 Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))

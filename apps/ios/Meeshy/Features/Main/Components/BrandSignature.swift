@@ -49,7 +49,7 @@ struct BrandSignature: View {
             Link(destination: Self.creditDestination) {
                 Text(verbatim: Self.credit)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium, design: .rounded))
-                    .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.heavy))
+                    .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.heavy))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .padding(Self.creditHitOutset)
@@ -70,7 +70,7 @@ struct BrandSignature: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 28, height: 28)
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .opacity(MeeshyOpacity.intense)
                 .padding(.top, MeeshySpacing.xxs)
                 .accessibilityHidden(true)

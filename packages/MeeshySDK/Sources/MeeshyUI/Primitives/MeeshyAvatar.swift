@@ -119,7 +119,7 @@ public enum AvatarContext: Sendable {
     /// pendant le scroll.
     /// Contextes où le badge de mood « respire » (`repeatForever`). Les
     /// contextes de LISTE et d'EN-TÊTE de conversation en sont sortis le
-    /// 2026-08-21 : `.conversationHeaderCollapsed` est aussi l'avatar de la
+    /// `.conversationHeaderCollapsed` est aussi l'avatar de la
     /// rangée plate Lentille — un ressort infini PAR RANGÉE pendant tout le
     /// défilement (précédent « hog device 2026-07-03 », plus bas), pour une
     /// animation qui n'informe de rien (directive user : moins d'animations
@@ -403,9 +403,6 @@ public struct MeeshyAvatar: View {
 
     private func performTap() {
         withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 0.9 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 1.0 }
-        }
         handleTap()
     }
 
@@ -446,6 +443,7 @@ public struct MeeshyAvatar: View {
                    value: shownPresence?.transitionKey)
         .adaptiveOnChange(of: shownPresence?.transitionKey) { _, _ in presenceChanged = true }
         .scaleEffect(tapScale)
+        .settling($tapScale, to: 1.0, after: .milliseconds(100), animation: .spring(response: 0.2, dampingFraction: 0.6))
 
         let tappable = Group {
             if hasTapHandler {
@@ -475,9 +473,11 @@ public struct MeeshyAvatar: View {
                     }
                 }
                 .accessibilityLabel(accessibilityName)
+                .accessibilityActions { presenceAction }
         } else {
             loaded
                 .accessibilityLabel(accessibilityName)
+                .accessibilityActions { presenceAction }
         }
     }
 
@@ -567,7 +567,7 @@ public struct MeeshyAvatar: View {
         switch effectiveStoryState {
         case .unread:
             // Unread-story affordance: solid brand-primary ring at double the
-            // resting width (product decision 2026-06-21). Replaces the former
+            // resting width. Replaces the former
             // Instagram-style multi-colour rotating gradient.
             Circle()
                 .stroke(MeeshyColors.brandPrimary, lineWidth: context.ringWidth * 2)
@@ -625,6 +625,13 @@ public struct MeeshyAvatar: View {
     }
 
     @ViewBuilder
+    private var presenceAction: some View {
+        if let onOnlineTap {
+            Button(String(localized: "avatar.presence.details.a11y", bundle: .module)) { onOnlineTap() }
+        }
+    }
+
+    @ViewBuilder
     private func onlineDot(for presence: AvatarPresenceDot, diameter: CGFloat) -> some View {
         // Couleur via le mapping central AvatarPresenceDot.color (PresenceStyle) :
         // primaire « ici », vert online/recent, orange away, gris idle.
@@ -636,6 +643,7 @@ public struct MeeshyAvatar: View {
                 HapticFeedback.light()
                 onOnlineTap?()
             }
+            .accessibilityHidden(true)
 
         // Pulse actif uniquement quand en ligne ET story ring visible ET enablePulse
         if enablePulse && presence.pulses && effectiveStoryState != .none {

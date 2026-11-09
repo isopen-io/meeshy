@@ -66,10 +66,15 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// coup l'accès au contenu.
     public internal(set) var editingKnowsDeclaredReferences = false
 
-    // Cancellable preload Task started by `init(reposting:authorHandle:)`.
-    // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
-    // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
-    nonisolated(unsafe) var preloadTask: Task<Void, Never>?
+    private nonisolated struct ComposerTasks: Sendable {
+        var preload: Task<Void, Never>?
+        var videoMeasure: [String: Task<Void, Never>] = [:]
+    }
+    private nonisolated let tasks = Locked(ComposerTasks())
+    var preloadTask: Task<Void, Never>? {
+        get { tasks.read { $0.preload } }
+        set { tasks.mutate { $0.preload = newValue } }
+    }
 
     // MARK: - Références
 
@@ -210,13 +215,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
     /// `StoryComposerViewModel+DrawingEditing.swift`).
     /// `public` en LECTURE : le rail *leading* montre les contrôleurs de
-    /// l'outil ouvert et TEINTE celui dont le panneau est déplié (directive
-    /// porteur 2026-08-30). L'écriture reste au module — elle passe par
+    /// l'outil ouvert et TEINTE celui dont le panneau est déplié.
+    /// L'écriture reste au module — elle passe par
     /// `beginDrawing` / `endDrawing` / `setExpandedDrawingTool`, qui posent les
     /// drapeaux par paires.
     @Published public internal(set) var drawingEditingMode: DrawingEditingMode = .inactive
 
-    /// Plein écran de TRACÉ (user 2026-07-11 v2) : l'outil dessin s'ouvre en
+    /// Plein écran de TRACÉ : l'outil dessin s'ouvre en
     /// mode LISTE (band avec les traits, rien d'activé) ; la sélection d'un
     /// pinceau bascule ce flag — canvas plein écran dessinable jusqu'aux
     /// angles, bulles seules, pinch-zoom. Retombe à `false` à la sortie du
@@ -242,7 +247,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Couleur/dégradé de fond sélectionné au Background tool. Appliqué EN
     /// DIRECT à `currentSlide.effects.background` — avant, la valeur ne
     /// rejoignait la slide qu'au prochain sync (publish/autosave) et le
-    /// canvas ne re-rendait pas à la sélection (retour user 2026-07-11).
+    /// canvas ne re-rendait pas à la sélection.
     @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())" {
         didSet {
             guard oldValue != backgroundColor else { return }
@@ -256,7 +261,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// (selectedImage) ET les `mediaObjects` modernes `isBackground == true`
     /// (chip Background) — ce dernier échappait au calcul et laissait le
     /// chrome en `.light` (pastel aléatoire) sur un letterbox blur sombre,
-    /// boutons inexploitables (captures user 2026-07-20). Un média de fond
+    /// boutons inexploitables. Un média de fond
     /// suit la luminance RÉELLE de son bitmap (2e vague de captures : capture
     /// d'écran BLANCHE en Background → chrome blanc invisible avec un `.dark`
     /// forfaitaire) ; sans bitmap mesurable, convention viewer → `.dark`.
@@ -343,15 +348,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// slide ID survives any reorder/insert/remove operation.
     var backgroundTransformCache: [String: BackgroundTransform] = [:]
 
-    /// **Une tâche de mesure PAR objet vidéo** (#5418). Une poignée unique
-    /// (`preloadTask`) suffisait à la graine, qui pose UNE vidéo ; le pont
-    /// document → canvas en pose autant que l'auteur en ingère, et elles se
-    /// voleraient leur poignée. Annulées au `deinit` comme `preloadTask`.
-    ///
-    /// `nonisolated(unsafe)` pour la MÊME raison que `preloadTask`, écrite à
-    /// son site : le `deinit` est `nonisolated` et doit pouvoir annuler sans
-    /// saut vers le main actor — l'annulation est `Sendable` et sûre.
-    nonisolated(unsafe) var videoMeasureTasks: [String: Task<Void, Never>] = [:]
+    /// **Une tâche de mesure PAR objet vidéo** (#5418) : plusieurs vidéos ingérées
+    /// ensemble ne se volent pas leur poignée. Annulées au `deinit`, comme `preloadTask`.
+    var videoMeasureTasks: [String: Task<Void, Never>] {
+        get { tasks.read { $0.videoMeasure } }
+        set { tasks.mutate { $0.videoMeasure = newValue } }
+    }
 
     // MARK: - Media Storage (pre-publication)
 
@@ -402,7 +404,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// — donc ne stampe le bitmap sur le canvas — QUE lorsque cette version
     /// change (cf. `StoryCanvasRepresentable.updateUIView`). Muter `loadedImages`
     /// directement sans ce bump laisse le reader périmé : un média fraîchement
-    /// ajouté ne s'affiche jamais et le canvas reste noir (bug user 2026-07-20).
+    /// ajouté ne s'affiche jamais et le canvas reste noir.
     /// Toute *nouvelle* écriture dans `loadedImages` DOIT passer par ici.
     func registerLoadedImage(_ image: UIImage?, for id: String) {
         if let image {
@@ -521,7 +523,6 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Le store était mono-brouillon : commencer une deuxième story écrasait
     /// silencieusement la première. Chaque session porte désormais son id —
     /// neuf pour une ardoise vierge, celui du brouillon repris sinon
-    /// (spec 2026-08-01).
     public private(set) var draftId: String = UUID().uuidString
 
     /// Vrai quand la session a été rattachée à un brouillon CHOISI par
@@ -633,13 +634,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         loadedImagesVersion &+= 1
     }
 
-    /// Default initializer (kept explicit so the convenience init below has a designated
-    /// init to delegate to). All stored properties default-initialise, so the body is empty.
     public init() {}
 
     nonisolated deinit {
-        preloadTask?.cancel()
-        // #5418 — une session refermée ne finit pas de mesurer ses vidéos.
-        for tache in videoMeasureTasks.values { tache.cancel() }
+        let held = tasks.read { $0 }
+        held.preload?.cancel()
+        for tache in held.videoMeasure.values { tache.cancel() }
     }
 }

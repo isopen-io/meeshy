@@ -33,6 +33,44 @@ final class DeprecatedModifierRenderParityTests: XCTestCase {
         XCTAssertEqual(legacyData, currentData)
     }
 
+    func test_foregroundStyleColorPrimary_rendersLikeForegroundColorPrimary_underTintedParent() throws {
+        let legacy = pixels(
+            Rectangle().foregroundColor(.primary).foregroundStyle(Color.red)
+        )
+        let current = pixels(
+            Rectangle().foregroundStyle(Color.primary).foregroundStyle(Color.red)
+        )
+        let legacyData = try XCTUnwrap(legacy)
+        let currentData = try XCTUnwrap(current)
+        XCTAssertEqual(legacyData, currentData)
+    }
+
+    func test_foregroundStyle_rendersLikeForegroundColor_onTextWithOpacity() throws {
+        let legacy = pixels(
+            Text("Ab").font(.system(size: 20)).foregroundColor(Color.white.opacity(0.45))
+                .background(Color.black)
+        )
+        let current = pixels(
+            Text("Ab").font(.system(size: 20)).foregroundStyle(Color.white.opacity(0.45))
+                .background(Color.black)
+        )
+        let legacyData = try XCTUnwrap(legacy)
+        let currentData = try XCTUnwrap(current)
+        XCTAssertEqual(legacyData, currentData)
+    }
+
+    func test_foregroundStyle_rendersLikeForegroundColor_onSFSymbolImage() throws {
+        let legacy = pixels(
+            Image(systemName: "lock.fill").foregroundColor(MeeshyColors.warning)
+        )
+        let current = pixels(
+            Image(systemName: "lock.fill").foregroundStyle(MeeshyColors.warning)
+        )
+        let legacyData = try XCTUnwrap(legacy)
+        let currentData = try XCTUnwrap(current)
+        XCTAssertEqual(legacyData, currentData)
+    }
+
     func test_bareHierarchicalSecondary_differsUnderTintedParent() throws {
         let qualified = pixels(
             Rectangle().foregroundStyle(Color.secondary).foregroundStyle(Color.red)

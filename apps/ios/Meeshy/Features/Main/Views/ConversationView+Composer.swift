@@ -16,7 +16,7 @@ extension ConversationView {
     // Garde anti-débordement de pile : chaque modificateur système ajoute un
     // niveau de générique `ModifiedContent<…>`, et la résolution runtime du type
     // opaque (`swift_getTypeByMangledName`, ~17 Ko de pile par niveau) dépassait
-    // les 1008 Ko du thread principal (device iPhone 16 Pro Max, 2026-09-03).
+    // les 1008 Ko du thread principal (device iPhone 16 Pro Max).
     // DÉCOUPER DES PROPRIÉTÉS NE DÉCOUPE PAS LE TYPE. La chaîne est donc faite de
     // frontières NOMINALES : une vue (`ConversationComposerCore`) et quatre
     // `ViewModifier` (`ConversationComposerLayers.swift`, `+GuestAttachments`),
@@ -96,7 +96,7 @@ extension ConversationView {
     ///
     /// ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant tout le
     /// cycle REST(12 s)+repli socket(10 s) d'UN message — le bouton d'envoi serait
-    /// mort ~22 s par message en réseau dégradé (2026-07-02). Les double-taps
+    /// mort ~22 s par message en réseau dégradé. Les double-taps
     /// restent couverts par le champ et le plateau vidés dans le tour du tap (#14696).
     /// Aucun dédoublonnage par CONTENU : des emojis identiques partent en série (#7985).
     func composerBar(

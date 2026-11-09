@@ -20,7 +20,7 @@ extension FeedPostCard {
 
     /// « Vues » — qui a vu, et ce que chacun a fait (#9727) — ne s'ouvre qu'à
     /// ADMIN/BIGBOSS sur un post ou un réel ; l'auteur n'en voit que les
-    /// nombres (décision porteur 2026-10-09). Règle : `PublicationViewersAccess`.
+    /// nombres. Règle: `PublicationViewersAccess`.
     var canListViewers: Bool {
         PublicationViewersAccess.mayList(
             postType: post.type,
@@ -37,7 +37,7 @@ extension FeedPostCard {
                 label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
                 tint: theme.textMuted
             )
-            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+            MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
             ReachMetricLabel(
                 icon: "eye.fill",
                 count: post.viewCount,
@@ -77,7 +77,7 @@ extension FeedPostCard {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(post.author)
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     // Vue `1h` — l'heure appartient à la ligne du NOM, pas à la
                     // ligne de méta. Elle qualifie l'auteur (« Camille Roux, il
@@ -90,8 +90,7 @@ extension FeedPostCard {
                     FeedPostCardTimestamp(post: post, color: theme.textMuted)
 
                     // Attribution de republication, juste après le pseudo :
-                    // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre (directive
-                    // user 2026-08-19). La formule « a republié de @handle »
+                    // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre. La formule « a republié de @handle »
                     // disait en toutes lettres ce que l'icône dit déjà, et
                     // poussait le handle en bout de ligne, là où la troncature
                     // le mangeait en premier sur une carte étroite : le seul
@@ -169,9 +168,9 @@ extension FeedPostCard {
                     // Reach stats (impressions · views) — visible ONLY to the
                     // post's author, after the meta row (private analytics).
                     // Les NOMBRES seulement : toucher la portée n'ouvre « Vues »
-                    // que pour ADMIN/BIGBOSS (#9727, décision 2026-10-09).
+                    // que pour ADMIN/BIGBOSS (#9727).
                     if isAuthor {
-                        MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption).foregroundStyle(theme.textMuted)
                         if canListViewers {
                             Button { showViewersSheet = true } label: { reachMetrics }
                                 .buttonStyle(GameBounceButtonStyle())
@@ -221,7 +220,7 @@ extension FeedPostCard {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(MeeshySpacing.sm)
             }
             .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
@@ -300,7 +299,7 @@ struct FeedPostOnlineMenuItems: View {
 /// La date d'un post, suivie — très discrètement — des points que ce post a
 /// rapportés au lecteur : « 2 h · ✦+99 ». Encre et corps de la date, ni
 /// capsule, ni couleur, ni flamme : plus discret que la marque des
-/// conversations (directive porteur 2026-10-07). Ce n'est pas un bouton.
+/// conversations. Ce n'est pas un bouton.
 /// Champ absent (ancien serveur, invité), `0` : la date seule.
 ///
 /// La lecture (`seed`) est notée à chaque nouvelle valeur — la date est
@@ -367,7 +366,7 @@ struct PostDateWithPoints<DateLabel: View>: View {
             HStack(spacing: MeeshySpacing.xxs) {
                 date()
                     .font(.caption)
-                    .foregroundColor(color)
+                    .foregroundStyle(color)
                 if let points = PostViewerPoints.shown(store.displayed(postId: postId, seed: seed)) {
                     PostPointsMark(points: points, color: color)
                         .equatable()

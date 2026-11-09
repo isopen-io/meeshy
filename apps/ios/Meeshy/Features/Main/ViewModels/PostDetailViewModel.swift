@@ -507,12 +507,9 @@ class PostDetailViewModel: ObservableObject {
         // l'append idempotent — ne JAMAIS vider `comments` ici (flash-vide).
         socialSocket.didReconnect
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                guard let self else { return }
-                Task {
-                    await self.refreshPost(postId)
-                    await self.onThread(postId).refreshFirstRootsPage()
-                }
+            .relay(through: OrderedEventLane()) { [weak self] _ in
+                await self?.refreshPost(postId)
+                await self?.onThread(postId).refreshFirstRootsPage()
             }
             .store(in: &socketCancellables)
 

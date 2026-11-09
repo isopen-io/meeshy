@@ -38,7 +38,7 @@ struct BackgroundSoundBadge: View, Equatable {
     let announcement: BackgroundAudioAnnouncement
     let accentHex: String
     /// Le son de fond est-il COUPÉ ? La note se barre, le crédit se fige — la
-    /// note EST le contrôle (directive porteur 2026-10-08, #9677).
+    /// note EST le contrôle (#9677).
     let isMuted: Bool
 
     /// Le crédit suit la taille de texte choisie, plafonnée : en très grande
@@ -335,7 +335,7 @@ extension BackgroundSoundBadge {
 
     /// **Ce post rend-il SON PROPRE canvas, en ligne ?**
     ///
-    /// Deux façons d'en porter un, et la seconde a été ajoutée le 2026-09-06
+    /// Deux façons d'en porter un, et la seconde a été ajoutée
     /// sur un constat porteur : « la vue détail ne montre pas la scène sans
     /// média intégré… pourtant en feed on voit bien la scène ».
     ///

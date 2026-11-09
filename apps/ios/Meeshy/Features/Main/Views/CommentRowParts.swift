@@ -41,7 +41,7 @@ struct CommentAuthorHeader<Author: View, Offer: View, Time: View>: View {
     }
 
     private var separator: some View {
-        MetaSeparator().font(separatorFont).foregroundColor(separatorColor)
+        MetaSeparator().font(separatorFont).foregroundStyle(separatorColor)
     }
 }
 

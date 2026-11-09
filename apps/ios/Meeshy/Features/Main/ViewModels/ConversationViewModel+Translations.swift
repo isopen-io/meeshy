@@ -35,8 +35,7 @@ struct MessageTranslation: Identifiable, Equatable {
     let sourceLanguage: String
     let targetLanguage: String
     let translatedContent: String
-    /// FACULTATIF — le fil ne garantit pas le modèle (audit iOS ↔ passerelle,
-    /// 2026-09-11) : une entrée de `Message.translations` écrite par une version
+    /// FACULTATIF — le fil ne garantit pas le modèle (audit iOS ↔ passerelle): une entrée de `Message.translations` écrite par une version
     /// antérieure n'en porte pas, et le schéma wire ne la déclare pas
     /// `nullable`, donc elle arrive absente. Aucune surface ne l'affiche ; la
     /// rendre obligatoire ne protégeait rien et coûtait la traduction entière.
@@ -148,8 +147,7 @@ extension ConversationViewModel {
     /// traduction audio à la demande) — DÉLÈGUE au canal unique du message
     /// (`bubbleLanguageSelections`), le seul que l'hôte observe et que
     /// `playAudio`/`syncActiveTrack` lisent. `activeAudioLanguageOverrides`
-    /// était un canal MORT (écrit ici, lu par personne — revue adversariale
-    /// 2026-08-18) : sélectionner une langue dans la vue Langue ne changeait
+    /// était un canal MORT (écrit ici): sélectionner une langue dans la vue Langue ne changeait
     /// ni la piste, ni le karaoké, ni le drapeau.
     func setActiveAudioLanguage(for messageId: String, language: String?) {
         setBubbleActiveDisplayLanguage(language, for: messageId)

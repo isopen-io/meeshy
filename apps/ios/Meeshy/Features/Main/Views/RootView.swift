@@ -45,6 +45,7 @@ struct StoryViewerRequest: Identifiable, Equatable {
 }
 
 struct RootView: View {
+    @State private var delayed = DelayedActions()
     @ObservedObject private var storyViewModel: StoryViewModel
     @ObservedObject private var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
@@ -238,7 +239,7 @@ struct RootView: View {
             // 7. Offline state — surfaced as a discreet inline chip inside
             // `ConnectionBanner` (the safe-area inset at the top of every
             // NavigationStack content view). The legacy full-width red
-            // `OfflineBanner` was retired 2026-05-27 — the offline state
+            // `OfflineBanner` was retired — the offline state
             // is just one of {.syncing, .offline, .disconnected} that the
             // small ConnectionBanner pill rotates through.
             pendingSettingsBannerOverlay
@@ -611,13 +612,13 @@ struct RootView: View {
             // the profile screen lands on the home surface — not whatever
             // happened to be on top of the nav stack at cold launch.
             router.popToRoot()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            delayed.run(after: .milliseconds(50)) {
                 router.push(.profile)
             }
 
         case .userLinks:
             router.popToRoot()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            delayed.run(after: .milliseconds(50)) {
                 router.push(.links)
             }
 
@@ -747,7 +748,7 @@ struct RootView: View {
         // Swallow the release tap that the toast Button may emit right after the
         // long-press / drag, then re-arm shortly after.
         suppressToastTap = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { suppressToastTap = false }
+        delayed.run(after: .milliseconds(600)) { suppressToastTap = false }
         HapticFeedback.medium()
         notifications.manager.dismissToast()
 

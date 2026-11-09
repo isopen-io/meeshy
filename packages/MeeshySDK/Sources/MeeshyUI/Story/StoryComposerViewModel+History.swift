@@ -109,7 +109,7 @@ extension StoryComposerViewModel {
                 if let img = retiredImages.removeValue(forKey: media.id) {
                     // Passe par `registerLoadedImage` pour bumper `loadedImagesVersion` :
                     // un undo/redo qui ressuscite un média doit rafraîchir le canvas
-                    // reader, sinon le média restauré reste noir (même cause 2026-07-20).
+                    // reader, sinon le média restauré reste noir.
                     registerLoadedImage(img, for: media.id)
                 }
                 if let url = retiredVideoURLs.removeValue(forKey: media.id) {

@@ -137,8 +137,8 @@ final class VisitorReachReconnectsTests: XCTestCase {
         )
 
         let initSink = try XCTUnwrap(
-            source.range(of: "reconnects\n            .receive(on: DispatchQueue.main)\n            .sink"),
-            "l'abonnement de l'initialiseur doit sauter sur le main avant son sink"
+            source.range(of: "reconnects\n            .receive(on: DispatchQueue.main)\n            .relay(through:"),
+            "l'abonnement de l'initialiseur doit sauter sur le main avant son relais"
         )
         XCTAssertNotNil(initSink)
     }

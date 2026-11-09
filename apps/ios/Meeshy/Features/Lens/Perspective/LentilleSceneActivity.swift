@@ -90,7 +90,7 @@ struct LentilleSceneActivityHost: View {
 
 // MARK: - L'heure et les points de la liste ne paraissent qu'au défilement (#9571)
 
-/// Directive porteur 2026-10-07 : « les points de conversation ne doivent
+/// « les points de conversation ne doivent
 /// s'afficher que pendant le défilement ; après cela le point et la date du
 /// dernier message disparaissent, comme dans une conversation ». Au repos, une
 /// rangée ne montre ni l'heure ni les points ; un défilement les révèle, ils

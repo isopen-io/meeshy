@@ -1,7 +1,7 @@
 import CoreGraphics
 import MeeshyUI
 
-/// **LE PLATEAU EST LA SCÈNE** (#6760, directive porteur 2026-09-15).
+/// **LE PLATEAU EST LA SCÈNE** (#6760).
 ///
 /// > « les details de l'auteur et les actions doivent être aligné sur le
 /// > plateau ! C'est le plateau entier qui prend le tumbHash de la scene ! Ce

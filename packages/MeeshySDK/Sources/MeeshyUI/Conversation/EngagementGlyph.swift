@@ -105,7 +105,7 @@ public struct EngagementGlyph: View {
             if participated {
                 Image(systemName: outline)
                     .font(MeeshyFont.relative(size))
-                    .foregroundColor(Color(hex: accentHex))
+                    .foregroundStyle(Color(hex: accentHex))
             }
         }
         .shadow(color: shadowed ? .black.opacity(0.4) : .clear, radius: shadowed ? 2 : 0, y: shadowed ? 1 : 0)

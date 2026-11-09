@@ -85,7 +85,7 @@ public struct SettingsSectionHeader: View {
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                 .tracking(1.1)
         }
-        .foregroundColor(Color(hex: color))
+        .foregroundStyle(Color(hex: color))
         .padding(.leading, MeeshySpacing.sm)
         .accessibilityAddTraits(.isHeader)
     }
@@ -212,7 +212,7 @@ public struct SettingsRow<Trailing: View>: View {
     private var iconTile: some View {
         Image(systemName: icon)
             .font(MeeshyFont.relative(15, weight: .medium))
-            .foregroundColor(Color(hex: color))
+            .foregroundStyle(Color(hex: color))
             .frame(width: SettingsRowMetrics.iconSize, height: SettingsRowMetrics.iconSize)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
@@ -245,7 +245,7 @@ public struct SettingsInfoButton: View {
         } label: {
             Image(systemName: "info.circle")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .regular))
-                .foregroundColor(Color(hex: color).opacity(MeeshyOpacity.intense))
+                .foregroundStyle(Color(hex: color).opacity(MeeshyOpacity.intense))
                 // La cible tactile atteint 44 pt sans que l'icône grossisse.
                 .frame(width: SettingsRowMetrics.minimumHeight,
                        height: SettingsRowMetrics.minimumHeight)
@@ -300,6 +300,7 @@ private struct SettingsInfoOverlay: ViewModifier {
                                 bundle: .module
                             ))
                             .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { dismiss() }
 
                         card(presented)
                             .padding(.horizontal, MeeshySpacing.xxl)

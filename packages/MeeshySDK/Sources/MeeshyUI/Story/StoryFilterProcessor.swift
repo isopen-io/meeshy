@@ -12,12 +12,12 @@ import MeeshySDK
 // TOUS ses types, pas seulement celui qui porte son nom.
 
 public nonisolated struct StoryFilterProcessor {
-    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
+    private nonisolated static let cache: LockedCache<NSString, UIImage> = LockedCache({
         let c = NSCache<NSString, UIImage>()
         c.countLimit = 50
         c.totalCostLimit = 20 * 1024 * 1024
         return c
-    }()
+    }())
 
     /// Applies `filter` to `image` at `intensity` (0…1). This is the SINGLE
     /// source of truth for the story filter look — shared by the composer

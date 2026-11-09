@@ -3,7 +3,7 @@ import MeeshyUI
 
 // MARK: - Le repli d'un espace commentaire (#9122)
 //
-// Directive porteur 2026-10-02 : dans TOUT espace commentaire, la barre affiche
+// dans TOUT espace commentaire, la barre affiche
 // ⌄ par défaut ; le toucher la replie en une icône de commentaire (brouillon
 // conservé) ; toucher l'icône la rouvre. Le lecteur de story le fait déjà
 // (#8431, #8642) ; les commentaires du fil et du détail d'un post montent ce

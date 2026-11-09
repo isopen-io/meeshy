@@ -9,7 +9,7 @@ import MeeshySDK
 ///
 /// - **Expirée.** Le TTL du cache dépasse la fenêtre de 24 h (voir plus bas).
 /// - **Vide.** Des stories sans le moindre contenu affichable existent en base
-///   (constaté le 2026-07-26 : `media: []`, `textObjects: []`, `content: null`).
+/// (`textObjects: []`, `content: null`).
 ///   Les rendre donnait un écran NOIR pendant toute la durée de slide.
 ///   Cf. `StoryContentPresence`, délibérément conservateur.
 ///
@@ -58,7 +58,7 @@ nonisolated enum StoryPlaybackSkipResolver {
 
         // L'auteur revisite ses PROPRES stories expirées pour lire réactions et
         // commentaires — un bandeau d'expiration marque l'état dans l'overlay
-        // plutôt qu'un saut (spec 2026-06-23).
+        // plutôt qu'un saut.
         if let currentUserId, group.id == currentUserId { return .stay }
 
         var idx = storyIndex

@@ -89,7 +89,7 @@ public struct TagInputField: View {
                 Button {
                     editing = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "common.clear_input", defaultValue: "Effacer la saisie", bundle: .module))
@@ -113,10 +113,10 @@ public struct TagInputField: View {
                     addTag(tag)
                 } label: {
                     HStack {
-                        Image(systemName: "tag.fill").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundColor(.secondary)
+                        Image(systemName: "tag.fill").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundStyle(Color.secondary)
                         Text(tag).font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         Spacer()
-                        Image(systemName: "arrow.turn.down.left").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundColor(.secondary)
+                        Image(systemName: "arrow.turn.down.left").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundStyle(Color.secondary)
                     }
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }

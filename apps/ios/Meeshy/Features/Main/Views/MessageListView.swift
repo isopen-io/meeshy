@@ -183,7 +183,12 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Request an on-demand translation of a specific message into a target
     /// language (issues a socket `translation:request`).
     var onRequestTranslation: ((String, String) -> Void)?
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
+
+    private var requiredRouter: Router {
+        guard let meeshyRouter else { preconditionFailure("MessageListView monté hors de MeeshyRouterInjection") }
+        return meeshyRouter
+    }
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
     /// SANS abonnement : le fil ne LIT le modèle de liste que pour le
@@ -234,7 +239,7 @@ struct MessageListView: UIViewControllerRepresentable {
             accentColor: accentColor,
             isDirect: isDirect,
             isDark: colorScheme == .dark,
-            router: router,
+            router: requiredRouter,
             storyViewModel: storyViewModel,
             statusViewModel: statusViewModel,
             conversationListViewModel: conversationListViewModel

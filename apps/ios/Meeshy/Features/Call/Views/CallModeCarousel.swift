@@ -107,7 +107,7 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
         VStack(spacing: MeeshySpacing.sm) {
             Text(name(centred ?? selection))
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
             if let hint {
@@ -459,6 +459,7 @@ private struct CallModeCarouselItem<Content: View>: View {
                 including: listens ? .all : .subviews
             )
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onGesture(.tap) }
     }
 }
 
@@ -484,7 +485,7 @@ struct CallModeGlyph: View {
         case .symbol(let symbol):
             Image(systemName: symbol)
                 .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
-                .foregroundColor(isSelected ? .black : .white)
+                .foregroundStyle(isSelected ? Color.black : Color.white)
         case .emoji(let emoji):
             Text(emoji)
                 .font(.title)
@@ -514,7 +515,7 @@ struct CallModeThumbnail: View {
             } else {
                 Image(systemName: symbol)
                     .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
         }
         .clipShape(Self.shape)
@@ -617,7 +618,7 @@ struct CallModeRecordingStop: View {
                         .frame(width: 8, height: 8)
                     Text(CallModeGestureRule.clock(context.date.timeIntervalSince(startedAt)))
                         .font(.footnote.weight(.semibold).monospacedDigit())
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, MeeshySpacing.xs)

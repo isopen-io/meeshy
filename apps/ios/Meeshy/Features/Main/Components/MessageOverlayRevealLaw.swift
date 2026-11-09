@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// **Glisser vers le haut réduit l'aperçu pour dégager le menu coupé**
-/// (directive porteur 2026-10-01, #9043).
+/// (#9043).
 ///
 /// Un long message élevé par l'appui long pousse le menu d'actions sous le bas
 /// de l'écran. Le glissement vertical PILOTE un facteur de réduction de

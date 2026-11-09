@@ -16,8 +16,7 @@ nonisolated enum ComposerActionSlot: Equatable {
     /// invisible quand il n'y a rien à envoyer, sans jamais l'effondrer.
     case send
 
-    /// **Au-delà de sept mots, la touche Retour passe à la ligne** (directive
-    /// porteur 2026-09-14, #6537) : un texte long se met en forme, une phrase
+    /// **Au-delà de sept mots, la touche Retour passe à la ligne** (#6537): un texte long se met en forme, une phrase
     /// courte part d'une touche.
     static let textStickerWordLimit = 7
 

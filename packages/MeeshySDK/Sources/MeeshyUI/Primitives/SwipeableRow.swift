@@ -202,7 +202,7 @@ public struct SwipeableRow<Content: View>: View {
                     Text(action.label)
                         .font(MeeshyFont.relative(10, weight: .semibold))
                 }
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .scaleEffect(0.4 + 0.6 * progress)
                 .animation(.spring(response: 0.25, dampingFraction: 0.6), value: progress)
             }

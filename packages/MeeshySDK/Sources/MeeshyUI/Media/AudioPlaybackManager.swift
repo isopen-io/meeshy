@@ -589,7 +589,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     // MARK: - Timer
     //
-    // Perf budget (2026-05-28): the previous 20 Hz tick (0.05 s) was the
+    // Perf budget: the previous 20 Hz tick (0.05 s) was the
     // single biggest CPU drain during sustained audio playback because
     // every wakeup re-published `currentTime` + `progress` through the
     // coordinator cascade → invalidated every `@ObservedObject coordinator`

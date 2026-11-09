@@ -16,7 +16,7 @@ public struct TransportBar: View {
     public let zoomScale: CGFloat
     public let isMuted: Bool
     /// Le readout `courant / durée`. La vue simple (Quick) le masque — la
-    /// position se lit sur le playhead et la règle (retour user 2026-07-11) ;
+    /// position se lit sur le playhead et la règle ;
     /// le Pro le conserve pour le calage précis.
     public let showsTimeReadout: Bool
     /// Undo/redo compacts pour le mode Quick (pas de TimelineToolbar dédiée).
@@ -35,8 +35,8 @@ public struct TransportBar: View {
     public let onRedo: () -> Void
     public let onSnapToggle: () -> Void
     /// Enregistrement de la story (export MP4 watermarké + effets/transitions →
-    /// Fichiers/Photothèque). Rendu juste après le bouton lecture (user
-    /// 2026-07-20). `nil` = surfaces sans export (le bouton n'apparaît pas).
+    /// Fichiers/Photothèque). Rendu juste après le bouton lecture.
+    /// `nil` = surfaces sans export (le bouton n'apparaît pas).
     public let onSave: (() -> Void)?
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,

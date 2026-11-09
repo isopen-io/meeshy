@@ -3,7 +3,7 @@ import MeeshySDK
 
 // MARK: - Le carnet des règles, illustré (#9538)
 //
-// Directive porteur 2026-10-06 : la partie explication reprend le détail du document de conception (parties I, II et
+// la partie explication reprend le détail du document de conception (parties I, II et
 // IV) AVEC les images et les représentations — les blasons des rangs, les pièces, les paliers, les Flammes, les ligues,
 // les médailles, le trésor, les trophées, les raretés. Pas d'image bitmap : chaque famille est dessinée par la brique
 // qui la dessine déjà partout ailleurs dans l'app (anneau, pièce, blason, Flamme, gemme, médaille, coupe, liseré) — une

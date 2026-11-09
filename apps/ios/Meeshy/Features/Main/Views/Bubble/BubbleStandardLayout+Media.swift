@@ -43,10 +43,10 @@ extension BubbleStandardLayout {
         onMediaTap(media)
     }
 
-    /// `AnyView` à la DÉCLARATION (2026-08-19). Le `switch items.count` à 4
+    /// `AnyView` à la DÉCLARATION. Le `switch items.count` à 4
     /// branches × `makeGridCell` produit un `_ConditionalContent` profond qui
     /// entrait dans le type de `BubbleStandardLayout.body` (47 niveaux). Trois
-    /// `.ips` device du 2026-08-10 meurent ICI, sur
+    /// `.ips` device meurent ICI, sur
     /// `com.apple.uikit.datasource.diffing` — pile de 512 Ko, pas 1 Mo.
     /// L'extraction de `BubbleGridCell` (voir `makeGridCell`) avait borné les
     /// CELLULES ; il restait à borner la GRILLE elle-même.
@@ -78,14 +78,12 @@ extension BubbleStandardLayout {
                 makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
                     .frame(width: gridMaxWidth, height: 240)
             }
-
         case 2:
             HStack(spacing: gridSpacing) {
                 makeGridCell(items[0], cellPointWidth: halfW)
                 makeGridCell(items[1], cellPointWidth: halfW)
             }
             .frame(width: gridMaxWidth, height: 180)
-
         case 3:
             let leftW = (gridMaxWidth - gridSpacing) * 0.6
             let rightW = (gridMaxWidth - gridSpacing) * 0.4
@@ -99,7 +97,6 @@ extension BubbleStandardLayout {
                 .frame(width: rightW)
             }
             .frame(width: gridMaxWidth, height: 240)
-
         default:
             let overflow = items.count - 4
             VStack(spacing: gridSpacing) {
@@ -136,11 +133,11 @@ extension BubbleStandardLayout {
     /// site is not. This also lets SwiftUI cache the cell's structural
     /// identity across body re-evaluations.
     ///
-    /// **Nécessaire mais PAS suffisant (constat du 2026-08-19).** Cette
+    /// **Nécessaire mais PAS suffisant.** Cette
     /// extraction a borné les CELLULES ; la GRILLE, elle, restait un
     /// `@ViewBuilder` dont le `switch items.count` à 4 branches entrait en
     /// entier dans le type de `BubbleStandardLayout.body`. Trois `.ips` device
-    /// du 2026-08-10 sont morts ICI malgré ce correctif, sur
+    /// sont morts ICI malgré ce correctif, sur
     /// `com.apple.uikit.datasource.diffing` — un thread à 512 Ko, la moitié du
     /// main thread. C'est l'érasure de `visualMediaGrid` à sa DÉCLARATION qui a
     /// fermé la classe (voir sa doc).
@@ -224,6 +221,7 @@ extension BubbleStandardLayout {
                     onReplyTap?(reply.reference.messageId)
                 }
             }
+            .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) { openQuotedTarget(reply) }
 
             Divider().background(dividerColor)
 
@@ -381,6 +379,7 @@ fileprivate struct BubbleGridCell: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
         })
         .onTapGesture(perform: handleTap)
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { handleTap() }
         .overlay(alignment: downloadPlacement.alignment) { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
         // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
@@ -420,7 +419,7 @@ fileprivate struct BubbleGridCell: View {
     }
 
     /// **Lecture inline à trois contrôles : son, lecture/pause, plein écran**
-    /// (#8231, porteur 2026-09-27). Le bouton lecture joue DANS la bulle ;
+    /// (#8231). Le bouton lecture joue DANS la bulle;
     /// toucher la vidéo ailleurs — le poster avant, la surface pendant — ouvre
     /// le plein écran, où la galerie reprend le moteur partagé à la même
     /// position. Les gestes vivent tous DANS le lecteur : un tap simultané
@@ -538,7 +537,7 @@ fileprivate struct BubbleGridCell: View {
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
@@ -689,7 +688,7 @@ fileprivate struct BubbleGridImageView: View {
             .clipped()
         } else {
             Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(MeeshyOpacity.strong)))
+                .overlay(Image(systemName: "photo").foregroundStyle(Color.white.opacity(MeeshyOpacity.strong)))
         }
     }
 }
@@ -724,8 +723,9 @@ private struct AttachmentBlurOverlayView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
         .accessibilityHint(hint ?? "")
-        .accessibilityAddTraits(.isButton)
         .onTapGesture { onReveal() }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onReveal() }
     }
 }
 

@@ -39,7 +39,7 @@ extension VitrineInteractions {
         }
         for rang in 1...nombre {
             VitrineTournage.etape("reel-\(rang)")
-            try? await Task.sleep(for: tenueDUnReel)
+            guard await cancellableSleep(for: tenueDUnReel) else { return }
             guard rang < nombre else { break }
             suivant()
             _ = await cancellableSleep(for: monteeDuReelSuivant)

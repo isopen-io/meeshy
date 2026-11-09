@@ -47,7 +47,7 @@ struct ProfileLanguagePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
             }
         }
@@ -62,15 +62,15 @@ struct ProfileLanguagePickerSheet: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "xmark.circle")
                     .font(.title3)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 36)
                 Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main))
                     .font(.body.weight(.medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 if selectedCode.isEmpty {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -101,17 +101,17 @@ struct ProfileLanguagePickerSheet: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(lang.nativeName)
                         .font(.body.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(lang.name)
                         .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(hex: lang.colorHex))
+                        .foregroundStyle(Color(hex: lang.colorHex))
                 }
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)

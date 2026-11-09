@@ -14,7 +14,7 @@ import Foundation
 // Le modèle ne calcule RIEN : il LIT le bloc `game` servi (le cache d'abord) et ne fait que choisir ce qui se
 // montre. Aucune règle du jeu n'est réécrite ici.
 //
-// « N'AFFICHER QUE CE QUI A DU SENS » (#9536, directive porteur 2026-10-06) : `make(game:)` est LA fonction qui
+// « N'AFFICHER QUE CE QUI A DU SENS » (#9536) : `make(game:)` est LA fonction qui
 // décide. Toutes les données à zéro ⇒ `nil` (aucun bandeau) ; sinon chaque morceau se tait tant qu'il n'a rien à dire :
 // pas de points ⇒ pas de total (`showsScore`) ; niveau 1 ⇒ ni anneau ni jauge (`showsLevel`) ; pas de Meeshes, de
 // Gloire, de ligue ni de Flamme ⇒ rien d'eux (leurs champs valent `nil`).
@@ -87,7 +87,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         }
     }
 
-    /// Une pièce du bandeau — chacune est SON bouton vers SA fiche (#10846, décision porteur 2026-10-16).
+    /// Une pièce du bandeau — chacune est SON bouton vers SA fiche (#10846).
     public enum Piece: String, CaseIterable, Hashable, Sendable {
         case level, sparks, meesh, rank, league, flame, trophies, mission, season
 

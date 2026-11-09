@@ -50,7 +50,7 @@ struct StoryViewerCardTransform {
     var offsetY: CGFloat {
         // La sortie CONTINUE le geste : le doigt allait vers le bas, la carte
         // s'en va vers le bas. Elle partait vers le HAUT, ce qui cassait la
-        // continuité du swipe de fermeture (directive user 2026-07-25).
+        // continuité du swipe de fermeture.
         if isDismissing { return screenHeight * 0.35 }
         // Suivi 1:1 du doigt. L'amorti à 0,5 rendait le retour en arrière
         // infidèle : la carte ne revenait pas sous le doigt, et l'annulation
@@ -168,7 +168,7 @@ enum StoryGroupSwipeOutcome: Equatable {
 }
 
 /// La loi du relâchement d'un glissé de groupe : progressif et annulable
-/// jusqu'au bout (directive porteur 2026-08-30). Le doigt qui REPART vers
+/// jusqu'au bout. Le doigt qui REPART vers
 /// l'origine annule, à n'importe quel point de la course — l'ancien seuil
 /// `dx < -60` validait dès 15 % de la largeur, même en revenant en arrière.
 enum StoryGroupSwipeDecision {

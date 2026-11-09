@@ -100,15 +100,10 @@ extension CallView {
                             }
                     )
                     .simultaneousGesture(selfTilePinchGesture)
-                    // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
-                    // #8747 — les commandes de ma caméra vivent AUTOUR de la
-                    // vignette : la toucher ne fait que permuter.
-                    .onTapGesture {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) {
-                            swapStreams.toggle()
-                        }
-                        HapticFeedback.light()
-                    }
+                    // Toucher la vignette ne fait que permuter les flux ; ses commandes vivent autour.
+                    .onTapGesture { swapPictureInPicture() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { swapPictureInPicture() }
                     .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
                     .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
                     .accessibilityValue(CallSelfTileCopy.sizeName(selfTileScale))
@@ -151,6 +146,11 @@ extension CallView {
         guard changed else { return }
         HapticFeedback.light()
         selfTileMemory.remember(scale, for: callManager.currentCallId)
+    }
+
+    private func swapPictureInPicture() {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) { swapStreams.toggle() }
+        HapticFeedback.light()
     }
 
     /// True when the survival layer has auto-dropped our outbound video while the

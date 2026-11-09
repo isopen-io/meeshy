@@ -272,7 +272,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
             }
             call.currentCallId = ack.callId
             Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
-            // Audit fix (calling-stack audit 2026-08-15): abort setup on
+            // Audit fix: abort setup on
             // a genuine peer-connection creation failure instead of
             // silently proceeding — see WebRTCService.configure's doc.
             guard call.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else {
@@ -364,7 +364,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
         call.isSpeaker = isVideo
         call.displayMode = .fullScreen
         call.callState = .connecting
-        // Audio-recovery fix (2026-08-14): this method's own doc comment says
+        // Audio-recovery fix: this method's own doc comment says
         // it "NEVER touches CallKit" — but it never reset the flag that says
         // otherwise. `callUsesCallKit` defaults to `true` and is left over
         // from whatever the last call was (or never touched at all on a
@@ -381,7 +381,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
         // and fetches real TURN credentials over the socket on its own
         // (requestFreshTurnCredentials → emitRequestIceServers), same as every
         // other path that lacks a payload-embedded ICE server list.
-        // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
+        // Audit fix: abort on a genuine
         // peer-connection creation failure instead of silently proceeding.
         guard call.webRTCService.configure(isVideo: isVideo, iceServers: nil) else {
             Logger.calls.error("[CALL_SETUP] rejoin webRTC.configure failed — aborting")

@@ -213,7 +213,7 @@ public struct MeeshyMoodBadge: View {
     /// (ScrollView, re-parenting) ; relancer un `repeatForever` par-dessus un
     /// autre les fait COMBINER par le moteur — aucun des deux ne se termine
     /// jamais et chaque frame les évalue tous, pour toujours (hog device
-    /// 2026-07-03 : `DefaultCombiningAnimation` à ~90 % du thread
+    /// `DefaultCombiningAnimation` à ~90 % du thread
     /// `ViewGraphDisplayLink`).
     private var currentMotion: Motion {
         Self.motion(

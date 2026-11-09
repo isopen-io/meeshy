@@ -29,9 +29,9 @@ extension PostDetailView {
 
     /// Attribution compacte d'une STORY republiée en story : icône repost +
     /// « @auteur » (SANS « via » — l'icône dit déjà la republication, même
-    /// règle que le header du viewer, directive user 2026-07-13) tappable
+    /// règle que le header du viewer) tappable
     /// vers l'original. Remplace l'embed canvas complet (qui doublait le
-    /// contenu sous le canvas principal — IMG_1161, 2026-07-13).
+    /// contenu sous le canvas principal — IMG_1161).
     func storyRepostAttributionRow(_ repost: RepostContent) -> some View {
         Button {
             HapticFeedback.light()
@@ -40,14 +40,14 @@ extension PostDetailView {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "arrow.2.squarepath")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Text("@\(repost.authorUsername ?? repost.author)")
                     .font(.footnote)
                     .foregroundColor(theme.accentText(repost.authorColor))
                 Spacer()
                 Image(systemName: "chevron.forward")
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.smPlus)
@@ -84,7 +84,7 @@ extension PostDetailView {
                         HStack(spacing: MeeshySpacing.xs) {
                             Text(repost.timestamp, style: .relative)
                                 .font(.caption2)
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                             // Language flags for repost translations
                             if let translations = repost.translations, !translations.isEmpty {
                                 repostLanguageFlags(repost)
@@ -138,12 +138,12 @@ extension PostDetailView {
                                     Text(display.flag).font(.caption2)
                                     Text(display.name)
                                         .font(.caption2.weight(.semibold))
-                                        .foregroundColor(langColor)
+                                        .foregroundStyle(langColor)
                                 }
                             }
                             Text(secondaryText)
                                 .font(.footnote)
-                                .foregroundColor(theme.textPrimary.opacity(0.8))
+                                .foregroundStyle(theme.textPrimary.opacity(0.8))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.vertical, MeeshySpacing.xsPlus)
@@ -328,7 +328,7 @@ extension PostDetailView {
         }()
 
         if !flags.isEmpty {
-            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+            MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
             ForEach(flags, id: \.self) { code in
                 LanguageFlagChip(code: code, isActive: code == repostSecondaryLangCode) {
                     if code == origLang {

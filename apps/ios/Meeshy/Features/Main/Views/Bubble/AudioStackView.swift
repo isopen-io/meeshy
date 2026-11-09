@@ -2,8 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Vertical list for a message carrying MORE THAN ONE audio track (directive
-/// porteur 2026-10-14, #10654) : each voice sits on its own row, one under the
+/// Vertical list for a message carrying MORE THAN ONE audio track (#10654): each voice sits on its own row, one under the
 /// other, each with its FULL player (waveform, speed/progress chips, karaoke).
 /// No pager, no "i/N" indicator.
 ///

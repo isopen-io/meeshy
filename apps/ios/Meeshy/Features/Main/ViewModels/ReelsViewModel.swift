@@ -360,8 +360,7 @@ final class ReelsViewModel: ObservableObject {
 
     // MARK: - Interactions (optimistic)
 
-    /// **Poser un émoji AUTRE que le cœur** (décision porteur 2026-09-02 —
-    /// « la palette d'emoji partout, comme sur les stories »).
+    /// **Poser un émoji AUTRE que le cœur** (comme sur les stories »).
     ///
     /// Le cœur garde `toggleLike` : il porte l'état `isLiked`, le compteur
     /// affiché, la réconciliation optimiste et son repli REST — tout un

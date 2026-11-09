@@ -40,7 +40,7 @@ struct MemberManagementSection: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "person.3.fill")
                 .font(MeeshyFont.relative(11, weight: .semibold))
-                .foregroundColor(sectionColor)
+                .foregroundStyle(sectionColor)
                 .accessibilityHidden(true)
 
             Text(headerTitle)
@@ -92,12 +92,12 @@ struct MemberManagementSection: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(13, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "member-management.search", defaultValue: "Rechercher un membre…", bundle: .main), text: $viewModel.memberSearchText)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
@@ -107,7 +107,7 @@ struct MemberManagementSection: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche", bundle: .main))
             }
@@ -162,7 +162,7 @@ struct MemberManagementSection: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 roleBadge(for: targetRole)
@@ -186,9 +186,11 @@ struct MemberManagementSection: View {
                     // carries an .accessibilityLabel, so VoiceOver reads the member's name.
                     Image(systemName: "ellipsis")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 32, height: 32)
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
                 }
                 .accessibilityLabel(String(format: String(localized: "member-management.options-a11y", defaultValue: "Options pour %@", bundle: .main), displayName))
             }
@@ -305,16 +307,14 @@ struct MemberManagementSection: View {
 
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            // Fixed 28pt: decorative empty-state hero glyph — the adjacent label carries
-            // the meaning, so it stays fixed and is hidden from VoiceOver (precedent 90i).
             Image(systemName: "person.slash")
-                .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
+                .meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)
+                .foregroundStyle(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
 
             Text(String(localized: "member-management.empty", defaultValue: "Aucun membre trouvé", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .rounded))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxl)

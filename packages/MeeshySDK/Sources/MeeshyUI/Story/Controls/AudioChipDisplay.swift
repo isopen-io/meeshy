@@ -101,7 +101,7 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
         }
     }
 
-    // MARK: - Temps restant du secteur audio (directive user 2026-08-02, itération 2)
+    // MARK: - Temps restant du secteur audio
 
     /// Fin de lecture du secteur — miroir EXACT de la fenêtre du reader
     /// (`AudioForegroundReaderOverlay.visibleAudios`) : un FOND joue jusqu'à
@@ -376,7 +376,7 @@ public struct AudioChipMarquee: View {
 
     private func marqueeText(_ string: String) -> some View {
         Text(string)
-            .font(.system(size: fontSize, weight: .semibold))
+            .meeshyScaledFont(fontSize, weight: .semibold)
             .foregroundColor(tint.opacity(paused ? 0.5 : 0.92))
             .lineLimit(1)
     }
@@ -443,7 +443,7 @@ struct AudioChipRemainingTimeText: View {
                     slideDuration: window.slideDuration,
                     isBackground: window.isBackground) ?? 0,
                 minuteDigits: minuteDigits))
-                .font(.system(size: fontSize, weight: .semibold))
+                .meeshyScaledFont(fontSize, weight: .semibold)
                 .monospacedDigit()
                 .foregroundColor(tint.opacity(dimmed ? 0.5 : 0.92))
                 .lineLimit(1)

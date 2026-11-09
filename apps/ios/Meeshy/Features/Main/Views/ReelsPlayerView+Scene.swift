@@ -203,7 +203,7 @@ struct ReelSceneView: View {
 /// La progression d'un réel composé — et depuis #7878, un CURSEUR.
 ///
 /// Elle disait « une barre, sans poignée — la scène se rejoue, elle ne se
-/// parcourt pas ». La demande porteur du 2026-09-25 renverse la décision : au
+/// parcourt pas ». La demande renverse la décision: au
 /// toucher, la barre s'épaissit, une poignée suit le doigt, la scène se
 /// redessine à l'instant pointé et reprend de là au relâcher — le geste du
 /// réel VIDÉO (`ReelScrubBar`), sur le moteur de la scène.

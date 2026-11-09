@@ -3,8 +3,7 @@ import Foundation
 // MARK: - Address
 
 /// L'adresse d'un lien de conversation telle qu'on la montre, copie et
-/// repartage : `meeshy.me/chat/<linkId>` (#7795, précision porteur
-/// 2026-09-24).
+/// repartage : `meeshy.me/chat/<linkId>` (#7795).
 ///
 /// Jamais `/l/<token>` — c'est une adresse de SUIVI, qui compterait un clic à
 /// chaque repartage — et jamais le slug `identifier` : un identifiant généré

@@ -79,7 +79,7 @@ public enum EngagementCatalog {
     ///
     /// Le hero du niveau l'ÉNUMÈRE (#5841) : « Contenu produit +9, Lien social
     /// +7… ». Il fallait donc qu'iOS le connaisse, et qu'il ne puisse pas
-    /// dériver — le porteur l'a réglé trois fois le 2026-09-09, et une valeur
+    /// dériver — le porteur l'a réglé trois fois, et une valeur
     /// recopiée se périme au premier réglage sans qu'aucun témoin ne rougisse.
     /// La garde `progression-layout-mirror-parity` compare les cinq nombres.
     ///

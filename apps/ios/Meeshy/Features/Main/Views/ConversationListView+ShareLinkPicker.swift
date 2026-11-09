@@ -21,7 +21,7 @@ struct ShareLinkPickerSheet: View {
                             .foregroundStyle(MeeshyColors.indigo300)
                         Text(String(localized: "conversation.list.no_eligible_conversation", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -32,26 +32,26 @@ struct ShareLinkPickerSheet: View {
                             HStack(spacing: MeeshySpacing.md) {
                                 Image(systemName: conversation.type == .group ? "person.3.fill" : "globe")
                                     .font(MeeshyFont.relative(MeeshyIconSize.md))
-                                    .foregroundColor(MeeshyColors.indigo500)
+                                    .foregroundStyle(MeeshyColors.indigo500)
                                     .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                                     .accessibilityHidden(true)
 
                                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                                     Text(conversation.name)
                                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
-                                        .foregroundColor(theme.textPrimary)
+                                        .foregroundStyle(theme.textPrimary)
                                         .lineLimit(1)
 
                                     Text(conversation.type.rawValue.capitalized)
                                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                                        .foregroundColor(theme.textSecondary)
+                                        .foregroundStyle(theme.textSecondary)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "link")
                                     .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                                    .foregroundColor(MeeshyColors.indigo400)
+                                    .foregroundStyle(MeeshyColors.indigo400)
                                     .accessibilityHidden(true)
                             }
                             .padding(.vertical, MeeshySpacing.xs)

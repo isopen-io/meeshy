@@ -101,7 +101,7 @@ struct GuestAttachmentSheet: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             Text(GuestAttachmentCopy.title(conversationTitle))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundColor(textPrimary)
+                .foregroundStyle(textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: MeeshySpacing.smPlus), GridItem(.flexible(), spacing: MeeshySpacing.smPlus)], spacing: MeeshySpacing.smPlus) {
@@ -122,7 +122,7 @@ struct GuestAttachmentSheet: View {
             } label: {
                 Text(GuestAttachmentCopy.cancel)
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    .foregroundColor(textPrimary)
+                    .foregroundStyle(textPrimary)
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
@@ -164,7 +164,7 @@ struct GuestAttachmentSheet: View {
                     .accessibilityHidden(true)
                 Text(GuestAttachmentCopy.tileLabel(kind))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(textPrimary)
+                    .foregroundStyle(textPrimary)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity, minHeight: 96)
@@ -228,7 +228,7 @@ struct GuestAttachmentSheet: View {
                 .accessibilityHidden(true)
             Text(message)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(textPrimary)
+                .foregroundStyle(textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)

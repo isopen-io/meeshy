@@ -48,7 +48,7 @@ public enum StorySlidePublishMatter {
         return carriesMatter(slide.effects)
     }
 
-    /// **La même règle, au grain des EFFETS seuls** (2026-09-05).
+    /// **La même règle, au grain des EFFETS seuls**.
     ///
     /// Un brouillon de document ne porte pas une `StorySlide` mais son
     /// `StoryEffects` — et la question « y a-t-il de quoi publier ? » s'y pose
@@ -78,8 +78,7 @@ public enum StorySlidePublishMatter {
         return false
     }
 
-    /// **Un canvas doit porter un OBJET, pas seulement un fond** (directive
-    /// porteur 2026-09-06).
+    /// **Un canvas doit porter un OBJET, pas seulement un fond**.
     ///
     /// > « Il faut juste rendre impossible la publication de canvas vide sans
     /// > texte, ni autre type d'object ! »

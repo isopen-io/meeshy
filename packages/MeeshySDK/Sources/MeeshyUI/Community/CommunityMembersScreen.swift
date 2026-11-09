@@ -53,8 +53,9 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
                         }
                     } label: {
                         Image(systemName: "person.badge.plus")
-                            .foregroundColor(MeeshyColors.indigo500)
+                            .foregroundStyle(MeeshyColors.indigo500)
                     }
+                    .accessibilityLabel(String(localized: "community.detail.action.invite", bundle: .module))
                 }
             }
         }
@@ -110,9 +111,9 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
             Text("\(count)")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
-        .foregroundColor(theme.textSecondary)
+        .foregroundStyle(theme.textSecondary)
         .textCase(.uppercase)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.lg)
@@ -150,16 +151,16 @@ struct MemberRow: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: member.communityRole.icon)
-                        .font(.system(size: MeeshyIconSize.xxs))
+                        .meeshyScaledFont(MeeshyIconSize.xxs)
                     Text(member.communityRole.displayName)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
-                .foregroundColor(roleColor)
+                .foregroundStyle(roleColor)
             }
 
             Spacer()
@@ -185,9 +186,11 @@ struct MemberRow: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
                 }
             }
         }

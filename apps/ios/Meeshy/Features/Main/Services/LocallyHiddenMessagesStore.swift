@@ -20,14 +20,13 @@ final class LocallyHiddenMessagesStore: @unchecked Sendable {
 
     private let defaults: UserDefaults
     private let storageKey = "meeshy_locally_hidden_messages"
-    private let lock = NSLock()
-    private var cache: Set<String>
+    private let cache: Locked<Set<String>>
     private var cancellables = Set<AnyCancellable>()
 
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
         let raw = userDefaults.stringArray(forKey: storageKey) ?? []
-        self.cache = Set(raw)
+        self.cache = Locked(Set(raw))
         wireAuthLogoutHook()
     }
 
@@ -51,27 +50,24 @@ final class LocallyHiddenMessagesStore: @unchecked Sendable {
     /// Returns `true` when the message should be filtered out of the
     /// ConversationView's display.
     func isHidden(_ messageId: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return cache.contains(messageId)
+        cache.read { $0.contains(messageId) }
     }
 
     /// Hide a message locally. Safe to call repeatedly.
     func hide(_ messageId: String) {
-        lock.lock()
-        let (inserted, _) = cache.insert(messageId)
-        let snapshot = Array(cache)
-        lock.unlock()
+        let (inserted, snapshot) = cache.mutate { ids -> (Bool, [String]) in
+            let result = ids.insert(messageId)
+            return (result.inserted, Array(ids))
+        }
         guard inserted else { return }
         defaults.set(snapshot, forKey: storageKey)
     }
 
     /// Unhide (used by "Undo" affordances and by tests).
     func unhide(_ messageId: String) {
-        lock.lock()
-        let removed = cache.remove(messageId) != nil
-        let snapshot = Array(cache)
-        lock.unlock()
+        let (removed, snapshot) = cache.mutate { ids -> (Bool, [String]) in
+            (ids.remove(messageId) != nil, Array(ids))
+        }
         guard removed else { return }
         defaults.set(snapshot, forKey: storageKey)
     }
@@ -83,34 +79,28 @@ final class LocallyHiddenMessagesStore: @unchecked Sendable {
     /// reappear. No-op when `oldId` was not hidden or equals `newId`.
     func migrate(from oldId: String, to newId: String) {
         guard oldId != newId else { return }
-        lock.lock()
-        let removed = cache.remove(oldId) != nil
-        if removed { cache.insert(newId) }
-        let snapshot: [String]? = removed ? Array(cache) : nil
-        lock.unlock()
+        let snapshot = cache.mutate { ids -> [String]? in
+            guard ids.remove(oldId) != nil else { return nil }
+            ids.insert(newId)
+            return Array(ids)
+        }
         guard let snapshot else { return }
         defaults.set(snapshot, forKey: storageKey)
     }
 
     /// Filter an array of message ids to those still visible to the user.
     func visibleIds(from ids: [String]) -> [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return ids.filter { !cache.contains($0) }
+        cache.read { hidden in ids.filter { !hidden.contains($0) } }
     }
 
     /// Raw snapshot for the ConversationViewModel to pre-compute its
     /// filtered `messagesByDate` without hitting the lock per row.
     var allHiddenIds: Set<String> {
-        lock.lock()
-        defer { lock.unlock() }
-        return cache
+        cache.read { $0 }
     }
 
     func clearAll() {
-        lock.lock()
-        cache.removeAll()
-        lock.unlock()
+        cache.mutate { $0.removeAll() }
         defaults.removeObject(forKey: storageKey)
     }
 }

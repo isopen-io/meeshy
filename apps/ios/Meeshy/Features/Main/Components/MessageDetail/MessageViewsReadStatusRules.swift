@@ -6,8 +6,7 @@ import MeeshySDK
 /// spinner a-t-il le droit de remplacer ce qui est déjà à l'écran**.
 ///
 /// Elles vivent ici, hors de la vue, pour deux raisons. La première est de
-/// budget : la fiche touchait le plafond de 1 200 lignes (directive
-/// 2026-09-02), et une règle pure est exactement ce qui en sort le mieux — on
+/// budget: la fiche touchait le plafond de 1 200 lignes, et une règle pure est exactement ce qui en sort le mieux — on
 /// l'éprouve sans monter SwiftUI. La seconde est qu'elles forment UNE paire :
 /// tant que la fiche ne se chargeait qu'à `onAppear` (I3, #7349), « une
 /// requête part » et « il n'y a rien à montrer » étaient le même instant, et

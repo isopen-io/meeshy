@@ -15,7 +15,7 @@ import MeeshySDK
 import MeeshyUI
 
 extension StoryViewModel {
-    /// Garde « viewed monotone » raffinée (directive 2026-07-29) : une fois
+    /// Garde « viewed monotone » raffinée: une fois
     /// vue localement, une story RESTE vue même si le serveur (laggé) dit le
     /// contraire — SAUF quand son contenu a été édité APRÈS la vue locale :
     /// le serveur a alors volontairement effacé les vues (reset
@@ -113,7 +113,7 @@ extension StoryViewModel {
 
     /// Échéance du pin : l'expiry de la story (le pin ne doit jamais lui
     /// survivre). Fallback aligné sur `toStoryGroups` : createdAt + fenêtre
-    /// publique (`StoryItem.defaultExpiryInterval`, 20 h depuis 2026-08-12).
+    /// publique (`StoryItem.defaultExpiryInterval`).
     static func pinDeadline(for story: StoryItem) -> Date {
         story.expiresAt ?? story.createdAt.addingTimeInterval(StoryItem.defaultExpiryInterval)
     }

@@ -24,7 +24,7 @@ struct FaceRampView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "focal.summary.ramp.title", defaultValue: "Ils t'attendent", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .heavy))
-                .foregroundColor(isDark ? .white.opacity(0.92) : .black.opacity(0.88))
+                .foregroundStyle(isDark ? Color.white.opacity(0.92) : Color.black.opacity(0.88))
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.md) {
@@ -66,7 +66,7 @@ private struct FaceRampEntryButton: View {
                 }
                 Text(entry.displayName)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(isDark ? .white.opacity(0.75) : .black.opacity(0.65))
+                    .foregroundStyle(isDark ? Color.white.opacity(0.75) : Color.black.opacity(0.65))
                     .lineLimit(1)
                     .frame(maxWidth: FocalMetrics.Avatar.size * 2.2)
             }

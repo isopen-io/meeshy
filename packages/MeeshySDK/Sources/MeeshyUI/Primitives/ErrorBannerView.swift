@@ -7,6 +7,7 @@ public struct ErrorBannerView: View {
 
     @State private var isVisible = false
     @State private var dismissTask: Task<Void, Never>?
+    @State private var clearTask: Task<Void, Never>?
 
     public init(error: Binding<MeeshyError?>) {
         self._error = error
@@ -49,9 +50,10 @@ public struct ErrorBannerView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.close", bundle: .module))
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.md)
@@ -102,9 +104,8 @@ public struct ErrorBannerView: View {
         withAnimation(MeeshyAnimation.springDefault) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            error = nil
-        }
+        clearTask?.cancel()
+        clearTask = Task { await DelayedUI.perform(after: .milliseconds(400)) { error = nil } }
     }
 }
 

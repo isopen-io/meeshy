@@ -58,7 +58,7 @@ struct BubbleFooter: View, Equatable {
             if let timestamp = model.timestamp {
                 Text(timestamp)
                     .font(.caption.weight(.medium))
-                    .foregroundColor(compactMetaColor)
+                    .foregroundStyle(compactMetaColor)
             }
             if model.delivery != nil {
                 if model.isFailed, let onRetry = actions.onRetry {
@@ -113,7 +113,7 @@ struct BubbleFooter: View, Equatable {
                 .modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
-                        // Nom borné à 16 caractères (directive user 2026-07-30) :
+                        // Nom borné à 16 caractères:
                         // au-delà, le pseudo mangeait la rangée et repoussait
                         // l'heure + l'accusé de lecture contre le bord. Le
                         // `lineLimit(1)` reste comme filet pour les très grandes
@@ -129,7 +129,7 @@ struct BubbleFooter: View, Equatable {
                     if let username = sender.username {
                         Text(username)
                             .font(.caption2)
-                            .foregroundColor(metaColor.opacity(MeeshyOpacity.intense))
+                            .foregroundStyle(metaColor.opacity(MeeshyOpacity.intense))
                             .lineLimit(1)
                     }
                 }
@@ -205,7 +205,7 @@ struct BubbleFooter: View, Equatable {
         if let timestamp = model.timestamp {
             Text(timestamp)
                 .font(.caption.weight(.medium))
-                .foregroundColor(metaColor)
+                .foregroundStyle(metaColor)
         }
         if model.delivery != nil {
             if model.isFailed, let onRetry = actions.onRetry {

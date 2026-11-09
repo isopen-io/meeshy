@@ -202,7 +202,7 @@ struct LocationSharingSettingsSection: View {
             SettingsRow(icon: icon, title: title, color: accentColor) {
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .opacity(isSelected ? 1 : 0)
             }
         }
@@ -243,7 +243,7 @@ struct LocationSharingSettingsSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)) { dismiss() }
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                 }
             }
         }

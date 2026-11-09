@@ -1,7 +1,7 @@
 #if os(iOS)
 import Foundation
 
-/// **Meeshy rend la main** (#11039, #11040 — décision porteur j du 2026-10-20).
+/// **Meeshy rend la main** (#11039, #11040).
 ///
 /// Quand Meeshy a mis en pause la musique d'une autre app (Spotify, Music,
 /// Netflix…), il lui rend la session avec `.notifyOthersOnDeactivation` :

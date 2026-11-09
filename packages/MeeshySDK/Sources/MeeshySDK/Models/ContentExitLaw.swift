@@ -14,7 +14,7 @@ import Foundation
 /// | `afterReadFlame` | non | non | annoncée |
 /// | `viewOnce` | non | non | bloquée |
 ///
-/// LA CAPTURE (décision porteur 2026-10-07, #9617). `blocked` : la capture et
+/// LA CAPTURE (#9617). `blocked` : la capture et
 /// l'enregistrement d'écran rendent du NOIR, et toute tentative s'annonce à la
 /// conversation. `announced` : l'image n'est pas noircie, mais la capture
 /// s'annonce à toute la conversation. Les deux flammes, copie transférée

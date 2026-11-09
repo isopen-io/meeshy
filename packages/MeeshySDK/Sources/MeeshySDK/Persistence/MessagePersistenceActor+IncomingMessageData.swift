@@ -24,7 +24,7 @@ public struct IncomingMessageRow: Sendable {
     /// Cette forme est APPAUVRIE par nature : elle sert à réconcilier un
     /// message aperçu ailleurs, pas à le décrire entièrement. Elle écrivait
     /// donc `"user"` en dur, et un avis d'arrivée naissait en base comme
-    /// une parole (régression 2026-08-24). Le défaut reste `"user"` — tous
+    /// une parole. Le défaut reste `"user"` — tous
     /// les appelants existants gardent leur comportement — mais celui qui
     /// CONNAÎT la source doit pouvoir la transmettre.
     public let messageSource: String

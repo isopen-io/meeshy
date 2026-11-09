@@ -133,7 +133,7 @@ private struct ProfilePostsStatsBand: View {
             VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                 Text(display)
                     .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -142,7 +142,7 @@ private struct ProfilePostsStatsBand: View {
                     .minimumScaleFactor(0.6)
                 Text(label)
                     .font(.caption2)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -464,14 +464,14 @@ struct ProfileUserPostsList: View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "checkmark.seal")
                 .font(MeeshyFont.relative(MeeshyIconSize.xl))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Text(String(localized: "profile.posts.endOfContent", defaultValue: "Vous avez tout vu", bundle: .main))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             if let firstPublished = viewModel.posts.last?.timestamp {
                 Text(String(format: String(localized: "profile.posts.firstPublishedAt", defaultValue: "Premier contenu publié le %@", bundle: .main), firstPublished.formatted(date: .abbreviated, time: .omitted)))
                     .font(.caption)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .frame(maxWidth: .infinity)

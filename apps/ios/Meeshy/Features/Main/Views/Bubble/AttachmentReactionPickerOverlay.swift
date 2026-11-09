@@ -25,6 +25,9 @@ struct AttachmentReactionPickerOverlay: View {
                 Color.black.opacity(0.4)
                     .contentShape(Rectangle())
                     .onTapGesture { close() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { close() }
                 EmojiReactionPicker(
                     scrollable: true,
                     onReact: { emoji in

@@ -79,7 +79,7 @@ public struct InviteLandingView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo600)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo600)
                     .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .background(Circle().fill(isDark ? MeeshyColors.indigo900.opacity(0.7) : Color.white))
                     .shadow(color: MeeshyColors.indigo900.opacity(isDark ? 0 : 0.1), radius: 8, y: 4)
@@ -91,7 +91,7 @@ public struct InviteLandingView: View {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
                 .scriptSafeTracking(1)
                 .textCase(.uppercase)
-                .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo500)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             Color.clear.frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)

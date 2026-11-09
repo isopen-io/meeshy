@@ -47,7 +47,7 @@ struct ReportMessageSheet: View {
                 VStack(spacing: MeeshySpacing.lg) {
                     Text(title ?? String(localized: "report.message.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
                         .font(.callout.weight(.semibold))
-                        .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                        .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, MeeshySpacing.sm)
 
@@ -59,7 +59,7 @@ struct ReportMessageSheet: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                             Text(String(localized: "report.message.details.label", defaultValue: "Détails (facultatif)", bundle: .main))
                                 .font(.footnote.weight(.medium))
-                                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
 
                             TextField(String(localized: "report.message.details.placeholder", defaultValue: "Décrivez le problème…", bundle: .main), text: $reason, axis: .vertical)
                                 .font(.subheadline)
@@ -131,10 +131,10 @@ struct ReportMessageSheet: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(type.label)
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                        .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                     Text(type.description)
                         .font(.caption)
-                        .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                        .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
                         .lineLimit(1)
                 }
 

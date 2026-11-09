@@ -38,3 +38,11 @@ Entre v0.105.4 et v0.106.2, l'amont introduit **Tahini**, une politique de gesti
 Le quartet bas du premier octet d'un PreKeySignalMessage n'est couvert par aucun MAC (libsignal ne lit que le quartet haut, la version), et un champ protobuf inconnu ajouté à la fin est ignoré. Une copie ainsi modifiée s'ouvre avec le MÊME clair ; le premier exemplaire déchiffré gagne, et le suivant est refusé comme doublon (`DuplicatedMessage`). Comportement amont, identique en 0.105.4. Le SignalMessage, lui, n'est pas malléable : son premier octet est couvert par le MAC et un octet ajouté rend le protobuf invalide.
 
 **Règle** : AUCUN identifiant, aucune déduplication, aucune signature ne se calcule sur les octets d'un PreKeySignalMessage (ni sur une enveloppe qui le contient tel quel) : deux octets différents peuvent porter le même message, et un relais (passerelle, pont DMA) qui dédupliquerait sur une empreinte de ces octets laisserait passer deux exemplaires dont un seul s'ouvre. Un identifiant de message se pose À CÔTÉ de la charge chiffrée, par l'émetteur. Témoin : `services/gateway/src/services/e2ee/__tests__/libsignal-prekey-malleability.test.ts` (copie 0x44 → 0x45, puis copie suivie de `f8 07 01` : les deux s'ouvrent, l'original est ensuite refusé comme doublon).
+
+### Le web est la cinquième plateforme (#17114)
+
+Le pont WASM du web (`packages/libsignal-wasm`, la crate officielle `libsignal-protocol` compilée vers wasm32) suit la même règle. Ses déclarations entrent dans la garde : `version` et `tag` de `packages/libsignal-wasm/Cargo.toml`, `apps/web/src/lib/e2ee/libsignal/manifest.json`, `WEB_LIBSIGNAL_ENGINE` (`apps/web/src/lib/licences/libsignal-engine.ts`) et `fixtures/libsignal/sealed-by/web.vectors.json`. Une montée ajoute donc deux étapes au lot :
+- reconstruire le pont (`bash packages/libsignal-wasm/build.sh`, qui réécrit le binaire, sa colle et le condensat consigné) ;
+- régénérer les vecteurs scellés par le web (`cd apps/web && bun scripts/generate-libsignal-web-vectors.ts`), que la passerelle et le banc web rejouent.
+
+Aucune entrée Dependabot `cargo` n'existe : le pont ne monte jamais seul. Si une telle entrée est créée, elle devra ignorer `libsignal-protocol`.

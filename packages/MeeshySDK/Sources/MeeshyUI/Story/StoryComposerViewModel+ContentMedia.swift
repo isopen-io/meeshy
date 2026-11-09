@@ -166,7 +166,7 @@ public extension StoryComposerViewModel {
     /// fichier. On COPIE donc la source sous `{objectId}.{ext}`, exactement
     /// comme le chemin caméra (`addCapturedMedia`) et la graine
     /// (`StoryComposerSeedFile`) ; référencer la source telle quelle laisserait
-    /// le fond introuvable → canvas noir (bug 2026-07-20).
+    /// le fond introuvable → canvas noir.
     ///
     /// Ne porte QUE l'image et la vidéo : un son ou un document n'a pas de place
     /// de FOND sur un canvas, et la qualification réel qui les concerne se règle
@@ -186,7 +186,7 @@ public extension StoryComposerViewModel {
     ///   la scène.
     ///
     ///   **Cette valeur de retour est ce qui manquait au texte alternatif d'un
-    ///   post** (2026-09-05). Cette fonction est le SEUL site qui connaisse les
+    /// post**. Cette fonction est le SEUL site qui connaisse les
     ///   deux bouts : elle frappe l'`objectId`, copie `item.sourceURL` vers
     ///   `tmp/<objectId>.<ext>` — et jetait la correspondance.
     ///   `carriedContentSources` garde les sources en Set, jamais en carte.
@@ -282,7 +282,7 @@ public extension StoryComposerViewModel {
                 // `aspectRatio: null` — le lecteur perdait sa source de
                 // dimensionnement primaire — et sa vignette, calculée sans
                 // image chargée, sortait VIDE. Mesuré sur staging le
-                // 2026-09-06 : la même story avec une IMAGE portait `1.498`.
+                // La même story avec une IMAGE portait `1.498`.
                 guard let objetVideo = insertForegroundVideo(
                         url: copied, thumbnail: nil, aspectRatio: nil,
                         duration: duration, intoSlideId: slideId, objectId: objectId)

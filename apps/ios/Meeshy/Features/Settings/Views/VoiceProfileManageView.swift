@@ -11,7 +11,7 @@ struct VoiceProfileManageView: View {
 
     /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
     /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
-    /// (+3 introduits par #6481, 2026-09-14).
+    /// (+3 introduits par #6481).
     private var accent: Color { Color(hex: accentColor) }
 
     @Environment(\.dismiss) private var dismiss
@@ -127,7 +127,7 @@ struct VoiceProfileManageView: View {
                 if let error = viewModel.error {
                     Text(error)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .padding(.horizontal, MeeshySpacing.xl)
                 }
 
@@ -152,11 +152,11 @@ struct VoiceProfileManageView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(statusLabel(for: profile.status))
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Text(statusDescription(for: profile.status))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
 
             Spacer()
@@ -168,7 +168,7 @@ struct VoiceProfileManageView: View {
                         .foregroundColor(accent)
                     Text(String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
         }
@@ -204,11 +204,11 @@ struct VoiceProfileManageView: View {
         HStack {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Spacer()
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
     }
 
@@ -219,10 +219,10 @@ struct VoiceProfileManageView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(String(localized: "voice.profile.cloningDescription", defaultValue: "Les traductions audio utiliseront votre voix", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             Spacer()
             Toggle(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main), isOn: Binding(
@@ -250,10 +250,10 @@ struct VoiceProfileManageView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(String(localized: "voice.makePublic.description", defaultValue: "Un échantillon de votre voix sera visible sur votre profil public", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             Spacer()
             Toggle(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main), isOn: Binding(
@@ -286,10 +286,10 @@ struct VoiceProfileManageView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des échantillons pour affiner votre voix", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             Spacer()
             // Le (+) reste dans sa carte, à côté de l'indication qu'il sert, et

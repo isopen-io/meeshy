@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import Foundation
+import MeeshySDK
 
 /// **Une source de trames pour le peintre** (#9349) : la caméra, la photo figée
 /// ou la vidéo en boucle (#9352). Elle PRÉVIENT à chaque trame neuve : la vue
@@ -55,30 +56,25 @@ nonisolated struct ComposerFramePacer: Equatable, Sendable {
 /// fil principal pendant que les trames arrivent : l'échéance vit sous verrou,
 /// et ne repart de zéro que si la cadence change.
 nonisolated final class ComposerFrameGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var pacer: ComposerFramePacer
+    private let pacer: Locked<ComposerFramePacer>
 
     init(fps: Int) {
-        pacer = ComposerFramePacer(fps: fps)
+        pacer = Locked(ComposerFramePacer(fps: fps))
     }
 
     var fps: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return pacer.fps
+        pacer.read { $0.fps }
     }
 
     func setFPS(_ fps: Int) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard fps != pacer.fps else { return }
-        pacer = ComposerFramePacer(fps: fps)
+        pacer.mutate { current in
+            guard fps != current.fps else { return }
+            current = ComposerFramePacer(fps: fps)
+        }
     }
 
     func admit(presentedAt time: TimeInterval) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return pacer.admit(presentedAt: time)
+        pacer.mutate { $0.admit(presentedAt: time) }
     }
 }
 

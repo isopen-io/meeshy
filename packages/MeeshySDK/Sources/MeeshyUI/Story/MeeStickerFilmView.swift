@@ -61,7 +61,7 @@ public struct MeeStickerFilmView: View {
             if let film, animates, !reduceMotion {
                 // Transparente aux touchers : un Mee ne change pas la bulle qui
                 // le porte — appui long, double tap, glisser-répondre partent
-                // comme sur un gabarit (retour porteur 2026-10-01).
+                // comme sur un gabarit.
                 LottieView(animation: film.animation)
                     .configuration(LottieConfiguration(renderingEngine: .automatic))
                     .playing(loopMode: .loop)

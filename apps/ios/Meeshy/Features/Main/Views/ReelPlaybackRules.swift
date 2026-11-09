@@ -193,7 +193,7 @@ struct PostSaveMedia: Equatable {
 }
 
 extension FeedPost {
-    /// **Qui a fait ce qu'on enregistre** (recette #9681, 2026-10-08) : l'auteur
+    /// **Qui a fait ce qu'on enregistre** (recette #9681): l'auteur
     /// du post — sauf pour un repartage nu, dont les médias sont ceux du post
     /// repartagé. Le filigrane le nomme ; le spectateur qui enregistre, jamais.
     var savedWorkAuthorUsername: String? {

@@ -310,7 +310,7 @@ struct CallBubbleView: View {
         } label: {
             Image(systemName: callManager.isMuted ? "mic.slash.fill" : "mic.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(callManager.isMuted ? MeeshyColors.error : .white)
+                .foregroundStyle(callManager.isMuted ? MeeshyColors.error : Color.white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
                 .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
         }
@@ -329,7 +329,7 @@ struct CallBubbleView: View {
         } label: {
             Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
+                .foregroundStyle(callManager.isSpeaker ? MeeshyColors.indigo400 : Color.white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
                 .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
         }
@@ -348,7 +348,7 @@ struct CallBubbleView: View {
         } label: {
             Image(systemName: "phone.down.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
                 .background(
                     Circle().fill(

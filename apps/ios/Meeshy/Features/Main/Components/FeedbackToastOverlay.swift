@@ -57,6 +57,11 @@ struct FeedbackToastOverlay: ViewModifier {
                             if let action = toastManager.onTapAction { action() }
                             toastManager.dismiss()
                         }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction {
+                            if let action = toastManager.onTapAction { action() }
+                            toastManager.dismiss()
+                        }
                         .accessibilityIdentifier(MeeshyA11yID.toastContainer)
                         .zIndex(999)
                 }

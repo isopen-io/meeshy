@@ -65,7 +65,6 @@ extension UniversalComposerBar {
                     .lineLimit(1...5)
                     .font(.callout)
                     // **La touche RETOUR ENVOIE, et elle porte l'accent**
-                    // (directive porteur 2026-09-05).
                     //
                     // `.submitLabel(.send)` remplace « retour » par « envoi » et
                     // fait peindre au système sa touche PROÉMINENTE — celle qui
@@ -122,7 +121,7 @@ extension UniversalComposerBar {
                             // synchro `text` → `textBinding` est différée d'un
                             // tour de rendu — sans ça, l'hôte enverrait le
                             // texte d'AVANT la frappe (même écart que
-                            // `sendQuickEmoji`, 2026-08-27).
+                            // `sendQuickEmoji`).
                             let sansRetour = ComposerReturnKey.stripped(newValue)
                             text = sansRetour
                             textBinding?.wrappedValue = sansRetour
@@ -192,7 +191,7 @@ extension UniversalComposerBar {
                         .frame(width: 32, height: 32)
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(MeeshyColors.errorStrong)
+                        .foregroundStyle(MeeshyColors.errorStrong)
                 }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -288,7 +287,7 @@ extension UniversalComposerBar {
                         )
                     Image(systemName: "arrow.up")
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 .opacity(canSend ? 1 : 0.4)
                 .frame(width: 44, height: 44)

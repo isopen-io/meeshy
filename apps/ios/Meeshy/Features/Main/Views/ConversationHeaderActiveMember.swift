@@ -6,8 +6,7 @@ import MeeshyUI
 
 /// L'un des trois participants les plus actifs, en avatar dans l'en-tête.
 ///
-/// La pile est une MISE EN AVANT de ces personnes (directive porteur
-/// 2026-09-24, #7831) : chacune porte donc l'identité avec laquelle sa fiche
+/// La pile est une MISE EN AVANT de ces personnes (#7831): chacune porte donc l'identité avec laquelle sa fiche
 /// s'ouvre — construite par `ProfileSheetUser.from(message:)`, exactement
 /// comme l'avatar d'une bulle, pour qu'un visiteur sans compte mène à sa fiche
 /// de participation et jamais à un compte qui n'existe pas.

@@ -9,7 +9,7 @@ import MeeshyUI
 /// son propre drapeau de composeur, et tant que `ThemedFeedOverlay` fut le seul
 /// lecteur de `Router.pendingOpenFeedComposer`, l'accès rapide « Publier un
 /// post » levait sur iPad un drapeau que **personne ne lisait** : le bouton se
-/// peignait, vibrait sous le doigt, et n'ouvrait rien (2026-09-08).
+/// peignait, vibrait sous le doigt, et n'ouvrait rien.
 ///
 /// La PRÉSENTATION et le RAMASSAGE vivent ensemble parce qu'ils répondent à une
 /// seule question — « qui ouvre ce composeur, et sur quel signal ? ». C'est

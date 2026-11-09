@@ -9,7 +9,7 @@ import os
 // reason to inherit this file's default MainActor isolation — needed so the
 // AVAudioEngine tap closure (which runs off-MainActor, see
 // startLocalCapture/reinstallTap below) can log without an isolation error.
-// Discovered via the Task 1 spike (2026-07-10): a bare `private let` here
+// Discovered via the Task 1 spike: a bare `private let` here
 // made the tap closure's log call fail to compile once the closure was
 // correctly typed `@Sendable` (see below) — same fix applied there.
 private nonisolated let callsLogger = MeeshyLog.logger(.calls)
@@ -213,8 +213,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     func requestPermission() async -> TranscriptionPermission {
         let status = await withCheckedContinuation { continuation in
-            // Confirmed on device (crash Meeshy-2026-07-11-020237.ips,
-            // faulting thread invoked by tccd via XPC): the `Task { @MainActor
+            // Confirmed on device (faulting thread invoked by tccd via XPC): the `Task { @MainActor
             // in }`-wrapping tried first was NOT sufficient — the OUTER
             // closure passed to requestAuthorization is itself implicitly
             // MainActor-isolated (same SWIFT_DEFAULT_ACTOR_ISOLATION
@@ -430,8 +429,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     }
 
     private func stopLocalCapture() {
-        // Never touch `audioEngine` when capture was never started (fix
-        // 2026-07-21, crash CallTranscriptionServiceTests via
+        // Never touch `audioEngine` when capture was never started (crash CallTranscriptionServiceTests via
         // `resetForCallEnd`/`applyRecognitionError`) — see `isCaptureActive`'s
         // doc comment.
         guard isCaptureActive else { return }

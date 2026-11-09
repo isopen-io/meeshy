@@ -240,7 +240,7 @@ struct NotificationSettingsView: View {
                         // Fixed size: single-letter label constrained inside a fixed
                         // 28×28 capsule — a scalable font would overflow the pill (doctrine 86i/93i).
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(isSelected ? .white : theme.textMuted)
+                        .foregroundStyle(isSelected ? Color.white : theme.textMuted)
                         .frame(width: 28, height: 28)
                         .background(
                             Capsule()
@@ -348,7 +348,7 @@ struct NotificationSettingsView: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     .accessibilityHidden(true)
                 Text(title.uppercased())
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
@@ -384,7 +384,7 @@ struct NotificationSettingsView: View {
                 // Fixed size: decorative glyph constrained inside a fixed 28×28 badge —
                 // a scalable font would overflow the tinted square (doctrine 74i/86i).
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
@@ -394,7 +394,7 @@ struct NotificationSettingsView: View {
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 

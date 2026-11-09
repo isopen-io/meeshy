@@ -133,7 +133,7 @@ struct GameVisibilityPickerView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(legend)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             // Trois pastilles côte à côte ; aux grandes tailles de texte (au-delà de XL), elles passent l'une sous
             // l'autre plutôt que de tronquer leur nom. Le choix se fait sur la TAILLE DU TEXTE, pas par `ViewThatFits` :
             // sous iOS 26 il mesure ses candidats sur le rendu asynchrone, où la fermeture d'un `ForEach` trappe à
@@ -162,7 +162,7 @@ struct GameVisibilityPickerView: View {
         } label: {
             Text(GameText.visibilityLabel(level))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(selected ? MeeshyColors.brandPrimary : theme.textPrimary)
+                .foregroundStyle(selected ? MeeshyColors.brandPrimary : theme.textPrimary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .background(
@@ -218,7 +218,7 @@ struct GameQuietButton: View {
         } label: {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(destructive ? MeeshyColors.error : MeeshyColors.brandPrimary)
+                .foregroundStyle(destructive ? MeeshyColors.error : MeeshyColors.brandPrimary)
                 .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget, alignment: .leading)
         }
         .buttonStyle(.plain)
@@ -242,7 +242,7 @@ struct GameSwitchRow: View {
         Toggle(isOn: Binding(get: { isOn }, set: { onChange($0) })) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .tint(MeeshyColors.brandPrimary)
         .frame(minHeight: MeeshyControlSize.tapTarget)

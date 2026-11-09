@@ -3,7 +3,7 @@ import UIKit
 import MeeshySDK
 
 /// **Le peintre du hors-champ d'une scène — un seul, sur les DEUX viewports**
-/// (#6904, décision porteur du 2026-09-17).
+/// (#6904).
 ///
 /// `SceneShape.Backdrop` nomme les trois fonds qu'un plateau peut poser sous une
 /// scène ajustée ; cette vue les peint, et c'est tout ce qu'elle fait.

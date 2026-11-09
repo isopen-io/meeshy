@@ -20,7 +20,7 @@ import MeeshyUI
 ///
 /// ## UN plein écran, scènes comprises (#6709)
 ///
-/// Directive porteur du 2026-09-15 : « lorsqu'on ouvre les scènes de poste, on
+/// « lorsqu'on ouvre les scènes de poste, on
 /// doit utiliser LE même composant qu'on utilise pour afficher les attachements
 /// de conversation ! Et afficher en bas la liste des images du poste et des
 /// médias en commentaire ! »
@@ -116,7 +116,7 @@ private struct SocialMediaGalleryLayer: ViewModifier {
     @State private var pendingCompose: ComposerSeedTarget?
     @State private var composeTarget: ComposerSeedTarget?
 
-    /// **« Composer » s'arme sur la PIÈCE ouverte** (#6709, recette du 2026-09-16).
+    /// **« Composer » s'arme sur la PIÈCE ouverte** (#6709).
     ///
     /// La couche résolvait la règle d'offre pour le POST entier (critère 2 de
     /// #6085) : un post à plusieurs scènes n'offrait donc aucune pièce, et la
@@ -185,8 +185,7 @@ private struct SocialMediaGalleryLayer: ViewModifier {
                     accentColor: accentColor,
                     playerLanguages: preferredContentLanguages,
                     thread: thread,
-                    // **Le même item, dans le menu de la PIÈCE** (arbitrage
-                    // porteur 2026-09-11). C'est la rangée d'actions du plein
+                    // **Le même item, dans le menu de la PIÈCE**. C'est la rangée d'actions du plein
                     // écran — celle qui porte déjà « Créer avec ce média » en
                     // conversation — et non un bouton inventé pour le fil :
                     // même libellé, même glyphe, même rang.
@@ -441,7 +440,7 @@ nonisolated enum SocialFullscreenRoute {
     }
 
     /// **Un canvas qui ne montre pas TOUT ce que le post porte n'a pas le
-    /// dernier mot** (régression mesurée puis corrigée le 2026-09-06).
+    /// dernier mot**.
     ///
     /// Mesuré au simulateur : un post composé de DEUX photos part avec ses deux
     /// médias et leurs deux légendes — et un canvas d'UNE seule scène, portant

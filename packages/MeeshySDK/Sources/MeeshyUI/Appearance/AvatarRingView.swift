@@ -166,8 +166,8 @@ public extension View {
     /// Le contour DANS l'empreinte de l'avatar (#10713) — pour les cotes FIXES (ligne de
     /// liste, bulle) : le contour occupe la cote `footprint`, l'avatar (anneau de story
     /// compris, #10714) se réduit à son trou. Rien ne grandit, rien ne se décale, et le
-    /// contour se pose sans perte d'image quand il arrive. Animé comme partout (décision
-    /// porteur 2026-10-16, #10815) : une liste en porte des dizaines, mais le plafond des
+    /// contour se pose sans perte d'image quand il arrive. Animé comme partout (#10815):
+    /// une liste en porte des dizaines, mais le plafond des
     /// films vivants (`LottieLiveBudget`) n'en fait jouer que quelques-uns à la fois — les
     /// autres montrent leur première image fixe, et un même fichier ne se décode qu'une fois.
     @ViewBuilder

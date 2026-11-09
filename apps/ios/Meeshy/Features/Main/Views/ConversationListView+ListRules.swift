@@ -22,9 +22,6 @@ extension ConversationListView {
     // raw unfiltered/ungrouped `conversationViewModel.conversations`: a
     // filtered/sectioned view's visible rows can fall entirely outside the
     // full-account top-20 by recency, permanently starving their auto-load
-    // (fix 2026-07-21; audit 2026-07-20 introduced the limit itself: every
-    // row firing its preview-prefetch `.task` on appear meant 1 REST call
-    // per newly-visible row on a cold cache).
     nonisolated static func shouldAutoLoadPreview(
         conversationId: String,
         orderedConversationIds: [String],

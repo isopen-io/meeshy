@@ -13,11 +13,11 @@ struct ClipFadeChipRow: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .semibold)
                     .foregroundStyle(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
                 Text(title.uppercased())
-                    .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: MeeshySpacing.xsPlus) {

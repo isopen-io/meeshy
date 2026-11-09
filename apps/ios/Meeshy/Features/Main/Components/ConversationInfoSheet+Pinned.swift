@@ -72,13 +72,13 @@ extension ConversationInfoSheet {
 
             Text(msg.senderName ?? "?")
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
 
             if !msg.content.isEmpty {
                 Text(msg.content)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(1)
             } else if let att = msg.attachments.first {
                 HStack(spacing: MeeshySpacing.xxs) {
@@ -121,9 +121,11 @@ extension ConversationInfoSheet {
                     } label: {
                         Image(systemName: "xmark")
                             .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
@@ -153,20 +155,20 @@ extension ConversationInfoSheet {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(msg.senderName ?? "?")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     MetaSeparator()
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
 
                     Text(RelativeTimeFormatter.longString(for: msg.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 if !msg.content.isEmpty {
                     Text(msg.content)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(4)
                 } else if let att = msg.attachments.first {
                     HStack(spacing: MeeshySpacing.xs) {

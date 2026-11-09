@@ -14,9 +14,9 @@ import MeeshyUI
 // `LentilleFocusElection.swift`, `LentilleFocusElectionHost.swift`) est
 // CONSOMMÉ ici, jamais édité.
 
-// MARK: - Il n'y a PLUS de carte (2026-08-23)
+// MARK: - Il n'y a PLUS de carte
 //
-// Ce fichier a porté, du 2026-08-21 au 2026-08-23, une VUE : `LentilleFocusCard`
+// Ce fichier a porté,, une VUE: `LentilleFocusCard`
 // (fond `bg2`, anneau d'accent, ombre, avatar 52, nom 17, encoche débordant du
 // bord haut) et son hôte `LentilleFocusCardHost`, qui la peignait PAR-DESSUS
 // la rangée élue dans l'overlay de la liste.
@@ -61,7 +61,7 @@ nonisolated enum LentilleFocusCard {
     /// Date COMPLÈTE du dernier message, MÊME loi que le message en focus du
     /// fil (`FocalFocusTimestamp`) avec le joint « à » : « Aujourd'hui à
     /// 5:49 », « Hier à 22:12 », « Mardi à 23:50 », « Sam. 3 oct. 2025 à
-    /// 14:41 » (directive 2026-08-21).
+    /// 14:41 ».
     static func fullTimestamp(lastMessageAt: Date, now: Date, calendar: Calendar, locale: Locale) -> String {
         FocalFocusTimestamp.listLabel(
             sentAt: lastMessageAt,

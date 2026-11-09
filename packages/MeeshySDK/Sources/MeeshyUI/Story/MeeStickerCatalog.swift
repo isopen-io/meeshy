@@ -100,7 +100,7 @@ nonisolated public enum MeeStickerCatalog {
     /// **Une ligne de la planche** : le titre d'une intention, ou une rangée
     /// de stickers. La planche défile en RANGÉES de hauteur fixe dans la pile
     /// paresseuse de la feuille — jamais en grilles imbriquées, qui créaient
-    /// toutes leurs cases d'un coup et figeaient le défilement (2026-10-02).
+    /// toutes leurs cases d'un coup et figeaient le défilement.
     nonisolated public enum Row: Hashable, Identifiable, Sendable {
         case title(MeeSticker.Intent)
         case stickers([MeeSticker])
@@ -234,7 +234,7 @@ nonisolated public enum MeeStickerCatalog {
 
     /// **Le film rasterisé, et RENDU à l'appelant.** La lecture se fait hors du
     /// fil principal, le rendu par lots qui lui rendent la main ; le relire
-    /// ensuite dans le cache pouvait le trouver déjà évincé (2026-10-02).
+    /// ensuite dans le cache pouvait le trouver déjà évincé.
     /// `FilmEntry` est une valeur immuable : elle traverse les acteurs.
     @concurrent
     public static func film(at url: URL, maxPixelSize: Int) async -> FilmEntry? {
@@ -284,17 +284,17 @@ nonisolated public enum MeeStickerCatalog {
     /// La borne est en OCTETS, pas en nombre : un film de 60 images à 360 px
     /// pèse 31 Mo rasterisé, et vingt d'entre eux rempliraient la mémoire
     /// d'un iPhone.
-    nonisolated(unsafe) private static let films: NSCache<NSString, FilmEntry> = {
+    private nonisolated static let films: LockedCache<NSString, FilmEntry> = LockedCache({
         let cache = NSCache<NSString, FilmEntry>()
         cache.totalCostLimit = 96 * 1024 * 1024
         return cache
-    }()
+    }())
 
-    nonisolated(unsafe) private static let stills: NSCache<NSString, UIImage> = {
+    private nonisolated static let stills: LockedCache<NSString, UIImage> = LockedCache({
         let cache = NSCache<NSString, UIImage>()
         cache.totalCostLimit = 24 * 1024 * 1024
         return cache
-    }()
+    }())
 
     /// `nonisolated deinit` : `NSCache` évince sur le fil qu'il choisit, et une
     /// deinit isolée au `MainActor` double-libère sur iOS 26.1 (voir
