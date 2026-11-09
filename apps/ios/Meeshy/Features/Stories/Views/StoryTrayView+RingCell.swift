@@ -107,7 +107,7 @@ struct StoryRingCell: View, Equatable {
             if showsUsername {
                 Text(group.username)
                     .font(MeeshyFont.relative(isCompact ? 9 : StoryEntryMetrics.labelFontSize, weight: group.hasUnviewed ? .semibold : .medium))
-                    .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
+                    .foregroundStyle(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
                     .frame(width: isCompact ? 56 : StoryEntryMetrics.labelWidth)
             }
@@ -190,7 +190,7 @@ fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
         if count > 5 {
             Text("+")
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                .foregroundColor(.white.opacity(MeeshyOpacity.strong))
+                .foregroundStyle(Color.white.opacity(MeeshyOpacity.strong))
         }
     }
     .accessibilityHidden(true)

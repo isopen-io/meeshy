@@ -183,10 +183,10 @@ struct StoryComposerBarView: View {
                             HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
+                                    .foregroundStyle(Color(hex: reply.authorColor))
                                 Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
                                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
+                                    .foregroundStyle(Color(hex: reply.authorColor))
                             }
                             Text(reply.displayContent)
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))

@@ -452,7 +452,7 @@ private struct MyStoryButton: View {
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
         }
     }
 
@@ -487,7 +487,7 @@ private struct MyStoryButton: View {
             if group.stories.count > 5 {
                 Text("+")
                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.strong))
+                    .foregroundStyle(Color.white.opacity(MeeshyOpacity.strong))
             }
         }
         .offset(y: 28)
@@ -541,7 +541,7 @@ private struct StoryUploadOverlay: View {
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
                     .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             } else {
                 Circle()
                     .trim(from: 0, to: displayedProgress)
@@ -556,7 +556,7 @@ private struct StoryUploadOverlay: View {
                 // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Text("\(Int(displayedProgress * 100))%")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -566,7 +566,7 @@ private struct StoryUploadOverlay: View {
                 // accessible complet vit sur l'overlay.
                 Text("+\(stackedCount)")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 18, height: 18)
                     .background(
                         Circle()
