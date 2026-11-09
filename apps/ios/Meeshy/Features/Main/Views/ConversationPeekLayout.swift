@@ -31,6 +31,31 @@ nonisolated enum ConversationPeekCardRoute: Equatable, Sendable {
     }
 }
 
+/// Glisser la carte vers le BAS depuis le cran compact (#17258) : la carte
+/// suit le doigt et se résorbe en pastille ; lâchée au-delà de 79 % de la
+/// course (position PROJETÉE, la vélocité comprise), l'aperçu se ferme ;
+/// en deçà — ou ramenée vers le haut avant le lâcher — elle revient en place.
+/// Une fois la pastille VERROUILLÉE (course entière), le lâcher la dépose.
+nonisolated enum ConversationPeekPullDown {
+    static let morphDistance: CGFloat = 140
+    static let dismissDistance: CGFloat = 110
+
+    enum Release: Equatable, Sendable {
+        case restore
+        case dismiss
+        case drop
+    }
+
+    static func progress(translation: CGFloat) -> CGFloat {
+        min(1, max(0, translation / morphDistance))
+    }
+
+    static func release(predictedEndTranslation: CGFloat, isLatched: Bool) -> Release {
+        if isLatched { return .drop }
+        return predictedEndTranslation >= dismissDistance ? .dismiss : .restore
+    }
+}
+
 /// La loi de dimensionnement de l'aperçu d'appui long (#17242), pure : une
 /// progression 0 → 1 pilote les DEUX hauteurs (menu qui grandit, carte qui se
 /// réduit d'autant), et la levée du doigt conclut vers le cran le plus proche
@@ -42,6 +67,16 @@ nonisolated struct ConversationPeekLayout: Equatable, Sendable {
     /// La carte réduite garde quelques messages lisibles (elle n'a pas d'en-tête).
     static let minimumCardHeight: CGFloat = 150
     static let settleThreshold: CGFloat = 0.5
+    /// Le voile reste VISIBLE au-dessus de la carte (#17258) : une bande qu'on
+    /// voit et qu'on touche pour fermer, jamais une marge de quelques points.
+    static let veilBandFraction: CGFloat = 0.1
+    static let minimumVeilBand: CGFloat = 56
+    static let maximumVeilBand: CGFloat = 120
+
+    /// La bande de voile laissée au-dessus de la carte, pour une hauteur offerte.
+    static func veilBand(forHeight height: CGFloat) -> CGFloat {
+        min(maximumVeilBand, max(minimumVeilBand, height * veilBandFraction))
+    }
 
     /// La hauteur offerte à la carte, à l'espacement et au menu réunis.
     let availableHeight: CGFloat

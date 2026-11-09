@@ -300,7 +300,7 @@ struct RootView: View {
             onSyncPillTap: handleSyncPillTap,
             onMiniPlayerTap: returnToPlayingAudio,
             showFeed: showFeed,
-            showMenu: showMenu
+            showMenu: showMenu, peekPresence: .shared
         ))
         // Les boutons flottants passent AU-DESSUS de tout le chrome (#9679) :
         // la bannière du joueur, la pastille de synchronisation, le mini-lecteur
@@ -928,6 +928,7 @@ struct RootView: View {
                 menuButtonPosition: $menuButtonPosition,
                 floatingGeometry: $floatingGeometry,
                 unreadCount: notifications.unreadCount,
+                peekPresence: .shared,
                 onPush: { router.push($0) }
             )
         }

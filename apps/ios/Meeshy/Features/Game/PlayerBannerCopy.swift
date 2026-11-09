@@ -112,9 +112,10 @@ enum PlayerBannerCopy {
 nonisolated enum PlayerBannerPlacement {
 
     /// L'écran courant porte la bannière : ni un écran profond (un fil, un détail, Progression elle-même — son
-    /// héros dit déjà tout), ni le lecteur de réels immersif.
-    static func hosts(routeIsDeep: Bool, reelsAreOpen: Bool) -> Bool {
-        !routeIsDeep && !reelsAreOpen
+    /// héros dit déjà tout), ni le lecteur de réels immersif, ni pendant l'aperçu d'appui long d'une conversation,
+    /// au-dessus duquel rien ne passe (#17260) — elle lui cède la place comme à un appel, et revient après.
+    static func hosts(routeIsDeep: Bool, reelsAreOpen: Bool, peekIsOpen: Bool = false) -> Bool {
+        !routeIsDeep && !reelsAreOpen && !peekIsOpen
     }
 
     /// iPad : la colonne des conversations reste là, le fil ouvert dans l'autre prend toute sa hauteur. Les routes

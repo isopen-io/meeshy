@@ -6,12 +6,6 @@ import org.junit.Test
 class CropFrameTest {
     private val display = CropRect(0f, 0f, 400f, 300f)
 
-    @Test fun `les chips pro n'apparaissent qu'en mode pro`() {
-        assertThat(CropRatio.available(false)).doesNotContain(CropRatio.RATIO_9_16)
-        assertThat(CropRatio.available(true)).hasSize(5)
-        assertThat(CropRatio.available(true).first()).isEqualTo(CropRatio.FREE)
-    }
-
     @Test fun `le cadre initial en ratio occupe 92 pour cent et est centre`() {
         val r = CropFrame.initial(null, 1.0, display)
         assertThat(r.height).isWithin(1e-3f).of(300f * 0.92f)

@@ -117,14 +117,14 @@ struct ConversationContextMenuView: View {
                     VStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: entry.symbol)
                             .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                            .symbolRenderingMode(.hierarchical)
+                            .symbolRenderingMode(.monochrome)
                         Text(entry.label)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
                             .minimumScaleFactor(0.8)
                     }
-                    .foregroundStyle(accent)
+                    .modifier(ConversationMenuInkModifier(baseHex: accentHex))
                     .frame(maxWidth: .infinity, minHeight: rowMinHeight)
                     .padding(.vertical, MeeshySpacing.xs)
                     .contentShape(Rectangle())
@@ -175,8 +175,7 @@ struct ConversationContextMenuView: View {
             // ferme le menu (`onSelected`, câblé par la liste).
             readingModeMenu
                 .labelStyle(MenuRowLabelStyle(iconColumnWidth: iconColumnWidth))
-                .foregroundStyle(accent)
-                .tint(accent)
+                .modifier(ConversationMenuInkModifier(baseHex: accentHex))
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(maxWidth: .infinity, minHeight: rowMinHeight, alignment: .leading)
                 .contentShape(Rectangle())
@@ -387,14 +386,14 @@ struct ConversationContextMenuView: View {
         showsCheckmark: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        let tint = isDestructive ? MeeshyColors.error : accent
+        let inkHex = isDestructive ? MeeshyColors.errorHex : accentHex
         return Button {
             action()
         } label: {
             HStack(spacing: MeeshySpacing.mdPlus) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
+                    .symbolRenderingMode(.monochrome)
                     .frame(width: iconColumnWidth)
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize))
@@ -410,7 +409,7 @@ struct ConversationContextMenuView: View {
                         .opacity(0.4)
                 }
             }
-            .foregroundStyle(tint)
+            .modifier(ConversationMenuInkModifier(baseHex: inkHex))
             .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
@@ -427,13 +426,13 @@ struct ConversationContextMenuView: View {
             HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
+                    .symbolRenderingMode(.monochrome)
                     .frame(width: iconColumnWidth)
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(accent)
+            .modifier(ConversationMenuInkModifier(baseHex: accentHex))
             .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
@@ -449,6 +448,69 @@ struct ConversationContextMenuView: View {
 
     private var divider: some View {
         Divider().overlay(accent.opacity(MeeshyOpacity.light))
+    }
+}
+
+// MARK: - L'encre des actions (#17259)
+
+/// L'encre des actions du menu d'appui long, sur son verre : la couleur de la
+/// conversation, assombrie (clair) ou éclaircie (sombre) juste assez pour
+/// tenir 4,5:1 (WCAG AA) contre le verre le moins favorable — sans quoi un
+/// accent pastel ou grisé se lisait comme une action DÉSACTIVÉE. Une action
+/// réellement désactivée prend une encre NEUTRE, plus faible et sans teinte.
+nonisolated enum ConversationMenuInk {
+    static let minimumContrast = 4.5
+
+    /// Le verre du menu, posé sur le voile de l'appui long, dans son cas le
+    /// plus défavorable à l'encre : gris moyen en clair, gris levé en sombre.
+    static func glassBackdropHex(isDark: Bool) -> String {
+        isDark ? "48484A" : "C7C7CC"
+    }
+
+    static func hex(base: String, isDark: Bool, isEnabled: Bool) -> String {
+        guard isEnabled else { return isDark ? "8E8E93" : "8A8A8E" }
+        let start = rgb(base) ?? rgb("6366F1") ?? (0, 0, 0)
+        let target: Double = isDark ? 1 : 0
+        let backdrop = luminance(rgb(glassBackdropHex(isDark: isDark)) ?? (0.5, 0.5, 0.5))
+        let mixed = stride(from: 0.0, through: 1.0, by: 0.05).lazy
+            .map { t in (mix(start.0, target, t), mix(start.1, target, t), mix(start.2, target, t)) }
+            .first { CanvasChromeScheme.contrastRatio(luminance($0), backdrop) >= minimumContrast }
+        return hexString(mixed ?? (target, target, target))
+    }
+
+    private static func mix(_ channel: Double, _ target: Double, _ t: Double) -> Double {
+        channel + (target - channel) * t
+    }
+
+    private static func luminance(_ c: (Double, Double, Double)) -> Double {
+        CanvasChromeScheme.luminance(red: c.0, green: c.1, blue: c.2)
+    }
+
+    private static func rgb(_ hex: String) -> (Double, Double, Double)? {
+        let digits = hex.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        guard digits.count == 6, digits.allSatisfy(\.isHexDigit), let v = UInt32(digits, radix: 16) else { return nil }
+        return (Double((v >> 16) & 0xFF) / 255, Double((v >> 8) & 0xFF) / 255, Double(v & 0xFF) / 255)
+    }
+
+    private static func hexString(_ c: (Double, Double, Double)) -> String {
+        [c.0, c.1, c.2]
+            .map { String(format: "%02X", Int(($0 * 255).rounded())) }
+            .joined()
+    }
+}
+
+/// Pose l'encre d'une action selon le schéma de couleurs et l'état activé de
+/// SA rangée : un bouton `.disabled` reçoit l'encre neutre de la loi.
+private struct ConversationMenuInkModifier: ViewModifier {
+    let baseHex: String
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        let ink = Color(hex: ConversationMenuInk.hex(base: baseHex, isDark: colorScheme == .dark, isEnabled: isEnabled))
+        content
+            .foregroundStyle(ink)
+            .tint(ink)
     }
 }
 
@@ -508,7 +570,7 @@ private struct MenuRowLabelStyle: LabelStyle {
         HStack(spacing: MeeshySpacing.mdPlus) {
             configuration.icon
                 .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                .symbolRenderingMode(.hierarchical)
+                .symbolRenderingMode(.monochrome)
                 .frame(width: iconColumnWidth)
             configuration.title
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize))

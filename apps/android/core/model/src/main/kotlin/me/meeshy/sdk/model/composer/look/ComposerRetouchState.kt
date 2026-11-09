@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.composer.look
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import me.meeshy.sdk.model.EntityImageFormat
 import me.meeshy.sdk.model.imageedit.CropRect
 import me.meeshy.sdk.model.imageedit.NormalizedCrop
 import me.meeshy.sdk.model.media.MediaTrimBounds
@@ -66,6 +67,8 @@ public data class ComposerRetouchState(
     val cropPreset: ComposerCropPreset? = null,
     /** La coupe et le son d'une vidéo ; `null` pour une photo. */
     val video: ComposerVideoEdit? = null,
+    /** Le format imposé d'une image d'identité (#17257) ; `null` ⇒ la retouche libre de la capture. */
+    val format: EntityImageFormat? = null,
 ) {
     /** (x) et « Terminé » cèdent la place aux éléments d'édition. */
     val showsTopRow: Boolean
@@ -92,7 +95,7 @@ public data class ComposerRetouchState(
 
     /** Un preset de proportions recadre la prise au plus grand, centré ; « Original » sur une prise entière ne recadre rien. */
     public fun choosingPreset(preset: ComposerCropPreset, sourceWidth: Int, sourceHeight: Int): ComposerRetouchState {
-        if (settled) return this
+        if (settled || format != null) return this
         val aspect = preset.aspect(sourceWidth.toDouble(), sourceHeight.toDouble())
         return copy(cropPreset = preset, crop = ComposerCropPreset.centeredCrop(aspect, sourceWidth.toDouble(), sourceHeight.toDouble()))
     }
@@ -100,10 +103,18 @@ public data class ComposerRetouchState(
     /** Les équerres tirées à la main : un recadrage libre (le preset ne tient plus que s'il est réalisé). */
     public fun cropping(to: NormalizedCrop?, sourceWidth: Int, sourceHeight: Int): ComposerRetouchState {
         if (settled) return this
+        format?.let { locked -> return copy(crop = to ?: locked.centeredCrop(sourceWidth, sourceHeight), cropPreset = null) }
         val aspect = to?.let { (it.width * sourceWidth).toDouble() / (it.height * sourceHeight) }
         val preset = aspect?.let { ComposerCropPreset.matching(it, sourceWidth.toDouble(), sourceHeight.toDouble()) }
         return copy(crop = to, cropPreset = preset)
     }
+
+    /**
+     * **Un format imposé** (#17257, iOS `ComposerEditTools.offered(formatLocked:)`) : le cadre se pose aussitôt, centré
+     * aux proportions du format ; la prise s'y place au pincement et au glissé, et aucun preset ne le défait.
+     */
+    public fun lockingFormat(locked: EntityImageFormat, sourceWidth: Int, sourceHeight: Int): ComposerRetouchState =
+        if (settled) this else copy(format = locked, crop = locked.centeredCrop(sourceWidth, sourceHeight), cropPreset = null)
 
     /** La coupe : la fenêtre gardée, poignées jamais croisées (`MediaTrimRule`). */
     public fun trimming(bounds: MediaTrimBounds): ComposerRetouchState {
