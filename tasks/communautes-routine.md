@@ -15,6 +15,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web), et la passerelle ne les sert qu'à qui peut les lire | voir réveil 15 | #6379 | voir réveil 15 |
 | 2026-11-08 | L'onglet Publications du détail lit les publications (iOS) | #17061 | #16878 | fusionnée dans dev (réveil 20) |
 | 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | voir réveil 20 |
+| 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | voir réveil 22 | #16892 | voir réveil 22 |
 
 ## 2026-11-07 — lot 1
 
@@ -173,3 +174,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suivi ouvert : #17104 (Android : même cause dite, sans réessayer).
 - Gotcha : `Localizable.xcstrings` du SDK se réécrit à l'identique par `json.dumps(indent=2, ensure_ascii=False)` + saut de ligne final, mais SANS `sort_keys` (l'ordre Xcode n'est pas l'ordre Python) : insérer les clés nouvelles à leur place.
 - Prochain lot recommandé : #6380 (emoji de création iOS sans effet) ou #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 (index de `CommunityMember`) demandent une session de staging.
+
+## 2026-11-09 — réveil 22
+
+- Début du run : #17152 (#6380, réveil 21) ouverte, menée EN DIRECT par sa session (commentaire posté une minute avant ce réveil, `ios.yml` en cours) : cédée, non touchée. Ses rouges iOS viennent des lots du composer fusionnés ce soir, pas d'elle.
+- Lot : #16892 (passerelle, sécurité). Une publication `COMMUNITY` dont `Post.communityId` est posé ne se lit que par les membres actifs et le créateur de CETTE communauté, vivante — plus par « un co-membre de n'importe quelle communauté de l'auteur ». Filtre de liste (`buildPostVisibilityOrFilter`) : la branche co-membre ne vaut plus que pour `communityId` nul ou absent ; une branche `communityId ∈ getReadableCommunityIds(lecteur)` (sans cache : quitter ferme aussitôt), résolue dans `buildFeedVisibilityFilter` (fil, profil, réels, stories, statuts, recherche) et `buildViewerVisibilityFilter` (détail, vue). Verdict unitaire (`canUserViewPost`) : `isCommunityReadableBy`. Hashtags : même paire de branches. `communityId` entre dans la tranche ACL REQUISE (`PostVisibilityRecord`), le compilateur a trouvé le seul site qui ne le lisait pas (`storyReplyAdmission`).
+- Une publication PUBLIC rattachée à une communauté privée reste servie comme avant (décision #16893).
+- Suivi ouvert : #17178 (notifications, temps réel et traductions de story suivent encore la règle co-membre).
+- Gotcha : huit suites moquent `communityVisibility` par une fabrique qui ne connaît que `getCommunityCoMemberIds` ; une nouvelle export lue par `viewerAudience` doit y entrer.
+
