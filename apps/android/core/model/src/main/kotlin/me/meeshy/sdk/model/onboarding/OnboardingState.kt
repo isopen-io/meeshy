@@ -13,12 +13,14 @@ import me.meeshy.sdk.model.ConversationWriteRestriction
 
 /**
  * Les cartes, dans l'ordre du parcours (iOS `OnboardingStepId`). `EMAIL` n'est proposée qu'à un compte dont l'adresse
- * n'est pas vérifiée ; `AGE` n'existe que si la passerelle la connaît ([ApiOnboardingState.servesAgeStep]).
+ * n'est pas vérifiée ; `AGE` n'existe que si la passerelle la connaît ([ApiOnboardingState.servesAgeStep]). `PROFILE`
+ * (« Montre-toi », #17238) est facultative : la passerelle la pré-coche quand le compte a déjà avatar ET bannière.
  */
 enum class OnboardingStepId(val wire: String) {
     LANGUAGES("languages"),
     AGE("age"),
     EMAIL("email"),
+    PROFILE("profile"),
     GLOBAL("global"),
     STORY("story"),
     FRIENDS("friends"),

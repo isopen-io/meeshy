@@ -3,8 +3,11 @@ package me.meeshy.app.onboarding
 import com.google.common.truth.Truth.assertThat
 import java.time.LocalDate
 import java.util.Locale
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.BirthDateDeclarationError
+import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.ConversationWriteRestriction
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.media.MediaPermissionState
@@ -20,7 +23,11 @@ import me.meeshy.sdk.model.onboarding.OnboardingSuggestion
 import org.junit.Test
 
 private class FakeGateway : OnboardingGateway {
-    var served: ApiOnboardingState? = ApiOnboardingState(eligible = true, globalConversationId = "g1")
+    var served: ApiOnboardingState? = ApiOnboardingState(
+        eligible = true,
+        globalConversationId = "g1",
+        prefilledSteps = listOf(OnboardingStepId.PROFILE),
+    )
     val settled = mutableSetOf<String>()
     val recorded = mutableListOf<Pair<OnboardingStepId, OnboardingStepOutcome>>()
     var finished = 0
@@ -36,6 +43,10 @@ private class FakeGateway : OnboardingGateway {
     var notificationsUndetermined = true
     val progressReads = ArrayDeque<OnboardingProgress?>()
     var progressFallback: OnboardingProgress? = null
+    var uploadedUrl: String? = "https://cdn/served.jpg"
+    var uploadGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    val uploads = mutableListOf<Pair<ImageUploadTarget, MediaUploadItem>>()
+    val released = mutableListOf<MediaUploadItem>()
 
     override suspend fun fetchState() = served
     override suspend fun record(step: OnboardingStepId, outcome: OnboardingStepOutcome) {
@@ -58,6 +69,12 @@ private class FakeGateway : OnboardingGateway {
         if (progressReads.isNotEmpty()) progressReads.removeFirst() else progressFallback
     override suspend fun contactsPermission() = contactsState
     override suspend fun notificationsUndetermined() = notificationsUndetermined
+    override suspend fun uploadProfileImage(target: ImageUploadTarget, item: MediaUploadItem): String? {
+        uploads += target to item
+        uploadGate?.await()
+        return uploadedUrl
+    }
+    override fun releaseProfileImage(item: MediaUploadItem) { released += item }
     override fun isSettled(userId: String) = userId in settled
     override fun markSettled(userId: String) { settled += userId }
 }
@@ -79,6 +96,14 @@ private fun model(gateway: FakeGateway) = OnboardingViewModel(gateway, FakeTexts
 }
 
 private fun step(id: OnboardingStepId) = OnboardingCard.Step(id)
+
+private fun picked(name: String = "pick.jpg") = MediaUploadItem(byteArrayOf(1, 2, 3), name, "image/jpeg")
+
+/** Un compte qui arrive sur « Montre-toi » : langues déjà vues, l'étape suivante est la carte du profil. */
+private suspend fun onProfileCard(gateway: FakeGateway, account: MeeshyUser = user()): OnboardingViewModel {
+    gateway.served = ApiOnboardingState(eligible = true, globalConversationId = "g1", seenSteps = listOf(OnboardingStepId.LANGUAGES))
+    return model(gateway).also { it.start(account) }
+}
 
 class OnboardingViewModelTest {
 
@@ -188,7 +213,10 @@ class OnboardingViewModelTest {
     fun `without a gesture the notifications card never shows and the recap closes the flow`() = runTest {
         val gateway = FakeGateway().apply {
             contactsState = MediaPermissionState.DENIED
-            served = ApiOnboardingState(eligible = true, seenSteps = listOf(OnboardingStepId.LANGUAGES, OnboardingStepId.STORY))
+            served = ApiOnboardingState(
+                eligible = true,
+                seenSteps = listOf(OnboardingStepId.LANGUAGES, OnboardingStepId.PROFILE, OnboardingStepId.STORY),
+            )
         }
         val vm = model(gateway)
         vm.start(user())
@@ -258,7 +286,12 @@ class OnboardingViewModelTest {
     // region Âge
 
     private fun ageFlow(gateway: FakeGateway): OnboardingViewModel {
-        gateway.served = ApiOnboardingState(eligible = true, globalConversationId = "g1", servesAgeStep = true)
+        gateway.served = ApiOnboardingState(
+            eligible = true,
+            globalConversationId = "g1",
+            servesAgeStep = true,
+            prefilledSteps = listOf(OnboardingStepId.PROFILE),
+        )
         return model(gateway)
     }
 
@@ -496,7 +529,7 @@ class OnboardingViewModelTest {
     private fun friendsFlow(gateway: FakeGateway, suggestions: List<OnboardingSuggestion> = emptyList()): OnboardingViewModel {
         gateway.served = ApiOnboardingState(
             eligible = true,
-            seenSteps = listOf(OnboardingStepId.LANGUAGES, OnboardingStepId.GLOBAL, OnboardingStepId.STORY),
+            seenSteps = listOf(OnboardingStepId.LANGUAGES, OnboardingStepId.PROFILE, OnboardingStepId.GLOBAL, OnboardingStepId.STORY),
             suggestions = suggestions,
         )
         return model(gateway)
@@ -691,4 +724,109 @@ class OnboardingViewModelTest {
         var guard = 0
         while (state.value.card != OnboardingCard.Step(target) && guard++ < 10) advance()
     }
+
+    // region Carte « Montre-toi » (#17238)
+
+    @Test
+    fun `montre-toi arrives after languages and before the global greeting`() = runTest {
+        val vm = onProfileCard(FakeGateway())
+
+        assertThat(vm.state.value.card).isEqualTo(step(OnboardingStepId.PROFILE))
+        assertThat(vm.state.value.userHandle).isEqualTo("ada")
+    }
+
+    @Test
+    fun `the chosen image shows at once while it uploads`() = runTest {
+        val gateway = FakeGateway().apply { uploadGate = kotlinx.coroutines.CompletableDeferred() }
+        val vm = onProfileCard(gateway)
+
+        val job = launch { vm.pickProfileImage(ImageUploadTarget.BANNER, picked(), "/cache/banner.jpg") }
+        testScheduler.runCurrent()
+
+        assertThat(vm.state.value.profileCard.banner.shown).isEqualTo("/cache/banner.jpg")
+        assertThat(vm.state.value.profileCard.isUploading).isTrue()
+        gateway.uploadGate?.complete(Unit)
+        job.join()
+        assertThat(vm.state.value.profileCard.isUploading).isFalse()
+    }
+
+    @Test
+    fun `an account that already shows an avatar and a banner skips montre-toi`() = runTest {
+        val vm = onProfileCard(FakeGateway(), user().copy(avatar = "https://cdn/a.jpg", banner = "https://cdn/b.jpg"))
+
+        assertThat(vm.state.value.card).isEqualTo(step(OnboardingStepId.GLOBAL))
+    }
+
+    @Test
+    fun `leaving montre-toi without an image records skipped`() = runTest {
+        val gateway = FakeGateway()
+        val vm = onProfileCard(gateway)
+
+        vm.continueFromProfile()
+
+        assertThat(gateway.recorded).containsExactly(OnboardingStepId.PROFILE to OnboardingStepOutcome.SKIPPED)
+        assertThat(vm.state.value.card).isEqualTo(step(OnboardingStepId.GLOBAL))
+    }
+
+    @Test
+    fun `a posed banner shows the served address and the step records done`() = runTest {
+        val gateway = FakeGateway()
+        val vm = onProfileCard(gateway)
+        val item = picked()
+
+        vm.pickProfileImage(ImageUploadTarget.BANNER, item, "/cache/banner.jpg")
+
+        assertThat(gateway.uploads.single().first).isEqualTo(ImageUploadTarget.BANNER)
+        assertThat(vm.state.value.profileCard.banner.shown).isEqualTo("https://cdn/served.jpg")
+        assertThat(gateway.released).containsExactly(item)
+        vm.continueFromProfile()
+        assertThat(gateway.recorded).containsExactly(OnboardingStepId.PROFILE to OnboardingStepOutcome.DONE)
+    }
+
+    @Test
+    fun `a failed upload rolls back to the previous avatar and a retry sends the same image again`() = runTest {
+        val gateway = FakeGateway().apply { uploadedUrl = null }
+        val vm = onProfileCard(gateway, user().copy(avatar = "https://cdn/old.jpg"))
+        val item = picked()
+
+        vm.pickProfileImage(ImageUploadTarget.AVATAR, item, "/cache/avatar.jpg")
+
+        assertThat(vm.state.value.profileCard.avatar.shown).isEqualTo("https://cdn/old.jpg")
+        assertThat(vm.state.value.profileCard.avatar.failed).isTrue()
+        assertThat(gateway.released).isEmpty()
+
+        gateway.uploadedUrl = "https://cdn/new.jpg"
+        vm.retryFailedProfileImages()
+
+        assertThat(gateway.uploads.map { it.second }).containsExactly(item, item)
+        assertThat(vm.state.value.profileCard.avatar.shown).isEqualTo("https://cdn/new.jpg")
+        assertThat(vm.state.value.profileCard.avatar.failed).isFalse()
+    }
+
+    @Test
+    fun `a failed image kept for retry is released when the card is left`() = runTest {
+        val gateway = FakeGateway().apply { uploadedUrl = null }
+        val vm = onProfileCard(gateway)
+        val item = picked()
+        vm.pickProfileImage(ImageUploadTarget.AVATAR, item, "/cache/avatar.jpg")
+
+        vm.later()
+
+        assertThat(gateway.released).containsExactly(item)
+        assertThat(gateway.recorded).containsExactly(OnboardingStepId.PROFILE to OnboardingStepOutcome.SKIPPED)
+    }
+
+    @Test
+    fun `an image picked away from the card is released without upload`() = runTest {
+        val gateway = FakeGateway()
+        val vm = model(gateway).also { it.start(user()) }
+        val item = picked()
+
+        vm.pickProfileImage(ImageUploadTarget.AVATAR, item, "/cache/avatar.jpg")
+
+        assertThat(gateway.uploads).isEmpty()
+        assertThat(gateway.released).containsExactly(item)
+    }
+
+    // endregion
 }
