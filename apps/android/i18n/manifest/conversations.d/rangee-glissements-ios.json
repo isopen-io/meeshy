@@ -21,12 +21,6 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "swipe.unlock",
-          "androidName": "swipe_unlock",
-          "status": "adopted"
-        },
-        {
           "androidName": "swipe_archive",
           "status": "android-only"
         },
