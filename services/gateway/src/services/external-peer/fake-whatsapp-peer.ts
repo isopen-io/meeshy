@@ -24,6 +24,7 @@ import {
   type PeerDeviceBundle,
   type PeerParty,
   type PeerUser,
+  type StoredAttachment,
 } from './external-peer-contract';
 
 /** Le sous-ensemble de `CacheStore` dont le faux a besoin ; `setnx` porte la réservation atomique. */
@@ -60,62 +61,62 @@ const monotonicStamp = (() => {
   };
 })();
 
-export type FakeWhatsAppOptions = { readonly store: PeerStore };
-
-export function createFakeWhatsAppPeer({ store }: FakeWhatsAppOptions): ExternalPeer {
-  const network: ExternalNetwork = 'whatsapp';
+/** Les clés de stockage d'un réseau : aucune ne porte un numéro en clair. */
+const storageKeys = (network: ExternalNetwork) => {
   const prefix = `extpeer:${network}`;
-  const bundleKey = (user: string, deviceId: number) => `${prefix}:bundle:${user}:${deviceId}`;
-  const oneTimeKey = (kind: OneTimeKind, device: string, registrationId: number, keyId: number) =>
-    `${prefix}:otpk:${kind}:${device}:${registrationId}:${keyId}`;
-  const claimKey = (kind: OneTimeKind, device: string, registrationId: number, keyId: number) =>
-    `${prefix}:claim:${kind}:${device}:${registrationId}:${keyId}`;
-  const envelopeKey = (recipient: string, stamp: number, envelopeId: string) =>
-    `${prefix}:env:${recipient}:${String(stamp).padStart(20, '0')}:${envelopeId}`;
-
-  /** Réserve la plus petite pré-clé unique libre : `setnx` sur sa réservation est le seul arbitre. */
-  const reserveOneTime = async <T>(kind: OneTimeKind, device: string, registrationId: number): Promise<T | null> => {
-    const candidates = (await store.keys(`${prefix}:otpk:${kind}:${device}:${registrationId}:*`))
-      .map((key) => Number(lastSegment(key)))
-      .sort((a, b) => a - b);
-    const claimNext = async (remaining: readonly number[]): Promise<T | null> => {
-      if (remaining.length === 0) return null;
-      const [keyId, ...rest] = remaining;
-      if (!(await store.setnx(claimKey(kind, device, registrationId, keyId), '1', RETENTION_SECONDS))) return claimNext(rest);
-      const key = oneTimeKey(kind, device, registrationId, keyId);
-      const value = parse<T>(await store.get(key));
-      await store.del(key);
-      return value ?? claimNext(rest);
-    };
-    return claimNext(candidates);
+  return {
+    bundle: (user: string, deviceId: number) => `${prefix}:bundle:${user}:${deviceId}`,
+    bundlesOf: (user: string) => `${prefix}:bundle:${user}:*`,
+    oneTime: (kind: OneTimeKind, device: string, registrationId: number, keyId: number) =>
+      `${prefix}:otpk:${kind}:${device}:${registrationId}:${keyId}`,
+    oneTimeOf: (kind: OneTimeKind, device: string, registrationId: number) => `${prefix}:otpk:${kind}:${device}:${registrationId}:*`,
+    anyOneTimeOf: (device: string) => `${prefix}:otpk:*:${device}:*`,
+    claim: (kind: OneTimeKind, device: string, registrationId: number, keyId: number) =>
+      `${prefix}:claim:${kind}:${device}:${registrationId}:${keyId}`,
+    envelope: (recipient: string, stamp: number, envelopeId: string) =>
+      `${prefix}:env:${recipient}:${String(stamp).padStart(20, '0')}:${envelopeId}`,
+    envelopesOf: (recipient: string) => `${prefix}:env:${recipient}:*`,
+    media: (attachmentId: string) => `${prefix}:media:${attachmentId}`,
   };
+};
+type StorageKeys = ReturnType<typeof storageKeys>;
 
-  const forgetOtherGenerations = async (device: string, registrationId: number): Promise<void> => {
-    const stale = (await store.keys(`${prefix}:otpk:*:${device}:*`)).filter((key) => !key.includes(`:${device}:${registrationId}:`));
-    await Promise.all(stale.map((key) => store.del(key)));
+/** Réserve la plus petite pré-clé unique libre : `setnx` sur sa réservation est le seul arbitre. */
+async function reserveOneTime<T>(
+  store: PeerStore,
+  keys: StorageKeys,
+  slot: { readonly kind: OneTimeKind; readonly device: string; readonly registrationId: number },
+): Promise<T | null> {
+  const { kind, device, registrationId } = slot;
+  const candidates = (await store.keys(keys.oneTimeOf(kind, device, registrationId))).map((key) => Number(lastSegment(key))).sort((a, b) => a - b);
+  const claimNext = async (remaining: readonly number[]): Promise<T | null> => {
+    if (remaining.length === 0) return null;
+    const [keyId, ...rest] = remaining;
+    if (!(await store.setnx(keys.claim(kind, device, registrationId, keyId), '1', RETENTION_SECONDS))) return claimNext(rest);
+    const key = keys.oneTime(kind, device, registrationId, keyId);
+    const value = parse<T>(await store.get(key));
+    await store.del(key);
+    return value ?? claimNext(rest);
   };
+  return claimNext(candidates);
+}
 
+function preKeyDirectory(store: PeerStore, keys: StorageKeys): Pick<ExternalPeer, 'publishPreKeyBundle' | 'fetchPreKeyBundles'> {
   const bundleFor = async (user: string, stored: StoredBundle): Promise<PeerDeviceBundle> => {
-    const device = `${user}:${stored.deviceId}`;
-    const preKey = await reserveOneTime<PeerDeviceBundle['preKey']>('ec', device, stored.registrationId);
-    const kyber = await reserveOneTime<PeerDeviceBundle['signedPreKey']>('kyber', device, stored.registrationId);
+    const slot = { device: `${user}:${stored.deviceId}`, registrationId: stored.registrationId };
+    const preKey = await reserveOneTime<PeerDeviceBundle['preKey']>(store, keys, { ...slot, kind: 'ec' });
+    const kyber = await reserveOneTime<PeerDeviceBundle['signedPreKey']>(store, keys, { ...slot, kind: 'kyber' });
     const { kyberLastResort, ...publicPart } = stored;
-    return {
-      ...publicPart,
-      preKey,
-      kyberPreKey: kyber ? { ...kyber, lastResort: false } : { ...kyberLastResort, lastResort: true },
-    };
+    return { ...publicPart, preKey, kyberPreKey: kyber ? { ...kyber, lastResort: false } : { ...kyberLastResort, lastResort: true } };
   };
 
   return {
-    network,
-
     publishPreKeyBundle: async (publication) => {
       const user = userKey(userOf(publication.party));
-      const deviceId = publication.party.deviceId;
+      const { registrationId, party: { deviceId } } = publication;
       const device = `${user}:${deviceId}`;
-      const { registrationId } = publication;
-      await forgetOtherGenerations(device, registrationId);
+      const stale = (await store.keys(keys.anyOneTimeOf(device))).filter((key) => !key.includes(`:${device}:${registrationId}:`));
+      await Promise.all(stale.map((key) => store.del(key)));
       const stored: StoredBundle = {
         deviceId,
         registrationId,
@@ -123,63 +124,77 @@ export function createFakeWhatsAppPeer({ store }: FakeWhatsAppOptions): External
         signedPreKey: publication.signedPreKey,
         kyberLastResort: publication.kyberLastResort,
       };
-      await store.set(bundleKey(user, deviceId), JSON.stringify(stored), RETENTION_SECONDS);
+      await store.set(keys.bundle(user, deviceId), JSON.stringify(stored), RETENTION_SECONDS);
+      const offer = (kind: OneTimeKind, keyId: number, value: unknown) =>
+        store.setnx(keys.oneTime(kind, device, registrationId, keyId), JSON.stringify(value), RETENTION_SECONDS);
       await Promise.all([
-        ...(publication.oneTimePreKeys ?? []).map((key) =>
-          store.setnx(oneTimeKey('ec', device, registrationId, key.keyId), JSON.stringify(key), RETENTION_SECONDS),
-        ),
-        ...(publication.kyberPreKeys ?? []).map((key) =>
-          store.setnx(oneTimeKey('kyber', device, registrationId, key.keyId), JSON.stringify(key), RETENTION_SECONDS),
-        ),
+        ...(publication.oneTimePreKeys ?? []).map((key) => offer('ec', key.keyId, key)),
+        ...(publication.kyberPreKeys ?? []).map((key) => offer('kyber', key.keyId, key)),
       ]);
     },
 
     fetchPreKeyBundles: async (target) => {
       const user = userKey(target);
-      const keys = (await store.keys(`${prefix}:bundle:${user}:*`)).sort((a, b) => Number(lastSegment(a)) - Number(lastSegment(b)));
-      const stored = (await Promise.all(keys.map(async (key) => parse<StoredBundle>(await store.get(key))))).filter(
+      const found = (await store.keys(keys.bundlesOf(user))).sort((a, b) => Number(lastSegment(a)) - Number(lastSegment(b)));
+      const stored = (await Promise.all(found.map(async (key) => parse<StoredBundle>(await store.get(key))))).filter(
         (bundle): bundle is StoredBundle => bundle !== null,
       );
       if (stored.length === 0) throw new ExternalPeerError(EXTERNAL_PEER_ERROR_CODES.PEER_UNKNOWN);
       return Promise.all(stored.map((bundle) => bundleFor(user, bundle)));
     },
+  };
+}
 
+function envelopeRelay(store: PeerStore, keys: StorageKeys): Pick<ExternalPeer, 'deliverEnvelope' | 'receiveEnvelopes' | 'acknowledge'> {
+  return {
     deliverEnvelope: async ({ from, to, type, body }) => {
       const envelopeId = randomUUID();
       const stamp = monotonicStamp();
       const acceptedAt = new Date(Math.floor(stamp / 1000)).toISOString();
       const stored: StoredEnvelope = { envelopeId, from, type, body, acceptedAt };
-      await store.set(envelopeKey(partyKey(to), stamp, envelopeId), JSON.stringify(stored), RETENTION_SECONDS);
+      await store.set(keys.envelope(partyKey(to), stamp, envelopeId), JSON.stringify(stored), RETENTION_SECONDS);
       return { envelopeId, acceptedAt };
     },
 
     receiveEnvelopes: async (recipient) => {
-      const keys = (await store.keys(`${prefix}:env:${partyKey(recipient)}:*`)).sort();
-      const envelopes = await Promise.all(keys.map(async (key) => parse<StoredEnvelope>(await store.get(key))));
+      const found = (await store.keys(keys.envelopesOf(partyKey(recipient)))).sort();
+      const envelopes = await Promise.all(found.map(async (key) => parse<StoredEnvelope>(await store.get(key))));
       return envelopes.filter((envelope): envelope is StoredEnvelope => envelope !== null);
     },
 
     acknowledge: async ({ recipient, envelopeIds }) => {
-      const mine = await store.keys(`${prefix}:env:${partyKey(recipient)}:*`);
+      const mine = await store.keys(keys.envelopesOf(partyKey(recipient)));
       const acknowledged = mine.filter((key) => envelopeIds.includes(lastSegment(key)));
       await Promise.all(acknowledged.map((key) => store.del(key)));
       return acknowledged.length;
     },
+  };
+}
 
+function attachmentShelf(store: PeerStore, keys: StorageKeys): Pick<ExternalPeer, 'deliverAttachment' | 'fetchAttachment'> {
+  return {
     deliverAttachment: async ({ digest, bytes }) => {
       const actual = createHash('sha256').update(Buffer.from(bytes, 'base64')).digest('base64');
       if (actual !== digest) throw new ExternalPeerError(EXTERNAL_PEER_ERROR_CODES.DIGEST_MISMATCH);
       const attachmentId = randomUUID();
-      await store.set(`${prefix}:media:${attachmentId}`, JSON.stringify({ digest, bytes }), RETENTION_SECONDS);
+      await store.set(keys.media(attachmentId), JSON.stringify({ digest, bytes }), RETENTION_SECONDS);
       return { attachmentId, digest };
     },
 
     fetchAttachment: async (attachmentId) => {
-      const stored = parse<{ digest: string; bytes: string }>(await store.get(`${prefix}:media:${attachmentId}`));
+      const stored = parse<StoredAttachment>(await store.get(keys.media(attachmentId)));
       if (stored === null) throw new ExternalPeerError(EXTERNAL_PEER_ERROR_CODES.ATTACHMENT_UNKNOWN);
       return stored;
     },
   };
+}
+
+export type FakeWhatsAppOptions = { readonly store: PeerStore };
+
+export function createFakeWhatsAppPeer({ store }: FakeWhatsAppOptions): ExternalPeer {
+  const network: ExternalNetwork = 'whatsapp';
+  const keys = storageKeys(network);
+  return { network, ...preKeyDirectory(store, keys), ...envelopeRelay(store, keys), ...attachmentShelf(store, keys) };
 }
 
 type MemoryEntry = { readonly value: string; readonly expiresAt: number | null };
