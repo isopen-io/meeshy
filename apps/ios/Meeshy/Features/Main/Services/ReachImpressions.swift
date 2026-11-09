@@ -5,7 +5,7 @@ import MeeshyUI
 
 // MARK: - Une apparition à l'écran = une impression (#10483)
 
-/// Règle de comptage du porteur (2026-10-13) : un contenu se compte CHAQUE fois
+/// Règle de comptage du porteur: un contenu se compte CHAQUE fois
 /// qu'il est listé, mécaniquement ou réellement — aucun dédoublonnage, ni dans
 /// le temps ni par montage — hors deux vues qui montrent le MÊME contenu au même
 /// endroit (`ReachPresence`, #11037). Ce qui ne compte pas, c'est un re-rendu : SwiftUI
@@ -54,13 +54,13 @@ struct ReachImpressionModifier: ViewModifier {
 /// Un AFFICHAGE, pas une apparition de vue (#11037). La grande rangée du rail
 /// et sa rangée épinglée montrent les mêmes anneaux : pendant le fondu du
 /// défilement les deux sont montées, et la rangée épinglée se monte et se
-/// démonte à chaque passage du seuil. Mesuré en production (2026-10-19) :
+/// démonte à chaque passage du seuil. Mesuré en production:
 /// 12 % des impressions répétées du rail arrivaient moins de 2 s après la
 /// précédente, pour le même lecteur et la même story.
 ///
 /// Un contenu ne compte qu'en entrant à l'écran alors qu'aucune vue ne le
 /// montre déjà, et pas s'il revient moins de `rejoinGrace` après en être sorti.
-/// Un vrai retour reste un nouvel affichage : la règle du porteur (2026-10-13)
+/// Un vrai retour reste un nouvel affichage: la règle du porteur
 /// compte chaque affichage des autres lecteurs.
 @MainActor
 final class ReachPresence {

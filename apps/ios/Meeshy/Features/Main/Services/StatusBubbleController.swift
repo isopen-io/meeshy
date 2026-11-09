@@ -140,8 +140,7 @@ struct StatusBubbleOverlayModifier: ViewModifier {
     /// les présentations modales (sheet / fullScreenCover) posent le leur.
     /// Poser le modificateur sur des vues sœurs (une carte de feed, une colonne
     /// iPad, un écran poussé) rendait une bulle PAR hôte, chacune convertissant
-    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes,
-    /// bug 2026-07-30).
+    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes).
     ///
     /// La frontière est la PRÉSENTATION, pas la hiérarchie de vues : une
     /// `.sheet` a son propre `PresentationHostingController` et l'overlay du

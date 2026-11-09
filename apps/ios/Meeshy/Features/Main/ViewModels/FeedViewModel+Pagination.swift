@@ -113,7 +113,7 @@ extension FeedViewModel {
                 // lente ne peut plus écraser une plus récente dans le cache, et
                 // « main-feed » est écrit quand `loadFeed` rend la main. Le test
                 // `…doesNotReturnBeforeTheFetchedPageIsPersisted` en est le témoin ;
-                // la CI du 2026-08-26 en était le symptôme (cache pollué entre tests).
+                // la CI en était le symptôme (cache pollué entre tests).
                 await bestEffort("feedViewModelPagination.feedCache.save", category: .cache) { try await feedCache.save(fetched, for: "main-feed") }
 
                 // Persist to GRDB alongside cache

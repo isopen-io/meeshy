@@ -92,8 +92,7 @@ enum ConversationFirstRenderWarmup {
         done = true
         // PILE PLATE OBLIGATOIRE : appelé depuis un `.task` SwiftUI, ce code
         // s'exécuterait au point courant de l'executor MainActor — potentiellement
-        // au fond du rendu de RootView (dump du 2026-07-30 21:12 : le warm-up
-        // lui-même a débordé, ~80 frames sous App.main). Un dispatch async
+        // au fond du rendu de RootView (~80 frames sous App.main). Un dispatch async
         // repart du drain du runloop (~15 frames), la marge de pile est alors
         // maximale pour les résolutions de métadonnées.
         DispatchQueue.main.async { performWarmup() }
@@ -150,7 +149,7 @@ enum ConversationFirstRenderWarmup {
     /// premier rendu. `topActiveMembersList` reproduit le chemin complet du
     /// crash (headerAvatarView → topActiveMembers → messages).
     ///
-    /// **TOUS les `@Published` sont lus, et ce n'est pas du zèle (2026-09-03).**
+    /// **TOUS les `@Published` sont lus, et ce n'est pas du zèle.**
     /// Cette liste n'en nommait que cinq, choisies à chaque crash d'après la
     /// trame fautive de ce crash-là. Une liste ainsi tenue n'énonce pas un
     /// invariant : elle énonce l'historique des pannes DÉJÀ VUES, et se périme
@@ -227,7 +226,7 @@ enum ConversationFirstRenderWarmup {
     }
 
     /// Même patron que `warmUpViewModelKeyPaths`, pour `ReadingModeController`
-    /// (2026-08-17, `Meeshy-2026-08-17-181310` env.) : `readingModeChipModel`
+    /// `readingModeChipModel`
     /// (`ConversationView`, section chip de mode) lit `readingModeController
     /// .decision.reason` — première matérialisation du KeyPath `@Published
     /// decision` (subscript `_enclosingInstance`) jamais vue avant ce lot

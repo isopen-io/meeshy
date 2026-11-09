@@ -3,7 +3,7 @@ import MeeshySDK
 
 /// **Pourquoi un contenu n'a pas pu s'ouvrir — la cause que l'écran doit DIRE (#6508).**
 ///
-/// Le 2026-09-14, un 500 serveur (#6503) a fait afficher « vérifiez votre
+/// Le, un 500 serveur (#6503) a fait afficher « vérifiez votre
 /// connexion » à chaque ouverture de contenu depuis une notification : l'app ne
 /// distinguait que « 404 » et « tout le reste », et « tout le reste » accusait
 /// le réseau. Quatre causes, parce que l'utilisateur n'a pas la même chose à

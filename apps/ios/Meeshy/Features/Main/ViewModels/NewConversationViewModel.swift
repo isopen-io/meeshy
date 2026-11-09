@@ -65,8 +65,7 @@ final class NewConversationViewModel: ObservableObject {
     @Published private(set) var isSearching = false
     /// `true` when the LAST `performSearch` call failed on a network/server
     /// error — distinguishes "zero results" from "the search itself broke"
-    /// (audit 2026-07-20: `performSearch`'s catch cleared `searchResults`
-    /// with no log and no distinct state, so a failed search looked
+    /// (so a failed search looked
     /// identical to a genuine empty result set). Cleared at the start of
     /// every new search attempt.
     @Published private(set) var searchFailed = false
@@ -211,8 +210,7 @@ final class NewConversationViewModel: ObservableObject {
             searchFailed = true
             // `query` is free-text the user typed to look up a contact (name,
             // email fragment, phone number…) — logged `.private` so it isn't
-            // persisted in cleartext by the unified logging system (fix
-            // 2026-07-21; matches the existing `.private` convention for
+            // persisted in cleartext by the unified logging system (matches the existing `.private` convention for
             // user-entered PII, e.g. `MagicLinkView`'s email log).
             Logger.network.warning("[NewConversationViewModel] user search failed for query=\(query, privacy: .private): \(error.localizedDescription, privacy: .public)")
         }
@@ -294,8 +292,7 @@ final class NewConversationViewModel: ObservableObject {
     ///
     /// Deliberately NOT routed through the `.createConversation` outbox kind
     /// (`OutboxDispatcher.dispatchCreateConversation`) despite that kind
-    /// existing and never being enqueued anywhere (audit 2026-07-20,
-    /// "OutboxKinds morts"): the outbox is fire-and-forget/eventually
+    /// existing and never being enqueued anywhere ("OutboxKinds morts"): the outbox is fire-and-forget/eventually
     /// consistent — its dispatcher discards the POST response body — while
     /// this call site needs the created `MeeshyConversation` SYNCHRONOUSLY
     /// to navigate the user into it. Reconciling/removing the dead kind

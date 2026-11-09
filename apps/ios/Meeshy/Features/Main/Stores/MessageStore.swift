@@ -230,8 +230,7 @@ public final class MessageStore: ObservableObject {
         let initialWindowSize = Self.initialWindowSize
         let repository = MessageRepository(persistence: persistence)
 
-        // La lecture de fenêtre part HORS du MainActor (audit fluidité
-        // 2026-08-26). En `.latest` ancré elle était SANS PLAFOND — après une
+        // La lecture de fenêtre part HORS du MainActor. En `.latest` ancré elle était SANS PLAFOND — après une
         // remontée profonde du fil, chaque notification d'écriture GRDB
         // (message entrant, accusé de livraison/lecture, réaction, tick de
         // retry) rematérialisait des MILLIERS de lignes SQLite sur la boucle

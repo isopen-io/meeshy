@@ -15,8 +15,7 @@ import os
 /// avoids by reading `presenceManager` as a plain (unobserved) computed
 /// property. `presenceVersion`'s VALUE is irrelevant — only the CHANGE is
 /// the signal; consumers observe THIS object (`@ObservedObject`) instead of
-/// `PresenceManager`, keeping "Zero Unnecessary Re-render" intact (audit
-/// 2026-07-20, "pastilles de présence jamais rafraîchies sur user:status").
+/// `PresenceManager`, keeping "Zero Unnecessary Re-render" intact ("pastilles de présence jamais rafraîchies sur user:status").
 @MainActor
 final class PresenceRefreshSignal: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -199,7 +198,7 @@ final class PresenceManager: ObservableObject {
     /// compris, activité fraîche (`noteActivity`) comprise. Seules les sources
     /// vivantes (`presence:snapshot`, `user:status`, typing:start) remplacent
     /// une présence connue. Jumeau iOS de F10 (web `mergeParticipants(_,
-    /// { presence: 'keep-existing' })`) — chantier confidentialité 2026-08-26.
+    /// { presence: 'keep-existing' })`) — chantier confidentialité.
     func seed(from conversations: [APIConversation], currentUserId: String) {
         let listed = conversations
             .flatMap { $0.participants ?? [] }
