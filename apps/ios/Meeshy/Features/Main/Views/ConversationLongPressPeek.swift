@@ -79,8 +79,10 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
             }
             .frame(maxWidth: .infinity)
             // La bande du haut reste au voile : visible, et un toucher la ferme
-            // (`LongPressVeil`, sous l'aperçu, la reçoit — #17258).
-            .padding(.top, band)
+            // (`LongPressVeil`, sous l'aperçu, la reçoit — #17258). L'aperçu,
+            // réduit à 80 % (#17274), se centre dans ce qui reste : la liste
+            // se voit au-dessus et au-dessous de lui.
+            .padding(.top, band + layout.verticalSlack / 2)
         }
         .padding(.vertical, MeeshySpacing.sm)
         .dismissOnEscape(onDismiss)
@@ -119,7 +121,7 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
                 if measured > 0 { leadHeight = measured }
             }
         }
-        .frame(width: layout.cardWidth, height: layout.menuHeight(progress: progress), alignment: .top)
+        .frame(width: layout.menuWidth, height: layout.menuHeight(progress: progress), alignment: .top)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
         // Liquid Glass natif iOS 26, matériau avant : le conteneur du menu
         // custom (garde `ConversationMenuSystemDesignGuardTests`).
