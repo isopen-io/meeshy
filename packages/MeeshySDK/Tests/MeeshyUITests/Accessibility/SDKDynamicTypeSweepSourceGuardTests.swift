@@ -255,6 +255,7 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Game/RankBlasonView.swift": 1,
         "Game/TrophyView.swift": 1,
         "Media/AudioPlayerChips.swift": 2,
+        "Media/CodeViewerView.swift": 1,
         "Media/MediaTranscriptionView.swift": 1,
         "Media/MeeshyVideoPlayer+InlineRenderer.swift": 2,
         "Navigation/CollapsibleHeader.swift": 2,

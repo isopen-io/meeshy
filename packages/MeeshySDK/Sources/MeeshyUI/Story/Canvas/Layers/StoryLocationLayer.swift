@@ -22,7 +22,11 @@ public final class StoryLocationLayer: CALayer {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    public private(set) nonisolated(unsafe) var locationObject: StoryLocationObject?
+    private nonisolated let locationObjectSlot = Locked<StoryLocationObject?>(nil)
+    public private(set) nonisolated var locationObject: StoryLocationObject? {
+        get { locationObjectSlot.read { $0 } }
+        set { locationObjectSlot.mutate { $0 = newValue } }
+    }
 
     /// Palette de marque MeeshyColors — jamais de couleur système en dur
     /// (`packages/MeeshySDK/CLAUDE.md`, Visual Identity).
