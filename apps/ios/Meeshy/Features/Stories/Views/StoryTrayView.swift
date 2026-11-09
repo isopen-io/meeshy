@@ -470,6 +470,8 @@ private struct MyStoryButton: View {
                 .font(MeeshyFont.emoji(MeeshyFont.title3Size))
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .background(Circle().fill(theme.backgroundPrimary))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))

@@ -308,6 +308,8 @@ struct MyStoriesView: View {
                 .foregroundColor(.white)
                 .frame(width: 32, height: 32)
                 .adaptiveGlassProminent(in: Circle(), tint: accentColor)
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "story.mine.create", defaultValue: "Créer une story"))

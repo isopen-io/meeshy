@@ -132,6 +132,8 @@ struct StoryComposerBarView: View {
                 .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .frame(width: 22, height: 22)
                 .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 22))
         }
         .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
     }

@@ -372,6 +372,8 @@ struct StoryLanguageDetailView: View {
             .tint(langColor)
             .frame(width: 26, height: 26)
             .contentShape(Circle())
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: 26))
         }
         .disabled(isRetranslating)
         .buttonStyle(.plain)

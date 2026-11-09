@@ -60,6 +60,8 @@ struct AffiliateView: View {
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
