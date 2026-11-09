@@ -3418,6 +3418,8 @@
 		C155DBA7DC41C19972231C2E /* MeeshyFocusFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C42F142B9C0642560892C41 /* MeeshyFocusFilter.swift */; };
 		C178219ADB367BCFF3581991 /* NativeMessageEditMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BF41DC10291662E61A497A /* NativeMessageEditMenu.swift */; };
 		C184958E212A43174F241FE1 /* ComposerSceneFrise+Ruler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AD9E0D5BE321DEF33490623 /* ComposerSceneFrise+Ruler.swift */; };
+		06A4D8DCA5975582AAD7E9BA /* ComposerSceneFrise+Metrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3961527744C7E48C88F4565 /* ComposerSceneFrise+Metrics.swift */; };
+		FD9EDB20D05251AFE9C99815 /* ComposerSceneFrise+Copy.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACCC96887A8FF70FBC268653 /* ComposerSceneFrise+Copy.swift */; };
 		C184EAA2819432A72B3FDD5B /* ShareExtractionReductionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42E624AB1BB6F7DF1A64F7A /* ShareExtractionReductionTests.swift */; };
 		C18570A9AC847A809015AE02 /* ComposerObjectEditorView+Mentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81ED00C124955F6D32236575 /* ComposerObjectEditorView+Mentions.swift */; };
 		C189C3472373B5A865C9D4E7 /* MessageListView+CoveredUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C82CF6AB106FC068875BB1 /* MessageListView+CoveredUpdate.swift */; };
@@ -7043,6 +7045,8 @@
 		8AB2E10D7BAC17321AF79829 /* BubbleSwipeContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleSwipeContainer.swift; sourceTree = "<group>"; };
 		8ACD57CF654939126C93D497 /* PostDetailView+CommentComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PostDetailView+CommentComposer.swift"; sourceTree = "<group>"; };
 		8AD9E0D5BE321DEF33490623 /* ComposerSceneFrise+Ruler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComposerSceneFrise+Ruler.swift"; sourceTree = "<group>"; };
+		C3961527744C7E48C88F4565 /* ComposerSceneFrise+Metrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComposerSceneFrise+Metrics.swift"; sourceTree = "<group>"; };
+		ACCC96887A8FF70FBC268653 /* ComposerSceneFrise+Copy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComposerSceneFrise+Copy.swift"; sourceTree = "<group>"; };
 		8ADEB42F50C98212C5891322 /* NotificationService+Detail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationService+Detail.swift"; sourceTree = "<group>"; };
 		8AF1366BF7C109C9BCA822C6 /* EndToEndPlaintextJanitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndPlaintextJanitorTests.swift; sourceTree = "<group>"; };
 		8AF18E7C13EF736BF8343A46 /* StoryLanguageQuickBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryLanguageQuickBar.swift; sourceTree = "<group>"; };
@@ -12871,6 +12875,8 @@
 				B0CB3ECC1B129BCFF23CFC72 /* ComposerSceneFrise.swift */,
 				3B4DD9B9FFE5B4ACC13113CE /* ComposerSceneFrise+BarContent.swift */,
 				8AD9E0D5BE321DEF33490623 /* ComposerSceneFrise+Ruler.swift */,
+				C3961527744C7E48C88F4565 /* ComposerSceneFrise+Metrics.swift */,
+				ACCC96887A8FF70FBC268653 /* ComposerSceneFrise+Copy.swift */,
 				BB91CF0E500B2F28CF2A8C60 /* ComposerSceneIntake.swift */,
 				AD01E4A9721C6CFE902ED572 /* ComposerSceneIntakeGhost.swift */,
 				13D0DA52E20B08D15820C47F /* ComposerSceneIntakePreview.swift */,
@@ -16076,6 +16082,8 @@
 				0BBF942BB89A9BF01F6B675B /* ComposerSceneFraming.swift in Sources */,
 				33A03CA15B85CD314834269C /* ComposerSceneFrise+BarContent.swift in Sources */,
 				C184958E212A43174F241FE1 /* ComposerSceneFrise+Ruler.swift in Sources */,
+				06A4D8DCA5975582AAD7E9BA /* ComposerSceneFrise+Metrics.swift in Sources */,
+				FD9EDB20D05251AFE9C99815 /* ComposerSceneFrise+Copy.swift in Sources */,
 				132C2FAEB995A0699188DCDA /* ComposerSceneFrise.swift in Sources */,
 				93DDA9B1E6FF85E6F6599075 /* ComposerSceneIntake.swift in Sources */,
 				696A00246355E33545F24AB0 /* ComposerSceneIntakeGhost.swift in Sources */,
