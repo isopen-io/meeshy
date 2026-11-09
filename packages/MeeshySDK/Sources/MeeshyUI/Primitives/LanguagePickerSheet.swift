@@ -179,7 +179,7 @@ public struct LanguagePickerSheet: View {
         ZStack(alignment: .bottom) {
             (style == .dark ? Color.black.opacity(0.6) : Color.black.opacity(MeeshyOpacity.medium))
                 .ignoresSafeArea()
-                .onTapGesture { dismiss() }
+                .meeshyTapAction(label: String(localized: "common.close", bundle: .module)) { dismiss() }
 
             VStack(spacing: 0) {
                 dragHandle
@@ -238,9 +238,10 @@ public struct LanguagePickerSheet: View {
                     onDismiss?()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xxl))
+                        .meeshyScaledFont(MeeshyIconSize.xxl)
                         .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
                 }
+                .accessibilityLabel(String(localized: "common.close", bundle: .module))
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.bottom, MeeshySpacing.sm)
@@ -253,7 +254,7 @@ public struct LanguagePickerSheet: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray)
-                .font(.system(size: MeeshyIconSize.sm))
+                .meeshyScaledFont(MeeshyIconSize.sm)
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))

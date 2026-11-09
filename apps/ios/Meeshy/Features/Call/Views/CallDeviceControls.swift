@@ -28,7 +28,7 @@ struct CallPillGlyph: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: diameter * 0.4, weight: .semibold))
+            .font(MeeshyFont.fixedGlyph(diameter * 0.4, weight: .semibold))
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
             .background(Circle().fill(CallButtonFill.color(for: kind)))

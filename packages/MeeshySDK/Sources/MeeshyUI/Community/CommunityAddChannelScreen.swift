@@ -60,7 +60,7 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
+                .meeshyScaledFont(40)
                 .foregroundColor(theme.textMuted)
             Text(viewModel.searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun résultat", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium, design: .rounded))
@@ -128,7 +128,7 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
 
                     if conversation.communityId != nil {
                         Label(String(localized: "community.addChannel.otherCommunity", defaultValue: "Autre communauté", bundle: .module), systemImage: "arrow.triangle.swap")
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                             .foregroundColor(MeeshyColors.amber500)
                     }
                 }
@@ -141,11 +141,11 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
                     .tint(MeeshyColors.brandPrimary)
             } else if conversation.communityId != nil {
                 Image(systemName: "arrow.forward.circle.fill")
-                    .font(.system(size: MeeshyIconSize.xl))
+                    .meeshyScaledFont(MeeshyIconSize.xl)
                     .foregroundColor(MeeshyColors.amber500)
             } else {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: MeeshyIconSize.xl))
+                    .meeshyScaledFont(MeeshyIconSize.xl)
                     .foregroundColor(MeeshyColors.brandPrimary)
             }
         }

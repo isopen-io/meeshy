@@ -300,6 +300,9 @@ struct FocalQuotedReplyView: View, Equatable {
         .onTapGesture {
             jumpToOriginal()
         }
+        .accessibilityAction(named: Text(String(localized: "bubble.reply.go_to_quoted", defaultValue: "Aller au message cité", bundle: .main))) {
+            jumpToOriginal()
+        }
     }
 
     /// Une image ou une vidéo citée se montre à la largeur d'une scène citée
@@ -331,14 +334,18 @@ struct FocalQuotedReplyView: View, Equatable {
         if thumbnailURL != nil || quotedMessageMediaFace != nil {
             quotedMediaFace
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    if hasTappableMedia {
-                        onQuotedMediaTap?(reference)
-                    } else {
-                        jumpToOriginal()
-                    }
-                }
+                .onTapGesture { activateQuotedMedia() }
+                .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reference))
+                .accessibilityAction { activateQuotedMedia() }
+        }
+    }
+
+    private func activateQuotedMedia() {
+        if hasTappableMedia {
+            onQuotedMediaTap?(reference)
+        } else {
+            jumpToOriginal()
         }
     }
 

@@ -252,9 +252,9 @@ public struct ConversationScrollControlsView: View {
                 case .offline:
                     HStack(spacing: MeeshySpacing.sm) {
                         Image(systemName: "wifi.slash")
-                            .font(.system(size: MeeshyIconSize.xs, weight: .bold))
+                            .meeshyScaledFont(MeeshyIconSize.xs, weight: .bold)
                         Text(String(localized: "conversation.offline", defaultValue: "Hors ligne", bundle: .module))
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
                     .foregroundColor(contentColor)
                     .padding(.horizontal, MeeshySpacing.lg)
@@ -287,7 +287,7 @@ public struct ConversationScrollControlsView: View {
     private var loadingNewerContent: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Text(Self.loadingNewerLabel)
-                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .lineLimit(1)
             pulsingDots
         }
@@ -328,7 +328,7 @@ public struct ConversationScrollControlsView: View {
                 .opacity(searchPulse ? 1.0 : 0.6)
 
             Text(String(localized: "conversation.searching", defaultValue: "Recherche…", bundle: .module))
-                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .lineLimit(1)
 
             Spacer(minLength: 0)
@@ -459,7 +459,7 @@ public struct ConversationScrollControlsView: View {
                 // Count headline — only past the 5-message threshold (#3921).
                 if Self.shouldShowCountHeadline(unreadCount: unreadCount) {
                     Text(String(localized: "conversation.unread_messages", defaultValue: "\(unreadCount) messages", bundle: .module))
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .heavy))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .heavy))
                         .lineLimit(1)
                 }
 
@@ -507,17 +507,17 @@ public struct ConversationScrollControlsView: View {
     private var lastMessageLine: some View {
         if let text = Self.lastMessageLineText(senderName: lastUnreadMessageSenderName, content: lastUnreadMessageContent) {
             Text(text)
-                .font(.system(size: MeeshyFont.smallSize, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                 .lineLimit(1)
                 .opacity(0.95)
         } else if let label = unreadAttachmentTypeLabel {
             HStack(spacing: MeeshySpacing.xs) {
                 if let symbol = unreadAttachmentSymbol {
                     Image(systemName: symbol)
-                        .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
+                        .meeshyScaledFont(MeeshyIconSize.xxs, weight: .semibold)
                 }
                 Text(label)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                     .lineLimit(1)
                     .opacity(0.95)
             }
@@ -536,7 +536,7 @@ public struct ConversationScrollControlsView: View {
             unreadAttachmentPreview
             if let detail = unreadAttachmentDetail, !detail.isEmpty {
                 Text(detail)
-                    .font(.system(size: MeeshyFont.microSize, weight: .regular))
+                    .meeshyScaledFont(MeeshyFont.microSize, weight: .regular)
                     .lineLimit(1)
                     .opacity(0.85)
             }

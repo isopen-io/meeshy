@@ -230,6 +230,7 @@ struct DiscoverTab: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: match.user.id)
             )
             .onTapGesture { router.openProfileSheet(profileUser) }
+            .accessibilityAction(named: Text(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))) { router.openProfileSheet(profileUser) }
             .countsImpression(of: statusViewModel.statusForUser(userId: match.user.id)?.id) {
                 statusViewModel.trackImpression($0)
             }
@@ -255,6 +256,7 @@ struct DiscoverTab: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))
+            .accessibilityAction { router.openProfileSheet(profileUser) }
 
             Spacer()
 
@@ -345,6 +347,7 @@ struct DiscoverTab: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
             .onTapGesture { router.openProfileSheet(profileUser) }
+            .accessibilityAction(named: Text(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))) { router.openProfileSheet(profileUser) }
             .countsImpression(of: statusViewModel.statusForUser(userId: user.id)?.id) {
                 statusViewModel.trackImpression($0)
             }
@@ -363,6 +366,7 @@ struct DiscoverTab: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))
+            .accessibilityAction { router.openProfileSheet(profileUser) }
 
             Spacer()
 

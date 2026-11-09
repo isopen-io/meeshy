@@ -226,7 +226,7 @@ struct ComposerToolRow: View, Equatable {
             .overlay(alignment: .topTrailing) {
                 if badge > 0 {
                     Text("\(badge)")
-                        .font(.system(size: MeeshyFont.microSize, weight: .bold))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .bold)
                         .foregroundStyle(.white)
                         .frame(minWidth: 15, minHeight: 15)
                         .background(accent)

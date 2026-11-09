@@ -146,7 +146,7 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
 
             if alreadyInvited {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: MeeshyIconSize.xl))
+                    .meeshyScaledFont(MeeshyIconSize.xl)
                     .foregroundColor(MeeshyColors.success)
             } else {
                 Button {

@@ -236,6 +236,7 @@ struct GroupCallStageView: View {
         // commandes) le délai d'un éventuel second toucher.
         .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
         .onTapGesture { onStageTap() }
+        .accessibilityAction(named: Text(String(localized: "call.stage.controls.toggle.a11y", defaultValue: "Afficher ou masquer les contrôles", bundle: .main))) { onStageTap() }
         .overlay(alignment: .topTrailing) { spotlightControls.padding(MeeshySpacing.sm) }
     }
 

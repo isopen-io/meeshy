@@ -168,6 +168,7 @@ struct GalleryScenePage: View, Equatable {
         // (`StoryCanvasUIView.gestureRecognizerShouldBegin`) : le doigt reste au
         // conteneur, qui répond comme celui des pages image et vidéo.
         .onTapGesture { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onEnterStage(.tap) }
         .offset(y: offset.height)
         // `isActive` désarme les pages VOISINES — la raison est écrite au SDK
         // (`MediaStageGestures.longPressArmed`) et reprise par la page vidéo.

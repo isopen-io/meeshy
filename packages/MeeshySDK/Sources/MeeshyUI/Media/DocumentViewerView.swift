@@ -98,7 +98,7 @@ public struct DocumentViewerView: View {
             }
 
             Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                 .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
                 .lineLimit(1)
                 .frame(width: 60)
@@ -130,26 +130,26 @@ public struct DocumentViewerView: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                    .font(.system(size: context.isCompact ? 12 : 13, weight: .semibold))
+                    .meeshyScaledFont(context.isCompact ? 12 : 13, weight: .semibold)
                     .foregroundColor(isDark ? .white : .black)
                     .lineLimit(1)
 
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(docType.label)
-                        .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                         .foregroundColor(Color(hex: docType.color))
 
                     if attachment.fileSize > 0 {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(attachment.fileSizeFormatted)
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                             .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(String(localized: "media.document.pages", defaultValue: "\(pages) pages", bundle: .module))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                             .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
                 }
@@ -164,7 +164,7 @@ public struct DocumentViewerView: View {
             if context.showsDeleteButton, let onDelete = onDelete {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.sm))
+                        .meeshyScaledFont(MeeshyIconSize.sm)
                         .foregroundColor(MeeshyColors.error)
                 }
                 .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
@@ -335,7 +335,7 @@ public struct DocumentFullSheet: View {
     private var noPreviewView: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: docType.icon)
-                .font(.system(size: MeeshyIconSize.hero))
+                .meeshyScaledFont(MeeshyIconSize.hero)
                 .foregroundColor(Color(hex: docType.color))
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
@@ -343,7 +343,7 @@ public struct DocumentFullSheet: View {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
-                .font(.system(size: MeeshyFont.labelSize))
+                .meeshyScaledFont(MeeshyFont.labelSize)
                 .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
 
             if attachment.fileSize > 0 {

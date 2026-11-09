@@ -151,7 +151,7 @@ struct CommunityLinksView: View {
             ZStack {
                 Circle().fill(accent.opacity(MeeshyOpacity.light)).frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
-                Image(systemName: "person.3.fill").font(.system(size: MeeshyIconSize.sm))
+                Image(systemName: "person.3.fill").font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm))
                     .foregroundColor(accent)
                     .accessibilityHidden(true)
             }

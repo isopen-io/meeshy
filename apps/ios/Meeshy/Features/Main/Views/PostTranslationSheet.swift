@@ -61,6 +61,8 @@ struct PostTranslationSheet: View {
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }

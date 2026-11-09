@@ -196,7 +196,7 @@ final class TalkieAdtsStreamDecoderTests: XCTestCase {
         let output: AVAudioFormat
         init(output: AVAudioFormat) { self.output = output }
 
-        func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus {
+        func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: @escaping TalkieAacInputBlock) -> AVAudioConverterOutputStatus {
             var status = AVAudioConverterInputStatus.haveData
             guard let pcm = buffer as? AVAudioPCMBuffer, block(1, &status) != nil, status == .haveData else {
                 (buffer as? AVAudioPCMBuffer)?.frameLength = 0

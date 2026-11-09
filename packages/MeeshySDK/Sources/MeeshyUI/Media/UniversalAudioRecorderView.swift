@@ -139,13 +139,14 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
                 }
             }
+            .accessibilityLabel(String(localized: "common.cancel", bundle: .module))
             .buttonStyle(.plain)
 
             Spacer()
 
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: context.contextIcon)
-                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                 Text(context.contextLabel)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
@@ -199,7 +200,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     private var durationDisplay: some View {
         VStack(spacing: MeeshySpacing.xs) {
             Text(MediaFormat.duration(recorder.duration))
-                .font(.system(size: 48, weight: .light, design: .monospaced))
+                .meeshyScaledFont(48, weight: .light, design: .monospaced)
                 .foregroundColor(.white)
                 .contentTransition(.numericText())
 
@@ -261,6 +262,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         .foregroundColor(MeeshyColors.errorStrong)
                 }
             }
+            .accessibilityLabel(String(localized: "common.delete", bundle: .module))
             .buttonStyle(.plain)
 
             // Stop (large)
@@ -316,6 +318,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         .foregroundColor(.white)
                 }
             }
+            .accessibilityLabel(String(localized: "story.voiceRecorder.start", bundle: .module))
             .buttonStyle(.plain)
 
             Text(String(localized: "audio.recorder.record", defaultValue: "Enregistrer", bundle: .module))

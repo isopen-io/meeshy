@@ -86,12 +86,13 @@ public struct CodeViewerView: View {
                             .foregroundStyle(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
                     .offset(x: 6, y: -6)
                 }
             }
 
             Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
-                .font(.system(size: 10, weight: .medium))
+                .meeshyScaledFont(10, weight: .medium)
                 .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
                 .lineLimit(1)
                 .frame(width: 60)
@@ -120,7 +121,7 @@ public struct CodeViewerView: View {
                 Spacer(minLength: 0)
 
                 Text(language.displayName)
-                    .font(.system(size: 9, weight: .heavy))
+                    .meeshyScaledFont(9, weight: .heavy)
                     .foregroundColor(langColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -130,7 +131,7 @@ public struct CodeViewerView: View {
 
                 if attachment.fileSize > 0 {
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 9, weight: .medium))
+                        .meeshyScaledFont(9, weight: .medium)
                         .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.3))
                 }
             }
@@ -145,7 +146,7 @@ public struct CodeViewerView: View {
                 HStack(spacing: 6) {
                     ProgressView().scaleEffect(0.6)
                     Text(String(localized: "media.code.loading", defaultValue: "Chargement...", bundle: .module))
-                        .font(.system(size: 10, weight: .medium))
+                        .meeshyScaledFont(10, weight: .medium)
                         .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
                 }
                 .frame(maxWidth: .infinity, minHeight: 60)
@@ -153,7 +154,7 @@ public struct CodeViewerView: View {
                 codePreview(code)
             } else {
                 Text(String(localized: "media.code.loadError", defaultValue: "Impossible de charger le fichier", bundle: .module))
-                    .font(.system(size: 10, weight: .medium))
+                    .meeshyScaledFont(10, weight: .medium)
                     .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
                     .frame(maxWidth: .infinity, minHeight: 40)
             }
@@ -178,7 +179,7 @@ public struct CodeViewerView: View {
             ForEach(Array(previewLines.enumerated()), id: \.offset) { index, attributed in
                 HStack(alignment: .top, spacing: 0) {
                     Text("\(index + 1)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .meeshyScaledFont(9, weight: .medium, design: .monospaced)
                         .foregroundColor(syntaxTheme.lineNumber)
                         .frame(width: 24, alignment: .trailing)
                         .padding(.trailing, 8)
@@ -192,9 +193,9 @@ public struct CodeViewerView: View {
             if totalLines > 10 {
                 HStack(spacing: 4) {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 8))
+                        .meeshyScaledFont(8)
                     Text(String(localized: "media.code.more_lines", defaultValue: "\(totalLines - 10) lignes de plus", bundle: .module))
-                        .font(.system(size: 9, weight: .medium))
+                        .meeshyScaledFont(9, weight: .medium)
                 }
                 .foregroundColor(langColor.opacity(0.7))
                 .padding(.top, 4)
@@ -267,16 +268,17 @@ public struct CodeFullSheet: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(hex: accentColor))
                     }
+                    .accessibilityLabel(String(localized: "common.close", bundle: .module))
                 }
 
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 6) {
                         Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .meeshyScaledFont(14, weight: .semibold)
                             .lineLimit(1)
 
                         Text(language.displayName)
-                            .font(.system(size: 10, weight: .heavy))
+                            .meeshyScaledFont(10, weight: .heavy)
                             .foregroundColor(langColor)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -295,6 +297,7 @@ public struct CodeFullSheet: View {
                             Image(systemName: "doc.on.doc")
                                 .foregroundColor(Color(hex: accentColor))
                         }
+                        .accessibilityLabel(String(localized: "media.code.copy.a11y", bundle: .module))
                     }
                 }
             }
@@ -311,7 +314,7 @@ public struct CodeFullSheet: View {
                 ForEach(Array(highlightedLines.enumerated()), id: \.offset) { index, attributed in
                     HStack(alignment: .top, spacing: 0) {
                         Text("\(index + 1)")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                             .foregroundColor(syntaxTheme.lineNumber)
                             .frame(width: lineNumWidth, alignment: .trailing)
                             .padding(.trailing, 10)
@@ -337,7 +340,7 @@ public struct CodeFullSheet: View {
     private var loadingOrErrorView: some View {
         VStack(spacing: 16) {
             Image(systemName: "chevron.left.forwardslash.chevron.right")
-                .font(.system(size: 48))
+                .meeshyScaledFont(48)
                 .foregroundColor(langColor)
 
             Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
@@ -345,7 +348,7 @@ public struct CodeFullSheet: View {
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.code.loadingFile", defaultValue: "Chargement du fichier...", bundle: .module))
-                .font(.system(size: 14))
+                .meeshyScaledFont(14)
                 .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
         }
     }

@@ -250,7 +250,7 @@ struct StoryViewerContainer: View {
                 Image(systemName: "exclamationmark.circle")
                     // Doctrine 84i/86i : glyphe hero d'etat d'erreur (~38pt, decoratif) → fige ;
                     // le titre ci-dessous porte le sens. Masque de VoiceOver.
-                    .font(.system(size: 38, weight: .regular))
+                    .font(MeeshyFont.fixedGlyph(38, weight: .regular))
                     .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
 

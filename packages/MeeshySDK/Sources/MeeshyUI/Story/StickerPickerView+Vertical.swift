@@ -82,12 +82,12 @@ extension StickerPickerView {
     private var searchTabContent: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .semibold))
+                .meeshyScaledFont(13, weight: .semibold)
                 .foregroundStyle(.secondary)
             TextField(String(localized: "sticker.sheet.search.prompt",
                              defaultValue: "Chercher un sticker…", bundle: .module),
                       text: $searchQuery)
-                .font(.system(size: 14))
+                .meeshyScaledFont(14)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             if !searchQuery.isEmpty {
@@ -250,7 +250,7 @@ extension StickerPickerView {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text(texte)
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -443,11 +443,11 @@ extension StickerPickerView {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
         HStack(spacing: 6) {
             if let icone {
-                Text(icone).font(.system(size: 13))
+                Text(icone).font(MeeshyFont.relative(13))
                     .accessibilityHidden(true)
             } else if let symbole {
                 Image(systemName: symbole)
-                    .font(.system(size: 11, weight: .semibold))
+                    .meeshyScaledFont(11, weight: .semibold)
                     .foregroundStyle(MeeshyColors.brandGradient)
                     .accessibilityHidden(true)
             }
@@ -456,7 +456,7 @@ extension StickerPickerView {
             // doit dire « ceci est un titre ». Un `.secondary` en corps 12
             // ordinaire se serait lu comme une légende de la grille du dessus.
             Text(titre.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)

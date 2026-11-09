@@ -36,7 +36,7 @@ struct AudioPlayerChipsColumn: View {
             HapticFeedback.light()
         } label: {
             Text(speed.label)
-                .font(.system(size: isCompact ? 9 : 10, weight: .bold, design: .monospaced))
+                .meeshyScaledFont(isCompact ? 9 : 10, weight: .bold, design: .monospaced)
                 .foregroundColor(chipFg)
                 .padding(.horizontal, isCompact ? 7 : 8)
                 .padding(.vertical, isCompact ? 2 : 3)

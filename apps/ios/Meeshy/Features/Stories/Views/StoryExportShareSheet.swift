@@ -87,7 +87,7 @@ struct StoryExportShareSheet: View {
                 // Doctrine 84i : hero décoratif de la sheet (~36pt) → taille figée
                 // (un glyphe hero qui grossit en XXXL déséquilibrerait l'en-tête) ;
                 // masqué du rotor car le sous-titre adjacent porte le sens.
-                .font(.system(size: 36, weight: .semibold))
+                .font(MeeshyFont.fixedGlyph(36, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
                 .accessibilityHidden(true)
             Text(String(localized: "story.export.share.subtitle",

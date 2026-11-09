@@ -105,7 +105,7 @@ public struct ConnectionActionView: View {
         HStack(spacing: MeeshySpacing.xs) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
             }
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
@@ -155,7 +155,7 @@ public struct ConnectionActionView: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "clock")
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                 Text(pendingLabel)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
@@ -176,7 +176,7 @@ public struct ConnectionActionView: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                 Text(addLabel)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }

@@ -33,7 +33,7 @@ struct CommunityLinkDetailView: View {
             ZStack {
                 Circle().fill(MeeshyColors.communityAccent.opacity(MeeshyOpacity.light)).frame(width: 60, height: 60)
                 // Glyphe héros dans un cercle de dimension fixe 60×60 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
-                Image(systemName: "person.3.fill").font(.system(size: MeeshyIconSize.xxxl))
+                Image(systemName: "person.3.fill").font(MeeshyFont.fixedGlyph(MeeshyIconSize.xxxl))
                     .foregroundColor(MeeshyColors.communityAccent)
                     .accessibilityHidden(true)
             }
@@ -97,7 +97,7 @@ struct CommunityLinkDetailView: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(MeeshyOpacity.light))
                     .frame(width: 52, height: 52)
                 // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
-                Image(systemName: icon).font(.system(size: MeeshyIconSize.xxl)).foregroundColor(color)
+                Image(systemName: icon).font(MeeshyFont.fixedGlyph(MeeshyIconSize.xxl)).foregroundColor(color)
                     .accessibilityHidden(true)
             }
             Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundColor(theme.textSecondary)

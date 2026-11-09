@@ -72,7 +72,7 @@ struct StoryRepublishComposer: View {
     /// fermeture, sans démonter la session.
     @State private var previewAssets: StoryPreviewAssets?
 
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -166,13 +166,13 @@ struct StoryRepublishComposer: View {
             },
             onDismiss: onFinish
         )
-        .modifier(StoryPreviewReaderCover(
+        .relayingMeeshyRouter(meeshyRouter) { $0.modifier(StoryPreviewReaderCover(
             assets: $previewAssets,
             storyViewModel: viewModel,
             statusViewModel: statusViewModel,
-            router: router,
+            router: $1,
             conversationList: conversationListViewModel
-        ))
+        )) }
     }
 
     /// **Ancrer une republication en POST** — `POST /posts/:id/repost`, le seul

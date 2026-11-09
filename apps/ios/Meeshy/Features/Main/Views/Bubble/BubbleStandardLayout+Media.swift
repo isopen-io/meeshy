@@ -78,14 +78,12 @@ extension BubbleStandardLayout {
                 makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
                     .frame(width: gridMaxWidth, height: 240)
             }
-
         case 2:
             HStack(spacing: gridSpacing) {
                 makeGridCell(items[0], cellPointWidth: halfW)
                 makeGridCell(items[1], cellPointWidth: halfW)
             }
             .frame(width: gridMaxWidth, height: 180)
-
         case 3:
             let leftW = (gridMaxWidth - gridSpacing) * 0.6
             let rightW = (gridMaxWidth - gridSpacing) * 0.4
@@ -99,7 +97,6 @@ extension BubbleStandardLayout {
                 .frame(width: rightW)
             }
             .frame(width: gridMaxWidth, height: 240)
-
         default:
             let overflow = items.count - 4
             VStack(spacing: gridSpacing) {
@@ -224,6 +221,7 @@ extension BubbleStandardLayout {
                     onReplyTap?(reply.reference.messageId)
                 }
             }
+            .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) { openQuotedTarget(reply) }
 
             Divider().background(dividerColor)
 
@@ -381,6 +379,7 @@ fileprivate struct BubbleGridCell: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
         })
         .onTapGesture(perform: handleTap)
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { handleTap() }
         .overlay(alignment: downloadPlacement.alignment) { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
         // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
@@ -724,8 +723,9 @@ private struct AttachmentBlurOverlayView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
         .accessibilityHint(hint ?? "")
-        .accessibilityAddTraits(.isButton)
         .onTapGesture { onReveal() }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onReveal() }
     }
 }
 

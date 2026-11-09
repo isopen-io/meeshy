@@ -132,7 +132,10 @@ public actor CacheCoordinator {
     /// #8674 — où dorment les caches des comptes quittés mais gardés, et qui
     /// possède le cache vivant. Injectables pour les témoins.
     nonisolated let accountArchiveDirectory: URL
-    nonisolated(unsafe) let ownerDefaults: UserDefaults
+    nonisolated let ownerDefaultsSuite: String?
+    nonisolated var ownerDefaults: UserDefaults {
+        ownerDefaultsSuite.flatMap(UserDefaults.init(suiteName:)) ?? .standard
+    }
 
     public init(
         messageSocket: any MessageSocketProviding = MessageSocketManager.shared,
@@ -145,7 +148,7 @@ public actor CacheCoordinator {
         self.socialSocket = socialSocket
         self.db = db
         self.accountArchiveDirectory = accountArchiveDirectory
-        self.ownerDefaults = ownerDefaultsSuite.flatMap(UserDefaults.init(suiteName:)) ?? .standard
+        self.ownerDefaultsSuite = ownerDefaultsSuite
 
         self.conversations = GRDBCacheStore(policy: .conversations, db: db, namespace: "conv", encrypted: true)
         self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg", encrypted: true)

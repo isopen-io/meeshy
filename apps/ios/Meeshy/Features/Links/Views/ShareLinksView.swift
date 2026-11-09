@@ -202,7 +202,7 @@ struct ShareLinksView: View {
                 // would overflow the frame. Kept fixed + hidden (the link name
                 // carries the meaning; doctrine 86i).
                 Image(systemName: link.isActive ? "link" : "link.badge.minus")
-                    .font(.system(size: MeeshyIconSize.md))
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.md))
                     .foregroundColor(link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
                     .accessibilityHidden(true)
             }

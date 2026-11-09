@@ -242,6 +242,8 @@ struct NearbyDiscoveryView: View {
                     .foregroundColor(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.backgroundSecondary.opacity(0.9)))
+                    .meeshyTapTarget()
+                    .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
             }
             .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
@@ -264,6 +266,8 @@ struct NearbyDiscoveryView: View {
                     .foregroundColor(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.backgroundSecondary.opacity(0.9)))
+                    .meeshyTapTarget()
+                    .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(

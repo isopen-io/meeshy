@@ -100,7 +100,7 @@ extension StickerPickerView {
             sectionHeader(symbole: Self.pageSymbol(.pack(pack.slug)), titre: pack.name) {
                 Text(String(format: String(localized: "sticker.sheet.pack.by", defaultValue: "par %@",
                                            bundle: .module), pack.author))
-                    .font(.system(size: 12, design: .rounded))
+                    .font(MeeshyFont.relative(12, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         }

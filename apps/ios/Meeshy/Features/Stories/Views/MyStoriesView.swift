@@ -193,17 +193,7 @@ struct MyStoriesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        onCreateStory()
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 32, height: 32)
-                            .adaptiveGlassProminent(in: Circle(), tint: accentColor)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "story.mine.create", defaultValue: "Créer une story"))
+                    createStoryButton
                 }
                 if !stories.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -309,6 +299,22 @@ struct MyStoriesView: View {
     /// `Picker` segmenté plutôt qu'un `TabView` paginé : le geste horizontal
     /// d'un `TabView` entre en concurrence avec le balayage de fermeture de la
     /// sheet, et les deux onglets y seraient instanciés en permanence.
+    private var createStoryButton: some View {
+        Button {
+            onCreateStory()
+        } label: {
+            Image(systemName: "plus")
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .adaptiveGlassProminent(in: Circle(), tint: accentColor)
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.mine.create", defaultValue: "Créer une story"))
+    }
+
     private var tabPicker: some View {
         Picker("", selection: $tab) {
             ForEach(visibleTabs) { tab in

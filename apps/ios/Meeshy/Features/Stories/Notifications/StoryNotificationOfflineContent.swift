@@ -36,7 +36,7 @@ public struct StoryNotificationOfflineContent: View {
 
             VStack(spacing: MeeshySpacing.xl) {
                 Image(systemName: cause.symbolName)
-                    .font(.system(size: 40))
+                    .font(MeeshyFont.fixedGlyph(40))
                     .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .accessibilityHidden(true)
                 VStack(spacing: MeeshySpacing.sm) {

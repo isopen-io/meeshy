@@ -124,7 +124,7 @@ extension PostDetailView {
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
-
+            .accessibilityAction { openMediaFullscreen(media) }
         case .video:
             let attachment = media.toMessageAttachment()
             VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
@@ -152,7 +152,6 @@ extension PostDetailView {
             }
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-
         case .audio:
             let audioAttachment = media.toMessageAttachment()
             // Le PORTEUR réel de CE média (repost cité si `owner` vient de
@@ -220,7 +219,6 @@ extension PostDetailView {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-
         case .document:
             HStack(spacing: MeeshySpacing.mdPlus) {
                 ZStack {
@@ -256,7 +254,6 @@ extension PostDetailView {
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
-
         }
     }
 
@@ -310,6 +307,7 @@ extension PostDetailView {
                                 ? String(format: String(localized: "a11y.post.media.more", defaultValue: "Voir les %d médias", bundle: .main), count)
                                 : String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
                             .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
+                            .accessibilityAction { openMediaFullscreen(visualMedia[3]) }
                         }
                     }
                 }
@@ -318,7 +316,6 @@ extension PostDetailView {
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         }
     }
-
     private func detailGridCell(_ media: FeedMedia) -> some View {
         return ZStack {
             ProgressiveCachedImage(
@@ -332,7 +329,6 @@ extension PostDetailView {
             .aspectRatio(contentMode: .fill)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
-
             if media.type == .video {
                 ZStack {
                     Circle().fill(.ultraThinMaterial).frame(width: 36, height: 36)
@@ -353,8 +349,8 @@ extension PostDetailView {
             ? String(localized: "a11y.post.media.video", defaultValue: "Vidéo partagée", bundle: .main)
             : String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
         .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
+        .accessibilityAction { openMediaFullscreen(media) }
     }
-
     private func openMediaFullscreen(_ media: FeedMedia) {
         guard media.type == .image || media.type == .video else { return }
         fullscreenMediaId = media.id

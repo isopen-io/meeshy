@@ -21,7 +21,7 @@ extension CallView {
                     Image(systemName: "chevron.down")
                         // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
                         // (diameter 40) → taille figée (ne doit pas déborder du cercle).
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.fixedGlyph(16, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .callControlGlass(diameter: 40, isActive: false, tint: .white)
                         // Visual glass circle stays 40pt (doctrine 82i), but the
@@ -45,7 +45,7 @@ extension CallView {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
                             // Doctrine 82i : glyphe de chrome dans un cadre
                             // glass fixe (diameter 40) → taille figée.
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MeeshyFont.fixedGlyph(15, weight: .semibold))
                             .foregroundStyle(Color.white)
                             .callControlGlass(diameter: 40, isActive: false, tint: .white)
                             // Cercle glass 40pt (doctrine 82i) mais cible
