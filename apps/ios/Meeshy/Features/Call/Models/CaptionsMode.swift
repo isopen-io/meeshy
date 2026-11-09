@@ -53,7 +53,7 @@ nonisolated enum TranscriptionCaptureAction: Equatable, Sendable {
 /// donc que chacun capture. Tant que la capture n'était liée qu'au panneau
 /// local, activer les sous-titres ne rendait l'utilisateur qu'ÉMETTEUR — le
 /// pair recevait tout, lui ne recevait rien tant que le pair n'activait pas
-/// de son côté (spec 2026-07-10 « toggle manuel, jamais automatique »).
+/// de son côté (jamais automatique »).
 ///
 /// La règle est maintenant : **ce device capture dès que quelqu'un écoute**,
 /// que ce soit son propre panneau ou celui d'un pair (signalé par

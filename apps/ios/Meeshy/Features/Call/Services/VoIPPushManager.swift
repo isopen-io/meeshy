@@ -62,7 +62,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     private var pendingTokenToRegister: String?
     private var authCancellable: AnyCancellable?
 
-    /// Audit 2026-05-21 — VoIP tokens are credentials; they no longer live in
+    /// VoIP tokens are credentials; they no longer live in
     /// UserDefaults. ``KeychainVoIPTokenStore`` writes them to the Keychain
     /// with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so the NSE can
     /// still read them in background. Inject for tests; the production shared

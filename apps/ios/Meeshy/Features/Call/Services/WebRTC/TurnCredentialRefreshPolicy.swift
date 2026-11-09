@@ -1,7 +1,7 @@
 import Foundation
 
 /// Ce que devient ICE quand des identifiants TURN frais viennent d'être posés
-/// (#8074 ; audit appels 2026-07-11 #9).
+/// (#8074).
 ///
 /// `updateIceServers` ne fait que `setConfiguration` : les allocations déjà
 /// faites gardent les anciens identifiants, qui expirent — et coturn refuse de

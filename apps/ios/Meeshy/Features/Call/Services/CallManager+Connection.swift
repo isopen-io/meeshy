@@ -35,7 +35,7 @@ extension CallManager {
         // relancer durationTask / heartbeat / haptics si re-déclenchée.
         if case .connected = callState { return }
 
-        // [Fix 2026-07-02] Le chrono CallKit du callee démarre au fulfill de
+        // [] Le chrono CallKit du callee démarre au fulfill de
         // l'answer action : la settle ICI (connexion réelle), pas au tap.
         settlePendingAnswerAction(fulfilled: true, reason: "connected")
         let wasReconnecting: Bool
@@ -43,7 +43,7 @@ extension CallManager {
 
         audio.activateAudioOnConnect()
 
-        // CALL-FIX 2026-06-06 — call established: stop ringback/ringtone + play the
+        // CALL-FIX — call established: stop ringback/ringtone + play the
         // "connected" cue. transitionToConnected is idempotent (guarded above) so
         // the cue plays exactly once. On a reconnect (wasReconnecting=true) the
         // ringback is already stopped, the cue already played, and the timer is

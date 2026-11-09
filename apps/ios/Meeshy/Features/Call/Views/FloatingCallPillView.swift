@@ -84,8 +84,8 @@ enum CallPillStatus: Equatable {
 /// le fond remonte sous la status bar jusqu'au bord haut du viewport
 /// (immersif). Toucher la
 /// bannière revient au plein écran ; le bouton « agrandir » dédié a été retiré
-/// (redondant avec le tap, retour user 2026-07-04), les chevrons décoratifs de
-/// bord aussi (retour user 2026-08-12). L'avatar réel du correspondant est
+/// (redondant avec le tap), les chevrons décoratifs de
+/// bord aussi. L'avatar réel du correspondant est
 /// résolu cache-first (Instant App) et l'état de connexion est porté par des
 /// glyphes code couleur, pas par du texte.
 struct FloatingCallPillView: View {
@@ -179,7 +179,7 @@ struct FloatingCallPillView: View {
         // Pleine largeur (façon barre d'appel WhatsApp) : la bannière s'étire
         // d'un bord à l'autre au sommet de l'app au lieu de flotter en capsule.
         .frame(maxWidth: .infinity)
-        // Retour user 2026-08-12 (second passage) : PLEINEMENT indigo. Plus de
+        // (second passage): PLEINEMENT indigo. Plus de
         // voile noir (l'ancien scrim 40 % faisait lire la zone status bar comme
         // une « barre noire ») ni de fondu transparent en bas.
         //
@@ -480,7 +480,7 @@ struct FloatingCallPillView: View {
             callManager.displayMode = .fullScreen
             return
         }
-        // Agrandissement depuis la bannière (retour user 2026-08-12) : le
+        // Agrandissement depuis la bannière: le
         // fullScreenCover est présenté SANS animation système ; CallView
         // consomme l'indice et joue l'expansion depuis le haut (mouvement
         // inverse de collapseIntoPip) — la bannière se retire par sa propre

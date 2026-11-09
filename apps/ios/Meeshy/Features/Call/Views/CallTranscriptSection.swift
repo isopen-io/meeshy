@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// Loads a call's transcript: the encrypted local cache first, the server
-/// replay as fallback (decision produit 2026-08-13), re-seeding the cache.
+/// replay as fallback, re-seeding the cache.
 /// App-side cascade (SDK Purity). Shared by both call detail sheets (#8698).
 enum CallTranscriptLoader {
     static func load(callId: String) async -> CallTranscript? {

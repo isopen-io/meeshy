@@ -33,7 +33,7 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
     private var lastRotation: Int = -1
     /// Mutated only on `queue` — the peer turned its camera off, so live
     /// frames are dropped and a placeholder is shown instead of the last
-    /// live frame frozen indefinitely (spec 2026-06-20 §5.3).
+    /// live frame frozen indefinitely.
     private var isRemoteVideoMuted = false
 
     init(sink: PiPSampleSink,

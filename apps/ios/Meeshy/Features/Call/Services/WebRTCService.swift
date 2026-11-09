@@ -58,7 +58,7 @@ final class WebRTCService {
     /// Un doublon exact — l'appelé renvoie sa réponse quand l'accusé tarde,
     /// la passerelle la rejoue après une reconnexion — ne se réapplique pas :
     /// la négociation est déjà stable, et l'échec qui en résultait faisait
-    /// raccrocher un appel qui fonctionnait (2026-09-30).
+    /// raccrocher un appel qui fonctionnait.
     private var appliedRemoteAnswerSDP: String?
     /// L'offre distante à laquelle on a déjà répondu, et la réponse donnée
     /// (#11468). La passerelle REJOUE l'offre à chaque (re)jonction, et
@@ -154,7 +154,7 @@ final class WebRTCService {
 
     // MARK: - Peer Connection Lifecycle
 
-    /// Returns `false` on failure (calling-stack audit 2026-08-15). Every
+    /// Returns `false` on failure. Every
     /// caller MUST check the result and abort call setup on `false` — before
     /// this fix the failure was logged and swallowed, so `CallManager`
     /// proceeded to activate the audio session, start the reliability

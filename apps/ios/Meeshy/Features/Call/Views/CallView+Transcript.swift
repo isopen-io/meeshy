@@ -10,7 +10,7 @@ import os
 extension CallView {
     /// Audio-call captions surface — a real layout element (NOT a floating
     /// overlay) occupying the space between `compactAudioCallHeader` and the
-    /// pill. User-requested 2026-07-11: "la zone de transcription ne doit
+    /// pill. User-requested: "la zone de transcription ne doit
     /// pas être en overlay des autres points d'action".
     var transcriptPanel: some View {
         CallJournalList(
@@ -165,7 +165,7 @@ extension CallView {
 
     /// Live captions — cycles off → captions (translated) → captions (original) → off
     /// on tap. Ce bouton commande ce que l'utilisateur LIT ; ce qu'il ÉMET suit
-    /// l'écoute réelle de l'appel depuis 2026-08-19 (`TranscriptionCapturePolicy`).
+    /// l'écoute réelle de l'appel (`TranscriptionCapturePolicy`).
     /// Il vit dans le rail « l'appel » (duo) ou la rangée « l'appel » (groupe)
     /// depuis #8394 — l'ancien bouton flottant a disparu.
     func captionsActionButton(captioned: Bool, diameter: CGFloat) -> some View {

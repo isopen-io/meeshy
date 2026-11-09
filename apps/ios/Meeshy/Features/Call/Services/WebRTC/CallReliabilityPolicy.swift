@@ -252,7 +252,7 @@ nonisolated enum CallReliabilityPolicy {
 
     /// Idempotence guard for `handleRemoteEnd` (a `call:ended` fanout). The
     /// gateway can emit `call:ended` more than once for the same call — the
-    /// native hangup/reject path AND (2026-07-12) the REST DELETE end/leave
+    /// native hangup/reject path AND the REST DELETE end/leave
     /// broadcast both reach the handler through the single `callEnded`
     /// publisher. Process the first, drop the rest: a duplicate while already
     /// `.ended` is a no-op, and an event for a DIFFERENT call must never tear
