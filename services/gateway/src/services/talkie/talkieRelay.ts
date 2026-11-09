@@ -22,6 +22,13 @@
  * contrôle tout entière. Un fragment hors bornes est IGNORÉ ; dépasser la durée,
  * le total ou le nombre ferme la prise de parole (`limit`).
  *
+ * ## Une voix scellée (#13949)
+ *
+ * Un fragment scellé est chiffré sur l'appareil de l'émetteur : le relais le traite comme tout
+ * fragment, c'est-à-dire comme des octets qu'il ne lit pas (ni transcription, ni normalisation, ni
+ * forme exigée). L'enveloppe de clé de l'ouverture repart telle quelle dans `talkie:incoming`, et le
+ * rejugement garde le sceau : une paire chiffrée ne coupe pas une voix scellée.
+ *
  * ## Ce qui change pendant qu'on parle
  *
  * La prise de parole est REJUGÉE en arrière-plan, au plus toutes les
@@ -47,6 +54,7 @@ import {
   talkieEndPayloadSchema,
   talkieStartPayloadSchema,
   type TalkieCodec,
+  type TalkieSeal,
   type TalkieEndReason,
   type TalkieStartAck,
 } from '@meeshy/shared/types/talkie';
@@ -66,6 +74,8 @@ type Session = {
   readonly toUserId: string;
   readonly socketId: string;
   readonly codec: TalkieCodec;
+  /** Voix scellée (#13949) : l'enveloppe de clé, relayée sans être lue ; son absence ⇒ voix en clair. */
+  readonly sealed: TalkieSeal | undefined;
   readonly startedAt: number;
   /** Une coupure posée à partir de cet instant vise la session : celui où son jugement a COMMENCÉ. */
   readonly cutFrom: number;
@@ -79,7 +89,8 @@ type Session = {
 
 export type TalkieRelayDeps = {
   readonly io: ServerEmitIO | undefined;
-  readonly judge: (fromUserId: string, toUserId: string) => Promise<TalkieVerdict>;
+  /** `sealed` : la voix est scellée sur l'appareil (#13949) — seule elle passe dans une paire chiffrée. */
+  readonly judge: (fromUserId: string, toUserId: string, sealed: boolean) => Promise<TalkieVerdict>;
   /** Le débit d'ouverture : `null` quand le compteur est injoignable (fail-closed). */
   readonly withinStartRate: (userId: string) => Promise<boolean | null>;
   /** L'instant de la DERNIÈRE coupure de la paire orientée, ou `null` ; LÈVE quand le cache partagé est injoignable. */
@@ -117,7 +128,7 @@ export class TalkieRelay {
 
     this.opening.set(socketId, (this.opening.get(socketId) ?? 0) + 1);
     try {
-      const verdict = await this.admit(fromUserId, toUserId, cutFrom);
+      const verdict = await this.admit(fromUserId, toUserId, cutFrom, parsed.data.sealed !== undefined);
       if (verdict !== null) return verdict;
       if (this.lostWhileOpening.has(socketId)) return refusal(TALKIE_UNAVAILABLE);
     } finally {
@@ -139,6 +150,7 @@ export class TalkieRelay {
       toUserId,
       socketId,
       codec: parsed.data.codec,
+      sealed: parsed.data.sealed,
       startedAt,
       cutFrom,
       bytes: 0,
@@ -164,18 +176,19 @@ export class TalkieRelay {
       codec: session.codec,
       startedAt: new Date(startedAt).toISOString(),
       maxDurationMs: TALKIE_MAX_DURATION_MS,
+      ...(session.sealed ? { sealed: session.sealed } : {}),
     });
     return { success: true, data: { talkieId: session.talkieId, maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES } };
   }
 
   /** `null` : admis. Le débit, la porte, puis une relecture de la coupure posée PENDANT le jugement. */
-  private async admit(fromUserId: string, toUserId: string, cutFrom: number): Promise<TalkieStartAck | null> {
+  private async admit(fromUserId: string, toUserId: string, cutFrom: number, sealed: boolean): Promise<TalkieStartAck | null> {
     try {
       const rate = await this.deps.withinStartRate(fromUserId);
       if (rate === null) return refusal(TALKIE_UNAVAILABLE);
       if (!rate) return RATE_LIMITED;
 
-      const verdict = await this.deps.judge(fromUserId, toUserId);
+      const verdict = await this.deps.judge(fromUserId, toUserId, sealed);
       if (verdict.ok === false) return refusal(verdict);
 
       const cut = await this.deps.cutAt(fromUserId, toUserId);
@@ -238,7 +251,7 @@ export class TalkieRelay {
     session.rejudging = true;
     session.judgedAt = now;
     this.deps
-      .judge(session.fromUserId, session.toUserId)
+      .judge(session.fromUserId, session.toUserId, session.sealed !== undefined)
       .then(
         (verdict) => {
           if (verdict.ok === false) this.close(session.talkieId, 'cut', 'recipient');

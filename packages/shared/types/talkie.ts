@@ -18,20 +18,33 @@
  * Règles que les clients ne recalculent pas : ouvert dès Proche (niveau effectif),
  * préférence de RÉCEPTION du destinataire (active par défaut, coupée par personne
  * — `talkieBlocked` — ou globalement — `notification.talkieEnabled`) ; jamais dans
- * une paire dont la conversation directe est chiffrée de bout en bout (hors E2EE
- * au MVP, l'interface le dit) ; coupé quand le destinataire est en appel ou en Ne
+ * une paire dont la conversation directe est chiffrée de bout en bout, SAUF voix
+ * scellée sur l'appareil (`sealed`, #13949 : fragments opaques pour le serveur) ; coupé quand le destinataire est en appel ou en Ne
  * pas déranger (repli : message vocal) ; un blocage coupe immédiatement.
  */
 import { z } from 'zod';
 
-import { TALKIE_CODECS, type TalkieCodec, type TalkieEndReason, type TalkieErrorCode } from './talkie-constants.js';
+import { TALKIE_CODECS, TALKIE_MAX_KEY_ENVELOPE_CHARS, type TalkieCodec, type TalkieEndReason, type TalkieErrorCode } from './talkie-constants.js';
 
 /** Les bornes, encodages, codes et raisons : `./talkie-constants.ts`, sans Zod, lisibles par un client léger. */
 export * from './talkie-constants.js';
 
+/**
+ * La voix SCELLÉE de bout en bout (#13949) : les fragments sont chiffrés sur l'appareil émetteur avec une clé
+ * propre à la prise de parole, dont l'enveloppe (scellée pour le destinataire par la session de la paire) voyage
+ * ici, OPAQUE. Le serveur ne la déchiffre pas, ne transcrit ni ne normalise les fragments, et n'exige d'eux
+ * aucune forme (un fragment scellé n'est pas une trame ADTS lisible). Dans une paire dont la conversation
+ * directe est chiffrée, seule une voix scellée passe ; une voix en clair y reste refusée.
+ */
+export const talkieSealSchema = z.object({
+  keyEnvelope: z.string().min(1).max(TALKIE_MAX_KEY_ENVELOPE_CHARS).regex(/^[A-Za-z0-9_-]+$/),
+});
+export type TalkieSeal = z.infer<typeof talkieSealSchema>;
+
 export const talkieStartPayloadSchema = z.object({
   toUserId: z.string().regex(/^[0-9a-fA-F]{24}$/),
   codec: z.enum(TALKIE_CODECS),
+  sealed: talkieSealSchema.optional(),
 });
 export type TalkieStartPayload = z.infer<typeof talkieStartPayloadSchema>;
 
@@ -58,6 +71,8 @@ export type TalkieIncomingEventData = {
   readonly codec: TalkieCodec;
   readonly startedAt: string;
   readonly maxDurationMs: number;
+  /** Présent ⇔ la voix est scellée : l'enveloppe de clé de l'émetteur, relayée telle quelle. */
+  readonly sealed?: TalkieSeal;
 };
 
 export type TalkieChunkEventData = {

@@ -13,6 +13,12 @@ export const TALKIE_MAX_CHUNK_BYTES = 16_384;
 export const TALKIE_MAX_TOTAL_BYTES = 512_000;
 /** Plafond du NOMBRE de fragments d'une prise de parole : 30 s par fragments de 100 ms au plus court. */
 export const TALKIE_MAX_CHUNKS = 300;
+/**
+ * Une voix SCELLÉE (#13949) porte, à l'ouverture, l'enveloppe de la clé de la prise de parole, scellée par
+ * l'émetteur pour le destinataire (session de la paire). Le serveur la relaie sans la lire : ce plafond
+ * borne sa taille en caractères base64url, rien de plus.
+ */
+export const TALKIE_MAX_KEY_ENVELOPE_CHARS = 4_096;
 /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
 export const TALKIE_CODECS = ['aac-adts'] as const;
 export type TalkieCodec = (typeof TALKIE_CODECS)[number];

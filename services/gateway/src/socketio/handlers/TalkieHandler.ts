@@ -106,7 +106,7 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
   const presence = getPresenceVisibilityService(params.prisma);
   return new TalkieRelay({
     io: params.io,
-    judge: async (fromUserId, toUserId) => {
+    judge: async (fromUserId, toUserId, sealed) => {
       const verdict = await judgeTalkie(
         {
           prisma: params.prisma,
@@ -117,6 +117,7 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
         },
         fromUserId,
         toUserId,
+        { sealed },
       );
       if (verdict.ok === false) logger.info('[TALKIE_REFUSED]', { code: verdict.code, cause: verdict.cause, fromUserId, toUserId });
       return verdict;
