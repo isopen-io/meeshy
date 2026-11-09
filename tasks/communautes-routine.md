@@ -195,3 +195,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suivis ouverts : #17178 (notifications, temps réel et traductions de story suivent encore la règle co-membre — le temps réel diffuse le contenu : priorité élevée), #17182 (les favoris ne filtrent aucune audience, préexistant). Index de `CommunityMember(userId, isActive)` et `Community(createdBy, isActive)` : rejoint #14227 / #16696. Une mention ouvre toujours le post à un non-membre nommé (voie des références, inchangée).
 - Gotcha : huit suites moquent `communityVisibility` par une fabrique qui ne connaît que `getCommunityCoMemberIds` ; une nouvelle export lue par `viewerAudience` doit y entrer.
 
+
+## 2026-11-09 — réveil 25
+
+- Début du run : #17183 (#16892) et #17152 (#6380) fusionnées par le porteur à 05:30–05:35 UTC ; dev n'est plus verrouillé.
+- Lot : #17178 (passerelle, sécurité) — en cours.
