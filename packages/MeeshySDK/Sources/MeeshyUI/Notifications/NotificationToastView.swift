@@ -117,12 +117,12 @@ public struct NotificationToastView: View {
                     HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                         Text(banner.headline)
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 4)
                         Text(receivedAt, style: .time)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
 
                     if banner.body != nil || banner.showsContentTile {
@@ -133,7 +133,7 @@ public struct NotificationToastView: View {
                             if let body = banner.body {
                                 Text(body)
                                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                                    .foregroundColor(theme.textSecondary)
+                                    .foregroundStyle(theme.textSecondary)
                                     .lineLimit(2)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -208,7 +208,7 @@ public struct NotificationToastView: View {
                 .overlay(
                     Image(systemName: notifType.systemIcon)
                         .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 )
                 .frame(width: 20, height: 20)
                 .overlay(Circle().stroke(Self.backgroundColor(isDark: isDark), lineWidth: MeeshyBorder.strong))
