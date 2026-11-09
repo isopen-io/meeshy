@@ -2936,25 +2936,22 @@ final class CallManagerHardeningTests: XCTestCase {
         }
         let body = String(source[disconnectRange.upperBound..<closingBrace.lowerBound])
 
+        // #17039 — the detach + close now run on CallEngineQueue (off the main
+        // thread), in the same closure, still in this order.
         XCTAssertTrue(
-            body.contains("audioTransceiver?.sender.track = nil"),
-            "disconnect() must nil audioTransceiver.sender.track before close() — " +
+            body.contains("transceivers: [audioTransceiver, videoTransceiver]"),
+            "disconnect() must hand BOTH transceivers to the teardown — " +
             "libwebrtc holds a strong ref to the track until the peer connection is " +
             "deallocated, which can outlive the call if a pending callback retains it")
-        XCTAssertTrue(
-            body.contains("videoTransceiver?.sender.track = nil"),
-            "disconnect() must nil videoTransceiver.sender.track before close() — " +
-            "same reasoning as the audio track: explicit nil forces ARC to collect " +
-            "the camera capture pipeline at call teardown, not at some later deinit")
 
         // Confirm ordering: sender.track nils must appear before peerConnection.close()
-        guard let audioNilIdx = body.range(of: "audioTransceiver?.sender.track = nil"),
-              let closeIdx = body.range(of: "peerConnection?.close()") else {
+        guard let detachIdx = body.range(of: "closing.transceivers.forEach { $0.sender.track = nil }"),
+              let closeIdx = body.range(of: "closing.peerConnection?.close()") else {
             XCTFail("Could not locate both sender.track nil and peerConnection.close() in disconnect() body"); return
         }
         XCTAssertTrue(
-            audioNilIdx.upperBound < closeIdx.lowerBound,
-            "audioTransceiver?.sender.track = nil must precede peerConnection?.close() — " +
+            detachIdx.upperBound < closeIdx.lowerBound,
+            "sender.track = nil must precede peerConnection.close() — " +
             "after close() the sender is stopped; the nil must happen before to ensure " +
             "the track is detached while the transceiver is still in a valid state")
     }

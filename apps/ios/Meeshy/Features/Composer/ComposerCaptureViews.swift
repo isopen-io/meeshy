@@ -65,8 +65,8 @@ struct ComposerCapturePreview: View {
                     let proportions = ComposerLookPainter.aspect(of: exterieur.size)
                     let canevas = ComposerLookPainter.previewCanvas(aspect: proportions)
                     ZStack {
-                        CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
-                                           mirrorsFrames: mirrorsSystemLayer,
+                        CameraPreviewLayer(session: session.camera.session, sessionQueue: session.camera.sessionQueue,
+                                           focusPoints: session.focusPoints, mirrorsFrames: mirrorsSystemLayer,
                                            connectionEpoch: session.camera.inputEpoch)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in

@@ -225,17 +225,14 @@ final class ListeningCenterTests: XCTestCase {
     func test_theBandStream_isReadableOffTheMainActor() async {
         let rig = makeRig()
         rig.sut.receive(served())
-        let first = await Self.firstValueOffMainActor(OffMainTransfer(value: rig.sut.band(for: "alice")))
+        let stream = OffMainPublisher(publisher: rig.sut.band(for: "alice"))
+
+        let first = await Task.detached { () -> AvatarListening?? in
+            for await value in stream.publisher.values { return value }
+            return nil
+        }.value
 
         XCTAssertEqual(first??.text, ListeningBandText.categoryLabel(.music))
-    }
-
-    @concurrent
-    nonisolated private static func firstValueOffMainActor(
-        _ stream: OffMainTransfer<AnyPublisher<AvatarListening?, Never>>
-    ) async -> AvatarListening?? {
-        for await value in stream.value.values { return value }
-        return nil
     }
 }
 
@@ -314,9 +311,4 @@ final class ConversationRowListeningWiringTests: XCTestCase {
 /// Le publisher du centre n'est pas `Sendable` ; le témoin le remet à une tâche détachée pour le lire hors du fil principal.
 private struct OffMainPublisher: @unchecked Sendable {
     let publisher: AnyPublisher<AvatarListening?, Never>
-}
-
-/// Le flux Combine n'est pas `Sendable` : le témoin le remet tel quel à la lecture hors MainActor qu'il vérifie (#17069).
-nonisolated private struct OffMainTransfer<Value>: @unchecked Sendable {
-    let value: Value
 }
