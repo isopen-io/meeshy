@@ -30,6 +30,15 @@ const declarations = (): Record<string, string | undefined> => ({
   'services/gateway/package.json': npmPin('services/gateway/package.json'),
   'packages/shared/package.json': npmPin('packages/shared/package.json'),
   'packages/LibSignalClient/LIBSIGNAL_VERSION': read('packages/LibSignalClient/LIBSIGNAL_VERSION').trim().replace(/^v/, ''),
+  'packages/LibSignalClient/Package.swift (release SignalFfi)': read('packages/LibSignalClient/Package.swift').match(
+    /releases\/download\/libsignal-ffi-v(\d+\.\d+\.\d+)\//,
+  )?.[1],
+  'packages/LibSignalClient/Sources/LibSignalClient/FfiVersion.swift': read(
+    'packages/LibSignalClient/Sources/LibSignalClient/FfiVersion.swift',
+  )
+    .match(/signal_ffi_version_(\d+)_(\d+)_(\d+)\(/)
+    ?.slice(1, 4)
+    .join('.'),
   'apps/android/gradle/libs.versions.toml': gradlePin(),
   'apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/licenses/LicenseNotice.kt': read(
     'apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/licenses/LicenseNotice.kt',
@@ -46,6 +55,16 @@ describe('libsignal — une seule version sur la passerelle, shared, iOS, Androi
   it('chaque déclaration est une version EXACTE, sans plage', () => {
     Object.entries(declarations()).forEach(([path, version]) => {
       expect({ path, version }).toEqual({ path, version: expect.stringMatching(/^\d+\.\d+\.\d+$/) });
+    });
+  });
+
+  it('toute bibliothèque org.signal du catalogue Gradle suit la version « libsignal », jamais une version en dur', () => {
+    const signalLibraries = read('apps/android/gradle/libs.versions.toml')
+      .split('\n')
+      .filter((line) => /module\s*=\s*"org\.signal:/.test(line));
+    expect(signalLibraries.length).toBeGreaterThan(0);
+    signalLibraries.forEach((line) => {
+      expect(line).toMatch(/version\.ref\s*=\s*"libsignal"/);
     });
   });
 
