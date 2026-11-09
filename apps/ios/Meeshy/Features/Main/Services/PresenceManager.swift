@@ -362,6 +362,27 @@ final class PresenceManager: ObservableObject {
         return presenceMap[userId] ?? fallback
     }
 
+    /// La relecture SERVIE fait foi sur ce que le serveur a cessé de servir (#14023). Une amitié
+    /// rompue ou un cercle descendu sous Ami (#13928) ne s'annonce par AUCUN événement (gestes
+    /// silencieux, RG-07) : l'entrée vivante survivrait jusqu'au prochain `user:status` et la carte
+    /// d'identité comme l'export préféreraient ce point à la charge servie. Une charge qui ne sert
+    /// aucune présence (`nil`, ou masque hors-ligne) purge donc l'entrée de cette personne ; une
+    /// charge qui en sert une la laisse, la carte vivante restant plus fraîche.
+    func reconcile(withServed groups: [StoryGroup]) {
+        let unserved = groups
+            .filter { ($0.authorPresence?.state ?? .offline) == .offline }
+            .map(\.id)
+            .filter { presenceMap[$0] != nil }
+        guard !unserved.isEmpty else { return }
+        unserved.forEach { presenceMap.removeValue(forKey: $0) }
+    }
+
+    /// `reconcile(withServed:)` en passant : rend les groupes tels quels, pour se poser sur la ligne qui les produit.
+    func reconciled(_ groups: [StoryGroup]) -> [StoryGroup] {
+        reconcile(withServed: groups)
+        return groups
+    }
+
     /// Pastille tri-state pour les listes : présence temps réel du manager si
     /// l'utilisateur est suivi, sinon calcul depuis le snapshot REST
     /// (`isOnline` + `lastActiveAt`) du modèle de la row.
