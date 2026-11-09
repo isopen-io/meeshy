@@ -40,7 +40,7 @@ struct LentilleBridgeLine: View {
         HStack(spacing: MeeshySpacing.xs) {
             Text(resolvedText)
                 .font(LentilleMetrics.Line2.font)
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .lineLimit(1)
 
             // `isComplete == false` (`LentilleProviders.swift`, gelé) :
@@ -50,7 +50,7 @@ struct LentilleBridgeLine: View {
             if bridge.isComplete == false, let count = bridge.data?.messageCount {
                 Text(String(format: partialFormat, count))
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                     .lineLimit(1)
             }
         }

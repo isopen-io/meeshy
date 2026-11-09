@@ -154,7 +154,7 @@ struct FocalIdentityHeader: View, Equatable {
 
                 Text(displayName)
                     .font(MeeshyFont.relative(nameSize, weight: FocalMetrics.Name.weight))
-                    .foregroundColor(nameColor)
+                    .foregroundStyle(nameColor)
                     .lineLimit(1)
 
                 if agentStyle.showsSpark {

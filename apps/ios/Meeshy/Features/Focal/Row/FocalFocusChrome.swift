@@ -74,7 +74,7 @@ struct FocalFocusChrome {
                     focusChip {
                         Image(systemName: "character.bubble")
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(focusAccent)
+                            .foregroundStyle(focusAccent)
                     }
                 }
                 .buttonStyle(.plain)
@@ -114,7 +114,7 @@ struct FocalFocusChrome {
                 focusChip {
                     Image(systemName: "face.smiling")
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(focusAccent)
+                        .foregroundStyle(focusAccent)
                 }
             }
             .buttonStyle(.plain)
@@ -141,7 +141,7 @@ struct FocalFocusChrome {
                     if reaction.count > 1 {
                         Text("\(reaction.count)")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(mine ? .white : focusAccent)
+                            .foregroundStyle(mine ? Color.white : focusAccent)
                     }
                 }
             }
@@ -258,7 +258,7 @@ struct FocalFocusChrome {
                 HStack(spacing: 4) {
                     Text(headerTimeString)
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
-                        .foregroundColor(metaTint)
+                        .foregroundStyle(metaTint)
                         .lineLimit(1)
                     if content.isMe, let status = content.meta.deliveryStatus {
                         BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)

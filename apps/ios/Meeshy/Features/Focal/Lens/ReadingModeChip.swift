@@ -94,12 +94,12 @@ struct ReadingModeChip: View {
             if model.isAuto {
                 Text(String(localized: "reading_mode.chip.auto_prefix", defaultValue: "AUTO", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .heavy))
-                    .foregroundColor(labelColor.opacity(0.65))
+                    .foregroundStyle(labelColor.opacity(0.65))
                     .fixedSize()
             }
             Text(model.label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(labelColor)
+                .foregroundStyle(labelColor)
                 .lineLimit(1)
                 .fixedSize()
         }

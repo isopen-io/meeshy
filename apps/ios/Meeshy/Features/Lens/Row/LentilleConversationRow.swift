@@ -275,7 +275,7 @@ struct LentilleConversationRow: View {
 
             Text(conversation.displayName)
                 .font(LentilleMetrics.Name.font)
-                .foregroundColor(textPrimary)
+                .foregroundStyle(textPrimary)
                 .lineLimit(1)
                 .layoutPriority(1)
 
@@ -561,7 +561,7 @@ struct LentilleConversationRow: View {
             if !draft.previewText.isEmpty {
                 Text(draft.previewText)
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
+                    .foregroundStyle(textSecondary)
                     .lineLimit(1)
             }
         }

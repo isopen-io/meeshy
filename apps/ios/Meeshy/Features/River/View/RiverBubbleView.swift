@@ -512,7 +512,7 @@ struct RiverBubbleView: View, Equatable {
             // plus long s'élide (`.lineLimit(1)`), comme sur le Fil.
             Text(content.senderDisplayName)
                 .font(MeeshyFont.relative(FocalMetrics.Name.size, weight: FocalMetrics.Name.weight))
-                .foregroundColor(laneColor)
+                .foregroundStyle(laneColor)
                 .lineLimit(1)
                 .frame(
                     maxWidth: contentWidth * RiverMetrics.Bubble.identityNameMaxWidth,
@@ -574,7 +574,7 @@ struct RiverBubbleView: View, Equatable {
             Spacer(minLength: 0)
             Text(content.timeString)
                 .font(FocalMetrics.Time.font)
-                .foregroundColor(metaTint)
+                .foregroundStyle(metaTint)
         }
     }
 
@@ -652,7 +652,7 @@ struct RiverBubbleView: View, Equatable {
                 .frame(width: FocalMetrics.Quote.railWidth)
             Text("\(reply.authorDisplayName) · \(reply.text)")
                 .font(MeeshyFont.relative(FocalMetrics.Text.size - 2))
-                .foregroundColor(metaTint)
+                .foregroundStyle(metaTint)
                 .lineLimit(1)
                 .padding(.leading, MeeshySpacing.sm)
         }
