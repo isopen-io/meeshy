@@ -11,10 +11,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { WEB_LIBSIGNAL_ENGINE } from '@/lib/licences/libsignal-engine';
+import { LIBSIGNAL_WASM_FILE, WEB_LIBSIGNAL_ENGINE } from '@/lib/licences/libsignal-engine';
 
 import { openLibsignalBridge, type LibsignalBridge, type PreKeyEntry, type SignalAddress, type WireMessage } from './libsignal-bridge';
-import { LIBSIGNAL_WASM_FILE } from './libsignal-wasm-file';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, '..', '..', '..', '..', '..', 'packages', 'shared', 'fixtures', 'libsignal');
@@ -107,7 +106,7 @@ describe('libsignal sur le web — les vecteurs croisés de la passerelle, iOS e
   });
 
   test('au moins un jeu scellé par une version antérieure est rejoué (#9231)', () => {
-    expect(legacyFiles().map((file) => vectorsOf(file).libsignal)).toContainEqual(expect.not.stringMatching(`^${bridge.version}$`));
+    expect(legacyFiles().some((file) => vectorsOf(file).libsignal !== bridge.version)).toBe(true);
   });
 
   describe.each([CURRENT, ...legacyFiles()].map((file) => [vectorsOf(file).libsignal, file] as const))('jeu scellé en %s', (_version, file) => {
@@ -123,7 +122,7 @@ describe('libsignal sur le web — les vecteurs croisés de la passerelle, iOS e
       expect(await openPersisted(vectors.bob, vectors.alice, bobOpensThird)).toBe(bobOpensThird.message.plaintext);
     });
 
-    test.each(Object.keys(TAMPERED) as readonly (keyof typeof TAMPERED)[])('chaque charge altérée d’un octet (%s) est refusée', async (byte) => {
+    (Object.keys(TAMPERED) as readonly (keyof typeof TAMPERED)[]).forEach((byte) => test(`chaque charge altérée d’un octet (${byte}) est refusée`, async () => {
       const { at, mask } = TAMPERED[byte];
       const [first] = vectors.freshSession.messages;
       if (first === undefined) throw new Error('un PreKeySignalMessage attendu');
@@ -135,6 +134,6 @@ describe('libsignal sur le web — les vecteurs croisés de la passerelle, iOS e
         aliceOpensReply: await refused(() => openPersisted(vectors.alice, vectors.bob, aliceOpensReply, flip(wire(aliceOpensReply.message), at, mask))),
         bobOpensThird: await refused(() => openPersisted(vectors.bob, vectors.alice, bobOpensThird, flip(wire(bobOpensThird.message), at, mask))),
       }).toEqual({ preKeyMessage: true, aliceOpensReply: true, bobOpensThird: true });
-    });
+    }));
   });
 });

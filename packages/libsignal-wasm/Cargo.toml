@@ -1,0 +1,29 @@
+# Le PONT WASM de libsignal pour le web (#17114). Il n'implémente aucune
+# primitive : il expose au navigateur la crate officielle `libsignal-protocol`
+# au tag de la version commune (#17113), compilée vers wasm32. Une montée de
+# libsignal change `version` ET `tag` ensemble ; la garde
+# `packages/shared/__tests__/ci/libsignal-version-alignment.test.ts` le vérifie.
+[package]
+name = "meeshy-libsignal-wasm"
+version = "0.106.2"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-only"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+libsignal-protocol = { git = "https://github.com/signalapp/libsignal", tag = "v0.106.2" }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom-0-4 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
+rand = "0.9.4"
+wasm-bindgen = "=0.2.130"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = true
