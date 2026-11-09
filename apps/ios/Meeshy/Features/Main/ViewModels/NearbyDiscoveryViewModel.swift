@@ -453,15 +453,16 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     private func observeNetwork() {
         network.isOfflinePublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] offline in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.isOffline = offline
-                    guard !offline else { return }
-                    await self.load()
-                }
+            .relay(through: OrderedEventLane()) { [weak self] offline in
+                await self?.applyReachability(offline: offline)
             }
             .store(in: &cancellables)
+    }
+
+    private func applyReachability(offline: Bool) async {
+        isOffline = offline
+        guard !offline else { return }
+        await load()
     }
 
     // MARK: - Lecture

@@ -24,6 +24,10 @@ final class ConcurrencyPrimitivesMigrationGuardTests: XCTestCase {
         name: "nonisolated-unsafe",
         pattern: #"nonisolated\(unsafe\)"#,
         reason: "TaskSlot, TeardownBox ou une vraie isolation")
+    private static let sinkTask = Rule(
+        name: "sink-task",
+        pattern: #"\.sink\s*(?:\(\s*receiveValue:\s*)?\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*?(?:(?<![\w)\]?] = )|(?<=\b_ = ))\bTask(?:\.detached)?\s*(?:\(\s*priority:[^)]*\)\s*)?\{"#,
+        reason: "OrderedEventLane : .relay(through:) garde l'ordre et meurt avec l'abonnement")
     private static let delayedMainQueue = Rule(
         name: "async-after",
         pattern: #"[\w)\]]\.asyncAfter\("#,
@@ -83,7 +87,20 @@ final class ConcurrencyPrimitivesMigrationGuardTests: XCTestCase {
         "Main/Components/OverlayAudioPlayer.swift",
         "JoinFlow/JoinFlowViewModel.swift",
         "Settings/Views/PrivacySettingsView.swift",
-    ].map { (path: $0, rules: [unsafeIsolation]) }
+    ].map { (path: $0, rules: [unsafeIsolation]) } + [
+        "Main/Services/OutboxFlushScheduling.swift",
+        "Main/Services/VisitorReachReporter.swift",
+        "Main/Services/ContentOpenReporter.swift",
+        "Main/Services/EngagementDispatcher.swift",
+        "Main/Services/ImpressionBatcher.swift",
+        "Main/ViewModels/NearbyDiscoveryViewModel.swift",
+        "Main/ViewModels/PostDetailViewModel.swift",
+        "Main/ViewModels/ConversationListViewModel+Observation.swift",
+        "Main/ViewModels/ConversationListViewModel+ReconnectRecovery.swift",
+        "Main/ViewModels/ConversationViewModel+StoreObservation.swift",
+        "Main/Components/ConversationCard/ConversationLinkCardViewModel.swift",
+        "Game/Wave2/GameArchiveModel.swift",
+    ].map { (path: $0, rules: [sinkTask]) }
 
     private static var featuresRoot: URL {
         URL(fileURLWithPath: #filePath)

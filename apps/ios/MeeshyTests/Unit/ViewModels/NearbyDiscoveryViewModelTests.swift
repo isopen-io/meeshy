@@ -819,7 +819,7 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
             "classe @MainActor doit être précédé d'un .receive(on: DispatchQueue.main) — sinon " +
             "SIGTRAP (_dispatch_assert_queue_fail) à la première transition réseau."
         )
-        let sink = try XCTUnwrap(body.range(of: ".sink"), "observeNetwork doit poser un sink")
+        let sink = try XCTUnwrap(body.range(of: ".relay(through:"), "observeNetwork doit poser un relais")
         XCTAssertLessThan(hop.lowerBound, sink.lowerBound, "le saut sur le main doit PRÉCÉDER le sink")
     }
 
