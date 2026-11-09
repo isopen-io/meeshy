@@ -114,7 +114,7 @@ class TranslationHandler:
                 self.voice_api_handler = get_voice_api_handler()
                 logger.info("✅ VoiceAPIHandler initialisé")
             except Exception as e:
-                logger.warning(f"⚠️ Impossible d'initialiser VoiceAPIHandler: {e}")
+                logger.warning(f"⚠️ [TRANSLATOR] Impossible d'initialiser VoiceAPIHandler: {type(e).__name__}")
                 self.voice_api_handler = None
         else:
             self.voice_api_handler = None
@@ -126,7 +126,7 @@ class TranslationHandler:
                 self.voice_profile_handler = get_voice_profile_handler()
                 logger.info("✅ VoiceProfileHandler initialisé")
             except Exception as e:
-                logger.warning(f"⚠️ Impossible d'initialiser VoiceProfileHandler: {e}")
+                logger.warning(f"⚠️ [TRANSLATOR] Impossible d'initialiser VoiceProfileHandler: {type(e).__name__}")
                 self.voice_profile_handler = None
         else:
             self.voice_profile_handler = None
@@ -181,7 +181,7 @@ class TranslationHandler:
         try:
             request_data = json.loads(json_frame.decode('utf-8'))
         except json.JSONDecodeError as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur parsing JSON multipart: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur parsing JSON multipart: {type(e).__name__}")
             return
 
         # Extraire les infos des frames binaires
@@ -238,6 +238,9 @@ class TranslationHandler:
               - Option A: N workers × vitesse (si N workers disponibles)
               - Option B: 2-3x plus rapide (overhead réduit, batch processing)
         """
+        claimed_task_id = None
+        task = None
+        outcome_owned = False
         try:
             # Note: request_data est déjà parsé par _handle_translation_request_multipart
             # binary_frames contient les données binaires si présentes
@@ -360,6 +363,7 @@ class TranslationHandler:
                         f"{incoming_task_id} (ttl {ttl:.0f}s)"
                     )
                     return
+                claimed_task_id = incoming_task_id
 
             # Créer la tâche de traduction
             # CORRECTION: Réutiliser le taskId envoyé par la Gateway pour que la corrélation
@@ -382,14 +386,36 @@ class TranslationHandler:
             
             # Enfiler la tâche dans la pool appropriée
             success = await self.pool_manager.enqueue_task(task)
-            
+            outcome_owned = True
+
             if not success:
                 await self.publish_pool_full([task])
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"[TRANSLATOR] Erreur de décodage JSON: {type(e).__name__}")
+            if not outcome_owned:
+                await self._report_unprocessed(task, claimed_task_id)
         except Exception as e:
             logger.error(f"[TRANSLATOR] Erreur lors du traitement de la requête: {type(e).__name__}")
+            if not outcome_owned:
+                await self._report_unprocessed(task, claimed_task_id)
+
+    async def _report_unprocessed(self, task, claimed_task_id) -> None:
+        """#17174 — une requête que son traitement a fait lever avant que la
+        file n'en prenne la charge : la tâche construite est signalée UNE fois,
+        comme un refus de file pleine (que la passerelle traite en transitoire),
+        et toute réserve en vol est libérée pour que la relance soit réacceptée."""
+        if claimed_task_id:
+            self.release_inflight(claimed_task_id)
+        if task is None:
+            return
+        try:
+            await self.publish_pool_full([task])
+        except Exception as e:
+            self.release_inflight(task.task_id)
+            logger.error(
+                f"❌ [TRANSLATOR] Signalement non publié pour {task.task_id}: {type(e).__name__}"
+            )
 
     @staticmethod
     def _pool_full_error(task) -> dict:
@@ -554,7 +580,7 @@ class TranslationHandler:
                 # ═══════════════════════════════════════════════════════════════════════
                     
             except Exception as e:
-                logger.error(f"❌ [TRANSLATOR] Erreur sauvegarde base de données: {e}")
+                logger.error(f"❌ [TRANSLATOR] Erreur sauvegarde base de données: {type(e).__name__}")
             
             # ENVOI À LA GATEWAY (seulement si traduction valide)
             if self.pub_socket:
@@ -750,7 +776,7 @@ class TranslationHandler:
             except Exception as e:
                 logger.warning(
                     f"⚠️ [TRANSLATOR] story textObject translation failed: "
-                    f"postId={post_id}, index={text_object_index}, target={target_lang}, err={e}"
+                    f"postId={post_id}, index={text_object_index}, target={target_lang}, err={type(e).__name__}"
                 )
 
         if not translations:
@@ -845,9 +871,7 @@ class TranslationHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible ou réponse vide")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur traitement Voice API: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur traitement Voice API: {type(e).__name__}")
 
     async def _handle_voice_profile_request(self, request_data: dict):
         """
