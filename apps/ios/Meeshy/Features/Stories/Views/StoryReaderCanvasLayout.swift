@@ -60,13 +60,13 @@ struct StoryReaderCanvasLayout {
     /// nettes (distinguée du viewport). En plein écran (`isFullscreenStorySession`) →
     /// `.free` = identité (canvas 9:16 plein bord, coins 0 ; le chrome se masque par
     /// ailleurs via `chromeVisible`). Un seul ressort anime taille/coins/position au
-    /// toggle — design user 2026-06-02. (it.33 : insets relevés pour une carte nette —
+    /// toggle — design user. (it.33: insets relevés pour une carte nette —
     /// la tentative it.32 cadrait déjà mais à 0.94 ≈ plein bord, donc invisible.)
     /// Présentation du canvas : `.free` (plein bord) quand le chrome est masqué
     /// (long-press immersif) OU en session plein écran ; `.carded` (carte arrondie
     /// marginée) au repos. Source de vérité : `StoryCanvasFraming.readerPresentation`
     /// (truth-table SDK pure, testée). Le long-press qui cache les contrôleurs
-    /// agrandit ainsi le canvas pour épouser le viewport (user 2026-06-03).
+    /// agrandit ainsi le canvas pour épouser le viewport.
     func presentation(lifted: Bool) -> StoryCanvasFraming.Presentation {
         StorySceneFocus.presentation(
             resting: StoryCanvasFraming.readerPresentation(isFullscreenSession: isFullscreenSession,

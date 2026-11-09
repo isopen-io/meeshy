@@ -49,9 +49,7 @@ extension StoryViewerView {
         installPrefetchPipelineIfNeeded()
         startTimer()
         prefetchCurrentGroup()
-        // PAS d'interlude à l'ouverture du viewer (directive user
-        // 2026-08-20 : « l'interlude s'affiche UNIQUEMENT lorsqu'on lit
-        // les groupes à la suite, non à la première ouverture ») — la
+        // PAS d'interlude à l'ouverture du viewer (non à la première ouverture ») — la
         // story demandée s'affiche immédiatement, l'interstitiel ne vit
         // que dans `adaptiveOnChange(of: currentGroupIndex)`. Sans
         // interlude, `markCurrentViewed` marque tout de suite (sa garde

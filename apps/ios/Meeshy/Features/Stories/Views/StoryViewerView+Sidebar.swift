@@ -132,8 +132,7 @@ struct StoryActionSidebarView: View {
     /// `loadStoryCommentCount()` (+Content.swift) confirme un compteur plus
     /// exact que le payload d'entrée.
     let storyCommentCountReconciledPulse: Int
-    /// Forward / external-share count for the Envoyer button label (user spec
-    /// 2026-05-28: non-author sees counts on Réact + Comments + Envoyer).
+    /// Forward / external-share count for the Envoyer button label.
     let storyShareCount: Int
     /// Author-only viewers count for the Vues button label.
     let storyViewCount: Int
@@ -151,7 +150,6 @@ struct StoryActionSidebarView: View {
     let activeLanguageCode: String?
     /// Langue effectivement affichée (résolue) — alimente le badge accolé au
     /// bouton « Abc ». Remplace l'ancien badge (EN) du coin bas-gauche
-    /// (directive user 2026-07-26).
     let displayedLanguageCode: String?
     /// Prisme « Exploration » : affiche la story dans la langue choisie (override éphémère).
     /// `nil` revient à la chaîne préférée du lecteur (#12646).
@@ -252,7 +250,7 @@ struct StoryActionSidebarView: View {
         )
     }
 
-    /// **Le contour de chaque action** (directive porteur 2026-10-01) — le son ouvert,
+    /// **Le contour de chaque action** — le son ouvert,
     /// le cœur posé, et l'anneau du cœur sur chaque geste déjà fait. `nil` ⇒ aucun.
     private func outlineTint(_ action: StoryRailEmphasisAction) -> Color? {
         let contour = StoryRailContour.resolve(
@@ -335,8 +333,7 @@ struct StoryActionSidebarView: View {
     /// `ScrollView` ne défile que dans une largeur BORNÉE.
     ///
     /// La borne ne dépend PAS de l'échelle, et c'est voulu : elle dit la place
-    /// DISPONIBLE, pas la place demandée. Ramener l'échelle de 2 à 1,5 (×0,75,
-    /// directive porteur du 2026-09-11 au soir) fait donc tenir plus d'émojis
+    /// DISPONIBLE, pas la place demandée. Ramener l'échelle de 2 à 1,5 (×0, 75) fait donc tenir plus d'émojis
     /// dans la même fenêtre, sans qu'aucune cote de mise en page ne bouge.
     private var reactionStripWidth: CGFloat {
         max(160, viewportWidth - 84)
@@ -424,8 +421,7 @@ struct StoryActionSidebarView: View {
         // `maxHeight` to the safe canvas-content slot so ViewThatFits has
         // a real constraint to evaluate against.
         //
-        // Densité resserrée (directive user 2026-07-10 « rapprocher les FABs,
-        // on y voit trop d'espace ») : spacing 8/6 au lieu de 20/14 — le rail
+        // Densité resserrée (on y voit trop d'espace »): spacing 8/6 au lieu de 20/14 — le rail
         // retrouve la compacité TikTok/IG, chaque action reste ≥ 44pt de zone
         // tappable via le padding du bouton.
         ViewThatFits(in: .vertical) {
@@ -447,7 +443,7 @@ struct StoryActionSidebarView: View {
                          flatBackground: currentStory?.storyEffects?.background)
         // Plan figé posé à l'apparition puis re-résolu au CHANGEMENT de slide
         // uniquement — les mises à jour de compteurs mid-slide ne re-déclenchent
-        // jamais la composition du rail (directive 2026-07-10).
+        // jamais la composition du rail.
         .onAppear {
             if frozenRailPlan == nil { frozenRailPlan = liveRailPlan }
         }
@@ -457,10 +453,10 @@ struct StoryActionSidebarView: View {
         // La présence d'une piste audio dans une vidéo est établie par un probe
         // ASYNCHRONE (`AVURLAsset.loadTracks`) qui conclut souvent après le gel :
         // le rail restait alors sans bouton son sur une story qui en a un
-        // (constaté 2026-07-25, probe `tracks=1` arrivé ~1 s trop tard).
+        // (probe `tracks=1` arrivé ~1 s trop tard).
         // Transition à sens unique « silencieux → sonore » : un bouton peut
         // apparaître quand la donnée arrive, jamais disparaître en cours de
-        // lecture — la directive 2026-07-10 (pas de rail qui clignote) tient.
+        // lecture — la (pas de rail qui clignote) tient.
         .adaptiveOnChange(of: storyHasAudibleSound) { wasAudible, isAudible in
             guard !wasAudible, isAudible else { return }
             frozenRailPlan = liveRailPlan
@@ -586,7 +582,7 @@ struct StoryActionSidebarView: View {
                     activeTint: nil,
                     outlineTint: outlineTint(.react)
                 ) {
-                    // Tap simple = la barre s'ouvre (directive user 2026-08-20).
+                    // Tap simple = la barre s'ouvre.
                     // L'émoji part au tap sur une tuile de la barre — plus de
                     // ❤️ envoyé à l'aveugle, plus de longpress.
                     toggleReactionBar()
@@ -689,7 +685,7 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // Republier la story EN STORY, d'un tap (#9953, porteur 2026-10-10) —
+            // Republier la story EN STORY, d'un tap (#9953) —
             // non-auteur, TOUTE audience : la loi d'audience du serveur borne le
             // résultat (403 `REPOST_AUDIENCE_WIDENING`). Le menu « … » offre
             // le post et le réel sous « Partager ▸ ».
@@ -794,9 +790,8 @@ struct StoryActionSidebarView: View {
             // commentaire existe sur la story (pour TOUS, auteur inclus). Sous
             // la sidebar, la zone d'écriture en bas permet déjà de laisser le
             // premier commentaire, donc un bouton à 0 ne serait que du bruit
-            // visuel (user spec 2026-05-28 + 2026-06-23 : ne pas afficher
-            // l'icône commentaire si aucun commentaire n'est laissé).
-            // MEMBERSHIP FIGÉE À L'ENTRÉE DU SLIDE (directive 2026-07-10) : la
+            // visuel.
+            // MEMBERSHIP FIGÉE À L'ENTRÉE DU SLIDE: la
             // réconciliation `loadStoryCommentCount()` (+Content) met toujours
             // le COMPTEUR à jour (label + prochains slides), mais ne fait plus
             // APPARAÎTRE ce bouton en cours de lecture — le set est décidé
@@ -819,7 +814,7 @@ struct StoryActionSidebarView: View {
             }
 
             // Traductions — ouvre la BARRE RAPIDE horizontale des langues
-            //    prêtes (directive user 2026-07-26). Le tap toggle
+            // prêtes. Le tap toggle
             //    `showLanguageOptions` ; la barre (rendue au-dessus du composer)
             //    porte les langues prêtes + un « + » à droite qui ouvre la
             //    liste complète (`showFullLanguagePicker`). Un badge accolé
@@ -857,7 +852,7 @@ struct StoryActionSidebarView: View {
                 // comme le strip de réactions au-dessus (même overlay trailing,
                 // même transition scale-depuis-trailing, même offset -56). Défile
                 // horizontalement si la liste dépasse ; le « + » ouvre la liste
-                // complète (directive user 2026-07-26).
+                // complète.
                 .overlay(alignment: .trailing) {
                     if showLanguageOptions {
                         StoryLanguageQuickBar(

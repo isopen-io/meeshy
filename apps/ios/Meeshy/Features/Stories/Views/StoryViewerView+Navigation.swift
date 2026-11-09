@@ -8,8 +8,7 @@ extension StoryViewerView {
 
     // Pas de haptic ici : `goToNext`/`goToPrevious` sont aussi le chemin de
     // l'auto-advance (timer `onCompletion`) — vibrer à chaque slide casse la
-    // fluidité de lecture (retour user 2026-07-13 : « 3 retours haptiques par
-    // slide »). Le tick unique par navigation MANUELLE vit au point de geste
+    // fluidité de lecture. Le tick unique par navigation MANUELLE vit au point de geste
     // (touchUp nav dans +Canvas, commit de swipe de groupe ci-dessus).
     func goToNext() {
         guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }

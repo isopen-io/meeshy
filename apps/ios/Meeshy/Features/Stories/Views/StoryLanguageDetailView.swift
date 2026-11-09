@@ -9,8 +9,7 @@ import MeeshyUI
 /// retraduire, action « Traduire » sur les langues absentes — mais câblé sur les
 /// données story (`StoryItem.translations`) et le service story
 /// (`StoryInteractionService.requestTranslation`). Remplace `LanguagePickerSheet`
-/// dans le reader (mal intégré au liquid glass, sans dark/light — directive user
-/// 2026-07-26).
+/// dans le reader (mal intégré au liquid glass).
 ///
 /// App-side : orchestration UX produit (câble les traductions prêtes de la story
 /// + décide « tap = explorer / traduire »). Feuille en verre, dark + light via

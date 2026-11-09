@@ -30,8 +30,7 @@ final class StoryDraftsViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Filtre les brouillons GELÉS (`pendingPublishAt` non nil, directive
-    /// 2026-08-02) : une publication est en cours pour eux, ils ne doivent
+    /// Filtre les brouillons GELÉS (`pendingPublishAt` non nil): une publication est en cours pour eux, ils ne doivent
     /// apparaître dans AUCUNE liste de reprise tant que la file travaille —
     /// les rouvrir en édition pendant qu'ils voyagent vers le serveur
     /// corromprait le brouillon que le succès/l'échec s'apprête à consommer.

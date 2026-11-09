@@ -17,7 +17,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// formerly-dropped enrichment becomes load-bearing — the previous
     /// version's serialized JSON would deserialize with that field missing.
     /// One-shot invalidation, no perma-refetch noise.
-    /// `_v2` (2026-05-28): forces a re-fetch so `visibility`, `shareCount`,
+    /// `_v2`: forces a re-fetch so `visibility`, `shareCount`,
     /// `viewCount`, `repostCount`, `currentUserReactions` reach clients that
     /// cached stories before `toStoryGroups` started propagating them
     /// (Partager button stayed hidden on PUBLIC stories until this).
@@ -90,7 +90,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private let socialSocket: SocialSocketProviding
     let api: APIClientProviding
     let visibilityStore: StoryVisibilityPreferenceStore
-    /// Cycle de vie de publication du brouillon (directive 2026-08-02) :
+    /// Cycle de vie de publication du brouillon:
     /// succès online (`launchUploadTask`), annulation (`cancelUpload`) et
     /// édition (`runStoryUpdate`) y écrivent. Propriété injectable — même
     /// raison que les autres dépendances de ce VM — pour que les tests
@@ -312,7 +312,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
             // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
             // au chargement réseau/cold-start — incohérent avec le tri appliqué
-            // par les events socket (2026-06-01). On sauve la version triée pour
+            // par les events socket. On sauve la version triée pour
             // que les chemins .fresh/.stale servent déjà le bon ordre.
             sortStoryGroupsInPlace()
             await bestEffort("storyViewModel.stories.save", category: .cache) { try await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey) }
@@ -387,7 +387,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Préfixe d'id des stories optimistes, voir `PendingStoryMarker`.
     static let pendingStoryIdPrefix = PendingStoryMarker.prefix
 
-    // MARK: - Reprise d'un échec de publication (spec 2026-08-01, incrément 5)
+    // MARK: - Reprise d'un échec de publication (incrément 5)
 
     /// Seam injectable (tests) : retrait d'un item de l'historique d'échecs.
     /// Le chemin réel traverse `StoryPublishService` (queue actor singleton +
@@ -649,7 +649,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // qu'il venait lui-même de demander : elle arrivait en base, mais la
         // story en mémoire gardait ses anciennes langues et la feuille
         // « Langues » laissait tourner son anneau indéfiniment sur une langue
-        // pourtant traduite (constaté au simulateur le 2026-07-27, allemand
+        // pourtant traduite (allemand
         // présent côté serveur et absent côté lecteur).
         socialSocket.postTranslationUpdated
             .receive(on: DispatchQueue.main)
@@ -677,7 +677,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             .store(in: &socketCancellables)
 
-        // === Real-time counter sync (user spec 2026-05-28) ===
+        // === Real-time counter sync ===
         // When anyone comments / reacts to a story we already have in the
         // tray, update its denormalized counters in place. Without these
         // sinks the sidebar `storyCommentCount` / `storyReactionCount`

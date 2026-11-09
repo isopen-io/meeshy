@@ -189,8 +189,7 @@ struct StoryTrayView: View {
     /// Résolution du profil « Moi » : le groupe de stories (avatar/couleur à
     /// jour, comme pour les autres utilisateurs via `StoryRingCell`) l'emporte
     /// quand il existe ; sinon repli sur `MeeshyUser` — « Voir le profil »
-    /// doit fonctionner même sans aucune story active (directive user
-    /// 2026-08-11).
+    /// doit fonctionner même sans aucune story active.
     private func myProfileUser() -> ProfileSheetUser? {
         let currentUser = AuthManager.shared.currentUser
         let userId = currentUser?.id ?? ""
@@ -247,7 +246,7 @@ struct StoryTrayView: View {
 // MARK: - Thumbnail Helper
 
 /// URL de la miniature de la dernière story du groupe — user request
-/// 2026-05-27 « dans la tray il faut mettre la vue miniature de la
+/// « dans la tray il faut mettre la vue miniature de la
 /// dernière story du groupe ». `stories` est trié ascendant par
 /// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
 /// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
@@ -412,7 +411,7 @@ private struct MyStoryButton: View {
                         viewModel.showStoryComposer = true
                         HapticFeedback.medium()
                     } label: {
-                        // User request 2026-07-04 : le (+) était COUPÉ en
+                        // User request: le (+) était COUPÉ en
                         // haut du tray — l'offset négatif (-4,-4) le
                         // faisait déborder du cadre de la cellule, et le
                         // conteneur scrollable rognait tout dépassement.
@@ -461,7 +460,7 @@ private struct MyStoryButton: View {
             onAddStatus?()
             HapticFeedback.medium()
         } label: {
-            // user request 2026-05-28 — placeholder = x0.8 du
+            // user request — placeholder = x0.8 du
             // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
             // pour garder la parité avec l'emoji mood animé
             // (cf. MeeshyAvatar.badgeSize .storyTray).
@@ -579,8 +578,7 @@ private struct StoryUploadOverlay: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(a11yLabel)
         // Purement informatif : cet overlay ne prend JAMAIS le geste destiné à
-        // l'avatar dessous (directive user 2026-08-01, postérieure au modèle
-        // tap-retry du 2026-07-31 qu'elle remplace).
+        // l'avatar dessous.
         //
         // Il portait auparavant `allowsHitTesting(isFailed)` plus un tap-retry
         // et un menu contextuel. En échec — exactement quand l'utilisateur a
@@ -725,7 +723,7 @@ struct PinnedStoryTrailBand: View {
             // visibles vivent (et animent).
             LazyHStack(alignment: .top, spacing: MeeshySpacing.md) {
                 // Sa propre story EN TÊTE, à la place qu'occupait le bouton
-                // « + » : depuis son retrait (directive user 2026-08-13), c'est
+                // « + »: depuis son retrait, c'est
                 // cet avatar-ci qui porte l'accès à la composition — deux
                 // affordances pour le même geste étaient une surcharge, pas une
                 // commodité. Le « + » survit là où il a du sens : en haut à
@@ -736,8 +734,7 @@ struct PinnedStoryTrailBand: View {
                         context: .storyTrayCompact,
                         showsUsername: false,
                         onViewStory: {
-                            // Parité avec la grande trail (supersession
-                            // 2026-08-02) : le tap ouvre la LISTE de gestion,
+                            // Parité avec la grande trail: le tap ouvre la LISTE de gestion,
                             // où vivent les onglets Publiées / Brouillons —
                             // et d'où l'on crée une story.
                             showMyStories = true

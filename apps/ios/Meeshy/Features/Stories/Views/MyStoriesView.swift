@@ -295,7 +295,7 @@ struct MyStoriesView: View {
         )
     }
 
-    /// Deux onglets COMPLÈTEMENT distincts (directive user 2026-08-01). Un
+    /// Deux onglets COMPLÈTEMENT distincts. Un
     /// `Picker` segmenté plutôt qu'un `TabView` paginé : le geste horizontal
     /// d'un `TabView` entre en concurrence avec le balayage de fermeture de la
     /// sheet, et les deux onglets y seraient instanciés en permanence.

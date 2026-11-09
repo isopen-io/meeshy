@@ -126,7 +126,7 @@ struct StoryRingCell: View, Equatable {
 
 // MARK: - Ce qu'une cellule d'anneau affiche (#10574)
 
-/// Mesuré sur l'iPhone le 2026-10-13 : 7 409 recalculs de `StoryRingCell` en
+/// 7 409 recalculs de `StoryRingCell` en
 /// 4 min 30, une cinquantaine à chaque passe de la liste — ses fermetures
 /// changent d'identité à chaque passe, SwiftUI ne pouvait rien prouver.
 nonisolated struct StoryRingCellRenderInputs: Equatable {
