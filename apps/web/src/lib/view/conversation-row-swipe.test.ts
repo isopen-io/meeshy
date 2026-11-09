@@ -43,10 +43,10 @@ const EVERY_STATE = [true, false].flatMap((isPinned) =>
 );
 
 describe('conversationRowSwipeSides — les côtés et leurs actions', () => {
-  test('bord de début : épingler puis sourdine ; bord de fin : archiver, lu, supprimer', () => {
+  test('#17243 — bord de début : épingler seul ; bord de fin : archiver, lu — ni sourdine ni suppression au balayage', () => {
     const sides = conversationRowSwipeSides({ flags: flags(), unread: true, canDelete: true, language: 'fr' });
-    expect(idsOf(sides.leading)).toEqual(['pin', 'mute']);
-    expect(idsOf(sides.trailing)).toEqual(['archive', 'read', 'delete']);
+    expect(idsOf(sides.leading)).toEqual(['pin']);
+    expect(idsOf(sides.trailing)).toEqual(['archive', 'read']);
   });
 
   test('aucun côté ne porte plus de 3 actions, dans AUCUN état — ni la table qui les déclare', () => {
@@ -69,36 +69,33 @@ describe('conversationRowSwipeSides — les côtés et leurs actions', () => {
       }
     }
     const sides = conversationRowSwipeSides({ flags: flags({ isPinned: true, isMuted: true, isArchived: true }), unread: false, canDelete: true, language: 'fr' });
-    expect([...sides.leading, ...sides.trailing].map((item) => item.label)).toEqual(['Désépingler', 'Son', 'Désarchiver', 'Non lu', 'Supprimer']);
+    expect([...sides.leading, ...sides.trailing].map((item) => item.label)).toEqual(['Désépingler', 'Désarchiver', 'Non lu']);
   });
 
-  test('toute action du menu qui n’est pas un appel se balaie, sur UN seul côté', () => {
+  test('#17243 — toute action du menu se balaie, sur UN seul côté, sauf la sourdine et la suppression, qui restent au menu', () => {
     for (const state of EVERY_STATE) {
-      const expected = idsOf(rowMenuItems(state)).sort();
+      const menu = idsOf(rowMenuItems(state));
       const sides = conversationRowSwipeSides(state);
-      expect([...idsOf(sides.leading), ...idsOf(sides.trailing)].sort()).toEqual(expected);
+      expect([...idsOf(sides.leading), ...idsOf(sides.trailing)].sort()).toEqual(menu.filter((id) => id !== 'mute' && id !== 'delete').sort());
+      expect(menu).toContain('mute');
+      if (state.canDelete) expect(menu).toContain('delete');
     }
   });
 
   test('archive imposée ⇒ « Archiver » quitte le bord de fin, comme le menu', () => {
     const sides = conversationRowSwipeSides({ flags: flags({ isArchived: true, archiveLocked: true }), unread: false, canDelete: true, language: 'fr' });
-    expect(idsOf(sides.trailing)).toEqual(['read', 'delete']);
+    expect(idsOf(sides.trailing)).toEqual(['read']);
   });
 
-  test('sans compte, « Supprimer » ne se balaie pas', () => {
+  test('sans compte, le bord de fin ne change pas : « Supprimer » ne s’y balaie jamais', () => {
     const sides = conversationRowSwipeSides({ flags: flags(), unread: false, canDelete: false, language: 'fr' });
     expect(idsOf(sides.trailing)).toEqual(['archive', 'read']);
-  });
-
-  test('un appel ne se balaie jamais, même permis', () => {
-    const sides = conversationRowSwipeSides({ flags: flags(), unread: false, canDelete: true, language: 'fr' });
-    expect([...idsOf(sides.leading), ...idsOf(sides.trailing)]).not.toContain('callAudio');
   });
 
   test('la zone d’un côté mesure 76 px par action', () => {
     const sides = conversationRowSwipeSides({ flags: flags(), unread: false, canDelete: true, language: 'fr' });
     expect(ROW_SWIPE_CELL).toBe(76);
-    expect(rowSwipeWidths(sides)).toEqual({ leading: 152, trailing: 228 });
+    expect(rowSwipeWidths(sides)).toEqual({ leading: 76, trailing: 152 });
   });
 });
 
@@ -198,7 +195,7 @@ describe('conversationRowSwipeSides — rendre obsolète en un geste (#14645)', 
   const viewer = { id: 'me', hasAccount: true, isAnonymous: false, platformRole: null };
   const actionsFor = (conversation: Parameters<typeof rowConversationActions>[0]['conversation']) => rowConversationActions({ conversation, viewer });
 
-  test('permis par le serveur ⇒ « Rendre obsolète » se balaie au bord de FIN, en dernier ; la bascule lu / non lu cède sa place', () => {
+  test('permis par le serveur ⇒ « Rendre obsolète » se balaie au bord de FIN, en dernier, après archiver et lu', () => {
     const sides = conversationRowSwipeSides({
       flags: flags(),
       unread: true,
@@ -206,8 +203,8 @@ describe('conversationRowSwipeSides — rendre obsolète en un geste (#14645)', 
       language: 'fr',
       actions: actionsFor({ type: 'group', currentUserRole: 'admin' }),
     });
-    expect(idsOf(sides.leading)).toEqual(['pin', 'mute']);
-    expect(idsOf(sides.trailing)).toEqual(['archive', 'delete', 'obsolete']);
+    expect(idsOf(sides.leading)).toEqual(['pin']);
+    expect(idsOf(sides.trailing)).toEqual(['archive', 'read', 'obsolete']);
     const obsolete = sides.trailing[2];
     expect(obsolete?.label).toBe('Rendre obsolète');
     expect(obsolete?.destructive).toBe(true);
@@ -221,7 +218,7 @@ describe('conversationRowSwipeSides — rendre obsolète en un geste (#14645)', 
       language: 'fr',
       actions: actionsFor({ type: 'group', currentUserRole: 'admin' }),
     });
-    expect(idsOf(sides.trailing)).toEqual(['read', 'delete', 'obsolete']);
+    expect(idsOf(sides.trailing)).toEqual(['read', 'obsolete']);
   });
 
   test('un membre d’un tête-à-tête ouvert le balaie aussi', () => {
@@ -245,7 +242,7 @@ describe('conversationRowSwipeSides — rendre obsolète en un geste (#14645)', 
       language: 'fr',
       actions: rowConversationActions({ conversation: { type: 'group', currentUserRole: 'admin' }, viewer: { ...viewer, platformRole: 'ADMIN' } }),
     });
-    expect(idsOf([...sides.leading, ...sides.trailing]).sort()).toEqual(['archive', 'delete', 'mute', 'obsolete', 'pin']);
+    expect(idsOf([...sides.leading, ...sides.trailing]).sort()).toEqual(['archive', 'obsolete', 'pin', 'read']);
     expect(sides.trailing.length).toBeLessThanOrEqual(ROW_SWIPE_MAX_ACTIONS);
   });
 });

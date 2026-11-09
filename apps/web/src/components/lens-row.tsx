@@ -19,7 +19,6 @@ import { useColorScheme } from '@/lib/use-color-scheme';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
 import {
-  isRowCallAction,
   isRowFlagAction,
   rowConversationActions,
   type RowActionId,
@@ -31,7 +30,6 @@ import {
 } from '@/lib/view/row-actions';
 import { useRowRoving } from '@/lib/view/row-roving';
 import { memberCountLabel, rowDateLabel } from '@/lib/view/row-extra';
-import { THREAD_SEARCH_PARAM } from '@/lib/view/thread-search-door';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { useLongPress } from '@/lib/view/long-press';
@@ -378,7 +376,6 @@ function LensRowImpl({
     onRowIntent?.(conversation.id, choice);
   };
   const onAction = (id: RowActionId) => {
-    if (id === 'search') return navigate(href('thread', { conversation: conversation.id }, { [THREAD_SEARCH_PARAM]: '1' }));
     if (id === 'delete' || id === 'leave' || id === 'obsolete') return requestDeparture({ conversationId: conversation.id, kind: id, returnToList: false });
     if (id === 'invite' || id === 'manageMembers') return openDetailsOn(id === 'invite' ? 'invite' : 'members');
     if (id === 'details') return onOpenDetails?.(conversation.id);
@@ -386,8 +383,6 @@ function LensRowImpl({
     if (id === 'rename') return onRowIntent?.(conversation.id, { kind: 'rename' });
     if (id === 'block') return onRowIntent?.(conversation.id, { kind: 'block', intent: peerBlocked === true ? 'unblock' : 'block' });
     if (isRowFlagAction(id)) return onRowAction(conversation.id, id);
-    if (!isRowCallAction(id)) return undefined;
-    callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group, peerKey: callPeerKey });
   };
 
   /* LE BALAYAGE DE LA LIGNE (#10580) — les actions du menu, rangées par bord.
@@ -870,12 +865,11 @@ function LensRowImpl({
         unread={unread}
         magnified={status.magnified}
         language={currentInterfaceLanguage()}
-        canCall={callsAvailable()}
         canDelete={account}
         actionsOf={actionsOf}
         peek={{ conversation, viewerId, languages, isAnonymous: guest }}
         peekOpener={peekOpener}
-        doors={{ search: true, readingMode: apiConfig.readingModesEnabled }}
+        doors={{ readingMode: apiConfig.readingModesEnabled }}
         readingModeOf={readingModeOf}
         tabStop={false}
         {...(menuMore === undefined ? {} : { more: menuMore })}

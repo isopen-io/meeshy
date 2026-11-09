@@ -106,14 +106,11 @@ describe('LensRow — le favori et les entrées d’iOS', () => {
     const { intents, details } = mount(group);
     openMenu();
     expect(labels()).toEqual([
-      'Appel vocal',
-      'Appel vidéo',
       'Épingler',
       'Silence',
-      'Rechercher',
       'Non lu',
-      'Mode de lecture',
       'Détails',
+      'Mode de lecture',
       'Renommer',
       'Inviter',
       'Gérer les membres',

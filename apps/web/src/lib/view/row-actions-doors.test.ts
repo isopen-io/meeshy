@@ -7,19 +7,19 @@ import { rowMenuItems, rowSubmenuItems } from './row-actions';
 import { rowReadingModeMenu } from './row-reading-mode';
 
 /**
- * LE MENU D'UNE LIGNE PORTE « RECHERCHER » ET « MODE DE LECTURE › » (#11226) —
- * les deux portes du menu contextuel d'iOS (`ConversationListView+Overlays.swift`) :
- * « Rechercher » ouvre la conversation sur sa recherche, « Mode de lecture »
- * choisit comment elle s'ouvrira (Automatique, puis les cinq modes du fil).
+ * LE MENU D'UNE LIGNE PORTE « MODE DE LECTURE › » (#11226) — il choisit
+ * comment la conversation s'ouvrira (Automatique, puis les cinq modes du fil).
+ * « Rechercher » a quitté le menu de la ligne (consigne porteur, #17243) : la
+ * recherche se fait dans la conversation.
  */
 const flags = { isPinned: false, isMuted: false, isArchived: false };
-const doors = { search: true, readingMode: true } as const;
+const doors = { readingMode: true } as const;
 
 describe('rowMenuItems — Rechercher et Mode de lecture, à la place d’iOS', () => {
-  test('« Rechercher » suit « Sourdine », « Mode de lecture › » suit « Lu »', () => {
-    const items = rowMenuItems({ flags, unread: false, language: 'fr', canCall: true, canDelete: true, doors });
-    expect(items.map((i) => i.id)).toEqual(['callAudio', 'callVideo', 'pin', 'mute', 'search', 'read', 'readingMode', 'archive', 'delete']);
-    expect(items.find((i) => i.id === 'search')).toMatchObject({ label: 'Rechercher', glyph: 'magnifyingGlass' });
+  test('#17243 — « Mode de lecture › » suit la tête, et « Rechercher » n’est plus au menu de la ligne', () => {
+    const items = rowMenuItems({ flags, unread: false, language: 'fr', canDelete: true, doors });
+    expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'readingMode', 'archive', 'delete']);
+    expect(items.map((i) => i.label)).not.toContain('Rechercher');
     expect(items.find((i) => i.id === 'readingMode')).toMatchObject({ label: 'Mode de lecture', glyph: 'eye', submenu: 'readingMode' });
   });
 
@@ -28,16 +28,16 @@ describe('rowMenuItems — Rechercher et Mode de lecture, à la place d’iOS', 
     expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'archive']);
   });
 
-  test('les modes de lecture coupés au déploiement : pas de sous-menu, la recherche reste', () => {
-    const items = rowMenuItems({ flags, unread: false, language: 'fr', doors: { search: true, readingMode: false } });
-    expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'search', 'read', 'archive']);
+  test('les modes de lecture coupés au déploiement : pas de sous-menu', () => {
+    const items = rowMenuItems({ flags, unread: false, language: 'fr', doors: { readingMode: false } });
+    expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'archive']);
   });
 
   test('en anglais, les mots d’iOS', async () => {
     await loadInterfaceCatalog('en');
     await loadRowMenuCatalog('en');
     const labels = rowMenuItems({ flags, unread: true, language: 'en', doors }).map((i) => i.label);
-    expect(labels).toEqual(['Pin', 'Mute', 'Search', 'Read', 'Reading mode', 'Archive']);
+    expect(labels).toEqual(['Pin', 'Mute', 'Read', 'Reading mode', 'Archive']);
   });
 });
 
