@@ -7,7 +7,7 @@
 
 import { PrismaClient, PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
-import { doUsersShareCommunity } from './communityVisibility';
+import { doUsersShareCommunity, isCommunityReadableBy } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
 import { verdictFor } from './referenceAccess';
 import { NOT_DELETED } from './softDelete';
@@ -38,6 +38,13 @@ export type PostVisibilityRecord = {
    * pour perpétuel, donc tout droit éteint pour intact.
    */
   expiresAt: Date | null;
+  /**
+   * La communauté où le post est publié, `null` hors communauté. REQUISE pour la
+   * même raison qu'`expiresAt` : une audience `COMMUNITY` rattachée ne se lit que
+   * par les membres de CETTE communauté (#16892) ; l'oublier rouvrirait la règle
+   * « co-membre de n'importe quelle communauté de l'auteur ».
+   */
+  communityId: string | null;
 };
 
 /**
@@ -49,7 +56,7 @@ export type PostVisibilityRecord = {
  */
 export type PostAclPrisma = Pick<
   PrismaClient,
-  'post' | 'postComment' | 'friendRequest' | 'userRelation' | 'communityMember' | 'participant' | 'postMention' | 'user'
+  'post' | 'postComment' | 'friendRequest' | 'userRelation' | 'community' | 'communityMember' | 'participant' | 'postMention' | 'user'
 >;
 
 /**
@@ -132,19 +139,25 @@ export function buildPostVisibilityOrFilter(
   audienceIds: string[],
   communityCoMemberIds: string[] = [],
   blockedAuthorIds: readonly string[] = [],
-  circles: PostCircles = NO_POST_CIRCLES
+  circles: PostCircles = NO_POST_CIRCLES,
+  readableCommunityIds: readonly string[] = []
 ) {
   const audience = {
     OR: [
       { authorId: viewerId },
       { visibility: PostVisibility.PUBLIC },
-      { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
+      {
+        visibility: PostVisibility.COMMUNITY,
+        authorId: { in: communityCoMemberIds },
+        OR: [{ communityId: null }, { communityId: { isSet: false } }],
+      },
       { visibility: PostVisibility.FRIENDS, authorId: { in: audienceIds } },
       { visibility: PostVisibility.EXCEPT, authorId: { in: audienceIds }, NOT: { visibilityUserIds: { has: viewerId } } },
       { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
       { visibility: PostVisibility.ACQUAINTANCES, authorId: { in: [...circles.acquaintance] } },
       { visibility: PostVisibility.CLOSE, authorId: { in: [...circles.close] } },
       { visibility: PostVisibility.BLOOD, authorId: { in: [...circles.blood] } },
+      { visibility: PostVisibility.COMMUNITY, communityId: { in: [...readableCommunityIds] } },
     ],
   };
   if (blockedAuthorIds.length === 0) return audience;
@@ -155,7 +168,8 @@ export function buildPostVisibilityOrFilter(
  * Checks whether `userId` is allowed to see `post` based on its visibility setting.
  *
  * PUBLIC    → everyone
- * COMMUNITY → author + members sharing at least one community with the author
+ * COMMUNITY → posted in a community: its active members and its creator (#16892);
+ *              otherwise: members sharing at least one community with the author
  * FRIENDS   → post author + accepted friends of author
  * ACQUAINTANCES / CLOSE / BLOOD → author + effective level (minimum of both grants)
  *              of at least Connaissance / Proche / Sang — never a DM contact (#13931)
@@ -238,7 +252,9 @@ async function matchesPostAudience(
       return post.visibilityUserIds.includes(userId);
 
     case PostVisibility.COMMUNITY:
-      return doUsersShareCommunity(prisma, post.authorId, userId);
+      return post.communityId
+        ? isCommunityReadableBy(prisma, post.communityId, userId)
+        : doUsersShareCommunity(prisma, post.authorId, userId);
 
     case PostVisibility.ACQUAINTANCES:
     case PostVisibility.CLOSE:
@@ -337,6 +353,7 @@ const POST_ACL_SELECT = {
   visibility: true,
   visibilityUserIds: true,
   expiresAt: true,
+  communityId: true,
 } as const;
 
 /**
@@ -486,6 +503,7 @@ const POST_REDIRECT_SELECT = {
   visibility: true,
   visibilityUserIds: true,
   expiresAt: true,
+  communityId: true,
   type: true,
   isQuote: true,
   repostOfId: true,

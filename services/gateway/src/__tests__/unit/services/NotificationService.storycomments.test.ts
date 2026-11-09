@@ -741,6 +741,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         ...baseParams,
         postType: 'POST',
         visibility: 'COMMUNITY',
+        communityId: null,
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;

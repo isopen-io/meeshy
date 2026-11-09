@@ -22,12 +22,12 @@ describe('resolveProfileTab — l’onglet que l’adresse demande, s’il est o
 });
 
 describe('userProfileTabs — l’ordre et la présence des onglets d’autrui (UserProfileSheet)', () => {
-  test('Publications, Conversations, Détails — l’ordre d’iOS', () => {
-    expect(userProfileTabs({ conversations: true })).toEqual(['posts', 'conversations', 'details']);
+  test('Détails, Conversations, Publications — l’ordre d’iOS (#17202)', () => {
+    expect(userProfileTabs({ conversations: true })).toEqual(['details', 'conversations', 'posts']);
   });
 
   test('sans conversations en commun possibles (soi, sans session), l’onglet disparaît', () => {
-    expect(userProfileTabs({ conversations: false })).toEqual(['posts', 'details']);
+    expect(userProfileTabs({ conversations: false })).toEqual(['details', 'posts']);
   });
 });
 

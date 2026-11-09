@@ -725,6 +725,16 @@ describe('#17022 — une séance s\'arrête aussi dans le geste qui ferme sa por
     ]);
   });
 
+  it('le départ d\'une conversation ne rejuge que les séances de ce fil : une panne ailleurs ne coupe rien d\'étranger', async () => {
+    const m = await deuxSeances();
+    const prisma = m.deps.prisma as unknown as { messageAttachment: { findUnique: () => Promise<unknown> } };
+    prisma.messageAttachment.findUnique = () => Promise.reject(new Error('base en panne'));
+
+    await rejudgeTogetherWhere(m.deps, { userId: HOTE, conversationId: AUTRE_CONV });
+
+    expect(m.emissions).toEqual([]);
+  });
+
   it('une invitation en attente vers un membre parti finit aussi', async () => {
     const m = monde();
     await inviter(m);

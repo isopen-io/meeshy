@@ -15,6 +15,11 @@
  * se passe s'il existe ; un unique bloqué par des doublons est SIGNALÉ, jamais forcé. Idempotente — la rejouer ne change
  * rien.
  *
+ * Un index NON unique de même clé déjà posé est CONVERTI EN PLACE (#13977), jamais supprimé puis recréé : le verrou
+ * `prepareUnique` (MongoDB 6.0+) refuse d'abord tout NOUVEAU doublon, les doublons existants sont comptés ensuite, puis
+ * `collMod … unique` convertit. Un doublon présent ou glissé laisse l'index où il était, verrouillé, et se signale :
+ * la collection ne reste jamais sans index de paire pendant que la passerelle écrit.
+ *
  * À JOUER SUR LE STAGING D'ABORD ; en production, avec le feu vert du porteur (#9223), sauvegarde vérifiée d'abord.
  *
  * Exécution (DRY_RUN=1 pour simuler), puis relecture :
@@ -46,6 +51,30 @@ const duplicateGroups = (collection, key) => {
 const report = { created: [], present: [], blocked: [] };
 const collections = db.getCollectionNames();
 
+const commandError = (command) => {
+  try {
+    const result = db.runCommand(command);
+    return result && result.ok === 1 ? null : (result && result.errmsg) || 'commande refusée';
+  } catch (error) {
+    return error.message;
+  }
+};
+
+const convertInPlace = (spec, match) => {
+  const label = `${spec.collection}.${match.name}`;
+  if (!dryRun) {
+    const lockError = commandError({ collMod: spec.collection, index: { keyPattern: spec.key, prepareUnique: true } });
+    if (lockError) return report.blocked.push(`${label} — verrou prepareUnique refusé : ${lockError}`);
+  }
+  const groups = duplicateGroups(spec.collection, spec.key);
+  if (groups > 0) return report.blocked.push(`${label} — ${groups} groupe(s) en doublon`);
+  if (!dryRun) {
+    const convertError = commandError({ collMod: spec.collection, index: { keyPattern: spec.key, unique: true } });
+    if (convertError) return report.blocked.push(`${label} — conversion en unique refusée : ${convertError}`);
+  }
+  return report.created.push(`${label} (converti en unique, en place)`);
+};
+
 for (const spec of specs) {
   const existing = collections.includes(spec.collection)
     ? db.getCollection(spec.collection).getIndexes()
@@ -54,6 +83,11 @@ for (const spec of specs) {
 
   if (match && (match.unique || !spec.unique)) {
     report.present.push(`${spec.collection}.${match.name}`);
+    continue;
+  }
+
+  if (match) {
+    convertInPlace(spec, match);
     continue;
   }
 
@@ -68,11 +102,8 @@ for (const spec of specs) {
   const options = { name: spec.name };
   if (spec.unique) options.unique = true;
 
-  if (!dryRun) {
-    if (match) db.getCollection(spec.collection).dropIndex(match.name);
-    db.getCollection(spec.collection).createIndex(spec.key, options);
-  }
-  report.created.push(`${spec.collection}.${spec.name}${match ? ` (remplace ${match.name}, non unique)` : ''}`);
+  if (!dryRun) db.getCollection(spec.collection).createIndex(spec.key, options);
+  report.created.push(`${spec.collection}.${spec.name}`);
 }
 
 print(dryRun ? '===== SIMULATION — rien n’est écrit =====' : '===== Index de UserRelation et AtomLink =====');

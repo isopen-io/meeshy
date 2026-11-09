@@ -180,3 +180,97 @@ describe('#17131 — un refus de la porte laisse une ligne de journal', () => {
     expect(mockLogger.info).not.toHaveBeenCalledWith('[TALKIE_REFUSED]', expect.anything());
   });
 });
+
+describe('#17142 — talkie:join et le réveil', () => {
+  const joinSocket = (id: string) => {
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    return {
+      id,
+      on: (event: string, listener: (...args: unknown[]) => void) => { handlers.set(event, listener); },
+      emit: (event: string, payload: unknown) => handlers.get(event)?.(payload),
+    };
+  };
+  const flush = async () => { for (let i = 0; i < 10; i += 1) await Promise.resolve(); };
+
+  it('la porte reçoit le canal de réveil du destinataire (wakeChannel)', async () => {
+    const seen: unknown[] = [];
+    judgeTalkie.mockImplementationOnce(async (deps: GateDeps) => { seen.push((deps as GateDeps & { wakeChannel?: unknown }).wakeChannel); return { ok: true }; });
+    const { io } = fakeIo();
+    const deps = depsFor(io, { [FROM]: { isAnonymous: false } });
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+    await socket.start({ toUserId: TO, codec: 'aac-adts' });
+
+    expect(typeof seen[0]).toBe('function');
+    deps.relay.dispose();
+  });
+
+  it('un invité ne rejoint rien ; un inscrit rejoint par le relais', async () => {
+    const { io } = fakeIo();
+    const deps = depsFor(io, { [TO]: { isAnonymous: false }, [FROM]: { isAnonymous: true } });
+    const join = jest.spyOn(deps.relay, 'join');
+    const guest = joinSocket(`sock-${FROM}`);
+    const member = joinSocket(`sock-${TO}`);
+    listenTalkie(guest, deps);
+    listenTalkie(member, deps);
+
+    guest.emit('talkie:join', { talkieId: 'a'.repeat(24) });
+    member.emit('talkie:join', { talkieId: 'a'.repeat(24) });
+    await flush();
+
+    expect(join).toHaveBeenCalledTimes(1);
+    expect(join).toHaveBeenCalledWith(`sock-${TO}`, TO, { talkieId: 'a'.repeat(24) });
+  });
+
+  it('une voix inconnue ici est relayée aux autres instances avec l’identité AUTHENTIFIÉE ; celles-ci la rejoignent', async () => {
+    const relayed: unknown[] = [];
+    const listeners = new Map<string, (payload: unknown) => void>();
+    const { io } = fakeIo();
+    const withAdapter = {
+      ...io,
+      serverSideEmit: (event: string, payload: unknown) => { relayed.push({ event, payload }); },
+      on: (event: string, listener: (payload: unknown) => void) => { listeners.set(event, listener); },
+    };
+    const deps = depsFor(withAdapter, { [TO]: { isAnonymous: false } });
+    const member = joinSocket(`sock-${TO}`);
+    listenTalkie(member, deps);
+
+    member.emit('talkie:join', { talkieId: 'a'.repeat(24), userId: FROM });
+    await flush();
+
+    expect(relayed).toEqual([{ event: 'talkie:join-relay', payload: { socketId: `sock-${TO}`, userId: TO, talkieId: 'a'.repeat(24) } }]);
+    const join = jest.spyOn(deps.relay, 'join');
+    listeners.get('talkie:join-relay')?.({ socketId: 'remote-sock', userId: TO, talkieId: 'b'.repeat(24) });
+    listeners.get('talkie:join-relay')?.({ socketId: 'remote-sock', userId: 'pas-un-id', talkieId: 'b'.repeat(24) });
+    expect(join).toHaveBeenCalledTimes(1);
+    expect(join).toHaveBeenCalledWith('remote-sock', TO, { talkieId: 'b'.repeat(24) });
+  });
+});
+
+describe('#13949 — la voix scellée reste ÉTEINTE tant qu’aucun client ne la déchiffre', () => {
+  const sealedStart = { toUserId: TO, codec: 'sealed-aac-adts', sealed: { keyId: 'q7Hk2-_xVb9LmN0pRsT4uW' } };
+  afterEach(() => { delete process.env.TALKIE_SEALED_VOICE_ENABLED; });
+
+  it.each([undefined, '', 'false', '1', 'TRUE'])('TALKIE_SEALED_VOICE_ENABLED=%p : une voix scellée est refusée sans être jugée', async (value) => {
+    if (value !== undefined) process.env.TALKIE_SEALED_VOICE_ENABLED = value;
+    const { io, emissions } = fakeIo();
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, depsFor(io, { [FROM]: { isAnonymous: false } }));
+
+    expect(await socket.start(sealedStart)).toMatchObject({ success: false, code: 'TALKIE_INVALID' });
+    expect(judgeTalkie).not.toHaveBeenCalled();
+    expect(emissions).toEqual([]);
+  });
+
+  it('allumé explicitement (« true »), la voix scellée est jugée par la porte', async () => {
+    process.env.TALKIE_SEALED_VOICE_ENABLED = 'true';
+    const { io } = fakeIo();
+    const deps = depsFor(io, { [FROM]: { isAnonymous: false } });
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+
+    expect(await socket.start(sealedStart)).toMatchObject({ success: true });
+    expect(judgeTalkie).toHaveBeenCalledTimes(1);
+    deps.relay.dispose();
+  });
+});

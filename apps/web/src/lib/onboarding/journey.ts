@@ -38,6 +38,8 @@ export type JourneyContext = {
   readonly progress: JourneyProgress;
   /** La fenêtre système peut-elle encore s'ouvrir (API présente, jamais répondue) ? */
   readonly notificationsAskable: boolean;
+  /** Le compte a-t-il déjà photo ET bannière ? « Montre-toi » (#17237) ne lui est pas proposée — filet face à une passerelle qui ne la pré-coche pas. */
+  readonly profileComplete?: boolean;
 };
 
 export const withDone = (progress: JourneyProgress, step: OnboardingStepId): JourneyProgress =>
@@ -90,7 +92,8 @@ const isSettled = (step: OnboardingStepId, context: JourneyContext): boolean =>
  * garder. Meeshy Global, jamais à un compte que la passerelle y dit fermé en
  * écriture : le salut y serait refusé.
  */
-export const isOffered = (step: OnboardingStepId, context: Pick<JourneyContext, 'state' | 'progress' | 'notificationsAskable'>): boolean => {
+export const isOffered = (step: OnboardingStepId, context: Pick<JourneyContext, 'state' | 'progress' | 'notificationsAskable' | 'profileComplete'>): boolean => {
+  if (step === 'profile') return context.profileComplete !== true;
   if (step === 'email') return context.state.emailVerified === false;
   if (step === 'age') return context.state.viewerWriteRestriction !== undefined;
   if (step === 'global') return context.state.viewerWriteRestriction !== 'minor-global';

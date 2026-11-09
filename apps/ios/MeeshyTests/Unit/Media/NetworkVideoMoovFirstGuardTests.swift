@@ -39,6 +39,8 @@ final class NetworkVideoMoovFirstGuardTests: XCTestCase {
             unflaggedSites: 1, reason: "audio M4A, hors du périmètre vidéo"),
         "AudioEditEngine.swift": Exemption(
             unflaggedSites: 1, reason: "audio M4A, hors du périmètre vidéo"),
+        "NSEAdtsRemux.swift": Exemption(
+            unflaggedSites: 1, reason: "voix du talkie ADTS remuxée en M4A dans la NSE, hors du périmètre vidéo"),
     ]
 
     private func repositoryRoot() -> URL {

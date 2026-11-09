@@ -29,6 +29,26 @@ final class NSEEnrichmentPlanTests: XCTestCase {
         XCTAssertNotNil(makeRequest(mediaPayload()).media)
     }
 
+    private func talkieVoice(_ url: String) -> [AnyHashable: Any] {
+        ["type": "talkie_incoming", "talkieId": "t", "fromUserId": "bob", "attachmentUrl": url, "attachmentMimeType": "audio/mp4"]
+    }
+
+    func test_talkieVoiceFromTheGateway_isDownloadedWithTheSessionToken() {
+        XCTAssertEqual(makeRequest(talkieVoice("https://gate.meeshy.me/api/v1/attachments/file/v.m4a")).media?.authenticated, true)
+        XCTAssertEqual(makeRequest(talkieVoice("/api/v1/attachments/file/v.m4a")).media?.authenticated, true)
+    }
+
+    func test_talkieVoiceFromAnotherOrigin_isNeverDownloaded_soTheTokenNeverLeaves() {
+        ["https://evil.example/v.m4a", "https://gate.meeshy.me.evil.example/v.m4a", "http://gate.meeshy.me/v.m4a",
+         "https://gate.meeshy.me:8443/v.m4a", "meeshy://talkie/v.m4a"].forEach { url in
+            XCTAssertNil(makeRequest(talkieVoice(url)).media, url)
+        }
+    }
+
+    func test_anOrdinaryMedia_isNeverDownloadedWithTheToken() {
+        XCTAssertEqual(makeRequest(mediaPayload()).media?.authenticated, false)
+    }
+
     func test_declaredSizeAboveTheCap_skipsTheMedia() {
         let tooBig = "\(NSEAttachmentPolicy.maxAttachmentBytes + 1)"
 

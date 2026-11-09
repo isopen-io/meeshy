@@ -43,6 +43,7 @@ import {
   type RetractedNotification,
   type RetractedNotificationAnnouncer,
 } from '../notifications/retractedNotifications';
+import { cutTogetherWhere } from '../together/togetherDeps';
 
 export { isProtectedFromObsolescence };
 
@@ -173,6 +174,8 @@ export async function obsoleteConversation(
     eraseLiveMessages(),
   ]);
   await eraseLiveMessages();
+  // #17022 — ses messages sont effacés : une séance « ensemble » qui y lisait une pièce s'arrête.
+  await cutTogetherWhere({ conversationId });
 
   await retractConversationNotifications(prisma, conversationId, announcer);
 

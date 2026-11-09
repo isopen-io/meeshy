@@ -315,7 +315,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                     <ProfileTalkieRow
                                       language={language}
                                       person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                      onNotice={(message) => announce(message, 'error')}
+                                      onNotice={(message, failed) => announce(message, failed ? 'error' : 'neutral')}
                                     />
                                     <ProfileTogetherRow
                                       language={language}

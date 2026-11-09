@@ -40,6 +40,7 @@ const publier = async (world: World, over: Partial<FriendContentFanoutParams> = 
     authorId: AUTEUR,
     contentType: 'POST',
     visibility: 'PUBLIC',
+    communityId: null,
     ...over,
   });
   return m.notified();
@@ -55,6 +56,7 @@ const commenter = async (world: World, over: Partial<StoryCommentFanoutParams> =
     commentExcerpt: 'bravo',
     postType: 'STORY',
     visibility: 'PUBLIC',
+    communityId: null,
     ...over,
   });
   return m;

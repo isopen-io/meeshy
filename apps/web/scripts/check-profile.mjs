@@ -416,8 +416,8 @@ try {
       check((await page.$('[data-user-banner]')) !== null, `${label} : /u/ porte sa bannière`);
       const publicTabs = await page.$$eval('[role="tab"]', (els) => els.map((el) => `${el.getAttribute('data-profile-tab')}:${el.getAttribute('aria-selected')}`));
       check(
-        JSON.stringify(publicTabs) === JSON.stringify(['posts:false', 'conversations:false', 'details:true']),
-        `${label} : /u/ — Publications · Conversations · Détails, Détails ouvert d'abord (${JSON.stringify(publicTabs)})`,
+        JSON.stringify(publicTabs) === JSON.stringify(['details:true', 'conversations:false', 'posts:false']),
+        `${label} : /u/ — Détails · Conversations · Publications, Détails ouvert d'abord (${JSON.stringify(publicTabs)})`,
       );
       const debordementPublic = await page.evaluate(() => {
         const main = document.getElementById('contenu');

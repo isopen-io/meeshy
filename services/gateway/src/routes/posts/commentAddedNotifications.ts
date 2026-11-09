@@ -17,7 +17,7 @@ import type { MentionService } from '../../services/MentionService';
 import type { ThreadAudience } from '../../services/posts/commentHome';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
-type CommentedPost = Pick<Post, 'authorId' | 'type' | 'createdAt' | 'expiresAt' | 'visibility' | 'visibilityUserIds'>;
+type CommentedPost = Pick<Post, 'authorId' | 'type' | 'createdAt' | 'expiresAt' | 'visibility' | 'visibilityUserIds' | 'communityId'>;
 
 export async function notifyCommentAdded(params: {
   readonly fastify: FastifyInstance;
@@ -80,6 +80,7 @@ export async function notifyCommentAdded(params: {
           postAuthorId: post.authorId,
           visibility: post.visibility,
           visibilityUserIds: post.visibilityUserIds ?? [],
+          communityId: post.communityId ?? null,
           directlyAddressedUserIds: parentId
             ? (parentComment?.authorId ? [parentComment.authorId] : [])
             : [post.authorId],
@@ -148,6 +149,7 @@ export async function notifyCommentAdded(params: {
       // de perdre. Une visibilité absente doit restreindre, pas ouvrir.
       visibility: post.visibility,
       visibilityUserIds: post.visibilityUserIds ?? [],
+      communityId: post.communityId ?? null,
     }).catch(err => enhancedLogger.error('story comment notification fan-out failed', err));
   }
 }

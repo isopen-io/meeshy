@@ -41,6 +41,11 @@ export type FriendContentFanoutParams = {
   /** User IDs list for ONLY/EXCEPT visibility modes. */
   visibilityUserIds?: string[];
   /**
+   * `Post.communityId` — REQUIS (#17178) : une publication `COMMUNITY` posée dans
+   * une communauté ne prévient que ses lecteurs. `null` = sans communauté.
+   */
+  communityId: string | null;
+  /**
    * La publication est un REPOST (simple ou citation) : son entourage suit le
    * réglage « repost » de l'auteur, pas celui du type écrit (#13929).
    */
@@ -159,6 +164,7 @@ export async function createFriendContentNotificationsBatch(
     authorId: params.authorId,
     visibility,
     visibilityUserIds,
+    communityId: params.communityId,
     candidateUserIds: entourage.ids,
   });
   const uniqueRecipientIds = [...new Set([...chosen, ...admitted])].filter((id) => id !== params.authorId);

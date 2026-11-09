@@ -41,7 +41,11 @@ describe('PostFeedService COMMUNITY visibility', () => {
     await service.getStories('viewer-1');
     const whereArg = prisma.post.findMany.mock.calls[0][0].where;
     const orClauses = whereArg.AND[0].OR;
-    expect(orClauses).toContainEqual({ visibility: 'COMMUNITY', authorId: { in: ['co-1'] } });
+    expect(orClauses).toContainEqual({
+      visibility: 'COMMUNITY',
+      authorId: { in: ['co-1'] },
+      OR: [{ communityId: null }, { communityId: { isSet: false } }],
+    });
   });
 
   it('getStatuses filters COMMUNITY posts to community co-members', async () => {
@@ -49,7 +53,11 @@ describe('PostFeedService COMMUNITY visibility', () => {
     await service.getStatuses('viewer-1');
     const whereArg = prisma.post.findMany.mock.calls[0][0].where;
     const orClauses = whereArg.AND[0].OR;
-    expect(orClauses).toContainEqual({ visibility: 'COMMUNITY', authorId: { in: ['co-1'] } });
+    expect(orClauses).toContainEqual({
+      visibility: 'COMMUNITY',
+      authorId: { in: ['co-1'] },
+      OR: [{ communityId: null }, { communityId: { isSet: false } }],
+    });
   });
 });
 
@@ -103,7 +111,11 @@ describe('PostFeedService.getFeed visibility gating', () => {
     const orClauses = prisma.post.findMany.mock.calls[0][0].where.AND[0].OR;
     expect(orClauses).toContainEqual({ visibility: 'PUBLIC' });
     expect(orClauses).toContainEqual({ authorId: 'viewer-1' });
-    expect(orClauses).toContainEqual({ visibility: 'COMMUNITY', authorId: { in: ['co-1'] } });
+    expect(orClauses).toContainEqual({
+      visibility: 'COMMUNITY',
+      authorId: { in: ['co-1'] },
+      OR: [{ communityId: null }, { communityId: { isSet: false } }],
+    });
   });
 });
 

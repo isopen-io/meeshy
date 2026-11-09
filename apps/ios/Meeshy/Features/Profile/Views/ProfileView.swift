@@ -915,9 +915,7 @@ struct ProfileView: View {
         isUploadingAvatar = true
         Task {
             do {
-                let compressed = await ImageCompressor.compressOffMain(image, maxSizeKB: 500)
-                let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "avatar.jpg")
-                let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
+                let updatedUser = try await ProfileImageUploader().upload(image, as: .avatar)
                 authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "profile.avatar.updated", bundle: .main))
@@ -935,9 +933,7 @@ struct ProfileView: View {
         isUploadingBanner = true
         Task {
             do {
-                let compressed = await ImageCompressor.compressOffMain(image, maxSizeKB: 800)
-                let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "banner.jpg")
-                let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
+                let updatedUser = try await ProfileImageUploader().upload(image, as: .banner)
                 authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "profile.banner.updated", bundle: .main))

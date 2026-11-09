@@ -7,6 +7,7 @@
  */
 
 import type { MessageLiveness } from '../messages/message-liveness';
+import type { MessageProtectionRow } from '../messages/push-envelope-protection';
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
@@ -58,6 +59,20 @@ export type MessageBannerSource = MessagePrismSource & {
   readonly ephemeralDuration: number | null;
   readonly effectFlags: number | null;
   readonly liveness: MessageLiveness;
+  /**
+   * #17195 — ce que la BASE dit de la protection du message, pour le SECOND
+   * VERROU de l'enveloppe de l'appareil. `null` ⇒ la relecture n'a rien rendu,
+   * et `protectedBeyondEncryption` l'arbitre en « protégé ».
+   *
+   * C'est un type imbriqué et non cinq colonnes de plus, parce que l'absence de
+   * relecture doit se DIRE : aplaties, les cinq colonnes à `null` se lisent
+   * « message ordinaire », soit le fail-OPEN exact que la garde refuse. Le
+   * champ en répète deux (`ephemeralDuration`, `effectFlags`) que l'horloge
+   * porte déjà au premier niveau — deux types parce que deux questions, comme
+   * cette source elle-même sépare le Prisme de l'horloge : l'un dit ce qui
+   * QUALIFIE la bulle, l'autre ce qui RETIENT le chiffré.
+   */
+  readonly protection: MessageProtectionRow | null;
 };
 
 /**
@@ -98,6 +113,8 @@ export const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
   messageType: null,
   ephemeralDuration: null,
   effectFlags: null,
+  // Fail-CLOSED : une relecture en échec ne prononce pas « ordinaire ».
+  protection: null,
   liveness: 'unknown',
 };
 

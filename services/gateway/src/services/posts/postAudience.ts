@@ -6,7 +6,7 @@ import { pairAccessAmong } from '../relations/pairAccess';
 import type { RelationAccess } from '@meeshy/shared/utils/relation-access';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import { teamPeersAdmitted } from '../relations/teamPeers';
-import { filterCommunityCoMembersAmong } from './communityVisibility';
+import { filterCommunityPostReadersAmong } from './communityVisibility';
 import { filterDirectContactIdsAmong } from './directContactVisibility';
 
 /**
@@ -17,7 +17,7 @@ import { filterDirectContactIdsAmong } from './directContactVisibility';
  */
 export type PostAudiencePrisma = Pick<
   PrismaClient,
-  'friendRequest' | 'userRelation' | 'communityMember' | 'participant' | 'user'
+  'friendRequest' | 'userRelation' | 'community' | 'communityMember' | 'participant' | 'user'
 >;
 
 export interface PostAudienceParams {
@@ -28,6 +28,13 @@ export interface PostAudienceParams {
   visibility: string | null | undefined;
   /** `Post.visibilityUserIds` — liste blanche en `ONLY`, liste noire en `EXCEPT`. */
   visibilityUserIds?: readonly string[];
+  /**
+   * `Post.communityId` — REQUIS, comme `visibility` : une publication `COMMUNITY`
+   * posée dans une communauté ne s'admet qu'à ses lecteurs (#17178), et un appelant
+   * qui l'omettrait rouvrirait la règle du co-membre sans que rien ne le signale.
+   * `null` = publication sans communauté.
+   */
+  communityId: string | null;
   /** Les utilisateurs dont on teste le droit de voir. Ordre préservé dans le résultat. */
   candidateUserIds: readonly string[];
 }
@@ -77,7 +84,8 @@ export interface PostAudienceParams {
  * | `FRIENDS`       | amis ∪ contacts DM de l'auteur                        |
  * | `EXCEPT`        | amis ∪ contacts DM, moins `visibilityUserIds`         |
  * | `ONLY`          | exactement `visibilityUserIds`                        |
- * | `COMMUNITY`     | les co-membres de communauté de l'auteur              |
+ * | `COMMUNITY`     | posée dans une communauté : ses membres actifs et son |
+ * |                 | créateur (#17178) ; sinon les co-membres de l'auteur  |
  * | `ACQUAINTANCES` | niveau effectif Connaissance et au-dessus (#13931)    |
  * | `CLOSE`         | niveau effectif Proche et au-dessus                   |
  * | `BLOOD`         | niveau effectif Sang                                  |
@@ -94,7 +102,7 @@ export interface PostAudienceParams {
  * la règle est explicite.
  *
  * **En panne, on REFUSE.** Le graphe illisible n'admet personne, et
- * `filterCommunityCoMembersAmong` rend déjà un ensemble vide sur exception — même politique. Cette
+ * `filterCommunityPostReadersAmong` rend déjà un ensemble vide sur exception — même politique. Cette
  * fonction garde une frontière de confidentialité : l'échec d'une notification
  * légitime est réparable (la mention est persistée, elle reste visible en
  * ouvrant le post), la fuite d'un extrait de post privé sur un écran verrouillé
@@ -120,8 +128,12 @@ export async function filterPostConsumers(params: PostAudienceParams): Promise<s
 
   if (visibility === 'COMMUNITY') {
     // Les seuls candidats, jamais la communauté entière (#14081).
-    const coMemberIds = await filterCommunityCoMembersAmong(prisma, authorId, others);
-    return admit((id) => coMemberIds.has(id));
+    const readerIds = await filterCommunityPostReadersAmong(prisma, {
+      authorId,
+      communityId: params.communityId,
+      candidates: others,
+    });
+    return admit((id) => readerIds.has(id));
   }
 
   const circleFeature = postCircleAudienceFeature(visibility);
