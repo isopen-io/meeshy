@@ -51,7 +51,7 @@ struct PreviewVideoPlayer: View {
                                 // fixed; the Button carries the a11y label.
                                 Image(systemName: "play.fill")
                                     .font(.system(size: MeeshyIconSize.xl))
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(Color.white)
                                     .offset(x: 2)
                             )
                     }
@@ -103,7 +103,7 @@ struct PreviewVideoPlayer: View {
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Reculer de 5 secondes", bundle: .main))
@@ -119,7 +119,7 @@ struct PreviewVideoPlayer: View {
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Avancer de 5 secondes", bundle: .main))

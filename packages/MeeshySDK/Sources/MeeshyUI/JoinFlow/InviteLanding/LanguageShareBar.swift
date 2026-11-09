@@ -72,7 +72,7 @@ public struct LanguageShareBar: View {
                     }
                 }
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             }
         }
     }

@@ -15,13 +15,13 @@ enum NearbyDiscoveryMode: String, CaseIterable, Sendable {
     case density
     case pins
     case list
-    /// **La chaleur par POPULARITÉ** (directive 2026-08-27) — dans la section
+    /// **La chaleur par POPULARITÉ** — dans la section
     /// Discover, chauffe les points selon les vues et impressions des
     /// publications, distincte de la densité (« le plus de posts »).
     case popular
 }
 
-/// **Les deux SECTIONS de l'écran (switch du haut, directive 2026-08-27).**
+/// **Les deux SECTIONS de l'écran (switch du haut).**
 /// `nearby` = autour de moi (Densité · Points · Liste) ; `discover` = la
 /// plateforme (Densité · Populaire), réservée au staff (`NearbyDiscoverAccess`).
 enum NearbyDiscoverySection: String, CaseIterable, Sendable {
@@ -448,7 +448,7 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     /// le runtime vérifie l'exécuteur à son entrée. Sans `receive(on:)`, la
     /// première transition réseau après l'ouverture de l'écran trappait
     /// (`SIGTRAP`, `_dispatch_assert_queue_fail`) — le crash « Find nearby »
-    /// du 2026-08-25, quelques secondes après le tap. Même forme que
+    /// quelques secondes après le tap. Même forme que
     /// `SyncPillViewModel`, l'autre abonné de ce publisher.
     private func observeNetwork() {
         network.isOfflinePublisher

@@ -19,7 +19,7 @@ public struct TrackBarView<Content: View>: View {
     public let iconName: String?
     /// Piste de la section FOND : la tuile d'étiquette prend une teinte indigo
     /// marquée et VoiceOver annonce « Fond » — les sections doivent se VOIR
-    /// dans les noms et types de piste (retour user 2026-07-20), pas seulement
+    /// dans les noms et types de piste, pas seulement
     /// se déduire du préfixe BG_.
     public let isBackgroundSection: Bool
     /// Largeur de la colonne d'étiquette collante. Passée par le conteneur —

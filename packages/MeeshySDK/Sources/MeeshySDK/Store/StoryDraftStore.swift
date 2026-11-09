@@ -696,7 +696,7 @@ public final class StoryDraftStore: @unchecked Sendable {
         return true
     }
 
-    // MARK: - Cycle de vie de publication (2026-08-02)
+    // MARK: - Cycle de vie de publication
 
     private static func metaValue(_ db: Database, draftId: String, key: String) throws -> String? {
         try String.fetchOne(

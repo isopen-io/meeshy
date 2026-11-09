@@ -151,7 +151,7 @@ public struct ReactionUpdateEvent: Decodable, Sendable {
     /// comparer les deux champs ne matche jamais pour sa propre réaction.
     public let participantId: String?
     /// `User.id` de l'auteur de la réaction (envoyé par le gateway depuis
-    /// toujours, décodé depuis 2026-08-12). C'est LA clé d'identité stable
+    /// toujours, décodé). C'est LA clé d'identité stable
     /// pour reconnaître l'écho de sa propre réaction et dédupliquer contre la
     /// ligne optimiste.
     public let userId: String?

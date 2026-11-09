@@ -131,7 +131,7 @@ struct AudioMediaView: View, Equatable {
     /// texte séparée. `BubbleStandardLayout` set ce flag à true quand il
     /// détecte audio + content, et SKIP son rendu textBubbleContent externe.
     /// Référence : draft-ietf-mimi-content-08 §MultiPart processAll +
-    /// disposition inline (user feedback 2026-05-29).
+    /// disposition inline.
     var embedsCaptionInWidget: Bool = false
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
@@ -285,11 +285,11 @@ struct AudioMediaView: View, Equatable {
     /// (→ show original, `nil`) or has a matching translated-audio transcript
     /// (→ that language code). `nil` when nothing matches — the strip then
     /// defaults to the original, per the Prisme rule (never falls back to
-    /// `.first`). Prisme audio-follow (2026-08-09) — this value now ALSO
+    /// `.first`). Prisme audio-follow — this value now ALSO
     /// seeds which audio track plays, not just which transcription TEXT is
     /// shown: it flows into `AudioPlayerView`'s `initialTranscriptionLanguage`
     /// parameter, whose doc comment (`Sources/MeeshyUI/Media/AudioPlayerView.swift`,
-    /// search "Prisme audio-follow (2026-08-09)") carries the full playback
+    /// search "Prisme audio-follow") carries the full playback
     /// contract — see that doc rather than assuming playback is unaffected.
     /// Internal (not `private`) so `@testable import` can observe the
     /// resolution from MeeshyTests without exposing it publicly.
@@ -542,8 +542,7 @@ struct AudioMediaView: View, Equatable {
                 // syncActiveTrack) ; la sélection redescend par
                 // `activeAudioLanguageOverride` → onChange. L'écriture
                 // LOCALE n'est que le repli des surfaces sans VM — la
-                // garder en plus du canal VM créerait deux vérités (revue
-                // adversariale 2026-08-18).
+                // garder en plus du canal VM créerait deux vérités.
                 if let onSelectAudioLanguage {
                     onSelectAudioLanguage(code)
                     return
@@ -586,6 +585,10 @@ struct AudioMediaView: View, Equatable {
                 } else {
                     onReplyTap?(ref.messageId)
                 }
+            }
+            .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) {
+                guard ref.opensQuotedTarget else { return }
+                if replyIsStory { onStoryReplyTap?(ref.messageId) } else { onReplyTap?(ref.messageId) }
             }
         }
     }

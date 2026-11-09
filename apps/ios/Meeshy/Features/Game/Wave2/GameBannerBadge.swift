@@ -4,11 +4,9 @@ import MeeshyUI
 
 // MARK: - Le niveau et le rang sur la bannière d'une fiche (#10093, #10231)
 //
-// Deux groupes sur la bannière, aux deux bouts (précision porteur 2026-10-11 : « les détails de points à gauche de la
-// bannière et le reste de rang à droite ») :
+// Deux groupes sur la bannière, aux deux bouts:
 //  · au DÉBUT (à gauche ; à droite en RTL) : le nom du palier au-dessus du cercle — qui porte le niveau, sa
-//    progression et le prestige — et à droite les étincelles en grand, par leur glyphe (« ✦ 18 347 » — porteur
-//    2026-10-19, #10951) ; le record ne se lit qu'à VoiceOver ;
+// progression et le prestige — et à droite les étincelles en grand, par leur glyphe (#10951); le record ne se lit qu'à VoiceOver;
 //  · à la FIN : le nom du rang et sa division en haut (« Murmure V »), le blason, puis la Gloire dessous
 //    (« ♛ 18 790 », #17202) — la Gloire fait le rang, elle se lit à côté de lui.
 // Ce que le serveur sert du jeu de ce membre selon SES réglages (`GET /users/:userId/game`, réglage `rank`) — la
@@ -93,7 +91,7 @@ struct GameBannerBadge: View {
 
     var body: some View {
         // Un `ZStack`, jamais un `Group` : un `Group` distribue ses modificateurs à ses enfants, et tant que rien n'est
-        // chargé il n'en a aucun — la tâche qui devait charger ne démarrait donc jamais (recette 2026-10-11). L'ancre
+        // chargé il n'en a aucun — la tâche qui devait charger ne démarrait donc jamais. L'ancre
         // invisible garantit au `ZStack` un enfant, donc une apparition, cache vide compris.
         ZStack {
             GameLoadAnchor()
@@ -183,7 +181,7 @@ struct GameBannerBadgeView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// En colonne : le nom du palier, le cercle, puis les étincelles dessous (porteur 2026-10-19, #10951).
+    /// En colonne: le nom du palier, le cercle, puis les étincelles dessous (#10951).
     private var levelGroup: some View {
         VStack(spacing: MeeshySpacing.xxs) {
             small(model.levelName)
@@ -201,7 +199,7 @@ struct GameBannerBadgeView: View {
     /// Les lignes du groupe du rang, de haut en bas.
     enum RankLine { case name, crest, glory }
 
-    /// Le titre du rang en haut, le blason, la Gloire en bas (porteur 2026-11-09, #17202) — le même ordre que le groupe
+    /// Le titre du rang en haut, le blason, la Gloire en bas (#17202) — le même ordre que le groupe
     /// du niveau d'en face : le nom, l'emblème, le compte.
     static let rankLines: [RankLine] = [.name, .crest, .glory]
 

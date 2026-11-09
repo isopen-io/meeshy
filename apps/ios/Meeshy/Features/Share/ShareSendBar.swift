@@ -70,7 +70,7 @@ struct ShareSendBar: View {
         Button(action: onSend) {
             Text(plan.limits.trimCount > 0 ? ShareSheetCopy.trimLast(plan.limits.trimCount) : ShareSheetCopy.sendButton(plan.title, count: recipientCount))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.buttonHeight)
                 .background(Capsule().fill(plan.canSend ? accent : theme.textMuted.opacity(MeeshyOpacity.strong)))
                 .contentShape(Capsule())
@@ -84,7 +84,7 @@ struct ShareSendBar: View {
     private func banner(_ text: String, symbol: String, color: Color) -> some View {
         Label(text, systemImage: symbol)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .padding(MeeshySpacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(color.opacity(MeeshyOpacity.light)))

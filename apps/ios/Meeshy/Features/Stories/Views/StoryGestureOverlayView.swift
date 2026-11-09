@@ -43,7 +43,6 @@ struct StoryGestureOverlayView: View {
     /// d'emojis, overlay de commentaires, sélecteurs plein écran). Le prochain
     /// toucher la referme AU LIEU de naviguer — sinon l'utilisateur avance dans
     /// la story en croyant simplement fermer ce qu'il vient d'ouvrir
-    /// (directive user 2026-07-25).
     let hasActiveFeature: Bool
     /// Ferme la surface ouverte. Appelé à la place de toute autre action.
     let onDismissActiveFeature: () -> Void
@@ -80,12 +79,10 @@ struct StoryGestureOverlayView: View {
     /// navigation prev/next et devient un hold (toggle pause + hide chrome).
     ///
     /// 0,45 s — proche du seuil d'un long-press iOS (0,5 s). À 0,2 s, valeur
-    /// posée le 2026-05-21, la navigation par tap devenait inatteignable : un
+    /// posée, la navigation par tap devenait inatteignable: un
     /// tap humain POSÉ (par opposition à un flick sec) dure couramment 150 à
     /// 300 ms, donc franchissait le seuil et armait le hold. L'utilisateur
     /// visait la story suivante et obtenait une pause avec le chrome masqué
-    /// (report user 2026-07-27 : « le tap sur la partie gauche et droite ne
-    /// permet plus d'aller vers l'arrière ni vers la story suivante »).
     private let holdThresholdSeconds: TimeInterval = 0.45
     /// Fenêtre pendant laquelle deux taps centrés comptent pour un double tap.
     private let doubleTapWindowSeconds: TimeInterval = 0.3
@@ -218,8 +215,7 @@ struct StoryGestureOverlayView: View {
                                 onChromeVisibilityChange(!isFullscreenStorySession)
                                 HapticFeedback.light()
                             case .none:
-                                // Arme le long-press. Il est un TOGGLE (spec
-                                // 2026-07-25) : il met en pause et masque les
+                                // Arme le long-press. Il est un TOGGLE: il met en pause et masque les
                                 // contrôleurs, et un second long-press rend la
                                 // lecture ET les contrôleurs.
                                 isResumingTap = false

@@ -69,14 +69,14 @@ extension BubbleContent {
         // `preferredLangCode` quand le message n'a AUCUNE traduction texte :
         // sans lui, le drapeau-toggle d'un vocal traduit restait inerte
         // (`preferredLangCode` nil ⇒ tap sans effet) et affichait la
-        // mauvaise face (user 2026-08-18 : le drapeau doit switcher l'audio).
+        // mauvaise face.
         preferredAudioLangCode: String? = nil,
         currentUserId: String,
         timeString: String? = nil,
         isEditSaving: Bool = false,
         hasEditHistory: Bool = false,
         recipientCount: Int = 1,
-        // 4th axis of the Prisme étendu (2026-05-26) — device locale, gated
+        // 4th axis of the Prisme étendu — device locale, gated
         // identically to `regional`/`custom` in `buildAvailableFlags` (only
         // surfaced when a translation actually exists for it). Default `nil`
         // keeps every existing call site (none of which pass this yet)
@@ -511,7 +511,7 @@ extension BubbleContent {
         preferredLang: String?,
         regional: String?,
         custom: String?,
-        // 4th axis of the Prisme étendu (2026-05-26) — gated identically to
+        // 4th axis of the Prisme étendu — gated identically to
         // `regional`/`custom`: only surfaced when a translation (text or
         // audio) actually exists for it. Never supplants the first 3 axes.
         deviceLocale: String? = nil,

@@ -10,7 +10,7 @@ extension iPadRootView {
         ZStack {
             // Offline state surfaced via ConnectionBanner inline chip
             // (safe-area inset) — see iOS root pattern. Legacy
-            // full-width red OfflineBanner retired 2026-05-27.
+            // full-width red OfflineBanner retired.
 
             // Toasts de retour : hôte UNIQUE au niveau de `MeeshyApp` (`.feedbackToastOverlay()`), comme sur
             // iPhone. Les monter ici aussi les doublait, avec un tap qui ignorait leur action.

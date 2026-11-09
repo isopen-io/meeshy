@@ -113,8 +113,7 @@ struct PostSceneMosaic: View {
     /// tient déjà pour les médias.
     @State private var page = 0
 
-    /// **Chaque scène porte SA légende — là où la place le permet** (directive
-    /// porteur 2026-09-06, en deux temps).
+    /// **Chaque scène porte SA légende — là où la place le permet** (en deux temps).
     ///
     /// > « La légende doit s'afficher par-dessus la scène PRÉCISE et non
     /// > par-dessus le poste entier ! Chaque scène a sa légende d'image ! »
@@ -299,7 +298,7 @@ struct PostSceneMosaic: View {
             // scalait. La cible tactile reste à 44.
             Image(systemName: glyphe)
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: UIFontMetrics.default.scaledValue(for: 34), height: UIFontMetrics.default.scaledValue(for: 34))
                 .background(Circle().fill(.black.opacity(0.45)))
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
@@ -312,7 +311,7 @@ struct PostSceneMosaic: View {
     private var compteur: some View {
         Text("\(page + 1) / \(document.scenes.count)")
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(.black.opacity(0.5)))
@@ -484,7 +483,7 @@ struct PostSceneMosaic: View {
         .onTapGesture { onTapScene?(tuile.sceneIndex) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(libelle(tuile, bouge: bouge))
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(.isButton).accessibilityAction { onTapScene?(tuile.sceneIndex) }
     }
 
     /// **Le player d'une tuile — nommé pour être LU** (#5593).
@@ -527,8 +526,7 @@ struct PostSceneMosaic: View {
 
     /// **Le son est COUPÉ, et voici pourquoi vous n'entendez rien.**
     ///
-    /// > « Les scènes cinématiques jouent avec signe audio barré » (constat
-    /// > porteur 2026-09-06).
+    /// > « Les scènes cinématiques jouent avec signe audio barré ».
     ///
     /// Un INDICATEUR, pas un contrôle — et la distinction est une décision, pas
     /// une facilité. `ScenePlayerConfig.locksMute` fige le muet du mode `.card`
@@ -554,7 +552,7 @@ struct PostSceneMosaic: View {
         if montreLIndicateurDeSonCoupe {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: UIFontMetrics.default.scaledValue(for: 22), height: UIFontMetrics.default.scaledValue(for: 22))
                 .background(Circle().fill(.black.opacity(0.45)))
                 .padding(MeeshySpacing.sm)
@@ -569,7 +567,7 @@ struct PostSceneMosaic: View {
     private var glypheDeLecture: some View {
         Image(systemName: "play.fill")
             .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-            .foregroundColor(.black.opacity(0.75))
+            .foregroundStyle(Color.black.opacity(0.75))
             .frame(width: UIFontMetrics.default.scaledValue(for: 22), height: UIFontMetrics.default.scaledValue(for: 22))
             .background(Circle().fill(.white.opacity(0.85)))
             .padding(MeeshySpacing.sm)
@@ -590,7 +588,7 @@ struct PostSceneMosaic: View {
                 Rectangle().fill(.black.opacity(0.45))
                 Text("+\(tuile.overflow)")
                     .font(.title2.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             .allowsHitTesting(false)
         }

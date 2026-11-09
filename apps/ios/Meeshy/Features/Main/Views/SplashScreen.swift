@@ -91,7 +91,7 @@ struct SplashScreen: View {
                 // Tagline
                 Text(String(localized: "splash.tagline", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
                     .offset(y: showSubtitle ? 0 : -20)

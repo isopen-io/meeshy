@@ -44,7 +44,7 @@ struct PreviewAudioPlayer: View {
                     // Comme la bulle : aucun nom de fichier, qui trahirait l'original (#9010).
                     Text(MediaKindLabel.voiceMessage())
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     Text(player.timeLabel(attachmentDurationMs: track.durationMs))
@@ -81,7 +81,7 @@ struct PreviewAudioPlayer: View {
             if let transcript = track.transcript, !transcript.isEmpty {
                 Text(transcript)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -90,7 +90,7 @@ struct PreviewAudioPlayer: View {
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
                         .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Reculer de 5 secondes", bundle: .main))
@@ -118,7 +118,7 @@ struct PreviewAudioPlayer: View {
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
                         .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Avancer de 5 secondes", bundle: .main))

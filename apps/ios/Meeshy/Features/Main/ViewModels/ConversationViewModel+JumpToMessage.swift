@@ -2,8 +2,7 @@ import Foundation
 import MeeshySDK
 import os
 
-// Extrait de `ConversationViewModel.swift` (4 992 lignes, hors budget 800-1100
-// de la directive 2026-08-28, qui interdit d'AJOUTER à un fichier hors
+// Extrait de `ConversationViewModel.swift` (4 992 lignes, qui interdit d'AJOUTER à un fichier hors
 // budget). Le lot #4823 ajoute le sticker à `sendMessage` : on extrait
 // d'abord, on ajoute ensuite. Responsabilité tenue ici : SAUTER vers un
 // message hors fenêtre (citation tapée, résultat de recherche) et revenir au

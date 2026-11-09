@@ -22,7 +22,7 @@ struct ConversationListHeaderOverlay: View {
     @Binding var showShareLinkSheet: Bool
     /// Compact story trail injected into the header's TITLE slot: une fois la
     /// liste scrollée, on ne lit plus « Meeshy Chats » mais la trail, à gauche
-    /// des boutons d'actions (directive user 2026-08-13). Reçoit l'offset de
+    /// des boutons d'actions. Reçoit l'offset de
     /// scroll vivant depuis la passe de rendu de ce header.
     var titleAccessory: ((CGFloat) -> AnyView)? = nil
 

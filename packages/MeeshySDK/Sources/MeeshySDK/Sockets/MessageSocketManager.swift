@@ -367,7 +367,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         startHeartbeat()
 
-        // CALL-FIX 2026-06-06 — replay the app foreground/background state on
+        // CALL-FIX — replay the app foreground/background state on
         // every (re)connect so the gateway always knows whether to deliver
         // incoming calls via the in-app socket banner (foreground) or a VoIP
         // push / CallKit (background). The first connect fires before the app's
@@ -375,7 +375,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // a foreground app as unknown and push CallKit for the first call.
         socket?.emit("presence:app-state", ["foreground": lastAppForeground])
 
-        // CALL-FIX 2026-06-06 — ask the gateway to replay any in-progress
+        // CALL-FIX — ask the gateway to replay any in-progress
         // (ringing) call so a user who comes online / opens the app mid-ring
         // sees the incoming banner immediately, instead of missing the call
         // that started while they were offline/backgrounded.
@@ -537,7 +537,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         forceReconnect()
     }
 
-    /// CALL-FIX 2026-06-05 — app-injected predicate: "is a call active right now?".
+    /// CALL-FIX — app-injected predicate: "is a call active right now?".
     /// Kept as an opaque closure so the SDK stays call-agnostic (SDK purity rule).
     /// The app wires it to `CallManager.isCallActiveFlag` (a thread-safe nonisolated
     /// flag) at boot. When it returns true, `forceReconnect()` is suppressed so a

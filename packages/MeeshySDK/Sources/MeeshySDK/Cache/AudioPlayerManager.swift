@@ -349,7 +349,7 @@ public class AudioPlayerManager: ObservableObject {
 
     // MARK: - Progress Timer (local player only)
     //
-    // 10 Hz tick (2026-05-28) — see `progressTickInterval` doc. Aucun délégué
+    // 10 Hz tick — see `progressTickInterval` doc. Aucun délégué
     // n'est posé sur l'`AVAudioPlayer` : c'est CE tick qui constate la fin. À la
     // fin naturelle, `isPlaying` repasse à faux et `currentTime` revient à 0 —
     // le seuil `>= 1.0` n'est donc jamais atteint, et un lecteur qui ne joue plus

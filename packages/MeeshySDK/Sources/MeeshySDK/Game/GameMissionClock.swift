@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Le minuteur d'une mission (#9539, directive porteur 2026-10-06)
+// MARK: - Le minuteur d'une mission (#9539)
 //
 // Chaque carte de mission porte un MINUTEUR jusqu'à la fin de sa plage — celle de la mission personnelle (deux heures
 // pleines), ou la fin du jour de jeu (minuit dans le fuseau du COMPTE) pour les trois du jour. Passé la fin, la carte

@@ -44,7 +44,7 @@ struct ShareRecipientRow: View, Equatable {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(recipient.title)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                     HStack(spacing: MeeshySpacing.xs) {
                         if recipient.isEncrypted {
@@ -103,18 +103,18 @@ struct ShareRecipientRow: View, Equatable {
         case .sending:
             ProgressView().frame(width: 24, height: 24)
         case .sent:
-            Image(systemName: "checkmark.circle.fill").font(.title3).foregroundColor(MeeshyColors.success)
+            Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(MeeshyColors.success)
         case .queued:
-            Image(systemName: "clock.arrow.circlepath").font(.title3).foregroundColor(MeeshyColors.warning)
+            Image(systemName: "clock.arrow.circlepath").font(.title3).foregroundStyle(MeeshyColors.warning)
         case .failed:
             Button(ShareSheetCopy.retry, action: onRetry)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .frame(minHeight: MeeshyControlSize.tapTarget)
         case nil:
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.title3)
-                .foregroundColor(isSelected ? Color(hex: accentHex) : theme.textMuted.opacity(0.6))
+                .foregroundStyle(isSelected ? Color(hex: accentHex) : theme.textMuted.opacity(0.6))
         }
     }
 }
@@ -156,7 +156,7 @@ struct ShareRecentChip: View, Equatable {
                 }
                 Text(recipient.title.split(separator: " ").first.map(String.init) ?? recipient.title)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                     .frame(maxWidth: 64)
             }

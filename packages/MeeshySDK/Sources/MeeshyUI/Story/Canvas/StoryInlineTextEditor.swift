@@ -150,8 +150,8 @@ public final class StoryInlineTextEditor: UITextView {
     /// ajoutée a des bounds quasi-nulles (designSize ≈ 0 + 16 padding)
     /// et l'invite "Exprimez-vous…" reste clippée à 6 px de large.
     ///
-    /// `maxHeight` borne la hauteur à celle de la ZONE d'édition (spec
-    /// 2026-08-01). Au-delà, le champ défile au lieu de continuer à grandir :
+    /// `maxHeight` borne la hauteur à celle de la ZONE d'édition.
+    /// Au-delà, le champ défile au lieu de continuer à grandir :
     /// un texte long sortait auparavant par le haut de l'écran, ses premières
     /// lignes devenant illisibles ET inéditables. Sans zone mesurée la valeur
     /// par défaut laisse la croissance libre, comportement d'origine.

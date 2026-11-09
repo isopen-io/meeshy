@@ -72,7 +72,7 @@ extension ConversationListViewModel {
                 // (`toConversation` écarte le titre DB). Le payload socket
                 // porte le titre BRUT — le greffer sur un DM écrase le nom
                 // affiché (« sandra raveloson » → « Sany » au premier
-                // pin/mute, vu 2026-07-04). Greffe réservée aux
+                // pin/mute). Greffe réservée aux
                 // conversations renommables.
                 if let title = event.title, self.conversations[index].type != .direct {
                     self.conversations[index].title = title
@@ -258,7 +258,7 @@ extension ConversationListViewModel {
 
         // Primary discovery path for newly-created conversations.
         //
-        // Per the 2026-05-11 socket-event audit (see
+        // Per the socket-event audit (see
         // tasks/socketio-events-cleanup.md), the gateway now emits a typed
         // `conversation:new` event to the user-rooms of EVERY participant —
         // creator included — when a conversation is created. Before this,
@@ -437,8 +437,7 @@ extension ConversationListViewModel {
             .store(in: &cancellables)
 
         // `didReconnect` ne joue ICI aucun delta : le relais du moteur en joue un
-        // seul par reconnexion, revenu par `conversationsDidChange` (audit
-        // 2026-05-11 : deux abonnés doublaient les `/conversations`). Il ne
+        // seul par reconnexion, revenu par `conversationsDidChange`. Il ne
         // rejoue que le préchargement — maintenant, et au rechargement suivant (#10572).
         messageSocket.didReconnect
             .receive(on: DispatchQueue.main)

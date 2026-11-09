@@ -9,7 +9,7 @@ import MeeshySDK
 /// espace design 1080×1920, et rendues live par NOTRE moteur largeur-variable
 /// (`MeeshyStrokeCanvas` côté parent) au lieu du modèle d'encre PencilKit. Ainsi le trait
 /// que l'utilisateur voit PENDANT le tracé (lent = largeur choisie, rapide = plus fin)
-/// est EXACTEMENT celui qui est commité au lift-up (C4, 2026-06-03).
+/// est EXACTEMENT celui qui est commité au lift-up.
 ///
 /// Le trait en cours est émis à chaque déplacement via `onStrokeInProgress` (puis `nil` au
 /// commit/annulation pour effacer l'aperçu) ; le trait final est émis via `onStrokeCommitted`
@@ -26,7 +26,7 @@ struct StrokeCaptureLayer: UIViewRepresentable {
     var onStrokeInProgress: (StoryDrawingStroke?) -> Void
     var onStrokeCommitted: (StoryDrawingStroke) -> Void
     var onEraseGesture: ([CGPoint]) -> Void
-    /// Pinch 2 doigts pendant le dessin (mode immersif, user 2026-07-11) :
+    /// Pinch 2 doigts pendant le dessin :
     /// zoom du viewport + pan par le déplacement du centroïde. `scale` est le
     /// facteur du geste, `translation` le delta du centroïde en points ÉCRAN
     /// (le `.offset` viewport SwiftUI s'applique après le `.scaleEffect`, donc

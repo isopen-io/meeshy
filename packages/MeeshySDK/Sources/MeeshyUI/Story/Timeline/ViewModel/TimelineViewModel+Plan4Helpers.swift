@@ -238,7 +238,7 @@ extension TimelineViewModel {
     //
     // Aucun réglage manuel : `project.slideDuration` a un unique écrivain,
     // `recomputeSlideDuration()`. `setSlideDuration` et `extendSlideDuration`
-    // ont été supprimés (2026-07-27) — ils écrivaient une valeur que le
+    // ont été supprimés — ils écrivaient une valeur que le
     // recalcul depuis le contenu effaçait à l'édition suivante, sans que rien
     // ne marque qu'elle venait de l'auteur. Le plafond de 600 s qu'ils
     // portaient vit désormais dans `ClipWindowResolver.maximumEnd`.

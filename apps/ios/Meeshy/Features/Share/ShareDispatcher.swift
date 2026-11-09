@@ -64,7 +64,7 @@ final class LiveShareDispatcher: ShareDispatching {
             }
             let sent = await sendText(text, to: recipient)
             // Une story ENVOYÉE allume l'anneau « Envoyer » de son lecteur
-            // (directive porteur 2026-10-01) — la passerelle ne sert pas ce geste.
+            // la passerelle ne sert pas ce geste.
             if case .card(let card) = request.subject, card.kind == .story, sent.conversationId != nil {
                 StoryViewerParticipationStore.shared.note(.sent, storyId: card.contentId)
             }

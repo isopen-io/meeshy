@@ -129,7 +129,7 @@ nonisolated enum QualityThresholds {
     /// Phase 1 fix P10: cellular ACK round-trip can take 3-4s in poor signal.
     /// 5s timeout absorbs worst-case without false positives.
     static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
-    /// #9111 (2026-10-02) — 6 → 8. With `reconnectAttemptBudgetSeconds` (10 s)
+    /// #9111 — 6 → 8. With `reconnectAttemptBudgetSeconds` (10 s)
     /// the attempts span 80 s: never LESS than the server's rejoin grace plus a
     /// heartbeat (`CallRules.rejoinGrace` 60 s + 10 s) — the client must not give
     /// up a call the gateway still holds for it — and, backoff included (~110 s),

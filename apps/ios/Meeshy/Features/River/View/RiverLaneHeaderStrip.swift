@@ -162,7 +162,7 @@ struct RiverLaneHeaderStrip: View {
             Circle().fill(color).frame(width: 7, height: 7)
             Text(name.uppercased())
                 .font(MeeshyFont.relative(11.5, weight: .semibold))
-                .foregroundColor(color)
+                .foregroundStyle(color)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)

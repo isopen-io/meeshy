@@ -94,7 +94,7 @@ struct ReportUserView: View {
                         HStack(spacing: MeeshySpacing.md) {
                             Image(systemName: reason.icon)
                                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                                .foregroundColor(selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500)
+                                .foregroundStyle(selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500)
                                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                                 .background(
                                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
@@ -217,7 +217,7 @@ struct ReportUserView: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
             Text(title.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))

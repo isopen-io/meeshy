@@ -19,7 +19,7 @@ nonisolated enum CallSpeakerRoute {
     /// CRITIQUE simulator : `.none` (= défaut earpiece/Receiver) ne route PAS
     /// vers les haut-parleurs macOS sur iOS Simulator — silence total même si
     /// l'ADM tourne ; on force `.speaker`. Sur device réel, `.none` = earpiece
-    /// pour `.voiceChat`. CALL-FIX 2026-06-05 (macOS) — même panne sur
+    /// pour `.voiceChat`. CALL-FIX (macOS) — même panne sur
     /// iOS-app-on-Mac (« Designed for iPad », PAS Catalyst) : pas d'earpiece,
     /// donc `.speaker` forcé ; test à l'exécution car le Mac exécute la
     /// tranche iphoneos.

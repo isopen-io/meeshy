@@ -226,6 +226,7 @@ struct BubbleCarouselView: View {
             fullscreenAttachment = attachment
             HapticFeedback.light()
         }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { fullscreenAttachment = attachment }
         .overlay(alignment: .bottom) {
             DownloadBadgeView(
                 attachment: attachment,
@@ -301,9 +302,7 @@ struct BubbleCarouselView: View {
     // MARK: - Prefetch
 
     /// Pure gate: should this attachment be prefetched? Extracted so the wiring
-    /// in `prefetchAdjacentPages` (2026-07-21 fix — the ±1 carousel neighbor
-    /// prefetch previously ignored `MediaDownloadPolicyEngine` entirely,
-    /// burning cellular data against 'Never'/'Wi-Fi only') is testable
+    /// in `prefetchAdjacentPages` (burning cellular data against 'Never'/'Wi-Fi only') is testable
     /// without spinning up the full carousel view. Sous 100 Ko, la pièce part
     /// quel que soit le réseau (#14639) ; au-delà, la politique de son type.
     nonisolated static func shouldPrefetch(

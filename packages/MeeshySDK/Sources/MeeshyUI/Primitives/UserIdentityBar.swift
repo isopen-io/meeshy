@@ -189,14 +189,14 @@ public struct UserIdentityBar: View {
             if let name {
                 Text(name)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
 
         case .username(let value):
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
 
         case .roleBadge(let role):
@@ -208,7 +208,7 @@ public struct UserIdentityBar: View {
                     Image(systemName: role.icon)
                         .meeshyScaledFont(MeeshyIconSize.xxs)
                 }
-                .foregroundColor(roleBadgeColor(for: role))
+                .foregroundStyle(roleBadgeColor(for: role))
             }
 
         case .time(let value):
@@ -243,14 +243,14 @@ public struct UserIdentityBar: View {
         case .memberSince(let value):
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
 
         case .actionButton(let label, let action):
             Button(action: action) {
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(
@@ -280,7 +280,7 @@ public struct UserIdentityBar: View {
                     Image(systemName: "chevron.down")
                         .meeshyScaledFont(8, weight: .medium)
                 }
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
@@ -292,7 +292,7 @@ public struct UserIdentityBar: View {
         case .text(let value, _):
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
         }
     }
@@ -340,7 +340,7 @@ public struct UserIdentityBar: View {
             // évoquant un échec tant que l'état n'est pas `.failed`.
             Image(systemName: "clock")
                 .font(.system(size: MeeshyIconSize.xxs))
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
@@ -363,13 +363,13 @@ public struct UserIdentityBar: View {
                     .font(.system(size: MeeshyIconSize.xxs, weight: .black))
                     .offset(x: 4)
             }
-            .foregroundColor(readColor)
+            .foregroundStyle(readColor)
             .frame(width: 17)
             .accessibilityLabel(String(localized: "userIdentity.read", defaultValue: "Lu", bundle: .module))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: MeeshyIconSize.xxs))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
         }
     }
 
@@ -377,7 +377,7 @@ public struct UserIdentityBar: View {
         Button(action: action) {
             Image(systemName: "translate")
                 .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
         }
         .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
         .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))

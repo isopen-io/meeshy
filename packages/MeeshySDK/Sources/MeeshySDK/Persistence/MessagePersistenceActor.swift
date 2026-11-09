@@ -99,7 +99,7 @@ public actor MessagePersistenceActor {
     /// **n'a pas de colonne userId** (cf. `MessageDatabaseMigrations.swift`
     /// migration "outbox") — il est donc impossible de filtrer par user.
     /// Approche safe-by-construction : drop tous les rows. Décision Q3
-    /// actée dans le design doc UserSession (2026-05-26). Sans ça, un
+    /// actée dans le design doc UserSession. Sans ça, un
     /// message enqueued offline par user A serait envoyé sous l'identité
     /// du user B après un logout+login rapide sur le même device.
     /// Câblée depuis `DependencyContainer.wireOutboxLogoutHook`.

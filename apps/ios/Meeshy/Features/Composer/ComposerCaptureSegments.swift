@@ -148,13 +148,6 @@ nonisolated enum ComposerCaptureRecordingBudget {
         return min(1, max(0, elapsed / budget))
     }
 
-    /// Le remplissage de chaque case, de gauche à droite, chacun dans `0...1`.
-    static func slotFills(elapsed: TimeInterval, budget: TimeInterval?, slots: Int = slots) -> [Double] {
-        guard slots > 0 else { return [] }
-        let rempli = fraction(elapsed: elapsed, budget: budget) * Double(slots)
-        return (0..<slots).map { min(1, max(0, rempli - Double($0))) }
-    }
-
     /// La limite est-elle atteinte ? Sans maximum, jamais.
     static func reached(elapsed: TimeInterval, budget: TimeInterval?) -> Bool {
         guard let budget, budget > 0 else { return false }

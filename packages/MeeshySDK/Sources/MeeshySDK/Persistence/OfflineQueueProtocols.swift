@@ -86,7 +86,7 @@ public protocol OfflineQueueing: Sendable {
         type: String?,
         location: SharedPlace?,
         mentions: [PostMentionInput]?,
-        /// Le SECOND opt-in de position (spec du 2026-08-02 §2). Il fait le
+        /// Le SECOND opt-in de position. Il fait le
         /// MÊME trajet que `location`, et pour la même raison : `location`
         /// survivait déjà au flush pendant que le consentement se perdait
         /// entre le composer et la file, si bien qu'un média posté hors ligne

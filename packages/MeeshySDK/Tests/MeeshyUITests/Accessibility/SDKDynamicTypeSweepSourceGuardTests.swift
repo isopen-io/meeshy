@@ -276,4 +276,61 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Story/Timeline/Views/Overlay/RulerView.swift": 1,
         "Story/Timeline/Views/Overlay/SnapGuideView.swift": 1
     ]
+
+    private static let featuresMainFixedFontCeiling = 88
+
+    private struct MainSite {
+        let file: String
+        let receiver: String
+        let scaled: String
+    }
+
+    private static let featuresMainMigratedSites: [MainSite] = [
+        MainSite(file: "Components/MemberManagementSection.swift", receiver: "Image(systemName: \"person.slash\")", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Components/MessageDetail/MessageDetailChrome.swift", receiver: "Image(systemName: icon)", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Components/MessageDetail/MessageReactionsDetailView.swift", receiver: "Image(systemName: \"face.smiling\")", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Components/MessageDetail/MessageTranscriptionDetailView.swift", receiver: "Image(systemName: \"text.word.spacing\")", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Views/ConversationMediaGalleryView+Pages.swift", receiver: "Image(systemName: \"photo\")", scaled: ".meeshyScaledFont(MeeshyIconSize.hero)"),
+        MainSite(file: "Components/ConversationLockSheet.swift", receiver: "Image(systemName: iconName)", scaled: ".meeshyScaledFont(44)")
+    ]
+
+    private static let featuresMainFixedSentinels: [FixedGlyph] = [
+        FixedGlyph(file: "Components/ConversationLockSheet.swift", receiver: "Text(\"\\(digit)\")", marker: ".font(.system(size: 26"),
+        FixedGlyph(file: "Components/MemberManagementSection.swift", receiver: "Image(", marker: ".font(.system(size: 13, weight: .semibold))")
+    ]
+
+    private static func mainSources() throws -> [MeeshyUISourceScan.Source] {
+        try MeeshyUISourceScan.sources(under: MeeshyUISourceScan.appFeaturesMainRoot)
+    }
+
+    func test_featuresMain_fixedFont_staysUnderCeiling() throws {
+        let regex = try NSRegularExpression(pattern: #"\.font\(\.system\(size:"#)
+        let sources = try Self.mainSources()
+        XCTAssertGreaterThan(sources.count, 900)
+        let total = sources.reduce(0) { sum, source in
+            sum + regex.numberOfMatches(in: source.text, range: NSRange(source.text.startIndex..., in: source.text))
+        }
+        XCTAssertLessThanOrEqual(total, Self.featuresMainFixedFontCeiling, "Police figée dans Features/Main : \(total) sites")
+    }
+
+    func test_featuresMain_migratedSites_scaleWithDynamicType() throws {
+        let sources = try Self.mainSources()
+        for site in Self.featuresMainMigratedSites {
+            let text = try XCTUnwrap(sources.first { $0.path == site.file }?.text, "\(site.file) introuvable")
+            let tails = Self.ranges(of: site.receiver, in: text).map { String(text[$0.upperBound...].prefix(160)) }
+            XCTAssertFalse(tails.isEmpty, "\(site.file) : \(site.receiver) introuvable")
+            XCTAssertTrue(tails.contains { $0.contains(site.scaled) }, "\(site.file) : \(site.receiver) ne suit plus Dynamic Type")
+            XCTAssertFalse(
+                tails.contains { $0.prefix(80).contains(".font(.system(size:") },
+                "\(site.file) : \(site.receiver) a retrouvé une police figée")
+        }
+    }
+
+    func test_featuresMain_fixedGlyphsStayFixed() throws {
+        let sources = try Self.mainSources()
+        for glyph in Self.featuresMainFixedSentinels {
+            let text = try XCTUnwrap(sources.first { $0.path == glyph.file }?.text, "\(glyph.file) introuvable")
+            XCTAssertTrue(text.contains(glyph.marker), "\(glyph.file) : le marqueur figé \(glyph.marker) a disparu")
+        }
+    }
 }

@@ -67,8 +67,7 @@ struct ConversationComposerDock<Zone: View>: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            // Composer transparent, sans fond (#3920, directive porteur
-            // 2026-08-26) : le seul état qui dépendait de ce matériau
+            // Composer transparent, sans fond (#3920): le seul état qui dépendait de ce matériau
             // PARTAGÉ était le composer nu — `MentionSuggestionOverlay`,
             // `EmojiKeyboardPanel`, `closedConversationBanner` et
             // `blockedComposerZone` se dotent CHACUN de leur propre fond

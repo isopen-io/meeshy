@@ -22,7 +22,7 @@ enum StoryVerticalGestureAction: Equatable {
 /// Décide du sort d'un drag vertical selon l'état plein écran.
 ///
 /// Le swipe bas porte DEUX sens selon le contexte ; la règle « sortir du plein
-/// écran » prime sur « quitter la story » (spec 2026-07-25), sinon il serait
+/// écran » prime sur « quitter la story », sinon il serait
 /// impossible de revenir en mode fenêtré au doigt.
 enum StoryVerticalGestureDecisions {
 

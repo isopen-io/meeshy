@@ -84,8 +84,8 @@ public protocol CallTranscriptRemoteServiceProviding: Sendable {
 
 // MARK: - Service
 
-/// Replay du journal de transcription persisté côté gateway (décision
-/// produit 2026-08-13) : le transcript survit à la suppression de l'app et
+/// Replay du journal de transcription persisté côté gateway:
+/// le transcript survit à la suppression de l'app et
 /// de ses caches locaux. L'accès est restreint PAR LE SERVEUR aux
 /// participants effectifs de l'appel (403 sinon). Atome réseau typé — la
 /// cascade « cache local d'abord, distant en fallback » est app-side

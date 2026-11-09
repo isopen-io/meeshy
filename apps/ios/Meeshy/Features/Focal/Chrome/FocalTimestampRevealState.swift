@@ -63,7 +63,7 @@ final class FocalTimestampRevealState: ObservableObject {
 /// Ce qu'une rangée NON focalisée ne montre QUE pendant le défilement :
 /// masqué au repos, révélé au geste, effacé `lingerMs` après le dernier.
 ///
-/// **Directive 2026-08-24** — l'heure passait déjà par ce révélé, les coches
+/// **** — l'heure passait déjà par ce révélé, les coches
 /// non : une conversation immobile portait donc la moitié de ses détails de
 /// réception. Cet enrobage est le point unique où la fenêtre s'applique, pour
 /// que les deux informations ne puissent plus diverger.

@@ -151,7 +151,7 @@ struct ThemedConversationRow: View {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         Text(conversation.displayName)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: conversation.userState.unreadCount > 0 ? .bold : .semibold))
-                            .foregroundColor(textPrimary)
+                            .foregroundStyle(textPrimary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -190,7 +190,7 @@ struct ThemedConversationRow: View {
                     // derrière `.equatable()` (aucune composante temporelle dans
                     // sa comparaison), donc sans ce wrapper l'horodatage relatif
                     // ne se rafraîchissait plus jamais après le montage initial
-                    // (audit 2026-07-20, "Horodatages relatifs figés").
+                    // ("Horodatages relatifs figés").
                     LiveRelativeTimestamp(date: conversation.lastMessageAt)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
@@ -312,7 +312,7 @@ struct ThemedConversationRow: View {
             if tagInfo.remaining > 0 {
                 Text("+\(tagInfo.remaining)")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundColor(textMuted)
+                    .foregroundStyle(textMuted)
                     .padding(.horizontal, MeeshySpacing.xsPlus)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(
@@ -381,7 +381,7 @@ struct ThemedConversationRow: View {
         let badgeColor = MeeshyColors.unreadBadgeBackground(isDark: isDark)
         return Text(NotificationBadge.displayed(conversation.userState.unreadCount))
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.xsPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .frame(minWidth: 24, minHeight: 24)
@@ -428,7 +428,7 @@ struct ThemedConversationRow: View {
             if !draft.previewText.isEmpty {
                 Text(draft.previewText)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(textSecondary)
+                    .foregroundStyle(textSecondary)
                     .lineLimit(1)
             }
         }
@@ -635,7 +635,7 @@ struct ConversationTitleLabel: View {
                     )))
             }
             Text(name)
-                .foregroundColor(color)
+                .foregroundStyle(color)
                 .lineLimit(lineLimit)
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(.leading)

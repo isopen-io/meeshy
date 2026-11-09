@@ -81,7 +81,7 @@ final class StoryPhotoSaveService: ObservableObject {
     private let concatenate: @MainActor ([URL], URL) async -> Bool
 
     /// **Le filigrane nomme l'AUTEUR de l'œuvre, jamais celui qui l'enregistre**
-    /// (recette #9681, 2026-10-08) : un réel de @demo-test-staging enregistré par
+    /// (recette #9681): un réel de @demo-test-staging enregistré par
     /// @atabeth sortait signé « @atabeth ».
     private let watermark: @MainActor (String?) -> StoryExportWatermark?
 

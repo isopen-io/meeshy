@@ -101,7 +101,7 @@ struct CallsTab: View {
         } label: {
             Text(String(localized: "calls.clearAll", defaultValue: "Tout effacer", bundle: .main))
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
@@ -113,18 +113,18 @@ struct CallsTab: View {
     private var eraseFailedBanner: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .accessibilityHidden(true)
             Text(String(localized: "calls.erase.failed", defaultValue: "L'effacement a échoué. Réessayez.", bundle: .main))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Spacer()
             Button {
                 viewModel.dismissEraseFailure()
             } label: {
                 Image(systemName: "xmark")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .contentShape(Rectangle())
             }
@@ -250,32 +250,32 @@ private struct CallJournalRow: View, Equatable {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(name)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textPrimary)
+                                .foregroundStyle(record.isMissed ? MeeshyColors.error : theme.textPrimary)
                                 .lineLimit(1)
 
                             if let participants = participantsLine {
                                 Text(participants)
                                     .font(.caption)
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                                     .lineLimit(1)
                             }
 
                             HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: directionIcon)
                                     .font(.caption2.weight(.bold))
-                                    .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textMuted)
+                                    .foregroundStyle(record.isMissed ? MeeshyColors.error : theme.textMuted)
                                 if record.isVideo {
                                     Image(systemName: "video.fill")
                                         .font(.caption2)
-                                        .foregroundColor(theme.textMuted)
+                                        .foregroundStyle(theme.textMuted)
                                 }
                                 Text(record.startedAt.relativeTimeString)
                                     .font(.caption.weight(.medium))
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                                 if !record.durationLabel.isEmpty {
                                     Text("· \(record.durationLabel)")
                                         .font(.caption.weight(.medium))
-                                        .foregroundColor(theme.textMuted)
+                                        .foregroundStyle(theme.textMuted)
                                 }
                             }
                         }
@@ -384,7 +384,7 @@ struct CallRowDialButton: View {
         } label: {
             Image(systemName: defaultIsVideo ? "video.fill" : "phone.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 // 44x44 — Apple HIG minimum tap target (was 40x40).
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .background(Circle().fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))

@@ -383,6 +383,7 @@ struct ComposerCaptureChrome: View {
             onValidateSegments: { validate() },
             liveDuration: session.camera.recordingDuration,
             recordingBudget: session.recordingBudget,
+            holding: session.barCapture.holding,
             flashIntensity: session.barCapture.flashIntensity,
             onFlashIntensity: { session.setFlashIntensity($0) },
             flipping: session.barCapture.flipping,

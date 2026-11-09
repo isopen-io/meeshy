@@ -256,7 +256,7 @@ public struct ConversationScrollControlsView: View {
                         Text(String(localized: "conversation.offline", defaultValue: "Hors ligne", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
-                    .foregroundColor(contentColor)
+                    .foregroundStyle(contentColor)
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.vertical, MeeshySpacing.smPlus)
                 case .rest:
@@ -267,7 +267,7 @@ public struct ConversationScrollControlsView: View {
                     // 44×44 atteint au passage la cible tactile HIG.
                     Image(systemName: "chevron.down")
                         .font(.system(size: MeeshyIconSize.xs, weight: .bold))
-                        .foregroundColor(contentColor)
+                        .foregroundStyle(contentColor)
                         .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 }
             }
@@ -291,7 +291,7 @@ public struct ConversationScrollControlsView: View {
                 .lineLimit(1)
             pulsingDots
         }
-        .foregroundColor(contentColor)
+        .foregroundStyle(contentColor)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
         .frame(maxWidth: 180)
@@ -335,7 +335,7 @@ public struct ConversationScrollControlsView: View {
 
             pulsingDots
         }
-        .foregroundColor(contentColor)
+        .foregroundStyle(contentColor)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
         .frame(maxWidth: 180)
@@ -391,7 +391,7 @@ public struct ConversationScrollControlsView: View {
     /// Jusqu'à 5 messages accumulés pendant que le lecteur est remonté dans
     /// l'historique, la pastille se contente de l'aperçu (nom + dernier
     /// message) — le format condensé « N nouveaux messages » n'apparaît
-    /// qu'au-delà (#3921, directive porteur 2026-08-26).
+    /// qu'au-delà (#3921).
     nonisolated static func shouldShowCountHeadline(unreadCount: Int) -> Bool {
         unreadCount > 5
     }
@@ -429,8 +429,8 @@ public struct ConversationScrollControlsView: View {
                     // toute la durée d'une frappe, alors que les deux
                     // informations sont vraies en même temps.
                     //
-                    // **Les visages et les points, PAS le nom** (directive
-                    // porteur 2026-09-10). Le nom y était redondant à deux
+                    // **Les visages et les points, PAS le nom**.
+                    // Le nom y était redondant à deux
                     // titres : la pile porte déjà la photo — ou les initiales —
                     // de celui qui écrit, et le libellé d'accessibilité du
                     // bouton entier annonce déjà « <nom>, Défiler vers le bas ».
@@ -488,7 +488,7 @@ public struct ConversationScrollControlsView: View {
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             }
         }
-        .foregroundColor(contentColor)
+        .foregroundStyle(contentColor)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
         // **Une BORNE, pas une largeur** (#5963). `maxWidth` s'ÉTEND à ce que

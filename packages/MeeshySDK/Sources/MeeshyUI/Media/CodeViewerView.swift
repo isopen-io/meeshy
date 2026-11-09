@@ -115,14 +115,14 @@ public struct CodeViewerView: View {
 
                 Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
                     .font(MeeshyFont.relative(12, weight: .semibold))
-                    .foregroundColor(isDark ? .white : .black)
+                    .foregroundStyle(isDark ? .white : .black)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
                 Text(language.displayName)
                     .meeshyScaledFont(9, weight: .heavy)
-                    .foregroundColor(langColor)
+                    .foregroundStyle(langColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
@@ -197,7 +197,7 @@ public struct CodeViewerView: View {
                     Text(String(localized: "media.code.more_lines", defaultValue: "\(totalLines - 10) lignes de plus", bundle: .module))
                         .meeshyScaledFont(9, weight: .medium)
                 }
-                .foregroundColor(langColor.opacity(0.7))
+                .foregroundStyle(langColor.opacity(0.7))
                 .padding(.top, 4)
             }
         }
@@ -266,7 +266,7 @@ public struct CodeFullSheet: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                     }
                     .accessibilityLabel(String(localized: "common.close", bundle: .module))
                 }
@@ -279,7 +279,7 @@ public struct CodeFullSheet: View {
 
                         Text(language.displayName)
                             .meeshyScaledFont(10, weight: .heavy)
-                            .foregroundColor(langColor)
+                            .foregroundStyle(langColor)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(langColor.opacity(0.15)))
@@ -295,7 +295,7 @@ public struct CodeFullSheet: View {
                             }
                         } label: {
                             Image(systemName: "doc.on.doc")
-                                .foregroundColor(Color(hex: accentColor))
+                                .foregroundStyle(Color(hex: accentColor))
                         }
                         .accessibilityLabel(String(localized: "media.code.copy.a11y", bundle: .module))
                     }
@@ -341,7 +341,7 @@ public struct CodeFullSheet: View {
         VStack(spacing: 16) {
             Image(systemName: "chevron.left.forwardslash.chevron.right")
                 .meeshyScaledFont(48)
-                .foregroundColor(langColor)
+                .foregroundStyle(langColor)
 
             Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
                 .font(MeeshyFont.relative(16, weight: .semibold))

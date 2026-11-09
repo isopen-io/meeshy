@@ -19,7 +19,7 @@ import MeeshySDK
 
 /// Stockage du texte du composer, hors de l'arbre de dépendances de la racine.
 ///
-/// Politique de persistance du brouillon (décision produit 2026-06-09) :
+/// Politique de persistance du brouillon:
 /// - **Fin de mot** (espace, retour ligne) ou **champ vidé** → persistance
 ///   IMMÉDIATE. Le brouillon est donc durable mot par mot.
 /// - **Milieu de mot** → fenêtre de 400 ms (filet de sécurité pour une pause

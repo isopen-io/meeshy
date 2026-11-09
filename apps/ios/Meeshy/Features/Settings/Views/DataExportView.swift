@@ -95,7 +95,7 @@ struct DataExportView: View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "shield.checkered")
                 .font(MeeshyFont.relative(24, weight: .semibold))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -180,8 +180,8 @@ struct DataExportView: View {
             // Glyphe figé : badge de dimension fixe 28×28 (doctrine 74i/86i — le scaling
             // Dynamic Type déborderait/tronquerait le glyphe hors du cadre fixe).
             Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(color)
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .medium))
+                .foregroundStyle(color)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xs)
@@ -264,7 +264,7 @@ struct DataExportView: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(color)
+                .foregroundStyle(color)
                 .accessibilityHidden(true)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))

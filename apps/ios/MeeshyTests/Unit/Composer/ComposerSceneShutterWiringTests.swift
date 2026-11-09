@@ -67,7 +67,7 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
     func test_lAppuiLong_filmeDesQueLaCameraEstPrete() throws {
         let hote = try source("MeeshyComposerHost+Viewfinder.swift")
         guard let geste = hote.range(of: "funchandleSceneCaptureLongPress(){"),
-              let finGeste = hote.range(of: "funchandleSceneQuickTap()", range: geste.upperBound..<hote.endIndex)
+              let finGeste = hote.range(of: "funcendSceneWriting()", range: geste.upperBound..<hote.endIndex)
         else { return XCTFail("le geste a changé de forme") }
         let appel = String(hote[geste.upperBound..<finGeste.lowerBound])
         XCTAssertTrue(appel.contains("armSceneCamera()sceneCapture.beginHold()"),
@@ -85,21 +85,16 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         XCTAssertTrue(corps.contains("startFilming()"))
     }
 
-    /// **Le toucher d'une scène vide ARME le viseur, sans rien prendre**
-    /// (#8711), et le tap du fond le lui demande d'abord.
-    func test_lePremierToucher_armeSansPhotographier_parLaLoi() throws {
+    /// **Le toucher d'une scène vide n'arme plus le viseur** (#17269, porteur
+    /// 2026-11-09) : la caméra s'arme à l'ouverture du composer, l'appui long filme.
+    func test_leToucherDeLaScene_nArmePlusLeViseur() throws {
         let code = try source("MeeshyComposerHost+Viewfinder.swift")
-        guard let début = code.range(of: "funchandleSceneQuickTap()->Bool{"),
-              let fin = code.range(of: "funchandleSceneCaptureLongPressChanged(", range: début.upperBound..<code.endIndex)
-        else { return XCTFail("le toucher a changé de forme") }
-        let corps = String(code[début.upperBound..<fin.lowerBound])
-        XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.offers("))
-        XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.tap(format:selectedFormat)"))
-        XCTAssertTrue(corps.contains("armSceneCamera()"))
-        XCTAssertFalse(corps.contains("takeScenePhoto()"), "le premier toucher ne prend plus la photo")
+        XCTAssertFalse(code.contains("funchandleSceneQuickTap("), "le toucher d'armement a quitté le composer")
         let hote = try source("MeeshyComposerHost.swift")
-        XCTAssertTrue(hote.contains("ifissue==.armViewfinder,handleSceneQuickTap(){return}"),
-                      "le tap du fond arme le viseur, mais seulement sur le verdict du toucher à vide (#13839, L5)")
+        XCTAssertFalse(hote.contains("armViewfinder"), "le toucher du fond n'a plus de verdict « armer »")
+        let ouverture = try source("MeeshyComposerHost+ScenePicking.swift")
+        XCTAssertTrue(ouverture.contains("ifplan.armsCamera,sceneCameraStage==.off{armSceneCamera()}"),
+                      "la caméra s'arme à l'ouverture, selon le plan")
     }
 
     /// **Viseur armé : un toucher VISE, deux touchers PHOTOGRAPHIENT** (#9351,

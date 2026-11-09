@@ -555,7 +555,7 @@ extension APIPost {
     /// endroits, jusqu'au rafraichissement qui le retirait du fil.
     ///
     /// La source de ces reposts types STORY est tarie cote serveur (un repost
-    /// nait POST depuis le 2026-08-19, `PostService.repostPost`), mais une
+    /// nait POST, `PostService.repostPost`), mais une
     /// surface n'a pas a faire confiance au type de ce qu'on lui pousse.
     ///
     /// Formule par EXCLUSION, et non par liste blanche : `type` est un

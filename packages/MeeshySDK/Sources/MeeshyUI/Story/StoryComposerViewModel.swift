@@ -215,13 +215,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
     /// `StoryComposerViewModel+DrawingEditing.swift`).
     /// `public` en LECTURE : le rail *leading* montre les contrôleurs de
-    /// l'outil ouvert et TEINTE celui dont le panneau est déplié (directive
-    /// porteur 2026-08-30). L'écriture reste au module — elle passe par
+    /// l'outil ouvert et TEINTE celui dont le panneau est déplié.
+    /// L'écriture reste au module — elle passe par
     /// `beginDrawing` / `endDrawing` / `setExpandedDrawingTool`, qui posent les
     /// drapeaux par paires.
     @Published public internal(set) var drawingEditingMode: DrawingEditingMode = .inactive
 
-    /// Plein écran de TRACÉ (user 2026-07-11 v2) : l'outil dessin s'ouvre en
+    /// Plein écran de TRACÉ : l'outil dessin s'ouvre en
     /// mode LISTE (band avec les traits, rien d'activé) ; la sélection d'un
     /// pinceau bascule ce flag — canvas plein écran dessinable jusqu'aux
     /// angles, bulles seules, pinch-zoom. Retombe à `false` à la sortie du
@@ -247,7 +247,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Couleur/dégradé de fond sélectionné au Background tool. Appliqué EN
     /// DIRECT à `currentSlide.effects.background` — avant, la valeur ne
     /// rejoignait la slide qu'au prochain sync (publish/autosave) et le
-    /// canvas ne re-rendait pas à la sélection (retour user 2026-07-11).
+    /// canvas ne re-rendait pas à la sélection.
     @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())" {
         didSet {
             guard oldValue != backgroundColor else { return }
@@ -261,7 +261,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// (selectedImage) ET les `mediaObjects` modernes `isBackground == true`
     /// (chip Background) — ce dernier échappait au calcul et laissait le
     /// chrome en `.light` (pastel aléatoire) sur un letterbox blur sombre,
-    /// boutons inexploitables (captures user 2026-07-20). Un média de fond
+    /// boutons inexploitables. Un média de fond
     /// suit la luminance RÉELLE de son bitmap (2e vague de captures : capture
     /// d'écran BLANCHE en Background → chrome blanc invisible avec un `.dark`
     /// forfaitaire) ; sans bitmap mesurable, convention viewer → `.dark`.
@@ -404,7 +404,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// — donc ne stampe le bitmap sur le canvas — QUE lorsque cette version
     /// change (cf. `StoryCanvasRepresentable.updateUIView`). Muter `loadedImages`
     /// directement sans ce bump laisse le reader périmé : un média fraîchement
-    /// ajouté ne s'affiche jamais et le canvas reste noir (bug user 2026-07-20).
+    /// ajouté ne s'affiche jamais et le canvas reste noir.
     /// Toute *nouvelle* écriture dans `loadedImages` DOIT passer par ici.
     func registerLoadedImage(_ image: UIImage?, for id: String) {
         if let image {
@@ -523,7 +523,6 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Le store était mono-brouillon : commencer une deuxième story écrasait
     /// silencieusement la première. Chaque session porte désormais son id —
     /// neuf pour une ardoise vierge, celui du brouillon repris sinon
-    /// (spec 2026-08-01).
     public private(set) var draftId: String = UUID().uuidString
 
     /// Vrai quand la session a été rattachée à un brouillon CHOISI par

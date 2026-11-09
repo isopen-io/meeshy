@@ -277,7 +277,6 @@ extension ConversationListView {
                     // devenue chip draggable.
                     LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0,
                                   onDismiss: { dismissContextMenu() })
-
                     // L'aperçu d'appui long (#17242) : grande carte, menu
                     // COMPACT qu'on tire vers le haut. La progression vit dans
                     // `ConversationLongPressPeek` : le geste ne ré-évalue pas
@@ -308,9 +307,7 @@ extension ConversationListView {
 
     /// La carte de l'aperçu d'appui long = la carte des DERNIERS MESSAGES
     /// (bannière, avatar/logo, titre, icônes d'en-tête, fil récent) — drapeau
-    /// Lentille ON comme OFF (décision user 2026-08-21 : le menu des modes n'a
-    /// rien à faire dans l'aperçu ; le choix de mode garde ses deux portes,
-    /// l'encoche de la carte de focus et le sous-menu « Mode de lecture »).
+    /// Lentille ON comme OFF (le choix de mode garde ses deux portes, l'encoche de la carte de focus et le sous-menu « Mode de lecture »).
     func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights, reduceMotion: Bool) -> some View {
         ConversationPreviewView(
             conversation: conversation,
@@ -335,6 +332,7 @@ extension ConversationListView {
             dismissContextMenu()
             openConversation(conversation)
         }
+        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { dismissContextMenu(); openConversation(conversation) }
         // Frame de repos de la carte (mesurée overlay invisible, hors
         // transformation) — point d'arrivée de l'émergence.
         .background(
@@ -485,7 +483,7 @@ extension ConversationListView {
 
 /// Le mouvement de l'aperçu < iOS 26 : la carte ÉMERGE de la ligne pressée —
 /// départ lent, accélération à mi-course, rebond (overshoot 1.3, le rebond
-/// appartient au long-press, pas au swipe des lignes — feedback 2026-07-03) et
+/// appartient au long-press) et
 /// flou progressif. Sous Réduire les animations, un FONDU sur place, sans
 /// overshoot ni flou. Les deux moitiés du réglage (système et app) se lisent
 /// par `MeeshyMotion.shouldReduce`.

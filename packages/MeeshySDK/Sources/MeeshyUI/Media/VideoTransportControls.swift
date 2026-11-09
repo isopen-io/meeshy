@@ -8,7 +8,7 @@ import AVKit
 // `SharedAVPlayerManager` + une `ControlSet` + une couleur d'accent.
 //
 // Lifting Liquid Glass 2026-07-11 (spec docs/superpowers/specs/
-// 2026-07-11-video-player-liquid-glass-lifting-design.md) : centre
+// Video-player-liquid-glass-lifting-design.md) : centre
 // ⏪10 · ▶︎/⏸ · ⏩10 en `.adaptiveGlass` dans un `AdaptiveGlassContainer`,
 // et UNE seule barre capsule en bas (temps · scrubber · durée · mute ·
 // AirPlay · menu ⋯). Le menu ⋯ regroupe vitesse / boucle / PiP — la
@@ -229,7 +229,7 @@ public struct VideoTransportControls: View {
     private func timeLabel(_ seconds: Double) -> some View {
         Text(MediaFormat.duration(seconds))
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white.opacity(MeeshyOpacity.intense))
+            .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
             .lineLimit(1)
             .fixedSize()
     }

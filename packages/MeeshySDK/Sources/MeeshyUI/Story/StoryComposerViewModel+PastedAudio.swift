@@ -27,7 +27,7 @@ extension StoryComposerViewModel {
     /// la pose pour un dessin d'onde inverserait la hiérarchie entre le contenu
     /// et sa représentation.
     public func attachPastedAudio(url: URL, role: ComposerAudioRole? = nil) {
-        // **L'objet naît AVEC son adresse** (2026-09-06), avant tout `await`.
+        // **L'objet naît AVEC son adresse**, avant tout `await`.
         //
         // L'URL est connue dès l'appel ; la forme d'onde et la durée, non —
         // elles demandent de lire le fichier. Les écrire ensemble, à la fin du

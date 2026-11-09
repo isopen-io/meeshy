@@ -88,11 +88,11 @@ struct AboutView: View {
 
             Text(String(localized: "about.app_name", defaultValue: "Meeshy", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(versionString)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .contextMenu {
                     Button {
                         copyValue(versionString)
@@ -191,7 +191,7 @@ struct AboutView: View {
     private var copyrightSection: some View {
         Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits réservés.", bundle: .main))
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .frame(maxWidth: .infinity)
             .padding(.top, MeeshySpacing.sm)
     }
@@ -202,7 +202,7 @@ struct AboutView: View {
         HStack(spacing: MeeshySpacing.xs + 2) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundStyle(Color(hex: color))
             Text(title.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
@@ -226,7 +226,7 @@ struct AboutView: View {
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
             .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-            .foregroundColor(Color(hex: color))
+            .foregroundStyle(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
@@ -240,13 +240,13 @@ struct AboutView: View {
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .lineLimit(1)
         }
         .padding(.horizontal, MeeshySpacing.md + 2)
@@ -268,13 +268,13 @@ struct AboutView: View {
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.md))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundStyle(MeeshyColors.success)
         }
         .padding(.horizontal, MeeshySpacing.md + 2)
         .padding(.vertical, MeeshySpacing.sm + 2)
@@ -290,13 +290,13 @@ struct AboutView: View {
 
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "arrow.up.right")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(Color(hex: color))
+                        .foregroundStyle(Color(hex: color))
                 }
                 .padding(.horizontal, MeeshySpacing.md + 2)
                 .padding(.vertical, MeeshySpacing.sm + 2)

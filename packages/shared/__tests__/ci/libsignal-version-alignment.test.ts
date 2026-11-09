@@ -1,10 +1,11 @@
 // packages/shared/__tests__/ci/libsignal-version-alignment.test.ts
 //
 // #17113 — un message scellé par libsignal sur une plateforme ne s'ouvre sur
-// les autres que si toutes parlent la même version. Les quatre déclarations du
-// dépôt (passerelle, shared, iOS, Android) et les vecteurs croisés qu'elles
-// rejouent portent donc UNE version, épinglée à l'octet : une montée de l'une
-// sans les autres rougit ici, sur la suite `shared` qui tourne à chaque PR.
+// les autres que si toutes parlent la même version. Les déclarations du dépôt
+// (passerelle, shared, iOS, Android, et depuis #17114 le pont WASM du web) et
+// les vecteurs croisés qu'elles rejouent portent donc UNE version, épinglée à
+// l'octet : une montée de l'une sans les autres rougit ici, sur la suite
+// `shared` qui tourne à chaque PR.
 
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -100,9 +101,21 @@ const declarations = (): Record<string, string | undefined> => ({
   'packages/shared/fixtures/libsignal/cross-platform.vectors.json': (
     JSON.parse(read('packages/shared/fixtures/libsignal/cross-platform.vectors.json')) as { libsignal: string }
   ).libsignal,
+  'packages/libsignal-wasm/Cargo.toml (version)': read('packages/libsignal-wasm/Cargo.toml').match(/^version = "([^"]+)"/m)?.[1],
+  'packages/libsignal-wasm/Cargo.toml (tag libsignal-protocol)': read('packages/libsignal-wasm/Cargo.toml').match(
+    /^libsignal-protocol = \{[^}]*tag = "v([^"]+)"/m,
+  )?.[1],
+  'apps/web/src/lib/e2ee/libsignal/manifest.json': (JSON.parse(read('apps/web/src/lib/e2ee/libsignal/manifest.json')) as { libsignal: string })
+    .libsignal,
+  'apps/web/src/lib/licences/libsignal-engine.ts': onlyOne(
+    [...read('apps/web/src/lib/licences/libsignal-engine.ts').matchAll(/WEB_LIBSIGNAL_ENGINE[^=]*=\s*libsignalEngineAt\('([^']+)'\)/g)].map((match) => match[1]),
+  ),
+  'packages/shared/fixtures/libsignal/sealed-by/web.vectors.json': (
+    JSON.parse(read('packages/shared/fixtures/libsignal/sealed-by/web.vectors.json')) as { libsignal: string }
+  ).libsignal,
 });
 
-describe('libsignal — une seule version sur la passerelle, shared, iOS, Android et les vecteurs croisés (#17113)', () => {
+describe('libsignal — une seule version sur la passerelle, shared, iOS, Android, le web et les vecteurs croisés (#17113, #17114)', () => {
   it('chaque déclaration est une version EXACTE, sans plage', () => {
     Object.entries(declarations()).forEach(([path, version]) => {
       expect({ path, version }).toEqual({ path, version: expect.stringMatching(/^\d+\.\d+\.\d+$/) });

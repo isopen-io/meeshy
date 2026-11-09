@@ -9,13 +9,12 @@ extension StoryViewerView {
     /// Builds the floating comments overlay (`StoryCommentsOverlayView`).
     /// Rendered by `StoryViewerContentView` as a sibling of the story card,
     /// NOT inside it, so the overlay does not inherit the card's drag offset,
-    /// scale, or 3D rotation (bug 2026-05-28: overlay shifted left during
-    /// drag / scale transitions).
+    /// scale, or 3D rotation.
     ///
     /// The overlay carries no composer of its own: its rows' « Répondre »
     /// set the session's reply target, and the main composer — always at the
     /// bottom (`StoryComposerBarView`) — shows the reply banner above its
-    /// input row. One comment input zone (spec user 2026-05-28). The thread,
+    /// input row. One comment input zone. The thread,
     /// its count and its loads are `StoryCommentSession`'s.
     func storyCommentsOverlay(zone: StoryCommentsZone.Frame) -> StoryCommentsOverlayView {
         let thread = commentSession.thread

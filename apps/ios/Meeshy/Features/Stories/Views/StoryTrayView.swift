@@ -189,8 +189,7 @@ struct StoryTrayView: View {
     /// Résolution du profil « Moi » : le groupe de stories (avatar/couleur à
     /// jour, comme pour les autres utilisateurs via `StoryRingCell`) l'emporte
     /// quand il existe ; sinon repli sur `MeeshyUser` — « Voir le profil »
-    /// doit fonctionner même sans aucune story active (directive user
-    /// 2026-08-11).
+    /// doit fonctionner même sans aucune story active.
     private func myProfileUser() -> ProfileSheetUser? {
         let currentUser = AuthManager.shared.currentUser
         let userId = currentUser?.id ?? ""
@@ -247,7 +246,7 @@ struct StoryTrayView: View {
 // MARK: - Thumbnail Helper
 
 /// URL de la miniature de la dernière story du groupe — user request
-/// 2026-05-27 « dans la tray il faut mettre la vue miniature de la
+/// « dans la tray il faut mettre la vue miniature de la
 /// dernière story du groupe ». `stories` est trié ascendant par
 /// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
 /// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
@@ -386,22 +385,7 @@ private struct MyStoryButton: View {
                 .accessibilityAddTraits(.isButton)
                 .overlay(alignment: .bottomTrailing) {
                     if myMoodEmoji == nil {
-                        Button {
-                            onAddStatus?()
-                            HapticFeedback.medium()
-                        } label: {
-                            // user request 2026-05-28 — placeholder = x0.8 du
-                            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
-                            // pour garder la parité avec l'emoji mood animé
-                            // (cf. MeeshyAvatar.badgeSize .storyTray).
-                            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
-                            Text("\u{1F4AD}")
-                                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
-                                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                                .background(Circle().fill(theme.backgroundPrimary))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
+                        moodPlaceholderButton
                     }
                 }
                 .overlay {
@@ -427,7 +411,7 @@ private struct MyStoryButton: View {
                         viewModel.showStoryComposer = true
                         HapticFeedback.medium()
                     } label: {
-                        // User request 2026-07-04 : le (+) était COUPÉ en
+                        // User request: le (+) était COUPÉ en
                         // haut du tray — l'offset négatif (-4,-4) le
                         // faisait déborder du cadre de la cellule, et le
                         // conteneur scrollable rognait tout dépassement.
@@ -439,7 +423,7 @@ private struct MyStoryButton: View {
                         // (déborderait s'il scalait, doctrine 86i) ; le
                         // bouton porte le libellé.
                         Image(systemName: "plus")
-                            .font(.system(size: MeeshyIconSize.lg, weight: .bold))
+                            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
                             .foregroundStyle(Color.white)
                             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                             .background(
@@ -467,8 +451,29 @@ private struct MyStoryButton: View {
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
         }
+    }
+
+    private var moodPlaceholderButton: some View {
+        Button {
+            onAddStatus?()
+            HapticFeedback.medium()
+        } label: {
+            // user request — placeholder = x0.8 du
+            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
+            // pour garder la parité avec l'emoji mood animé
+            // (cf. MeeshyAvatar.badgeSize .storyTray).
+            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
+            Text("\u{1F4AD}")
+                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                .background(Circle().fill(theme.backgroundPrimary))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
 
     private func storyCountDots(_ group: StoryGroup) -> some View {
@@ -481,7 +486,7 @@ private struct MyStoryButton: View {
             if group.stories.count > 5 {
                 Text("+")
                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.strong))
+                    .foregroundStyle(Color.white.opacity(MeeshyOpacity.strong))
             }
         }
         .offset(y: 28)
@@ -534,8 +539,8 @@ private struct StoryUploadOverlay: View {
 
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .bold))
+                    .foregroundStyle(Color.white)
             } else {
                 Circle()
                     .trim(from: 0, to: displayedProgress)
@@ -550,7 +555,7 @@ private struct StoryUploadOverlay: View {
                 // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Text("\(Int(displayedProgress * 100))%")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -560,7 +565,7 @@ private struct StoryUploadOverlay: View {
                 // accessible complet vit sur l'overlay.
                 Text("+\(stackedCount)")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 18, height: 18)
                     .background(
                         Circle()
@@ -573,8 +578,7 @@ private struct StoryUploadOverlay: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(a11yLabel)
         // Purement informatif : cet overlay ne prend JAMAIS le geste destiné à
-        // l'avatar dessous (directive user 2026-08-01, postérieure au modèle
-        // tap-retry du 2026-07-31 qu'elle remplace).
+        // l'avatar dessous.
         //
         // Il portait auparavant `allowsHitTesting(isFailed)` plus un tap-retry
         // et un menu contextuel. En échec — exactement quand l'utilisateur a
@@ -719,7 +723,7 @@ struct PinnedStoryTrailBand: View {
             // visibles vivent (et animent).
             LazyHStack(alignment: .top, spacing: MeeshySpacing.md) {
                 // Sa propre story EN TÊTE, à la place qu'occupait le bouton
-                // « + » : depuis son retrait (directive user 2026-08-13), c'est
+                // « + »: depuis son retrait, c'est
                 // cet avatar-ci qui porte l'accès à la composition — deux
                 // affordances pour le même geste étaient une surcharge, pas une
                 // commodité. Le « + » survit là où il a du sens : en haut à
@@ -730,8 +734,7 @@ struct PinnedStoryTrailBand: View {
                         context: .storyTrayCompact,
                         showsUsername: false,
                         onViewStory: {
-                            // Parité avec la grande trail (supersession
-                            // 2026-08-02) : le tap ouvre la LISTE de gestion,
+                            // Parité avec la grande trail: le tap ouvre la LISTE de gestion,
                             // où vivent les onglets Publiées / Brouillons —
                             // et d'où l'on crée une story.
                             showMyStories = true

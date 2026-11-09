@@ -26715,43 +26715,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس المشهد لفتح الكاميرا"
+            "value": "اضغط مطولًا على المشهد للتصوير"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tippe auf die Szene für die Kamera"
+            "value": "Halte die Szene gedrückt zum Filmen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap the scene for the camera"
+            "value": "Hold the scene to film"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca la escena para la cámara"
+            "value": "Mantén pulsada la escena para grabar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez la scène pour la caméra"
+            "value": "Maintenez la scène pour filmer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca la scena per la fotocamera"
+            "value": "Tieni premuta la scena per registrare"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque na cena para a câmera"
+            "value": "Toque e segure a cena para gravar"
           }
         }
       }
@@ -43850,6 +43850,194 @@
           "stringUnit": {
             "state": "translated",
             "value": "voz clonada"
+          }
+        }
+      }
+    },
+    "a11y.main.quotedReply.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح الرسالة المقتبسة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zitierte Nachricht öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the quoted message"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el mensaje citado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le message cité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri il messaggio citato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir a mensagem citada"
+          }
+        }
+      }
+    },
+    "a11y.main.gallery.zoomToggle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تكبير أو العودة إلى الحجم الأصلي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vergrößern oder zur Originalgröße zurückkehren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom in or back to the original size"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ampliar o volver al tamaño original"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoomer ou revenir à la taille d’origine"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingrandisci o torna alla dimensione originale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ampliar ou voltar ao tamanho original"
+          }
+        }
+      }
+    },
+    "a11y.main.bubble.quickReact": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفاعل سريع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schnell reagieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "React quickly"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reaccionar rápido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réagir rapidement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reagisci rapidamente"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reagir rapidamente"
+          }
+        }
+      }
+    },
+    "a11y.main.reel.playPause": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشغيل أو إيقاف مؤقت"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiedergabe oder Pause"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play or pause"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproducir o pausar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lecture ou pause"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riproduci o metti in pausa"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproduzir ou pausar"
           }
         }
       }
@@ -75008,6 +75196,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconectando…"
+          }
+        }
+      }
+    },
+    "call.stage.controls.toggle.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إظهار عناصر التحكم أو إخفاؤها"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerelemente ein- oder ausblenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show or hide the controls"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar u ocultar los controles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher ou masquer les contrôles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra o nascondi i controlli"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar ou ocultar os controles"
           }
         }
       }
@@ -178955,6 +179190,241 @@
           "stringUnit": {
             "state": "translated",
             "value": "Compressão forte de fotos e vídeos"
+          }
+        }
+      }
+    },
+    "settings.media.opening.camera.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفتح الكاميرا خلف المشهد فور فتح المحرّر. اضغط مطولًا على المشهد للتصوير."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Kamera öffnet sich hinter der Szene, sobald der Editor aufgeht. Halte die Szene gedrückt, um zu filmen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The camera opens behind the scene as soon as the composer opens. Hold the scene to film."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La cámara se abre detrás de la escena en cuanto se abre el editor. Mantén pulsada la escena para grabar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La caméra s'ouvre derrière la scène dès l'ouverture du composer. Maintenez la scène pour filmer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La fotocamera si apre dietro la scena appena si apre l'editor. Tieni premuta la scena per registrare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A câmera abre atrás da cena assim que o editor abre. Toque e segure a cena para gravar."
+          }
+        }
+      }
+    },
+    "settings.media.opening.camera.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تجهيز الكاميرا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamera bereitstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get the camera ready"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparar la cámara"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Armer la caméra"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparare la fotocamera"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparar a câmera"
+          }
+        }
+      }
+    },
+    "settings.media.opening.header": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عند فتح المحرّر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beim Öffnen des Editors"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When opening the composer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al abrir el editor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À l'ouverture du composer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All'apertura dell'editor"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ao abrir o editor"
+          }
+        }
+      }
+    },
+    "settings.media.opening.library.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تظهر صورك في منتصف الشاشة، والكاميرا مرئية خلفها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Fotos erscheinen auf halber Höhe, die Kamera bleibt dahinter sichtbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your photos appear halfway up, with the camera visible behind them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus fotos aparecen a media altura, con la cámara visible detrás."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos photos s'ouvrent à mi-hauteur, la caméra visible derrière."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le tue foto appaiono a metà altezza, con la fotocamera visibile dietro."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suas fotos aparecem na metade da tela, com a câmera visível atrás."
+          }
+        }
+      }
+    },
+    "settings.media.opening.library.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح مكتبة الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotomediathek öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the photo library"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir la fototeca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir la photothèque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprire la libreria foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir a fototeca"
           }
         }
       }

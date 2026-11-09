@@ -48,8 +48,7 @@ extension UniversalComposerBar {
                 permanentEffectsToggleButton
             }
 
-            // **Le sticker à la place de l'humeur** (#9082, directive porteur
-            // 2026-10-02) : l'indicateur passif de tonalité laisse sa place à
+            // **Le sticker à la place de l'humeur** (#9082): l'indicateur passif de tonalité laisse sa place à
             // la porte du sélecteur de stickers — rendue seulement si l'hôte
             // sait l'ouvrir (loi 4).
             if let openStickers = resolvedOnStickerPicker {

@@ -110,14 +110,14 @@ struct MessageLanguageDetailView: View {
                     .frame(width: 8, height: 8)
                 Image(systemName: "text.bubble.fill")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(originalColor)
+                    .foregroundStyle(originalColor)
                 Text(String(format: String(localized: "message-detail.original", defaultValue: "Original • %@", bundle: .main), Self.languageName(for: originalLang)))
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Text(originalLang.uppercased())
                     .font(.system(.caption2, design: .monospaced).weight(.bold))
-                    .foregroundColor(originalColor)
+                    .foregroundStyle(originalColor)
                     .padding(.horizontal, MeeshySpacing.xsPlus)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(originalColor.opacity(MeeshyOpacity.light)))
@@ -143,7 +143,7 @@ struct MessageLanguageDetailView: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
                         .font(.caption2.weight(.medium))
-                        .foregroundColor(originalColor.opacity(MeeshyOpacity.heavy))
+                        .foregroundStyle(originalColor.opacity(MeeshyOpacity.heavy))
                     Text(transcription.text)
                         .font(.footnote)
                         .foregroundStyle(theme.textSecondary)
@@ -163,7 +163,7 @@ struct MessageLanguageDetailView: View {
                             .frame(width: 6, height: 6)
                         Text(Self.languageName(for: selectedCode))
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(langColor)
+                            .foregroundStyle(langColor)
                         Spacer()
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = nil }
@@ -176,6 +176,8 @@ struct MessageLanguageDetailView: View {
                                 .frame(width: 28, height: 28)
                                 .adaptiveGlass(in: Circle())
                                 .contentShape(Circle())
+                                .meeshyTapTarget()
+                                .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "message-detail.a11y.close-translation", defaultValue: "Fermer la traduction", bundle: .main))
@@ -202,12 +204,10 @@ struct MessageLanguageDetailView: View {
             Rectangle()
                 .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 .frame(height: 0.5)
-
             // Language list
             ForEach(LanguageDisplay.translationPickerLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
                 languageRow(lang, originalLang: originalLang)
             }
-
             if let translationError {
                 errorView(translationError)
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -294,7 +294,7 @@ struct MessageLanguageDetailView: View {
                     .font(.callout)
                 Text(lang.name)
                     .font(.footnote.weight(.medium))
-                    .foregroundColor(isSelected ? langColor : theme.textPrimary)
+                    .foregroundStyle(isSelected ? langColor : theme.textPrimary)
 
                 Spacer()
 
@@ -320,19 +320,19 @@ struct MessageLanguageDetailView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.medium))
-                            .foregroundColor(langColor.opacity(0.6))
+                            .foregroundStyle(langColor.opacity(0.6))
                     }
                     .accessibilityLabel(String(localized: "message-detail.a11y.retranslate", defaultValue: "Retraduire", bundle: .main))
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
+                        .foregroundStyle(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
                     HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "waveform")
                             .font(.caption2.weight(.medium))
                             .minimumScaleFactor(0.8)
-                            .foregroundColor(langColor.opacity(0.6))
+                            .foregroundStyle(langColor.opacity(0.6))
                         Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
                             .font(.caption2)
                             .foregroundStyle(theme.textMuted)
@@ -342,11 +342,11 @@ struct MessageLanguageDetailView: View {
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
+                        .foregroundStyle(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
                         .font(.caption2.weight(.medium))
-                        .foregroundColor(langColor)
+                        .foregroundStyle(langColor)
                         .padding(.horizontal, MeeshySpacing.sm)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(langColor.opacity(MeeshyOpacity.light)))

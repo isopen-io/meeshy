@@ -68,7 +68,7 @@ final class StoryPlaybackPipeline {
     ///
     /// The prefetcher's canvases stay in `.edit` for life (a warm cache): the
     /// visible `StoryReaderRepresentable` is the ONLY playing canvas — promoting
-    /// the prefetched one doubled every background video and audio (2026-05-28).
+    /// the prefetched one doubled every background video and audio.
     ///
     /// `setCurrentSlide` un-pauses by contract; the requested pause is put back
     /// right after, at the single call site, so a re-arm during a pause (the
@@ -104,7 +104,7 @@ final class StoryPlaybackPipeline {
 
     /// Prefetches every medium of `story` (players included), then runs
     /// `probe` — the foreground video audio probe, so the sound button is
-    /// settled before the slide shows (2026-05-28).
+    /// settled before the slide shows.
     @discardableResult
     func prefetch(_ story: StoryItem, then probe: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
         let sources = Self.prefetchSources(of: story)

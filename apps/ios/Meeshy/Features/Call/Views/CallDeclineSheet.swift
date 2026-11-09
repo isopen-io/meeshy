@@ -72,7 +72,7 @@ struct CallDeclineSheet: View {
             Button(action: sendDraft) {
                 Text(String(localized: "call.decline.custom.send", defaultValue: "Envoyer et refuser", bundle: .main))
                     .font(.body.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.plain)

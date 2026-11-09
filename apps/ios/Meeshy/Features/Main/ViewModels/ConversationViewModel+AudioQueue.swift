@@ -40,7 +40,7 @@ extension ConversationViewModel {
             listenedAttachmentIds: listenedAttachmentIds,
             // L'auto-avance joue la piste EFFECTIVE de chaque vocal — sans
             // ce résolveur, le 2e vocal sortait en V.O. pendant que sa bulle
-            // affichait le karaoké traduit (revue adversariale 2026-08-18).
+            // affichait le karaoké traduit.
             trackUrlResolver: { [weak self] message, attachment in
                 self?.effectiveAudioTrackUrl(for: attachment, message: message) ?? attachment.fileUrl
             }

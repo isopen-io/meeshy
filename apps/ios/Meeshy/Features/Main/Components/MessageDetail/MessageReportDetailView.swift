@@ -17,7 +17,7 @@ struct MessageReportDetailView: View {
     @State private var reportReason = ""
     @State private var isSubmittingReport = false
     /// Confirmation avant d'envoyer le signalement — action de modération,
-    /// modale de validation obligatoire (feedback device 2026-07-14).
+    /// modale de validation obligatoire.
     @State private var showReportConfirm = false
 
     var body: some View {

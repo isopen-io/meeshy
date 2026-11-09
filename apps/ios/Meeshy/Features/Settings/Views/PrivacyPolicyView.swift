@@ -121,7 +121,7 @@ struct PrivacyPolicyView: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "\(number).circle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
 
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))

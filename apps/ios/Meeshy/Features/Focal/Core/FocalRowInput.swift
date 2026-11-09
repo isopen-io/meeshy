@@ -83,8 +83,7 @@ struct FocalRowInput: Equatable {
     let isFirstInGroup: Bool
     /// La rangée ferme-t-elle un groupe ? En Script/Focal, c'est elle qui
     /// porte le drapeau-toggle de langue (`FocalRow.flagAndReactionsRow`) —
-    /// pas chaque message du groupe (#3919, directive porteur 2026-08-26,
-    /// miroir de `isLastReceivedMessage`/mode Bulles où c'est déjà le DERNIER
+    /// pas chaque message du groupe (#3919, miroir de `isLastReceivedMessage`/mode Bulles où c'est déjà le DERNIER
     /// message qui porte l'identité).
     let isLastInGroup: Bool
     let senderId: String
@@ -165,15 +164,14 @@ struct FocalRowInput: Equatable {
     /// Le DERNIER message reçu de la conversation : la rangée Script/Focal y
     /// monte le bouton (+) d'ajout rapide de réaction, comme la bulle
     /// (`BubbleReactionsOverlay.isMounted`). Signal de position, fourni par
-    /// l'hôte (`lastReceivedMessageId` du VM) — 2026-08-21, l'écart « jamais
+    /// l'hôte (`lastReceivedMessageId` du VM) —, l'écart « jamais
     /// côté Focal » est comblé.
     let isLastReceivedMessage: Bool
-    /// Focal (2026-08-21) : le message EN FOCUS — celui de la carte teintée.
+    /// Focal: le message EN FOCUS — celui de la carte teintée.
     /// Il porte ses détails même en continuation de groupe (avatar, présence,
     /// mood, date ET heure d'envoi). Son texte garde le MÊME plafond que les
     /// autres rangées (`LongMessageExcerpt`) : aucune hauteur
-    /// ne dépend du focus (décision 2026-08-22 bis, retrait du plafond
-    /// `FocalMetrics.Focus.maxCharacters` le 2026-08-25 — L1-01). Posé par
+    /// ne dépend du focus. Posé par
     /// l'hôte au tick d'élection (une superposition, jamais une hauteur).
     let isFocused: Bool
     /// Le message long DÉPLIÉ dans le fil (#8147) — un seul à la fois, tenu
@@ -371,7 +369,7 @@ extension FocalRowInput {
     /// La rangée est une tête ET une fin de groupe — l'identité (pastille, nom)
     /// et la méta (drapeaux) sont DANS son cadre — et jamais l'élue Focal, dont
     /// le chrome (carte, pastille soulevée) déborde : c'est ce débordement que
-    /// la capture de la cellule tranchait (directive 2026-08-23). Elle est
+    /// la capture de la cellule tranchait. Elle est
     /// immobile : ni envoi en cours, ni bouton d'ajout de réaction, ni effet
     /// d'APPARITION rejoué sous le doigt — les effets PERSISTANTS, eux, restent,
     /// comme la bulle les garde en Bulles.
@@ -478,7 +476,7 @@ struct FocalRowActions {
     /// en plein écran, audio en lecture ; repli = saut à l'original.
     var onQuotedMediaTap: ((ReplyReference) -> Void)?
     var onMediaTap: ((MessageAttachment) -> Void)?
-    /// Lot 3.2 (2026-08-18) — cartes lieu/fichier réelles en rangée plate :
+    /// Lot 3.2 — cartes lieu/fichier réelles en rangée plate:
     /// tap sur la carte lieu → plein écran (présenté par ConversationView,
     /// comme les autres plein écrans du fil) ; partage d'un fichier téléchargé.
     var onTapLocation: ((SharedPlace) -> Void)?

@@ -111,7 +111,7 @@ struct CommentsSheetView: View {
     @State var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
-    /// Lieu choisi via le picker, en attente d'envoi (Task 11/12, 2026-07-29).
+    /// Lieu choisi via le picker, en attente d'envoi (Task 11/12).
     /// `SharedPlace` porte le nom ; la fabrique `ComposerAttachment.location`
     /// ne le portait pas, n'était plus le véhicule, et a été retirée (248i).
     @State var commentPendingPlace: SharedPlace? = nil
@@ -304,7 +304,6 @@ struct CommentsSheetView: View {
                     }
                     .keepsReplyTargetInView(replyingTo?.id, proxy: commentsProxy)
                     } // ScrollViewReader
-
                     VStack(spacing: 0) {
                         if editingComment != nil {
                             editingBanner
@@ -334,10 +333,9 @@ struct CommentsSheetView: View {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
-
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         dismiss()
@@ -345,9 +343,11 @@ struct CommentsSheetView: View {
                         // Figé : chrome xmark dans un cadre tap fixe 32×32 (doctrine 82i).
                         Image(systemName: "xmark")
                             .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
                     }
                     .accessibilityLabel(String(localized: "a11y.comment.close", defaultValue: "Fermer", bundle: .main))
                 }
@@ -599,7 +599,7 @@ struct CommentsSheetView: View {
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
     /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
     /// la fin), fichiers routés vers le staging commentaire existant
-    /// (spec 2026-07-30, lot 1).
+    /// (lot 1).
     private func handleComposerIngest(_ ingests: [ComposerIngest]) {
         if let block = CommentComposerIngestion.mergedText(from: ingests) {
             if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {

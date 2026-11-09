@@ -5,7 +5,7 @@ import MeeshySDK
 /// épaisseur / lissage / calques) + une bulle X de sortie. Mirror exact de
 /// `TextEditFloatingBubbles`.
 ///
-/// Icônes flottantes SANS arrière-plan explicite (directive user 2026-07-10) :
+/// Icônes flottantes SANS arrière-plan explicite :
 /// même langage que les actions du header — `glassControlForeground` +
 /// `adaptiveGlass` (Liquid Glass iOS 26 / material en fallback), l'outil actif
 /// et le X passant en verre proéminent teinté.
@@ -28,7 +28,7 @@ struct DrawingEditFloatingBubbles: View {
                 .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
             }
             Spacer(minLength: 4)
-            // Retour arrière / avant — juste à gauche du X (spec user 2026-06-01).
+            // Retour arrière / avant — juste à gauche du X.
             actionBubble(symbol: "arrow.uturn.backward", enabled: canUndo,
                          label: String(localized: "story.drawEdit.undo", defaultValue: "Annuler le dernier trait", bundle: .module), action: onUndo)
             actionBubble(symbol: "arrow.uturn.forward", enabled: canRedo,

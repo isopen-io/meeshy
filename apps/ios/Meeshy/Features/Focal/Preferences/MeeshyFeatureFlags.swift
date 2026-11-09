@@ -10,9 +10,8 @@ import Foundation
 /// (clé `meeshy.flag.reading_modes` — SI POSÉE EXPLICITEMENT), déjà couvert
 /// par `LentilleFlagGateTests`.
 ///
-/// **Sortie de bêta (2026-09-14, #6482).** Les modes de lecture ont vécu
-/// derrière la préférence « Activer les bêta » (I-075, du 2026-08-16 au
-/// 2026-09-13) ; ils sont désormais actifs par défaut, avec leur interrupteur
+/// **Sortie de bêta (#6482).** Les modes de lecture ont vécu
+/// derrière la préférence « Activer les bêta » (I-075); ils sont désormais actifs par défaut, avec leur interrupteur
 /// dans les Réglages. Voir la docstring de `LentilleFeatureFlag` pour la
 /// cascade.
 ///

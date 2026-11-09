@@ -308,8 +308,7 @@ struct MiniAudioPlayerBar: View {
         // entre la bande du haut et l'aplat de la barre. Posés avant, ils sont
         // peints de la même couleur — la respiration reste, la couture non.
         .padding(.top, MeeshySpacing.xsPlus)
-        // Bandeau INDIGO PLEIN, à angles droits, pleine largeur (retour user
-        // 2026-08-13). La capsule glass d'avant flottait au-dessus du contenu
+        // Bandeau INDIGO PLEIN, à angles droits, pleine largeur. La capsule glass d'avant flottait au-dessus du contenu
         // et empruntait sa couleur au fond : à ce point de montage — le bloc
         // vit DANS le VStack de compression de `RootView`, il pousse l'écran
         // vers le bas au lieu de le recouvrir — une pastille flottante ment

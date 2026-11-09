@@ -198,7 +198,7 @@ struct EmojiPickerView: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
 
                 TextField(String(localized: "emoji.search", defaultValue: "Rechercher un emoji"), text: $searchText)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
@@ -210,7 +210,7 @@ struct EmojiPickerView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color.secondary)
                     }
                     .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Effacer la recherche", bundle: .main))
                 }
@@ -236,7 +236,7 @@ struct EmojiPickerView: View {
                                     // Doctrine 82i : glyphe d'onglet de catégorie dans un cadre tap fixe
                                     // 36×28 → taille figée (l'icône ne doit pas déborder de l'onglet).
                                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                                    .foregroundColor(selectedCategory == category ? .white : .primary)
+                                    .foregroundStyle(selectedCategory == category ? Color.white : Color.primary)
                                     .frame(width: 36, height: 28)
                                     .background(
                                         RoundedRectangle(cornerRadius: MeeshyRadius.xs)
@@ -306,13 +306,13 @@ struct EmojiPickerView: View {
     private func sectionHeader(icon: String, title: String) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs))
                 .accessibilityHidden(true)
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
         }
         .padding(.horizontal, MeeshySpacing.lg)
     }

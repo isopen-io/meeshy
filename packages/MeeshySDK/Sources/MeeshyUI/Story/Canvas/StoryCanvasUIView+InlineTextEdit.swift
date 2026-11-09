@@ -157,7 +157,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     }
 
     /// Pose le bloc en édition (calque + champ) au CENTRE DE LA ZONE, et borne
-    /// sa hauteur à celle de la zone (spec 2026-08-01).
+    /// sa hauteur à celle de la zone.
     ///
     /// Le centre ne dépend plus de la hauteur du bloc : un texte neuf naît là où
     /// se trouvera un texte de trois lignes, donc la première frappe ne déplace

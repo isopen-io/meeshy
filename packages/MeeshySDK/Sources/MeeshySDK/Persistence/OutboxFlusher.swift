@@ -330,8 +330,8 @@ public actor OutboxFlusher {
     /// refus du serveur. Sans cette distinction, ~2 min d'outage (connection
     /// refused = échec instantané, seul le backoff espace les tentatives)
     /// consomment les 5 attempts → `.exhausted` → l'utilisateur doit re-taper
-    /// Retry PAR message au lieu du flush FIFO automatique au reconnect
-    /// (observé E2E 2026-07-02). Même principe que le gate BW1 (mode avion)
+    /// Retry PAR message au lieu du flush FIFO automatique au reconnect.
+    /// Même principe que le gate BW1 (mode avion)
     /// et que l'exemption session-expiry ci-dessus.
     /// `MeeshyError.network` est la normalisation APIClient de tout URLError
     /// transport ; les URLError bruts couvrent le chemin TUS qui ne passe pas

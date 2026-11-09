@@ -237,7 +237,7 @@ struct ParticipantProfileSheet: View {
                     )) {
                         Text(allowedLabel(capability))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .tint(MeeshyColors.success)
@@ -247,12 +247,12 @@ struct ParticipantProfileSheet: View {
             } else if capabilities.denied.isEmpty {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: MeeshyIconSize.xs))
-                        .foregroundColor(MeeshyColors.success)
+                        .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xs))
+                        .foregroundStyle(MeeshyColors.success)
                         .frame(width: 18)
                     Text(noRestrictionLabel)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                     Spacer(minLength: 0)
                 }
                 .accessibilityIdentifier("participant-profile-no-restriction")
@@ -260,12 +260,12 @@ struct ParticipantProfileSheet: View {
                 ForEach(capabilities.denied, id: \.rawValue) { capability in
                     HStack(spacing: MeeshySpacing.sm) {
                         Image(systemName: "nosign")
-                            .font(.system(size: MeeshyIconSize.xs))
-                            .foregroundColor(MeeshyColors.warning)
+                            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xs))
+                            .foregroundStyle(MeeshyColors.warning)
                             .frame(width: 18)
                         Text(deniedLabel(capability))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
@@ -290,12 +290,12 @@ struct ParticipantProfileSheet: View {
             if canGrantHistory {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: MeeshyIconSize.xs))
-                        .foregroundColor(theme.textMuted)
+                        .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xs))
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 18)
                     Text(seesHistorySinceLabel)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     DatePicker(
@@ -321,7 +321,7 @@ struct ParticipantProfileSheet: View {
                             Task { await setHistoryGrant(nil) }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 // La cible d'un bouton est celle de son
                                 // ÉTIQUETTE : le glyphe seul fait une vingtaine
                                 // de points, et une cible de cette taille se
@@ -343,7 +343,7 @@ struct ParticipantProfileSheet: View {
             if let historyGrantErrorMessage {
                 Text(historyGrantErrorMessage)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .accessibilityIdentifier("participant-profile-history-grant-error")
             }
         }
@@ -362,7 +362,7 @@ struct ParticipantProfileSheet: View {
             if !link.isActive {
                 Text(linkInactiveLabel)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                     .accessibilityIdentifier("participant-profile-entry-link-inactive")
             }
 
@@ -406,7 +406,7 @@ struct ParticipantProfileSheet: View {
     private func sectionTitle(_ title: String) -> some View {
         Text(title.uppercased())
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
     }
 
     private func header(_ profile: ConversationParticipantProfile) -> some View {
@@ -414,19 +414,19 @@ struct ParticipantProfileSheet: View {
             // Le masque QUALIFIE l'identité — il la précède, il ne la décore pas.
             if profile.isAnonymous {
                 Image(systemName: "theatermasks.fill")
-                    .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
-                    .foregroundColor(.purple)
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
+                    .foregroundStyle(Color.purple)
                     .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(profile.resolvedFullName)
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 if let username = profile.username {
                     Text("@\(username)")
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
 
@@ -453,17 +453,17 @@ struct ParticipantProfileSheet: View {
     private func row(icon: String, label: String, value: String?, withheld: Bool = false) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.xs))
-                .foregroundColor(theme.textMuted)
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xs))
+                .foregroundStyle(theme.textMuted)
                 .frame(width: 18)
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Spacer(minLength: 8)
             Text(withheld ? withheldLabel : (value ?? ""))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: withheld ? .regular : .medium))
                 .italic(withheld)
-                .foregroundColor(withheld ? theme.textMuted : theme.textPrimary)
+                .foregroundStyle(withheld ? theme.textMuted : theme.textPrimary)
                 .lineLimit(1)
         }
     }

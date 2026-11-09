@@ -22,7 +22,7 @@ struct AvatarInitialsFace: View {
                 .frame(width: size, height: size)
             Text(initials)
                 .font(.system(size: fontSize, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
         }
     }
 

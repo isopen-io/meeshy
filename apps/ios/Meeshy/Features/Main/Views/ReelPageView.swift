@@ -157,6 +157,7 @@ struct ReelPageView: View {
                 .clipped()
                 .contentShape(Rectangle())
                 .onTapGesture { handleContentTap() }
+                .accessibilityAction(named: Text(String(localized: "a11y.main.reel.playPause", bundle: .main))) { handleContentTap() }
                 .onLongPressGesture(minimumDuration: 0.3) { enterImmersive() }
 
             MediaChromeVeil.reelPlayer.gradient
@@ -214,7 +215,6 @@ struct ReelPageView: View {
                     actionRail
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
-
                 // Draggable scrub bar — only for the active video reel. Sits
                 // just below the description / action rail. Drag to seek.
                 if isVideoReel && isEngaged {

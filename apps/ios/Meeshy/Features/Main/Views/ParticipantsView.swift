@@ -88,7 +88,7 @@ struct ParticipantsView: View {
                     } label: {
                         Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                     }
                     .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                 }
@@ -234,7 +234,7 @@ struct ParticipantsView: View {
 
             Text("\(participants.count) \(participants.count > 1 ? String(localized: "participants.members_plural", defaultValue: "membres", bundle: .main) : String(localized: "participants.members_singular", defaultValue: "membre", bundle: .main))")
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
         }
@@ -326,7 +326,7 @@ struct ParticipantsView: View {
                     if participant.isAnonymous {
                         Image(systemName: "theatermasks.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                            .foregroundColor(.purple)
+                            .foregroundStyle(Color.purple)
                             .accessibilityLabel(String(
                                 localized: "participants.anonymous",
                                 defaultValue: "Sans compte",
@@ -337,7 +337,7 @@ struct ParticipantsView: View {
 
                     Text(isCurrentUser ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))" : participant.name)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     if let role = participant.conversationRole,
@@ -350,7 +350,7 @@ struct ParticipantsView: View {
                 if let username = participant.username {
                     Text("@\(username)")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 }
             }
@@ -361,10 +361,10 @@ struct ParticipantsView: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(localized: "participants.since", defaultValue: "Depuis", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     Text(shortDate(joinedAt))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
         }
@@ -391,7 +391,7 @@ struct ParticipantsView: View {
     private func roleBadge(_ role: String) -> some View {
         Text(roleDisplayLabel(role))
             .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.xsPlus)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(roleBadgeColor(role)))

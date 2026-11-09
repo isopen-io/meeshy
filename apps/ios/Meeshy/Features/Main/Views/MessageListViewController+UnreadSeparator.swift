@@ -10,7 +10,7 @@ import MeeshySDK
 // qui la capture depuis le ViewModel.
 //
 // Type DÉDIÉ demandé par le cadrage du lot — `MessageListViewController.swift`
-// (3515 lignes) est hors du budget 1000-1200 de la directive 2026-08-28,
+// (3515 lignes) est hors du budget 1000-1200 de la,
 // même idiome que `+Insets`/`+SeenTracking`/`+Snapshot`/`+ThreadQuiescence` :
 // on n'ajoute pas EN PLACE à un fichier hors budget, on ajoute dans son
 // extension dédiée. Les trois points d'accroche côté hôte (le stockage de
@@ -121,7 +121,7 @@ extension MessageListViewController {
     ///    restaurait l'ancre du BAS et renvoyait le lecteur tout en bas :
     ///    exactement le défaut que D-L2 existe pour éviter. Épilogue
     ///    identique à `scrollToBottom(animated: false)`, posé là par la même
-    ///    revue adversariale (2026-08-18).
+    /// revue adversariale.
     /// 3. **Il cède au doigt.** La scène n'appartient qu'au doigt : un geste
     ///    déjà en cours (fil lent à charger, frontière gelée en retard)
     ///    annule la révélation au lieu de la voler.
@@ -161,8 +161,7 @@ extension MessageListViewController {
     /// hauteurs réelles — le drapeau retombe et le verrou de scène ADOPTE la
     /// position atteinte. Appelé aussi quand la révélation renonce (doigt en
     /// cours, cible pas encore matérialisée) : un drapeau qui fuirait à
-    /// `true` désarmerait le verrou pour toute la session (filet de la revue
-    /// adversariale 2026-08-18, `settleAtRest`).
+    /// `true` désarmerait le verrou pour toute la session (`settleAtRest`).
     private func endUnreadSeparatorReveal() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }

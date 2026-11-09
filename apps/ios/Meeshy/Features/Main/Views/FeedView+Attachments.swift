@@ -10,7 +10,7 @@ extension FeedView {
 
     /// Promeut le résultat d'une préparation dans `pendingAttachments` une
     /// fois `.ready` ; la rangée de tuiles qui affichait les préparations en
-    /// vol est partie avec l'overlay (2026-09-06).
+    /// vol est partie avec l'overlay.
     func trackFeedPreparation(_ prep: PreparingAttachment) {
         Task { @MainActor [prep] in
             let result = await prep.awaitCompletion()
@@ -43,8 +43,7 @@ extension FeedView {
         // Preserve the original classification: a plain POST that carried media
         // must stay a POST. A draft saved as REEL is NOT trusted blindly: the
         // publish paths re-derive the type from the RESTORED attachments via
-        // `ReelComposition.defaultType` (règle produit 2026-08-02 — video ||
-        // audio || >= 2 images), so a stale 1-image "REEL" draft republishes
+        // `ReelComposition.defaultType`, so a stale 1-image "REEL" draft republishes
         // as a POST. Eligibility can't be checked here — the media below is
         // restored asynchronously through the preparation pipeline.
         composerForcePlainPost = (draft.type == "POST")

@@ -5,7 +5,7 @@ import MeeshyUI
 // MARK: - Les RÈGLES PURES du plein écran
 //
 // Extraites de `ConversationMediaGalleryView.swift` (#4014) : le fichier
-// dépassait le budget 800-1100 (1259 lignes), et la directive du 2026-08-28
+// dépassait le budget 800-1100 (1259 lignes), et la
 // interdit d'ajouter à un fichier hors budget — on extrait d'abord.
 //
 // La découpe suit la RESPONSABILITÉ, pas une tranche : ces quatre types ne
@@ -213,7 +213,7 @@ enum CaptionExpansionSpace {
 
     /// Opacité de la scène d'une story pendant que sa légende est dépliée.
     ///
-    /// **Ce n'est PAS un flou qu'on ajoute** (correction porteur 2026-09-02) :
+    /// **Ce n'est PAS un flou qu'on ajoute**:
     ///
     /// > « le flou c'est pas un voile qui apparaît mais le contenu qui disparaît
     /// > un peu pour laisser le thumbnail naturel du background si on a un média

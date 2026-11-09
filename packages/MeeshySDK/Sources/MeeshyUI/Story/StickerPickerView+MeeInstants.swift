@@ -6,7 +6,7 @@ import MeeshySDK
 extension StickerPickerView {
 
     /// **Mee et Meo qui écrivent tes mots, ton lieu, l'heure ou la météo**
-    /// (directive porteur 2026-10-02). Ils lisent ce que l'onglet sait déjà :
+    /// Ils lisent ce que l'onglet sait déjà :
     /// les mots tapés dans son champ, le lieu choisi, l'heure de l'ouverture ;
     /// la météo garde la valeur de chaque sticker. Les vignettes montrent ce
     /// qui partira.

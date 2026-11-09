@@ -11,7 +11,7 @@ import MeeshySDK
 nonisolated enum OutgoingAttachmentRules {
 
     /// Décision pure et testable du popup de consentement vocal à l'envoi
-    /// (2026-07-08) : uniquement quand le send contient de l'audio, que le
+    /// uniquement quand le send contient de l'audio, que le
     /// consentement vocal manque, et qu'on n'a pas déjà proposé cette session.
     static func shouldPromptVoiceConsent(
         hasAudio: Bool,

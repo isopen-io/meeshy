@@ -51,7 +51,7 @@ struct SectionHeaderView: View {
 
                     Image(systemName: section.icon)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(Color(hex: section.color))
+                        .foregroundStyle(Color(hex: section.color))
                         .scaleEffect(isTapped ? 1.15 : 1.0)
                 }
 
@@ -63,7 +63,7 @@ struct SectionHeaderView: View {
                 // Count badge
                 Text("\(count)")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(Color(hex: section.color))
+                    .foregroundStyle(Color(hex: section.color))
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(
@@ -78,7 +78,7 @@ struct SectionHeaderView: View {
                 if isDropTarget {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3.weight(.semibold))
-                        .foregroundColor(Color(hex: section.color))
+                        .foregroundStyle(Color(hex: section.color))
                         .transition(.scale.combined(with: .opacity))
                 }
 
@@ -92,7 +92,7 @@ struct SectionHeaderView: View {
                 // Expand/collapse chevron with rotation animation
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(Color(hex: section.color))
+                    .foregroundStyle(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .animation(.easeOut(duration: 0.2), value: isExpanded)
@@ -496,7 +496,7 @@ struct ConversationPreviewView: View {
     private func headerGlassButtonLabel(icon: String, targetSize: CGFloat) -> some View {
         Image(systemName: icon)
             .font(.footnote.weight(.semibold))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .frame(width: targetSize, height: ConversationPreviewRenderer.headerTargetSize)
@@ -570,7 +570,7 @@ struct ThemedCommunityCard: View, Equatable {
             // libellé d'accessibilité.
             Text(community.name)
                 .font(MeeshyFont.relative(CommunityCardMetrics.nameSize, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
                 .padding(CommunityCardMetrics.padding)
@@ -598,6 +598,7 @@ struct ThemedCommunityCard: View, Equatable {
             + "\(community.conversationCount) " + String(localized: "tab.conversations", defaultValue: "Conversations")
         )
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action?() }
     }
 }
 
@@ -638,7 +639,7 @@ struct ThemedFilterChip: View {
         }) {
             Text(title)
                 .font(font)
-                .foregroundColor(isSelected ? .white : Color(hex: color))
+                .foregroundStyle(isSelected ? Color.white : Color(hex: color))
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
                 .background(
@@ -674,7 +675,7 @@ struct TagChip: View {
     var body: some View {
         Text(tag.name)
             .font(.caption2.weight(.semibold))
-            .foregroundColor(Color(hex: tag.color))
+            .foregroundStyle(Color(hex: tag.color))
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(

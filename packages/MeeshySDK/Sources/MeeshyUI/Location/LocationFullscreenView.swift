@@ -76,7 +76,7 @@ public struct LocationFullscreenView: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "person.fill")
                         .meeshyScaledFont(MeeshyIconSize.xs)
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                     Text(name)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(Color.primary)
@@ -87,7 +87,7 @@ public struct LocationFullscreenView: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "mappin.and.ellipse")
                     .meeshyScaledFont(MeeshyIconSize.md, weight: .medium)
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagée", bundle: .module))
@@ -134,7 +134,7 @@ public struct LocationFullscreenView: View {
                         Text(String(localized: "location.fullscreen.directions", defaultValue: "Itinéraire", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.smPlus)
                     .background(

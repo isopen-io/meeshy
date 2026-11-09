@@ -29,7 +29,7 @@ struct ConversationSwipeActions {
     /// Les builders ci-dessous tournent pour CHAQUE conversation à CHAQUE
     /// body pass (~99 rows × 8 labels) ; `String(localized:)` refait un
     /// lookup de bundle à chaque appel — mesurable dans la famine du main
-    /// thread derrière les kills 0x8BADF00D (diag 2026-07-05). La langue de
+    /// thread derrière les kills 0x8BADF00D. La langue de
     /// l'app ne change pas à chaud (redémarrage requis), des statiques sont
     /// donc sûres.
     private enum SwipeLabels {
