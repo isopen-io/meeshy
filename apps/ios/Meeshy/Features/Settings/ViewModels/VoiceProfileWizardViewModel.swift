@@ -18,12 +18,24 @@ final class VoiceProfileWizardViewModel: ObservableObject {
     @Published var totalToUpload = 0
     @Published var error: String?
     @Published var ageVerified = false
-    @Published var birthDate = Date()
+    @Published var birthDate: Date
 
+    /// La date de naissance la plus récente admise au clonage vocal (#17309) : la date maximale
+    /// du sélecteur, et sa valeur d'ouverture — jamais la date du jour (#10561).
+    let latestAdmittedBirthDate: Date
+    private let calendar: Calendar
     private let service: VoiceProfileServiceProviding
 
-    init(service: VoiceProfileServiceProviding = VoiceProfileService.shared) {
+    init(
+        service: VoiceProfileServiceProviding = VoiceProfileService.shared,
+        calendar: Calendar = .current,
+        today: Date = Date()
+    ) {
         self.service = service
+        self.calendar = calendar
+        let limit = VoiceCloningAgeRule.voiceCloningBirthDateLimit(today: today, calendar: calendar)
+        self.latestAdmittedBirthDate = limit
+        self.birthDate = limit
     }
 
     func checkConsent() async {
@@ -61,7 +73,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
         do {
             _ = try await service.grantConsent(
                 voiceCloningConsent: false,
-                birthDate: Self.formatBirthDate(birthDate)
+                birthDate: Self.formatBirthDate(birthDate, calendar: calendar)
             )
             ageVerified = true
             currentStep = .recording
@@ -70,13 +82,14 @@ final class VoiceProfileWizardViewModel: ObservableObject {
         }
     }
 
-    /// Formate une date en `YYYY-MM-DD` (calendrier grégorien, UTC, POSIX) —
-    /// le format attendu par le gateway pour `VoiceConsentRequest.birthDate`.
-    static func formatBirthDate(_ date: Date) -> String {
+    /// Formate une date en `YYYY-MM-DD` (calendrier grégorien, POSIX) — le format attendu par le
+    /// gateway pour `VoiceConsentRequest.birthDate`. Le jour se lit dans le fuseau du SÉLECTEUR :
+    /// lu en UTC, un minuit choisi à l'est de Greenwich partait la veille (#17309).
+    static func formatBirthDate(_ date: Date, calendar: Calendar = .current) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }

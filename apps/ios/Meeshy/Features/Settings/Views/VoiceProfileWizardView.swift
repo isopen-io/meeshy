@@ -219,7 +219,7 @@ struct VoiceProfileWizardView: View {
                 .foregroundStyle(theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.xxxl)
 
-            DatePicker(String(localized: "voice.profile.wizard.birthDate", defaultValue: "Date de naissance", bundle: .main), selection: $viewModel.birthDate, displayedComponents: .date)
+            DatePicker(String(localized: "voice.profile.wizard.birthDate", defaultValue: "Date de naissance", bundle: .main), selection: $viewModel.birthDate, in: ...viewModel.latestAdmittedBirthDate, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .padding(.horizontal, MeeshySpacing.xl)
