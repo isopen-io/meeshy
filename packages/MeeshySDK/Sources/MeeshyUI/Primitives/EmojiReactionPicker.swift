@@ -491,7 +491,7 @@ public struct EmojiFullPickerSheet: View {
                 .frame(width: 36, height: 4).padding(.top, MeeshySpacing.smPlus)
             Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
                 .padding(.bottom, MeeshySpacing.xs)
         }
     }
@@ -605,7 +605,7 @@ public struct CategorizedEmojiPickerSheet: View {
             // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
             Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
                 .padding(.top, MeeshySpacing.lg)
                 .padding(.bottom, MeeshySpacing.xxs)
             categoryTabs
