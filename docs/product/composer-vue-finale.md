@@ -17,7 +17,7 @@
 | Un toucher range tout, un autre rend tout | Un toucher sur la scène range tout (regarder sa scène), un autre rend tout |
 | Une option à réglages s'ouvre DANS la pilule, qui grandit vers le haut | Fond, Durée, Transitions, Cadre, Audience, formats de Publier : dans la pilule |
 | Participants, Journal : en feuille | Stickers, Mention, Hashtags, Lieu, bibliothèque de sons : en feuille |
-| Effets, Montage : mode plein écran Quitter · Réglages · Valider | Modifier un objet, Dessin, Caméra, Frise : mode plein écran Quitter · Réglages · Valider |
+| Effets, Montage : mode plein écran Quitter · Réglages · Valider | Dessin, Caméra, Frise : mode plein écran Quitter · Réglages · Valider |
 | Le verre s'assombrit sur un contenu clair | Idem sur une scène claire (fond blanc, photo de neige) |
 | Toucher une vignette la met à la une | Toucher un objet le sélectionne et le fait passer devant |
 
@@ -40,16 +40,17 @@
    - Sur une scène vierge, le premier toucher arme la caméra (rien d'autre n'y a de sens).
    - Avec un objet sélectionné, le toucher désélectionne d'abord.
    - Rangé : **la scène prend tout l'écran en gardant ses proportions**, avec un peu de noir en haut et en bas, ou à gauche et à droite, selon l'écran. Plus aucun contrôle. Il n'y a pas de minuterie.
-6. **Toucher un objet le sélectionne, et la pilule devient celle de l'objet : ‹ · Modifier · Dupliquer · Temps · (…).** (révisée le 2026-11-09)
-   - L'objet passe devant. Aucun cadre ni poignée ne s'affiche ; un léger halo dit la sélection.
-   - Les rails et l'en-tête se retirent, ↶ ↷ restent.
-   - **(…) ouvre le menu de l'objet**, posé au-dessus de lui : Mettre devant, Mettre en fond, Verrouiller, et **Retirer en dernier, en rouge**. Aucun bouton rouge dans la pilule au repos.
-   - **Il n'y a pas de menu à l'appui long** : l'appui long commence le glisser. Double toucher = Modifier.
+6. **Toucher un objet le sélectionne, et la pilule porte DIRECTEMENT les outils de cet objet : ‹ · ses outils · (…).** (révisée deux fois le 2026-11-09)
+   - Il n'y a pas d'étape « Modifier » : ce qu'on touche montre tout de suite de quoi le changer. Sticker : Remplacer · Miroir · Temps. Texte : Aa · couleur · alignement · fond (les quatre outils de la barre du clavier). Photo : Looks · Recadrer · Réglages · Pivoter. Vidéo : Looks · Recadrer · Couper · Son. Ce jeu d'outils est celui de la retouche d'une pièce (loi 17) : il n'en existe qu'un.
+   - **Toucher un outil fait grandir la pilule vers le haut avec ses options** (loi 7) ; l'outil courant est le disque blanc, le retoucher ou ‹ referme. L'objet reste manipulable au doigt pendant ce temps. Aucun mode plein écran ne s'interpose.
+   - L'objet passe devant. Aucun cadre ni poignée ne s'affiche ; un léger halo dit la sélection. Les rails et l'en-tête se retirent, ↶ ↷ restent.
+   - **(…) ouvre le menu de l'objet**, posé au-dessus de lui : ce qui ne tient pas dans la pilule (Dupliquer, Mettre devant, Mettre en fond, Verrouiller ; Temps, Description et Faire un sticker pour un média), et **Retirer en dernier, en rouge**. Aucun bouton rouge dans la pilule au repos.
+   - **Il n'y a pas de menu à l'appui long** : l'appui long commence le glisser. Double toucher sur un texte = écrire.
    - **Glisser un objet fait apparaître deux cibles**, et rien d'autre que les repères d'aimantation : la **duplication en haut**, la **poubelle en bas, à la place de la pilule**. Lâcher sur la poubelle retire l'objet (↶ le ramène) ; lâcher sur la duplication pose une copie identique un rang au-dessus de l'original, et l'original revient à sa place. Cela vaut pour tout objet de la scène.
-   - Modifier et Temps disparaissent sur un objet verrouillé. Sur grand écran, le rail « Sélection » liste tout, Retirer en dernier, sans (…).
+   - Sur un objet verrouillé, la pilule ne garde que ‹ et (…). Sur grand écran, le rail « Sélection » liste les outils de l'objet puis le reste, Retirer en dernier, sans (…).
 7. **Une option à réglages s'ouvre DANS la pilule, qui grandit vers le haut avec ‹ Retour et Fermer.** Fond, Cadre du fond, Transitions, Effet visuel, Durée, Audience, formats de Publier. La scène garde sa taille et montre l'effet en direct.
 8. **Une liste longue s'ouvre en feuille ancrée** : Stickers, Mention, Hashtags, Lieu, sons, Sauf… et Seulement… de l'audience. La scène se réduit au-dessus d'elle, jamais dessous.
-9. **Modifier, Dessin, Caméra et Frise sont des modes plein écran : Quitter · Réglages · Valider.**
+9. **Dessin, Caméra et Frise sont des modes plein écran : Quitter · Réglages · Valider.**
    - L'en-tête devient Quitter (à gauche) et Valider (à droite) ; les réglages de l'outil vivent dans une plaque de verre en bas.
    - Quitter rend l'objet d'avant ; Valider garde et fait UN pas d'annulation.
    - Dans un mode, la scène reste manipulable au doigt : glisser, pincer, tourner l'objet modifié (#8535).
@@ -112,17 +113,21 @@ Le tableau des vues et leurs captures est généré avec la planche (voir l'inde
 
 ### Un objet
 
-| O1 · Toucher : les outils de l’objet | O2 · (…) de l’objet : le menu | O3 · Glisser : repères, duplication et poubelle | O12 · Lâcher sur la poubelle |
+| O1 · Toucher un sticker : ses outils | O14 · Toucher un texte : ses outils | O4 · Toucher une photo : ses outils | O15 · Toucher une vidéo : ses outils |
 |---|---|---|---|
-| ![O1](composer-vue-finale/vues/O1.png) | ![O2](composer-vue-finale/vues/O2.png) | ![O3](composer-vue-finale/vues/O3.png) | ![O12](composer-vue-finale/vues/O12.png) |
+| ![O1](composer-vue-finale/vues/O1.png) | ![O14](composer-vue-finale/vues/O14.png) | ![O4](composer-vue-finale/vues/O4.png) | ![O15](composer-vue-finale/vues/O15.png) |
 
-| O13 · Lâcher sur la duplication | O4 · Modifier une photo | O5 · Réglages | O6 · Filtres |
+| O2 · (…) de l’objet : le menu | O3 · Glisser : repères, duplication et poubelle | O12 · Lâcher sur la poubelle | O13 · Lâcher sur la duplication |
 |---|---|---|---|
-| ![O13](composer-vue-finale/vues/O13.png) | ![O4](composer-vue-finale/vues/O4.png) | ![O5](composer-vue-finale/vues/O5.png) | ![O6](composer-vue-finale/vues/O6.png) |
+| ![O2](composer-vue-finale/vues/O2.png) | ![O3](composer-vue-finale/vues/O3.png) | ![O12](composer-vue-finale/vues/O12.png) | ![O13](composer-vue-finale/vues/O13.png) |
 
-| O7 · Recadrer | O8 · Vidéo : couper et son | O9 · Description (texte alternatif) | O10 · Temps de l’objet |
+| O5 · Photo : Réglages | O6 · Photo : Looks | O7 · Photo : Recadrer | O8 · Vidéo : Couper et Son |
 |---|---|---|---|
-| ![O7](composer-vue-finale/vues/O7.png) | ![O8](composer-vue-finale/vues/O8.png) | ![O9](composer-vue-finale/vues/O9.png) | ![O10](composer-vue-finale/vues/O10.png) |
+| ![O5](composer-vue-finale/vues/O5.png) | ![O6](composer-vue-finale/vues/O6.png) | ![O7](composer-vue-finale/vues/O7.png) | ![O8](composer-vue-finale/vues/O8.png) |
+
+| O9 · Photo : Description (texte alternatif) | O10 · Temps de l’objet |
+|---|---|
+| ![O9](composer-vue-finale/vues/O9.png) | ![O10](composer-vue-finale/vues/O10.png) |
 
 | O11 · Texte en édition, manipulé au doigt |
 |---|
@@ -173,11 +178,11 @@ Le tableau des vues et leurs captures est généré avec la planche (voir l'inde
 | Pilule unique en bas, outils derrière (…) | Colonne droite de 8 à 10 boutons ronds toujours visible | R2, R3 |
 | Audience en puce d'en-tête | Puce à gauche de Publier, en bas | R2 |
 | Publier masqué sur scène vide | Publier visible, refus motivé au toucher | R1 |
-| Sélection sans cadre, pilule de l'objet avec (…), Retirer en dernier du menu | Cadre pointillé blanc, barre Modifier · Dupliquer · Temps · Retirer à la place de la colonne | O1, O2 |
+| Sélection sans cadre, pilule portant directement les outils de l'objet, (…) pour le reste, Retirer en dernier du menu | Cadre pointillé blanc, barre Modifier · Dupliquer · Temps · Retirer à la place de la colonne | O1, O14, O4, O15, O2 |
 | Glisser un objet vers la poubelle (bas) ou la duplication (haut) | Aucune cible de dépôt | O3, O12, O13 |
 | La retouche d'une pièce est le composer en mode simple, aplati à l'envoi seulement | Retouche de la prise (`ConversationPieceRetouch`), aplatie à « Terminé » | C1 à C4 |
 | Fond, Durée, Transitions dans la pilule | Feuilles ancrées « Fond », « Durée de la diapo » | S1, S5 |
-| Modifier en mode Quitter · Réglages · Valider | Rail Modifier dans la colonne, propriétés en plaque basse | O3 |
+| Les outils d'un objet s'ouvrent dans sa pilule, sans mode ni étape « Modifier » | Rail Modifier dans la colonne, propriétés en plaque basse | O5 à O9 |
 | Rangée des scènes en surimpression ; double toucher duplique, appui long croix + glisser | Rangée dans un cadre ; `moveSlide` / `duplicateSlide` sans appelant | R5, R6 |
 | Quatre effets de texte, dont Flamme animée sur les lettres | 24 effets + Aucun (`StoryTextEffect`) | A2 |
 | Une seule piste de rognage pour le son et la vidéo : onde ou vignettes, poignées, tête de lecture, volume, muet | Trois pistes voisines : `MediaTrimStrip`, `ComposerTrimTrack`, `MeeshyAudioTrimmer` | A15, O8, C2 |
