@@ -73,7 +73,7 @@ nonisolated struct CallFrameStage {
 nonisolated enum CallFrameRenderer {
     static let layerCostLimit = 48 * 1024 * 1024
 
-    nonisolated(unsafe) private static let layerCache: NSCache<NSString, CallFrameLayers> = {
+    nonisolated private static let layerCache: NSCache<NSString, CallFrameLayers> = {
         let cache = NSCache<NSString, CallFrameLayers>()
         cache.totalCostLimit = layerCostLimit
         return cache
