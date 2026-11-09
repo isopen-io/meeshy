@@ -69,6 +69,7 @@ import { contentDetailCategory, contentDetailPushFields } from './content-detail
 import { servedBannerBody } from './served-banner-body';
 import { reactedMessageSynthesis, reactionBody } from './reaction-body';
 import { messageLivenessOf } from '../messages/message-liveness';
+import { deviceEnvelopeForPush } from './deviceEnvelopePush';
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,
@@ -307,9 +308,11 @@ export class NotificationService {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
         // Cycle 126 — `createdAt` et `messageType` ; cycle 127 — `deletedAt` et
-        // `expiresAt`, dans la lecture qui se faisait déjà : quatre colonnes de
-        // plus, aucune requête de plus. C'est ce qui rend la garde gratuite, et
-        // c'est pourquoi elle appartient ICI plutôt qu'à chaque éventail.
+        // `expiresAt` ; #17080 — de quoi résoudre l'enveloppe. Toutes dans la
+        // lecture qui se faisait déjà : des colonnes de plus, aucune requête de
+        // plus. C'est ce qui rend ces gardes gratuites, et c'est pourquoi elles
+        // appartiennent ICI plutôt qu'à chaque éventail — dont un, l'ÉDITION,
+        // n'a aucune charge push à composer et ne les câblerait pas.
         select: {
           translations: true,
           originalLanguage: true,
@@ -318,7 +321,18 @@ export class NotificationService {
           ephemeralDuration: true,
           effectFlags: true,
           deletedAt: true,
-          expiresAt: true },
+          expiresAt: true,
+          // #17080 — de quoi décider de l'enveloppe de l'appareil, dans la
+          // lecture qui se faisait déjà : son chiffré, son régime, les deux
+          // drapeaux de protection que les colonnes portent, et le régime de la
+          // CONVERSATION par la relation — un message hérité, ou écrit par un
+          // chemin qui n'a pas posé `encryptionMode`, ne doit ni rouvrir ni
+          // fermer l'écran verrouillé sur la foi de sa seule ligne (#12518).
+          encryptedContent: true,
+          encryptionMode: true,
+          isViewOnce: true,
+          isBlurred: true,
+          conversation: { select: { encryptionMode: true } } },
       });
       return {
         translations: this.pushableTranslations(message?.translations),
@@ -328,6 +342,12 @@ export class NotificationService {
         ephemeralDuration: message?.ephemeralDuration ?? null,
         effectFlags: message?.effectFlags ?? null,
         liveness: this.messageLiveness(message, messageId),
+        // La DÉCISION, jamais la matière brute : c'est elle qui est une règle,
+        // et deux consommateurs qui la rejoueraient depuis les colonnes
+        // divergeraient au premier cycle qui en touche une.
+        deviceEnvelope: message
+          ? deviceEnvelopeForPush(message, message.conversation?.encryptionMode) ?? null
+          : null,
       };
     } catch (error) {
       notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
@@ -808,8 +828,15 @@ export class NotificationService {
       // défauts trouvés ici (#7157, #7159) étaient des champs VOISINS qu'aucune
       // phrase du bloc ne nommait : les énumérer à un seul endroit est ce qui
       // les rend visibles.
-      const { content: sanitizedContent, actor: sanitizedActor, metadata: sanitizedMetadata } =
-        sanitizeNotificationInputs(params);
+      const {
+        content: sanitizedContent,
+        actor: sanitizedActor,
+        metadata: sanitizedMetadata,
+        // #17177 — le contexte passe par le même bloc : il porte l'enveloppe
+        // chiffrée, que la NSE déchiffre pour ÉCRASER le corps de la bannière.
+        // Elle ne doit survivre qu'à la protection dont elle EST le placeholder.
+        context: sanitizedContext,
+      } = sanitizeNotificationInputs(params);
 
       // Titre/sous-titre localisés, conscients de l'entité — calculés UNE fois
       // côté serveur (langue du destinataire) puis persistés. Source unique pour
@@ -868,7 +895,7 @@ export class NotificationService {
 
           // Groupes V2 (cast en any car Prisma doit être régénéré)
           actor: (sanitizedActor || null) as any,
-          context: params.context as any,
+          context: sanitizedContext as any,
           metadata: sanitizedMetadata as any,
 
           // State (isRead, readAt, createdAt en DB, expiresAt si fourni)
@@ -1100,7 +1127,7 @@ export class NotificationService {
                   // Android #10641), sous le SECOND VERROU du cycle 125 :
                   // `push-media-fields.ts`.
                   ...pushMediaFields(params.context),
-                  encryptedContent: params.context.encryptedContent || '',
+                  encryptedContent: sanitizedContext.encryptedContent || '',
                   // #8857 — le détail du contenu, sous le MÊME second verrou que le média.
                   ...(params.context.notificationLocKey ? {} : contentDetailPushFields(params.context.contentDetail)),
                   // Cycle 124 — le couple que la NSE PRÉ-ENREGISTRE. Les DEUX
@@ -1735,6 +1762,19 @@ export class NotificationService {
           originalLanguage: prismSource.originalLanguage,
           protectedByLocKey: !!params.notificationLocKey,
         }),
+        // #17080 — l'enveloppe que la NSE DÉCHIFFRE, résolue par la relecture
+        // partagée. Seul le lot `regular` la portait : la bannière d'une MENTION
+        // d'une conversation chiffrée restait `🔒 💬` à vie, parce que la NSE
+        // ne remplace le corps par le clair que si `encryptedContent` est non
+        // vide — et son repli `locKey` dérive du MÊME champ, donc aucune des
+        // deux branches ne tirait.
+        //
+        // DÉRIVÉE, jamais reçue en paramètre : le chemin d'ÉDITION
+        // (`notifyNewlyMentioned`) appelle ce créateur sans composer aucune
+        // charge push, et « une garde de confidentialité se relit CHEZ ELLE,
+        // pas dans ses paramètres » vaut dans les deux sens — un paramètre dont
+        // l'absence retire une feature est un demi-correctif.
+        encryptedContent: prismSource.deviceEnvelope ?? undefined,
         // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
         // premier est redondant avec la base `protected-placeholder` que
         // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
@@ -2411,6 +2451,19 @@ export class NotificationService {
           originalLanguage: prismSource.originalLanguage,
           protectedByLocKey: !!params.notificationLocKey,
         }),
+        // #17080 — l'enveloppe que la NSE DÉCHIFFRE, résolue par la relecture
+        // partagée. Seul le lot `regular` la portait : la bannière d'une RÉPONSE
+        // d'une conversation chiffrée restait `🔒 💬` à vie, parce que la NSE
+        // ne remplace le corps par le clair que si `encryptedContent` est non
+        // vide — et son repli `locKey` dérive du MÊME champ, donc aucune des
+        // deux branches ne tirait.
+        //
+        // DÉRIVÉE, jamais reçue en paramètre : le chemin d'ÉDITION
+        // (`notifyNewlyMentioned`) appelle ce créateur sans composer aucune
+        // charge push, et « une garde de confidentialité se relit CHEZ ELLE,
+        // pas dans ses paramètres » vaut dans les deux sens — un paramètre dont
+        // l'absence retire une feature est un demi-correctif.
+        encryptedContent: prismSource.deviceEnvelope ?? undefined,
         // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
         // premier est redondant avec la base `protected-placeholder` que
         // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son

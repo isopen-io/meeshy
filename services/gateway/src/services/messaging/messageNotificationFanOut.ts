@@ -26,6 +26,12 @@ import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
 // (#17081). Elle n'est PAS réexportée d'ici : un ré-export ne traverse pas un
 // double qui énumère ses clés à la main, et ce module est doublé partout.
 import { NOTIFICATION_FANOUT_CONCURRENCY } from '../notifications/notificationFanOutBudget';
+// #17177 — la règle de l'enveloppe vit chez le COÛT qu'elle borne (le chiffré
+// qui part vers un appareil), pas chez l'éventail qui l'a écrite en premier :
+// la réponse, la mention et le chemin d'ÉDITION la demandent aussi, et elle
+// n'est pas réexportée d'ici — un ré-export ne traverse pas un double de test
+// partiel (cycle 150).
+import { deviceEnvelopeForPush } from '../notifications/deviceEnvelopePush';
 import { pendingRequestUserIds } from './pendingMessageRequests';
 
 
@@ -357,21 +363,6 @@ async function listeningRegularRecipients(
  * envoi réussi en 500. `onError` laisse l'appelant journaliser dans le contexte
  * de sa requête.
  */
-/**
- * #13114 — le seul chiffré qui voyage sur le fil push est l'enveloppe qu'un
- * APPAREIL a scellée (`e2ee`), que la NSE ouvre avec ses propres clés. En
- * `server` et `hybrid`, `encryptedContent` est le chiffré AU REPOS, sous la clé
- * de conversation que seule la passerelle détient : il ne quitte pas le
- * serveur. Le mode de la LIGNE décide, celui de la conversation ne supplée
- * qu'une ligne héritée qui n'en porte aucun.
- */
-export function deviceEnvelopeForPush(
-  message: Pick<FanOutMessage, 'encryptedContent' | 'encryptionMode'>,
-  conversationMode: string | null | undefined,
-): string | undefined {
-  if (!message.encryptedContent) return undefined;
-  return isEndToEndMode(message.encryptionMode ?? conversationMode) ? message.encryptedContent : undefined;
-}
 
 export async function notifyMessageRecipients(params: {
   prisma: FanOutPrisma;
@@ -467,6 +458,33 @@ export async function notifyMessageRecipients(params: {
     // masque. `Message.translations` ne traduisant que `Message.content`, c'est
     // ici — où l'on sait ce que l'aperçu montre — que la question se tranche.
     const previewIsProtectedPlaceholder = protectedOverride !== null;
+
+    // #17177 — l'enveloppe de l'appareil que le lot `regular` transporte, sous
+    // la garde de PROTECTION que `deviceEnvelopeForPush` tient désormais.
+    //
+    // La préséance de `protectedOverride` ci-dessus place le chiffrement en
+    // DERNIER : un message à VUE UNIQUE, FLOUTÉ ou ÉPHÉMÈRE d'une conversation
+    // e2ee compose donc son propre placeholder (`👁️ 🖼️`) **et** laissait partir
+    // à côté de quoi l'écraser — la NSE déchiffre sans consulter
+    // `declaresProtection`. Le même message en mode `server` est protégé.
+    //
+    // Pourquoi ce lot-ci la REÇOIT quand la réponse et la mention la DÉRIVENT
+    // de leur relecture (`MessageBannerSource.deviceEnvelope`) : celui-ci tient
+    // le message en mémoire et sa relecture vivante ne lit que de quoi juger
+    // l'éligibilité. Même partage que `messageLiveness` — une règle, deux sites
+    // qui l'appliquent, aucun qui la réécrive.
+    const deviceEnvelope = deviceEnvelopeForPush(
+      {
+        encryptedContent: message.encryptedContent,
+        encryptionMode: message.encryptionMode,
+        isViewOnce: message.isViewOnce,
+        isBlurred: message.isBlurred,
+        effectFlags: message.effectFlags,
+        expiresAt: message.expiresAt ?? null,
+        ephemeralDuration: message.ephemeralDuration ?? null,
+      },
+      conversation.encryptionMode,
+    );
 
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
@@ -783,7 +801,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: deviceEnvelopeForPush(message, conversation.encryptionMode),
+          encryptedContent: deviceEnvelope,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122

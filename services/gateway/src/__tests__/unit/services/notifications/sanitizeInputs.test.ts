@@ -52,7 +52,7 @@ describe('persistedNotificationTitle', () => {
 });
 
 describe('sanitizeNotificationInputs', () => {
-  const base = { content: 'Contenu', metadata: {} as never };
+  const base = { content: 'Contenu', metadata: {} as never, context: {} };
 
   it('laisse passer un avatar servi en chemin relatif — #7157', () => {
     const { actor } = sanitizeNotificationInputs({
@@ -92,5 +92,67 @@ describe('sanitizeNotificationInputs', () => {
     expect(actor?.displayName).not.toContain('<b>');
 
     expect(sanitizeNotificationInputs(base).actor).toBeUndefined();
+  });
+});
+
+/**
+ * #17177 — le SECOND VERROU de l'enveloppe chiffrée, en règle PURE.
+ *
+ * Les témoins de bout en bout (ce qui part réellement vers APNs, sur les trois
+ * éventails) vivent dans `deviceEnvelopeThreeFanOuts.test.ts`. Ceux-ci tiennent
+ * la table : quelle clé de protection laisse passer un chiffré, et laquelle le
+ * retient. `protectedPreview` est l'unique producteur de cette clé dans tout le
+ * dépôt, donc les quatre valeurs ci-dessous sont exhaustives.
+ */
+describe('sanitizeNotificationInputs — le verrou de l enveloppe chiffrée', () => {
+  const base = { content: 'Contenu', metadata: {} as never };
+  const ENVELOPE = 'YmFzZTY0';
+
+  it.each([
+    ['notification.view_once_message'],
+    ['notification.hidden_message'],
+    ['notification.ephemeral_message'],
+  ])('retient le chiffré sous la clé %s', (notificationLocKey) => {
+    const { context } = sanitizeNotificationInputs({
+      ...base,
+      context: { encryptedContent: ENVELOPE, notificationLocKey },
+    });
+
+    expect(context).not.toHaveProperty('encryptedContent');
+  });
+
+  it('laisse passer sous la clé du CHIFFREMENT — c est elle que la NSE remplace', () => {
+    const { context } = sanitizeNotificationInputs({
+      ...base,
+      context: { encryptedContent: ENVELOPE, notificationLocKey: 'notification.encrypted_message' },
+    });
+
+    expect(context.encryptedContent).toBe(ENVELOPE);
+  });
+
+  it('laisse passer quand AUCUNE protection n est déclarée', () => {
+    // Mode d'échec du correctif : un verrou qui mord sans déclaration
+    // retirerait le déchiffrement local à toute conversation chiffrée.
+    const { context } = sanitizeNotificationInputs({
+      ...base,
+      context: { encryptedContent: ENVELOPE },
+    });
+
+    expect(context.encryptedContent).toBe(ENVELOPE);
+  });
+
+  it('retient sous une clé INCONNUE — une porte échoue en montrant moins', () => {
+    const { context } = sanitizeNotificationInputs({
+      ...base,
+      context: { encryptedContent: ENVELOPE, notificationLocKey: 'notification.quelque_chose_de_neuf' },
+    });
+
+    expect(context).not.toHaveProperty('encryptedContent');
+  });
+
+  it('rend le contexte INCHANGÉ quand il ne porte aucune enveloppe', () => {
+    const context = { conversationId: 'c1', notificationLocKey: 'notification.view_once_message' };
+
+    expect(sanitizeNotificationInputs({ ...base, context }).context).toBe(context);
   });
 });

@@ -58,6 +58,22 @@ export type MessageBannerSource = MessagePrismSource & {
   readonly ephemeralDuration: number | null;
   readonly effectFlags: number | null;
   readonly liveness: MessageLiveness;
+  /**
+   * #17080 — l'enveloppe que la bannière de ce message a le droit de
+   * transporter (`deviceEnvelopeForPush`), ou `null`.
+   *
+   * Elle est RÉSOLUE par la relecture, pas transportée brute : la décision
+   * demande le régime de la conversation, que la même lecture ramène par la
+   * RELATION, et la protection du message, que la garde relit chez elle. C'est
+   * ce qui la met ICI plutôt que chez chaque appelant — seul l'éventail
+   * d'ENVOI tient le message en mémoire, et le chemin d'ÉDITION, qui appelle le
+   * lot de mentions sans composer aucune charge push, ne la câblerait pas.
+   *
+   * Même raison que l'horloge et le verdict de vie, deux champs au-dessus :
+   * elle ne compose AUCUNE chaîne, donc « qui compose ce corps ? » ne la trouve
+   * jamais (cycle 126).
+   */
+  readonly deviceEnvelope: string | null;
 };
 
 /**
@@ -99,6 +115,7 @@ export const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
   ephemeralDuration: null,
   effectFlags: null,
   liveness: 'unknown',
+  deviceEnvelope: null,
 };
 
 /**
@@ -166,6 +183,21 @@ export type NotificationBannerMedia = {
 // Emojis are platform-universal so no client-side localisation is needed for
 // the body itself. The `locKey` is still emitted for compatibility with the
 // iOS NSE locKey path (used only as a fallback when E2EE decryption fails).
+
+/**
+ * Les clés de localisation que `protectedPreview` pose — son unique producteur
+ * dans tout le dépôt, donc leur valeur est une DÉCLARATION de protection et
+ * jamais un indice (cycle 125).
+ *
+ * Nommées plutôt que répétées en littéral parce qu'une SEULE d'entre elles
+ * autorise l'enveloppe de l'appareil à voyager (#17177) : celle du
+ * CHIFFREMENT, que la NSE est précisément censée remplacer par le clair. Les
+ * trois autres annoncent une protection de cycle de vie, que rien ne remplace.
+ */
+export const EPHEMERAL_MESSAGE_LOC_KEY = 'notification.ephemeral_message';
+export const VIEW_ONCE_MESSAGE_LOC_KEY = 'notification.view_once_message';
+export const BLURRED_MESSAGE_LOC_KEY = 'notification.hidden_message';
+export const ENCRYPTED_MESSAGE_LOC_KEY = 'notification.encrypted_message';
 
 const PROTECTION_ICON = Object.freeze({
   ephemeral: '🔥',
@@ -291,16 +323,16 @@ export function protectedPreview(input: {
     const preview = duration
       ? `${PROTECTION_ICON.ephemeral} ${icon} ${duration}`
       : `${PROTECTION_ICON.ephemeral} ${icon}`;
-    return { preview, locKey: 'notification.ephemeral_message' };
+    return { preview, locKey: EPHEMERAL_MESSAGE_LOC_KEY };
   }
   if (isViewOnce) {
-    return { preview: `${PROTECTION_ICON.viewOnce} ${icon}`, locKey: 'notification.view_once_message' };
+    return { preview: `${PROTECTION_ICON.viewOnce} ${icon}`, locKey: VIEW_ONCE_MESSAGE_LOC_KEY };
   }
   if (isBlurred) {
-    return { preview: `${PROTECTION_ICON.blurred} ${icon}`, locKey: 'notification.hidden_message' };
+    return { preview: `${PROTECTION_ICON.blurred} ${icon}`, locKey: BLURRED_MESSAGE_LOC_KEY };
   }
   // isEncrypted (last branch — least restrictive flag)
-  return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: 'notification.encrypted_message' };
+  return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: ENCRYPTED_MESSAGE_LOC_KEY };
 }
 
 /**
