@@ -342,7 +342,7 @@ Chaque écart « bloquant » ou « a_corriger » devient une issue (titre séman
 phase('Couvrir')
 const couverture = await agent(`
 Lecture seule sur origin/${BASE} de ${REPO}, sauf les issues que tu ouvres. Matrice de couverture de la planche ${PLANCHE} : ses vues
-(R1–R13, A1–A18, O1–O11, S1–S10, P1–P6, I1–I4, C1–C2 ; une vue que le champ decisions_porteur du registre retire ne se compte pas) × iOS et Android.
+(lis leurs identifiants dans la planche elle-même : chaque « id » de la table S) × iOS et Android.
 Pour chaque vue : l'écran qui la réalise existe-t-il, se compose-t-il des composants du kit SEULS (${FICHES}/), et respecte-t-il les lois citées
 par la vue dans ${LOIS} (disposition, hiérarchie, états, gestes) ? Appuie-toi sur le code, les témoins et les instantanés, pas sur les titres d'issues.
 Une vue en écart sans issue ouverte en reçoit une (même milestone). Relève les cliquets de la garde du kit sur chaque plateforme
