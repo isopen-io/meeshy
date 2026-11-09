@@ -187,7 +187,7 @@ struct SignupView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .meeshyTapTarget()
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
@@ -206,7 +206,7 @@ struct SignupView: View {
 
             Text(String(localized: "auth.signup.subtitle", defaultValue: "Vous lirez tout le monde dans votre langue.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -263,10 +263,10 @@ struct SignupView: View {
                     .accessibilityHidden(true)
                 Text(languageChipTitle)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                 Text(String(localized: "auth.signup.language.change", defaultValue: "Changer", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -320,11 +320,11 @@ struct SignupView: View {
             if let banner = viewModel.bannerError {
                 HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .accessibilityHidden(true)
                     Text(banner)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(MeeshySpacing.md)
@@ -347,7 +347,7 @@ struct SignupView: View {
                     } else {
                         Text(primaryTitle)
                             .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                     }
                 }
             }
@@ -386,7 +386,7 @@ struct SignupView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "auth.signup.legal", defaultValue: "En continuant, vous acceptez les conditions d'utilisation et la politique de confidentialité.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: MeeshySpacing.lg) {
@@ -395,7 +395,7 @@ struct SignupView: View {
                 } label: {
                     Text(String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                         .frame(minHeight: MeeshyControlSize.tapTarget)
                 }
                 Button {
@@ -403,7 +403,7 @@ struct SignupView: View {
                 } label: {
                     Text(String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                         .frame(minHeight: MeeshyControlSize.tapTarget)
                 }
             }
@@ -417,9 +417,9 @@ struct SignupView: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Text(String(localized: "auth.signup.haveAccount", defaultValue: "Déjà un compte ?", bundle: .main))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Text(String(localized: "auth.signup.signIn", defaultValue: "Se connecter", bundle: .main))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
             }
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             .frame(maxWidth: .infinity, minHeight: 44)
@@ -504,7 +504,7 @@ struct SignupView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             HStack(spacing: 0) {
                 // Un contenu qui porte plusieurs éléments (le champ de mot de
