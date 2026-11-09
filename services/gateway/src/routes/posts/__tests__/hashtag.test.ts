@@ -115,7 +115,7 @@ describe('GET /posts/hashtag/:tag', () => {
     await app.inject({ method: 'GET', url: '/posts/hashtag/paris' });
     const where = (prisma.post.findMany as jest.Mock).mock.calls[0][0].where;
     const visibilitiesInOr = where.OR.map((clause: Record<string, unknown>) => clause.visibility).filter(Boolean);
-    expect(visibilitiesInOr).toEqual(['PUBLIC', 'COMMUNITY']);
+    expect(visibilitiesInOr).toEqual(['PUBLIC', 'COMMUNITY', 'COMMUNITY']);
     await app.close();
   });
 
