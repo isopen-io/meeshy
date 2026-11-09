@@ -9,7 +9,7 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     public let policy: CachePolicy
 
-    nonisolated(unsafe) let memoryCache: NSCache<NSString, CacheBox>
+    let memoryCache: LockedCache<NSString, CacheBox>
     let baseDirectory: URL
     let fileManager = FileManager.default
     let logger = MeeshyLog.logger(.diskCache, subsystem: .legacySDK)
@@ -101,7 +101,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         let cache = NSCache<NSString, CacheBox>()
         cache.countLimit = 100
         cache.totalCostLimit = memoryBudgetBytes
-        self.memoryCache = cache
+        self.memoryCache = LockedCache(cache)
         FileManager.default.createDirectoryLogging(at: self.baseDirectory, context: "disk cache root", logger: logger)
 
         NotificationCenter.default.addObserver(
@@ -728,11 +728,11 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// notable main-thread cost). The map turns the repeat hashes into a lookup.
     /// `NSCache` is internally thread-safe, so the `nonisolated(unsafe)` static
     /// is sound from the `nonisolated` callers.
-    nonisolated(unsafe) private static let fileKeyCache: NSCache<NSString, NSString> = {
+    private static let fileKeyCache: LockedCache<NSString, NSString> = LockedCache({
         let cache = NSCache<NSString, NSString>()
         cache.countLimit = 4000
         return cache
-    }()
+    }())
 
     nonisolated static func fileKey(for urlString: String) -> String {
         let cacheKey = urlString as NSString
