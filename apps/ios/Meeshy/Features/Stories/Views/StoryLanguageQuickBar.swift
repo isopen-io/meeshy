@@ -157,7 +157,7 @@ struct StoryLanguageQuickBar: View {
                     .fill(Color.white.opacity(MeeshyOpacity.light))
                     .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 Image(systemName: "plus")
-                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             }
             .scaleEffect(highlightedIndex == languages.count ? 1.35 : 1.0)

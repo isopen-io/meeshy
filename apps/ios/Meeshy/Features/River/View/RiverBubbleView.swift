@@ -606,6 +606,9 @@ struct RiverBubbleView: View, Equatable {
                 .equatable()
                 .contentShape(Rectangle())
                 .onTapGesture { openQuotedMedia(media.reference) }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: media.reference))
+                .accessibilityAction { openQuotedMedia(media.reference) }
                 .padding(.leading, MeeshySpacing.sm)
                 .padding(.top, MeeshySpacing.xs)
             Spacer(minLength: 0)
@@ -613,6 +616,7 @@ struct RiverBubbleView: View, Equatable {
         .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
         .onTapGesture { followQuote() }
+        .accessibilityAction(named: Text(String(localized: "bubble.reply.go_to_quoted", defaultValue: "Aller au message cité", bundle: .main))) { followQuote() }
     }
 
     /// La lecture ou le plein écran quand l'hôte l'offre, le saut à l'original

@@ -290,14 +290,14 @@ extension StoryCardView {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { captionScrollToTopToken += 1 }
-                // Le retrait est RENDU au repère de l'écran : la colonne du
-                // canvas déborde le viewport, et 68 pt de colonne n'y valent pas
-                // 68 pt d'écran (cf. `railClearanceInset`).
+                // Retrait rendu au repère de l'écran : la colonne du canvas déborde le
+                // viewport, 68 pt de colonne n'y valent pas 68 pt d'écran (`railClearanceInset`).
                 .padding(.trailing, CaptionExpansionSpace.railClearanceInset(
                     columnWidth: columnWidth, viewportWidth: viewportWidth))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(Self.captionScrollToTopLabel)
                 .accessibilityHint(Self.captionScrollToTopHint)
+                .accessibilityAction { captionScrollToTopToken += 1 }
         }
     }
 

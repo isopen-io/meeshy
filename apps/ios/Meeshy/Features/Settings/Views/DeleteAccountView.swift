@@ -304,7 +304,7 @@ struct DeleteAccountView: View {
             VStack(spacing: MeeshySpacing.lg) {
                 // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
                 Image(systemName: "envelope.circle.fill")
-                    .font(.system(size: 64))
+                    .font(MeeshyFont.fixedGlyph(64))
                     .foregroundStyle(
                         MeeshyColors.brandGradient
                     )

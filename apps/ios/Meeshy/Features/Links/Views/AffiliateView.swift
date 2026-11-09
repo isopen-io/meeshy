@@ -56,10 +56,12 @@ struct AffiliateView: View {
             showCreateSheet = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: MeeshyIconSize.lg, weight: .bold))
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
@@ -179,7 +181,7 @@ struct AffiliateView: View {
             // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
             // déséquilibrer l'état vide.
             Image(systemName: "link")
-                .font(.system(size: 36))
+                .font(MeeshyFont.fixedGlyph(36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
                 .accessibilityHidden(true)
 

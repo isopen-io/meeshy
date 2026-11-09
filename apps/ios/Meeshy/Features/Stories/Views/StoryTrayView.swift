@@ -386,22 +386,7 @@ private struct MyStoryButton: View {
                 .accessibilityAddTraits(.isButton)
                 .overlay(alignment: .bottomTrailing) {
                     if myMoodEmoji == nil {
-                        Button {
-                            onAddStatus?()
-                            HapticFeedback.medium()
-                        } label: {
-                            // user request 2026-05-28 — placeholder = x0.8 du
-                            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
-                            // pour garder la parité avec l'emoji mood animé
-                            // (cf. MeeshyAvatar.badgeSize .storyTray).
-                            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
-                            Text("\u{1F4AD}")
-                                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
-                                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                                .background(Circle().fill(theme.backgroundPrimary))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
+                        moodPlaceholderButton
                     }
                 }
                 .overlay {
@@ -439,7 +424,7 @@ private struct MyStoryButton: View {
                         // (déborderait s'il scalait, doctrine 86i) ; le
                         // bouton porte le libellé.
                         Image(systemName: "plus")
-                            .font(.system(size: MeeshyIconSize.lg, weight: .bold))
+                            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
                             .foregroundStyle(Color.white)
                             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                             .background(
@@ -469,6 +454,27 @@ private struct MyStoryButton: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
+    }
+
+    private var moodPlaceholderButton: some View {
+        Button {
+            onAddStatus?()
+            HapticFeedback.medium()
+        } label: {
+            // user request 2026-05-28 — placeholder = x0.8 du
+            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
+            // pour garder la parité avec l'emoji mood animé
+            // (cf. MeeshyAvatar.badgeSize .storyTray).
+            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
+            Text("\u{1F4AD}")
+                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                .background(Circle().fill(theme.backgroundPrimary))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
 
     private func storyCountDots(_ group: StoryGroup) -> some View {
@@ -534,7 +540,7 @@ private struct StoryUploadOverlay: View {
 
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(.white)
             } else {
                 Circle()
