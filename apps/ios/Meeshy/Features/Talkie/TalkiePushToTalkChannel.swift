@@ -149,6 +149,14 @@ final class TalkiePushToTalkChannel: TalkiePushToTalkChanneling {
         _ = await managerIfAvailable()
     }
 
+    /// À l'ouverture de session, au premier plan : un destinataire joignable rejoint le canal, même s'il n'a jamais
+    /// parlé lui-même — sinon iOS jette ses réveils.
+    func joinIfReachable(role: String?, relations: RelationsProviding = RelationsService.shared) async {
+        let links = (try? await relations.links()) ?? []
+        guard TalkieOfferRule.reachable(links: links, role: role) else { return }
+        await activate()
+    }
+
     func tokenReceived(_ token: String) async {
         defaults.set(token, forKey: TalkiePushToTalkRules.tokenDefaultsKey)
         do {
