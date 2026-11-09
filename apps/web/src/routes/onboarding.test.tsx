@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { MY_PROFILE_QUERY_KEY } from '@/lib/api/profile';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
@@ -409,6 +410,19 @@ describe('« Montre-toi » (#17237) — après le courriel, avant le salut, jama
     expect(uploads).toEqual(['avatar']);
     await click(action(host, 'profile.continue'));
     expect(patches).toEqual([{ step: 'profile', outcome: 'done' }]);
+    expect(card(host)).toBe('global');
+  });
+
+  test('photo ET bannière déjà là, passerelle qui ne pré-coche pas : la carte est sautée côté client', async () => {
+    sessionStore.getState().establish({
+      user: { id: 'u-maya', username: 'maya', displayName: 'Maya', systemLanguage: 'fr', avatar: 'https://cdn.test/maya.jpg' },
+      token: 'jwt',
+      sessionToken: 's',
+      expiresIn: 3600,
+    });
+    const { deps } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
+    deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, { banner: 'https://cdn.test/banniere.jpg' });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     expect(card(host)).toBe('global');
   });
 

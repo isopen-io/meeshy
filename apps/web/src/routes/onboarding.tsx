@@ -341,9 +341,18 @@ export function OnboardingJourney({
     });
   }, [deps.readScore, setProgress]);
 
+  /* « Montre-toi » (#17237) ne se propose pas à un compte qui a DÉJÀ photo ET
+     bannière — miroir d'iOS (`hasProfileImages`), filet face à une passerelle
+     qui ne pré-coche pas l'étape. Lu au montage : une image posée PAR la carte
+     ne la retire pas sous les doigts. */
+  const [profileComplete] = useState(() => {
+    const avatarHeld = session.status === 'authenticated' ? session.user.avatar : undefined;
+    const banner = deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.banner;
+    return (avatarHeld ?? '') !== '' && (banner ?? '') !== '';
+  });
   const context = useMemo<JourneyContext | null>(
-    () => (state === undefined ? null : { state, progress, notificationsAskable: askable }),
-    [state, progress, askable],
+    () => (state === undefined ? null : { state, progress, notificationsAskable: askable, profileComplete }),
+    [state, progress, askable, profileComplete],
   );
 
   /* L'ENTRÉE — une fois l'état connu (cache d'abord) : `?story=<id>` au

@@ -66,6 +66,11 @@ describe('resumeStep — la reprise rouvre la PREMIÈRE étape manquante', () =>
     expect(resumeStep(context({ state: bare({ seenSteps: ['languages'], prefilledSteps: ['profile'] }) }))).toBe('global');
   });
 
+  test('un compte qui a DÉJÀ photo et bannière ne voit pas « Montre-toi », même face à un serveur qui ne la pré-coche pas (#17237)', () => {
+    expect(resumeStep(context({ state: bare({ seenSteps: ['languages'] }), profileComplete: true }))).toBe('global');
+    expect(resumeStep(context({ state: bare({ seenSteps: ['languages'] }), profileComplete: false }))).toBe('profile');
+  });
+
   test('« Montre-toi » faite ici, avant que le serveur l’ait vue : réglée (#17237)', () => {
     expect(resumeStep(context({ state: bare({ seenSteps: ['languages'] }), progress: withDone(EMPTY_PROGRESS, 'profile') }))).toBe('global');
   });
