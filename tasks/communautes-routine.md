@@ -16,6 +16,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | L'onglet Publications du détail lit les publications (iOS) | #17061 | #16878 | fusionnée dans dev (réveil 20) |
 | 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | fusionnée dans dev (réveil 21) |
 | 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
+| 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | voir réveil 22 | #16892 | voir réveil 22 |
 
 ## 2026-11-07 — lot 1
 
@@ -184,3 +185,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `CommunityLocalAppearanceTests` (SDK, 5) et trois de plus dans `CommunityCreateViewModelTests`. iOS ne compile pas en conteneur : preuve par `ios.yml`.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 demandent une session de staging.
 - État en fin de run : PR #17152 ouverte, NON fusionnée. `ios.yml` sur la tête `5da395a14` : gardes texte et compilation vertes, les quatre tranches de tests rouges sur 14 échecs TOUS hors du diff (composer surtout, plus `MessageSearchResultRow`) — dev ne lance pas les tests à la fusion, ce rouge s'y est accumulé sans être vu : #17172. Le prochain réveil relance `ios.yml` quand #17172 est soldée, puis fusionne au vert.
+
+## 2026-11-09 — réveil 22
+
+- Début du run : #17152 (#6380, réveil 21) ouverte, menée EN DIRECT par sa session (commentaire posté une minute avant ce réveil, `ios.yml` en cours) : cédée, non touchée. Ses rouges iOS viennent des lots du composer fusionnés ce soir, pas d'elle.
+- Lot : #16892 (passerelle, sécurité). Une publication `COMMUNITY` dont `Post.communityId` est posé ne se lit que par les membres actifs et le créateur de CETTE communauté, vivante — plus par « un co-membre de n'importe quelle communauté de l'auteur ». Filtre de liste (`buildPostVisibilityOrFilter`) : la branche co-membre ne vaut plus que pour `communityId` nul ou absent ; une branche `communityId ∈ getReadableCommunityIds(lecteur)` (sans cache : quitter ferme aussitôt), résolue dans `buildFeedVisibilityFilter` (fil, profil, réels, stories, statuts, recherche) et `buildViewerVisibilityFilter` (détail, vue). Verdict unitaire (`canUserViewPost`) : `isCommunityReadableBy`. Hashtags : même paire de branches. `communityId` entre dans la tranche ACL REQUISE (`PostVisibilityRecord`), le compilateur a trouvé le seul site qui ne le lisait pas (`storyReplyAdmission`).
+- Une publication PUBLIC rattachée à une communauté privée reste servie comme avant (décision #16893).
+- Revue adversariale avant la PR : un BLOQUANT corrigé dans le lot — une republication (`repostPost`, et `POST /posts` avec `repostOfId`) naissait sans `communityId`, donc lisible par les co-membres de n'importe quelle communauté du REPUBLIEUR, avec le contenu de l'original. `repostCommunityId` (`services/posts/repostCommunity.ts`) fait hériter la communauté de la source et refuse une autre (403 `REPOST_COMMUNITY_MISMATCH`). `PostService.ts` 2118 → 2114 lignes (budget abaissé).
+- Suivis ouverts : #17178 (notifications, temps réel et traductions de story suivent encore la règle co-membre — le temps réel diffuse le contenu : priorité élevée), #17182 (les favoris ne filtrent aucune audience, préexistant). Index de `CommunityMember(userId, isActive)` et `Community(createdBy, isActive)` : rejoint #14227 / #16696. Une mention ouvre toujours le post à un non-membre nommé (voie des références, inchangée).
+- Gotcha : huit suites moquent `communityVisibility` par une fabrique qui ne connaît que `getCommunityCoMemberIds` ; une nouvelle export lue par `viewerAudience` doit y entrer.
+
