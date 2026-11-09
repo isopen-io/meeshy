@@ -34,6 +34,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     relationFeatureSetting: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    bloodLocationPoint: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    bloodLocationConsultation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>

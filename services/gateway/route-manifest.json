@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 797,
+  "routeCount": 803,
   "routes": [
     {
       "method": "DELETE",
@@ -603,6 +603,20 @@
       "method": "DELETE",
       "path": "/api/v1/me/delete-account",
       "module": "deleteAccountRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/me/location/history",
+      "module": "bloodLocationMeRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -4073,6 +4087,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/features",
+      "module": "bloodLocationMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/me/game/league/friends",
       "module": "meGameWave2Routes",
       "mountPrefix": "/api/v1/me",
@@ -4145,6 +4173,20 @@
       "method": "GET",
       "path": "/api/v1/me/game/seasons/calendar",
       "module": "meGameSeasonCalendarRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/location/consultations",
+      "module": "bloodLocationMeRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -5426,6 +5468,20 @@
       "method": "GET",
       "path": "/api/v1/relations/:userId",
       "module": "relationsLevelRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/:userId/location/history",
+      "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -9330,6 +9386,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/me/location/blood",
+      "module": "bloodLocationMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/me/meesh/mint",
       "module": "meMeeshRoutes",
       "mountPrefix": "/api/v1/me",
@@ -10924,6 +10994,20 @@
       "method": "PUT",
       "path": "/api/v1/me/game/visibility",
       "module": "meGameWave2Routes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/location/blood-settings",
+      "module": "bloodLocationMeRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [

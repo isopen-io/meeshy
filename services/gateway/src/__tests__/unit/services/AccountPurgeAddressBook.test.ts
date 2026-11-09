@@ -84,6 +84,8 @@ function base() {
     userRelation: table([]),
     pairInteractionDay: table([]),
     relationFeatureSetting: table([]),
+    bloodLocationPoint: table([]),
+    bloodLocationConsultation: table([]),
     friendRequest: table([]),
     conversationShareLink: table([]),
     userContact,
