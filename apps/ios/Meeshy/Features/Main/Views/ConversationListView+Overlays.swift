@@ -200,7 +200,7 @@ extension ConversationListView {
         let reduceMotion = ConversationPreviewEntranceMotion.isReducedNow
         withAnimation(ConversationPreviewEntranceMotion.exit(reduceMotion: reduceMotion)) {
             previewScale = reduceMotion ? previewScale : min(previewScale, 0.7)
-            if !chipModeLatched && dragOffsetY <= 110 {
+            if !chipModeLatched && dragOffsetY <= ConversationPeekPullDown.dismissDistance {
                 // Fermeture normale : la carte revient en place en fondant.
                 // Fermeture depuis le morph drag (chip relâchée) : la carte
                 // fond SUR PLACE sous le doigt — la faire remonter au centre
@@ -228,7 +228,7 @@ extension ConversationListView {
     /// Une fois LATCHÉE (`chipModeLatched`), la chip reste chip même si le
     /// doigt remonte (pour viser un header de section au-dessus).
     var dragMorphProgress: CGFloat {
-        chipModeLatched ? 1 : min(1, max(0, dragOffsetY / 140))
+        chipModeLatched ? 1 : ConversationPeekPullDown.progress(translation: dragOffsetY)
     }
 
     /// Émergence de l'aperçu depuis la ligne pressée — tick 1 : la carte se
@@ -289,7 +289,8 @@ extension ConversationListView {
                         card: { heights in peekCard(for: conversation, heights: heights, reduceMotion: reduceMotion) },
                         menu: peekMenu(for: conversation),
                         onChipDragChanged: { handleCardChipDrag($0) },
-                        onChipDragEnded: { endCardChipDrag($0) }
+                        onChipDragEnded: { endCardChipDrag($0) },
+                        onDismiss: { dismissContextMenu() }
                     )
                 }
                 .onAppear {
@@ -412,21 +413,16 @@ extension ConversationListView {
         chipAutoScrollDriver.update(fingerLocation: value.location)
     }
 
-    /// Lâcher : la pastille se dépose ; sinon, au-delà de 110 pt le menu se
-    /// ferme, en deçà la carte revient en place.
+    /// Lâcher : la pastille se dépose, ou `ConversationPeekPullDown` ferme / remet en place (#17258).
     func endCardChipDrag(_ value: DragGesture.Value) {
-        if chipModeLatched {
+        switch ConversationPeekPullDown.release(predictedEndTranslation: value.predictedEndTranslation.height, isLatched: chipModeLatched) {
+        case .drop:
             chipAutoScrollDriver.stop()
             handleChipDrop(at: value.location)
-            return
-        }
-        if value.translation.height > 110 {
+        case .dismiss:
             dismissContextMenu()
-            return
-        }
-        withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
-            dragOffsetY = 0
-            dragOffsetX = 0
+        case .restore:
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) { dragOffsetY = 0; dragOffsetX = 0 }
         }
     }
 
