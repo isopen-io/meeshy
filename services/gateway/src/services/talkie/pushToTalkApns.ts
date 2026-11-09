@@ -40,6 +40,9 @@ export async function sendViaPushToTalk(
     notification.pushType = 'pushtotalk';
     notification.priority = 10;
     notification.expiry = 0;
+    notification.alert = undefined as never;
+    notification.sound = undefined as never;
+    notification.badge = undefined as never;
     notification.payload = { ...(payload.data ?? {}) };
     const corr = { tokenId: tokenRecord.id, apnsEnv: env, topic: notification.topic, pushType: 'pushtotalk' };
     const result = await transport.send(env, notification, tokenRecord.token, corr);
