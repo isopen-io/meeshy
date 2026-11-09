@@ -49,7 +49,27 @@ final class ConcurrencyPrimitivesMigrationGuardTests: XCTestCase {
         "Main/Components/ConversationCard/ConversationLinkCardPreviewLaunch.swift",
         "Main/Views/NearbyDensityOverlay.swift",
         "Export/MessageCardMotionExporter.swift",
-    ].map { (path: $0, rules: [mutedSleep, nanosecondSleep]) }
+    ].map { (path: $0, rules: [mutedSleep, nanosecondSleep]) } + [
+        "../Core/MessageStoreRouter.swift",
+        "Main/Services/EditHistoryStore.swift",
+        "Main/Services/LocallyHiddenMessagesStore.swift",
+        "Main/Services/ConversationProtectionPreferenceStore.swift",
+        "Main/Services/BackgroundTaskManager.swift",
+        "Main/Services/RecentCameraRollAssetProvider.swift",
+        "Main/ViewModels/NearbyDiscoveryViewModel.swift",
+        "Lens/Core/GatewayBridgeProvider.swift",
+        "Lens/Core/LentilleProviders.swift",
+        "Lens/Mode/LentilleReadingModeContext.swift",
+        "Auth/SignInLinkOpener.swift",
+        "Links/Views/ShareableLink.swift",
+        "Game/Frames/GloryFrameFonts.swift",
+        "Game/Photo/GamePhotoNotebook.swift",
+        "Call/Services/CallColorLook.swift",
+        "Main/Components/CameraPreviewLayer.swift",
+        "Main/Components/ComposerCameraPreparedInputs.swift",
+        "Composer/ComposerFramePacing.swift",
+        "Composer/ComposerLookSceneCache.swift",
+    ].map { (path: $0, rules: [artisanLock]) }
 
     private static var featuresRoot: URL {
         URL(fileURLWithPath: #filePath)

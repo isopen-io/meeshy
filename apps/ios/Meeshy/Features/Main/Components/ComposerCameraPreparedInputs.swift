@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import MeeshySDK
 import QuartzCore
 
 /// **L'entrée de l'autre objectif, prête AVANT le toucher** (#9753, porteur
@@ -15,8 +16,7 @@ import QuartzCore
 ///
 /// Thread-safe : lue et écrite sur la file de la session, vidée à la fermeture.
 nonisolated final class ComposerCameraPreparedInputs<Input: AnyObject>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var inputs: [AVCaptureDevice.Position: Input] = [:]
+    private let inputs = Locked<[AVCaptureDevice.Position: Input]>(uncheckedState: [:])
 
     nonisolated deinit {}
 
@@ -24,16 +24,12 @@ nonisolated final class ComposerCameraPreparedInputs<Input: AnyObject>: @uncheck
 
     /// L'entrée prête pour `position`, retirée du stock : elle ne sert qu'une fois.
     func take(_ position: AVCaptureDevice.Position) -> Input? {
-        lock.lock()
-        defer { lock.unlock() }
-        return inputs.removeValue(forKey: position)
+        inputs.mutateUnchecked { $0.removeValue(forKey: position) }
     }
 
     /// Prépare `position` si rien n'y est prêt ; `make` ne s'appelle que dans ce cas.
     func prepare(_ position: AVCaptureDevice.Position, make: () -> Input?) {
-        lock.lock()
-        let pret = inputs[position] != nil
-        lock.unlock()
+        let pret = inputs.mutateUnchecked { $0[position] != nil }
         guard !pret, let entree = make() else { return }
         store(entree, for: position)
     }
@@ -46,21 +42,15 @@ nonisolated final class ComposerCameraPreparedInputs<Input: AnyObject>: @uncheck
     }
 
     func isPrepared(_ position: AVCaptureDevice.Position) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return inputs[position] != nil
+        inputs.mutateUnchecked { $0[position] != nil }
     }
 
     func reset() {
-        lock.lock()
-        inputs = [:]
-        lock.unlock()
+        inputs.mutateUnchecked { $0 = [:] }
     }
 
     private func store(_ entree: Input, for position: AVCaptureDevice.Position) {
-        lock.lock()
-        inputs[position] = entree
-        lock.unlock()
+        inputs.mutateUnchecked { $0[position] = entree }
     }
 }
 

@@ -276,8 +276,7 @@ final class BackgroundTaskManager {
 /// `setTaskCompleted` rendu UNE fois : par l'expiration (tout de suite) ou par
 /// la fin du travail, le premier des deux. Le second appel ne fait rien.
 nonisolated final class BackgroundTaskCompletion: @unchecked Sendable {
-    private let lock = NSLock()
-    private var done = false
+    private let done = Locked(false)
     private let deliver: @Sendable (Bool) -> Void
 
     init(_ deliver: @escaping @Sendable (Bool) -> Void) {
@@ -285,10 +284,10 @@ nonisolated final class BackgroundTaskCompletion: @unchecked Sendable {
     }
 
     func complete(success: Bool) {
-        lock.lock()
-        let first = !done
-        done = true
-        lock.unlock()
+        let first = done.mutate { finished -> Bool in
+            defer { finished = true }
+            return !finished
+        }
         if first { deliver(success) }
     }
 }

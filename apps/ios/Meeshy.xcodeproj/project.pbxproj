@@ -1352,6 +1352,7 @@
 		4BB50BCA11BCFF7C68C6A41D /* VoiceSetupDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB3D930B4EBB041366417E5 /* VoiceSetupDestination.swift */; };
 		4BC1605E07FA076783C2E7B0 /* FeedPostsMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C74A22651C78D485010D62D /* FeedPostsMapView.swift */; };
 		4BDCC92ACDE4EA3AFDA08538 /* ConversationHeaderCallButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4707E421A0BC6C651FCBDE7E /* ConversationHeaderCallButton.swift */; };
+		4BE63B1C1DD28F2C99633A83 /* AppLockedStateConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CD175200979DD66A2438F3 /* AppLockedStateConcurrencyTests.swift */; };
 		4BF740E095E78AFACFFB37CE /* CallFrameRenderer+Ornaments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43157A6EE0D14623AB492758 /* CallFrameRenderer+Ornaments.swift */; };
 		4BFDC92B56B33031B73FA634 /* ConversationMediaHubViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B29A2682AB9BCFD61A670D /* ConversationMediaHubViewModel.swift */; };
 		4C0D0121BD3F66E12BF25259 /* MeeshyComposerHost+ReelAutoSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9FCF92FC45DEFDE53D2F0C /* MeeshyComposerHost+ReelAutoSwitch.swift */; };
@@ -6708,6 +6709,7 @@
 		75A89CE32C6F73063FC05DB6 /* NearbyDiscoveryViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDiscoveryViewModelTests.swift; sourceTree = "<group>"; };
 		75AED4A2DCF89A86062DD459 /* ComposerRailBottomAnchorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailBottomAnchorTests.swift; sourceTree = "<group>"; };
 		75B59354C0E6B78F2C82A23D /* ConversationComposerFoldMemoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationComposerFoldMemoryTests.swift; sourceTree = "<group>"; };
+		75CD175200979DD66A2438F3 /* AppLockedStateConcurrencyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLockedStateConcurrencyTests.swift; sourceTree = "<group>"; };
 		75E738CE6677763E9DF96C1E /* ComposerBackgroundDoorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerBackgroundDoorTests.swift; sourceTree = "<group>"; };
 		75EF37D6857CC8BCC3144C67 /* ConversationLockGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockGateTests.swift; sourceTree = "<group>"; };
 		75F32199F93C101DB7A47EED /* GallerySceneScrubberTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GallerySceneScrubberTests.swift; sourceTree = "<group>"; };
@@ -11061,6 +11063,7 @@
 				B26746C8D05D72EDC0D3942B /* XcodeCloudBuildNumberGuardTests.swift */,
 				1C572E7AC204BD30C9671215 /* CallFrames */,
 				AB58FF0C0F190CABDBEF8B8F /* TaskSlotTests.swift */,
+				75CD175200979DD66A2438F3 /* AppLockedStateConcurrencyTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -19824,6 +19827,7 @@
 				FEE768A6D398A3EBEF1A8948 /* iPadRootViewPerfRerenderTests.swift in Sources */,
 				288A73B5E84B33940807F577 /* ConcurrencyPrimitivesMigrationGuardTests.swift in Sources */,
 				49D0C43A6DA37D6BAFD19093 /* TaskSlotTests.swift in Sources */,
+				4BE63B1C1DD28F2C99633A83 /* AppLockedStateConcurrencyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
