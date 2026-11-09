@@ -68,7 +68,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
     /// vignette. La colonne droite qui reste (outil, objet) garde sa place.
     func test_leRepos_estUnCalqueAuDessusDuChrome_etLaColonneDroiteResteDansLaSceneLibre() throws {
         let code = compact(try sceneSurface())
-        XCTAssertTrue(code.contains("sceneLetterboxsceneLayerchromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}}"),
+        XCTAssertTrue(code.contains("sceneLetterboxsceneLayerif!chromeIsConcealed{chromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}ComposerLimitCapsuleView(capsule:.shared)}}"),
                       "sol, scène, chrome, repos (ou les rails du grand écran, #13839 L6) — dans cet ordre")
         guard let debut = code.range(of: "varfreeZone:someView{"),
               let etages = code.range(of: "varcomposingFloors:someView{") else {

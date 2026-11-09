@@ -13,7 +13,7 @@ import { TOGETHER_ERROR_CODES, type TogetherErrorCode } from '@meeshy/shared/typ
 import { getCacheStore } from '../../services/CacheStore';
 import { endTogetherOf, hasTogether, inviteTogether, joinTogether, leaveTogether, syncTogether, type TogetherIo } from '../../services/together/togetherRelay';
 import type { ServerEmitIOWithRooms } from '../serverEmit';
-import { togetherRelayDepsOf } from '../../services/together/togetherDeps';
+import { shareTogetherCuts, togetherRelayDepsOf } from '../../services/together/togetherDeps';
 import { createCustomRateLimiter, rateLimitDisabled, type RateLimiter } from '../../utils/rate-limiter.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -116,6 +116,8 @@ export function togetherHandlerDeps(params: {
   readonly wait?: (ms: number) => Promise<void>;
 }): TogetherHandlerDeps {
   const relay = togetherRelayDepsOf(params);
+  // Le relais du processus, pour les sites qui ferment une porte sans tenir de quoi émettre (#17022).
+  shareTogetherCuts({ prisma: params.prisma, io: params.io });
   return {
     callerOf: (socketId) => {
       const userId = params.socketToUser.get(socketId);

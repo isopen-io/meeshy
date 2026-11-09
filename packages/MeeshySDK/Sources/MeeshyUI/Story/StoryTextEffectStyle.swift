@@ -28,13 +28,44 @@ struct StoryTextEffectModifier: ViewModifier {
     func body(content: Content) -> some View {
         if let spec = effect.shadow {
             let offset = spec.offset(fontSize: Double(fontSize))
-            content.shadow(
+            let shadowed = content.shadow(
                 color: Self.ink(spec.ink, textColor: textColor).opacity(spec.opacity),
                 radius: spec.blurRadius(fontSize: Double(fontSize)),
                 x: offset.x,
                 y: offset.y)
+            if effect.burns {
+                burning(shadowed, glyphs: content)
+            } else {
+                shadowed
+            }
         } else {
             content
+        }
+    }
+
+    /// **La Flamme figée d'une vignette** (#17112) : les lettres prennent la
+    /// chaleur du feu, et une flamme floue née de leur silhouette monte
+    /// au-dessus d'elles. Image FIXE et déterministe — la vignette compare des
+    /// effets, elle ne joue pas ; le feu animé vit sur le canvas
+    /// (`StoryFlameLayer`), dont elle reprend le dégradé de chaleur.
+    private func burning<Shadowed: View>(_ shadowed: Shadowed, glyphs: Content) -> some View {
+        let lick = StoryFlameTextRenderer.lickHeight(fontSize: fontSize)
+        return shadowed
+            .overlay {
+                LinearGradient(stops: Self.heatStops(lickFraction: 0), startPoint: .top, endPoint: .bottom)
+                    .mask { glyphs }
+            }
+            .background {
+                LinearGradient(stops: Self.heatStops(lickFraction: 0.6), startPoint: .top, endPoint: .bottom)
+                    .mask { glyphs.blur(radius: fontSize * 0.10) }
+                    .scaleEffect(x: 0.9, y: 1.4, anchor: .bottom)
+                    .offset(y: -lick * 0.15)
+            }
+    }
+
+    static func heatStops(lickFraction: Double) -> [Gradient.Stop] {
+        StoryFlameTextRenderer.heatStops(lickFraction: lickFraction).map { stop in
+            Gradient.Stop(color: Color(hex: stop.hex).opacity(stop.alpha), location: stop.location)
         }
     }
 

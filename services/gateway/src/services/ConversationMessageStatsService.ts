@@ -1,16 +1,24 @@
 import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withOrphanedSenderRepair } from './messaging/withOrphanedSenderRepair';
-
-interface ParticipantStatEntry {
-  messageCount: number;
-  wordCount: number;
-  characterCount: number;
-  imageCount: number;
-  audioCount: number;
-  videoCount: number;
-  firstMessageAt: string | null;
-  lastMessageAt: string | null;
-}
+import {
+  applyPersonalHistoryHiding,
+  hidingFingerprint,
+  NO_PERSONAL_HIDING,
+  type PersonalHistoryHiding,
+} from './personalHistoryFilter';
+import {
+  FLOORED_FOLD_PAGE,
+  mergeFoldedStats,
+  type FoldedMessageStats,
+  countCharacters,
+  countWords,
+  foldMessageStats,
+  FOLDABLE_MESSAGE_SELECT,
+  pruneDailyActivity,
+  shapeMessageStats,
+  type FoldableMessage,
+  type ParticipantStatEntry,
+} from './conversations/messageStatsAggregate';
 
 interface CacheEntry {
   data: Record<string, unknown>;
@@ -27,11 +35,6 @@ const ATTACHMENT_TYPE_FIELDS: Record<string, string> = {
   video: 'videoCount',
   file: 'fileCount',
 };
-
-function countWords(content: string): number {
-  if (!content || !content.trim()) return 0;
-  return content.trim().split(/\s+/).length;
-}
 
 // A message counts as "text" for stats iff it has no attachments AND its
 // messageType is 'text'. This mirrors the authoritative recompute()
@@ -57,10 +60,6 @@ function isLocationMessageStat(messageType?: string): boolean {
   return messageType === 'location';
 }
 
-function countCharacters(content: string): number {
-  return content ? content.length : 0;
-}
-
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -69,24 +68,28 @@ function currentHour(): string {
   return String(new Date().getUTCHours());
 }
 
-function pruneDailyActivity(daily: Record<string, number>): Record<string, number> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 90);
-  const cutoffKey = cutoff.toISOString().slice(0, 10);
-
-  const pruned: Record<string, number> = {};
-  for (const [key, value] of Object.entries(daily)) {
-    if (key >= cutoffKey) {
-      pruned[key] = value;
-    }
-  }
-  return pruned;
-}
-
 export class ConversationMessageStatsService {
   private static instance: ConversationMessageStatsService | null = null;
   private readonly cache = new Map<string, CacheEntry>();
+  /**
+   * Les agrégats PLANCHÉISÉS, dans un seau à part — `conversationId` puis
+   * plancher (#17076).
+   *
+   * **Deux niveaux, et c'est ce qui garde `invalidate` en O(1).** Une clé
+   * composite dans la carte d'origine aurait obligé chaque nouveau message à
+   * balayer la carte pour trouver ses variantes ; un seau par conversation
+   * s'efface d'un `delete`, donc un lecteur planchéisé n'est jamais plus
+   * périmé qu'un lecteur ordinaire.
+   *
+   * **Et le seau ne peut pas servir une fenêtre pour une autre** : la clé EST
+   * la fenêtre (plancher + masquage personnel). Mettre un agrégat planchéisé
+   * dans la carte d'origine l'aurait servi à toute la conversation — la fuite
+   * inverse de celle qu'on ferme.
+   */
+  private readonly flooredCache = new Map<string, Map<string, CacheEntry>>();
   private readonly ttlMs = 5 * 60 * 1000;
+  /** Fenêtres distinctes gardées par conversation — cf. `getStatsUnderFloor`. */
+  private readonly maxFlooredWindows = 32;
 
   private constructor() {}
 
@@ -99,6 +102,7 @@ export class ConversationMessageStatsService {
 
   invalidate(conversationId: string): void {
     this.cache.delete(conversationId);
+    this.flooredCache.delete(conversationId);
   }
 
   private isValid(entry?: CacheEntry | null): entry is CacheEntry {
@@ -367,6 +371,120 @@ export class ConversationMessageStatsService {
   }
 
   /**
+   * L'agrégat d'un lecteur à PLANCHER (#17076) — la même charge, bornée à sa
+   * fenêtre de lecture.
+   *
+   * Il ne passe NI par la ligne `ConversationMessageStats`, NI par
+   * `recompute()`, et les deux refus sont du même ordre : la ligne agrège
+   * l'avant-plancher, et l'`upsert` de `recompute` remplacerait la ligne de
+   * TOUS par la fenêtre d'UN seul. Le pli est partagé ; l'écriture, non.
+   *
+   * Ce que ça coûte, et c'est écrit parce que ça se décide : une lecture par
+   * requête sur la fenêtre du lecteur, là où un lecteur sans plancher ne paie
+   * qu'un `findUnique`. La fenêtre d'un lecteur planchéisé est par construction
+   * celle que `GET …/messages` lui sert déjà — on ne lit donc rien de plus que
+   * ce qu'il a le droit de lire — et le seau de cache ci-dessus la garde cinq
+   * minutes, comme celui de tout le monde.
+   */
+  async getStatsUnderFloor(
+    prisma: PrismaClient,
+    conversationId: string,
+    floor: Date,
+    hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
+  ): Promise<Record<string, unknown>> {
+    // **La clé porte TOUT ce qui borne la fenêtre**, pas seulement le plancher :
+    // deux lecteurs peuvent partager un plancher et masquer personnellement des
+    // choses différentes (`clear-history`, `delete-for-me`). Une clé qui ne
+    // nommerait que le plancher servirait l'agrégat de l'un à l'autre — plus
+    // étroit, donc jamais une fuite, mais faux, et faux d'une façon qu'aucun
+    // témoin ne verrait.
+    const windowKey = `${floor.toISOString()}|${hidingFingerprint(hiding)}`;
+    const bucket = this.flooredCache.get(conversationId);
+    const cached = bucket?.get(windowKey);
+    if (this.isValid(cached)) {
+      return cached.data;
+    }
+
+    const shaped = await this.foldFlooredWindow(prisma, conversationId, floor, hiding);
+
+    const target = bucket ?? new Map<string, CacheEntry>();
+    // Le seau est BORNÉ. Sans plafond, une conversation sans nouveau message
+    // garderait une entrée par fenêtre distincte pour la vie du processus,
+    // chacune portant un `participantStats` complet — et `invalidate` est le
+    // seul chemin de sortie. La plus ancienne part : l'ordre d'insertion d'une
+    // `Map` est celui de l'arrivée.
+    if (!target.has(windowKey) && target.size >= this.maxFlooredWindows) {
+      const oldest = target.keys().next();
+      if (!oldest.done) target.delete(oldest.value);
+    }
+    target.set(windowKey, { data: shaped, expiresAt: Date.now() + this.ttlMs });
+    this.flooredCache.set(conversationId, target);
+    return shaped;
+  }
+
+  /**
+   * La fenêtre PLANCHÉISÉE, lue page par page et repliée.
+   *
+   * Quatre propriétés, et chacune a son témoin dans
+   * `stats-history-floor.test.ts` :
+   *
+   * 1. **la borne part dans la REQUÊTE** (`createdAt.gte`), jamais en filtrage
+   *    après coup — un pli sur tout puis un masque laisserait les totaux
+   *    parler ;
+   * 2. **le masquage PERSONNEL du lecteur s'applique aussi.** Un agrégat par
+   *    lecteur est précisément le régime où `clear-history` et `delete-for-me`
+   *    veulent dire quelque chose : compter ce que le lecteur a effacé de SA vue
+   *    contredirait la vue que toutes les autres surfaces lui servent. Il ne
+   *    peut que RÉTRÉCIR (`applyPersonalHistoryHiding` fusionne borne par
+   *    borne), donc il ne peut pas desserrer le plancher ;
+   * 3. **elle n'ÉCRIT rien.** Elle ne peut pas emprunter `recompute()`, dont
+   *    l'`upsert` remplacerait la ligne de TOUS par la fenêtre d'UN seul ;
+   * 4. **elle ne répare pas les expéditeurs orphelins**, et c'est la conséquence
+   *    de (3) : la réparation est une ÉCRITURE. `recompute()` la porte parce
+   *    qu'elle est le chemin AUTORITATIF ; ici un orphelin retombe sur
+   *    `senderId` — un `Participant.id` que l'enrichissement nominal de la route
+   *    ne trouvera pas — exactement comme une réparation qui échoue.
+   *
+   * La pagination est par `id` croissant plutôt que par `createdAt` : deux
+   * messages peuvent partager une date à la milliseconde, et un curseur sur une
+   * valeur non unique saute ou répète une ligne à chaque frontière de page.
+   */
+  private async foldFlooredWindow(
+    prisma: PrismaClient,
+    conversationId: string,
+    floor: Date,
+    hiding: PersonalHistoryHiding,
+  ): Promise<Record<string, unknown>> {
+    const where = applyPersonalHistoryHiding(
+      { conversationId, deletedAt: null, createdAt: { gte: floor } },
+      hiding,
+    );
+
+    const pages: FoldedMessageStats[] = [];
+    let cursor: string | null = null;
+
+    for (;;) {
+      const page = await prisma.message.findMany({
+        where,
+        select: { id: true, ...FOLDABLE_MESSAGE_SELECT },
+        orderBy: { id: 'asc' },
+        take: FLOORED_FOLD_PAGE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      if (page.length === 0) break;
+      pages.push(foldMessageStats(page as unknown as readonly FoldableMessage[]));
+      if (page.length < FLOORED_FOLD_PAGE) break;
+      cursor = (page[page.length - 1] as { id: string }).id;
+    }
+
+    return shapeMessageStats({
+      conversationId,
+      ...mergeFoldedStats(pages),
+      updatedAt: new Date(),
+    });
+  }
+
+  /**
    * Le recalcul autoritatif, mais SEULEMENT pour une conversation dont les
    * compteurs existent déjà.
    *
@@ -393,129 +511,34 @@ export class ConversationMessageStatsService {
   async recompute(prisma: PrismaClient, conversationId: string): Promise<Record<string, unknown>> {
     const messages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
       where: { conversationId, deletedAt: null },
-      select: {
-        content: true,
-        senderId: true,
-        createdAt: true,
-        originalLanguage: true,
-        messageType: true,
-        sender: { select: { userId: true } },
-        attachments: { select: { mimeType: true } },
-      },
+      select: FOLDABLE_MESSAGE_SELECT,
     }));
 
-    let totalMessages = 0;
-    let totalWords = 0;
-    let totalCharacters = 0;
-    let textMessages = 0;
-    let imageCount = 0;
-    let audioCount = 0;
-    let videoCount = 0;
-    let fileCount = 0;
-    let locationCount = 0;
+    // Le PLI est partagé avec la fenêtre planchéisée (#17076) : c'est lui qui
+    // définit ce que chaque compteur veut dire, et la fenêtre de 90 jours de
+    // `dailyActivity` en fait partie. Ce chemin-ci est le seul qui ÉCRIT.
+    const folded = foldMessageStats(messages as unknown as readonly FoldableMessage[]);
 
-    const participantStats: Record<string, ParticipantStatEntry> = {};
-    const dailyActivity: Record<string, number> = {};
-    const hourlyDistribution: Record<string, number> = {};
-    const languageDistribution: Record<string, number> = {};
-
-    for (const msg of messages) {
-      totalMessages += 1;
-      const words = countWords(msg.content);
-      const chars = countCharacters(msg.content);
-      totalWords += words;
-      totalCharacters += chars;
-
-      const userId = msg.sender?.userId || msg.senderId;
-
-      if (!participantStats[userId]) {
-        participantStats[userId] = {
-          messageCount: 0,
-          wordCount: 0,
-          characterCount: 0,
-          imageCount: 0,
-          audioCount: 0,
-          videoCount: 0,
-          firstMessageAt: null,
-          lastMessageAt: null,
-        };
-      }
-      const entry = participantStats[userId];
-      entry.messageCount += 1;
-      entry.wordCount += words;
-      entry.characterCount += chars;
-
-      const msgTime = msg.createdAt.toISOString();
-      if (!entry.firstMessageAt || msgTime < entry.firstMessageAt) {
-        entry.firstMessageAt = msgTime;
-      }
-      if (!entry.lastMessageAt || msgTime > entry.lastMessageAt) {
-        entry.lastMessageAt = msgTime;
-      }
-
-      const msgType = msg.messageType || 'text';
-      if (msgType === 'text' && msg.attachments.length === 0) {
-        textMessages += 1;
-      }
-
-      for (const att of msg.attachments) {
-        const resolved = resolveAttachmentType(att.mimeType);
-        if (resolved === 'image') { imageCount += 1; entry.imageCount += 1; }
-        else if (resolved === 'audio') { audioCount += 1; entry.audioCount += 1; }
-        else if (resolved === 'video') { videoCount += 1; entry.videoCount += 1; }
-        else if (resolved === 'file') { fileCount += 1; }
-      }
-
-      if (msgType === 'location') {
-        locationCount += 1;
-      }
-
-      const day = msg.createdAt.toISOString().slice(0, 10);
-      dailyActivity[day] = (dailyActivity[day] || 0) + 1;
-
-      const hour = String(msg.createdAt.getUTCHours());
-      hourlyDistribution[hour] = (hourlyDistribution[hour] || 0) + 1;
-
-      if (msg.originalLanguage) {
-        languageDistribution[msg.originalLanguage] = (languageDistribution[msg.originalLanguage] || 0) + 1;
-      }
-    }
-
-    const prunedDaily = pruneDailyActivity(dailyActivity);
+    const columns = {
+      totalMessages: folded.totalMessages,
+      totalWords: folded.totalWords,
+      totalCharacters: folded.totalCharacters,
+      textMessages: folded.textMessages,
+      imageCount: folded.imageCount,
+      audioCount: folded.audioCount,
+      videoCount: folded.videoCount,
+      fileCount: folded.fileCount,
+      locationCount: folded.locationCount,
+      participantStats: folded.participantStats as unknown as Prisma.InputJsonValue,
+      dailyActivity: folded.dailyActivity as unknown as Prisma.InputJsonValue,
+      hourlyDistribution: folded.hourlyDistribution as unknown as Prisma.InputJsonValue,
+      languageDistribution: folded.languageDistribution as unknown as Prisma.InputJsonValue,
+    };
 
     const row = await prisma.conversationMessageStats.upsert({
       where: { conversationId },
-      create: {
-        conversationId,
-        totalMessages,
-        totalWords,
-        totalCharacters,
-        textMessages,
-        imageCount,
-        audioCount,
-        videoCount,
-        fileCount,
-        locationCount,
-        participantStats: participantStats as unknown as Prisma.InputJsonValue,
-        dailyActivity: prunedDaily as unknown as Prisma.InputJsonValue,
-        hourlyDistribution: hourlyDistribution as unknown as Prisma.InputJsonValue,
-        languageDistribution: languageDistribution as unknown as Prisma.InputJsonValue,
-      },
-      update: {
-        totalMessages,
-        totalWords,
-        totalCharacters,
-        textMessages,
-        imageCount,
-        audioCount,
-        videoCount,
-        fileCount,
-        locationCount,
-        participantStats: participantStats as unknown as Prisma.InputJsonValue,
-        dailyActivity: prunedDaily as unknown as Prisma.InputJsonValue,
-        hourlyDistribution: hourlyDistribution as unknown as Prisma.InputJsonValue,
-        languageDistribution: languageDistribution as unknown as Prisma.InputJsonValue,
-      },
+      create: { conversationId, ...columns },
+      update: columns,
     });
 
     const shaped = this.shapeResponse(row);
@@ -524,54 +547,11 @@ export class ConversationMessageStatsService {
   }
 
   private shapeResponse(row: Record<string, unknown>): Record<string, unknown> {
-    return {
-      conversationId: row.conversationId,
-      totalMessages: row.totalMessages,
-      totalWords: row.totalWords,
-      totalCharacters: row.totalCharacters,
-      contentTypes: {
-        text: row.textMessages,
-        image: row.imageCount,
-        audio: row.audioCount,
-        video: row.videoCount,
-        file: row.fileCount,
-        location: row.locationCount,
-      },
-      participantStats: typeof row.participantStats === 'string'
-        ? JSON.parse(row.participantStats as string)
-        : row.participantStats,
-      dailyActivity: typeof row.dailyActivity === 'string'
-        ? JSON.parse(row.dailyActivity as string)
-        : row.dailyActivity,
-      hourlyDistribution: typeof row.hourlyDistribution === 'string'
-        ? JSON.parse(row.hourlyDistribution as string)
-        : row.hourlyDistribution,
-      languageDistribution: typeof row.languageDistribution === 'string'
-        ? JSON.parse(row.languageDistribution as string)
-        : row.languageDistribution,
-      updatedAt: row.updatedAt,
-    };
+    return shapeMessageStats(row);
   }
+
 }
 
-/**
- * La table MIME → compteur, et la SEULE. `recompute()` — l'autorité, puisque
- * c'est elle qui reconstruit la ligne depuis les messages — l'applique déjà ;
- * les chemins incrémentaux en portaient chacun leur copie inline (handler
- * socket, route de suppression), et une copie qui dérive fait diverger le
- * compteur incrémental de son propre recalcul.
- *
- * Exportée pour que les deux unités partagées d'effets (`messagePostSaveEffects`,
- * `messageRemovalEffects`) traduisent les MIME avec cette table-ci et pas une
- * jumelle.
- */
-export function resolveAttachmentType(mimeType: string): string {
-  if (!mimeType) return 'file';
-  if (mimeType.startsWith('image/')) return 'image';
-  if (mimeType.startsWith('audio/')) return 'audio';
-  if (mimeType.startsWith('video/')) return 'video';
-  return 'file';
-}
 
 /**
  * La clé sous laquelle un message est crédité puis débité dans

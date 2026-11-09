@@ -315,7 +315,25 @@ public enum StorySlideRenderer {
             ctx.scaleBy(x: scale, y: scale)
             ctx.translateBy(x: -centerX, y: -centerY)
             (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
+            drawFlames(of: textObj, glyphAttributes: attrs, in: textRect, fontSize: fontSize, ctx: ctx)
             ctx.restoreGState()
+        }
+    }
+
+    /// **La Flamme figée sur sa phase 0** (#17112) : la couverture et le
+    /// thumbHash montrent les mêmes flammes sur les mêmes lettres que la scène,
+    /// image fixe déterministe. La silhouette se prend sur le MÊME tracé que
+    /// le texte peint juste avant — sans ombre ni fond, seule la couverture
+    /// des glyphes compte.
+    private static func drawFlames(of textObj: StoryTextObject,
+                                   glyphAttributes: [NSAttributedString.Key: Any],
+                                   in textRect: CGRect, fontSize: CGFloat, ctx: CGContext) {
+        guard textObj.parsedTextEffect.burns else { return }
+        let glyphs = NSAttributedString(
+            string: textObj.text,
+            attributes: glyphAttributes.filter { $0.key != .shadow && $0.key != .backgroundColor })
+        StoryFlameTextRenderer.drawStill(in: ctx, glyphRect: textRect, fontSize: fontSize) { _ in
+            glyphs.draw(in: CGRect(origin: .zero, size: textRect.size))
         }
     }
 

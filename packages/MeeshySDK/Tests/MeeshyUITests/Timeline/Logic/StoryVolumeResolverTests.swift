@@ -110,3 +110,24 @@ final class StoryVolumeResolverTests: XCTestCase {
                                                      isDuckingDisabled: false))
     }
 }
+
+/// **Le gain AUDIBLE d'un média réglé dans « Rogner et régler »** (#17110) :
+/// muet, volume, puis atténuation — une seule fonction, que la bande, le
+/// lecteur et l'export lisent.
+final class StoryVolumeResolverAudibleGainTests: XCTestCase {
+
+    func test_audibleGain_muet_estNul() {
+        XCTAssertEqual(StoryVolumeResolver.audibleGain(volume: 1.4, isMuted: true, isDucking: true), 0)
+    }
+
+    func test_audibleGain_sansAttenuation_estLeVolumeBorne() {
+        XCTAssertEqual(StoryVolumeResolver.audibleGain(volume: 0.7, isMuted: false, isDucking: false), 0.7, accuracy: 0.0001)
+        XCTAssertEqual(StoryVolumeResolver.audibleGain(volume: 7, isMuted: false, isDucking: false), StoryVolume.maxGain)
+        XCTAssertEqual(StoryVolumeResolver.audibleGain(volume: -1, isMuted: false, isDucking: false), 0)
+    }
+
+    func test_audibleGain_attenue_appliqueLeFacteurUnique() {
+        XCTAssertEqual(StoryVolumeResolver.audibleGain(volume: 1, isMuted: false, isDucking: true),
+                       StoryVolume.duckingFactor, accuracy: 0.0001)
+    }
+}

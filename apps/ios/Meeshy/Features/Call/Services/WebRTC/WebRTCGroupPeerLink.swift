@@ -185,14 +185,21 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         restartTask = nil
         tail?.cancel()
         tail = nil
-        audioTrack.isEnabled = false
         controlChannel?.delegate = nil
-        controlChannel?.close()
+        // #17039 — fermer le canal et la connexion attend les fils de libwebrtc
+        // (0,74 à 1,02 s sur le fil principal, HangTracer) : l'état se vide ici,
+        // la fermeture part sur la file du moteur. Les rappels de la connexion
+        // fermée sont écartés par identité (`self.peerConnection === peerConnection`).
+        let closing = (audioTrack: audioTrack, controlChannel: controlChannel, peerConnection: peerConnection)
         controlChannel = nil
-        peerConnection?.close()
         peerConnection = nil
         remoteVideoTrack = nil
         pendingCandidates = []
+        CallEngineQueue.run {
+            closing.audioTrack.isEnabled = false
+            closing.controlChannel?.close()
+            closing.peerConnection?.close()
+        }
     }
 
     // MARK: - Négociation

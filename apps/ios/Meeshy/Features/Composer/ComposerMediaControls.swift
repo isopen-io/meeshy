@@ -17,6 +17,9 @@ struct ComposerMediaTrimBand: View {
     let objectId: String
     let source: (url: URL, bounds: MediaTrimBounds, sourceDuration: Double, isVideo: Bool)
     var waveform: [Float] = []
+    /// Volume et Muet sur la bande (#17110) — posé par l'hôte qui ne les sert
+    /// pas déjà ailleurs : deux Muet dans un même écran seraient un doublon.
+    var showsAdjustments = false
 
     /// **La durée du FICHIER**, mesurée à l'ouverture. Le modèle ne la porte pas
     /// de façon fiable ; sans elle, chaque réouverture montrerait une source
@@ -37,11 +40,25 @@ struct ComposerMediaTrimBand: View {
                                            sourceDuration: duree),
             waveform: waveform,
             accent: MeeshyColors.brandPrimary,
+            controls: showsAdjustments ? reglages : MediaTrimStrip.Controls.bare,
             onChange: { bornes in
                 viewModel.setSourceTrim(id: objectId, bounds: bornes, sourceDuration: duree)
             }
         )
         .task(id: source.url) { await measure(url: source.url) }
+    }
+
+    /// **« Rogner et régler »** (#17110, A15 · O8) : Volume et Muet sur la MÊME
+    /// bande que les poignées. Boucle et « Atténuer sous les voix » attendent
+    /// leurs écrivains de modèle : un contrôle sans effet n'est pas monté.
+    private var reglages: MediaTrimStrip.Controls {
+        let id = objectId
+        let vm = viewModel
+        return MediaTrimStrip.Controls(
+            adjustments: ComposerMediaVolume.adjustments(viewModel: vm, id: id),
+            volumeRange: ComposerMediaVolume.range(viewModel: vm, id: id),
+            options: MediaTrimOptions.piece,
+            onAdjust: { ComposerMediaVolume.apply($0, viewModel: vm, id: id) })
     }
 
     /// L'onde d'un SON, quand elle a été analysée ; une vidéo n'en porte pas
@@ -70,10 +87,12 @@ struct ComposerMediaTrimBand: View {
 struct ComposerMediaActionRow: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let media: StoryMediaObject
+    /// `false` quand la bande « Rogner et régler » porte déjà Muet (#17110).
+    var offersMute = true
 
     var body: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            if media.kind == .video {
+            if media.kind == .video, offersMute {
                 action(symbol: media.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                        title: ComposerObjectEditorCopy.mute,
                        isOn: media.isMuted) {

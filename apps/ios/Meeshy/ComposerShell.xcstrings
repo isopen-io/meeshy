@@ -1,0 +1,102 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "composer.shell.camera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الكاميرا" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kamera" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Camera" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cámara" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Caméra" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Fotocamera" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Câmera" } }
+      }
+    },
+    "composer.shell.concealed.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "المس المشهد لاستعادة الأدوات" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Tippe auf die Szene, um die Werkzeuge wieder anzuzeigen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap the scene to bring the tools back" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca la escena para recuperar las herramientas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Touchez la scène pour retrouver les outils" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tocca la scena per ritrovare gli strumenti" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Toque na cena para recuperar as ferramentas" } }
+      }
+    },
+    "composer.shell.duplicate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تكرار المشهد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Szene duplizieren" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Duplicate scene" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Duplicar la escena" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dupliquer la scène" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Duplica la scena" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Duplicar a cena" } }
+      }
+    },
+    "composer.shell.reorder.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تم" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Fertig" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Listo" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Fine" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Concluído" } }
+      }
+    },
+    "composer.shell.moveEarlier" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "نقل إلى الخلف" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nach vorne verschieben" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Move earlier" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mover antes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer avant" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Sposta prima" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Mover para antes" } }
+      }
+    },
+    "composer.shell.moveLater" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "نقل إلى الأمام" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nach hinten verschieben" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Move later" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mover después" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer après" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Sposta dopo" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Mover para depois" } }
+      }
+    },
+    "composer.shell.rail.scene" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "المشهد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Szene" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scene" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Escena" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Scène" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Scena" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Cena" } }
+      }
+    },
+    "composer.shell.rail.selection" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التحديد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "AUSWAHL" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "SELECTION" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "SELECCIÓN" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "SÉLECTION" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "SELEZIONE" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "SELEÇÃO" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

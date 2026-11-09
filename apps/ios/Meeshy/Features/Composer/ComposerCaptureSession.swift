@@ -44,6 +44,7 @@ final class ComposerCaptureSession: ObservableObject {
     @Published private(set) var flashIntensity: Double
     /// Les segments de la prise en cours — chacun un FICHIER déjà écrit.
     @Published var segments: [ComposerCaptureSegment] = []
+    @Published var recordingBudget: TimeInterval?
     /// L'instant où le doigt s'est posé, `nil` sans appui long en cours. Sa
     /// présence est aussi le témoin qui rend la levée sûre.
     @Published var holdStartedAt: Date?
@@ -247,8 +248,7 @@ final class ComposerCaptureSession: ObservableObject {
     func arm(mode: ComposerSceneCameraMode) {
         resetIntents()
         self.mode = mode
-        // **Les cadres d'emblée, « Aucun » choisi** :
-        // la bande s'ouvre sur la famille des cadres, sans en imposer un.
+        // **Le déclencheur d'emblée, aucun look imposé** (A8) : la plaque s'ouvre à la demande.
         look = ComposerCaptureSession.openingLook
         openFamily = ComposerCaptureSession.openingFamily
         stage = .armed
@@ -258,8 +258,8 @@ final class ComposerCaptureSession: ObservableObject {
         camera.configure(filming: mode != .photo)
     }
 
-    /// La bande ouverte à l'armement, et le look qu'elle montre choisi.
-    static let openingFamily: ComposerLookFamily? = .frames
+    /// La bande ouverte à l'armement (aucune depuis A8, #17109), et le look choisi.
+    static let openingFamily: ComposerLookFamily? = nil
     static let openingLook = ComposerPhotoLook()
 
     /// **Préparer la session avant de la montrer** : l'hôte qui peut
@@ -358,7 +358,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// caméra la fait partir DÉJÀ verrouillée ; la vidéo s'éclaire
     /// aussi, à l'intensité du curseur.
     func startFilming() {
-        guard stage == .armed, !controls.isSwitchingCamera else { return }
+        guard stage == .armed, !controls.isSwitchingCamera, ComposerCaptureRecordingBudget.allowsAnotherTake(after: self) else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
         let intent = noteRecordingStarted()
         stage = .recording

@@ -41,15 +41,20 @@ extension MeeshyComposerHost {
         HStack(spacing: MeeshySpacing.smPlus) {
             if paintedSocleZones.contains(.audience) { audienceChip }
             Spacer()
-            // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
-            // qu'il n'y a rien à publier, et son toucher dit pourquoi.
-            if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
+            // **Publier est ABSENT d'une scène vide** (#17111, qui remplace
+            // « toujours là, grisé » de #13839) : ni gris, ni toast — il paraît
+            // dès qu'il y a quelque chose à publier.
+            if ComposerPillGrammar.publishIsShown(hasMatterToPublish: !socleHasNothingToPublish) { publishButton }
         }
         .padding(.horizontal, ComposerSceneArrangementRelay(host: self).socleHorizontalPadding)
         // **Plus bas, sous la scène** : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
         .padding(.top, MeeshySpacing.xs)
         .padding(.bottom, MeeshySpacing.xxs)
+        // L'état masqué retire le socle avec le reste du chrome (#17111).
+        .opacity(sceneChromeIsConcealedServed ? 0 : 1)
+        .allowsHitTesting(!sceneChromeIsConcealedServed)
+        .accessibilityHidden(sceneChromeIsConcealedServed)
     }
 
     // **La pastille de son n'est pas au socle.**

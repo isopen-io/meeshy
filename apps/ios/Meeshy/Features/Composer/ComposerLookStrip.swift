@@ -275,19 +275,19 @@ struct ComposerLookStrip: View {
 
     // MARK: - Repliée, sans look : le déclencheur simple (#9557)
 
-    /// Un anneau, rien de peint : la caméra est déjà tout l'écran. Il porte les
-    /// gestes de la miniature choisie, et son point rouge quand la prise tourne.
-    /// **Aucun cercle : la case « Aucun », nettement choisie** (#10336, #10284 —
-    /// « le cadre est le déclencheur ») : rien n'est peint dedans, mais elle porte
-    /// la marque de la case choisie, rouge et battante pendant la prise.
+    /// **Le déclencheur à anneau blanc** (A8, #17109, qui revient sur #9351 et
+    /// #10336) : rien de peint dedans, la caméra est déjà tout l'écran. En
+    /// filmant (A9), l'anneau devient la jauge rouge du maximum du format et
+    /// porte le carré d'arrêt. Il garde les gestes de la miniature choisie.
     private var shutter: some View {
         let cellule = ComposerLookStripRule.cellSize
-        return ZStack {
-            glyph(symbol: "circle.slash")
-            chosenOverlay
-        }
-        .frame(width: cellule.width, height: cellule.height)
-        .modifier(ComposerTriggerOutlineStyle(recording: recording))
+        return ComposerShutterRing(recording: recording,
+                                   progress: ComposerCaptureRecordingBudget.fraction(
+                                       elapsed: ComposerCaptureSegments.elapsed(segments: session.segments,
+                                                                               live: recordingTime,
+                                                                               recording: recording),
+                                       budget: session.recordingBudget))
+        .frame(width: ComposerShutterRing.diameter + 2 * ComposerTriggerOutline.outset, height: cellule.height)
         .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
         .modifier(ComposerShutterPulse(tick: session.camera.shutterPresses))
         .contentShape(Rectangle())
