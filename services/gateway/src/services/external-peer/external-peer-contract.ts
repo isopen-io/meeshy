@@ -193,6 +193,7 @@ export interface ExternalPeer {
   /** Réserve ATOMIQUEMENT une pré-clé unique EC par appareil : deux demandes ne reçoivent jamais la même. */
   fetchPreKeyBundles(user: PeerUser): Promise<readonly PeerDeviceBundle[]>;
   deliverEnvelope(envelope: OutboundEnvelope): Promise<EnvelopeReceipt>;
+  /** Les plus anciennes d'abord, au plus `E2EE_ENVELOPE_BOUNDS.maxEnvelopes` : l'accusé d'une page découvre la suivante. */
   receiveEnvelopes(recipient: PeerParty): Promise<readonly InboundEnvelope[]>;
   acknowledge(acknowledgement: Acknowledgement): Promise<number>;
   deliverAttachment(attachment: OpaqueAttachment): Promise<AttachmentRef>;

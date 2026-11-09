@@ -13,7 +13,7 @@
  * numéro s'énumère), seulement de quoi garder les numéros hors des listes de clés.
  */
 import { createHash, randomUUID } from 'crypto';
-import { E2EE_ENVELOPE_RETENTION_DAYS } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_ENVELOPE_BOUNDS, E2EE_ENVELOPE_RETENTION_DAYS } from '@meeshy/shared/types/e2ee-directory';
 import type { CacheStore } from '../CacheStore';
 import {
   EXTERNAL_PEER_ERROR_CODES,
@@ -157,7 +157,7 @@ function envelopeRelay(store: PeerStore, keys: StorageKeys): Pick<ExternalPeer, 
     },
 
     receiveEnvelopes: async (recipient) => {
-      const found = (await store.keys(keys.envelopesOf(partyKey(recipient)))).sort();
+      const found = (await store.keys(keys.envelopesOf(partyKey(recipient)))).sort().slice(0, E2EE_ENVELOPE_BOUNDS.maxEnvelopes);
       const envelopes = await Promise.all(found.map(async (key) => parse<StoredEnvelope>(await store.get(key))));
       return envelopes.filter((envelope): envelope is StoredEnvelope => envelope !== null);
     },

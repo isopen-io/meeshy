@@ -9,6 +9,7 @@ import { describe, it, expect } from '@jest/globals';
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { E2EE_ENVELOPE_BOUNDS } from '@meeshy/shared/types/e2ee-directory';
 import { realLibsignalMessages } from '../../e2ee/__tests__/libsignal-devices';
 import { admitExternalPeer, type ExternalPeerLogger } from '../external-peer-gate';
 import { createFakeWhatsAppPeer, memoryPeerStore } from '../fake-whatsapp-peer';
@@ -128,6 +129,22 @@ describe('pair externe — les enveloppes opaques', () => {
     expect(await refusalCode(() => peer.deliverEnvelope({ from: meeshy(1), to: meeshy(2), type: 3, body: PREKEY_MESSAGE.body }))).toBe(
       EXTERNAL_PEER_ERROR_CODES.INVALID,
     );
+  });
+
+  it('une file longue est servie par pages bornées, les plus anciennes d’abord, et l’accusé de chaque page découvre la suivante', async () => {
+    const { peer } = gate();
+    const delivered = await Array.from({ length: E2EE_ENVELOPE_BOUNDS.maxEnvelopes + 1 }).reduce<Promise<string[]>>(async (done) => {
+      const ids = await done;
+      const receipt = await peer.deliverEnvelope({ from: friend(), to: meeshy(), type: 2, body: SIGNAL_MESSAGE.body });
+      return [...ids, receipt.envelopeId];
+    }, Promise.resolve([]));
+
+    const firstPage = await peer.receiveEnvelopes(meeshy());
+    expect(firstPage.map((envelope) => envelope.envelopeId)).toEqual(delivered.slice(0, E2EE_ENVELOPE_BOUNDS.maxEnvelopes));
+    expect(await peer.acknowledge({ recipient: meeshy(), envelopeIds: firstPage.map((envelope) => envelope.envelopeId) })).toBe(
+      E2EE_ENVELOPE_BOUNDS.maxEnvelopes,
+    );
+    expect((await peer.receiveEnvelopes(meeshy())).map((envelope) => envelope.envelopeId)).toEqual(delivered.slice(E2EE_ENVELOPE_BOUNDS.maxEnvelopes));
   });
 
   it('un accusé ne retire que les enveloppes de SON destinataire', async () => {

@@ -30,6 +30,13 @@ describe('pair externe — le choix par configuration', () => {
     expect(select({ NODE_ENV: 'production', MEESHY_ENV: 'prod', EXTERNAL_PEER_PROVIDER: 'fake-whatsapp' })).toBeNull();
   });
 
+  it('un environnement que la porte ne reconnaît pas reste FERMÉ : seuls le développement, les tests et le staging déclaré l’ouvrent', () => {
+    expect(select({ EXTERNAL_PEER_PROVIDER: 'fake-whatsapp' })).toBeNull();
+    expect(select({ NODE_ENV: 'prod', EXTERNAL_PEER_PROVIDER: 'fake-whatsapp' })).toBeNull();
+    expect(select({ NODE_ENV: 'Production', EXTERNAL_PEER_PROVIDER: 'fake-whatsapp' })).toBeNull();
+    expect(select({ NODE_ENV: 'test', EXTERNAL_PEER_PROVIDER: 'fake-whatsapp' })?.network).toBe('whatsapp');
+  });
+
   it('aucun adaptateur réel n’existe avant la signature : toute autre valeur reste fermée', () => {
     expect(select({ NODE_ENV: 'development', EXTERNAL_PEER_PROVIDER: 'meta-whatsapp' })).toBeNull();
     expect(select({ NODE_ENV: 'production', MEESHY_ENV: 'staging', EXTERNAL_PEER_PROVIDER: 'whatsapp' })).toBeNull();

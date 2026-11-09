@@ -24,8 +24,12 @@ réutilise pas : il sera retiré.
   pré-clé unique par `setnx` sur sa réservation ; une nouvelle `registrationId` efface les pré-clés de l'ancienne
   génération ; rétention 30 jours (`E2EE_ENVELOPE_RETENTION_DAYS`). Aucun hôte appelé.
 - **Choix par configuration** (`external-peer-selection.ts`) : `EXTERNAL_PEER_PROVIDER=fake-whatsapp` ouvre le
-  faux hors production ou au staging déclaré (`MEESHY_ENV=staging`) ; en production il reste fermé même demandé,
-  et aucune autre valeur n'ouvre rien tant que l'accord avec Meta n'est pas signé.
+  faux en développement, en test (`NODE_ENV` dans une liste FERMÉE) ou au staging déclaré (`MEESHY_ENV=staging`) ;
+  un `NODE_ENV` absent ou inconnu le laisse fermé, la production le garde fermé même demandé, et aucune autre
+  valeur n'ouvre rien tant que l'accord avec Meta n'est pas signé.
+- **Relève par pages** : `receiveEnvelopes` sert au plus `E2EE_ENVELOPE_BOUNDS.maxEnvelopes` enveloppes, les plus
+  anciennes d'abord — la borne même de l'accusé ; l'accusé d'une page découvre la suivante, et une file longue ne
+  part jamais d'un bloc.
 - **Modèles Prisma `DMASession`, `DMAEnrollment`, `PreKey`** : ni réutilisés ni modifiés. L'état du faux est celui
   des serveurs de WhatsApp, pas une donnée Meeshy ; le lot « retrait-moteur-maison » tranche leur sort.
 - **Garde de source** (`external-peer-isolation-guard.test.ts`) : aucun module de production n'importe
