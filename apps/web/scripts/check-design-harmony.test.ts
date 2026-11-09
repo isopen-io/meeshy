@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from 'bun:test';
 
 // @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
@@ -148,6 +151,26 @@ describe("l'art d'attente baké — même dessin que sa source, même exemption"
   test("l'exemption du baké ne couvre ni le composant hôte ni son témoin, qui restent du chrome scanné", () => {
     expect(exemptionOf('components/screen-wait.tsx')).toBe(null);
     expect(isInScope('components/screen-wait.test.tsx')).toBe(false);
+  });
+});
+
+describe("l'écran d'humeur — un chrome immersif qui se LIT dans la charte", () => {
+  // La page d'humeur (`components/mood-page.tsx`) est un plein écran posé SUR un
+  // média : encre blanche, voiles noirs, halo d'avatar. Chacune de ces couleurs
+  // a un RÔLE que la charte nomme déjà (`on-media`, `on-brand`, `scrim*`,
+  // `media-backdrop`) ; aucune ne doit rester un littéral brut. Le témoin lit la
+  // VRAIE source par l'API publique du gate — la même que le pilote.
+  const source = readFileSync(fileURLToPath(new URL('../src/components/mood-page.tsx', import.meta.url)), 'utf8');
+
+  test('mood-page.tsx ne porte aucune couleur de chrome en dur', () => {
+    expect(scanSource(source)).toEqual([]);
+  });
+
+  test("le chrome immersif passe par les jetons de la charte, pas par l'exemption", () => {
+    expect(exemptionOf('components/mood-page.tsx')).toBe(null);
+    expect(source).toContain('text-on-media');
+    expect(source).toContain('var(--color-scrim');
+    expect(source).toContain('var(--color-media-backdrop)');
   });
 });
 
