@@ -203,7 +203,7 @@ nonisolated protocol TalkieAacDecoding: AnyObject {
     func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: AVAudioConverterInputBlock) -> AVAudioConverterOutputStatus
 }
 
-extension AVAudioConverter: TalkieAacDecoding {}
+nonisolated extension AVAudioConverter: TalkieAacDecoding {}
 
 /// Le décodeur d'UNE prise de parole (#17094) : les trames ADTS de chaque fragment entrent, en mémoire, dans un même
 /// convertisseur AAC → PCM qui garde son état d'un fragment à l'autre. Un fragment décodé seul repartait d'un décodeur
@@ -226,11 +226,15 @@ nonisolated final class TalkieAdtsStreamDecoder {
     private let makeConverter: ConverterFactory
     private var stream: Stream?
 
-    init(makeConverter: @escaping ConverterFactory = { AVAudioConverter(from: $0, to: $1) }) {
+    init(makeConverter: @escaping ConverterFactory = TalkieAdtsStreamDecoder.systemConverter) {
         self.makeConverter = makeConverter
     }
 
     nonisolated deinit {}
+
+    static func systemConverter(_ input: AVAudioFormat, _ output: AVAudioFormat) -> TalkieAacDecoding? {
+        AVAudioConverter(from: input, to: output)
+    }
 
     func pcm(_ data: Data) -> AVAudioPCMBuffer? {
         let frames = TalkieAdtsFrame.split(data)
