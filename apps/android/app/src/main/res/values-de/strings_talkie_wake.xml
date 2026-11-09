@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: talkie-reveil (#17144) — le réveil du talkie d'urgence : canal de la notification et action « Lire ». -->
+<resources>
+    <string name="talkie_wake_channel_name">Notfall-Talkie</string>
+    <string name="talkie_wake_channel_description">Erscheint, wenn eine vertraute Person mit dir spricht, und spielt ihre Stimme ab, auch wenn Meeshy im Hintergrund ist</string>
+    <string name="talkie_wake_play">Abspielen</string>
+</resources>

@@ -273,13 +273,14 @@ export async function endTogetherOf(deps: TogetherRelayDeps, userId: string): Pr
 /**
  * Ce qu'une route vient de fermer, et donc les séances à rejuger (#17022) :
  * - une PAIRE, après un blocage, une baisse ou un retrait de lien ;
- * - un COMPTE, après sa désactivation, sa suppression, ou la fin de son appartenance à une
- *   conversation (départ, bannissement, retrait) ;
+ * - un COMPTE, après sa désactivation ou sa suppression — ou, restreint à une conversation,
+ *   après la fin de son appartenance (départ, bannissement, retrait) : une panne de jugement
+ *   (qui coupe, fail-closed) ne touche alors que les séances de ce fil ;
  * - une CONVERSATION, après la suppression d'un de ses messages.
  */
 export type TogetherCutScope =
   | { readonly userA: string; readonly userB: string }
-  | { readonly userId: string }
+  | { readonly userId: string; readonly conversationId?: string }
   | { readonly conversationId: string };
 
 const uniqueSessions = (sessions: readonly (TogetherSession | null)[]): readonly TogetherSession[] => [
@@ -301,7 +302,12 @@ async function pairSessions(deps: TogetherRelayDeps, userA: string, userB: strin
 
 const sessionsOf = (deps: TogetherRelayDeps, scope: TogetherCutScope): Promise<readonly TogetherSession[]> => {
   if ('userA' in scope) return pairSessions(deps, scope.userA, scope.userB);
-  if ('userId' in scope) return readUserTogether(deps.cache, scope.userId, deps.now());
+  if ('userId' in scope) {
+    const { conversationId } = scope;
+    return readUserTogether(deps.cache, scope.userId, deps.now()).then((sessions) =>
+      conversationId ? sessions.filter((session) => session.conversationId === conversationId) : sessions,
+    );
+  }
   return readConversationTogether(deps.cache, scope.conversationId, deps.now());
 };
 

@@ -30,7 +30,13 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
 
     func didReceive(_ notification: UNNotification) {
         let request = notification.request.content
-        let resolved = NotificationExpandedContent.resolve(userInfo: request.userInfo) { raw in
+        // #17143 — la voix d'un talkie ne se joue que depuis la passerelle configurée, et du fichier attaché.
+        let attachments = request.attachments.map(\.url)
+        let userInfo = NotificationExpandedContent.talkieVoiceOnlyFromAttachment(
+            NotificationDetailPolicy.sealingUntrustedTalkieVoice(request.userInfo, apiBaseURL: NSETrustedOrigin.apiBaseURL),
+            attachmentURLs: attachments
+        )
+        let resolved = NotificationExpandedContent.resolve(userInfo: userInfo) { raw in
             NotificationPayloadHelpers.resolveRemoteMediaURL(raw, apiBaseURL: NSETrustedOrigin.apiBaseURL)
         }
         content = resolved
@@ -38,7 +44,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
             preferredContentSize = CGSize(width: view.bounds.width, height: 0)
             return
         }
-        mount(root(for: resolved, attachments: request.attachments.map(\.url)))
+        mount(root(for: resolved, attachments: attachments))
         preferredContentSize = CGSize(width: view.bounds.width, height: NotificationExpandedLayout.height(for: resolved))
         if case .ephemeral(let deadline) = resolved {
             scheduleExpiry(at: deadline, identifier: notification.request.identifier)

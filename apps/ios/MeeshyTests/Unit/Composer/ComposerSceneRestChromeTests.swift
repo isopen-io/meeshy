@@ -98,9 +98,9 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertEqual(ComposerRestChrome.tools(offered: sansPalette, hasBackgroundMedia: true)
                         .filter { $0 == .background }, [.background])
         let repos = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
-        XCTAssertTrue(repos.contains("if tool == .background, let fond = sceneBackgroundMedia?.id { return selectSceneBackground(fond) }"),
+        XCTAssertTrue(repos.contains("if tool == .background, let fond = host.sceneBackgroundMedia?.id { return host.selectSceneBackground(fond) }"),
                       "avec un média de fond, « Fond » sélectionne le fond au lieu d'ouvrir la palette")
-        XCTAssertTrue(repos.contains("hasBackgroundMedia: sceneBackgroundMedia != nil"))
+        XCTAssertTrue(repos.contains("hasBackgroundMedia: host.sceneBackgroundMedia != nil"))
     }
 
     func test_tools_lePlusEstToujoursLeDernier_memeSansAucunePorte() {
