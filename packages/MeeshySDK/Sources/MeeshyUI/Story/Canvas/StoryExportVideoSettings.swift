@@ -17,8 +17,8 @@ import Foundation
 /// | `1280x720` | 11,1 Mbps | 720×1280 | 84 Mo — au prix de la définition |
 ///
 /// Autrement dit : aucun preset ne plafonne le débit en pleine définition. Un
-/// export d'une minute de contenu détaillé pesait 314 Mo (signalement user,
-/// 2026-07-30). D'où le passage à `AVAssetReader` + `AVAssetWriter`, seul chemin
+/// export d'une minute de contenu détaillé pesait 314 Mo.
+/// D'où le passage à `AVAssetReader` + `AVAssetWriter`, seul chemin
 /// qui accepte un `AVVideoAverageBitRateKey`.
 ///
 /// ## Le débit cible

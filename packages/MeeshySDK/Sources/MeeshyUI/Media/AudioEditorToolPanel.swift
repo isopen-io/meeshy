@@ -70,7 +70,7 @@ struct AudioEditorToolPanel: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Button {
@@ -92,7 +92,7 @@ struct AudioEditorToolPanel: View {
                              defaultValue: "Fondu d'entr\u{00E9}e", bundle: .module),
                       systemImage: "arrow.up.right")
                     .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
             .tint(accent)
             Toggle(isOn: $controller.fadeOut) {
@@ -100,7 +100,7 @@ struct AudioEditorToolPanel: View {
                              defaultValue: "Fondu de sortie", bundle: .module),
                       systemImage: "arrow.down.right")
                     .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
             .tint(accent)
         }
@@ -118,7 +118,7 @@ struct AudioEditorToolPanel: View {
                 } label: {
                     Text(speedLabel(value))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-                        .foregroundColor(isActive ? .white : theme.textSecondary)
+                        .foregroundStyle(isActive ? .white : theme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, MeeshySpacing.sm)
                         .background(
@@ -138,12 +138,12 @@ struct AudioEditorToolPanel: View {
             HStack {
                 Image(systemName: "speaker.fill")
                     .meeshyScaledFont(MeeshyIconSize.xs)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Slider(value: $controller.gain, in: 0...2, step: 0.05)
                     .tint(accent)
                 Image(systemName: "speaker.wave.3.fill")
                     .meeshyScaledFont(MeeshyIconSize.xs)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             Text(volumeLabel(controller.gain))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
@@ -176,7 +176,7 @@ struct AudioEditorToolPanel: View {
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 .lineLimit(1)
                         }
-                        .foregroundColor(isActive ? .white : theme.textSecondary)
+                        .foregroundStyle(isActive ? .white : theme.textSecondary)
                         .padding(.horizontal, MeeshySpacing.smPlus)
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
@@ -200,7 +200,7 @@ struct AudioEditorToolPanel: View {
                 Text(String(localized: "audio.editor.transcription.running",
                             defaultValue: "Transcription en cours\u{2026}", bundle: .module))
                     .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         } else {
             Button {
@@ -231,7 +231,7 @@ struct AudioEditorToolPanel: View {
             ScrollView {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textPrimary.opacity(0.85))
+                    .foregroundStyle(theme.textPrimary.opacity(0.85))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: 110)
@@ -258,7 +258,7 @@ struct AudioEditorToolPanel: View {
                 .foregroundColor(tint)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

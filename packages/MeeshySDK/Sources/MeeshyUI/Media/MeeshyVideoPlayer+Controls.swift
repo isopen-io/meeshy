@@ -92,8 +92,8 @@ internal struct _InlineOverlayControls: View {
 
     // MARK: - Top Bar (agrandir à gauche · PiP + AirPlay + vitesse + son à droite)
     //
-    // **Agrandir au bord GAUCHE, le son au bord DROIT** (#9575, directive
-    // porteur 2026-10-07). Le groupe centré du 2026-08-10 posait les deux
+    // **Agrandir au bord GAUCHE, le son au bord DROIT** (#9575).
+    // Le groupe centré du 2026-08-10 posait les deux
     // contrôles les plus touchés au milieu de l'image ; chacun a maintenant son
     // coin, et les autres (PiP, AirPlay, vitesse) restent groupés à droite,
     // AVANT le son. La répartition est la fonction pure `topBarLayout` ; ce
@@ -189,7 +189,7 @@ internal struct _InlineOverlayControls: View {
             } label: {
                 Text(manager.playbackSpeed.label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
                     .adaptiveGlass(in: Capsule())
@@ -212,7 +212,7 @@ internal struct _InlineOverlayControls: View {
     private func topBarGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .frame(width: 28, height: 28)
             .adaptiveGlass(in: Circle(), interactive: true)
     }
@@ -249,7 +249,7 @@ internal struct _InlineOverlayControls: View {
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .meeshyTapTarget()
@@ -277,7 +277,7 @@ internal struct _InlineOverlayControls: View {
     private var playPauseIcon: some View {
         Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
             .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .offset(x: manager.isPlaying ? 0 : 2)
             .adaptiveSymbolReplace(id: manager.isPlaying)
     }
@@ -293,11 +293,11 @@ internal struct _InlineOverlayControls: View {
                 HStack {
                     Text(MediaFormat.duration(isSeeking ? seekValue * manager.duration : manager.currentTime))
                         .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.8))
                     Spacer()
                     Text(MediaFormat.duration(manager.duration))
                         .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.8))
                 }
                 .padding(.horizontal, MeeshySpacing.xxs)
             }
@@ -339,7 +339,7 @@ internal struct _InlineOverlayControls: View {
                         // `SharedAVPlayerManager`). Même correction que la barre
                         // du couloir — jusqu'ici seule la pastille bougeait,
                         // au-dessus d'une image figée. Directive « gestes
-                        // progressifs et annulables » (2026-08-30).
+                        // progressifs et annulables ».
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
                         seekValue = fraction
                         manager.seek(to: fraction * manager.duration, precise: false)
@@ -381,8 +381,8 @@ internal struct _FullscreenOverlayControls: View {
     var isInAlbum = false
 
     /// **De haut en bas : barre haute, scène, progression sur toute la largeur
-    /// de l'écran, ligne d'informations** (#9577, directive porteur
-    /// 2026-10-07). Le son, AirPlay et (...) ont quitté la ligne de la barre
+    /// de l'écran, ligne d'informations** (#9577).
+    /// Le son, AirPlay et (...) ont quitté la ligne de la barre
     /// pour une colonne à droite ; le bouton central n'est plus ici — il vit
     /// dans le renderer, sous sa propre règle d'effacement.
     var body: some View {
@@ -439,7 +439,7 @@ internal struct _FullscreenOverlayControls: View {
                 Spacer(minLength: 0)
             }
             .font(.system(size: MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
-            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+            .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             .lineLimit(1)
             .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityElement(children: .combine)
@@ -454,7 +454,7 @@ internal struct _FullscreenOverlayControls: View {
             if let fileName, !fileName.isEmpty {
                 Text(fileName)
                     .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }

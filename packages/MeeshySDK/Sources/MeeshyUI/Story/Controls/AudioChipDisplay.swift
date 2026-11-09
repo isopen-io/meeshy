@@ -101,7 +101,7 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
         }
     }
 
-    // MARK: - Temps restant du secteur audio (directive user 2026-08-02, itération 2)
+    // MARK: - Temps restant du secteur audio
 
     /// Fin de lecture du secteur — miroir EXACT de la fenêtre du reader
     /// (`AudioForegroundReaderOverlay.visibleAudios`) : un FOND joue jusqu'à

@@ -100,7 +100,7 @@ nonisolated public enum MeeStickerCatalog {
     /// **Une ligne de la planche** : le titre d'une intention, ou une rangée
     /// de stickers. La planche défile en RANGÉES de hauteur fixe dans la pile
     /// paresseuse de la feuille — jamais en grilles imbriquées, qui créaient
-    /// toutes leurs cases d'un coup et figeaient le défilement (2026-10-02).
+    /// toutes leurs cases d'un coup et figeaient le défilement.
     nonisolated public enum Row: Hashable, Identifiable, Sendable {
         case title(MeeSticker.Intent)
         case stickers([MeeSticker])
@@ -234,7 +234,7 @@ nonisolated public enum MeeStickerCatalog {
 
     /// **Le film rasterisé, et RENDU à l'appelant.** La lecture se fait hors du
     /// fil principal, le rendu par lots qui lui rendent la main ; le relire
-    /// ensuite dans le cache pouvait le trouver déjà évincé (2026-10-02).
+    /// ensuite dans le cache pouvait le trouver déjà évincé.
     /// `FilmEntry` est une valeur immuable : elle traverse les acteurs.
     @concurrent
     public static func film(at url: URL, maxPixelSize: Int) async -> FilmEntry? {

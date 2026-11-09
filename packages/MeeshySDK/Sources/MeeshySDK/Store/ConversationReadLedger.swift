@@ -146,7 +146,7 @@ public enum ConversationReadEvent: Sendable, Hashable {
 ///    écriture : l'écrire dans l'entrée perdait le compte servi PENDANT
 ///    l'affichage, et la fermeture rendait 0 à une conversation encore non
 ///    lue — l'API disait « 1 conversation non lue » pendant que le badge
-///    affichait 0 (#7350, recette 2026-09-21). Ouvrir n'est pas lire.
+/// affichait 0 (#7350). Ouvrir n'est pas lire.
 /// 2. **Un accusé de lecture SERVEUR est MONOTONE.** Un `serverReceipt` dont
 ///    le `lastReadAt` n'est pas STRICTEMENT postérieur à celui déjà connu est
 ///    un rejeu, et il est jeté EN ENTIER — son compteur avec lui. C'est la

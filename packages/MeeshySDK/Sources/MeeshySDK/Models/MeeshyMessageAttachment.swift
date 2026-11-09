@@ -405,7 +405,7 @@ public extension Array where Element == MeeshyMessageAttachment {
     /// serveur `uiReplyTo`, optimiste `makeReplyReference`, bannière swipe
     /// `triggerReply`) et l'OUVERTURE (`MessageListViewController
     /// .openQuotedMedia`) DOIVENT résoudre la MÊME pièce jointe. Avant
-    /// (2026-08-27) l'icône lisait `attachments.first` et l'ouverture
+    /// l'icône lisait `attachments.first` et l'ouverture
     /// `attachments.first(where: type != .location)` : dès qu'une localisation
     /// précédait le média, l'icône décrivait une pièce jointe et le plein
     /// écran en ouvrait une autre. Un seul point de vérité pour les deux.

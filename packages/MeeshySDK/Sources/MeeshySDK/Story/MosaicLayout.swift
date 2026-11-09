@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// **Comment les VISUELS d'une publication se posent les uns à côté des
-/// autres** (directive porteur 2026-09-06, #5322).
+/// autres** (#5322).
 ///
 /// > « Le rendu est une mosaïque d'image avec +n sur la dernière des 4 images.
 /// > On peut définir comment la mosaïque sera affichée : il faut proposer 4
@@ -283,8 +283,7 @@ public nonisolated enum MosaicLayout {
 
     // MARK: - La légende
 
-    /// **La légende s'affiche dans TOUS les modes** (directive porteur
-    /// 2026-09-06) :
+    /// **La légende s'affiche dans TOUS les modes**:
     ///
     /// > « La règle "pas de légende en mosaïque" est abolie, parfois la légende
     /// > est possible il faut les afficher en trimant bien entendu ! »
@@ -328,7 +327,7 @@ public nonisolated enum MosaicLayout {
         }
     }
 
-    /// **Quelle tuile porte une légende** (directive porteur 2026-09-06).
+    /// **Quelle tuile porte une légende**.
     ///
     /// > « Il ne faut pas systématiquement mettre la légende sur la tuile !
     /// > Mais le faire sur les formats le permettant (défilement continu, image

@@ -70,7 +70,7 @@ public struct FeedbackToastView: View {
                 Spacer()
                 Image(systemName: "chevron.forward")
                     .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
-                    .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
             }
         }
         .padding(.horizontal, MeeshySpacing.xl)

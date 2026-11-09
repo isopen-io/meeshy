@@ -3,7 +3,7 @@ import QuartzCore
 /// `CADisplayLink` retient FORTEMENT son target : cibler `self` rend le
 /// `deinit` de l'owner inatteignable (chaîne run loop → link → owner) — la
 /// classe de fuite corrigée sur StoryReaderTimerController, StoryCanvasUIView
-/// et MessageListViewController (audit 2026-06-12). Ce proxy est le pattern
+/// et MessageListViewController. Ce proxy est le pattern
 /// canonique pour TOUT nouveau `CADisplayLink` : le link ne retient que le
 /// proxy, jamais l'owner.
 ///

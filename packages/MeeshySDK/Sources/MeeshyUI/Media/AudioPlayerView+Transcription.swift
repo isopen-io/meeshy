@@ -288,8 +288,8 @@ extension AudioPlayerView {
 
     // MARK: - Chevron de la tenue CARTE — déplie la transcription EN LIGNE
 
-    /// La bulle a la place de s'étendre : son chevron reste (arbitrage user
-    /// 2026-08-24). La rangée plate, elle, renvoie au plein écran
+    /// La bulle a la place de s'étendre : son chevron reste.
+    /// La rangée plate, elle, renvoie au plein écran
     /// (`seeMoreButton` ci-dessous) — elle n'a pas cette place.
     @ViewBuilder
     private var expandToggleButton: some View {
@@ -329,8 +329,8 @@ extension AudioPlayerView {
 
     // MARK: - « Voir plus » — la suite se lit EN PLEIN ÉCRAN
 
-    /// Remplace le chevron qui dépliait la transcription EN LIGNE (directive
-    /// 2026-08-24). Déplier sur place repoussait tout le fil vers le bas pour
+    /// Remplace le chevron qui dépliait la transcription EN LIGNE.
+    /// Déplier sur place repoussait tout le fil vers le bas pour
     /// un texte qui n'a jamais la place d'y tenir ; le plein écran
     /// (`onFullscreen`, la MÊME destination que la pastille de pourcentage)
     /// lui donne l'espace, le karaoké déroulant et le bandeau de langues.
@@ -506,7 +506,7 @@ extension AudioPlayerView {
             } label: {
                 Text(single.text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
-                    .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                    .foregroundStyle(inlineSegmentColor(isActive: isActive, isPast: isPast))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -538,7 +538,7 @@ extension AudioPlayerView {
                     } label: {
                         Text(segment.text + " ")
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
-                            .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                            .foregroundStyle(inlineSegmentColor(isActive: isActive, isPast: isPast))
                             .padding(.horizontal, isActive ? 2 : 0)
                             .padding(.vertical, isActive ? 1 : 0)
                             .background(

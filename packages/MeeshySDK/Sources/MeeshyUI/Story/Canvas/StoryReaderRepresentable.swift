@@ -45,7 +45,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// (`outgoingStory` dans `StoryCardView`) pendant un cross-fade. Force le
     /// canvas à monter en `.edit` mode dès `makeUIView` — ses AVPlayer bg /
     /// FG et son audio mixer ne démarrent JAMAIS, supprimant la double-lecture
-    /// 350-400 ms pendant la transition (user 2026-05-28).
+    /// 350-400 ms pendant la transition.
     ///
     /// Visuellement, le slide affiche son image bg + ses textes/stickers
     /// rendus par `rebuildLayers()` mais les vidéos sont figées frame 0. C'est
@@ -323,7 +323,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // pose souvent son gel APRÈS coup (l'interstitiel d'identité est armé
         // dans `onAppear`/`onChange`, donc après l'évaluation du body qui a créé
         // ce canvas). L'audio démarrait alors dans `setReaderContext` et on
-        // entendait la story PENDANT l'interlude (bug user 2026-07-25). Naître
+        // entendait la story PENDANT l'interlude. Naître
         // en pause supprime la course au lieu de tenter de la gagner.
         // La QoE ne mesure que la story PUBLIÉE que l'hôte déclare lire : ni
         // l'aperçu du composer (médias préchargés, id local), ni le calque
@@ -355,7 +355,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // Le changement de langue ne touche NI l'id NI le `content` du slide
         // (la légende du post n'a pas forcément de traduction) : sans ce test,
         // choisir une langue dans le strip du viewer laissait le canvas afficher
-        // les textes dans l'ancienne langue (bug 2026-07-25).
+        // les textes dans l'ancienne langue.
         let languagesChanged = view.readerContext.preferredLanguages != preferredLanguages
         let newSlide = renderableSlide
         let identityChanged = newSlide.id != view.slide.id

@@ -207,7 +207,7 @@ extension StoryCanvasUIView {
 
     /// **De quelle famille est l'objet touché** — site UNIQUE (#4671).
     ///
-    /// `audio` y est entré le 2026-09-01, et son absence coûtait plus qu'un
+    /// `audio` y est entré, et son absence coûtait plus qu'un
     /// éditeur manquant : `handleSingleTap` fait
     /// `guard let id = hitTestItem(…), let kind = itemKind(forId: id) else { … onBackgroundTapped?() }`.
     /// Le hit-test TROUVAIT bien la pastille audio — sa couche est nommée — mais
@@ -245,7 +245,7 @@ extension StoryCanvasUIView {
             // `.background` cible le bg media, `.foreground` hit-teste les fg
             // (avec fallback bg si le doigt ne touche aucun foreground).
             //
-            // Unification BG ↔ FG (2026-05-29) : le bg media est dans
+            // Unification BG ↔ FG : le bg media est dans
             // `mediaObjects[]` avec `isBackground: true`, donc `currentScale`
             // / `updateScale` fonctionnent déjà pour lui. On utilise donc
             // EXACTEMENT le même flow que les items foreground (mute
@@ -371,7 +371,7 @@ extension StoryCanvasUIView {
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / renderHeightForDesign)
 
-            // Unification BG/FG (2026-05-29) : updatePosition mute
+            // Unification BG/FG : updatePosition mute
             // mediaObjects[bg].x/y qui est lu par le converter bgTransform de
             // rebuildLayers et appliqué via applyContentTransform sur le
             // contentLayer du bg.
@@ -382,7 +382,7 @@ extension StoryCanvasUIView {
             // trop sensible pour ajuster finement le cadrage (user feedback
             // 2026-05-29 : « avec une faible sensibilité »).
             //
-            // Snap de CADRAGE (directive user 2026-07-14) : contrairement au
+            // Snap de CADRAGE : contrairement au
             // foreground (rails 0.18/0.25/0.5/0.75/0.82), le bg s'accroche au
             // centre (0.5) et aux bords (0.0/1.0) — « centrer ou coller la
             // bordure que l'utilisateur approche ». Guides + haptic à l'entrée.
@@ -518,7 +518,7 @@ extension StoryCanvasUIView {
         // via `applyContentTransform`, miroir exact du chemin que prend le
         // converter `bgTransform` lors d'un rebuildLayers complet.
         //
-        // Unification BG/FG (2026-05-29) : le bg passe par les mêmes
+        // Unification BG/FG : le bg passe par les mêmes
         // updateScale/updatePosition/updateRotation que les items FG (qui
         // mutent `mediaObjects[bg]`), donc les valeurs lues ici viennent de
         // la même source de vérité que le mini-preview et le reader.
@@ -560,7 +560,7 @@ extension StoryCanvasUIView {
             // L'ancien chemin posait `transform = scale × rotation` sur des
             // `bounds` déjà × scale (depuis le dernier configure), ce qui
             // double-scale dès le 2e geste sur le même media → bug
-            // "media grossit après rotation puis pan" (2026-05-27). Même
+            // "media grossit après rotation puis pan". Même
             // pattern que la branche text plus bas qui ne pose que la
             // rotation parce que scale est déjà cuit dans fontSize.
             // Au rapport RECADRÉ (#9499) : le geste ne rend pas sa forme
@@ -674,7 +674,7 @@ extension StoryCanvasUIView {
         // `CALayer.hitTest` natif ignore les zPosition ET se fait avaler par
         // les overlays pleine-toile sans nom (layer de DESSIN, zPosition
         // 9999) — dès qu'un dessin existait, plus AUCUN item n'était
-        // touchable et le pan retombait sur le fond (bug user 2026-07-11).
+        // touchable et le pan retombait sur le fond.
         let named = (itemsContainer.sublayers ?? []).enumerated()
             .filter { !($0.element.name ?? "").isEmpty }
             .sorted {

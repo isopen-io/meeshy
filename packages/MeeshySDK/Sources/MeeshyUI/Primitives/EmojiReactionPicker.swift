@@ -73,7 +73,7 @@ public nonisolated struct ScrubTileFramesKey: PreferenceKey {
 /// messages) — elle y sépare la rangée de ce qu'elle survole. Elle a tort sur
 /// une story plein écran, où la scène EST le fond et où la pilule ajoute un
 /// cadre que la directive porteur refuse (#6083, 2026-09-11 : « pas de
-/// contour ») — et, depuis le 2026-10-01 (#9043), sur le voile de l'appui long
+/// contour ») — et, (#9043), sur le voile de l'appui long
 /// d'un message, « sans cadre comme pour les story ».
 ///
 /// `nonisolated` : un habillage est une VALEUR. Le paquet est sous
@@ -491,7 +491,7 @@ public struct EmojiFullPickerSheet: View {
                 .frame(width: 36, height: 4).padding(.top, MeeshySpacing.smPlus)
             Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
                 .padding(.bottom, MeeshySpacing.xs)
         }
     }
@@ -605,7 +605,7 @@ public struct CategorizedEmojiPickerSheet: View {
             // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
             Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
                 .padding(.top, MeeshySpacing.lg)
                 .padding(.bottom, MeeshySpacing.xxs)
             categoryTabs

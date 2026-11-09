@@ -116,7 +116,7 @@ public final class TimelineViewModel: ObservableObject {
     /// écrivait directement `project.slideDuration`, que le premier
     /// `recomputeSlideDuration()` venu écrasait — rien ne distinguait une
     /// valeur posée par l'auteur d'un reste de calcul. C'est ce défaut, et non
-    /// le bouton, qui avait motivé son retrait le 2026-07-27.
+    /// le bouton, qui avait motivé son retrait.
     ///
     /// Traité comme un PLANCHER, pas comme une autorité : un contenu plus long
     /// que la demande l'emporte toujours. « +10 s » n'a jamais servi à rogner.
@@ -264,7 +264,7 @@ public final class TimelineViewModel: ObservableObject {
             // Fin de lecture = retour au début (convention transport). La
             // tête laissée à `slideDuration` figeait le canvas du composer
             // sur le dernier instant — éléments hors fenêtre masqués — au
-            // lieu de l'état statique du design (capture user 2026-07-20).
+            // lieu de l'état statique du design.
             self.scrub(to: 0, precise: true)
             self.onPlaybackEnded?()
         }
@@ -485,7 +485,7 @@ public final class TimelineViewModel: ObservableObject {
     /// same "longest data wins" rule as `StorySlide.computedTotalDuration()`
     /// (via `StoryEffects.contentDerivedDuration`), so the ruler/track length
     /// always matches what will actually play — never left stale after a
-    /// trim/split/delete/add/move (design doc 2026-07-18). Fires
+    /// trim/split/delete/add/move. Fires
     /// `durationDidAutoAdjust` only when the value actually changes, so a
     /// no-op edit doesn't spam a toast.
     ///

@@ -140,7 +140,7 @@ public struct ImageViewerView: View {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: MeeshyIconSize.lg))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
                     .accessibilityLabel(String(localized: "common.delete", bundle: .module))
@@ -161,7 +161,7 @@ public struct ImageViewerView: View {
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
                                 .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         }
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, MeeshySpacing.sm)
                         .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(MeeshyColors.mediaScrim))
@@ -179,7 +179,7 @@ public struct ImageViewerView: View {
                     Spacer()
                     Text(attachment.fileSizeFormatted)
                         .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(MeeshyColors.mediaScrim))

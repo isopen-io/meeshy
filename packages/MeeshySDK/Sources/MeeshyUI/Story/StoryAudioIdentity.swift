@@ -1,7 +1,7 @@
 import Foundation
 import MeeshySDK
 
-/// **Ce qu'une piste MONTRE d'elle-même** (directive porteur 2026-09-01).
+/// **Ce qu'une piste MONTRE d'elle-même**.
 ///
 /// > « Il ne faut plus mettre un chip mais juste la note musicale et l'onde si
 /// > c'est un enregistrement, ou alors le titre si disponible et le crédit
@@ -151,8 +151,7 @@ public nonisolated enum StoryAudioIdentity {
         case story
     }
 
-    /// **La transcription se sert au POST, jamais à la story** (directive
-    /// porteur 2026-09-01).
+    /// **La transcription se sert au POST, jamais à la story**.
     ///
     /// > « avoir une vue avec transcription pour le mode poste et une autre
     /// > vue sans transcription pour le mode story »

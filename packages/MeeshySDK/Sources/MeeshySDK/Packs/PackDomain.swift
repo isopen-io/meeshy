@@ -17,7 +17,7 @@ public enum PackDomain: String, Codable, Sendable, Hashable, CaseIterable {
     case bannerFrame = "banner-frame"
     /// Un domaine qu'une passerelle plus récente ajouterait (`capture-frame`,
     /// ou tout autre) : il se lit, il ne fait pas tomber la liste qui le porte,
-    /// et il ne route JAMAIS une requête (§ 11 de la spécification 2026-10-14).
+    /// et il ne route JAMAIS une requête.
     case unknown
 
     /// Les domaines que ce client sait router — `unknown` n'en est pas un.

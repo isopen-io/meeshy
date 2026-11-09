@@ -66,7 +66,7 @@ import Foundation
 ///
 /// ## Ce que la loi FERME, ce qu'elle DÉCLARE, ce qui reste DEHORS
 ///
-/// Mesuré le 2026-09-17, tour 3 bis du lot #6904 — l'état précédent de ce
+/// Mesuré, tour 3 bis du lot #6904 — l'état précédent de ce
 /// paragraphe (« AUCUN hôte ne les appelle encore ») était vrai au tour 2 et a
 /// cessé de l'être au tour 3 :
 ///
@@ -292,8 +292,7 @@ public enum SceneShape {
     /// qu'on reproduit, pas ce qu'on corrige.
     public nonisolated static let cardedCornerRadius: CGFloat = 22
 
-    /// **En PLEIN ÉCRAN, la carte n'a AUCUN rayon** (directive porteur du
-    /// 2026-09-18, verbatim) :
+    /// **En PLEIN ÉCRAN, la carte n'a AUCUN rayon**:
     ///
     /// > « Lorsqu'on met en plein écran, il faut enlever l'arrondi sur le
     /// > composant et garder les bords angle exacte ! »
@@ -324,7 +323,7 @@ public enum SceneShape {
     public nonisolated static let cardedBackdrop: Backdrop = .thumbHashDominantColor
 
     /// **Le cadre de la scène dans un viewport — UN seul, pour toute surface
-    /// plein écran** (directive porteur du 2026-09-17, 3e message).
+    /// plein écran**.
     ///
     /// La scène est AJUSTÉE (elle tient entière, centrée) et le fond habille ce
     /// qui reste. Il n'y a plus de second état : l'immersif d'un post n'est pas
@@ -548,8 +547,8 @@ public extension StoryItem {
     /// matière. La cascade est celle du lecteur de stories depuis #6141 — la
     /// scène d'abord, son premier média ensuite — et elle vit ici parce que
     /// **le lecteur de stories n'est plus la seule surface à la descendre** :
-    /// le plein écran cadré d'un post et le RÉEL montent la même carte
-    /// (directive porteur du 2026-09-17). Elle est restée une extension de
+    /// le plein écran cadré d'un post et le RÉEL montent la même carte.
+    /// Elle est restée une extension de
     /// `StoryItem` et non une méthode d'hôte pour cette seule raison : trois
     /// hôtes qui la recopient sont trois fonds qui divergeront, et c'est
     /// exactement ce que ce lot retire.

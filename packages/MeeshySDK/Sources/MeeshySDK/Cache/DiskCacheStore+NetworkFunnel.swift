@@ -84,7 +84,7 @@ extension DiskCacheStore {
             // Média protégé même-origine (ex. audio de la bibliothèque de sons
             // servi par `/api/v1/static/:filename`, route JWT) : la requête nue
             // recevait 401 et la story jouait MUETTE, gelée sur le spinner de
-            // stall (bug prod 2026-08-02, post 6a6ef0b44415c63ff8da7855).
+            // stall.
             let request = Self.networkRequest(
                 for: fetch.url,
                 apiOrigin: MeeshyConfig.shared.serverOrigin,

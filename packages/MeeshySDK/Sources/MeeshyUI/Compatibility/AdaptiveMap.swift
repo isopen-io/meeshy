@@ -56,7 +56,7 @@ public struct MapTarget: Equatable {
 /// SAME `@State` driving `updateUIView`, that resolution re-enters itself —
 /// two nested `_performActionAsIfGoingToDefaultLocation:` frames on the same
 /// stack, main thread pinned at 60-99% CPU with no crash. Proven by process
-/// sampling on the location picker (2026-07-30). An explicit region
+/// sampling on the location picker. An explicit region
 /// initializes synchronously and cannot re-enter.
 enum AdaptiveMapInitialRegion {
     static let neutral = MKCoordinateRegion(

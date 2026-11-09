@@ -99,7 +99,7 @@ enum StoryMediaLayerRules {
 
     // MARK: - Filtre
 
-    /// **Le filtre PROPRE à l'objet** (retour porteur 2026-09-28), cuit dans
+    /// **Le filtre PROPRE à l'objet**, cuit dans
     /// le bitmap au même point de passage que l'orientation — comme le fond le
     /// fait pour le filtre de slide (`StoryBackgroundLayer.stampFinalImage`).
     /// La clé de cache suit l'INSTANCE d'image : un bitmap retouché ne resservira

@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Story Text Effect
 
 /// **L'axe EFFET d'un texte de story — ce qui se pose PAR-DESSUS la police**
-/// (#4870, directive porteur 2026-09-02).
+/// (#4870).
 ///
 /// `StoryTextStyle` choisit une POLICE et rien d'autre (#4850) : ses dix-huit
 /// cas résolvent vers une famille, une graisse ou un design. Ce qui BRILLE ou
@@ -32,7 +32,7 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     /// Lueur large et pleine : l'enseigne au néon.
     case neon
 
-    // MARK: Néons COLORÉS — la lueur a sa propre couleur (2026-09-05)
+    // MARK: Néons COLORÉS — la lueur a sa propre couleur
     //
     // Cinq effets dont l'encre ne vient ni du texte ni du fond, mais d'eux.
     // C'est ce que la concurrence appelle « néon » : un texte clair dont le

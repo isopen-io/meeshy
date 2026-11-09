@@ -232,14 +232,14 @@ public struct LanguagePickerSheet: View {
             HStack {
                 Text(String(localized: "languagePicker.title", defaultValue: "Langue de traduction", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    .foregroundColor(style == .dark ? .white : .primary)
+                    .foregroundStyle(style == .dark ? .white : Color.primary)
                 Spacer()
                 Button {
                     onDismiss?()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .meeshyScaledFont(MeeshyIconSize.xxl)
-                        .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
+                        .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
                 }
                 .accessibilityLabel(String(localized: "common.close", bundle: .module))
             }
@@ -258,7 +258,7 @@ public struct LanguagePickerSheet: View {
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(style == .dark ? .white : .primary)
+                .foregroundStyle(style == .dark ? .white : Color.primary)
                 .tint(MeeshyColors.brandPrimary)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)

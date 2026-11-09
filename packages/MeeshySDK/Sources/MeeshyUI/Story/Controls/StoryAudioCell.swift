@@ -99,7 +99,7 @@ struct StoryAudioCell: View {
         } label: {
             Image(systemName: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                 .font(.system(size: MeeshyIconSize.xxxl, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
         }
         .buttonStyle(.plain)
@@ -169,7 +169,7 @@ struct StoryAudioCell: View {
     private var durationLabel: some View {
         Text(MediaFormat.duration(playback.duration, rounding: .toNearestOrAwayFromZero))
             .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium, design: .monospaced)
-            .foregroundColor(secondaryText)
+            .foregroundStyle(secondaryText)
             .frame(minWidth: 32)
     }
 
@@ -180,7 +180,7 @@ struct StoryAudioCell: View {
         } label: {
             Image(systemName: isBackground ? "speaker.wave.2.circle.fill" : "speaker.wave.2.circle")
                 .font(.system(size: MeeshyIconSize.lg, weight: .medium))
-                .foregroundColor(isBackground ? MeeshyColors.indigo400 : secondaryText)
+                .foregroundStyle(isBackground ? MeeshyColors.indigo400 : secondaryText)
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
         }
         .buttonStyle(.plain)
@@ -199,7 +199,7 @@ struct StoryAudioCell: View {
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 .font(.system(size: MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(muted ? MeeshyColors.error.opacity(MeeshyOpacity.intense) : secondaryText)
+                .foregroundStyle(muted ? MeeshyColors.error.opacity(MeeshyOpacity.intense) : secondaryText)
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .contentShape(Rectangle())
         }
@@ -238,7 +238,7 @@ struct StoryAudioCell: View {
         } label: {
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: MeeshyIconSize.md, weight: .medium))
-                .foregroundColor(MeeshyColors.error.opacity(MeeshyOpacity.intense))
+                .foregroundStyle(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                 .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
