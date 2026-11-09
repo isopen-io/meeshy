@@ -29,7 +29,7 @@ struct StoryTrayView: View {
     // `SharePickerView` (« Transférer ») crasherait sur un environment object
     // manquant. (Le cover du composer, lui, est monté aux racines depuis S5 —
     // cf. `StoryComposerCover`.)
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
@@ -69,13 +69,13 @@ struct StoryTrayView: View {
         }
         .frame(height: Self.trayHeight + Self.decorReserve.top + Self.decorReserve.bottom)
         .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
-        .myStoriesSheet(
+        .relayingMeeshyRouter(meeshyRouter) { $0.myStoriesSheet(
             isPresented: $showMyStories,
             followUp: $myStoriesFollowUp,
             viewModel: viewModel,
             userId: AuthManager.shared.currentUser?.id ?? "",
             statusViewModel: statusViewModel,
-            router: router,
+            router: $1,
             conversationListViewModel: conversationListViewModel,
             perform: { action in
                 // Aucun `Task`, aucun `sleep` : `onDismiss` s'exécute APRÈS la
@@ -98,7 +98,7 @@ struct StoryTrayView: View {
                     viewModel.openComposer(resumingDraftId: draftId)
                 }
             }
-        )
+        ) }
         .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         // NOTE : la tuile « Stories » du profil est désormais servie par le
         // listener `openMyStories` de la RACINE (RootView / iPadRootView) —
@@ -619,7 +619,7 @@ struct PinnedStoryTrailBand: View {
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     // Capturés pour réinjection sur la sheet MyStoriesView (sa sheet interne
     // SharePickerView « Transférer » crasherait sur un env object manquant).
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     /// S5 — le tap sur son propre anneau ouvre désormais le VIEWER (parité avec
@@ -682,13 +682,13 @@ struct PinnedStoryTrailBand: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
-                .myStoriesSheet(
+                .relayingMeeshyRouter(meeshyRouter) { $0.myStoriesSheet(
                     isPresented: $showMyStories,
                     followUp: $myStoriesFollowUp,
                     viewModel: viewModel,
                     userId: currentUserId,
                     statusViewModel: statusViewModel,
-                    router: router,
+                    router: $1,
                     conversationListViewModel: conversationListViewModel,
                     perform: { action in
                         switch action {
@@ -705,7 +705,7 @@ struct PinnedStoryTrailBand: View {
                             viewModel.openComposer(resumingDraftId: draftId)
                         }
                     }
-                )
+                ) }
                 .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         }
     }

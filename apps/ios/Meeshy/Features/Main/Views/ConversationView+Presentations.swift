@@ -91,20 +91,18 @@ struct ConversationComposeCovers: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .relayingMeeshyRouter(meeshyRouter) { content, router in
-                content.conversationCover(item: $composerState.composeMediaTarget) { cible in
-                    MediaComposerDoor(
-                        // L'INTENTION naît dans la porte, pas ici : un second site
-                        // qui la construirait serait un second contrat à tenir
-                        // d'accord, et ce lot a DEUX déclencheurs pour une seule
-                        // présentation. L'hôte ne remet que la cible.
-                        target: cible,
-                        storyViewModel: storyViewModel,
-                        preview: MediaComposerPreviewHosts(router: router, conversationList: conversationListViewModel, statusViewModel: statusViewModel),
-                        onDismiss: { composerState.composeMediaTarget = nil }
-                    )
-                }
-            }
+            .relayingMeeshyRouter(meeshyRouter) { content, router in content.conversationCover(item: $composerState.composeMediaTarget) { cible in
+                MediaComposerDoor(
+                    // L'INTENTION naît dans la porte, pas ici : un second site
+                    // qui la construirait serait un second contrat à tenir
+                    // d'accord, et ce lot a DEUX déclencheurs pour une seule
+                    // présentation. L'hôte ne remet que la cible.
+                    target: cible,
+                    storyViewModel: storyViewModel,
+                    preview: MediaComposerPreviewHosts(router: router, conversationList: conversationListViewModel, statusViewModel: statusViewModel),
+                    onDismiss: { composerState.composeMediaTarget = nil }
+                )
+            } }
             .conversationCover(item: $composerState.previewMedia) { media in
                 switch media.type {
                 case "video", "audio":

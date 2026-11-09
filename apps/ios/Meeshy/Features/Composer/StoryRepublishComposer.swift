@@ -166,15 +166,13 @@ struct StoryRepublishComposer: View {
             },
             onDismiss: onFinish
         )
-        .relayingMeeshyRouter(meeshyRouter) { content, router in
-            content.modifier(StoryPreviewReaderCover(
-                assets: $previewAssets,
-                storyViewModel: viewModel,
-                statusViewModel: statusViewModel,
-                router: router,
-                conversationList: conversationListViewModel
-            ))
-        }
+        .relayingMeeshyRouter(meeshyRouter) { $0.modifier(StoryPreviewReaderCover(
+            assets: $previewAssets,
+            storyViewModel: viewModel,
+            statusViewModel: statusViewModel,
+            router: $1,
+            conversationList: conversationListViewModel
+        )) }
     }
 
     /// **Ancrer une republication en POST** — `POST /posts/:id/repost`, le seul

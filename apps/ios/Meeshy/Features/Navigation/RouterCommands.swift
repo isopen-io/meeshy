@@ -117,16 +117,4 @@ struct MeeshyRouterInjection: ViewModifier {
     }
 }
 
-extension View {
-    @ViewBuilder
-    func relayingMeeshyRouter<Relayed: View>(
-        _ router: Router?,
-        @ViewBuilder _ relay: (Self, Router) -> Relayed
-    ) -> some View {
-        if let router {
-            relay(self, router)
-        } else {
-            self
-        }
-    }
-}
+extension View { @ViewBuilder func relayingMeeshyRouter<Relayed: View>(_ router: Router?, @ViewBuilder _ relay: (Self, Router) -> Relayed) -> some View { if let router { relay(self, router) } else { self } } }

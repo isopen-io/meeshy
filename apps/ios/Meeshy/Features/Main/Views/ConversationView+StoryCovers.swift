@@ -22,21 +22,19 @@ struct ConversationStoryViewerCovers: ViewModifier {
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
 
     func body(content: Content) -> some View {
-        content.relayingMeeshyRouter(meeshyRouter) { content, router in
-            content.modifier(StoryReaderCover(
-                request: request,
-                storyViewModel: storyViewModel,
-                statusViewModel: statusViewModel,
-                router: router,
-                conversationList: conversationListViewModel,
-                presentationSource: overlayState.showStoryViewer ? "ConversationView.overlay" : "ConversationView.header",
-                zoomNamespace: zoomNamespace,
-                coversConversation: true,
-                onReply: { replyContext in
-                    router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
-                }
-            ))
-        }
+        content.relayingMeeshyRouter(meeshyRouter) { content, router in content.modifier(StoryReaderCover(
+            request: request,
+            storyViewModel: storyViewModel,
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationList: conversationListViewModel,
+            presentationSource: overlayState.showStoryViewer ? "ConversationView.overlay" : "ConversationView.header",
+            zoomNamespace: zoomNamespace,
+            coversConversation: true,
+            onReply: { replyContext in
+                router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
+            }
+        )) }
     }
 
     private var request: Binding<StoryViewerRequest?> {
