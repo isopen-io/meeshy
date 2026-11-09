@@ -64,22 +64,22 @@ struct StatusBubbleOverlay: View {
                             .onChanged { _ in dismiss() }
                     )
                     .allowsHitTesting(appearAnimation)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { dismiss() }
 
                 thoughtCircle(size: 4)
                     .position(x: anchor.x + dx * 0.08, y: anchor.y + dir * 7)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7), value: appearAnimation)
-
                 thoughtCircle(size: 7)
                     .position(x: anchor.x + dx * 0.22, y: anchor.y + dir * 15)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.03), value: appearAnimation)
-
                 thoughtCircle(size: 10)
                     .position(x: anchor.x + dx * 0.42, y: anchor.y + dir * 24)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.06), value: appearAnimation)
-
                 bubbleContent
                     .frame(width: bubbleW)
                     .fixedSize(horizontal: false, vertical: true)

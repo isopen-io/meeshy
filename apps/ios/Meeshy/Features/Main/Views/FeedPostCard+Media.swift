@@ -189,6 +189,7 @@ extension FeedPostCard {
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .onTapGesture { openFullscreen(media) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { openFullscreen(media) }
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {
@@ -284,7 +285,6 @@ extension FeedPostCard {
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundStyle(theme.textMuted)
                     }
-
                     if let pages = media.pageCount {
                         Text("\u{2022}")
                             .foregroundStyle(theme.textMuted)
@@ -294,7 +294,6 @@ extension FeedPostCard {
                     }
                 }
             }
-
             Spacer()
         }
         .padding(MeeshySpacing.mdPlus)
