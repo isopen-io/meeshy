@@ -32,14 +32,20 @@ public final class SessionEndingHooks {
         let work = Task { @MainActor in
             for hook in pending { await hook() }
         }
-        // Détaché : le délai ne doit pas attendre que l'acteur principal se libère pour annuler le travail.
-        let watchdog = Task.detached {
+        let watchdog = Self.watchdog(cancelling: work, after: limit)
+        await work.value
+        watchdog.cancel()
+    }
+
+    /// Le délai vit HORS de l'acteur principal : la tâche naît d'un contexte non isolé, donc sur l'exécuteur
+    /// concurrent, et n'attend jamais que l'acteur principal se libère pour annuler le travail (6 s mesurées en CI
+    /// pour 0,05 s quand elle l'attendait). Elle hérite de la priorité de l'appelant, ce qu'une tâche détachée perdrait.
+    private nonisolated static func watchdog(cancelling work: Task<Void, Never>, after limit: TimeInterval) -> Task<Void, Never> {
+        Task {
             do {
                 try await Task.sleep(for: .seconds(limit))
                 work.cancel()
             } catch {}
         }
-        await work.value
-        watchdog.cancel()
     }
 }
