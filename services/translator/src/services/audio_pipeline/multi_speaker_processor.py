@@ -153,7 +153,8 @@ async def process_multi_speaker_audio(
     sender_speaker_id: Optional[str] = None,
     model_type: str = "premium",
     on_translation_ready: Optional[Any] = None,
-    diarization_speakers: Optional[List[Any]] = None
+    diarization_speakers: Optional[List[Any]] = None,
+    generate_voice_clone: bool = False
 ) -> Dict[str, Any]:
     """
     Traite un audio multi-speaker en créant des tours de parole.
@@ -199,10 +200,17 @@ async def process_multi_speaker_audio(
         on_translation_ready: Callback appelé après chaque traduction de langue
                              (permet remontée progressive à la gateway)
         diarization_speakers: Segments de diarization bruts (pour filtrage overlaps)
+        generate_voice_clone: Autorisation de la passerelle ; faux par défaut ⇒ rend {} sans rien modéliser
 
     Returns:
         Dict avec les traductions par langue
     """
+    # #17309 — un modèle de voix par locuteur est un clonage : sans autorisation explicite de la
+    # passerelle (consentement ET 18 ans révolus), aucun locuteur n'est modélisé.
+    if not generate_voice_clone:
+        logger.info("[MULTI_SPEAKER] Clonage non autorisé : aucun modèle de voix par locuteur")
+        return {}
+
     logger.info(
         f"[MULTI_SPEAKER] 🎭 Traitement: {len(segments)} segments → {len(target_languages)} langue(s)"
     )
