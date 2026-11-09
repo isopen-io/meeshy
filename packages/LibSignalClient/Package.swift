@@ -23,7 +23,7 @@ let package = Package(
         .binaryTarget(
             name: "SignalFfi",
             url: "https://github.com/isopen-io/meeshy/releases/download/libsignal-ffi-v0.106.2/SignalFfi.xcframework.zip",
-            checksum: "ca4d60ac81b69c6e9c02668797aa838a10c2454954c9f6ee23c18e7ae6af6529"
+            checksum: "09b0cf9ec5a688d2b85ee4924476cab5af1dd654f3de600ce922522b5b2aa7b4"
         ),
         .target(
             name: "LibSignalClient",
