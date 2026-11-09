@@ -32,20 +32,46 @@ struct ConversationExpandedHeaderBand<Back: View, Mid: View, Avatar: View, Backg
     /// n'a pas d'adresse publique.
     @ViewBuilder let share: () -> Share
 
+    /// La voix du talkie, publiée par son bouton (#17310) : une voix en cours donne toute la barre au talkie.
+    @State private var talkie = TalkieHeaderLive.rest
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
+        let chrome = talkie.chrome
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: MeeshySpacing.sm) {
-                if layout.showsBackButton { backButton() }
+                if layout.showsBackButton { backButton().modifier(YieldingToTalkie(yields: !chrome.showsBackButton)) }
+                // Le contenu médian porte le bouton tenu : il reste en place, sous la barre, pour garder le doigt.
                 midContent()
-                share()
-                avatar()
+                share().modifier(YieldingToTalkie(yields: !chrome.showsIdentity))
+                avatar().modifier(YieldingToTalkie(yields: !chrome.showsIdentity))
             }
             .padding(.leading, layout.showsBackButton ? 0 : MeeshySpacing.xs)
             .padding(.trailing, MeeshySpacing.sm)
+            .overlay {
+                if chrome.talkieSpansBar {
+                    TalkieHeaderLiveBar(live: talkie)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.15, anchor: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82), value: talkie.voice)
         }
+        .onPreferenceChange(TalkieHeaderLiveKey.self) { talkie = $0 }
         .padding(layout.glassShape.innerInsets)
         .background(background())
         .padding(layout.glassShape.outerInsets)
+    }
+}
+
+/// Ce qui cède la place au talkie élargi s'efface et sort de VoiceOver, sans libérer sa place (#17310).
+private struct YieldingToTalkie: ViewModifier {
+    let yields: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(yields ? 0 : 1)
+            .allowsHitTesting(!yields)
+            .accessibilityHidden(yields)
     }
 }
 
