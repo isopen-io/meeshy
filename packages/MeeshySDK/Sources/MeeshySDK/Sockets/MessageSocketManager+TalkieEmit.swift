@@ -2,7 +2,7 @@ import Foundation
 import SocketIO
 
 // Émettre le talkie (#16927) sur la socket de messages : `talkie:start` (accusé), `talkie:send-chunk` (binaire natif,
-// jamais du base64) et `talkie:end`, les trois noms de `TALKIE_CLIENT_EVENTS`.
+// jamais du base64), `talkie:end`, et `talkie:join` au réveil (#17141).
 
 /// Qui porte MA voix vers la passerelle. L'app ne voit pas la socket.
 public protocol TalkieEmitting: AnyObject, Sendable {
@@ -11,6 +11,14 @@ public protocol TalkieEmitting: AnyObject, Sendable {
     func start(toUserId: String) async -> TalkieStartVerdict
     func sendChunk(talkieId: String, seq: Int, capturedAt: Date, data: Data)
     func end(talkieId: String)
+    /// `talkie:join` (#17141) : réveillé par un push, je rejoins la prise de parole ; la passerelle rejoue ce qu'elle a
+    /// gardé, puis le direct.
+    func join(talkieId: String)
+}
+
+public extension TalkieEmitting {
+    /// Un émetteur qui ne sait pas rejoindre ne rejoint rien.
+    func join(talkieId: String) {}
 }
 
 /// L'émission du talkie sur la socket de messages : un type à part, qui ne fait que porter trois événements et lire
@@ -55,5 +63,10 @@ public final class TalkieSocketEmitter: TalkieEmitting {
     public func end(talkieId: String) {
         guard let socket = manager.socket, socket.status == .connected else { return }
         socket.emit(SocketEvent.talkieEnd.rawValue, ["talkieId": talkieId])
+    }
+
+    public func join(talkieId: String) {
+        guard let socket = manager.socket, socket.status == .connected else { return }
+        socket.emit(SocketEvent.talkieJoin.rawValue, ["talkieId": talkieId])
     }
 }

@@ -32,9 +32,46 @@ struct TalkieSendingTests {
         )))
     }
 
+    @Test func unAccuseEnReveil_ditQueLeDestinataireSeReveille() {
+        let read = verdict([
+            "success": true,
+            "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa", "maxDurationMs": 20_000, "maxChunkBytes": 8_192, "delivery": "waking"],
+        ])
+        #expect(read == .opened(TalkieOpened(talkieId: "aaaaaaaaaaaaaaaaaaaaaaaa", maxDuration: 20, maxChunkBytes: 8_192, delivery: .waking)))
+    }
+
+    @Test func uneLivraisonAbsenteOuInconnue_vautLeDirect() {
+        let absent = verdict(["success": true, "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa"]])
+        let unknown = verdict(["success": true, "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa", "delivery": "teleport"]])
+        guard case .opened(let first) = absent, case .opened(let second) = unknown else {
+            Issue.record("accusés ouverts attendus")
+            return
+        }
+        #expect(first.delivery == .live)
+        #expect(second.delivery == .live)
+    }
+
     @Test func unAccuseSansIdentifiant_estUnEchec() {
         #expect(verdict(["success": true, "data": ["talkieId": ""]]) == .refused(.failed))
         #expect(verdict(["success": true]) == .refused(.failed))
+    }
+
+    @Test func unRepliQuiNommeSaConversation_yEnvoieLaCopie() {
+        let read = verdict(["success": false, "error": "x", "code": "TALKIE_FALLBACK_VOICE", "conversationId": "cccccccccccccccccccccccc"])
+        #expect(read == .voiceInto(conversationId: "cccccccccccccccccccccccc"))
+    }
+
+    @Test func uneConversationDeRepliIllisible_retombeSurLeRepliOrdinaire() {
+        #expect(verdict(["success": false, "code": "TALKIE_FALLBACK_VOICE", "conversationId": "../x"]) == .refused(.voice))
+        #expect(verdict(["success": false, "code": "TALKIE_NOT_ALLOWED", "conversationId": "cccccccccccccccccccccccc"]) == .refused(.notAllowed))
+    }
+
+    @Test func uneFinDeVoixReveillee_ditSiLeDestinataireLaRejointe() throws {
+        let decode = { (json: String) in try JSONDecoder().decode(TalkieEnded.self, from: Data(json.utf8)) }
+        let base = #""talkieId":"t","fromUserId":"a","toUserId":"b","reason":"sender""#
+        #expect(try decode("{\(base),\"joined\":false}").joined == false)
+        #expect(try decode("{\(base),\"joined\":true}").joined == true)
+        #expect(try decode("{\(base)}").joined == nil)
     }
 
     @Test func unBlocageEtUnRepli_rendentLaMemeIssue() {

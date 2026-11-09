@@ -71,6 +71,19 @@ final class TalkieSenderTests: XCTestCase {
     }
 
     @MainActor
+    final class FakeCopier: TalkieVoiceCopying {
+        var sent: [(frames: [Data], toUserId: String)] = []
+        var conversations: [String?] = []
+        var succeeds = true
+
+        func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool {
+            sent.append((frames, toUserId))
+            conversations.append(conversationId)
+            return succeeds
+        }
+    }
+
+    @MainActor
     final class FakeDeadline {
         var delays: [TimeInterval] = []
         var run: (@MainActor () -> Void)?
@@ -83,6 +96,7 @@ final class TalkieSenderTests: XCTestCase {
         let capture: FakeCapture
         let deadline: FakeDeadline
         let ended: PassthroughSubject<TalkieEnded, Never>
+        let copier: FakeCopier
     }
 
     final class Clock: @unchecked Sendable {
@@ -94,9 +108,11 @@ final class TalkieSenderTests: XCTestCase {
         let capture = FakeCapture()
         let deadline = FakeDeadline()
         let ended = PassthroughSubject<TalkieEnded, Never>()
+        let copier = FakeCopier()
         let sut = TalkieSender(
             emitter: emitter,
             capture: capture,
+            copier: copier,
             endedEvents: ended.eraseToAnyPublisher(),
             now: { clock.now },
             schedule: { delay, run in
@@ -105,7 +121,7 @@ final class TalkieSenderTests: XCTestCase {
                 return { deadline.cancelled += 1 }
             }
         )
-        return Rig(sut: sut, emitter: emitter, capture: capture, deadline: deadline, ended: ended)
+        return Rig(sut: sut, emitter: emitter, capture: capture, deadline: deadline, ended: ended, copier: copier)
     }
 
     private func settle() async {
@@ -189,19 +205,164 @@ final class TalkieSenderTests: XCTestCase {
         XCTAssertEqual(rig.sut.phase, .idle)
     }
 
-    func test_aBlock_isSaidLikeAFallback_andNothingIsSent() async {
+    /// Précision du porteur (2026-11-08) : un repli n'est plus une erreur. La voix continue de s'enregistrer tant que
+    /// le doigt tient, puis part en message vocal ; un blocage rend la MÊME issue, sans fuite.
+    func test_aFallback_keepsRecording_andTheVoiceLeavesAsAVoiceCopyOnRelease() async {
         let rig = makeRig()
         rig.sut.press(toUserId: "bob")
         await settle()
-        rig.capture.speak(frames: 12)
+        rig.capture.speak(frames: Self.framesPerFragment * 2)
         rig.emitter.resolve(.refused(.voice))
         await settle()
 
+        XCTAssertEqual(rig.sut.phase, .recordingCopy(toUserId: "bob"))
+        XCTAssertNil(rig.sut.notice)
+        XCTAssertEqual(rig.capture.stops, 0)
+        XCTAssertEqual(rig.deadline.delays, [TalkieContract.maxDuration])
+
+        rig.capture.speak(frames: 3)
+        await rig.sut.release()
+
+        XCTAssertEqual(rig.copier.sent.map(\.toUserId), ["bob"])
+        XCTAssertEqual(rig.copier.sent.first?.frames.reduce(0) { $0 + $1.count }, (Self.framesPerFragment * 2 + 3) * 10)
         XCTAssertEqual(rig.sut.notice, .voice)
         XCTAssertTrue(rig.emitter.chunks.isEmpty)
         XCTAssertTrue(rig.emitter.ends.isEmpty)
         XCTAssertEqual(rig.capture.stops, 1)
         XCTAssertEqual(rig.sut.phase, .idle)
+    }
+
+    func test_aFallbackAfterRelease_sendsWhatWasCapturedAtOnce() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        await rig.sut.release()
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+
+        XCTAssertEqual(rig.copier.sent.first?.frames.reduce(0) { $0 + $1.count }, 30)
+        XCTAssertEqual(rig.sut.notice, .voice)
+        XCTAssertEqual(rig.sut.phase, .idle)
+    }
+
+    func test_theVoiceCopy_closesByItselfAtTheMaximumDuration() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+
+        rig.deadline.run?()
+        await settle()
+
+        XCTAssertEqual(rig.copier.sent.count, 1)
+        XCTAssertEqual(rig.sut.phase, .idle)
+    }
+
+    func test_aVoiceCopyThatCannotLeave_isAFailure() async {
+        let rig = makeRig()
+        rig.copier.succeeds = false
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+        await rig.sut.release()
+
+        XCTAssertEqual(rig.sut.notice, .failed)
+    }
+
+    func test_aFallbackWithARefusedMicrophone_saysTheMicrophone_andCopiesNothing() async {
+        let rig = makeRig()
+        rig.capture.allow = false
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+
+        XCTAssertEqual(rig.sut.notice, .micDenied)
+        XCTAssertTrue(rig.copier.sent.isEmpty)
+        XCTAssertEqual(rig.sut.phase, .idle)
+    }
+
+    func test_aWakingDelivery_isShownWhileTalking_andClearsAtTheEnd() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        let waking = TalkieOpened(talkieId: Self.opened.talkieId, maxDuration: 30, maxChunkBytes: 16_384, delivery: .waking)
+        rig.emitter.resolve(.opened(waking))
+        await settle()
+
+        XCTAssertTrue(rig.sut.waking)
+        XCTAssertEqual(rig.sut.phase, .talking(toUserId: "bob", talkieId: Self.opened.talkieId))
+
+        await rig.sut.release()
+        XCTAssertFalse(rig.sut.waking)
+    }
+
+    func test_aFallbackThatNamesItsConversation_sendsTheCopyThere() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.voiceInto(conversationId: "cccccccccccccccccccccccc"))
+        await settle()
+        await rig.sut.release()
+
+        XCTAssertEqual(rig.copier.conversations, ["cccccccccccccccccccccccc"])
+        XCTAssertEqual(rig.sut.notice, .voice)
+    }
+
+    private func wakingTalk(_ rig: Rig) async {
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(TalkieOpened(talkieId: Self.opened.talkieId, maxDuration: 30, maxChunkBytes: 16_384, delivery: .waking)))
+        await settle()
+        rig.capture.speak(frames: Self.framesPerFragment * 2)
+        await rig.sut.release()
+    }
+
+    func test_aWakingVoiceNobodyJoined_leavesAsAVoiceCopy() async {
+        let rig = makeRig()
+        await wakingTalk(rig)
+        XCTAssertTrue(rig.copier.sent.isEmpty)
+
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+
+        XCTAssertEqual(rig.copier.sent.map(\.toUserId), ["bob"])
+        XCTAssertEqual(rig.copier.sent.first?.frames.reduce(0) { $0 + $1.count }, rig.emitter.chunks.reduce(0) { $0 + $1.bytes })
+        XCTAssertEqual(rig.copier.conversations, [nil])
+        XCTAssertEqual(rig.sut.notice, .voice)
+    }
+
+    func test_aWakingVoiceThatWasJoined_orALiveOne_isNeverCopied() async {
+        let joined = makeRig()
+        await wakingTalk(joined)
+        await joined.sut.ended(Self.opened.talkieId, reason: .sender, joined: true)
+        await joined.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+        XCTAssertTrue(joined.copier.sent.isEmpty)
+
+        let live = makeRig()
+        live.sut.press(toUserId: "bob")
+        await settle()
+        live.emitter.resolve(.opened(Self.opened))
+        await settle()
+        live.capture.speak(frames: Self.framesPerFragment)
+        await live.sut.release()
+        await live.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+        XCTAssertTrue(live.copier.sent.isEmpty)
+    }
+
+    func test_aLiveDelivery_isNotWaking() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+
+        XCTAssertFalse(rig.sut.waking)
     }
 
     func test_notAllowed_isReported_soTheRowWithdraws() async {
