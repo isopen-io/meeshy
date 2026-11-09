@@ -217,6 +217,8 @@ final class LongPressPeekPresence: ObservableObject {
 
     @Published private(set) var isOpen = false
 
+    nonisolated deinit {}
+
     func update(isOpen: Bool) {
         guard self.isOpen != isOpen else { return }
         self.isOpen = isOpen
