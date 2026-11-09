@@ -119,6 +119,7 @@ struct MyStoryCard: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(selectionIndicator == .selected ? .isSelected : [])
             .accessibilityLabel(thumbnailAccessibilityLabel)
+            .accessibilityAction { onOpen() }
     }
 
     /// Le « … » posé SUR la vignette (#16386) : un rond translucide lisible sur

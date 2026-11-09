@@ -113,11 +113,14 @@ struct StoryRingCell: View, Equatable {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            HapticFeedback.medium()
-            Logger.messages.info("[StoryRingCell] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
-            onViewStory()
-        }
+        .onTapGesture { openStory() }
+        .accessibilityAction(named: Text(StoryTrayCopy.viewStories)) { openStory() }
+    }
+
+    private func openStory() {
+        HapticFeedback.medium()
+        Logger.messages.info("[StoryRingCell] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
+        onViewStory()
     }
 }
 

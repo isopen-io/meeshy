@@ -122,6 +122,9 @@ struct StoryLanguageDetailView: View {
                 Color.black.opacity(MeeshyOpacity.medium)
                     .ignoresSafeArea()
                     .onTapGesture { onDismiss() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                    .accessibilityAction { onDismiss() }
 
                 panel
                     .frame(height: currentHeight(for: geo.size.height))

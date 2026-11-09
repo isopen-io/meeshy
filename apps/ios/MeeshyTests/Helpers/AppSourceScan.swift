@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum AppSourceScan {
+enum AppSourceScan {
 
     struct Source {
         let path: String

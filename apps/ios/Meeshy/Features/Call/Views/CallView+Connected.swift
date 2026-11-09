@@ -209,6 +209,7 @@ extension CallView {
                 ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
                 : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { toggleControls() }
             // Sous VoiceOver les contrôles restent en place : cet élément quitte l'arbre.
             .accessibilityHidden(!exposesTheTapToggle)
     }
