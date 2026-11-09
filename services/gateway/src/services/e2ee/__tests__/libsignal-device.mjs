@@ -5,6 +5,9 @@
 // script tourne donc dans un processus Node à part :
 //   - `node libsignal-device.mjs verify <identité> <message> <signature>` :
 //     vérification XEdDSA, imprime `true` ou `false` ;
+//   - `node libsignal-device.mjs deserialize <type> <corps>` : la lecture
+//     STRUCTURELLE d'un message sérialisé par libsignal (`SignalMessage` pour 2,
+//     `PreKeySignalMessage` pour 3, #17115), imprime `true` ou `false` ;
 //   - `node libsignal-device.mjs serve` : lit des commandes JSON ligne à ligne
 //     sur stdin et répond une ligne JSON par commande. Les clés privées restent
 //     dans CE processus ; seules les parties publiques en sortent.
@@ -103,6 +106,18 @@ if (process.argv[2] === 'verify') {
   let valid = false;
   try {
     valid = signal.PublicKey.deserialize(bytes(identityKey)).verify(bytes(message), bytes(signature));
+  } catch {
+    valid = false;
+  }
+  process.stdout.write(valid ? 'true' : 'false');
+} else if (process.argv[2] === 'deserialize') {
+  const [type, body] = process.argv.slice(3);
+  let valid = false;
+  try {
+    if (type === '2') signal.SignalMessage.deserialize(bytes(body));
+    else if (type === '3') signal.PreKeySignalMessage.deserialize(bytes(body));
+    else throw new Error('type inconnu');
+    valid = true;
   } catch {
     valid = false;
   }

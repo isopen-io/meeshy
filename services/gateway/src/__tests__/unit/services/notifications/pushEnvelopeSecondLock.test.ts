@@ -187,7 +187,7 @@ const strongerThanEncryption = (): ReadonlyArray<readonly [string, Record<string
   ['vue unique (effectFlags)', { effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE }],
   ['flouté (colonne)', { isBlurred: true }],
   ['flouté (effectFlags)', { effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }],
-  ['éphémère (échéance)', { expiresAt: new Date('2026-11-09T18:00:00Z') }],
+  ['éphémère (échéance)', { expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000) }],
   ['éphémère (durée)', { ephemeralDuration: 30 }],
   ['éphémère (effectFlags)', { effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL }],
   ['éphémère après lecture', { effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ }],
