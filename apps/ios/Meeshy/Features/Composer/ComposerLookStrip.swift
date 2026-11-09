@@ -187,7 +187,12 @@ struct ComposerLookStrip: View {
     let source: any ComposerFrameSourcing
     let context: ComposerCaptureGestureContext
     let recordingTime: TimeInterval
+    /// Le tri des puces posées sous la bande (#17267).
+    var filter = ComposerLookStripFilter()
 
+    /// La case choisie en dernier : dans la liste mêlée, c'est elle qui porte
+    /// le choix — un filtre ET un cadre peuvent appartenir au look (#17267).
+    @State private var focus: ComposerLookStripItem?
     /// Les cases dont un pixel se voit — mises à jour au franchissement d'une case,
     /// jamais à chaque image du défilement.
     @State private var visible: ClosedRange<Int>?
@@ -204,13 +209,26 @@ struct ComposerLookStrip: View {
 
     private static let scrollSpace = "composer.capture.band"
 
-    /// La famille ouverte GARDE ses cases pendant l'enregistrement : basculer de la
+    /// La bande ouverte GARDE ses cases pendant l'enregistrement : basculer de la
     /// bande à la miniature seule annulerait l'appui long qui vient de lancer la
     /// prise (sa levée ne parviendrait plus à `endHold`). Les autres cases
-    /// s'effacent ; seule la choisie reste visible et vivante.
+    /// s'effacent ; seule la choisie reste visible et vivante. Ouverte depuis
+    /// n'importe quelle famille, elle montre la liste mêlée que ses puces trient
+    /// (#17267).
     private var items: [ComposerLookStripItem] {
-        guard let famille = session.openFamily else { return [] }
-        return ComposerLookStripRule.items(famille)
+        guard session.openFamily != nil else { return [] }
+        return ComposerLookStripFilterRule.items(filter)
+    }
+
+    /// La case encadrée : la dernière choisie, si la liste la montre.
+    private func chosenIndex(in cases: [ComposerLookStripItem]) -> Int? {
+        ComposerLookStripFilterRule.chosenIndex(in: cases, look: session.look, focus: focus)
+    }
+
+    /// La case que le défilement suit : la choisie, ou « Aucun » quand le tri
+    /// l'a écartée — trier ne choisit rien.
+    private func followedIndex(in cases: [ComposerLookStripItem]) -> Int? {
+        ComposerLookStripFilterRule.followedIndex(in: cases, look: session.look, focus: focus)
     }
 
     private var recording: Bool { context.stage == .recording }
@@ -223,8 +241,8 @@ struct ComposerLookStrip: View {
 
     /// Le nom de la case choisie dans la famille ouverte — le seul écrit.
     private var chosenItemName: String {
-        ComposerLookStripRule.chosenIndex(in: items, look: session.look)
-            .map { ComposerCaptureCopy.itemName(items[$0]) } ?? ""
+        let cases = items
+        return chosenIndex(in: cases).map { ComposerCaptureCopy.itemName(cases[$0]) } ?? ""
     }
 
     /// Le déclencheur porte UN nom, seul ou dans la bande ouverte.
@@ -273,6 +291,10 @@ struct ComposerLookStrip: View {
         .adaptiveOnChange(of: pressing) { _, tenu in
             guard !tenu else { return }
             session.releaseStaleHold()
+        }
+        .adaptiveOnChange(of: session.openFamily) { _, famille in
+            guard let famille else { return }
+            focus = ComposerLookStripFilterRule.focus(opening: famille, look: session.look)
         }
     }
 
@@ -379,15 +401,18 @@ struct ComposerLookStrip: View {
                 .coordinateSpace(name: Self.scrollSpace)
                 .environment(\.layoutDirection, .leftToRight)
                 .onAppear {
-                    guard let choisie = ComposerLookStripRule.chosenIndex(in: items, look: session.look) else { return }
+                    guard let choisie = followedIndex(in: items) else { return }
                     beginFollowing(chosen: choisie)
                     lecteur.scrollTo(choisie, anchor: .center)
                 }
-                .adaptiveOnChange(of: ComposerLookStripRule.chosenIndex(in: items, look: session.look)) { _, choisie in
+                .adaptiveOnChange(of: followedIndex(in: items)) { _, choisie in
                     guard let choisie, let cible = settle.follow.chose(choisie) else { return }
                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                         lecteur.scrollTo(cible, anchor: .center)
                     }
+                }
+                .adaptiveOnChange(of: filter) { _, _ in
+                    refollow(reader: lecteur)
                 }
             }
         }
@@ -397,7 +422,7 @@ struct ComposerLookStrip: View {
         let cellule = ComposerLookStripRule.cellSize
         let pas = ComposerLookStripRule.pitch
         let cases = items
-        let choisie = ComposerLookStripRule.chosenIndex(in: cases, look: session.look)
+        let choisie = chosenIndex(in: cases)
         let peintes = ComposerLookStripRule.paintedIndices(visible: visible, count: cases.count,
                                                            cells: budget.thumbnailCells,
                                                            chosen: choisie, recording: recording)
@@ -541,7 +566,9 @@ struct ComposerLookStrip: View {
     private func perform(_ zone: ComposerCaptureZone, _ geste: ComposerCaptureGestureKind,
                          item: ComposerLookStripItem? = nil) {
         if geste == .longPress { session.selfTimer.cancel() }
-        session.perform(ComposerCaptureGesture.action(zone: zone, gesture: geste, context: context), item: item)
+        let action = ComposerCaptureGesture.action(zone: zone, gesture: geste, context: context)
+        if action == .select, let item { focus = item }
+        session.perform(action, item: item)
     }
 
     /// VoiceOver ne TIENT pas un doigt : une prise qu'il lance part verrouillée,
@@ -567,7 +594,7 @@ struct ComposerLookStrip: View {
     /// et, sans accroche système (iOS 16), se recentre sur sa case.
     private func followScroll(scrolled: CGFloat, width: CGFloat, reader: ScrollViewProxy) {
         let cases = items
-        let choisie = ComposerLookStripRule.chosenIndex(in: cases, look: session.look)
+        let choisie = followedIndex(in: cases)
         beginFollowing(chosen: choisie)
         let vues = ComposerLookStripRule.visibleRange(offset: scrolled - (width - ComposerLookStripRule.cellSize.width) / 2,
                                                       width: width, count: cases.count)
@@ -588,8 +615,9 @@ struct ComposerLookStrip: View {
     }
 
     private func rest(reader: ScrollViewProxy) {
+        defer { settle.base = nil }
         let cases = items
-        let choisie = ComposerLookStripRule.chosenIndex(in: cases, look: session.look)
+        let choisie = followedIndex(in: cases)
         switch settle.follow.settled(chosen: choisie, selects: selects) {
         case .rejoin(let cible):
             return reader.scrollTo(cible, anchor: .center)
@@ -602,8 +630,27 @@ struct ComposerLookStrip: View {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { reader.scrollTo(centre, anchor: .center) }
     }
 
+    /// **La case du centre s'ajoute au look d'AVANT le défilement** (#17267) :
+    /// la liste mêlée traverse d'autres familles pour rejoindre une case, et ce
+    /// qu'elle traverse ne reste pas dans la prise.
     private func choose(_ item: ComposerLookStripItem) {
-        perform(.otherThumbnail, .tap, item: item)
+        guard selects else { return }
+        let base = settle.base ?? session.look
+        settle.base = base
+        focus = item
+        session.look = ComposerLookStripRule.look(of: item, combinedWith: base)
+        HapticFeedback.light()
+    }
+
+    /// **Les puces ont trié la bande** : elle rejoint d'elle-même la case qu'elle
+    /// suit — les cases qu'elle traverse alors ne sont pas des choix.
+    private func refollow(reader: ScrollViewProxy) {
+        settle.base = nil
+        guard let suivie = followedIndex(in: items) else { return }
+        settle.follow.begin(chosen: suivie)
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+            reader.scrollTo(suivie, anchor: .center)
+        }
     }
 }
 
@@ -612,6 +659,8 @@ struct ComposerLookStrip: View {
 final class ComposerLookStripScrollSettle {
     var task: Task<Void, Never>?
     var follow = ComposerLookStripFollow()
+    /// Le look d'avant le défilement en cours ; `nil` au repos.
+    var base: ComposerPhotoLook?
 
     nonisolated deinit {}
 }

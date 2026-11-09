@@ -32,7 +32,7 @@ enum ComposerLookFilterCopy {
     }
 }
 
-/// **Les puces sous la bande** (#17267, porteur 2026-11-09 : « juste en bas mettre
+/// **Les puces sous la bande** (#17267, porteur : « juste en bas mettre
 /// les chips permettant de les filtrer ») : les types, puis les ambiances qu'au
 /// moins une case porte sous le type choisi. Chaque toucher trie la bande dans
 /// la même image. La puce est celle des cadres de l'appel (`CallFrameMoodChip`) :
@@ -41,7 +41,7 @@ struct ComposerLookFilterChips: View {
     let filter: ComposerLookStripFilter
     let onChange: (ComposerLookStripFilter) -> Void
 
-    static let height: CGFloat = 44
+    static var height: CGFloat { ComposerLookStripRule.chipsHeight }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {

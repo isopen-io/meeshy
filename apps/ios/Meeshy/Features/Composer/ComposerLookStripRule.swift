@@ -124,6 +124,8 @@ nonisolated enum ComposerLookStripRule {
     /// Le nom du choix, seul sous la bande (#9566), discret (porteur 2026-10-12).
     static let chosenNameSize: CGFloat = 10
     static let chosenNameHeight: CGFloat = 18
+    /// La rangée des puces qui trient la bande (#17267) : une cible de 44 pt.
+    static let chipsHeight: CGFloat = 44
     /// Filtres · Effets · Cadres posés au niveau de la bande : leur bas sur le
     /// bas des cases (porteur 2026-10-12).
     static var railBottomInset: CGFloat { chosenNameHeight + ComposerTriggerOutline.outset }

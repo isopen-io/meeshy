@@ -31,6 +31,8 @@ struct ComposerCaptureBottomRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Le cadenas qui se ferme, élastique, avant de partir (#9753).
     @State private var lockSeal = ComposerLockSeal()
+    /// Le tri de la bande ouverte (#17267), partagé par la bande et ses puces.
+    @State private var lookFilter = ComposerLookStripFilter()
 
     private var capture: ComposerSceneCameraBar.Capture { session.barCapture }
 
@@ -78,6 +80,9 @@ struct ComposerCaptureBottomRow: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
+        .adaptiveOnChange(of: session.openFamily) { avant, apres in
+            lookFilter = lookFilter.following(open: avant, to: apres)
+        }
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanels)
     }
 
@@ -86,7 +91,7 @@ struct ComposerCaptureBottomRow: View {
             if !recording { zoom }
             ZStack {
                 ComposerLookStrip(session: session, source: source, context: context,
-                                  recordingTime: session.camera.recordingDuration)
+                                  recordingTime: session.camera.recordingDuration, filter: lookFilter)
                 HStack {
                     Spacer(minLength: 0)
                     if showsLockTrack {
@@ -108,8 +113,18 @@ struct ComposerCaptureBottomRow: View {
                         .transition(.opacity)
                 }
             }
+            if session.openFamily != nil && ComposerCaptureGesture.offersRail(context) {
+                lookChips
+            }
         }
         .padding(.bottom, MeeshySpacing.lg)
+    }
+
+    /// **Les puces qui trient la bande ouverte, juste sous elle** (#17267) :
+    /// Tout · Filtres · Cadres · Effets image · Effets visage, puis les ambiances.
+    private var lookChips: some View {
+        ComposerLookFilterChips(filter: lookFilter) { lookFilter = $0 }
+            .transition(.opacity)
     }
 
     /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
@@ -175,14 +190,18 @@ struct ComposerCaptureBottomRow: View {
     /// · Cadres en colonne, la bande à leur droite — jamais un panneau qui
     /// flotte au-dessus des outils. Retoucher la famille ouverte rend les outils.
     private var familyRow: some View {
-        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-            // Le haut de la colonne sur le haut des cases (#10339).
-            ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
-                session.toggleFamily(famille)
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+                // Le haut de la colonne sur le haut des cases (#10339).
+                ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                    session.toggleFamily(famille)
+                }
+                .padding(.leading, MeeshySpacing.mdPlus)
+                .padding(.top, ComposerTriggerOutline.outset)
+                ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0,
+                                  filter: lookFilter)
             }
-            .padding(.leading, MeeshySpacing.mdPlus)
-            .padding(.top, ComposerTriggerOutline.outset)
-            ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
+            lookChips
         }
         .frame(height: ComposerEditScene.familyRow)
         .transition(.opacity)

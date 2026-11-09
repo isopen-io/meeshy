@@ -12,7 +12,7 @@ nonisolated enum ComposerLookKind: Hashable, Sendable {
     case faceEffect
 }
 
-/// **Les puces de type, sous la bande** (#17267, porteur 2026-11-09) : Tout ·
+/// **Les puces de type, sous la bande** (#17267) : Tout ·
 /// Filtres · Cadres · Effets image · Effets visage. L'ordre de déclaration EST
 /// l'ordre de la rangée.
 nonisolated enum ComposerLookTypeChip: String, CaseIterable, Hashable, Sendable {
@@ -57,6 +57,12 @@ nonisolated struct ComposerLookStripFilter: Equatable, Sendable {
         return ComposerLookStripFilter(type: type, mood: garde)
     }
 
+    /// Chaque ouverture de la bande repart de « Tout » ; passer d'une famille du
+    /// rail à une autre, bande ouverte, garde le tri.
+    func following(open avant: ComposerLookFamily?, to apres: ComposerLookFamily?) -> ComposerLookStripFilter {
+        avant == nil && apres != nil ? ComposerLookStripFilter() : self
+    }
+
     /// Retoucher l'ambiance choisie la retire.
     func toggling(mood: CallFrameMood) -> ComposerLookStripFilter {
         ComposerLookStripFilter(type: type, mood: self.mood == mood ? nil : mood)
@@ -71,7 +77,7 @@ nonisolated enum ComposerLookStripFilterRule {
     /// Tout ce que la bande peut proposer, sans les « Aucun » de chaque famille.
     /// Calculée UNE fois : le défilement relit la bande à chaque image.
     static let catalogue: [ComposerLookStripItem] = ComposerLookFamily.allCases.flatMap { famille in
-        ComposerLookStripRule.items(famille).filter { kind(of: $0) != nil }
+        ComposerLookStripRule.items(famille).filter { ComposerLookStripFilterRule.kind(of: $0) != nil }
     }
 
     /// Ce que fait la case ; `nil` pour un « Aucun ».
@@ -110,7 +116,7 @@ nonisolated enum ComposerLookStripFilterRule {
     }
 
     private static func admits(_ item: ComposerLookStripItem, _ filter: ComposerLookStripFilter) -> Bool {
-        guard let kind = kind(of: item), filter.type.admits(kind) else { return false }
+        guard let nature = kind(of: item), filter.type.admits(nature) else { return false }
         guard let mood = filter.mood else { return true }
         return self.mood(of: item) == mood
     }
@@ -119,7 +125,7 @@ nonisolated enum ComposerLookStripFilterRule {
     /// dans l'ordre du catalogue des cadres — jamais une puce qui viderait la bande.
     static func moods(for type: ComposerLookTypeChip) -> [CallFrameMood] {
         let portees = Set(catalogue.compactMap { item -> CallFrameMood? in
-            guard let kind = kind(of: item), type.admits(kind) else { return nil }
+            guard let nature = kind(of: item), type.admits(nature) else { return nil }
             return mood(of: item)
         })
         return CallFrameMood.allCases.filter { portees.contains($0) }
