@@ -247,3 +247,30 @@ struct ConcealedUnderLongPressPeek: ViewModifier {
             .animation(.easeOut(duration: 0.18), value: presence.isOpen)
     }
 }
+
+// MARK: - Un voile qu'on lit au travers (#17316)
+
+/// Le voile de l'aperçu d'une conversation est LÉGER : un assombrissement
+/// discret, aucune matière système, et un flou de quelques points posé sur la
+/// liste elle-même — on lit encore les conversations derrière l'aperçu. Le
+/// menu d'un message garde le voile standard.
+nonisolated enum ConversationPeekVeil {
+    static let weight: LongPressVeilWeight = .light
+
+    static func backdropBlurRadius(peekIsOpen: Bool) -> CGFloat {
+        peekIsOpen ? LongPressVeilLaw.backdropBlurRadius(weight: weight) : 0
+    }
+}
+
+/// La liste se floute de quelques points sous l'aperçu ouvert. Seul ce
+/// modificateur observe la présence : la liste qu'il porte n'est pas
+/// ré-évaluée.
+struct BlurredUnderLongPressPeek: ViewModifier {
+    @ObservedObject var presence: LongPressPeekPresence
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: ConversationPeekVeil.backdropBlurRadius(peekIsOpen: presence.isOpen))
+            .animation(.easeOut(duration: 0.18), value: presence.isOpen)
+    }
+}

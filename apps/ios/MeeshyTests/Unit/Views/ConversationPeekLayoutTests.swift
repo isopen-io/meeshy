@@ -316,3 +316,162 @@ private extension Array where Element == Character {
         stride(from: 0, to: count, by: 2).map { String(self[$0..<Swift.min($0 + 2, count)]) }
     }
 }
+
+/// #17316 — un appui qui a fait apparaître l'aperçu n'ouvre JAMAIS la
+/// conversation ; un tap court l'ouvre sans aperçu ; depuis l'aperçu, seul un
+/// geste explicite (la carte, « Ouvrir ») l'ouvre, et le voile ferme seulement.
+final class ConversationRowPressLawTests: XCTestCase {
+
+    private func pressHeld() -> (ConversationRowPress, ConversationRowPress.Effect) {
+        var press = ConversationRowPress()
+        _ = press.handle(.began)
+        let effect = press.handle(.longPressRecognized)
+        return (press, effect)
+    }
+
+    func test_longPress_showsThePeekOnly() {
+        let (_, effect) = pressHeld()
+        XCTAssertEqual(effect, .showPeek)
+    }
+
+    func test_releaseAfterThePeek_doesNothing() {
+        var (press, _) = pressHeld()
+        XCTAssertEqual(press.handle(.released), ConversationRowPress.Effect.none)
+    }
+
+    func test_tapFiredAtTheReleaseOfAPeekPress_neverOpensTheConversation() {
+        var (press, _) = pressHeld()
+        _ = press.handle(.released)
+        XCTAssertEqual(press.handle(.tapped), ConversationRowPress.Effect.none)
+    }
+
+    func test_tapFiredBeforeTheReleaseIsReported_neverOpensEither() {
+        var (press, _) = pressHeld()
+        XCTAssertEqual(press.handle(.tapped), ConversationRowPress.Effect.none)
+        XCTAssertEqual(press.handle(.released), ConversationRowPress.Effect.none)
+    }
+
+    func test_shortTap_opensTheConversationOnly() {
+        var press = ConversationRowPress()
+        XCTAssertEqual(press.handle(.began), ConversationRowPress.Effect.none)
+        XCTAssertEqual(press.handle(.released), ConversationRowPress.Effect.none)
+        XCTAssertEqual(press.handle(.tapped), .openConversation)
+    }
+
+    func test_nextPress_afterAPeek_opensAgainOnTap() {
+        var (press, _) = pressHeld()
+        _ = press.handle(.released)
+        _ = press.handle(.tapped)
+        _ = press.handle(.began)
+        XCTAssertEqual(press.handle(.tapped), .openConversation)
+    }
+
+    func test_nextTap_opens_evenWhenThePeekPressNeverReportedATap() {
+        var (press, _) = pressHeld()
+        _ = press.handle(.released)
+        _ = press.handle(.began)
+        XCTAssertEqual(press.handle(.tapped), .openConversation)
+    }
+
+    func test_longPressRecognizedTwice_raisesThePeekOnce() {
+        var (press, _) = pressHeld()
+        XCTAssertEqual(press.handle(.longPressRecognized), ConversationRowPress.Effect.none)
+    }
+
+    func test_touchOnTheVeil_dismissesOnly() {
+        XCTAssertEqual(ConversationPeekTouch.veil.effect, .dismiss)
+    }
+
+    func test_touchOnTheCard_dismissesAndOpens() {
+        XCTAssertEqual(ConversationPeekTouch.card.effect, .dismissAndOpen)
+    }
+
+    func test_rowModifier_routesItsTapThroughTheLaw() throws {
+        let rows = try AppSourceGuard.stripComments(source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift"))
+        XCTAssertTrue(rows.contains("press.handle(.tapped)"), "le tap de la rangée passe par la loi de l'appui")
+        XCTAssertTrue(rows.contains("press.handle(.longPressRecognized)"), "le déclencheur de l'aperçu passe par la loi de l'appui")
+        XCTAssertTrue(rows.contains("press.handle(pressing ? .began : .released)"), "le début d'appui réarme la loi")
+    }
+
+    func test_peekOverlay_routesVeilAndCardTouchesThroughTheLaw() throws {
+        let overlays = try AppSourceGuard.stripComments(source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        XCTAssertTrue(overlays.contains("handlePeekTouch(.veil"), "le voile passe par la loi des touchers de l'aperçu")
+        XCTAssertTrue(overlays.contains("handlePeekTouch(.card"), "la carte passe par la loi des touchers de l'aperçu")
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try AppSourceGuard.text(at: url)
+    }
+}
+
+/// #17316 — le voile de l'aperçu d'une conversation est LÉGER : la liste se
+/// lit au travers. Un flou de quelques points posé sur la liste, un
+/// assombrissement discret, aucune matière système ; le menu des messages
+/// garde le voile standard.
+final class ConversationPeekVeilLawTests: XCTestCase {
+
+    func test_conversationPeek_usesTheLightVeil() {
+        XCTAssertEqual(ConversationPeekVeil.weight, .light)
+    }
+
+    func test_backdropBlur_isAFewPointsAtMost() {
+        let radius = ConversationPeekVeil.backdropBlurRadius(peekIsOpen: true)
+        XCTAssertGreaterThan(radius, 0)
+        XCTAssertLessThanOrEqual(radius, 3)
+    }
+
+    func test_backdropBlur_isZero_whenThePeekIsClosed() {
+        XCTAssertEqual(ConversationPeekVeil.backdropBlurRadius(peekIsOpen: false), 0)
+    }
+
+    func test_lightVeil_posesNoSystemMaterial() {
+        XCTAssertNil(LongPressVeilLaw.matter(weight: .light, reduceTransparency: false))
+        XCTAssertNil(LongPressVeilLaw.matter(weight: .light, reduceTransparency: true))
+    }
+
+    func test_lightVeil_dimsLightly_andLessThanTheStandardVeil() {
+        let light = LongPressVeilLaw.dim(weight: .light, reduceTransparency: false)
+        XCTAssertGreaterThan(light, 0)
+        XCTAssertLessThanOrEqual(light, 0.15)
+        XCTAssertLessThan(light, LongPressVeilLaw.dim(weight: .standard, reduceTransparency: false))
+    }
+
+    func test_lightVeil_underReduceTransparency_dimsMore_toKeepTheCardApart() {
+        XCTAssertGreaterThan(
+            LongPressVeilLaw.dim(weight: .light, reduceTransparency: true),
+            LongPressVeilLaw.dim(weight: .light, reduceTransparency: false)
+        )
+    }
+
+    func test_standardVeil_isUnchanged_forTheMessageMenu() {
+        XCTAssertEqual(LongPressVeilLaw.matter(weight: .standard, reduceTransparency: false), .translucent)
+        XCTAssertEqual(LongPressVeilLaw.dim(weight: .standard, reduceTransparency: false), 0.30, accuracy: 0.0001)
+        XCTAssertEqual(LongPressVeilLaw.backdropBlurRadius(weight: .standard), 0)
+    }
+
+    func test_onlyTheConversationPeek_posesTheLightVeil() throws {
+        let overlays = try AppSourceGuard.stripComments(source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        let menu = try AppSourceGuard.stripComments(source("Meeshy/Features/Main/Components/MessageOverlayMenu.swift"))
+        let piece = try AppSourceGuard.stripComments(source("Meeshy/Features/Main/Components/MessagePieceOverlay.swift"))
+        XCTAssertTrue(overlays.contains("weight: ConversationPeekVeil.weight"))
+        XCTAssertTrue(menu.contains("LongPressVeil(visibility: isVisible ? 1 : 0, onDismiss: dismiss)"), "le menu des messages garde le voile standard")
+        XCTAssertTrue(piece.contains("LongPressVeil(visibility: isVisible ? 1 : 0, onDismiss: dismiss)"), "l'aperçu d'une pièce garde le voile standard")
+    }
+
+    func test_conversationList_isBlurredUnderThePeek() throws {
+        let list = try AppSourceGuard.stripComments(source("Meeshy/Features/Main/Views/ConversationListView.swift"))
+        XCTAssertTrue(list.contains("BlurredUnderLongPressPeek(presence: .shared)"))
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try AppSourceGuard.text(at: url)
+    }
+}
