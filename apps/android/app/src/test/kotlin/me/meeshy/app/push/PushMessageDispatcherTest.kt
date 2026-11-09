@@ -26,6 +26,7 @@ class PushMessageDispatcherTest {
         } }
         val messagePresenter: MessageNotificationPresenter = mockk(relaxed = true)
         val ringer = RecordingRinger()
+        val waker = RecordingWaker()
         val freshness: me.meeshy.sdk.call.CallFreshnessChecker = mockk {
             io.mockk.coEvery { check(any()) } returns me.meeshy.sdk.model.call.CallFreshness.Live
         }
@@ -36,6 +37,7 @@ class PushMessageDispatcherTest {
             callPresenter = callPresenter,
             revocationHandler = revocationHandler,
             bringHandler = me.meeshy.app.bring.BringPushHandler(ringer),
+            talkieHandler = me.meeshy.app.talkie.TalkieWakeHandler(waker),
             messagePresenter = messagePresenter,
             freshness = freshness,
             observers = observers,
@@ -47,6 +49,23 @@ class PushMessageDispatcherTest {
         val stops = mutableListOf<String>()
         override fun ring(push: me.meeshy.sdk.model.relation.BringRingPush) { rings += push.bringId }
         override fun stop(bringId: String) { stops += bringId }
+    }
+
+    private class RecordingWaker : me.meeshy.app.talkie.TalkieWaker {
+        val woken = mutableListOf<String>()
+        override fun wake(push: me.meeshy.sdk.model.relation.TalkieWakePush) { woken += push.talkieId }
+        override fun voiceLeft(push: me.meeshy.sdk.model.relation.TalkieWakePush) { woken += push.deliveryKey }
+    }
+
+    @Test
+    fun `un reveil de talkie demarre le service et jamais une banniere de message`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "talkie_incoming", "talkieId" to "t1", "fromUserId" to "alice", "fromName" to "Ada"))
+        fixture.dispatcher.dispatch(push("type" to "talkie_incoming", "talkieId" to "t1", "fromUserId" to "alice"))
+
+        assertThat(fixture.waker.woken).containsExactly("t1")
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
     }
 
     @Test

@@ -24,6 +24,11 @@ final class ProfileCircleViewModelTests: XCTestCase {
         var level: RelationLevel?
     }
 
+    final class ObservedOffers: @unchecked Sendable {
+        var talkie: Bool?
+        var together: Bool?
+    }
+
     override func setUp() async throws {
         try await super.setUp()
         await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
@@ -238,6 +243,41 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertTrue(rig.sut.offersBring)
     }
 
+    func test_offersTalkieAndTogether_aServedAccessLevelOfBloodWithoutALink_offersBoth() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .public, grantedByMe: .public, accessLevel: .blood))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersTalkie)
+        XCTAssertTrue(rig.sut.offersTogether)
+        XCTAssertNil(rig.sut.shownLevel, "aucun lien n'est fabriqué")
+    }
+
+    func test_offersTalkieAndTogether_aFriend_areNotOffered_butBringIs() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersBring)
+        XCTAssertFalse(rig.sut.offersTalkie)
+        XCTAssertFalse(rig.sut.offersTogether)
+    }
+
+    func test_offersTalkieAndTogether_aStrangerWithoutAccessLevel_areNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(link("a", .public))
+
+        await rig.sut.load()
+
+        XCTAssertFalse(rig.sut.offersTalkie)
+        XCTAssertFalse(rig.sut.offersTogether)
+    }
+
     // MARK: - Rétrograder d'un cran, annuler le lien à Connaissance (#14910)
 
     func test_offeredLowering_goesDownOneRungAndUnlinksAtAcquaintance() async {
@@ -358,6 +398,93 @@ final class ProfileCircleViewModelTests: XCTestCase {
 
         XCTAssertEqual(second.relations.linksCallCount, 1, "le cache invalidé force la relecture")
         XCTAssertEqual(second.sut.shownLevel, .acquaintance)
+    }
+
+    // MARK: - Après une baisse, les outils suivent le lien, sauf le verdict d'équipe (#16623)
+
+    func test_lower_fromClose_withdrawsTalkieAndTogether_beforeTheServerAnswers_keepsBring() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        rig.relations.linkResult = .success(link("a", .close))
+        await rig.sut.load()
+        XCTAssertTrue(rig.sut.offersTalkie)
+        let observed = ObservedOffers()
+        let sut = rig.sut
+        rig.relations.lowerHook = {
+            await MainActor.run {
+                observed.talkie = sut.offersTalkie
+                observed.together = sut.offersTogether
+            }
+        }
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        _ = await rig.sut.lower()
+
+        XCTAssertEqual(observed.talkie, false, "le talkie se retire avant la réponse du serveur")
+        XCTAssertEqual(observed.together, false)
+        XCTAssertFalse(rig.sut.offersTalkie)
+        XCTAssertFalse(rig.sut.offersTogether)
+        XCTAssertTrue(rig.sut.offersBring, "Proche → Ami garde le Bring")
+    }
+
+    func test_lower_fromFriend_withdrawsBring_evenWhenTheRereadFails() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+        await rig.sut.load()
+        XCTAssertTrue(rig.sut.offersBring)
+        rig.relations.linkResult = .failure(NSError(domain: "test", code: 1))
+
+        _ = await rig.sut.lower()
+
+        XCTAssertFalse(rig.sut.offersBring, "Ami → Connaissance : plus de Bring proposé")
+    }
+
+    func test_lower_betweenTeamAccounts_keepsTheServedToolLevelAboveTheLink() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .friend, accessLevel: .blood))
+        await rig.sut.load()
+        rig.relations.linkResult = .failure(NSError(domain: "test", code: 1))
+
+        _ = await rig.sut.lower()
+
+        XCTAssertEqual(rig.sut.shownLevel, .acquaintance)
+        XCTAssertTrue(rig.sut.offersTalkie, "entre deux comptes de l'équipe, le lien ne décide pas des outils")
+        XCTAssertTrue(rig.sut.offersBring)
+        XCTAssertTrue(rig.sut.offersTogether)
+    }
+
+    func test_lower_twiceBetweenTeamAccountsLinkedAtBlood_theRereadVerdictKeepsTheTools() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .blood)])
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .blood, grantedByMe: .blood, accessLevel: .blood))
+        await rig.sut.load()
+        rig.relations.lowerResult = .success(link("a", .close))
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .close, grantedByMe: .close, accessLevel: .blood))
+        _ = await rig.sut.lower()
+        rig.relations.lowerResult = .success(link("a", .friend))
+        rig.relations.linkResult = .failure(NSError(domain: "test", code: 1))
+
+        _ = await rig.sut.lower()
+
+        XCTAssertEqual(rig.sut.shownLevel, .friend)
+        XCTAssertEqual(rig.sut.toolLevel, .blood, "le verdict relu après la première baisse fait foi")
+        XCTAssertTrue(rig.sut.offersTalkie)
+    }
+
+    func test_lower_failure_restoresTheToolOffers() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        rig.relations.linkResult = .success(link("a", .close))
+        await rig.sut.load()
+        rig.relations.lowerResult = .failure(NSError(domain: "test", code: 1))
+
+        _ = await rig.sut.lower()
+
+        XCTAssertEqual(rig.sut.toolLevel, .close)
+        XCTAssertTrue(rig.sut.offersTalkie)
+        XCTAssertTrue(rig.sut.offersTogether)
     }
 
     // MARK: - Libellés impératifs, un par cercle visé (#14910, décision porteur)

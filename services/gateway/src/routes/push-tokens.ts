@@ -69,7 +69,7 @@ const unregisterDeviceTokenSchema = z.object({
  */
 export const MAX_ACTIVE_PUSH_TOKENS_PER_TYPE = 5;
 
-async function retireSurplusTokens(
+export async function retireSurplusTokens(
   fastify: FastifyInstance,
   { userId, type, keepId }: { userId: string; type: string; keepId: string }
 ): Promise<void> {
