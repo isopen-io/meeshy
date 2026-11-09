@@ -32,6 +32,7 @@ import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITI
  */
 const onboardingClientOf = (request: FastifyRequest) => ({
   ageStepAware: announcesCapability(request.headers, CLIENT_CAPABILITIES.onboardingAge),
+  profileStepAware: announcesCapability(request.headers, CLIENT_CAPABILITIES.onboardingProfile),
 });
 
 export type MeOnboardingRoutesOptions = {
