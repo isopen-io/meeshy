@@ -117,8 +117,8 @@ function preKeyDirectory(store: PeerStore, keys: StorageKeys): Pick<ExternalPeer
       const { registrationId, party: { deviceId } } = publication;
       const device = `${user}:${deviceId}`;
       const previous = parse<StoredBundle>(await store.get(keys.bundle(user, deviceId)));
-      const identityChanged = previous !== null && previous.identityKey !== publication.identityKey;
-      const stale = identityChanged
+      const freshIdentity = previous === null || previous.identityKey !== publication.identityKey;
+      const stale = freshIdentity
         ? [...(await store.keys(keys.anyOneTimeOf(device))), ...(await store.keys(keys.anyClaimOf(device)))]
         : (await store.keys(keys.anyOneTimeOf(device))).filter((key) => !key.includes(`:${device}:${registrationId}:`));
       await Promise.all(stale.map((key) => store.del(key)));

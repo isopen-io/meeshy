@@ -32,7 +32,8 @@ const sourcesUnder = (root: string): readonly string[] =>
     return /\.(ts|mts|cts|js|mjs)$/.test(name) && !/\.test\.ts$/.test(name) ? [path] : [];
   });
 
-const IMPORTS_HOMEMADE_ENGINE = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"][^'"]*dma-interoperability[^'"]*['"]/;
+const MODULE_SPECIFIER = String.raw`(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)['"\x60]`;
+const IMPORTS_HOMEMADE_ENGINE = new RegExp(`${MODULE_SPECIFIER}[^'"\x60]*dma-interoperability`);
 const REACHES_NETWORK = [
   /\bhttps?:\/\//i,
   /\bwss?:\/\//i,
@@ -41,8 +42,8 @@ const REACHES_NETWORK = [
   /\bfbcdn\b/i,
   /\bmeta\.com\b/i,
   /\bwa\.me\b/i,
-  /(?:from\s+|require\s*\(\s*)['"](?:node:)?(?:http|https|http2|net|tls|dgram|dns)['"]/,
-  /(?:from\s+|require\s*\(\s*)['"](?:axios|undici|node-fetch|got|ws|socket\.io-client)['"]/,
+  new RegExp(`${MODULE_SPECIFIER}(?:node:)?(?:http|https|http2|net|tls|dgram|dns|child_process)['"\x60]`),
+  new RegExp(`${MODULE_SPECIFIER}(?:axios|undici|node-fetch|got|ws|socket\\.io-client)['"\x60]`),
   /\bfetch\s*\(/,
 ];
 
@@ -59,10 +60,14 @@ describe('chantier DMA — le moteur maison n’est importé par aucun module de
     );
   });
 
-  it('le motif attrape les trois formes d’import', () => {
+  it('le motif attrape toutes les formes d’import, y compris l’import pour effet et le chemin entre accents graves', () => {
     expect(IMPORTS_HOMEMADE_ENGINE.test("import { X3DH } from '../dma-interoperability/signal-protocol/X3DH';")).toBe(true);
     expect(IMPORTS_HOMEMADE_ENGINE.test("const engine = await import('./dma-interoperability');")).toBe(true);
     expect(IMPORTS_HOMEMADE_ENGINE.test("require('../../dma-interoperability/index')")).toBe(true);
+    expect(IMPORTS_HOMEMADE_ENGINE.test("import '../dma-interoperability/bootstrap';")).toBe(true);
+    expect(IMPORTS_HOMEMADE_ENGINE.test("export * from '../dma-interoperability';")).toBe(true);
+    expect(IMPORTS_HOMEMADE_ENGINE.test('const engine = await import(`./dma-interoperability/${name}`);')).toBe(true);
+    expect(IMPORTS_HOMEMADE_ENGINE.test("const engine = require(`../dma-interoperability`);")).toBe(true);
     expect(IMPORTS_HOMEMADE_ENGINE.test("import { createFakeWhatsAppPeer } from './fake-whatsapp-peer';")).toBe(false);
   });
 
@@ -85,6 +90,12 @@ describe('chantier DMA — le pair externe n’appelle aucun hôte', () => {
     expect(caught("import https from 'node:https';")).toBe(true);
     expect(caught("import axios from 'axios';")).toBe(true);
     expect(caught('await fetch(url);')).toBe(true);
+    expect(caught("const https = await import('node:https');")).toBe(true);
+    expect(caught("const { request } = await import('undici');")).toBe(true);
+    expect(caught("import 'node:net';")).toBe(true);
+    expect(caught("const { execFile } = require('child_process');")).toBe(true);
+    expect(caught("import { spawn } from 'node:child_process';")).toBe(true);
+    expect(caught("const http = require(`node:http`);")).toBe(true);
     expect(caught("import { createHash } from 'crypto';")).toBe(false);
   });
 
