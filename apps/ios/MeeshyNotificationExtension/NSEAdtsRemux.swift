@@ -3,7 +3,7 @@ import Foundation
 
 /// La voix d'un talkie arrive en trames AAC ADTS brutes (`audio/aac`), qu'une pièce jointe de notification ne sait pas
 /// porter : elle est REMISE en conteneur `.m4a`, sans réencodage, avant d'être attachée.
-nonisolated enum NSEAdtsRemux {
+enum NSEAdtsRemux {
     static let remuxedMimeType = "audio/mp4"
 
     static func needsRemux(mimeType: String) -> Bool {
