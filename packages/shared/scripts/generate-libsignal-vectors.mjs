@@ -13,11 +13,12 @@
  * `__tests__/ci/libsignal-version-alignment.test.ts` exige qu'il porte la même
  * version que les quatre déclarations du dépôt.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import * as signal from '@signalapp/libsignal-client';
+import { overwriteRefusal } from './libsignal-vectors-overwrite.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = join(HERE, '..', 'fixtures', 'libsignal', 'cross-platform.vectors.json');
@@ -25,6 +26,17 @@ const VERSION = JSON.parse(
   readFileSync(createRequire(import.meta.url).resolve('@signalapp/libsignal-client/package.json'), 'utf8'),
 ).version;
 const TIMESTAMP = 1_790_000_000_000;
+
+const existingVersion = existsSync(OUTPUT) ? JSON.parse(readFileSync(OUTPUT, 'utf8')).libsignal : undefined;
+const refusal = overwriteRefusal({
+  existingVersion,
+  version: VERSION,
+  legacyExists: existingVersion !== undefined && existsSync(join(dirname(OUTPUT), 'legacy', `${existingVersion}.vectors.json`)),
+});
+if (refusal !== undefined) {
+  process.stderr.write(`${refusal}\n`);
+  process.exit(1);
+}
 
 const b64 = (bytes) => Buffer.from(bytes).toString('base64');
 const utf8 = (text) => new TextEncoder().encode(text);
