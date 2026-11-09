@@ -382,6 +382,28 @@ describe('les réglages', () => {
     expect(w.settings.rows.find((r) => r.ownerId === MOI && r.otherId === SANG)?.proximityRadiusMeters).toBe(5000);
   });
 
+  it('un fantôme ou un rayon ne se règle que pour quelqu\'un à qui la position du Sang peut s\'ouvrir : ni inconnu, ni compte inexistant, ni Proche', async () => {
+    const w = bloodWorldAvecConsentements();
+    const inexistant = '6400000000000000000000ee';
+
+    const refus = await Promise.all([inexistant, PROCHE, BLOQUE].map((userId) => updateBloodLocationSettings(w.deps, MOI, { userId, ghost: true, proximityRadiusMeters: 300 })));
+
+    expect(refus).toEqual([{ ok: false }, { ok: false }, { ok: false }]);
+    expect(w.settings.rows.filter((r) => r.ownerId === MOI && [inexistant, PROCHE, BLOQUE].includes(String(r.otherId)))).toEqual([]);
+    await expect(updateBloodLocationSettings(w.deps, MOI, { userId: SANG, ghost: true })).resolves.toEqual({ ok: true });
+  });
+
+  it('entre deux comptes de l\'équipe, sans lien, le fantôme ciblé se règle', async () => {
+    const w = bloodLocationWorld({
+      links: [],
+      users: [
+        { id: MODERATEUR, birthDate: ADULT_BIRTH, role: 'MODERATOR' },
+        { id: AUTRE_MODERATEUR, birthDate: ADULT_BIRTH, role: 'ADMIN' },
+      ],
+    });
+    await expect(updateBloodLocationSettings(w.deps, MODERATEUR, { userId: AUTRE_MODERATEUR, ghost: true })).resolves.toEqual({ ok: true });
+  });
+
   it('LIENS reste le cercle de référence du monde', () => {
     expect(LIENS.some(([, , level]) => level === 'BLOOD')).toBe(true);
   });

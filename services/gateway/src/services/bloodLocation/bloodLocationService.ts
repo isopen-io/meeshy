@@ -161,6 +161,19 @@ export async function listBloodLocationConsultations(deps: BloodLocationDeps, ob
 
 const clampRadius = (meters: number): number => Math.min(BLOOD_PROXIMITY_MAX_RADIUS_METERS, Math.max(BLOOD_PROXIMITY_MIN_RADIUS_METERS, meters));
 
+/**
+ * La loi ouvrirait-elle la position du Sang entre les deux, consentement mis à part ? Un réglage
+ * pour un inconnu, un compte inexistant ou un Proche n'a pas lieu d'être : il ne crée aucune ligne.
+ */
+async function locationMayOpenWith(deps: BloodLocationDeps, ownerId: string, otherId: string): Promise<boolean> {
+  const verdicts = await Promise.all(
+    (['location.history', 'location.proximity'] as const).map((feature) =>
+      pairAccessAmong(deps.prisma, { feature, subjectId: ownerId, otherIds: [otherId], subjectIs: 'target', now: new Date(deps.now()), consentOf: () => 'granted' }),
+    ),
+  );
+  return verdicts.some((verdict) => verdict.get(otherId)?.allowed === true);
+}
+
 export async function updateBloodLocationSettings(deps: BloodLocationDeps, ownerId: string, settings: BloodLocationSettingsPayload): Promise<{ readonly ok: boolean }> {
   const at = new Date(deps.now());
   if (settings.userId === undefined) {
@@ -168,7 +181,7 @@ export async function updateBloodLocationSettings(deps: BloodLocationDeps, owner
     await deps.prisma.user.update({ where: { id: ownerId }, data: { locationGhostAt: settings.ghost ? at : null } });
     return { ok: true };
   }
-  if (settings.userId === ownerId) return { ok: false };
+  if (settings.userId === ownerId || !(await locationMayOpenWith(deps, ownerId, settings.userId))) return { ok: false };
   const data = {
     ...(settings.ghost === undefined ? {} : { ghostAt: settings.ghost ? at : null }),
     ...(settings.proximityRadiusMeters === undefined ? {} : { proximityRadiusMeters: clampRadius(settings.proximityRadiusMeters) }),
