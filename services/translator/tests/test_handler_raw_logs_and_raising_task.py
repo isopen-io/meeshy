@@ -15,6 +15,7 @@
    jamais deux fois.
 """
 import json
+import re
 import logging
 import sys
 from pathlib import Path
@@ -193,6 +194,7 @@ async def test_voice_api_error_logs_only_the_exception_type_and_prints_no_traceb
 def test_no_raw_exception_interpolation_remains_in_the_handler():
     source = Path(_module().__file__).read_text(encoding="utf-8")
     assert "{e}" not in source
+    assert not re.search(r"\{(?:e(?:![rsa])?|str\(e\)|repr\(e\))\}", source)
     assert "traceback.print_exc" not in source
 
 

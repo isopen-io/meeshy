@@ -404,7 +404,8 @@ class TranslationHandler:
         """#17174 — une requête que son traitement a fait lever avant que la
         file n'en prenne la charge : la tâche construite est signalée UNE fois,
         comme un refus de file pleine (que la passerelle traite en transitoire),
-        et toute réserve en vol est libérée pour que la relance soit réacceptée."""
+        et toute réserve en vol est libérée : la relance de la passerelle est
+        réacceptée au lieu d'être ignorée jusqu'au TTL de déduplication."""
         if claimed_task_id:
             self.release_inflight(claimed_task_id)
         if task is None:
@@ -412,7 +413,6 @@ class TranslationHandler:
         try:
             await self.publish_pool_full([task])
         except Exception as e:
-            self.release_inflight(task.task_id)
             logger.error(
                 f"❌ [TRANSLATOR] Signalement non publié pour {task.task_id}: {type(e).__name__}"
             )

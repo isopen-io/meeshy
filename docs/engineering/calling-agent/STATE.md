@@ -729,3 +729,34 @@ socket jusqu'au client.
 1. #17173 et #17174 : petits lots sur `zmq_translation_handler.py`, à grouper. #17189 pourra les suivre.
 2. #17132 et #17133.
 3. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 19 — 2026-11-09
+
+- **Base** : `origin/dev` @ `a1914f562`. Les PR #17175 (cycle 17) et #17190 (cycle 18) y sont fusionnées.
+- **Branche** : `claude/determined-volta-ko85so`.
+- **Objectif** : #17173 et #17174 (R4), piste 1 du cycle 18. Le gestionnaire de traduction ne journalise plus d'exception brute. Une requête qui lève avant d'entrer en file est signalée, et sa réserve est libérée.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni le JSON publié) :
+  - **#17173** : sept sites de `zmq_translation_handler.py` n'écrivent plus que `type(e).__name__` (init voix ×2, JSON multipart, sauvegarde base, post, Voice API, plus le nouveau site de signalement). Le `traceback.print_exc()` du site Voice API, qui écrivait sur stderr, est retiré.
+  - **#17174 R4** : `_handle_translation_request` suit la réserve prise (`claimed_task_id`), la tâche construite et le moment où la file prend la charge (`outcome_owned`). Si une exception arrive avant ce moment, `_report_unprocessed` libère la réserve et publie **une** `translation_error` au JSON inchangé (« translation pool full », transitoire côté passerelle). Il n'y a jamais de double publication, même si le signalement lève. Le gain réel tient à la réserve libérée : la relance de la passerelle (à 30 s) est réacceptée, alors qu'avant elle était ignorée jusqu'au TTL de déduplication (≥ 75 s). La passerelle, elle, attend toujours ses 30 s.
+  - **R2** (libellé distinct pour saturation et panne) : non fait. Il est rattaché à #17189.
+- **Tests** : `tests/test_handler_raw_logs_and_raising_task.py` (17 tests) et `..._qa.py` (QA, 4 gardes : la vraie file, `CancelledError`, un re-push dédupliqué, une branche sans tâche).
+  - **Rouge sur `origin/dev`** : 14 sur 17, par exemple `exception brute journalisée : ['❌ [TRANSLATOR] Erreur traitement Voice API: SECRET-TEXT-17173 voice']` ou `assert [] == [{'type': 'tr...l full', ...}]`.
+  - **Vert** : relancé par moi, `115 passed, 1 xfailed` sur les fichiers du lot, `test_enqueue_*`, `test_shutdown_*`, `test_batch_pool_full_rejection*` et `test_translation_task_dedup*`.
+  - **Suites qui importent le handler** (QA, 21 fichiers) : 319 passés et 3 échecs sur la branche, contre 302 passés et 3 échecs sur `dev`. Les 3 échecs sont les mêmes des deux côtés : `test_20::test_audio_process_missing_fields` et deux cas de `test_audio_at_rest_and_forget`, liés à l'environnement.
+  - **Mutations QA** : 9 tuées, 2 survivantes équivalentes. La ligne morte que montrait M2 est retirée.
+  - La garde textuelle voit maintenant aussi `{e!r}`, `{str(e)}` et `{repr(e)}` (réserve R4 de la QA).
+- **Environnement** : `python -m pytest` est absent du conteneur. On utilise un venv jetable (`uv pip install --no-config --index-url https://pypi.org/simple`, parce que l'index pytorch est refusé par le proxy) et on lance avec `-p no:cacheprovider --no-cov`.
+- **QA** : favorable avec réserves. R1 (le gain annoncé au commit était surévalué) est corrigé ici et dans la docstring. R2 → #17189. R3 (ligne morte) et R4 (garde faible) sont corrigées dans ce lot. R5 : les échecs préexistants, hors périmètre.
+
+### Découvert en chemin
+
+- #17204 : `MessageLimits` n'est pas importé. Un message trop long lève `NameError` au lieu de publier `translation_skipped`.
+- #17205 : un premier frame multipart qui n'est pas de l'UTF-8 lève `UnicodeDecodeError`, et cette exception remonte. Le `{error}` de `_handle_cache_forget` reste à trancher.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : lancer `workflow_dispatch` de `ci.yml`, puis fusionner au vert.
+1. #17204 : petit, net et visible côté passerelle.
+2. #17205, puis #17189 (contrat déclaré du libellé et R2 de #17174).
+3. #17132 et #17133.
+4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
