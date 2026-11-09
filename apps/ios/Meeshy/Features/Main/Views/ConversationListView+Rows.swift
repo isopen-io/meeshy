@@ -74,8 +74,7 @@ struct ConversationRowItem: View {
     /// .autoPreviewLoadRowLimit`, computed by the caller via
     /// `ConversationListView.shouldAutoLoadPreview`). Without this, EVERY
     /// row firing `.task` on appear meant scrolling through a cold cache
-    /// issued one REST call per newly-visible conversation (audit
-    /// 2026-07-20). Rows past the limit still get their preview populated
+    /// issued one REST call per newly-visible conversation. Rows past the limit still get their preview populated
     /// on-demand via the long-press path (`onLongPress` →
     /// `loadPreviewMessages`, ConversationListView.swift).
     let enableAutoPreviewLoad: Bool
@@ -93,14 +92,14 @@ struct ConversationRowItem: View {
     ///    builder à CHAQUE body pass (mesures LazyVStack comprises) et
     ///    matérialisait un tuple géant (9 items + sous-menus) copié en pleine
     ///    récursion de layout → EXC_BAD_ACCESS `initializeWithCopy for
-    ///    Button` au LANCEMENT sur iOS 26 (crash 2026-07-11, PAC failure).
+    /// Button` au LANCEMENT sur iOS 26 (PAC failure).
     /// 2. Le paramètre générique regonflait le type de la row — la famille
     ///    de crash type-metadata que l'extraction en structs nominales avait
     ///    éliminée (voir l'en-tête du fichier). AnyView est ACCEPTABLE ici,
     ///    contrairement aux rows : un contenu de menu n'a pas d'identité
     ///    structurelle à préserver (reconstruit à l'ouverture du menu).
     /// `EmptyView` boxé sur le chemin fallback < iOS 26 (jamais rendu).
-    /// 2026-08-21 (audit fluidité H3) : une CLOSURE, plus une valeur. La
+    /// (audit fluidité H3): une CLOSURE, plus une valeur. La
     /// valeur était matérialisée par `ConversationListView.conversationRow`
     /// à CHAQUE passe de body de la LISTE (N menus complets par passe, dont
     /// les passes déclenchées par la présence ou la frappe d'autrui). La
@@ -108,7 +107,7 @@ struct ConversationRowItem: View {
     /// portillon `.equatable()` — et son type reste `AnyView` (aucun
     /// paramètre générique : les deux raisons ci-dessus tiennent toujours).
     let nativeContextMenu: () -> AnyView
-    /// MAGNIFICATION EN PLACE (2026-08-23) — les deux magasins d'élection et
+    /// MAGNIFICATION EN PLACE — les deux magasins d'élection et
     /// de scène, PAR RÉFÉRENCE, plus les données/actions dont la rangée élue a
     /// besoin. Ils ne sont jamais LUS ici : c'est `LentilleMagnifiableRow`,
     /// dans son propre fichier, qui s'y abonne (§H15 — ce body ne doit pas se
@@ -130,7 +129,7 @@ struct ConversationRowItem: View {
                 // Menu contextuel NATIF (Liquid Glass) : le système possède le
                 // long-press, la preview et l'exposition VoiceOver ; l'avatar
                 // garde son propre `.contextMenu`, donc un appui maintenu dessus
-                // n'ouvre PAS le menu de la ligne (feedback user 2026-07-08). Le
+                // n'ouvre PAS le menu de la ligne. Le
                 // tap plein-ligne laisse la priorité aux gestes de l'avatar.
                 countedRowCore
                     .contentShape(Rectangle())
@@ -164,7 +163,7 @@ struct ConversationRowItem: View {
                         nativeContextMenu()
                     } preview: {
                         // Aperçu = la carte des DERNIERS MESSAGES, drapeau Lentille
-                        // ON comme OFF (décision 2026-08-21), dessinés dans le mode
+                        // ON comme OFF, dessinés dans le mode
                         // que le fil ouvrirait (#11213). STATIQUE dans un menu
                         // natif : sans boutons (`isInteractive: false`), qui y
                         // seraient inertes. Long-press-only (portillon `.equatable()`).
@@ -340,7 +339,7 @@ struct ConversationRowItem: View {
     @ViewBuilder
     private var rowCore: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            // La rangée élue se rend elle-même MAGNIFIÉE (2026-08-23) : plus
+            // La rangée élue se rend elle-même MAGNIFIÉE: plus
             // aucune carte au-dessus d'elle, donc swipe, glisser-déposer et
             // appui long restent les siens, et elle hérite de toutes ses
             // features sans qu'aucune soit recopiée ailleurs. Le portillon
@@ -418,8 +417,7 @@ struct ConversationRowItem: View {
 
 // MARK: - Contexte de passe (résolu UNE fois par passe de body de la liste)
 
-/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (audit
-/// fluidité 2026-08-21, H4/H18) : les langues du lecteur (copie de tableau par
+/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (H4/H18): les langues du lecteur (copie de tableau par
 /// rang) et l'éligibilité à l'auto-chargement d'aperçu (`firstIndex` O(n) par
 /// rang ⇒ O(n²) par passe). `autoPreviewIds` applique la MÊME règle que
 /// `ConversationListView.shouldAutoLoadPreview` (préfixe `limit` de l'ordre
@@ -442,7 +440,7 @@ struct ConversationRowPassContext {
 /// .ringSize`). Les gestes tap/long-press de la LIGNE n'écoutent pas cette
 /// bande — l'avatar y possède ses propres gestes (tap story/profil, badge
 /// mood, menu contextuel) et un appui maintenu dessus ne doit PAS ouvrir le
-/// menu de la ligne (feedback user 2026-07-08).
+/// menu de la ligne.
 enum ConversationRowMetrics {
     static let avatarInteractionExclusionWidth: CGFloat =
         MeeshySpacing.md + AvatarContext.conversationList.ringSize
@@ -510,8 +508,7 @@ private struct RowPressBounceModifier: ViewModifier {
     /// rebondit alors visiblement (damping 0.25). Tout autre relâchement —
     /// début de swipe d'actions, départ de scroll, tap — retombe sur un
     /// retour discret quasi sans rebond (damping 0.85) : le rebond appartient
-    /// au long-press/preview, PAS au swipe des lignes (feedback user
-    /// 2026-07-03).
+    /// au long-press/preview, PAS au swipe des lignes.
     @State private var triggered = false
     @State private var frameBox = RowFrameBox()
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -570,8 +567,7 @@ private struct RowPressBounceModifier: ViewModifier {
                         // inatteignable, seul `onPressingChanged` sert (true au
                         // touch-down, false au relâchement/échec). Sa variante
                         // `perform:` composée avec le `.onTapGesture` de la
-                        // ligne ne fire qu'au RELÂCHEMENT (vérifié frame par
-                        // frame 2026-07-03) — d'où le déclencheur séparé.
+                        // ligne ne fire qu'au RELÂCHEMENT — d'où le déclencheur séparé.
                         .onLongPressGesture(
                             minimumDuration: 3600,
                             maximumDistance: 10,

@@ -166,7 +166,7 @@ extension PostDetailView {
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
     /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
     /// la fin), fichiers routés vers le staging commentaire existant
-    /// (spec 2026-07-30, lot 1).
+    /// (lot 1).
     private func handleComposerIngest(_ ingests: [ComposerIngest]) {
         if let block = CommentComposerIngestion.mergedText(from: ingests) {
             if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {

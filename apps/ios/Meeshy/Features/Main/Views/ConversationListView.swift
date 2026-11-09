@@ -29,8 +29,7 @@ struct ConversationListView: View {
     // Lock + block ARE observed: they drive the swipe-action icons (Unlock /
     // Unblock toggles built by `leadingSwipeActions` / `trailingSwipeActions`)
     // which the row's Equatable gate compares. A direct read would freeze a
-    // stale action behind the gate after a lock/unlock or block/unblock (Opus
-    // review finding 2026-06-10) — they aren't in `renderFingerprint`. Both
+    // stale action behind the gate after a lock/unlock or block/unblock — they aren't in `renderFingerprint`. Both
     // change only on explicit user action (rare), and the gate keeps unaffected
     // rows static, so observing them is free on the hot scroll path.
     private var lockManager: ConversationLockManager { ConversationLockManager.shared }
@@ -46,7 +45,7 @@ struct ConversationListView: View {
     /// décide seul si CETTE row doit se reconstruire. Avant ce signal,
     /// personne n'observait `PresenceManager` : les pastilles ne se
     /// rafraîchissaient que par coïncidence, au gré d'un autre re-render
-    /// (audit 2026-07-20, "pastilles jamais rafraîchies sur user:status").
+    /// ("pastilles jamais rafraîchies sur user:status").
     @ObservedObject private var presencePulse: PresenceRefreshSignal
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
@@ -55,7 +54,7 @@ struct ConversationListView: View {
 
     // Status
     @State private var showStatusComposer = false
-    /// Accès rapides (queue de liste / état vide, 2026-08-21) : les feuilles
+    /// Accès rapides (queue de liste / état vide): les feuilles
     /// de création EXISTANTES, réutilisées telles quelles.
     @State private var showCreateAffiliate = false
     @State private var showCreateTrackingLink = false
@@ -100,7 +99,7 @@ struct ConversationListView: View {
     // part dans ce fichier : la liste monte un hôte, c'est tout.
     @State private var focusCandidateRegistry = LentilleFocusCandidateRegistry()
     @State private var focusElection = LentilleFocusElection()
-    /// Activité de la SCÈNE (2026-08-21) : perspective et carte de focus
+    /// Activité de la SCÈNE: perspective et carte de focus
     /// pendant le défilement seulement, à plat `restDelay` après la pose.
     @State private var sceneActivity = LentilleSceneActivity()
 
@@ -197,7 +196,7 @@ struct ConversationListView: View {
     @State var renameText: String = ""
 
     // Drag & Drop : le `.onDrag` natif est RÉACTIVÉ sur le chemin iOS 26
-    // (2026-07-11) — il coexiste avec le `.contextMenu` système ; c'était le
+    // il coexiste avec le `.contextMenu` système; c'était le
     // long-press CUSTOM du fallback qu'il cassait (135af8f2), il reste donc
     // absent de la branche < iOS 26 (qui garde le morph chip de l'overlay).
     // L'id voyage dans le NSItemProvider : `draggingConversation` n'est plus
@@ -274,9 +273,9 @@ struct ConversationListView: View {
         // `conversationViewModel.conversations` (the raw, unfiltered,
         // ungrouped account-wide list) used to silently starve auto-load for
         // any filtered/sectioned view whose visible rows don't line up with
-        // the full-account top-20 by recency (fix 2026-07-21).
+        // the full-account top-20 by recency.
         let orderedConversationIds = conversationViewModel.groupedConversations.flatMap { $0.conversations.map(\.id) }
-        // Contexte de PASSE (audit fluidité 2026-08-21, H4/H18) : les langues du
+        // Contexte de PASSE (H4/H18): les langues du
         // lecteur (une copie de tableau par rang auparavant) et l'ensemble des
         // ids éligibles à l'auto-chargement (un `firstIndex` O(n) par rang ⇒
         // O(n²) par passe auparavant) sont résolus UNE fois ici.
@@ -563,11 +562,11 @@ struct ConversationListView: View {
             )).background { DeviceTranslationEngineHost(engine: conversationViewModel.endToEndTexts.translations.engine) }
     }
 
-    /// `AnyView` à la DÉCLARATION (2026-08-19). Chaîne `body → mainContent →
+    /// `AnyView` à la DÉCLARATION. Chaîne `body → mainContent →
     /// mainContentZStack` : 56 niveaux d'imbrication de type concret, résolus
     /// en UNE fois par le décodeur de métadonnées RÉCURSIF du runtime Swift au
-    /// 1er rendu — ~17 Ko de pile par niveau. Un `.ips` device du 2026-08-17
-    /// (`Meeshy-2026-08-17-161136`) meurt dans cette chaîne. Éraser CHAQUE
+    /// 1er rendu — ~17 Ko de pile par niveau. Un `.ips` device
+    /// meurt dans cette chaîne. Éraser CHAQUE
     /// maillon borne chaque matérialisation à sa propre couche.
     /// Voir `ConversationViewBodyTypeDepthTests`.
     private var mainContent: AnyView {
@@ -743,7 +742,7 @@ struct ConversationListView: View {
                         ConversationPaginationFooter()
                     }
 
-                    // Queue de liste (2026-08-21) : les accès rapides, hauts
+                    // Queue de liste: les accès rapides, hauts
                     // d'une DEMI-région visible — de quoi amener la dernière
                     // conversation jusqu'à la bande de focus au centre de
                     // l'écran (sans cette queue, la magnificence ne touchait
@@ -794,7 +793,7 @@ struct ConversationListView: View {
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area.
         // La trail compacte prend la PLACE DU TITRE dans la barre et se révèle à
         // mesure que la grande trail passe sous le header : une fois scrollé, on
-        // ne lit plus « Meeshy Chats » mais la trail (directive user 2026-08-13).
+        // ne lit plus « Meeshy Chats » mais la trail.
         .overlay(alignment: .top) {
             ConversationListHeaderOverlay(
                 scrollRelay: scrollOffsetRelay,

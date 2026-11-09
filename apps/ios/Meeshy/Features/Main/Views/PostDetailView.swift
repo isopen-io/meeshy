@@ -52,7 +52,7 @@ struct PostDetailView: View {
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
     /// La scène par laquelle on ENTRE en plein écran depuis la mosaïque du
-    /// détail (directive porteur 2026-09-06).
+    /// détail.
     @State var detailSceneIndex: Int = 0
     @State var audioFullscreen: AudioFullscreenSource?
     /// Lieu du post ouvert plein écran (sticker / carte de la page Detail).
@@ -255,7 +255,7 @@ struct PostDetailView: View {
         // ET garantit que la porte et le rendu voient EXACTEMENT le même item.
         let renderedItem = StoryItem(feedPost: post)
         // **La scène se rend parce que le post en PORTE une, pas parce qu'il
-        // est une story** (constat porteur 2026-09-06). `post.isStory` était
+        // est une story**. `post.isStory` était
         // ici une question de TYPE là où le fil pose, lui, une question de
         // CONTENU (`post.storyEffects?.canvasV3`) — d'où un POST à scène
         // peint dans le fil et ABSENT du détail. Le prédicat est partagé avec
@@ -268,7 +268,7 @@ struct PostDetailView: View {
                 .padding(.top, MeeshySpacing.sm)
         }
 
-        // Lieu attaché au post (constat user 2026-07-30) : même paire de
+        // Lieu attaché au post: même paire de
         // rendus que la card du feed — carte pleine largeur + texte overlay
         // quand la position est le seul visuel, sinon sticker compact.
         if let place = post.location {
@@ -296,8 +296,7 @@ struct PostDetailView: View {
         // STORY qui reposte une STORY : le canvas principal ci-dessus rend
         // DÉJÀ la republication complète (effects/médias/audio retombent sur
         // la source via `StoryItem(feedPost:)`). Rendre en plus l'embed de
-        // l'original doublait le contenu à l'écran (bug 2026-07-13,
-        // IMG_1161) — on le remplace par une ligne d'attribution « via
+        // l'original doublait le contenu à l'écran (IMG_1161) — on le remplace par une ligne d'attribution « via
         // @auteur » qui ouvre l'original.
         if let repost = post.repost {
             if post.isStory && isSharedStory {

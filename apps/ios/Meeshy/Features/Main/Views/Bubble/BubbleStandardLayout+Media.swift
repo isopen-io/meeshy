@@ -43,10 +43,10 @@ extension BubbleStandardLayout {
         onMediaTap(media)
     }
 
-    /// `AnyView` à la DÉCLARATION (2026-08-19). Le `switch items.count` à 4
+    /// `AnyView` à la DÉCLARATION. Le `switch items.count` à 4
     /// branches × `makeGridCell` produit un `_ConditionalContent` profond qui
     /// entrait dans le type de `BubbleStandardLayout.body` (47 niveaux). Trois
-    /// `.ips` device du 2026-08-10 meurent ICI, sur
+    /// `.ips` device meurent ICI, sur
     /// `com.apple.uikit.datasource.diffing` — pile de 512 Ko, pas 1 Mo.
     /// L'extraction de `BubbleGridCell` (voir `makeGridCell`) avait borné les
     /// CELLULES ; il restait à borner la GRILLE elle-même.
@@ -133,11 +133,11 @@ extension BubbleStandardLayout {
     /// site is not. This also lets SwiftUI cache the cell's structural
     /// identity across body re-evaluations.
     ///
-    /// **Nécessaire mais PAS suffisant (constat du 2026-08-19).** Cette
+    /// **Nécessaire mais PAS suffisant.** Cette
     /// extraction a borné les CELLULES ; la GRILLE, elle, restait un
     /// `@ViewBuilder` dont le `switch items.count` à 4 branches entrait en
     /// entier dans le type de `BubbleStandardLayout.body`. Trois `.ips` device
-    /// du 2026-08-10 sont morts ICI malgré ce correctif, sur
+    /// sont morts ICI malgré ce correctif, sur
     /// `com.apple.uikit.datasource.diffing` — un thread à 512 Ko, la moitié du
     /// main thread. C'est l'érasure de `visualMediaGrid` à sa DÉCLARATION qui a
     /// fermé la classe (voir sa doc).
@@ -419,7 +419,7 @@ fileprivate struct BubbleGridCell: View {
     }
 
     /// **Lecture inline à trois contrôles : son, lecture/pause, plein écran**
-    /// (#8231, porteur 2026-09-27). Le bouton lecture joue DANS la bulle ;
+    /// (#8231). Le bouton lecture joue DANS la bulle;
     /// toucher la vidéo ailleurs — le poster avant, la surface pendant — ouvre
     /// le plein écran, où la galerie reprend le moteur partagé à la même
     /// position. Les gestes vivent tous DANS le lecteur : un tap simultané

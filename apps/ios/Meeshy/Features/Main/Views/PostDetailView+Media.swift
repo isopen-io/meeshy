@@ -6,7 +6,7 @@ import MeeshyUI
 /// (#6696).
 ///
 /// Extrait de `PostDetailView.swift` (2 164 lignes, au-delà du plafond dur de
-/// 1 200) avant de corriger la scène du détail : la directive 2026-08-28
+/// 1 200) avant de corriger la scène du détail: la
 /// interdit d'ajouter à un fichier hors budget, on extrait d'abord. La section
 /// est une responsabilité entière — ce qu'on rend pour chaque type de média, qui
 /// en est l'auteur, et le geste qui ouvre le plein écran partagé.

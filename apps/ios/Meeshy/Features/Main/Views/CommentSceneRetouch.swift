@@ -4,7 +4,7 @@ import MeeshySDK
 import MeeshyUI
 
 // **Les commentaires retouchent leurs médias dans LA retouche de la caméra**
-// (#11133, décision porteur 2026-10-20 : « un seul éditeur ») — la même porte
+// (#11133) — la même porte
 // que la conversation : « Éditer » sur une pièce ouvre `ConversationPieceRetouch`,
 // « Terminé » la remplace À SA PLACE, « Abandonner » la retire. Un son n'a pas
 // de retouche.

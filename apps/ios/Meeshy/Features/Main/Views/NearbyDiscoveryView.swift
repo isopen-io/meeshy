@@ -24,8 +24,7 @@ nonisolated enum NearbyDistanceLabel {
 
 // MARK: - « Voir près d'ici »
 
-/// Action contextuelle sur un badge de position DÉJÀ affiché (spec du
-/// 2026-08-02 §4 — points d'entrée).
+/// Action contextuelle sur un badge de position DÉJÀ affiché.
 ///
 /// Elle est INDÉPENDANTE de l'opt-in de découvrabilité : le lieu est déjà
 /// public sur la publication, ouvrir la carte autour de lui n'expose rien de
@@ -62,7 +61,7 @@ struct SeeNearbyContextMenu: ViewModifier {
 
 // MARK: - Écran
 
-/// **Découverte de publications par proximité** (spec du 2026-08-02 §4).
+/// **Découverte de publications par proximité**.
 ///
 /// Trois lectures d'un même rayon — densité, pins, liste — et surtout : un
 /// écran vide qui DIT pourquoi il est vide.
@@ -154,7 +153,7 @@ struct NearbyDiscoveryView: View {
 
     @ViewBuilder
     private var surface: some View {
-        // La SECTION décide d'abord (directive 2026-08-27). Discover montre la
+        // La SECTION décide d'abord. Discover montre la
         // plateforme (posts du fil sur la carte) ; son sous-mode Populaire
         // chauffe les points par la popularité (vues + impressions).
         if viewModel.section == .discover {
@@ -278,7 +277,7 @@ struct NearbyDiscoveryView: View {
         .padding(.horizontal, MeeshySpacing.lg)
     }
 
-    /// **Le switch de SECTION (directive 2026-08-27)** — Nearby ⟷ Discover, en
+    /// **Le switch de SECTION** — Nearby ⟷ Discover, en
     /// haut. Discover n'existe que pour le staff (`availableSections`) ; sans
     /// lui, la place tient le titre « À proximité » comme avant.
     @ViewBuilder

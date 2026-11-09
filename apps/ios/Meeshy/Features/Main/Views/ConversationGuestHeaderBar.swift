@@ -7,7 +7,7 @@ import MeeshyUI
 /// L'adresse que « Partager » transmet : `<origine web>/chat/<lien>`, la page
 /// de jonction que le web sert à tout le monde, compte ou pas.
 ///
-/// Directive porteur du 2026-10-11 : « mettre à côté de l'avatar le lien pour
+/// « mettre à côté de l'avatar le lien pour
 /// partager la conversation (/chat/mshy_world), permettant à chacun de
 /// transmettre la conversation ». Le lien existe dans deux cas :
 /// - l'invité est ENTRÉ par un lien — c'est celui-là qu'il transmet ;
@@ -121,7 +121,7 @@ struct ConversationShareLinkButton: View {
 
 /// Ce qu'un visiteur sans compte voit au-dessus du fil : le titre, l'avatar
 /// de la conversation — qui n'ouvre rien —, le lien à transmettre et la
-/// fermeture. Directive porteur du 2026-10-11 : ni nombre de participants, ni
+/// fermeture.: ni nombre de participants, ni
 /// détail de la conversation, ni fiche de profil pour qui n'est pas membre de
 /// Meeshy. Sorti de `ConversationView` (hors budget) pour y poser le partage.
 /// Le titre prend la couleur du thème et la bande le verre de l'en-tête d'un

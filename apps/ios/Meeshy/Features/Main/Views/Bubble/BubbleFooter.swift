@@ -113,7 +113,7 @@ struct BubbleFooter: View, Equatable {
                 .modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
-                        // Nom borné à 16 caractères (directive user 2026-07-30) :
+                        // Nom borné à 16 caractères:
                         // au-delà, le pseudo mangeait la rangée et repoussait
                         // l'heure + l'accusé de lecture contre le bord. Le
                         // `lineLimit(1)` reste comme filet pour les très grandes

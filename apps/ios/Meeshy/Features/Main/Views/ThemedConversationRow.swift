@@ -190,7 +190,7 @@ struct ThemedConversationRow: View {
                     // derrière `.equatable()` (aucune composante temporelle dans
                     // sa comparaison), donc sans ce wrapper l'horodatage relatif
                     // ne se rafraîchissait plus jamais après le montage initial
-                    // (audit 2026-07-20, "Horodatages relatifs figés").
+                    // ("Horodatages relatifs figés").
                     LiveRelativeTimestamp(date: conversation.lastMessageAt)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))

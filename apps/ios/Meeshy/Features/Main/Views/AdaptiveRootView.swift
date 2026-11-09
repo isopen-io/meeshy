@@ -140,7 +140,7 @@ struct AdaptiveRootView: View {
     }
 }
 
-// MARK: - Fenêtres de Meeshy sur iPad (2026-10-14)
+// MARK: - Fenêtres de Meeshy sur iPad
 //
 // UNE fenêtre principale, et des fenêtres DÉTACHÉES à côté : une conversation donnée — on écrit à la personne ou
 // au groupe pendant qu'une autre conversation est ouverte dans la fenêtre principale —, ou le fil de réels pendant
@@ -149,7 +149,7 @@ struct AdaptiveRootView: View {
 // La fenêtre principale est UNIQUE : chaque copie montait sa propre racine, son routeur et sa tâche de démarrage,
 // mais confiait ses fermetures et ses intentions à des singletons partagés — l'exécuteur des stories mourait avec
 // la fenêtre fermée, l'écran d'appel restait attaché à une scène disparue, une même intention s'exécutait deux
-// fois (audit multi-fenêtre du 2026-10-14). Une seconde copie ouverte par le système montre donc
+// fois. Une seconde copie ouverte par le système montre donc
 // `SecondaryMainWindowView` et renvoie vers la première. Une fenêtre détachée, elle, ne monte AUCUNE racine : un
 // routeur et des modèles à elle, sans tâche de démarrage, sans récepteur d'intention.
 
@@ -637,7 +637,7 @@ struct DetachedWindowView: View {
     private func closeWindow() {
         guard let session = scene?.session else { return }
         // La fenêtre principale revient d'abord : hors Stage Manager elle était passée en arrière-plan, et
-        // fermer seule la fenêtre détachée renvoyait à l'écran d'accueil (recette iPad du 2026-10-14).
+        // fermer seule la fenêtre détachée renvoyait à l'écran d'accueil.
         if let primary = MainWindowRegistry.shared.primarySession {
             UIApplication.shared.requestSceneSessionActivation(primary, userActivity: nil, options: nil)
         }

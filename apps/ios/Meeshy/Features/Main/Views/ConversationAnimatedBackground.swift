@@ -109,7 +109,7 @@ struct ConversationBackgroundConfig {
     /// animations PLUS each decorative sub-component's own pulse/orbit
     /// re-evaluated SwiftUI bodies at up to 120 Hz (ProMotion) the entire time a
     /// conversation was open — pegging the main thread and heating the device
-    /// (device trace 2026-06-10, `ConversationAnimatedBackground.body` was the
+    /// (`ConversationAnimatedBackground.body` was the
     /// hottest app symbol). When `false`, every animation kickoff early-returns
     /// and the background renders its STATIC resting composition (gradient +
     /// overlays at phase 0). Flip to `true` — or drive it from a scroll/typing

@@ -9,7 +9,7 @@ import MeeshyUI
 // tenue en `@State` : liée, jamais copiée) et leur remet ce qui se compose chez
 // lui.
 
-/// Popup consentement vocal (2026-07-08) : envoi d'un audio sans consentement
+/// Popup consentement vocal: envoi d'un audio sans consentement
 /// validé → proposer la traduction automatique. La validation accorde le
 /// consentement de définition du profil vocal ET la traduction utilisant ce
 /// profil, puis relance l'envoi ; « Plus tard » envoie tel quel (le composer

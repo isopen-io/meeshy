@@ -411,7 +411,7 @@ struct CallSummaryDetailSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .task(id: summary.callId) {
-            // Replay serveur (décision produit 2026-08-13) : cache local
+            // Replay serveur: cache local
             // chiffré d'abord, distant en fallback — `CallTranscriptLoader`.
             transcript = await CallTranscriptLoader.load(callId: summary.callId)
             networkJournal = await CallNetworkJournalStore.shared.journal(for: summary.callId)

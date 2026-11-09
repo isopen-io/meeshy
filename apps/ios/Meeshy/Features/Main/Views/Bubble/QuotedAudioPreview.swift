@@ -12,7 +12,7 @@ import MeeshyUI
 /// dans les deux peaux ; le geste est posé par la peau qui l'héberge (une zone
 /// = un site, loi des zones), jamais ici.
 ///
-/// **Elle JOUE sur place depuis #8320** (directive porteur du 2026-09-27) : le
+/// **Elle JOUE sur place depuis #8320**: le
 /// geste de la peau lance l'audio cité par le lecteur PARTAGÉ
 /// (`ConversationAudioCoordinator`), et la capsule en montre l'état — le
 /// glyphe passe à la pause pendant la lecture, et l'onde se remplit à mesure

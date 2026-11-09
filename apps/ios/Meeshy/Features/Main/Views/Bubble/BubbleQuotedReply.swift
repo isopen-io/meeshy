@@ -396,7 +396,7 @@ struct BubbleQuotedReply: View, Equatable {
     }
 
     /// Meme regle pour l'indice. La cle est celle que la rangee plate a
-    /// DEPLACEE du nom vers l'avatar le 2026-08-24 : elle vit desormais aux
+    /// DEPLACEE du nom vers l'avatar: elle vit desormais aux
     /// deux endroits ou la ZONE 1 existe, et n'est donc morte nulle part.
     private var authorGateHint: String {
         guard authorGateTap != nil else { return "" }
@@ -594,8 +594,7 @@ struct BubbleQuotedReply: View, Equatable {
 
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    // **Le texte part du deux-points de l'auteur** (#5103,
-                    // directive porteur du 2026-09-04). Le nom occupait sa
+                    // **Le texte part du deux-points de l'auteur** (#5103). Le nom occupait sa
                     // propre rangée et le texte commençait à la suivante :
                     // une citation de trois mots coûtait deux lignes, dont
                     // une ne portait qu'un nom.

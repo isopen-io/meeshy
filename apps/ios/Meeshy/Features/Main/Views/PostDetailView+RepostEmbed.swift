@@ -29,9 +29,9 @@ extension PostDetailView {
 
     /// Attribution compacte d'une STORY republiée en story : icône repost +
     /// « @auteur » (SANS « via » — l'icône dit déjà la republication, même
-    /// règle que le header du viewer, directive user 2026-07-13) tappable
+    /// règle que le header du viewer) tappable
     /// vers l'original. Remplace l'embed canvas complet (qui doublait le
-    /// contenu sous le canvas principal — IMG_1161, 2026-07-13).
+    /// contenu sous le canvas principal — IMG_1161).
     func storyRepostAttributionRow(_ repost: RepostContent) -> some View {
         Button {
             HapticFeedback.light()

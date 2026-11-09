@@ -40,7 +40,7 @@ struct ConversationOverlayState {
     var isSelectionModeActive = false
     var selectedMessageIds: Set<String> = []
     /// Maximum de messages ET pièces jointes sélectionnables au total
-    /// (retour porteur 2026-08-27, #4005).
+    /// (#4005).
     static let selectionCap = 100
     @Indirect var detailSheetMessage: Message? = nil
     /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)

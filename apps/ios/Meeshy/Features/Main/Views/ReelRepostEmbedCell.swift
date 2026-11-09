@@ -180,7 +180,7 @@ struct ReelRepostEmbedCell: View {
                 // `validUsernames` vaut `nil` PAR DÉFAUT dans le renderer, et
                 // `nil` veut dire « linkifier tout » : sans les références du
                 // post source, chaque `@handle` du texte cité devenait un lien
-                // mort. Le gateway les sert depuis le 2026-08-19, le SDK les
+                // mort. Le gateway les sert, le SDK les
                 // décode ; il ne restait qu'à les passer ici.
                 MessageTextRenderer.render(repost.displayContent, fontSize: 13, color: theme.textSecondary,
                                            validUsernames: repost.validMentionUsernames)

@@ -12,7 +12,6 @@ import MeeshyUI
 /// `usesPerspective` est parti avec le pass — `usesFlatRow` reste (Script).
 extension ConversationReadingMode {
     /// `.script` et `.focal` rendent la MÊME rangée plate uniforme ; Focal y
-    /// ajoute la perspective minimale au défilement (`FocalScrollPerspective`,
-    /// 2026-08-21 — transform + opacity CALayer, zéro relayout).
+    /// ajoute la perspective minimale au défilement (`FocalScrollPerspective`, zéro relayout).
     var usesFlatRow: Bool { self == .focal || self == .script }
 }

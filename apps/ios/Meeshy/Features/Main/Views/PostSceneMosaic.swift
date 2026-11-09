@@ -113,8 +113,7 @@ struct PostSceneMosaic: View {
     /// tient déjà pour les médias.
     @State private var page = 0
 
-    /// **Chaque scène porte SA légende — là où la place le permet** (directive
-    /// porteur 2026-09-06, en deux temps).
+    /// **Chaque scène porte SA légende — là où la place le permet** (en deux temps).
     ///
     /// > « La légende doit s'afficher par-dessus la scène PRÉCISE et non
     /// > par-dessus le poste entier ! Chaque scène a sa légende d'image ! »
@@ -527,8 +526,7 @@ struct PostSceneMosaic: View {
 
     /// **Le son est COUPÉ, et voici pourquoi vous n'entendez rien.**
     ///
-    /// > « Les scènes cinématiques jouent avec signe audio barré » (constat
-    /// > porteur 2026-09-06).
+    /// > « Les scènes cinématiques jouent avec signe audio barré ».
     ///
     /// Un INDICATEUR, pas un contrôle — et la distinction est une décision, pas
     /// une facilité. `ScenePlayerConfig.locksMute` fige le muet du mode `.card`

@@ -439,7 +439,7 @@ struct ReelFeedCard: View, Equatable {
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
-            // Indicateur de position type sticker (constat user 2026-07-30) —
+            // Indicateur de position type sticker —
             // cliquable, il gagne sur le tap-média de la carte (Button >
             // onTapGesture). Même pill que story/feed/player.
             if let place = post.location {

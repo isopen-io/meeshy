@@ -155,7 +155,7 @@ struct BubbleJoinNoticeView: View, Equatable {
     /// Ce n'est pas non plus l'appui long, qui l'a porté un temps : ce geste-là
     /// ouvre, PARTOUT ailleurs dans le fil, les options d'un message. Une
     /// pastille système qui se l'approprie ne gagne pas un geste, elle en VOLE
-    /// un — et l'avis d'arrivée reste un message du fil (directive 2026-08-24).
+    /// un — et l'avis d'arrivée reste un message du fil.
     ///
     /// `==` est écrit à la main : une closure n'est pas `Equatable`, et la
     /// synthèse automatique refuserait de compiler. Elle est exclue de la

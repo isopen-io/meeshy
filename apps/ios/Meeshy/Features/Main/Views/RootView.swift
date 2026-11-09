@@ -239,7 +239,7 @@ struct RootView: View {
             // 7. Offline state — surfaced as a discreet inline chip inside
             // `ConnectionBanner` (the safe-area inset at the top of every
             // NavigationStack content view). The legacy full-width red
-            // `OfflineBanner` was retired 2026-05-27 — the offline state
+            // `OfflineBanner` was retired — the offline state
             // is just one of {.syncing, .offline, .disconnected} that the
             // small ConnectionBanner pill rotates through.
             pendingSettingsBannerOverlay

@@ -312,8 +312,8 @@ struct ThemedFeedOverlay: View {
     /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
     /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
     /// vont ensemble ; le chemin iPad (`FeedView.feedHeaderActions`) porte la
-    /// même paire. La carte des posts du feed (bouton `map`, 2026-08-13) a
-    /// fusionné dans « À proximité » le 2026-08-26 — mode Discover, réservé au
+    /// même paire. La carte des posts du feed (bouton `map`) a
+    /// fusionné dans « À proximité » — mode Discover, réservé au
     /// staff de la plateforme.
     private var feedHeaderActions: some View {
         HStack(spacing: MeeshySpacing.sm) {
@@ -517,7 +517,7 @@ struct ThemedFeedOverlay: View {
             },
             // Ce fil AGRÈGE déjà les frames et élit une surface (`onPreferenceChange`
             // plus bas) — il ne le REMETTAIT à aucune carte standard. Un repost de
-            // réel y restait donc sur son poster figé, et depuis le 2026-09-05 une
+            // réel y restait donc sur son poster figé, et une
             // scène y resterait en pause, pendant que le fil voisin (`FeedView`) les
             // joue. Une élection tenue mais jamais servie ne se voit nulle part.
             reelAutoplay: reelAutoplay
@@ -647,7 +647,7 @@ struct ThemedFeedOverlay: View {
         }
         .tracksOutboundLinks(surface: SocialSurface(.feed))
         // Drapeau `Router.pendingOpenFeedComposer` (accès rapide « Publier un
-        // post », 2026-08-21) : consommé à l'apparition ET quand il se lève
+        // post »): consommé à l'apparition ET quand il se lève
         // pendant que le flux est déjà là.
         .adaptiveOnChange(of: router.pendingOpenFeedComposer, initial: true) { _, _ in
             consumePendingComposerRequest()

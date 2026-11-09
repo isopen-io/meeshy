@@ -13,7 +13,7 @@ import MeeshyUI
 /// Struct NOMINALE : le type structurel du glyphe (opaques `adaptiveGlass` +
 /// `meeshyTapTarget`) reste scopé à ce body au lieu de gonfler le mangled name
 /// du bouton hôte — dont le décodage récursif a déjà débordé la pile du main
-/// thread au premier rendu sur appareil (.ips 2026-07-30).
+/// thread au premier rendu sur appareil.
 ///
 /// Les capsules de l'en-tête (retour, puce de mode) reprennent la même teinte
 /// et la même interactivité par `glassTintOpacity` et `isGlassInteractive`.

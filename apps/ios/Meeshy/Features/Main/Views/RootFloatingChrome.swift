@@ -210,7 +210,7 @@ struct RootFloatingChrome: View {
                     // menu fermé) pour que le ressort d'ouverture parte d'un
                     // état existant : le glow/pulse ne doit vivre que menu
                     // OUVERT — six ombres re-rasterisées par frame en continu
-                    // derrière la liste, sinon (audit chauffe 2026-08-26).
+                    // derrière la liste, sinon.
                     isGlowEnabled: showMenu,
                     action: { openMenuEntry(entry) }
                 )

@@ -15,7 +15,7 @@ struct ThemedActionButton: View {
     /// ressort d'ouverture anime depuis un état existant — mais un `onAppear`
     /// inconditionnel y démarrait le glow `repeatForever` (ombre re-rasterisée
     /// à CHAQUE frame) sur six boutons INVISIBLES, en permanence, derrière la
-    /// liste de conversations (audit chauffe 2026-08-26). Le décor ne respire
+    /// liste de conversations. Le décor ne respire
     /// que quand il est visible.
     var isGlowEnabled: Bool = true
     let action: () -> Void

@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - CE QU'UNE PIÈCE MONTRE DE SES RÉACTIONS — une écriture, deux surfaces
 //
-// **Directive porteur 2026-09-16** (#6789) : « lorsqu'on choisi la réaction, ce
+// **** (#6789): « lorsqu'on choisi la réaction, ce
 // doit s'afficher sur l'attachement en plein ecran et dans la conversation ».
 //
 // La conversation l'affichait déjà (`reactionsBadge`, posée sur la tuile de la

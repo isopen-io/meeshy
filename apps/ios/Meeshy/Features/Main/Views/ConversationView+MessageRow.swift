@@ -386,7 +386,7 @@ extension ConversationView {
     /// message hugs the composer — see `QuickReactionBarPlacement`. The
     /// full-screen `Color.clear` backdrop dismisses the bar on tap and also
     /// blocks the list from scrolling, so the captured anchor never drifts.
-    /// `AnyView` à la DÉCLARATION (2026-08-19) : c'était le chemin le PLUS
+    /// `AnyView` à la DÉCLARATION: c'était le chemin le PLUS
     /// PROFOND du type concret de `bodyContent` (GeometryReader → ZStack →
     /// VStack → EmojiReactionPicker + HStack de `Button<VStack<Image,Text>>`,
     /// ~30 niveaux). Ce type entrait dans le mangled name de `bodyContent`

@@ -33,7 +33,7 @@ extension FeedPostCard {
             // écrasait ce calcul et letterboxait les clips verticaux.
             // L'audio et les documents restent compacts et s'auto-dimensionnent.
             //
-            // **La légende s'affiche ICI AUSSI depuis le 2026-09-05.** Elle ne
+            // **La légende s'affiche ICI AUSSI.** Elle ne
             // s'affichait que sur le carrousel (≥ 2 médias) et en plein écran ;
             // un média SEUL n'en montrait aucune — et c'est le cas d'un post à
             // canvas, qui n'en a qu'un. L'auteur composait sa légende, la
@@ -131,7 +131,7 @@ extension FeedPostCard {
     }
 
     // `mediaIsCompact` vivait ici pour décider si `mediaPreview` devait imposer
-    // une hauteur de 220 pt. Ce cadre a disparu le 2026-08-10 — il écrasait le
+    // une hauteur de 220 pt. Ce cadre a disparu — il écrasait le
     // calcul de ratio des cellules image/vidéo et letterboxait les clips
     // verticaux. L'audio et les documents s'auto-dimensionnent, le prédicat
     // n'avait donc plus d'appelant.

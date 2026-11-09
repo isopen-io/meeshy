@@ -15,7 +15,7 @@ struct CommentAttachmentsTray: View {
     let onRemove: (String) -> Void
     /// Lieu partagé en attente d'envoi. Pas un `ComposerAttachment` :
     /// `SharedPlace` porte le nom et l'adresse, l'attachement ne les portait
-    /// pas et n'est plus le véhicule (Task 11/12, 2026-07-29). `nil` par
+    /// pas et n'est plus le véhicule (Task 11/12). `nil` par
     /// défaut pour les hôtes qui ne câblent pas encore le partage de position.
     var place: SharedPlace? = nil
     var onRemovePlace: (() -> Void)? = nil

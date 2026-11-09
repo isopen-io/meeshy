@@ -423,9 +423,9 @@ extension ConversationView {
 
     /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
     /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
-    /// l'autre et n'est plus le véhicule (Task 11/12, 2026-07-29). Le lieu
+    /// l'autre et n'est plus le véhicule (Task 11/12). Le lieu
     /// reste en attente jusqu'au prochain envoi : `sendMessageWithAttachments`
-    /// le capture et le passe aux trois transports (lot 2, spec 2026-07-30).
+    /// le capture et le passe aux trois transports (lot 2).
     func handleLocationSelection(_ place: SharedPlace) {
         withAnimation {
             composerState.pendingPlace = place

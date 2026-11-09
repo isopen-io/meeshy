@@ -7,7 +7,7 @@ import MeeshyUI
 /// state stay visible and the bubble right-aligns like every other bubble.
 /// Tapping it re-triggers the send.
 ///
-/// Interaction (2026-06-11):
+/// Interaction:
 /// - **At rest** the band is steady (no animation): a calm orange strip with a
 ///   centred `arrow.clockwise` glyph. It does NOT blink while merely displayed.
 /// - **On tap** it commits to a resend: the glyph swaps to a spinner and the

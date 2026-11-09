@@ -323,7 +323,7 @@ struct WidgetPreviewView: View {
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        // Drapeau du Router (2026-08-21) — la notification
+                        // Drapeau du Router — la notification
                         // `openFeedComposer` n'avait AUCUN observateur : cette
                         // action ne faisait rien. `RootView` montre le flux,
                         // `ThemedFeedOverlay` ouvre son composeur.
