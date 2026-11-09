@@ -37,7 +37,7 @@ enum NSEAdtsRemux {
 
 /// Un téléchargement qui porte le jeton de la session ne suit une redirection que vers la passerelle, sous un chemin
 /// attendu : toute autre redirection est refusée, le jeton ne part jamais ailleurs.
-nonisolated final class NSETokenRedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
+final class NSETokenRedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
     private let apiBaseURL: String
 
     init(apiBaseURL: String) {
