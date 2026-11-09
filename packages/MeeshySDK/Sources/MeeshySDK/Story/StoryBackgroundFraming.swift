@@ -1,5 +1,5 @@
 /// **Le cadrage d'un fond de scène — ce qu'il vaut à l'arrivée, et ce que le
-/// geste en fait** (#6125, directive porteur 2026-09-12).
+/// geste en fait** (#6125).
 ///
 /// > « le Meeshy Composer doit intégrer dans canvas la pièce pour fit dans le
 /// > canvas par défaut, et l'auteur zoom ou dézoom pour rogner correctement
