@@ -26,8 +26,9 @@
  *
  * Un fragment scellé est chiffré sur l'appareil de l'émetteur : le relais le traite comme tout
  * fragment, c'est-à-dire comme des octets qu'il ne lit pas (ni transcription, ni normalisation, ni
- * forme exigée). L'enveloppe de clé de l'ouverture repart telle quelle dans `talkie:incoming`, et le
- * rejugement garde le sceau : une paire chiffrée ne coupe pas une voix scellée.
+ * forme exigée). L'identifiant de clé de l'ouverture repart tel quel dans `talkie:incoming` (la clé, elle,
+ * voyage par le relais des signaux E2EE), et le rejugement garde le sceau : une paire chiffrée ne coupe pas
+ * une voix scellée.
  *
  * ## Ce qui change pendant qu'on parle
  *
@@ -74,7 +75,7 @@ type Session = {
   readonly toUserId: string;
   readonly socketId: string;
   readonly codec: TalkieCodec;
-  /** Voix scellée (#13949) : l'enveloppe de clé, relayée sans être lue ; son absence ⇒ voix en clair. */
+  /** Voix scellée (#13949) : l'identifiant de clé, relayé sans être lu ; son absence ⇒ voix en clair. */
   readonly sealed: TalkieSeal | undefined;
   readonly startedAt: number;
   /** Une coupure posée à partir de cet instant vise la session : celui où son jugement a COMMENCÉ. */

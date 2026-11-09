@@ -8,7 +8,7 @@ import {
   TALKIE_ERROR_CODES,
   TALKIE_MAX_CHUNK_BYTES,
   TALKIE_MAX_DURATION_MS,
-  TALKIE_MAX_KEY_ENVELOPE_CHARS,
+  TALKIE_SEAL_KEY_ID_CHARS,
   talkieChunkPayloadSchema,
   talkieStartPayloadSchema,
 } from '../types/talkie';
@@ -49,11 +49,19 @@ describe('le contrat du talkie', () => {
     expect(relationPersonSettingsUpdateSchema.safeParse({ talkieBlocked: true }).success).toBe(true);
   });
 
-  it('#13949 — une voix scellée porte son enveloppe de clé, opaque, bornée et lisible en base64url', () => {
+  it('#13949 — une voix scellée ne porte que l’identifiant de sa clé : la clé voyage par le relais des signaux E2EE, par appareil', () => {
     const base = { toUserId: 'b'.repeat(24), codec: 'aac-adts' as const };
-    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'AbC-_123' } }).success).toBe(true);
-    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: '' } }).success).toBe(false);
-    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'a b+/=' } }).success).toBe(false);
-    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'a'.repeat(TALKIE_MAX_KEY_ENVELOPE_CHARS + 1) } }).success).toBe(false);
+    const keyId = 'A'.repeat(TALKIE_SEAL_KEY_ID_CHARS.min);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId } }).success).toBe(true);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId: 'AbC-_123' } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId: `${keyId.slice(1)}+` } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId: 'a'.repeat(TALKIE_SEAL_KEY_ID_CHARS.max + 1) } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'a'.repeat(2_400) } }).success).toBe(false);
+  });
+
+  it('#13949 — rien d’autre que l’identifiant ne repart à côté du sceau', () => {
+    const keyId = 'k'.repeat(TALKIE_SEAL_KEY_ID_CHARS.min);
+    const parsed = talkieStartPayloadSchema.parse({ toUserId: 'b'.repeat(24), codec: 'aac-adts', sealed: { keyId, key: 'clair', keyEnvelope: 'x' } });
+    expect(parsed.sealed).toEqual({ keyId });
   });
 });

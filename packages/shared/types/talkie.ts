@@ -24,20 +24,21 @@
  */
 import { z } from 'zod';
 
-import { TALKIE_CODECS, TALKIE_MAX_KEY_ENVELOPE_CHARS, type TalkieCodec, type TalkieEndReason, type TalkieErrorCode } from './talkie-constants.js';
+import { TALKIE_CODECS, TALKIE_SEAL_KEY_ID_CHARS, type TalkieCodec, type TalkieEndReason, type TalkieErrorCode } from './talkie-constants.js';
 
 /** Les bornes, encodages, codes et raisons : `./talkie-constants.ts`, sans Zod, lisibles par un client léger. */
 export * from './talkie-constants.js';
 
 /**
  * La voix SCELLÉE de bout en bout (#13949) : les fragments sont chiffrés sur l'appareil émetteur avec une clé
- * propre à la prise de parole, dont l'enveloppe (scellée pour le destinataire par la session de la paire) voyage
- * ici, OPAQUE. Le serveur ne la déchiffre pas, ne transcrit ni ne normalise les fragments, et n'exige d'eux
- * aucune forme (un fragment scellé n'est pas une trame ADTS lisible). Dans une paire dont la conversation
- * directe est chiffrée, seule une voix scellée passe ; une voix en clair y reste refusée.
+ * propre à la prise de parole. Cette clé n'est PAS ici : l'émetteur la remet par le relais des signaux E2EE
+ * de la paire (`e2ee:send-signal`, une enveloppe libsignal par appareil, Sesame compris) ; `talkie:start` n'en
+ * porte que l'identifiant, que le destinataire rapproche de la clé déchiffrée. Le serveur ne transcrit ni ne
+ * normalise les fragments, et n'exige d'eux aucune forme (un fragment scellé n'est pas une trame ADTS lisible).
+ * Dans une paire dont la conversation directe est chiffrée, seule une voix scellée passe.
  */
 export const talkieSealSchema = z.object({
-  keyEnvelope: z.string().min(1).max(TALKIE_MAX_KEY_ENVELOPE_CHARS).regex(/^[A-Za-z0-9_-]+$/),
+  keyId: z.string().min(TALKIE_SEAL_KEY_ID_CHARS.min).max(TALKIE_SEAL_KEY_ID_CHARS.max).regex(/^[A-Za-z0-9_-]+$/),
 });
 export type TalkieSeal = z.infer<typeof talkieSealSchema>;
 
@@ -71,7 +72,7 @@ export type TalkieIncomingEventData = {
   readonly codec: TalkieCodec;
   readonly startedAt: string;
   readonly maxDurationMs: number;
-  /** Présent ⇔ la voix est scellée : l'enveloppe de clé de l'émetteur, relayée telle quelle. */
+  /** Présent ⇔ la voix est scellée : l'identifiant de la clé, remise à part par le relais des signaux E2EE. */
   readonly sealed?: TalkieSeal;
 };
 

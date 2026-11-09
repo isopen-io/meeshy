@@ -14,11 +14,11 @@ export const TALKIE_MAX_TOTAL_BYTES = 512_000;
 /** Plafond du NOMBRE de fragments d'une prise de parole : 30 s par fragments de 100 ms au plus court. */
 export const TALKIE_MAX_CHUNKS = 300;
 /**
- * Une voix SCELLÉE (#13949) porte, à l'ouverture, l'enveloppe de la clé de la prise de parole, scellée par
- * l'émetteur pour le destinataire (session de la paire). Le serveur la relaie sans la lire : ce plafond
- * borne sa taille en caractères base64url, rien de plus.
+ * Une voix SCELLÉE (#13949) ne porte, à l'ouverture, que l'IDENTIFIANT de la clé de sa prise de parole
+ * (base64url, au moins 16 octets aléatoires). La clé elle-même voyage par le relais des signaux E2EE
+ * (`e2ee-signals.ts`) : une enveloppe libsignal par appareil, Sesame compris. Le serveur ne lit ni l'un ni l'autre.
  */
-export const TALKIE_MAX_KEY_ENVELOPE_CHARS = 4_096;
+export const TALKIE_SEAL_KEY_ID_CHARS = { min: 22, max: 64 } as const;
 /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
 export const TALKIE_CODECS = ['aac-adts'] as const;
 export type TalkieCodec = (typeof TALKIE_CODECS)[number];

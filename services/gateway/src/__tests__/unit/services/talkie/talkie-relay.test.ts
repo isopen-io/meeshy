@@ -302,20 +302,20 @@ describe('#14459 (m4, m5) — la coupure partagée', () => {
 });
 
 describe('#13949 — le relais transporte une voix scellée sans la lire', () => {
-  const ENVELOPE = 'eyJrIjoiQUJDIn0-_';
+  const KEY_ID = 'q7Hk2-_xVb9LmN0pRsT4uW';
 
-  it('annonce l’enveloppe de clé telle quelle au destinataire, et juge la paire AVEC le sceau', async () => {
+  it('annonce l’identifiant de clé tel quel au destinataire, et juge la paire AVEC le sceau', async () => {
     const judge = jest.fn(async (_f: string, _t: string, _sealed: boolean): Promise<TalkieVerdict> => ({ ok: true }));
     const t = relayWith({ judge });
-    const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts', sealed: { keyEnvelope: ENVELOPE } });
+    const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts', sealed: { keyId: KEY_ID } });
     t.relay.dispose();
 
     expect(ack.success).toBe(true);
     expect(judge).toHaveBeenCalledWith(FROM, TO, true);
-    expect(of(t, 'talkie:incoming')[0].payload).toMatchObject({ sealed: { keyEnvelope: ENVELOPE } });
+    expect(of(t, 'talkie:incoming')[0].payload.sealed).toEqual({ keyId: KEY_ID });
   });
 
-  it('une voix en clair est jugée sans sceau et n’annonce aucune enveloppe', async () => {
+  it('une voix en clair est jugée sans sceau et n’annonce aucun sceau', async () => {
     const judge = jest.fn(async (_f: string, _t: string, _sealed: boolean): Promise<TalkieVerdict> => ({ ok: true }));
     const t = relayWith({ judge });
     await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
@@ -325,10 +325,18 @@ describe('#13949 — le relais transporte une voix scellée sans la lire', () =>
     expect(of(t, 'talkie:incoming')[0].payload).not.toHaveProperty('sealed');
   });
 
+  it('aucune matière de clé ne repart à côté de l’identifiant, même si l’émetteur en glisse une', async () => {
+    const t = relayWith();
+    await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts', sealed: { keyId: KEY_ID, key: 'clair', keyEnvelope: 'x' } });
+    t.relay.dispose();
+
+    expect(of(t, 'talkie:incoming')[0].payload.sealed).toEqual({ keyId: KEY_ID });
+  });
+
   it('un fragment scellé repart octet pour octet : ni trame ADTS exigée, ni normalisation', async () => {
     const t = relayWith();
     const talkieId = await (async () => {
-      const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts', sealed: { keyEnvelope: ENVELOPE } });
+      const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts', sealed: { keyId: KEY_ID } });
       if (!ack.success) throw new Error(ack.code);
       return ack.data.talkieId;
     })();
@@ -343,7 +351,7 @@ describe('#13949 — le relais transporte une voix scellée sans la lire', () =>
     const judge = jest.fn(async (_f: string, _t: string, sealed: boolean): Promise<TalkieVerdict> =>
       (sealed ? { ok: true } : { ok: false, code: 'TALKIE_E2EE_CONVERSATION', message: 'x' }));
     const t = relayWith({ judge });
-    const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts', sealed: { keyEnvelope: ENVELOPE } });
+    const ack = await t.relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts', sealed: { keyId: KEY_ID } });
     if (!ack.success) throw new Error(ack.code);
     t.advance(2_500);
     await t.relay.chunk(SOCKET, FROM, { talkieId: ack.data.talkieId, seq: 0, data: frame() });
