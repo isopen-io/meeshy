@@ -30,7 +30,8 @@ import org.signal.libsignal.protocol.state.SignedPreKeyRecord
  * Les VECTEURS CROISÉS libsignal (#17113) : le fichier COMMUN `packages/shared/fixtures/libsignal/cross-platform.vectors.json`,
  * scellé par la passerelle et rejoué tel quel par elle (jest) et par le SDK iOS, s'ouvre ici par le chiffreur de PRODUCTION
  * ([E2eeSessionCipher]) sur le coffre transactionnel. PQXDH depuis les seules pré-clés, puis des sessions sérialisées rechargées
- * (rétrocompatibilité #9231). Une charge altérée d'un octet est refusée.
+ * (rétrocompatibilité #9231). Les jeux de `legacy/`, scellés par une version ANTÉRIEURE, s'ouvrent de même : une session
+ * persistée avant une montée survit à la montée. Une charge altérée d'un octet est refusée.
  */
 class LibsignalCrossPlatformVectorsTest {
 
@@ -56,27 +57,34 @@ class LibsignalCrossPlatformVectorsTest {
         throw AssertionError("Fichier partagé introuvable : $path")
     }
 
-    private val vectors: JsonObject =
-        Json.parseToJsonElement(repositoryFile("packages/shared/fixtures/libsignal/cross-platform.vectors.json").readText()).jsonObject
-
     private fun JsonObject.obj(key: String): JsonObject = getValue(key).jsonObject
     private fun JsonObject.text(key: String): String = getValue(key).jsonPrimitive.content
     private fun JsonObject.number(key: String): Int = getValue(key).jsonPrimitive.int
     private fun JsonObject.bytes(key: String): ByteArray = Base64.getDecoder().decode(text(key))
 
-    private val alice = vectors.obj("alice")
-    private val bob = vectors.obj("bob")
+    private fun parse(file: File): JsonObject = Json.parseToJsonElement(file.readText()).jsonObject
+
+    private val currentFile = repositoryFile("packages/shared/fixtures/libsignal/cross-platform.vectors.json")
+    private val vectors: JsonObject = parse(currentFile)
+    private val legacy: List<JsonObject> =
+        File(currentFile.parentFile, "legacy").listFiles { file -> file.name.endsWith(".vectors.json") }.orEmpty()
+            .sortedBy { it.name }
+            .map(::parse)
+    private val allSets: List<JsonObject> = listOf(vectors) + legacy
 
     private fun address(party: JsonObject) = E2eeDeviceAddress(party.text("name"), party.number("deviceId"))
 
     private fun device(party: JsonObject) =
         Device(address(party), E2eeLocalIdentity(IdentityKeyPair(party.bytes("identityKeyPair")), party.number("registrationId")))
 
-    private fun bobWithPreKeys(): Device = device(bob).apply {
-        seed {
-            storeSignedPreKey(bob.obj("signedPreKey").number("id"), SignedPreKeyRecord(bob.obj("signedPreKey").bytes("record")))
-            storeKyberPreKey(bob.obj("kyberPreKey").number("id"), KyberPreKeyRecord(bob.obj("kyberPreKey").bytes("record")))
-            storePreKey(bob.obj("preKey").number("id"), PreKeyRecord(bob.obj("preKey").bytes("record")))
+    private fun bobWithPreKeys(set: JsonObject): Device {
+        val bob = set.obj("bob")
+        return device(bob).apply {
+            seed {
+                storeSignedPreKey(bob.obj("signedPreKey").number("id"), SignedPreKeyRecord(bob.obj("signedPreKey").bytes("record")))
+                storeKyberPreKey(bob.obj("kyberPreKey").number("id"), KyberPreKeyRecord(bob.obj("kyberPreKey").bytes("record")))
+                storePreKey(bob.obj("preKey").number("id"), PreKeyRecord(bob.obj("preKey").bytes("record")))
+            }
         }
     }
 
@@ -93,9 +101,9 @@ class LibsignalCrossPlatformVectorsTest {
         return E2eeCiphertext(message.number("type"), body.copyOf().also { it[it.lastIndex] = (it[it.lastIndex].toInt() xor 0x01).toByte() })
     }
 
-    private val freshMessages: List<JsonObject> = vectors.obj("freshSession").getValue("messages").jsonArray.map { it.jsonObject }
-    private val reply = vectors.obj("persistedSessions").obj("aliceOpensReply")
-    private val third = vectors.obj("persistedSessions").obj("bobOpensThird")
+    private fun JsonObject.freshMessages(): List<JsonObject> = obj("freshSession").getValue("messages").jsonArray.map { it.jsonObject }
+    private fun JsonObject.reply(): JsonObject = obj("persistedSessions").obj("aliceOpensReply")
+    private fun JsonObject.third(): JsonObject = obj("persistedSessions").obj("bobOpensThird")
 
     @Test
     fun `the vectors are sealed by the libsignal version this module pins`() {
@@ -105,39 +113,57 @@ class LibsignalCrossPlatformVectorsTest {
     }
 
     @Test
+    fun `a set sealed by an earlier libsignal version is replayed`() {
+        val versions = legacy.map { it.text("libsignal") }
+        assertThat(versions).isNotEmpty()
+        assertThat(versions).doesNotContain(vectors.text("libsignal"))
+    }
+
+    @Test
     fun `bob opens both PreKeySignalMessages from his pre-keys alone`() {
-        val device = bobWithPreKeys()
+        allSets.forEach { set ->
+            val device = bobWithPreKeys(set)
+            val messages = set.freshMessages()
 
-        val plaintexts = freshMessages.map { device.open(ciphertext(it), address(alice)) }
+            val plaintexts = messages.map { device.open(ciphertext(it), address(set.obj("alice"))) }
 
-        assertThat(freshMessages.map { it.number("type") }).containsExactly(E2eeWire.PRE_KEY_TYPE, E2eeWire.PRE_KEY_TYPE).inOrder()
-        assertThat(plaintexts).isEqualTo(freshMessages.map { it.text("plaintext") })
+            assertThat(messages.map { it.number("type") }).containsExactly(E2eeWire.PRE_KEY_TYPE, E2eeWire.PRE_KEY_TYPE).inOrder()
+            assertThat(plaintexts).isEqualTo(messages.map { it.text("plaintext") })
+        }
     }
 
     @Test
     fun `sessions reloaded from their serialized records open the next SignalMessage on both sides`() {
-        val aliceDevice = persisted(alice, bob, reply.text("session"))
-        val bobDevice = persisted(bob, alice, third.text("session"))
-        val replyMessage = reply.obj("message")
-        val thirdMessage = third.obj("message")
+        allSets.forEach { set ->
+            val alice = set.obj("alice")
+            val bob = set.obj("bob")
+            val aliceDevice = persisted(alice, bob, set.reply().text("session"))
+            val bobDevice = persisted(bob, alice, set.third().text("session"))
+            val replyMessage = set.reply().obj("message")
+            val thirdMessage = set.third().obj("message")
 
-        assertThat(listOf(replyMessage.number("type"), thirdMessage.number("type")))
-            .containsExactly(E2eeWire.WHISPER_TYPE, E2eeWire.WHISPER_TYPE)
-        assertThat(aliceDevice.open(ciphertext(replyMessage), address(bob))).isEqualTo(replyMessage.text("plaintext"))
-        assertThat(bobDevice.open(ciphertext(thirdMessage), address(alice))).isEqualTo(thirdMessage.text("plaintext"))
+            assertThat(listOf(replyMessage.number("type"), thirdMessage.number("type")))
+                .containsExactly(E2eeWire.WHISPER_TYPE, E2eeWire.WHISPER_TYPE)
+            assertThat(aliceDevice.open(ciphertext(replyMessage), address(bob))).isEqualTo(replyMessage.text("plaintext"))
+            assertThat(bobDevice.open(ciphertext(thirdMessage), address(alice))).isEqualTo(thirdMessage.text("plaintext"))
+        }
     }
 
     @Test
     fun `each payload altered by one byte is refused`() {
-        val freshBob = bobWithPreKeys()
-        val aliceDevice = persisted(alice, bob, reply.text("session"))
-        val persistedBob = persisted(bob, alice, third.text("session"))
-        val alteredFirst = tampered(freshMessages.first())
-        val alteredReply = tampered(reply.obj("message"))
-        val alteredThird = tampered(third.obj("message"))
+        allSets.forEach { set ->
+            val alice = set.obj("alice")
+            val bob = set.obj("bob")
+            val freshBob = bobWithPreKeys(set)
+            val aliceDevice = persisted(alice, bob, set.reply().text("session"))
+            val persistedBob = persisted(bob, alice, set.third().text("session"))
+            val alteredFirst = tampered(set.freshMessages().first())
+            val alteredReply = tampered(set.reply().obj("message"))
+            val alteredThird = tampered(set.third().obj("message"))
 
-        assertThrows(Exception::class.java) { freshBob.open(alteredFirst, address(alice)) }
-        assertThrows(Exception::class.java) { aliceDevice.open(alteredReply, address(bob)) }
-        assertThrows(Exception::class.java) { persistedBob.open(alteredThird, address(alice)) }
+            assertThrows(Exception::class.java) { freshBob.open(alteredFirst, address(alice)) }
+            assertThrows(Exception::class.java) { aliceDevice.open(alteredReply, address(bob)) }
+            assertThrows(Exception::class.java) { persistedBob.open(alteredThird, address(alice)) }
+        }
     }
 }

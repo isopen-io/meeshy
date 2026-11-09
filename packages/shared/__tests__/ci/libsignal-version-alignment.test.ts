@@ -7,7 +7,7 @@
 // sans les autres rougit ici, sur la suite `shared` qui tourne à chaque PR.
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -78,6 +78,49 @@ describe('libsignal — Dependabot ne monte jamais une seule plateforme (#17113)
         directory,
         rule: '      - dependency-name: "@signalapp/libsignal-client"\n',
       });
+    });
+  });
+
+  it('une entrée Gradle, si elle existe, exclut entièrement org.signal', () => {
+    dependabotEntries()
+      .filter(({ ecosystem }) => ecosystem === 'gradle')
+      .forEach(({ directory, body }) => {
+        expect({ directory, excludesSignal: /^ {6}- dependency-name:\s*"org\.signal:\*"\n(?! {8}update-types)/m.test(body) }).toEqual({
+          directory,
+          excludesSignal: true,
+        });
+      });
+  });
+});
+
+const LEGACY = 'packages/shared/fixtures/libsignal/legacy';
+
+const sealedBy = (path: string): string => (JSON.parse(read(path)) as { libsignal: string }).libsignal;
+
+const legacyVersions = (): readonly string[] =>
+  existsSync(join(REPO, LEGACY))
+    ? readdirSync(join(REPO, LEGACY))
+        .filter((name) => name.endsWith('.vectors.json'))
+        .map((name) => sealedBy(`${LEGACY}/${name}`))
+    : [];
+
+const semver = (version: string): readonly number[] => version.split('.').map(Number);
+
+const isOlder = (candidate: string, reference: string): boolean => {
+  const [a, b] = [semver(candidate), semver(reference)];
+  const index = a.findIndex((part, position) => part !== b[position]);
+  return index !== -1 && a[index] < b[index];
+};
+
+describe('libsignal — une session persistée avant une montée survit à la montée (#9231)', () => {
+  it('le jeu scellé en 0.105.4, la version des sessions déjà persistées, est gardé dans legacy/', () => {
+    expect(legacyVersions()).toContain('0.105.4');
+  });
+
+  it('chaque jeu de legacy/ est scellé par une version ANTÉRIEURE à celle des vecteurs courants', () => {
+    const current = sealedBy('packages/shared/fixtures/libsignal/cross-platform.vectors.json');
+    legacyVersions().forEach((version) => {
+      expect({ version, olderThanCurrent: isOlder(version, current) }).toEqual({ version, olderThanCurrent: true });
     });
   });
 });

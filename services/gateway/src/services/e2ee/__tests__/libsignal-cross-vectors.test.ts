@@ -4,17 +4,21 @@
  * quel par le SDK iOS (`LibsignalCrossPlatformVectorTests`) et `:core:e2ee`
  * Android (`LibsignalCrossPlatformVectorsTest`), s'ouvre ici avec la VRAIE
  * bibliothèque (processus à part, `libsignal-vectors.mjs`) : PQXDH depuis les
- * seules pré-clés, puis des sessions sérialisées rechargées (#9231). La même
- * charge altérée d'un octet est refusée.
+ * seules pré-clés, puis des sessions sérialisées rechargées (#9231). Les jeux
+ * de `legacy/`, scellés par une version ANTÉRIEURE, s'ouvrent de même : une
+ * session persistée avant une montée survit à la montée. La même charge
+ * altérée d'un octet est refusée.
  *
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
 import { execFileSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
-const FIXTURE = join(__dirname, '../../../../../../packages/shared/fixtures/libsignal/cross-platform.vectors.json');
+const FIXTURES = join(__dirname, '../../../../../../packages/shared/fixtures/libsignal');
+const CURRENT = join(FIXTURES, 'cross-platform.vectors.json');
+const LEGACY = join(FIXTURES, 'legacy');
 const BENCH = join(__dirname, 'libsignal-vectors.mjs');
 
 type WireMessage = { type: number; body: string; plaintext: string };
@@ -35,31 +39,48 @@ type Report = {
   tamperedRefused: Record<'preKeyMessage' | 'aliceOpensReply' | 'bobOpensThird', boolean>;
 };
 
-const vectors = (): Vectors => JSON.parse(readFileSync(FIXTURE, 'utf8')) as Vectors;
-const replay = (): Report => JSON.parse(execFileSync(process.execPath, [BENCH, FIXTURE]).toString()) as Report;
+const legacyFiles = (): string[] =>
+  (existsSync(LEGACY) ? readdirSync(LEGACY) : [])
+    .filter((name) => name.endsWith('.vectors.json'))
+    .sort()
+    .map((name) => join(LEGACY, name));
+
+const vectorsOf = (file: string): Vectors => JSON.parse(readFileSync(file, 'utf8')) as Vectors;
+const replay = (file: string): Report => JSON.parse(execFileSync(process.execPath, [BENCH, file]).toString()) as Report;
 
 describe('libsignal — les vecteurs croisés partagés avec iOS et Android (#17113)', () => {
-  const report = replay();
-
-  it('la passerelle charge la version de libsignal qui a scellé les vecteurs', () => {
-    expect(report.loaded).toBe(vectors().libsignal);
+  it('la passerelle charge la version de libsignal qui a scellé les vecteurs courants', () => {
+    const report = replay(CURRENT);
+    expect(report.loaded).toBe(vectorsOf(CURRENT).libsignal);
     expect(report.declared).toBe(report.loaded);
   });
 
-  it('Bob ouvre les deux PreKeySignalMessage depuis ses seules pré-clés (PQXDH, Kyber, pré-clé unique)', () => {
-    const messages = vectors().freshSession.messages;
-    expect(messages.map((message) => message.type)).toEqual([3, 3]);
-    expect(report.fresh).toEqual(messages.map((message) => message.plaintext));
+  it('au moins un jeu scellé par une version antérieure est rejoué (#9231)', () => {
+    const current = vectorsOf(CURRENT).libsignal;
+    expect(legacyFiles().map((file) => vectorsOf(file).libsignal)).toEqual(
+      expect.arrayContaining([expect.not.stringMatching(new RegExp(`^${current.replace(/\./g, '\\.')}$`))]),
+    );
   });
 
-  it('une session sérialisée à cette version, rechargée, ouvre le SignalMessage suivant, des deux côtés', () => {
-    const { aliceOpensReply, bobOpensThird } = vectors().persistedSessions;
-    expect([aliceOpensReply.message.type, bobOpensThird.message.type]).toEqual([2, 2]);
-    expect(report.aliceOpensReply).toBe(aliceOpensReply.message.plaintext);
-    expect(report.bobOpensThird).toBe(bobOpensThird.message.plaintext);
-  });
+  describe.each([CURRENT, ...legacyFiles()].map((file) => [vectorsOf(file).libsignal, file] as const))('jeu scellé en %s', (_version, file) => {
+    const vectors = vectorsOf(file);
+    const report = replay(file);
 
-  it('chaque charge altérée d’un octet est refusée', () => {
-    expect(report.tamperedRefused).toEqual({ preKeyMessage: true, aliceOpensReply: true, bobOpensThird: true });
+    it('Bob ouvre les deux PreKeySignalMessage depuis ses seules pré-clés (PQXDH, Kyber, pré-clé unique)', () => {
+      const messages = vectors.freshSession.messages;
+      expect(messages.map((message) => message.type)).toEqual([3, 3]);
+      expect(report.fresh).toEqual(messages.map((message) => message.plaintext));
+    });
+
+    it('une session sérialisée, rechargée par la version courante, ouvre le SignalMessage suivant, des deux côtés', () => {
+      const { aliceOpensReply, bobOpensThird } = vectors.persistedSessions;
+      expect([aliceOpensReply.message.type, bobOpensThird.message.type]).toEqual([2, 2]);
+      expect(report.aliceOpensReply).toBe(aliceOpensReply.message.plaintext);
+      expect(report.bobOpensThird).toBe(bobOpensThird.message.plaintext);
+    });
+
+    it('chaque charge altérée d’un octet est refusée', () => {
+      expect(report.tamperedRefused).toEqual({ preKeyMessage: true, aliceOpensReply: true, bobOpensThird: true });
+    });
   });
 });
