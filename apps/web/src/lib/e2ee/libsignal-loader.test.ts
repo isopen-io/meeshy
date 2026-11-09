@@ -8,7 +8,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -83,6 +83,14 @@ describe('le binaire du pont est celui que la construction a consigné (#17114)'
       tag: cargo.match(/libsignal-protocol = \{[^}]*tag = "v([^"]+)"/)?.[1],
       licences: WEB_LIBSIGNAL_ENGINE?.version,
     }).toEqual({ manifest: manifest.libsignal, crate: manifest.libsignal, tag: manifest.libsignal, licences: manifest.libsignal });
+  });
+
+  test('la source correspondante du binaire (AGPL-3.0 § 6) est dans le dépôt que l’offre de source désigne', () => {
+    const crate = join(REPO, 'packages', 'libsignal-wasm');
+    expect(['Cargo.toml', 'Cargo.lock', 'build.sh', 'rust-toolchain', 'src/lib.rs'].filter((file) => !existsSync(join(crate, file)))).toEqual([]);
+    expect(readFileSync(join(crate, 'Cargo.lock'), 'utf8')).toContain(
+      `source = "git+https://github.com/signalapp/libsignal?tag=v${manifest.libsignal}#`,
+    );
   });
 
   test('la construction est épinglée : chaîne Rust du dépôt et wasm-bindgen exact', () => {
