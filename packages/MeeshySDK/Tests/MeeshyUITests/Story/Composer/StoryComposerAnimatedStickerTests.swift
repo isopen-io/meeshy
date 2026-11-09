@@ -41,6 +41,31 @@ final class StoryComposerAnimatedStickerTests: XCTestCase {
                         "l'image fixe reste : c'est elle que peignent la cover, l'export et le thumbHash")
     }
 
+    /// **Des octets qui arrivent APRÈS la pose** (#17040) — le film d'un Mee se
+    /// rasterise hors du toucher : il rejoint le sticker s'il est toujours sur
+    /// la scène, et il est ignoré sinon.
+    func test_attacherDesOctetsTardifs_rejointLeStickerEncorePose() throws {
+        let vm = StoryComposerViewModel()
+        let sticker = vm.addSticker(image: Self.pixel(), provider: "mee")!
+        let version = vm.loadedImagesVersion
+
+        XCTAssertTrue(LateStickerAnimation.attach(Self.gifBytes, to: sticker.id, on: vm))
+
+        XCTAssertEqual(vm.loadedStickerAnimations[sticker.id], Self.gifBytes)
+        XCTAssertNotEqual(vm.loadedImagesVersion, version, "le canvas relit son lecteur")
+    }
+
+    func test_attacherDesOctetsTardifs_aUnStickerRetire_estIgnore() throws {
+        let vm = StoryComposerViewModel()
+        let sticker = vm.addSticker(image: Self.pixel(), provider: "mee")!
+        var slide = vm.currentSlide
+        slide.effects.stickerObjects = []
+        vm.currentSlide = slide
+
+        XCTAssertFalse(LateStickerAnimation.attach(Self.gifBytes, to: sticker.id, on: vm))
+        XCTAssertNil(vm.loadedStickerAnimations[sticker.id])
+    }
+
     /// **Un sticker FIXE ne paie rien.** L'écrasante majorité des stickers sont
     /// des PNG : leur faire traverser un dictionnaire d'octets serait de la
     /// mémoire pour rien, et brouillerait le prédicat « ce sticker anime-t-il ? ».
