@@ -18,7 +18,12 @@
  * 3. la présence du destinataire n'est pas servie à l'émetteur (masquée, ou hors du
  *    niveau), ou il est en APPEL, en Ne pas déranger, ou sans appareil connecté ⇒
  *    `TALKIE_FALLBACK_VOICE` : l'émetteur envoie un message vocal. Le même code dans
- *    tous ces cas : il ne dit rien qu'on ne voie déjà.
+ *    tous ces cas : il ne dit rien qu'on ne voie déjà ;
+ * 4. (#17142) quand la SEULE indisponibilité est l'absence de socket, et que le
+ *    destinataire a gardé ses pushs et un jeton actif (PushToTalk, APNs ou FCM), la
+ *    prise de parole s'ouvre en mode `waking` : un push le réveille, sa voix l'attend.
+ *    Appel, Ne pas déranger et présence masquée gardent le repli : ces gardes
+ *    passent AVANT le réveil.
  *
  * Les étapes 2 et 3 ne se jugent qu'APRÈS la loi : un inconnu n'apprend ni le
  * chiffrement d'une paire, ni la disponibilité de quelqu'un. Le chiffrement et la
@@ -29,7 +34,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NOTIFICATION_PREFERENCE_DEFAULTS, type NotificationPreference } from '@meeshy/shared/types/preferences/notification';
-import { TALKIE_ERROR_CODES, type TalkieErrorCode } from '@meeshy/shared/types/talkie';
+import { TALKIE_ERROR_CODES, TALKIE_FALLBACK_VOICE_MESSAGE, type TalkieErrorCode } from '@meeshy/shared/types/talkie';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { resolveRelationAccess, type RelationAccessReason } from '@meeshy/shared/utils/relation-access';
@@ -64,7 +69,10 @@ export type TalkieRefusal = {
   readonly message: string;
   readonly cause?: TalkieRefusalCause;
 };
-export type TalkieVerdict = { readonly ok: true } | TalkieRefusal;
+/** `pushtotalk` : un jeton PushToTalk iOS est enregistré ; `push` : un jeton APNs ou FCM ordinaire. */
+export type TalkieWakeChannel = 'pushtotalk' | 'push';
+export type TalkieWaking = { readonly ok: true; readonly delivery: 'waking'; readonly channel: TalkieWakeChannel };
+export type TalkieVerdict = { readonly ok: true; readonly delivery?: undefined } | TalkieWaking | TalkieRefusal;
 
 const OPEN: TalkieVerdict = { ok: true };
 const refuse = (code: TalkieErrorCode, message: string): TalkieRefusal => ({ ok: false, code, message });
@@ -72,7 +80,7 @@ const because = (refusal: TalkieRefusal, cause: TalkieRefusalCause): TalkieRefus
 export const TALKIE_NOT_ALLOWED: TalkieRefusal = refuse(TALKIE_ERROR_CODES.NOT_ALLOWED, 'Talkie indisponible');
 const BLOCKED = refuse(TALKIE_ERROR_CODES.BLOCKED, 'Talkie indisponible');
 const E2EE = refuse(TALKIE_ERROR_CODES.E2EE_CONVERSATION, 'Le talkie n’est pas chiffré de bout en bout : il est indisponible dans une conversation chiffrée');
-const FALLBACK = refuse(TALKIE_ERROR_CODES.FALLBACK_VOICE, 'Envoie un message vocal');
+const FALLBACK = refuse(TALKIE_ERROR_CODES.FALLBACK_VOICE, TALKIE_FALLBACK_VOICE_MESSAGE);
 export const TALKIE_UNAVAILABLE: TalkieRefusal = refuse(TALKIE_ERROR_CODES.UNAVAILABLE, 'Talkie momentanément indisponible');
 
 /** Le repli vocal d'un destinataire indisponible, sa cause dans l'ordre où on la lit. */
@@ -127,7 +135,15 @@ export type TalkieGateDeps = {
   readonly recipientConnected: (userId: string) => Promise<boolean>;
   /** La présence du destinataire est-elle SERVIE à l'émetteur (`resolvePresenceVisibility`) ? */
   readonly presenceServed: (viewer: { readonly userId: string; readonly role: string }, targetId: string) => Promise<boolean>;
+  /** Le canal par lequel réveiller le destinataire, ou `null` (#17142). Absent : jamais de réveil. */
+  readonly wakeChannel?: (userId: string) => Promise<TalkieWakeChannel | null>;
 };
+
+/** Un doute sur les jetons ne réveille personne et n'empêche rien : le repli vocal. */
+async function wakeChannelOf(deps: TalkieGateDeps, userId: string): Promise<TalkieWakeChannel | null> {
+  if (!deps.wakeChannel) return null;
+  return deps.wakeChannel(userId).catch(() => null);
+}
 
 export async function judgeTalkie(
   deps: TalkieGateDeps,
@@ -181,6 +197,10 @@ export async function judgeTalkie(
   // l'état — le talkie ne devient pas un oracle de la présence que la cible a masquée.
   if (!presenceShown) return because(FALLBACK, 'presence-masked');
   const [busy, connected] = await Promise.all([inActiveCall(prisma, toUserId), deps.recipientConnected(toUserId)]);
-  const cause = unavailability(busy, connected, isWithinDnd(prefs, now));
-  return cause ? because(FALLBACK, cause) : OPEN;
+  const dnd = isWithinDnd(prefs, now);
+  const cause = unavailability(busy, connected, dnd);
+  if (cause === null) return OPEN;
+  const wakeable = cause === 'not-connected' && !dnd && prefs.pushEnabled !== false;
+  const channel = wakeable ? await wakeChannelOf(deps, toUserId) : null;
+  return channel ? { ok: true, delivery: 'waking', channel } : because(FALLBACK, cause);
 }

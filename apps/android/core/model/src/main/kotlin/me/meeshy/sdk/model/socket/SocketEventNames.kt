@@ -203,6 +203,9 @@ object SocketEventNames {
     const val TALKIE_CHUNK = "talkie:chunk"
     const val TALKIE_ENDED = "talkie:ended"
 
+    // talkie réveillé (#17142, #17144) : client -> serveur, rattrapage d'une prise de parole par un appareil réveillé
+    const val TALKIE_JOIN = "talkie:join"
+
     // status
     const val STATUS_CREATED = "status:created"
     const val STATUS_DELETED = "status:deleted"
@@ -419,6 +422,7 @@ object SocketEventNames {
         TALKIE_INCOMING,
         TALKIE_CHUNK,
         TALKIE_ENDED,
+        TALKIE_JOIN,
         STATUS_CREATED,
         STATUS_DELETED,
         STATUS_REACTED,

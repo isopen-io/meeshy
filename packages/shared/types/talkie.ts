@@ -11,6 +11,9 @@
  *    destinataire en `talkie:chunk` ({@link TalkieChunkEventData}), sans upload, sans
  *    normalisation, sans transcription, sans rien stocker.
  * 3. `talkie:end` → `talkie:ended` ({@link TalkieEndedEventData}).
+ * 4. (#17142) destinataire sans socket mais joignable par push : l'accusé dit `delivery: 'waking'`, un push de réveil
+ *    part, et le destinataire émet `talkie:join` {@link TalkieJoinPayload} — il reçoit alors `talkie:incoming`, tous les
+ *    fragments gardés dans l'ordre, puis le direct, puis `talkie:ended`.
  *
  * La copie en message vocal se fait APRÈS, par le chemin vocal existant, hors du
  * chemin critique : c'est elle qui sert de repli (`TALKIE_FALLBACK_VOICE`).
@@ -24,7 +27,7 @@
  */
 import { z } from 'zod';
 
-import { TALKIE_CODECS, type TalkieCodec, type TalkieEndReason, type TalkieErrorCode } from './talkie-constants.js';
+import { TALKIE_CODECS, type TalkieCodec, type TalkieDelivery, type TalkieEndReason, type TalkieErrorCode } from './talkie-constants.js';
 
 /** Les bornes, encodages, codes et raisons : `./talkie-constants.ts`, sans Zod, lisibles par un client léger. */
 export * from './talkie-constants.js';
@@ -35,9 +38,17 @@ export const talkieStartPayloadSchema = z.object({
 });
 export type TalkieStartPayload = z.infer<typeof talkieStartPayloadSchema>;
 
+/**
+ * `delivery` et `conversationId` sont OPTIONNELS (#17142) : un ancien client les ignore, un nouveau client lit
+ * l'absence de `delivery` comme `live`. `conversationId` n'accompagne que `TALKIE_FALLBACK_VOICE` : la conversation la
+ * plus récente que l'émetteur partage avec le destinataire, où partira la copie vocale (absent : aucune).
+ */
 export type TalkieStartAck =
-  | { readonly success: true; readonly data: { readonly talkieId: string; readonly maxDurationMs: number; readonly maxChunkBytes: number } }
-  | { readonly success: false; readonly error: string; readonly code: TalkieErrorCode };
+  | {
+      readonly success: true;
+      readonly data: { readonly talkieId: string; readonly maxDurationMs: number; readonly maxChunkBytes: number; readonly delivery?: TalkieDelivery };
+    }
+  | { readonly success: false; readonly error: string; readonly code: TalkieErrorCode; readonly conversationId?: string };
 
 /** `data` : un `Buffer` / `ArrayBuffer` Socket.IO (binaire natif), jamais du base64. */
 export const talkieChunkPayloadSchema = z.object({
@@ -51,6 +62,24 @@ export type TalkieChunkPayload = z.infer<typeof talkieChunkPayloadSchema>;
 
 export const talkieEndPayloadSchema = z.object({ talkieId: z.string().regex(/^[0-9a-f]{24}$/) });
 export type TalkieEndPayload = z.infer<typeof talkieEndPayloadSchema>;
+
+/** `talkie:join` (#17142) : le destinataire réveillé rejoint une prise de parole `waking`, pendant ou jusqu'à 60 s après. */
+export const talkieJoinPayloadSchema = z.object({ talkieId: z.string().regex(/^[0-9a-f]{24}$/) });
+export type TalkieJoinPayload = z.infer<typeof talkieJoinPayloadSchema>;
+
+/**
+ * Le push de réveil (#17142), mêmes clés sur les deux canaux : APNs `pushtotalk` (topic `<bundle>.voip-ptt`) quand un
+ * jeton PushToTalk est enregistré, sinon notification haute priorité. `fromName` est vide quand le destinataire masque le
+ * nom de l'expéditeur ; `title` et `body` sont localisés à sa langue (Prisme de cadrage).
+ */
+export type TalkieWakePushData = {
+  readonly type: 'talkie_incoming';
+  readonly talkieId: string;
+  readonly fromUserId: string;
+  readonly fromName: string;
+  readonly title: string;
+  readonly body: string;
+};
 
 export type TalkieIncomingEventData = {
   readonly talkieId: string;
@@ -76,4 +105,10 @@ export type TalkieEndedEventData = {
   readonly toUserId: string;
   readonly reason: TalkieEndReason;
   readonly endedAt: string;
+  /**
+   * Une voix RÉVEILLÉE seulement (#17142) : le destinataire l'a-t-il rejointe avant sa fin ? `false` ⇒ le client
+   * émetteur crée la copie vocale (dans `conversationId` de son repli, ou la conversation la plus récente), comme pour
+   * un repli. Absent pour une voix en direct.
+   */
+  readonly joined?: boolean;
 };

@@ -3,6 +3,7 @@ package me.meeshy.app.push
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.app.bring.BringPushHandler
+import me.meeshy.app.talkie.TalkieWakeHandler
 import me.meeshy.sdk.call.CallFreshnessChecker
 import me.meeshy.sdk.model.call.CallFreshness
 import me.meeshy.sdk.model.call.IncomingCallPushRoute
@@ -23,7 +24,8 @@ import javax.inject.Singleton
  *  3. a **revocation** (`notification_revoked`) ([RevocationPushHandler]) ;
  *  4. a **Bring** ring or stop (`bring` / `bring_stopped`, #13936) ([BringPushHandler]) — before the message path,
  *     which would render it as an ordinary banner ;
- *  5. anything else : the message pipeline ([MessageNotificationPresenter]).
+ *  5. a **talkie wake** (`talkie_incoming`, #17144) ([TalkieWakeHandler]) — a foreground service, never a banner ;
+ *  6. anything else : the message pipeline ([MessageNotificationPresenter]).
  *
  * Each stage is isolated (the async EventEmitter rule) : a rendering failure never deprives
  * the observers, an observer failure never deprives the others.
@@ -36,6 +38,7 @@ class PushMessageDispatcher @Inject constructor(
     private val callPresenter: IncomingCallNotificationPresenter,
     private val revocationHandler: RevocationPushHandler,
     private val bringHandler: BringPushHandler,
+    private val talkieHandler: TalkieWakeHandler,
     private val messagePresenter: MessageNotificationPresenter,
     private val freshness: CallFreshnessChecker,
     observers: Set<@JvmSuppressWildcards PushObserver>,
@@ -91,6 +94,7 @@ class PushMessageDispatcher @Inject constructor(
             IncomingCallPushRoute.NotACallPush -> when {
                 revocationHandler.handle(push.data) -> Unit
                 bringHandler.handle(push.data, nowMillis) -> Unit
+                talkieHandler.handle(push.data) -> Unit
                 else -> messagePresenter.present(push)
             }
         }

@@ -15,6 +15,11 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
+const cutTogetherWhere = jest.fn(async (_scope: unknown) => undefined);
+jest.mock('../../../../services/together/togetherDeps', () => ({
+  cutTogetherWhere: (scope: unknown) => cutTogetherWhere(scope),
+}));
+
 const mockGetAttachment = jest.fn<any>();
 const mockDeleteAttachment = jest.fn<any>().mockResolvedValue(undefined);
 
@@ -151,6 +156,28 @@ describe('DELETE /attachments/:id — diffusion', () => {
     expect((await remove(app)).statusCode).toBe(200);
     expect(mockDeleteAttachment).toHaveBeenCalledWith(ATTACHMENT_ID);
     expect(emitted).toEqual([]);
+    await app.close();
+  });
+});
+
+describe('DELETE /attachments/:id — séance « ensemble » (#17022)', () => {
+  it.each([['une vidéo', 'video/mp4'], ['un audio', 'audio/aac']])('supprimer %s coupe les séances de sa conversation', async (_cas, mimeType) => {
+    cutTogetherWhere.mockClear();
+    mockGetAttachment.mockResolvedValueOnce({ ...attachmentOf(USER_ID), mimeType });
+    const { app } = await buildHarness();
+    expect((await remove(app)).statusCode).toBe(200);
+    expect(cutTogetherWhere).toHaveBeenCalledWith({ conversationId: CONVERSATION_ID });
+    await app.close();
+  });
+
+  it('supprimer une image, ou être refusé, ne rejuge rien', async () => {
+    cutTogetherWhere.mockClear();
+    mockGetAttachment.mockResolvedValueOnce({ ...attachmentOf(USER_ID), mimeType: 'image/png' });
+    mockGetAttachment.mockResolvedValueOnce({ ...attachmentOf(OTHER_PARTICIPANT_ID), mimeType: 'video/mp4' });
+    const { app } = await buildHarness();
+    await remove(app);
+    expect((await remove(app)).statusCode).toBe(403);
+    expect(cutTogetherWhere).not.toHaveBeenCalled();
     await app.close();
   });
 });

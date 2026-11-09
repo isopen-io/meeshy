@@ -31,7 +31,8 @@ export type TogetherVerdict = { readonly ok: true; readonly media: TogetherMedia
 
 const REFUSED: TogetherVerdict = { ok: false };
 
-const mediaOf = (mimeType: unknown): TogetherMediaKind | null => {
+/** Le genre d'un média qui se lit ensemble, ou `null` : la seule définition, que les sites de coupure relisent. */
+export const togetherMediaOf = (mimeType: unknown): TogetherMediaKind | null => {
   if (typeof mimeType !== 'string') return null;
   const lower = mimeType.toLowerCase();
   if (lower.startsWith('video/')) return 'video';
@@ -51,7 +52,7 @@ async function playableMedia(prisma: TogetherGateDb, subject: TogetherSubject): 
   const message = attachment?.message;
   if (!attachment || !message || attachment.isViewOnce || message.isViewOnce) return null;
   if (message.conversationId !== subject.conversationId || message.deletedAt || message.expiresAt) return null;
-  return mediaOf(attachment.mimeType);
+  return togetherMediaOf(attachment.mimeType);
 }
 
 async function bothActiveMembers(prisma: TogetherGateDb, subject: TogetherSubject): Promise<boolean> {

@@ -14,7 +14,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web) et ne se lisent ou publient que par qui en a le droit (passerelle) | #16895 | #6379 | fusionnée dans dev (réveil 17) |
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web), et la passerelle ne les sert qu'à qui peut les lire | voir réveil 15 | #6379 | voir réveil 15 |
 | 2026-11-08 | L'onglet Publications du détail lit les publications (iOS) | #17061 | #16878 | fusionnée dans dev (réveil 20) |
-| 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | voir réveil 20 |
+| 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | fusionnée dans dev (réveil 21) |
+| 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
 | 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | voir réveil 22 | #16892 | voir réveil 22 |
 
 ## 2026-11-07 — lot 1
@@ -174,6 +175,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suivi ouvert : #17104 (Android : même cause dite, sans réessayer).
 - Gotcha : `Localizable.xcstrings` du SDK se réécrit à l'identique par `json.dumps(indent=2, ensure_ascii=False)` + saut de ligne final, mais SANS `sort_keys` (l'ordre Xcode n'est pas l'ordre Python) : insérer les clés nouvelles à leur place.
 - Prochain lot recommandé : #6380 (emoji de création iOS sans effet) ou #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 (index de `CommunityMember`) demandent une session de staging.
+
+## 2026-11-08 — réveil 21
+
+- Début du run : #17105 (#7816) fusionnée par le porteur à 20:39 UTC ; #7816 fermée.
+- Lot : #6380 (iOS). L'emoji choisi à la création n'allait nulle part, et celui des réglages n'était rendu nulle part (le détail le RELISAIT sans l'afficher). `CommunityLocalAppearance` (SDK, `Models/`) devient le seul site des clés `community.emoji.<id>` / `community.color.<id>` (mêmes clés : les installations existantes gardent leur choix) ; une valeur vide efface au lieu d'écrire `""` (une couleur vide rendait un hex vide au détail). La création l'écrit après le succès (jamais sur un échec), les réglages et le détail le lisent ; `CommunityEmojiMark` pose l'emoji en coin de bannière, le même dans l'aperçu de création et dans le détail.
+- Android faisait déjà de même (`appearanceStore.setEmoji` après la création) ; le web n'a rien à porter (aucun champ serveur, D-60, commentaire de `community-new.tsx` mis à jour).
+- Pas de revue adversariale : ni authentification, ni permission, ni migration (préférence d'affichage locale).
+- Témoins : `CommunityLocalAppearanceTests` (SDK, 5) et trois de plus dans `CommunityCreateViewModelTests`. iOS ne compile pas en conteneur : preuve par `ios.yml`.
+- Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 demandent une session de staging.
+- État en fin de run : PR #17152 ouverte, NON fusionnée. `ios.yml` sur la tête `5da395a14` : gardes texte et compilation vertes, les quatre tranches de tests rouges sur 14 échecs TOUS hors du diff (composer surtout, plus `MessageSearchResultRow`) — dev ne lance pas les tests à la fusion, ce rouge s'y est accumulé sans être vu : #17172. Le prochain réveil relance `ios.yml` quand #17172 est soldée, puis fusionne au vert.
 
 ## 2026-11-09 — réveil 22
 
