@@ -11,7 +11,7 @@ struct VoiceProfileManageView: View {
 
     /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
     /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
-    /// (+3 introduits par #6481, 2026-09-14).
+    /// (+3 introduits par #6481).
     private var accent: Color { Color(hex: accentColor) }
 
     @Environment(\.dismiss) private var dismiss

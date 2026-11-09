@@ -284,7 +284,7 @@ extension SignupView {
     // UNE saisie, FACULTATIVE depuis #6424 sans le dire (#6582 web, #7897) : le
     // bouton actif sans lui le prouve. Il paraît quand l'identité est DÉFINIE,
     // et sa conséquence se déplie sous « Pourquoi mettre un mot de passe
-    // maintenant ? » (directive porteur 2026-09-25).
+    // maintenant ? ».
 
     var passwordWhyDetail: String {
         String(

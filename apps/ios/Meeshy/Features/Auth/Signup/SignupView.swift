@@ -133,7 +133,6 @@ struct SignupView: View {
                 }
                 // Le clavier suit le doigt et remonte si on relâche avant la fin —
                 // le mécanisme système, jamais un `DragGesture.onEnded` maison
-                // (directive porteur 2026-08-30).
                 .scrollDismissesKeyboard(.interactively)
             }
         }

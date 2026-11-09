@@ -262,7 +262,7 @@ struct PrivacySettingsView: View {
 
     /// Le chiffrement E2EE n'est pas encore opérationnel : la section est
     /// affichée GRISÉE et NON interactive avec un statut explicite « Désactivé /
-    /// Bientôt disponible » (décision produit 2026-06-14). Aucune préférence de
+    /// Bientôt disponible ». Aucune préférence de
     /// chiffrement n'est éditable tant que la fonctionnalité n'est pas livrée —
     /// éviter de laisser croire qu'un chiffrement optionnel/actif existe.
     private var encryptionSection: some View {

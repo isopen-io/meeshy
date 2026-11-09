@@ -48,7 +48,7 @@ struct AffiliateView: View {
     // MARK: - Header Action
 
     /// Le (+) devient un disque de verre, du diamètre du retour qui lui fait
-    /// face (directive porteur 2026-09-14, #6481) — le glyphe plein cerclé
+    /// face (#6481) — le glyphe plein cerclé
     /// ne ressemblait à aucun autre chrome de la barre.
     private var createLinkButton: some View {
         Button {

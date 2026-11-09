@@ -148,7 +148,7 @@ final class DiscoverViewModel: ObservableObject {
         defer { isImportingContacts = false }
         do {
             _ = try await contactSync.syncDirectory(mode: .replace)
-            // Toutes les pages (plus de plafond à 200 — 2026-08-21).
+            // Toutes les pages.
             let directory = try await directoryService.listAll(filter: .meeshy, query: nil)
             contactMatches = directory.compactMap(\.asContactMatch)
             hasImportedContacts = true
