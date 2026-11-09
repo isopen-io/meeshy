@@ -40,6 +40,7 @@ final class TalkieVoiceCopyTests: XCTestCase {
         var enqueued: [(URL, String)] = []
         var opened: [String] = []
         var clientMessageIds: [String] = []
+        var names: [String] = []
     }
 
     func test_send_enqueuesTheFileIntoTheMostRecentConversation() async {
@@ -47,7 +48,7 @@ final class TalkieVoiceCopyTests: XCTestCase {
         let sut = TalkieVoiceCopySender(
             shared: { _ in [TalkieCopyCandidate(id: "family", type: "group", rankAt: Date())] },
             openDirect: { userId in log.opened.append(userId); return "direct" },
-            enqueue: { url, id, cid in log.enqueued.append((url, id)); log.clientMessageIds.append(cid) },
+            enqueue: { url, id, cid, name in log.enqueued.append((url, id)); log.clientMessageIds.append(cid); log.names.append(name) },
             writeFile: { _, _ in 1.5 }
         )
 
@@ -64,7 +65,7 @@ final class TalkieVoiceCopyTests: XCTestCase {
         let sut = TalkieVoiceCopySender(
             shared: { _ in throw URLError(.notConnectedToInternet) },
             openDirect: { userId in log.opened.append(userId); return "direct" },
-            enqueue: { url, id, cid in log.enqueued.append((url, id)); log.clientMessageIds.append(cid) },
+            enqueue: { url, id, cid, name in log.enqueued.append((url, id)); log.clientMessageIds.append(cid); log.names.append(name) },
             writeFile: { _, _ in 1.5 }
         )
 
@@ -79,7 +80,7 @@ final class TalkieVoiceCopyTests: XCTestCase {
         let sut = TalkieVoiceCopySender(
             shared: { _ in XCTFail("la passerelle a déjà choisi"); return [] },
             openDirect: { userId in log.opened.append(userId); return "direct" },
-            enqueue: { url, id, cid in log.enqueued.append((url, id)); log.clientMessageIds.append(cid) },
+            enqueue: { url, id, cid, name in log.enqueued.append((url, id)); log.clientMessageIds.append(cid); log.names.append(name) },
             writeFile: { _, _ in 1.5 }
         )
 
@@ -94,7 +95,7 @@ final class TalkieVoiceCopyTests: XCTestCase {
         let sut = TalkieVoiceCopySender(
             shared: { _ in [TalkieCopyCandidate(id: "c", type: "direct", rankAt: nil)] },
             openDirect: { _ in "direct" },
-            enqueue: { url, id, cid in log.enqueued.append((url, id)); log.clientMessageIds.append(cid) },
+            enqueue: { url, id, cid, name in log.enqueued.append((url, id)); log.clientMessageIds.append(cid); log.names.append(name) },
             writeFile: { _, _ in nil }
         )
 
@@ -112,13 +113,45 @@ final class TalkieVoiceCopyTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
+    // MARK: - #17308 : la copie porte un nom qui a du sens
+
+    func test_name_saysTalkieThenTheLocalDayAndMinute() {
+        let paris = TimeZone(identifier: "Europe/Paris")!
+        let moment = ISO8601DateFormatter().date(from: "2026-11-09T19:37:42Z")!
+
+        XCTAssertEqual(TalkieVoiceCopyName.of(moment, timeZone: paris), "talkie_2026-11-09_2037.m4a")
+    }
+
+    func test_name_padsSingleDigitMonthDayHourAndMinute() {
+        let utc = TimeZone(identifier: "UTC")!
+        let moment = ISO8601DateFormatter().date(from: "2027-03-04T05:06:00Z")!
+
+        XCTAssertEqual(TalkieVoiceCopyName.of(moment, timeZone: utc), "talkie_2027-03-04_0506.m4a")
+    }
+
+    func test_send_handsTheQueueTheNameOfTheMomentItWasSpoken() async {
+        let log = Log()
+        let moment = ISO8601DateFormatter().date(from: "2026-11-09T19:37:42Z")!
+        let sut = TalkieVoiceCopySender(
+            shared: { _ in [TalkieCopyCandidate(id: "direct", type: "direct", rankAt: Date())] },
+            openDirect: { _ in "direct" },
+            enqueue: { url, id, cid, name in log.enqueued.append((url, id)); log.clientMessageIds.append(cid); log.names.append(name) },
+            writeFile: { _, _ in 1.5 },
+            now: { moment }
+        )
+
+        _ = await sut.send([Data([1])], toUserId: "bob")
+
+        XCTAssertEqual(log.names, [TalkieVoiceCopyName.of(moment)])
+    }
+
     // MARK: - #17255 : la copie part une fois, et son abandon se voit
 
     private func makeSender(log: Log, exhausted: AnyPublisher<String, Never> = Empty().eraseToAnyPublisher()) -> TalkieVoiceCopySender {
         TalkieVoiceCopySender(
             shared: { _ in [TalkieCopyCandidate(id: "direct", type: "direct", rankAt: Date())] },
             openDirect: { _ in "direct" },
-            enqueue: { url, id, cid in log.enqueued.append((url, id)); log.clientMessageIds.append(cid) },
+            enqueue: { url, id, cid, name in log.enqueued.append((url, id)); log.clientMessageIds.append(cid); log.names.append(name) },
             writeFile: { _, _ in 1.5 },
             exhausted: exhausted
         )
