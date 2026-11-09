@@ -75,12 +75,12 @@ struct GameShowcaseScreen: View {
                 .gameElement(GameElementDetails.trophy(GameTrophyItem(key: order[index], awardedAt: awardedAt ?? "")))
             Text(view.title)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
             if let awardedAt {
                 Text(GameText.showcaseAwarded(date: GameWave2Format.awardedDate(awardedAt)))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .multilineTextAlignment(.center)
             }
             HStack(spacing: MeeshySpacing.xs) {
@@ -106,7 +106,7 @@ struct GameShowcaseScreen: View {
         } label: {
             Image(systemName: symbol)
                 .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous).fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
         }
@@ -155,7 +155,7 @@ struct GameConstellationCard: View {
             if !constellation.cosmetics.isEmpty {
                 Text(GameText.constellationCosmetics)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 ForEach(constellation.cosmetics, id: \.cosmeticKey) { cosmetic in
                     HStack(spacing: MeeshySpacing.sm) {
                         GameConstellationSwatch(kind: cosmetic.kind)
@@ -230,7 +230,7 @@ private struct GameConstellationSwatch: View {
             switch kind {
             case .halo: Circle().stroke(brand.opacity(0.4), lineWidth: 3).shadow(color: brand, radius: 4)
             case .frame: Circle().stroke(brand, lineWidth: 2)
-            case .sparkle: Image(systemName: "sparkle").imageScale(.small).foregroundColor(brand)
+            case .sparkle: Image(systemName: "sparkle").imageScale(.small).foregroundStyle(brand)
             }
         }
         .frame(width: 28, height: 28)

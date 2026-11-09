@@ -54,7 +54,7 @@ struct GameAtlasScreen: View {
         return GameCard(tint: MeeshyColors.brandPrimary, title: GameText.atlasTitle) {
             Text(count)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             GameProgressBar(value: Double(atlas.stamped) / Double(max(1, atlas.total)), tint: MeeshyColors.brandPrimary, label: count)
             GameNote(text: GameText.atlasIntro)
         }
@@ -75,11 +75,11 @@ struct GameAtlasScreen: View {
                             .accessibilityHidden(true)
                         Text(GameWave2Format.languageName(stamp.language))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .multilineTextAlignment(.center)
                         Text(GameText.atlasStampedOn(date: GameWave2Format.day(stamp.stampedOn)))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .multilineTextAlignment(.center)
                     }
                     .accessibilityElement(children: .combine)
@@ -112,10 +112,10 @@ struct GameAtlasScreen: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(GameWave2Format.languageName(entry.language))
                                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                             Text(entry.sent ? GameText.atlasPendingSent : GameText.atlasPendingReceived)
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                         Spacer(minLength: 0)
                     }

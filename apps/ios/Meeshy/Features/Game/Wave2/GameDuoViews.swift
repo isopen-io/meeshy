@@ -74,7 +74,7 @@ struct GameDuoCard: View {
         if let mission = duo.mission {
             Text(GameCopy.missionTitle(templateKey: mission.templateKey, target: mission.partTarget))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(ThemeManager.shared.textPrimary)
+                .foregroundStyle(ThemeManager.shared.textPrimary)
             if let progress = duo.progress {
                 progressLines(mission: mission, progress: progress)
             }

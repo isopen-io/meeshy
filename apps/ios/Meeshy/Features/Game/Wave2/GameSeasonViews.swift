@@ -111,11 +111,11 @@ struct GameSeasonUpcoming: View {
         GameCard(tint: MeeshyColors.brandPrimary, title: GameText.seasonTitle) {
             Text(Self.line(upcoming))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(ThemeManager.shared.textPrimary)
+                .foregroundStyle(ThemeManager.shared.textPrimary)
             if let theme = GameWave2Format.seasonTheme(upcoming.themeKey) {
                 Text(GameText.seasonTheme(theme: theme))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
             }
             GameNote(text: GameText.seasonHow(per: GameCopy.formatCount(GameSeason.starsPerStep)))
         }
@@ -135,7 +135,7 @@ struct GameSeasonOpened: View {
             if let theme = GameWave2Format.seasonTheme(season.themeKey) {
                 Text(GameText.seasonTheme(theme: theme))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
             }
             GameNote(text: GameText.archiveSeasonDates(start: GameWave2Format.day(season.startDay),
                                                        end: GameWave2Format.day(season.endDay)))
@@ -161,7 +161,7 @@ private struct GameSeasonHeader: View {
             if let theme = GameWave2Format.seasonTheme(season.themeKey) {
                 Text(GameText.seasonTheme(theme: theme))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
             }
             Text(GameText.seasonStars(count: season.stars) + " · " + stepsLine)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -351,7 +351,7 @@ private struct GameSeasonSeal: View {
                 .background(Circle().fill(lit ? AnyShapeStyle(GameMaterial.gold.gradient) : AnyShapeStyle(theme.textMuted.opacity(MeeshyOpacity.subtle))))
             Text(GameCopy.formatCount(step))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
     }
