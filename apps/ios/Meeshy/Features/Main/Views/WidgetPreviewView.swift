@@ -7,6 +7,7 @@ import os
 // MARK: - WidgetPreviewView
 
 struct WidgetPreviewView: View {
+    @State private var delayed = DelayedActions()
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -575,7 +576,7 @@ struct WidgetPreviewView: View {
 
         for step in 1...steps {
             let value = Int(Double(target) * Double(step) / Double(steps))
-            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(step)) {
+            delayed.run(after: .seconds(interval * Double(step))) {
                 withAnimation(.easeOut(duration: 0.08)) {
                     animatedUnreadCount = value
                 }

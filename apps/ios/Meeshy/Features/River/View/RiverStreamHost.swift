@@ -42,6 +42,7 @@ import MeeshyUI
 /// `resolveRiverStep`. Un tap sur une bulle déplace le curseur dessus
 /// (`moveTo`) sans passer par la loi — c'est un choix explicite, pas un pas.
 struct RiverStreamHost: View {
+    @State private var delayed = DelayedActions()
     let geometry: RiverLaneResolver.RiverGeometry
     /// Contenu résolu (texte, nom, heure — le Prisme déjà appliqué par
     /// l'appelant) pour CHAQUE bulle de `geometry.bubbles`, DÉJÀ indexé par
@@ -309,7 +310,7 @@ struct RiverStreamHost: View {
     private func attemptLanding() {
         guard let target = landingTarget, scrollProxy != nil, paneHeight > 0 else { return }
         frame(target)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        delayed.run(after: .milliseconds(600)) {
             if landingTarget == target { landingTarget = nil }
         }
     }

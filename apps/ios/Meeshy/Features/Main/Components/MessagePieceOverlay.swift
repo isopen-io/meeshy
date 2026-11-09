@@ -20,6 +20,7 @@ import MeeshyUI
 /// Une pièce protégée (vue unique, flou, chiffrement) se montre masquée, sans
 /// réaction ni sortie : l'appui long ne dévoile pas ce que le fil retient.
 struct MessagePieceOverlay: View {
+    @State private var delayed = DelayedActions()
     let message: Message
     let accentHex: String
     @Binding var focusedPieceId: String?
@@ -255,7 +256,7 @@ struct MessagePieceOverlay: View {
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        delayed.run(after: .milliseconds(220)) {
             isPresented = false
         }
     }

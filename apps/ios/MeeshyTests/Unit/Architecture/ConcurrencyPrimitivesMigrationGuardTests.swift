@@ -100,7 +100,25 @@ final class ConcurrencyPrimitivesMigrationGuardTests: XCTestCase {
         "Main/ViewModels/ConversationViewModel+StoreObservation.swift",
         "Main/Components/ConversationCard/ConversationLinkCardViewModel.swift",
         "Game/Wave2/GameArchiveModel.swift",
-    ].map { (path: $0, rules: [sinkTask]) }
+    ].map { (path: $0, rules: [sinkTask]) } + [
+        "Main/Views/Bubble/PieceSpotlight.swift",
+        "Main/Views/Bubble/BubbleReactionsOverlay.swift",
+        "Main/Views/ConversationAnimatedBackground.swift",
+        "Main/Views/ConversationRowAvatar.swift",
+        "Main/Views/FeedPostActionsBar.swift",
+        "Main/Views/ConversationListHelpers.swift",
+        "Main/Views/PostDetailView.swift",
+        "Main/Views/PostDetailView+CommentTarget.swift",
+        "Main/Views/RootView.swift",
+        "Main/Views/iPadRootView+Navigation.swift",
+        "Auth/Views/LoginView.swift",
+        "Main/Components/StatusBubbleOverlay.swift",
+        "Main/Components/MessagePieceOverlay.swift",
+        "Main/Components/MessageOverlayMenu.swift",
+        "Main/Components/ContactCard/ContactCardDetailSheet.swift",
+        "Share/ShareSheetView.swift",
+        "Main/Views/AudioFullscreenView.swift",
+    ].map { (path: $0, rules: [delayedMainQueue]) }
 
     private static var featuresRoot: URL {
         URL(fileURLWithPath: #filePath)

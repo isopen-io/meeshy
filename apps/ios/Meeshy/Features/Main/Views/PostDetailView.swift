@@ -6,6 +6,7 @@ import MeeshySDK
 import MeeshyUI
 
 struct PostDetailView: View {
+    @State private var delayed = DelayedActions()
     let postId: String
     var initialPost: FeedPost?
     var showComments: Bool = false
@@ -418,7 +419,7 @@ struct PostDetailView: View {
                         .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures = sceneMeasures.recordingViewport($0, composerIsFocused: composerIsFocused) }
                         .onAppear {
                             if showComments {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                delayed.run(after: .milliseconds(500)) {
                                     attemptScrollToTargetComment(using: scrollProxy)
                                 }
                             }
@@ -749,11 +750,7 @@ struct PostDetailView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                     likeScale = 1.3
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        likeScale = 1.0
-                    }
-                }
+                delayed.run(after: .milliseconds(150)) { withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { likeScale = 1.0 } }
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
