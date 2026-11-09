@@ -593,6 +593,12 @@ export default defineConfig({
         institutional: fileURLToPath(new URL('./src/styles/institutional.css', import.meta.url)),
         /* LA LANDING (#10002) — sa feuille, inlinée par `scripts/prerender-landing.tsx`. */
         landing: fileURLToPath(new URL('./src/styles/landing.css', import.meta.url)),
+        /* LE PONT libsignal (#17114) — aucun écran ne l'appelle encore : sans
+           cette entrée, il ne serait pas construit, et son poids ne serait ni
+           mesuré ni borné (`budgets.json › on_demand_chunks.libsignal_bridge`).
+           Aucun document ne le référence ; l'application ne l'atteint que par
+           `loadLibsignalBridge()`, un import() différé. */
+        'libsignal-build-entry': fileURLToPath(new URL('./src/lib/e2ee/libsignal-build-entry.ts', import.meta.url)),
       },
       output: {
         /**
