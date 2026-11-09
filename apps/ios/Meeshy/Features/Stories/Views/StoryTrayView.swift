@@ -439,7 +439,7 @@ private struct MyStoryButton: View {
                         // (déborderait s'il scalait, doctrine 86i) ; le
                         // bouton porte le libellé.
                         Image(systemName: "plus")
-                            .font(.system(size: MeeshyIconSize.lg, weight: .bold))
+                            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.lg, weight: .bold))
                             .foregroundStyle(Color.white)
                             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                             .background(
@@ -534,7 +534,7 @@ private struct StoryUploadOverlay: View {
 
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(.white)
             } else {
                 Circle()

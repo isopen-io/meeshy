@@ -161,7 +161,7 @@ struct MyStoryCard: View {
             ZStack {
                 Circle().fill(accentColor)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.fixedGlyph(11, weight: .bold))
                     .foregroundStyle(.white)
             }
             .frame(width: 22, height: 22)

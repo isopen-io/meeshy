@@ -272,7 +272,7 @@ struct ActiveSessionsView: View {
                 Image(systemName: row.systemImage)
                     // Glyphe décoratif borné par le cadre fixe 32×32 → police figée (86i) ;
                     // l'identité de l'appareil est portée par le titre → masqué du rotor.
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.fixedGlyph(16, weight: .medium))
                     .foregroundColor(tint)
                     .frame(width: 32, height: 32)
                     .background(

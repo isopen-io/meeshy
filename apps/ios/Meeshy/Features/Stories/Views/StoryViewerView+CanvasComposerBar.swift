@@ -185,7 +185,7 @@ struct StoryComposerBarView: View {
                         } label: {
                             Image(systemName: "xmark")
                                 // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
-                                .font(.system(size: 9, weight: .bold))
+                                .font(MeeshyFont.fixedGlyph(9, weight: .bold))
                                 .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))

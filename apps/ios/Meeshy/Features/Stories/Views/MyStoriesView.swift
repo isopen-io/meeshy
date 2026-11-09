@@ -197,7 +197,7 @@ struct MyStoriesView: View {
                         onCreateStory()
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
+                            .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(width: 32, height: 32)
                             .adaptiveGlassProminent(in: Circle(), tint: accentColor)

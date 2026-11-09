@@ -46,7 +46,7 @@ struct UserStatsView: View {
             if let errorMessage = viewModel.errorMessage {
                 HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                         .foregroundColor(MeeshyColors.error)
                         .accessibilityHidden(true)
                     Text(errorMessage)
@@ -95,7 +95,7 @@ struct UserStatsView: View {
             // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
             // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
             Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xl, weight: .semibold))
                 .foregroundColor(Color(hex: color))
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(

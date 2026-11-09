@@ -180,7 +180,7 @@ struct DataExportView: View {
             // Glyphe figé : badge de dimension fixe 28×28 (doctrine 74i/86i — le scaling
             // Dynamic Type déborderait/tronquerait le glyphe hors du cadre fixe).
             Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(color)
                 .frame(width: 28, height: 28)
                 .background(
