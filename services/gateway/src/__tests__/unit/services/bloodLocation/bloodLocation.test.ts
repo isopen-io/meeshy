@@ -234,6 +234,25 @@ describe('le journal des consultations — du seul observé', () => {
     expect(journal.excessiveObserverIds).toEqual([MOI]);
   });
 
+  it('un observateur qui lit en boucle ne gonfle pas le journal et n\'y cache personne : au plus 21 lignes par jour, la dernière à l\'heure de sa dernière lecture', async () => {
+    const w = bloodLocationWorld({
+      links: [...LIENS, [SANG, AUTRE_SANG, 'BLOOD']],
+      consents: [[SANG, MOI, TOUT_PARTAGE], [SANG, AUTRE_SANG, TOUT_PARTAGE]],
+    });
+    await readBloodLocationHistory(w.deps, AUTRE_SANG, SANG, {});
+    for (let i = 0; i < 300; i += 1) {
+      w.avancer(1000);
+      await readBloodLocationHistory(w.deps, MOI, SANG, {});
+    }
+
+    const journal = await listBloodLocationConsultations(w.deps, SANG);
+
+    expect(w.consultations.rows.filter((row) => row.observerId === MOI)).toHaveLength(21);
+    expect(journal.items.map((c) => c.observerId)).toContain(AUTRE_SANG);
+    expect(journal.items[0]).toEqual({ observerId: MOI, consultedAt: new Date(w.horloge()).toISOString() });
+    expect(journal.excessiveObserverIds).toEqual([MOI]);
+  });
+
   it('les consultations de plus de 30 jours ne sont plus servies', async () => {
     const w = bloodWorldAvecConsentements();
     await readBloodLocationHistory(w.deps, MOI, SANG, {});

@@ -10,7 +10,8 @@
  *   réponse vide qu'un compte sans historique ; la consultation est notée dans les deux cas. Un
  *   émetteur hors drapeau rend aussi la réponse vide, sans journal : la fonction n'existe pas pour lui.
  * - **Journal** : lisible du seul observé ; `excessive` quand un même observateur dépasse 20 lectures
- *   en 24 h.
+ *   en 24 h. Au-delà, ses lectures ne s'ajoutent plus, elles datent sa dernière ligne ; et chaque
+ *   observateur des 30 jours y figure, quel que soit le volume des autres.
  * - **Proximité** : `bloodProximity.ts`, déclenchée à l'enregistrement, jamais bloquante — et jamais
  *   pour un point arrivé à une vitesse impossible depuis le précédent (rangé, marqué dans le scellé).
  */
@@ -117,6 +118,24 @@ async function viewerMayRead(deps: BloodLocationDeps, viewerId: string, ownerId:
   return { kind: 'forbidden', code: verdict?.reason === 'consent' ? 'RELATION_CONSENT_REQUIRED' : 'FORBIDDEN' };
 }
 
+/**
+ * Note une lecture. Au-delà du seuil d'excès sur 24 h, l'excès est déjà signalé : la dernière ligne
+ * de l'observateur prend l'heure de cette lecture au lieu d'en ajouter une — un observateur qui lit
+ * en boucle ne gonfle pas le journal (au plus seuil + 1 lignes par jour).
+ */
+async function noteConsultation(deps: BloodLocationDeps, observedId: string, observerId: string): Promise<void> {
+  const now = deps.now();
+  const stamp = { consultedAt: new Date(now), expiresAt: new Date(now + HISTORY_MS) };
+  const ofPair = { observedId, observerId };
+  const lastDay = await deps.prisma.bloodLocationConsultation.count({ where: { ...ofPair, consultedAt: { gte: new Date(now - DAY_MS) } } });
+  if (lastDay <= BLOOD_CONSULTATION_EXCESS_PER_DAY) {
+    await deps.prisma.bloodLocationConsultation.create({ data: { ...ofPair, ...stamp } });
+    return;
+  }
+  const last = await deps.prisma.bloodLocationConsultation.findFirst({ where: ofPair, orderBy: { consultedAt: 'desc' }, select: { id: true } });
+  if (last) await deps.prisma.bloodLocationConsultation.updateMany({ where: { id: last.id }, data: stamp });
+}
+
 export async function readBloodLocationHistory(
   deps: BloodLocationDeps,
   viewerId: string,
@@ -127,10 +146,7 @@ export async function readBloodLocationHistory(
   const refusal = await viewerMayRead(deps, viewerId, ownerId);
   if (refusal) return refusal;
   if (!deps.enabledFor(ownerId)) return { kind: 'ok', items: [] };
-  const now = deps.now();
-  await deps.prisma.bloodLocationConsultation.create({
-    data: { observedId: ownerId, observerId: viewerId, consultedAt: new Date(now), expiresAt: new Date(now + HISTORY_MS) },
-  });
+  await noteConsultation(deps, ownerId, viewerId);
   const [global, targeted] = await Promise.all([inGlobalGhost(deps, ownerId), ghostedBy(deps, ownerId)]);
   if (global || targeted.has(viewerId)) return { kind: 'ok', items: [] };
   return { kind: 'ok', items: await pointsOf(deps, ownerId, viewerId, params) };
@@ -143,15 +159,22 @@ export async function eraseBloodLocationHistory(deps: BloodLocationDeps, ownerId
 
 export async function listBloodLocationConsultations(deps: BloodLocationDeps, observedId: string): Promise<BloodLocationConsultations> {
   const now = deps.now();
-  const rows = await deps.prisma.bloodLocationConsultation.findMany({
-    where: { observedId, consultedAt: { gte: new Date(now - HISTORY_MS) } },
-    orderBy: { consultedAt: 'desc' },
-    take: JOURNAL_LIMIT,
-    select: { observerId: true, consultedAt: true },
-  });
-  const lastDay = rows.filter((row) => row.consultedAt.getTime() >= now - DAY_MS);
-  const counts = lastDay.reduce((acc, row) => acc.set(row.observerId, (acc.get(row.observerId) ?? 0) + 1), new Map<string, number>());
-  const excessiveObserverIds = [...counts].filter(([, count]) => count > BLOOD_CONSULTATION_EXCESS_PER_DAY).map(([id]) => id);
+  const where = { observedId, consultedAt: { gte: new Date(now - HISTORY_MS) } };
+  const select = { observerId: true, consultedAt: true } as const;
+  const [recent, latestPerObserver] = await Promise.all([
+    deps.prisma.bloodLocationConsultation.findMany({ where, orderBy: { consultedAt: 'desc' }, take: JOURNAL_LIMIT, select }),
+    deps.prisma.bloodLocationConsultation.findMany({ where, orderBy: { consultedAt: 'desc' }, distinct: ['observerId'], select }),
+  ]);
+  const seen = new Set(recent.map((row) => `${row.observerId}:${row.consultedAt.getTime()}`));
+  const rows = [...recent, ...latestPerObserver.filter((row) => !seen.has(`${row.observerId}:${row.consultedAt.getTime()}`))].sort(
+    (a, b) => b.consultedAt.getTime() - a.consultedAt.getTime(),
+  );
+  const dayAgo = now - DAY_MS;
+  const activeToday = latestPerObserver.filter((row) => row.consultedAt.getTime() >= dayAgo).map((row) => row.observerId);
+  const counts = await Promise.all(
+    activeToday.map(async (observerId) => [observerId, await deps.prisma.bloodLocationConsultation.count({ where: { observedId, observerId, consultedAt: { gte: new Date(dayAgo) } } })] as const),
+  );
+  const excessiveObserverIds = counts.filter(([, count]) => count > BLOOD_CONSULTATION_EXCESS_PER_DAY).map(([id]) => id);
   return {
     items: rows.map((row) => ({ observerId: row.observerId, consultedAt: row.consultedAt.toISOString() })),
     excessive: excessiveObserverIds.length > 0,

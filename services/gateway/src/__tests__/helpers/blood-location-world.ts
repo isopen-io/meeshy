@@ -65,8 +65,12 @@ function inMemoryTable(rows: Row[], keyOf?: (where: Row) => Row | null) {
       args.data.forEach((data) => rows.push({ id: `row${String(rows.length).padStart(21, '0')}`, ...data }));
       return { count: args.data.length };
     },
-    findMany: async (args: { where?: Row; select?: Row; orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {}) =>
-      order(matching(args.where).map(asNumber), args.orderBy).slice(0, args.take ?? rows.length).map((row) => pick(row, args.select)),
+    findMany: async (args: { where?: Row; select?: Row; orderBy?: Record<string, 'asc' | 'desc'>; take?: number; distinct?: string[] } = {}) => {
+      const ordered = order(matching(args.where).map(asNumber), args.orderBy);
+      const keyOfRow = (row: Row): string => JSON.stringify((args.distinct ?? []).map((field) => row[field]));
+      const unique = args.distinct ? ordered.filter((row, index) => ordered.findIndex((other) => keyOfRow(other) === keyOfRow(row)) === index) : ordered;
+      return unique.slice(0, args.take ?? rows.length).map((row) => pick(row, args.select));
+    },
     findFirst: async (args: { where?: Row; select?: Row; orderBy?: Record<string, 'asc' | 'desc'> } = {}) => {
       const [found] = order(matching(args.where), args.orderBy);
       return found ? pick(found, args.select) : null;
