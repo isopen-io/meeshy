@@ -25,13 +25,22 @@ struct SessionEndingHooksTests {
         #expect(log.calls == ["a", "b"])
     }
 
-    @Test func unCrochetQuiTraine_neRetientPasLaSortieAuDelaDuDelai() async {
+    /// Le crochet qui traîne est ANNULÉ passé le délai — vérifié par son effet, jamais par une durée mesurée : sur un
+    /// runner chargé, l'acteur principal peut rester pris plusieurs secondes et fausser tout chronomètre (8 s en CI).
+    @Test func unCrochetQuiTraine_estAnnulePasseLeDelai() async {
         let hooks = SessionEndingHooks(timeout: 0.05)
-        hooks.add { try? await Task.sleep(for: .seconds(5)) }
-        let start = Date()
+        let log = Log()
+        hooks.add {
+            do {
+                try await Task.sleep(for: .seconds(60))
+                log.calls.append("fini")
+            } catch {
+                log.calls.append("annulé")
+            }
+        }
 
         await hooks.runAll()
 
-        #expect(Date().timeIntervalSince(start) < 2)
+        #expect(log.calls == ["annulé"])
     }
 }
