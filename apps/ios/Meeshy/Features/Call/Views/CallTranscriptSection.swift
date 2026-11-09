@@ -79,7 +79,7 @@ struct CallTranscriptSection: View {
                     withAnimation { showOriginalText.toggle() }
                 } label: {
                     Image(systemName: showOriginalText ? "character.bubble.fill" : "captions.bubble.fill")
-                        .foregroundColor(Color(hex: accentHex))
+                        .foregroundStyle(Color(hex: accentHex))
                 }
                 .accessibilityLabel(showOriginalText
                     ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)

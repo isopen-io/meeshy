@@ -98,7 +98,7 @@ struct CallCaptionRow: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(speakerHeading)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(speakerColor)
+                        .foregroundStyle(speakerColor)
                         .lineLimit(1)
                     if let tag = line.languageTag {
                         Text(tag)

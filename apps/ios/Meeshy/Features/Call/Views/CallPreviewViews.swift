@@ -171,7 +171,7 @@ struct CallPreviewOutgoingControls: View {
                     // cercle de 64 pt (règle du 264i : aucune taille figée neuve).
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(isOn ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(isOn ? MeeshyColors.indigo500 : Color.white.opacity(MeeshyOpacity.intense))
                     .callControlGlass(diameter: 64, isActive: isOn, tint: MeeshyColors.indigo500)
 
                 Text(caption)
