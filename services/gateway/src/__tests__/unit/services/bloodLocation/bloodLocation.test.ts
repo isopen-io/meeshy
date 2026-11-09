@@ -303,7 +303,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     expect(cible.emissions).toEqual([]);
   });
 
-  it('rien au-delà du rayon réglé, et un rayon réglé plus large déclenche', async () => {
+  it('rien au-delà du rayon réglé, et un rayon réglé plus large déclenche à l\'évaluation suivante de la paire', async () => {
     const w = proxi();
     await recordBloodLocation(w.deps, SANG, A_5_KM);
     await recordBloodLocation(w.deps, MOI, PARIS);
@@ -311,6 +311,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
 
     await updateBloodLocationSettings(w.deps, MOI, { userId: SANG, proximityRadiusMeters: 5000 });
     await updateBloodLocationSettings(w.deps, SANG, { userId: MOI, proximityRadiusMeters: 5000 });
+    w.avancer(15 * MINUTE);
     await recordBloodLocation(w.deps, MOI, PARIS);
     expect(w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
   });

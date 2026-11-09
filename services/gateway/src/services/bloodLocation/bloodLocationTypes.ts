@@ -20,6 +20,11 @@ export type BloodLocationDeps = {
    * Strict — une panne LÈVE, et l'alerte ne part pas.
    */
   readonly claimProximityCooldown: (pairKey: string, ttlSeconds: number) => Promise<boolean>;
+  /**
+   * Ajoute `by` au compteur `key` (créé pour `ttlSeconds`) et rend le total. Strict — une panne
+   * LÈVE, et aucune paire n'est évaluée.
+   */
+  readonly countProximityEvaluations: (key: string, by: number, ttlSeconds: number) => Promise<number>;
   /** Journalise un échec sans charge ; jamais d'effet sur le geste. */
   readonly report?: (error: unknown) => void;
 };

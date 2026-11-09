@@ -9,6 +9,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { matchesMongoWhere, type MongoDocument } from './mongo-where';
 import { ADULT_BIRTH, messagingWorld, type CircleLink, type Row } from './messaging-circle-world';
 import type { BloodLocationDeps } from '../../services/bloodLocation/bloodLocationService';
+import { sealPoint, type SealedPoint } from '../../services/bloodLocation/bloodLocationSeal';
 
 export const T0 = Date.parse('2026-11-09T12:00:00.000Z');
 export const MINUTE = 60_000;
@@ -102,6 +103,8 @@ export type BloodLocationWorldSeed = {
   /** `[propriétaire, bénéficiaire, partages]` : ce que `propriétaire` partage à `bénéficiaire`. */
   readonly consents?: ReadonlyArray<readonly [string, string, Consentements & Row]>;
   readonly cooldownDown?: boolean;
+  /** Le compteur d'évaluations de proximité en panne. */
+  readonly counterDown?: boolean;
   /** Les comptes que le drapeau n'admet pas (hors liste blanche). */
   readonly horsDrapeau?: readonly string[];
 };
@@ -143,6 +146,7 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
   };
   const emissions: Emission[] = [];
   const cooldowns = new Map<string, number>();
+  const counters = new Map<string, { value: number; until: number }>();
   let now = T0;
   const deps: BloodLocationDeps = {
     prisma: prisma as unknown as PrismaClient,
@@ -155,6 +159,14 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
       if (until !== undefined && until > now) return false;
       cooldowns.set(key, now + ttlSeconds * 1000);
       return true;
+    },
+    countProximityEvaluations: async (key, by, ttlSeconds) => {
+      if (seed.counterDown) throw new Error('redis injoignable');
+      const current = counters.get(key);
+      const live = current !== undefined && current.until > now ? current : { value: 0, until: now + ttlSeconds * 1000 };
+      const next = { value: live.value + by, until: live.until };
+      counters.set(key, next);
+      return next.value;
     },
   };
   return {
@@ -171,6 +183,10 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
       now += ms;
     },
     horloge: (): number => now,
+    /** Range un point tel que la production l'aurait scellé, sans passer par l'enregistrement (ni proximité). */
+    poser: (ownerId: string, point: Omit<SealedPoint, 'hiddenFrom'>, at: number = now): void => {
+      points.rows.push({ id: `pt${String(points.rows.length).padStart(22, '0')}`, ownerId, sealed: sealPoint(ownerId, { ...point, hiddenFrom: [] }), recordedAt: new Date(at), expiresAt: new Date(at + 30 * JOUR) });
+    },
     /** Retire ou accorde un partage : le prochain geste relit la base. */
     consentir: (ownerId: string, otherId: string, shares: Consentements & Row): void => {
       settings.upsertBy({ ownerId, otherId }, { ownerId, otherId, locationShared: false, locationHistoryShared: false, proximityShared: false, ...shares }, shares);

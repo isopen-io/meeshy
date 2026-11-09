@@ -12,6 +12,8 @@ export type SealedPoint = {
   readonly longitude: number;
   readonly accuracy?: number;
   readonly hiddenFrom: readonly string[];
+  /** Arrivé à une vitesse impossible depuis le point précédent : rangé, jamais servi à la proximité. */
+  readonly implausible?: true;
 };
 
 const contextOf = (ownerId: string): string => `BloodLocationPoint.sealed:${ownerId.toLowerCase()}`;
@@ -29,7 +31,13 @@ export function openPoint(ownerId: string, sealed: string): SealedPoint | null {
     if (!isCoordinate(row.latitude, 90) || !isCoordinate(row.longitude, 180)) return null;
     const hiddenFrom = Array.isArray(row.hiddenFrom) ? row.hiddenFrom.filter((id): id is string => typeof id === 'string') : [];
     const accuracy = typeof row.accuracy === 'number' && Number.isFinite(row.accuracy) && row.accuracy >= 0 ? row.accuracy : undefined;
-    return { latitude: row.latitude, longitude: row.longitude, hiddenFrom, ...(accuracy === undefined ? {} : { accuracy }) };
+    return {
+      latitude: row.latitude,
+      longitude: row.longitude,
+      hiddenFrom,
+      ...(accuracy === undefined ? {} : { accuracy }),
+      ...(row.implausible === true ? { implausible: true as const } : {}),
+    };
   } catch {
     return null;
   }

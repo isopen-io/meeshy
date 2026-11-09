@@ -9,6 +9,12 @@
  *
  * Seuls les comptes que le drapeau admet sont candidats : hors liste blanche, aucun événement.
  *
+ * L'alerte ne sert pas à LOCALISER (audit #13937) : un point arrivé à une vitesse impossible depuis le
+ * précédent ({@link isPlausibleMove}) n'est ni évalué ni pris comme « dernière position » de l'autre ;
+ * une paire n'est évaluée qu'une fois par quart d'heure, qu'elle alerte ou non — un essai raté coûte ;
+ * un compte n'évalue que {@link PROXIMITY_EVALUATIONS_PER_HOUR} paires par heure. Cadence et compteur
+ * sont stricts : une panne n'évalue rien.
+ *
  * Le consentement est relu en base à CHAQUE enregistrement (`relationConsent`), jamais en cache : un
  * retrait coupe l'alerte suivante. La loi d'accès (`location.proximity`, niveau, blocage, âge, équipe)
  * est celle de `pairAccessAmong`, dans les deux sens.
@@ -29,13 +35,20 @@ import { openPoint } from './bloodLocationSeal';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
 const CANDIDATE_LIMIT = 200;
+/** Au-delà (≈ 250 km/h), un déplacement depuis le point précédent est tenu pour inventé. */
+export const PROXIMITY_MAX_SPEED_MPS = 70;
+/** Une paire évaluée — alerte ou non — ne l'est plus avant ce délai. */
+export const PROXIMITY_PAIR_EVALUATION_MINUTES = 15;
+/** Les paires qu'un compte peut évaluer dans une heure d'horloge. */
+export const PROXIMITY_EVALUATIONS_PER_HOUR = 60;
+const HOUR_MS = 3_600_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 const DISTANCE_STEPS: readonly BloodProximityEventData['distanceMeters'][] = [100, 250, 500, 1000, 2500, 5000];
 
 const radians = (degrees: number): number => (degrees * Math.PI) / 180;
 
 /** Distance du grand cercle (haversine), en mètres. */
-export function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
+export function distanceMeters(a: { readonly latitude: number; readonly longitude: number }, b: { readonly latitude: number; readonly longitude: number }): number {
   const dLat = radians(b.latitude - a.latitude);
   const dLon = radians(b.longitude - a.longitude);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(radians(a.latitude)) * Math.cos(radians(b.latitude)) * Math.sin(dLon / 2) ** 2;
@@ -45,10 +58,30 @@ export function distanceMeters(a: { latitude: number; longitude: number }, b: { 
 const stepOf = (meters: number): BloodProximityEventData['distanceMeters'] =>
   DISTANCE_STEPS.find((step) => meters <= step) ?? DISTANCE_STEPS[DISTANCE_STEPS.length - 1];
 
-const pairKeyOf = (a: string, b: string): string => {
+const pairKeyOf = (a: string, b: string, kind: 'alert' | 'evaluation' = 'alert'): string => {
   const [low, high] = [a.toLowerCase(), b.toLowerCase()].sort();
-  return `blood-proximity:${low}:${high}`;
+  return `${kind === 'alert' ? 'blood-proximity' : 'blood-proximity-eval'}:${low}:${high}`;
 };
+
+const accountKeyOf = (ownerId: string, now: number): string => `blood-proximity-evals:${ownerId.toLowerCase()}:${Math.floor(now / HOUR_MS)}`;
+
+type Point = { readonly latitude: number; readonly longitude: number };
+
+/** Vrai sans point précédent, ou quand la vitesse depuis lui reste possible (seconde plancher). */
+export function isPlausibleMove(previous: (Point & { readonly at: number }) | null, next: Point, at: number): boolean {
+  if (!previous) return true;
+  const seconds = Math.max(1, (at - previous.at) / 1000);
+  return distanceMeters(previous, next) / seconds <= PROXIMITY_MAX_SPEED_MPS;
+}
+
+async function claimed(deps: BloodLocationDeps, key: string, ttlSeconds: number): Promise<boolean> {
+  try {
+    return await deps.claimProximityCooldown(key, ttlSeconds);
+  } catch (error) {
+    deps.report?.(error);
+    return false;
+  }
+}
 
 /** Les candidats que `ownerId` n'a pas masqués, et qui ne l'ont pas masqué (fantôme global ou ciblé). */
 async function unhiddenCandidates(deps: BloodLocationDeps, ownerId: string, candidates: readonly string[], ghostedByOwner: ReadonlySet<string>): Promise<readonly string[]> {
@@ -96,7 +129,7 @@ async function freshPositionOf(deps: BloodLocationDeps, otherId: string, ownerId
     select: { sealed: true },
   });
   const point = row ? openPoint(otherId, row.sealed) : null;
-  return point && !point.hiddenFrom.includes(ownerId) ? point : null;
+  return point && !point.implausible && !point.hiddenFrom.includes(ownerId) ? point : null;
 }
 
 /** Cherche les Sangs proches du nouveau point de `ownerId` et leur envoie l'alerte, une par paire toutes les 2 h. */
@@ -116,17 +149,19 @@ export async function alertBloodProximity(
   const allowed = await mutuallyAllowed(deps, ownerId, visible);
   if (allowed.length === 0) return;
   const radii = await radiusByCandidate(deps, ownerId, allowed);
+  const evaluated: { readonly otherId: string; readonly other: Point }[] = [];
   for (const otherId of allowed) {
     const other = await freshPositionOf(deps, otherId, ownerId);
-    if (!other) continue;
+    if (!other || !(await claimed(deps, pairKeyOf(ownerId, otherId, 'evaluation'), PROXIMITY_PAIR_EVALUATION_MINUTES * 60))) continue;
+    evaluated.push({ otherId, other });
+  }
+  if (evaluated.length === 0) return;
+  const total = await deps.countProximityEvaluations(accountKeyOf(ownerId, deps.now()), evaluated.length, HOUR_MS / 1000);
+  const budget = Math.max(0, PROXIMITY_EVALUATIONS_PER_HOUR - (total - evaluated.length));
+  for (const { otherId, other } of evaluated.slice(0, budget)) {
     const meters = distanceMeters(position, other);
     if (meters > (radii.get(otherId) ?? BLOOD_PROXIMITY_DEFAULT_RADIUS_METERS)) continue;
-    try {
-      if (!(await deps.claimProximityCooldown(pairKeyOf(ownerId, otherId), RELATION_THRESHOLDS.proximity.cooldownHours * 3600))) continue;
-    } catch (error) {
-      deps.report?.(error);
-      continue;
-    }
+    if (!(await claimed(deps, pairKeyOf(ownerId, otherId), RELATION_THRESHOLDS.proximity.cooldownHours * 3600))) continue;
     const distance = stepOf(meters);
     deps.io?.to(ROOMS.user(otherId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: ownerId, distanceMeters: distance });
     deps.io?.to(ROOMS.user(ownerId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: otherId, distanceMeters: distance });
