@@ -27,6 +27,8 @@ extension ComposerCaptureCopy {
 
     static func itemName(_ item: ComposerLookStripItem) -> String {
         switch item {
+        case .untouched:
+            return ComposerLookFilterCopy.none
         case .filter(.natural):
             return String(localized: "composer.capture.band.noFilter", defaultValue: "Aucun filtre", bundle: .main)
         case .filter(let preset):
@@ -42,6 +44,7 @@ extension ComposerCaptureCopy {
 
     static func itemSymbol(_ item: ComposerLookStripItem) -> String {
         switch item {
+        case .untouched: return "circle.slash"
         case .filter(let preset): return CallEffectsCopy.presetSymbol(preset)
         case .effect(.none): return "circle.slash"
         case .effect: return "wand.and.stars"
