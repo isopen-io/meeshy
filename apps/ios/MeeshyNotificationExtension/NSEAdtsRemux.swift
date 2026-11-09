@@ -3,7 +3,7 @@ import Foundation
 
 /// La voix d'un talkie arrive en trames AAC ADTS brutes (`audio/aac`), qu'une pièce jointe de notification ne sait pas
 /// porter : elle est REMISE en conteneur `.m4a`, sans réencodage, avant d'être attachée.
-nonisolated enum NSEAdtsRemux {
+enum NSEAdtsRemux {
     static let remuxedMimeType = "audio/mp4"
 
     static func needsRemux(mimeType: String) -> Bool {
@@ -37,7 +37,7 @@ nonisolated enum NSEAdtsRemux {
 
 /// Un téléchargement qui porte le jeton de la session ne suit une redirection que vers la passerelle, sous un chemin
 /// attendu : toute autre redirection est refusée, le jeton ne part jamais ailleurs.
-nonisolated final class NSETokenRedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
+final class NSETokenRedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
     private let apiBaseURL: String
 
     init(apiBaseURL: String) {

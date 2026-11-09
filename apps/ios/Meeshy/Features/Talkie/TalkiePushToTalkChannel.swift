@@ -58,23 +58,18 @@ nonisolated protocol TalkiePushToTalkTokenRegistering: Sendable {
     func unregister(token: String) async throws
 }
 
-/// `POST/DELETE /api/v1/users/me/push-to-talk-token { token }` (#17142). La route n'est pas encore dans le manifeste
-/// généré du catalogue : elle s'écrit ici le temps que la passerelle la publie, puis rejoint `UsersEndpoint`.
+/// `POST/DELETE /api/v1/users/me/push-to-talk-token { token }` (#17142), par le catalogue généré.
 nonisolated struct APITalkiePushToTalkTokenRegistrar: TalkiePushToTalkTokenRegistering {
-    private struct Endpoint: MeeshyEndpoint {
-        var path: String { "/api/v1/users/me/push-to-talk-token" }
-    }
-
     private struct Body: Encodable, Sendable {
         let token: String
     }
 
     func register(token: String) async throws {
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(Endpoint(), body: Body(token: token))
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(UsersEndpoint.mePushToTalkToken, body: Body(token: token))
     }
 
     func unregister(token: String) async throws {
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.delete(Endpoint(), body: Body(token: token))
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.delete(UsersEndpoint.mePushToTalkToken, body: Body(token: token))
     }
 }
 
