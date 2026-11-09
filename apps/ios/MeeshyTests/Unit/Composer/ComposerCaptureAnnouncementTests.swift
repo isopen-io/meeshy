@@ -4,6 +4,7 @@ import AVFoundation
 
 /// **Le viseur dit à VoiceOver ce que l'image montre** (CAM-12) : objectif,
 /// cran de zoom, photo prise, vidéo démarrée et arrêtée.
+@MainActor
 final class ComposerCaptureAnnouncementTests: XCTestCase {
 
     private let crans: [CGFloat] = [0.5, 1, 2]

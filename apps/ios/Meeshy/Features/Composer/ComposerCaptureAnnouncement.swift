@@ -45,7 +45,7 @@ nonisolated enum ComposerCaptureAnnouncement: Equatable, Sendable {
         presets.first { abs($0 - factor) < presetTolerance }
     }
 
-    var text: String {
+    @MainActor var text: String {
         switch self {
         case .lens(front: true):
             String(localized: "composer.camera.announce.frontLens", defaultValue: "Objectif avant", bundle: .main)
