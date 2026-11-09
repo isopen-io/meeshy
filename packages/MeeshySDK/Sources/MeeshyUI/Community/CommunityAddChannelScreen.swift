@@ -61,14 +61,14 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .meeshyScaledFont(40)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Text(viewModel.searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun résultat", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             if viewModel.searchText.isEmpty {
                 Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Créez d'abord une conversation pour l'ajouter ici.", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xxxl)
             }
@@ -108,7 +108,7 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "number")
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
@@ -116,20 +116,20 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title(for: conversation))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: MeeshySpacing.sm) {
                     if let count = conversation.memberCount {
                         Label("\(count)", systemImage: "person.2.fill")
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
 
                     if conversation.communityId != nil {
                         Label(String(localized: "community.addChannel.otherCommunity", defaultValue: "Autre communauté", bundle: .module), systemImage: "arrow.triangle.swap")
                             .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
-                            .foregroundColor(MeeshyColors.amber500)
+                            .foregroundStyle(MeeshyColors.amber500)
                     }
                 }
             }
@@ -142,11 +142,11 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
             } else if conversation.communityId != nil {
                 Image(systemName: "arrow.forward.circle.fill")
                     .meeshyScaledFont(MeeshyIconSize.xl)
-                    .foregroundColor(MeeshyColors.amber500)
+                    .foregroundStyle(MeeshyColors.amber500)
             } else {
                 Image(systemName: "plus.circle.fill")
                     .meeshyScaledFont(MeeshyIconSize.xl)
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
             }
         }
         .padding(.vertical, MeeshySpacing.xs)
