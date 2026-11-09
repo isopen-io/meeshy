@@ -53,27 +53,39 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/WidgetPreviewView.swift"
     ]
 
-    private enum RouterObjectHolder {
-        case stateReader
-        case relay
-    }
-
-    private static let routerObjectHolders: [(path: String, role: RouterObjectHolder)] = [
-        ("Meeshy/Features/Main/Views/ConversationView.swift", .stateReader),
-        ("Meeshy/Features/Main/Views/RootViewComponents.swift", .stateReader),
-        ("Meeshy/Features/Composer/StoryEditComposer.swift", .relay),
-        ("Meeshy/Features/Composer/StoryRepublishComposer.swift", .relay),
-        ("Meeshy/Features/Main/Views/BookmarksView.swift", .relay),
-        ("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift", .relay),
-        ("Meeshy/Features/Main/Views/ConversationView+Presentations.swift", .relay),
-        ("Meeshy/Features/Main/Views/ConversationView+StoryCovers.swift", .relay),
-        ("Meeshy/Features/Main/Views/FeedView.swift", .relay),
-        ("Meeshy/Features/Main/Views/MessageListView.swift", .relay),
-        ("Meeshy/Features/Stories/Views/StoryTrayView.swift", .relay)
+    private static let routerStateReaders: [(path: String, reason: String)] = [
+        ("Meeshy/Features/Main/Views/ConversationView.swift", "lit pendingOpenSearch, pendingHighlightMessageId, replyContextVersion et consomme pendingReplyContext"),
+        ("Meeshy/Features/Main/Views/RootViewComponents.swift", "lit pendingOpenFeedComposer et consomme consumePendingFeedComposer")
     ]
 
+    private static let routerRelays = [
+        "Meeshy/Features/Composer/StoryEditComposer.swift",
+        "Meeshy/Features/Composer/StoryRepublishComposer.swift",
+        "Meeshy/Features/Main/Views/BookmarksView.swift",
+        "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift",
+        "Meeshy/Features/Main/Views/ConversationView+Presentations.swift",
+        "Meeshy/Features/Main/Views/ConversationView+StoryCovers.swift",
+        "Meeshy/Features/Main/Views/FeedView.swift",
+        "Meeshy/Features/Main/Views/MessageListView.swift",
+        "Meeshy/Features/Stories/Views/StoryTrayView.swift"
+    ]
+
+    private static var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func swiftSources(under folder: String) -> [URL] {
+        let root = Self.appRoot.appendingPathComponent(folder)
+        let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        return (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
+    }
+
     private func declaresRouterObject(_ source: String) -> Bool {
-        source.range(of: #"@EnvironmentObject\s+(private\s+)?var\s+\w+\s*:\s*Router\b"#, options: .regularExpression) != nil
+        source.range(of: #"@EnvironmentObject\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*:\s*Router\b"#, options: .regularExpression) != nil
     }
 
     func test_injectionSites_poseBothChannels() throws {
@@ -112,12 +124,35 @@ final class RouterInjectionGuardTests: XCTestCase {
         XCTAssertTrue(body.contains("@Environment(\\.routerCommands)"))
     }
 
-    func test_routerObjectHolders_areTheListedReadersAndRelays() throws {
-        for holder in Self.routerObjectHolders {
-            let source = try code(holder.path)
-            XCTAssertTrue(declaresRouterObject(source), "\(holder.path) ne déclare plus le Router : sortir de la liste")
-            guard holder.role == .stateReader else { continue }
-            XCTAssertTrue(source.contains("router.pending") || source.contains("router.consumePending"), "\(holder.path) ne lit pas l'état du Router")
+    func test_routerRelays_readTheRouterWithoutObservingIt() throws {
+        for path in Self.routerRelays {
+            let source = try principalCode(path)
+            XCTAssertFalse(declaresRouterObject(source), "\(path) observe encore le Router")
+            XCTAssertTrue(source.contains("@Environment(\\.meeshyRouter)"), "\(path) ne lit pas le routeur par l'environnement")
         }
+    }
+
+    func test_onlyTheListedStateReadersObserveTheRouter() throws {
+        let observers = try swiftSources(under: "Meeshy")
+            .filter { declaresRouterObject(AppSourceGuard.stripComments(try AppSourceGuard.text(at: $0))) }
+            .map(\.lastPathComponent)
+        let expected = Self.routerStateReaders.map { URL(fileURLWithPath: $0.path).lastPathComponent }
+        XCTAssertEqual(Set(observers), Set(expected))
+    }
+
+    func test_routerStateReaders_stillReadRouterState() throws {
+        for reader in Self.routerStateReaders {
+            XCTAssertFalse(reader.reason.isEmpty)
+            let source = try code(reader.path)
+            XCTAssertTrue(declaresRouterObject(source), "\(reader.path) ne déclare plus le Router : sortir de la liste")
+            XCTAssertTrue(source.contains("router.pending") || source.contains("router.consumePending"), "\(reader.path) ne lit pas l'état du Router")
+        }
+    }
+
+    func test_routerObject_isOnlyInjectedWithItsCommands() throws {
+        let injectors = try swiftSources(under: "Meeshy")
+            .filter { AppSourceGuard.stripComments(try AppSourceGuard.text(at: $0)).contains(".environmentObject(router)") }
+            .map(\.lastPathComponent)
+        XCTAssertEqual(injectors, ["RouterCommands.swift"])
     }
 }
