@@ -461,7 +461,7 @@ public struct EmojiFullPickerSheet: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { dismiss() }
+                Color.black.opacity(0.4).ignoresSafeArea().meeshyTapAction(label: String(localized: "common.close", bundle: .module)) { dismiss() }
                 VStack(spacing: 0) {
                     dragHandle
                     categoryTabs

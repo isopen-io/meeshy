@@ -143,7 +143,7 @@ enum MeeshyUISourceScan {
             let upper = min(index + 20, lines.count - 1)
             let window = lines[index...upper].joined(separator: "\n")
             if window.contains("CycleButtonAccessibility(") || window.contains("clipBarAccessibility(") { return false }
-            if window.contains("accessibilityAction(named:") { return false }
+            if window.contains("accessibilityAction(named:") || window.contains("accessibilityHidden(true)") { return false }
             let isButton = window.contains(".accessibilityAddTraits(") && window.contains("isButton")
             return !(isButton && window.contains(".accessibilityAction"))
         }.map { $0 + 1 }

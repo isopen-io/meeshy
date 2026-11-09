@@ -179,7 +179,7 @@ public struct LanguagePickerSheet: View {
         ZStack(alignment: .bottom) {
             (style == .dark ? Color.black.opacity(0.6) : Color.black.opacity(MeeshyOpacity.medium))
                 .ignoresSafeArea()
-                .onTapGesture { dismiss() }
+                .meeshyTapAction(label: String(localized: "common.close", bundle: .module)) { dismiss() }
 
             VStack(spacing: 0) {
                 dragHandle

@@ -186,7 +186,7 @@ internal struct _FullscreenRenderer: View {
                     onReadyForDisplay: { surfaceReady = true }
                 )
                     .ignoresSafeArea()
-                    .onTapGesture { handleSurfaceTap() }
+                    .meeshyNamedTapAction(String(localized: "media.controls.toggle.a11y", bundle: .module)) { handleSurfaceTap() }
                     .gesture(swipeDownGesture)
                     .gesture(pinchGesture)
             } else {

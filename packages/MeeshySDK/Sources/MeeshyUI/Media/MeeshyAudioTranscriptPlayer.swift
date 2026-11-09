@@ -230,6 +230,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
                                            defaultValue: "Modifier le son",
                                            bundle: .module))
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { onEdit() }
         } else {
             contenu
                 .accessibilityLabel(String(localized: "audio.content.waveform",
