@@ -4,7 +4,7 @@ import os
 
 /// **Une ligne qui a renoncé finit par SORTIR de la file** (#5965).
 ///
-/// Mesuré au simulateur le 2026-09-10, compte `recette000102` pointant
+/// Mesuré au simulateur, compte `recette000102` pointant
 /// `gate.staging.meeshy.me` : sept lignes `.exhausted` de la veille — deux
 /// `sendMessage` et une `sendReaction` en 404 sur une conversation qui n'existe
 /// pas sur cet hôte, une `sendReaction` en 500, deux `blockUser` et une

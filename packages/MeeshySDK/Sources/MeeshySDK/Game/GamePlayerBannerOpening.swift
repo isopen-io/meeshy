@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Le bandeau du jeu ne paraît qu'à l'OUVERTURE de l'app (#9536, directive porteur 2026-10-06)
+// MARK: - Le bandeau du jeu ne paraît qu'à l'OUVERTURE de l'app (#9536)
 //
 // Il SUPPLANTE la règle « toujours visible » de #9494 : le bandeau s'ouvre avec l'application — au démarrage à froid,
 // ou au retour au premier plan après une VRAIE absence — reste `lingers` secondes, puis s'en va lentement vers le

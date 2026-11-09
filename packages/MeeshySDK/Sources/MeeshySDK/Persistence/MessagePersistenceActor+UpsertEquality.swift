@@ -38,8 +38,8 @@ func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
         && a.replyToJson == b.replyToJson && a.forwardedFromId == b.forwardedFromId
         && a.forwardedFromConversationId == b.forwardedFromConversationId
         && a.forwardedFromJson == b.forwardedFromJson
-    // **`messageSource` et `messageType` DOIVENT figurer ici** (régression
-    // 2026-08-24). Ils décident du RENDU — un message `system` s'affiche en
+    // **`messageSource` et `messageType` DOIVENT figurer ici**.
+    // Ils décident du RENDU — un message `system` s'affiche en
     // avis dédié, un `user` en parole avec avatar et nom. Ils manquaient à
     // cette comparaison : une ligne née `"user"` (le chemin de réconciliation
     // depuis le cache l'écrivait en dur) recevait ensuite la charge canonique

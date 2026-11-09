@@ -22,7 +22,7 @@ public struct LocationMessageView: View {
         self.thumbnailProvider = thumbnailProvider
     }
 
-    /// Rendu unique d'un lieu (Task 14, 2026-07-29) : message, post et
+    /// Rendu unique d'un lieu : message, post et
     /// commentaire partagent désormais tous `SharedPlace` comme véhicule, donc
     /// tous convergent vers cet initialiseur plutôt que de reconstruire leur
     /// propre notion de « position ». L'initialiseur historique par

@@ -82,7 +82,6 @@ public struct ViewOnceChip: View, Equatable {
     }
 
     /// Le fond de la puce : plein avant l'ouverture, MOINS prononcé après
-    /// (directive porteur 2026-09-23).
     public static func fillOpacity(for state: State, isDark: Bool) -> Double {
         switch state {
         case .sealed: return isDark ? 0.24 : 0.16

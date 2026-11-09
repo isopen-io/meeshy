@@ -4,7 +4,7 @@ import MeeshySDK
 
 /// La bannière in-app — la notification qui descend du haut de l'écran.
 ///
-/// #8723 (porteur, 2026-09-29) : « un design plus sexy avec du RELIEF ». La
+/// #8723 : « un design plus sexy avec du RELIEF ». La
 /// carte n'est plus un rectangle noir plat cerclé d'un liseré : c'est une
 /// plaque de verre (`adaptiveGlass` — Liquid Glass sur iOS 26, matériau
 /// translucide avant) posée sur un voile opaque qui garde le texte lisible

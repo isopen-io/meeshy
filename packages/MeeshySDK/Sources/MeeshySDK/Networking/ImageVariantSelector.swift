@@ -6,7 +6,7 @@ import Foundation
 /// parmi les variantes responsive (`MeeshyImageVariant`) plus l'original, pour
 /// charger un WebP allégé au lieu de l'original multi-Mo dans une preview.
 ///
-/// Provenance de l'algorithme (cf. spec 2026-06-09) :
+/// Provenance de l'algorithme :
 /// - Construction des candidats (filtre `url`/`width>0`, tri, dédupe, append de
 ///   l'original ssi strictement plus large) = miroir de `buildImageSrcSet`
 ///   (web `srcset.ts:26-42`).

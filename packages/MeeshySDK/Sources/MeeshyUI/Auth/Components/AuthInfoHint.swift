@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// « Moins de détails sur la page de connexion et d'enregistrement ; utiliser
 /// des (i) pour informer sur le mode de fonctionnement si naturellement ce
-/// n'est pas clair » (directive porteur 2026-09-15). Une ligne visible par
+/// n'est pas clair ». Une ligne visible par
 /// écran dit CE QU'ON FAIT ; le (i) dit COMMENT ça marche, pour qui le demande.
 ///
 /// Le bouton et son texte sont DEUX vues parce qu'ils vivent à deux endroits :

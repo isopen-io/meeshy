@@ -9,7 +9,7 @@ import Foundation
 /// **CE QUI vient d'arriver**, pas seulement qui l'a fait et ce qu'il a écrit.
 /// Un commentaire sur un réel, une réaction à une story et la publication d'une
 /// humeur se ressemblaient toutes trois — « Alice » / « super ! » — et rien ne
-/// les distinguait (signalé par le porteur produit, 2026-08-30).
+/// les distinguait.
 ///
 /// Les sept cadrages, tels que le produit les demande :
 ///

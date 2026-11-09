@@ -154,7 +154,7 @@ public extension ConversationSyncEngineProviding {
 // MARK: - Implementation
 
 
-// LE MOTEUR EST UN TYPE EN QUATRE FICHIERS (#4172, extraction 2026-09-04).
+// LE MOTEUR EST UN TYPE EN QUATRE FICHIERS (#4172).
 // Le budget de taille (1000-1200 lignes) interdisait toute greffe au fichier
 // de 2 213 lignes ; le découpage suit les surfaces (chargement / socket /
 // écritures), pas des tranches arbitraires. Les membres partagés entre ces

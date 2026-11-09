@@ -159,7 +159,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// content scrolls (e.g. a compact story trail). It cross-fades with the
     /// title over `CollapsibleHeaderMetrics.inlineAccessoryReveal`, so a
     /// scrolled header shows the trail — not a shrunken « Meeshy Feed » —
-    /// immediately left of the trailing actions (directive user 2026-08-13).
+    /// immediately left of the trailing actions.
     ///
     /// Deliberately NOT the same slot as `accessory`: one EXCHANGES with the
     /// title and only exists once scrolled, the other is a permanent second
@@ -302,7 +302,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 // fondu croisé qu'avant) — mais la trail ne vit plus DANS la
                 // fente : une piste horizontale posée entre le titre et les
                 // actions s'arrête à leur bord, alors que le défilement doit
-                // aller d'un bout à l'autre de l'écran (retour user 2026-08-18).
+                // aller d'un bout à l'autre de l'écran.
                 // Elle est désormais une couche PLEINE LARGEUR posée SOUS la
                 // rangée (`.background` plus bas), et le chrome droit flotte
                 // dessus.
@@ -445,7 +445,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// 5 s, amplitude 1,2 de luminance ; `.compositingGroup()` divise l'amplitude
     /// par deux sans supprimer les bascules). Ce dégradé est CONSERVÉ tel quel
     /// par choix produit — clignotement assumé, ne pas « corriger » en peignant
-    /// le fondu : cela alourdit le bas du header (arbitrage 2026-07-27).
+    /// le fondu : cela alourdit le bas du header.
     private var headerBackground: some View {
         Rectangle()
             .fill(.ultraThinMaterial)
