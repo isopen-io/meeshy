@@ -61,8 +61,20 @@ final class TalkieSenderTests: XCTestCase {
             return true
         }
 
+        /// Tient l'arrêt du micro ouvert, comme le vrai qui vide ses dernières trames : la passerelle peut parler pendant.
+        var holdStop = false
+        private var stopWaiter: CheckedContinuation<Void, Never>?
+
         func stop() async {
             stops += 1
+            guard holdStop else { return }
+            await withCheckedContinuation { stopWaiter = $0 }
+        }
+
+        func letStopFinish() {
+            holdStop = false
+            stopWaiter?.resume()
+            stopWaiter = nil
         }
 
         func speak(frames: Int, bytes: Int = 10) {
@@ -75,6 +87,8 @@ final class TalkieSenderTests: XCTestCase {
         var sent: [(frames: [Data], toUserId: String)] = []
         var conversations: [String?] = []
         var succeeds = true
+        let failed = PassthroughSubject<Void, Never>()
+        var failures: AnyPublisher<Void, Never> { failed.eraseToAnyPublisher() }
 
         func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool {
             sent.append((frames, toUserId))
@@ -274,6 +288,23 @@ final class TalkieSenderTests: XCTestCase {
         XCTAssertEqual(rig.sut.notice, .failed)
     }
 
+    /// #17255 — la copie est partie dans la file, puis la file l'a abandonnée : l'émetteur le voit.
+    func test_aVoiceCopyAbandonedLaterByTheQueue_isAFailure() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+        await rig.sut.release()
+        XCTAssertEqual(rig.sut.notice, .voice)
+        rig.sut.notice = nil
+
+        rig.copier.failed.send(())
+
+        XCTAssertEqual(rig.sut.notice, .failed)
+    }
+
     func test_aFallbackWithARefusedMicrophone_saysTheMicrophone_andCopiesNothing() async {
         let rig = makeRig()
         rig.capture.allow = false
@@ -441,5 +472,87 @@ final class TalkieSenderTests: XCTestCase {
         await settle()
 
         XCTAssertEqual(rig.emitter.startCalls, ["bob"])
+    }
+
+    // MARK: - #17248 — le verdict « personne n'a rejoint » ne se perd jamais
+
+    private static let wakingOpened = TalkieOpened(talkieId: opened.talkieId, maxDuration: 30, maxChunkBytes: 16_384, delivery: .waking)
+
+    private func openWakingTalk(_ rig: Rig) async {
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(Self.wakingOpened))
+        await settle()
+    }
+
+    /// L'ordre relevé sur appareil : la passerelle ferme la voix réveillée et rend `joined: false` pendant que le micro
+    /// de l'émetteur s'arrête encore. Le verdict arrive AVANT que la voix soit rangée : il doit l'attendre.
+    func test_aNobodyJoinedVerdictThatArrivesWhileTheMicStops_stillLeavesAsAVoiceCopy() async {
+        let rig = makeRig()
+        await openWakingTalk(rig)
+        rig.capture.speak(frames: Self.framesPerFragment * 2)
+        rig.capture.holdStop = true
+        let releasing = Task { await rig.sut.release() }
+        await settle()
+
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+        rig.capture.letStopFinish()
+        await releasing.value
+        await settle()
+        XCTAssertEqual(rig.copier.sent.map(\.toUserId), ["bob"], "le verdict arrivé avant la voix rangée l'a attendue")
+
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+
+        XCTAssertEqual(rig.copier.sent.map(\.toUserId), ["bob"], "un `ended` en double ne refait aucune copie")
+        XCTAssertEqual(rig.copier.sent.first?.frames.reduce(0) { $0 + $1.count }, rig.emitter.chunks.reduce(0) { $0 + $1.bytes })
+        XCTAssertEqual(rig.sut.notice, .voice)
+    }
+
+    func test_anEarlyNobodyJoinedVerdict_whoseCopyCannotLeave_isAFailure() async {
+        let rig = makeRig()
+        rig.copier.succeeds = false
+        await openWakingTalk(rig)
+        rig.capture.speak(frames: Self.framesPerFragment * 2)
+        rig.capture.holdStop = true
+        let releasing = Task { await rig.sut.release() }
+        await settle()
+
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+        rig.capture.letStopFinish()
+        await releasing.value
+
+        XCTAssertEqual(rig.copier.sent.count, 1)
+        XCTAssertEqual(rig.sut.notice, .failed)
+    }
+
+    func test_anEarlyJoinedVerdict_copiesNothing() async {
+        let rig = makeRig()
+        await openWakingTalk(rig)
+        rig.capture.speak(frames: Self.framesPerFragment * 2)
+        rig.capture.holdStop = true
+        let releasing = Task { await rig.sut.release() }
+        await settle()
+
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: true)
+        rig.capture.letStopFinish()
+        await releasing.value
+        await rig.sut.ended(Self.opened.talkieId, reason: .sender, joined: false)
+
+        XCTAssertTrue(rig.copier.sent.isEmpty)
+    }
+
+    /// Une voix réveillée que la passerelle ferme d'elle-même (plafond) garde aussi ce qui restait dans le fragment en
+    /// cours : la copie porte TOUTE la voix captée, pas seulement les fragments partis.
+    func test_aWakingVoiceClosedByTheGateway_copiesTheUnsentTailToo() async {
+        let rig = makeRig()
+        await openWakingTalk(rig)
+        let frames = Self.framesPerFragment * 2 + 3
+        rig.capture.speak(frames: frames, bytes: 10)
+
+        await rig.sut.ended(Self.opened.talkieId, reason: .limit, joined: false)
+
+        XCTAssertEqual(rig.copier.sent.first?.frames.reduce(0) { $0 + $1.count }, frames * 10)
+        XCTAssertEqual(rig.sut.notice, .voice)
     }
 }
