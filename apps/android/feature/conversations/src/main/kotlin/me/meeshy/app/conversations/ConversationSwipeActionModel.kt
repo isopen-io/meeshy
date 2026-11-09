@@ -25,19 +25,17 @@ internal data class ConversationSwipeActionModel(
             isArchived: Boolean,
             hasUnread: Boolean,
             canToggleArchive: Boolean,
-            obsolete: Boolean = false,
         ): ConversationSwipeActionModel {
             val plan = ConversationSwipePlan.of(
                 hasUnread = hasUnread,
                 canToggleArchive = canToggleArchive,
-                obsolete = obsolete,
             )
             fun item(kind: SwipeKind) = ConversationSwipeItem(
                 kind = kind,
                 active = when (kind) {
                     SwipeKind.PIN -> isPinned
                     SwipeKind.ARCHIVE -> isArchived
-                    SwipeKind.MARK_READ, SwipeKind.MARK_UNREAD, SwipeKind.OBSOLETE -> false
+                    SwipeKind.MARK_READ, SwipeKind.MARK_UNREAD -> false
                 },
             )
             return ConversationSwipeActionModel(plan.leading.map(::item), plan.trailing.map(::item))

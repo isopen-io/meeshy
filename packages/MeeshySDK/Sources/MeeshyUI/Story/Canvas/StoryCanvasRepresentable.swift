@@ -5,8 +5,8 @@ import MeeshySDK
 /// Pont entre les bitmaps édités/foreground du composer (`viewModel.loadedImages`
 /// keyés par `media.id`) et l'`ImageCacheReader` consommé par `StoryMediaLayer`.
 ///
-/// Le composer mute `loadedImages[id] = edited` dans son `MeeshyImageEditorView`
-/// onAccept. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
+/// Le composer mute `loadedImages[id] = edited` quand une image est
+/// retouchée. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
 /// (URL inchangée → `ImageLoader` cache servait l'ancien bitmap) et le canvas
 /// principal restait stale après édition. Le mini canvas marchait déjà car
 /// `SlideMiniPreview` lit `loadedImages` direct.
@@ -120,7 +120,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// éditions image (bug 2026-05-27 : main canvas stale après image edit).
     public var loadedImages: [String: UIImage] = [:]
     /// Cookie monotone à bumper côté composer à chaque mutation utile de
-    /// `loadedImages` (typiquement l'`onAccept` du `MeeshyImageEditorView`).
+    /// `loadedImages` (typiquement une image retouchée).
     /// Le `Coordinator` compare la valeur reçue à `lastVersionSeen` pour
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
@@ -397,7 +397,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // reader UNIQUEMENT quand `loadedImagesVersion` change pour éviter
         // un rebuild par body eval (updateUIView est appelé fréquemment).
         // Le bump de version est piloté par le composer (cf.
-        // `MeeshyImageEditorView` onAccept → `viewModel.loadedImagesVersion &+= 1`).
+        // une retouche → `viewModel.loadedImagesVersion &+= 1`).
         //
         // `invalidateImageCache()` bump la révision pour forcer le re-stamp
         // des layers du `StoryRendererCache` — cet appel EST réservé au

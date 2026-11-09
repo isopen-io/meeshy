@@ -6,9 +6,13 @@ import SwiftUI
 private struct ComposerToolBounceModifier: ViewModifier {
     let active: Bool
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        guard #available(iOS 17.0, *) else { return AnyView(content) }
-        return AnyView(content.symbolEffect(.bounce, value: active))
+        if #available(iOS 17.0, *) {
+            content.symbolEffect(.bounce, value: active)
+        } else {
+            content
+        }
     }
 }
 

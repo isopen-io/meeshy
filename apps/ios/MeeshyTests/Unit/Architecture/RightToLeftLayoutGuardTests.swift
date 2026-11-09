@@ -43,7 +43,6 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
     /// géométrie — jamais une direction de lecture.
     private static let directionalByDesign: Set<String> = [
         "ClipTimingBar.swift",
-        "MeeshyImageEditorView.swift",
     ]
 
     private func repoRoot() -> URL {

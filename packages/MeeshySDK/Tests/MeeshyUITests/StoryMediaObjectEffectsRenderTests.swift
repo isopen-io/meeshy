@@ -108,17 +108,6 @@ final class StoryMediaObjectEffectsRenderTests: XCTestCase {
         XCTAssertTrue(StoryMediaLayer.filtered(image, for: posee(nil)) === image)
     }
 
-    // MARK: - Une seule écriture : l'éditeur de l'avatar et la scène
-
-    @MainActor
-    func test_lePreReglageDeLEditeur_estLaMiCourseDuCurseurDeLaScene() throws {
-        let source = uni(0.4)
-        let editeur = ImageFilterEngine().render(source, state: ImageEditState(effect: .bloom))
-        let scene = StoryMediaAdjustmentsProcessor.apply(ImageAdjustments(bloom: ImageFilterEngine.presetAmount),
-                                                         to: source, imageId: "preset-bloom")
-        XCTAssertEqual(try luminanceMoyenne(editeur), try luminanceMoyenne(scene), accuracy: 1)
-    }
-
     // MARK: - Le fond, et la règle vidéo
 
     func test_leFondImage_peintSesEffets_leFondVideoAucun() {

@@ -204,16 +204,14 @@ describe('LensRow — les deux bords', () => {
   });
 });
 
-describe('LensRow — rendre obsolète en un geste (#14645)', () => {
+describe('LensRow — le balayage d’un administrateur (#14645, #17243)', () => {
   const ADMIN_LYON = { ...LYON, currentUserRole: 'admin' } as Conversation;
 
-  test('administrateur : « Rendre obsolète » se révèle en dernier au bord de fin et demande la confirmation', async () => {
+  test('#17243 — administrateur : « Rendre obsolète » ne se balaie pas, le bord de fin garde archiver et lu', async () => {
     const { row } = await monter({ conversations: [ADMIN_LYON, PARIS] });
     await versLaGauche(row('c-lyon'), 120);
-    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu', 'Rendre obsolète']);
-    expect(offsetOf(row('c-lyon'))).toBe('-228px');
-    await act(async () => actionOf(row('c-lyon'), 'Rendre obsolète').click());
-    expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'obsolete', returnToList: false });
+    expect(labelsOf(row('c-lyon'))).toEqual(['Archiver', 'Non lu']);
+    expect(offsetOf(row('c-lyon'))).toBe('-152px');
   });
 
   test('administrateur : le bord de début reste épingler', async () => {
@@ -313,16 +311,6 @@ describe('LensRow — le retour en place', () => {
     await versLaDroite(row('c-lyon'), 80);
     await act(async () => actionOf(row('c-lyon'), 'Épingler').click());
     expect(actions).toEqual(['c-lyon:pin']);
-    await reposer();
-    expect(estFermee(row('c-lyon'))).toBe(true);
-  });
-
-  test('« Rendre obsolète » demande la confirmation existante, jamais une action de drapeau', async () => {
-    const { row, actions } = await monter({ conversations: [{ ...LYON, currentUserRole: 'admin' } as Conversation, PARIS] });
-    await versLaGauche(row('c-lyon'), 120);
-    await act(async () => actionOf(row('c-lyon'), 'Rendre obsolète').click());
-    expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'obsolete', returnToList: false });
-    expect(actions).toEqual([]);
     await reposer();
     expect(estFermee(row('c-lyon'))).toBe(true);
   });

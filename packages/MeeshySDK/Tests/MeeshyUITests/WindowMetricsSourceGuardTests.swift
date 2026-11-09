@@ -55,8 +55,8 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
     /// `connectedScenes` (`.compactMap { $0 as? UIWindowScene }.first`) choisit
     /// une scène arbitraire dans un `Set` non ordonné — potentiellement une
     /// scène en arrière-plan sous multi-fenêtre. `StoryComposerView+Canvas.swift`
-    /// (`safeAreaBottomInset`), `MeeshyImageEditorView.swift` et
-    /// `MeeshyVideoEditorView.swift` (`deviceSafeAreaInsets`) portaient ce
+    /// (`safeAreaBottomInset`) et les anciens éditeurs plein écran d'image et
+    /// de vidéo (`deviceSafeAreaInsets`) portaient ce
     /// défaut avant leur convergence vers `WindowMetrics.safeAreaInsets`.
     func test_meeshyUI_confinesConnectedScenesWalksToWindowMetrics() throws {
         let found = try Self.allMeeshyUISources()

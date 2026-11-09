@@ -11,8 +11,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * Pose [content] dans le panneau d'actions révélées d'une rangée (iOS `ConversationSwipeActions`):
- * glisser vers le début de lecture révèle épingler, vers la fin archiver / lu-non lu / rendre obsolète
- * (silence, verrou et suppression vivent dans le menu d'appui long, #17244). Le panneau reste ouvert, une seule rangée l'est à la fois, chaque action est aussi une action
+ * glisser vers le début de lecture révèle épingler, vers la fin archiver / lu-non lu
+ * (silence, verrou, suppression et « Rendre obsolète » vivent dans le menu d'appui long, #17244). Le panneau reste ouvert, une seule rangée l'est à la fois, chaque action est aussi une action
  * personnalisée TalkBack et le sens s'inverse en RTL — tout cela vit dans [SwipeableRow]; ici on ne
  * choisit que QUOI révéler et ce que chaque bouton déclenche.
  */
@@ -29,7 +29,6 @@ internal fun ConversationSwipeActions(
         unarchive = stringResource(R.string.swipe_unarchive),
         markRead = stringResource(R.string.swipe_mark_read),
         markUnread = stringResource(R.string.swipe_mark_unread),
-        obsolete = stringResource(R.string.conversations_action_make_obsolete),
     )
     val revealed = remember(swipe, labels, actions) {
         swipe.leading.map { it.toAction(labels, actions) } to swipe.trailing.map { it.toAction(labels, actions) }
@@ -44,7 +43,6 @@ private data class SwipeLabels(
     val unarchive: String,
     val markRead: String,
     val markUnread: String,
-    val obsolete: String,
 )
 
 private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: ConversationRowActions): SwipeAction =
@@ -63,8 +61,5 @@ private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: Convers
         )
         SwipeKind.MARK_UNREAD -> SwipeAction(
             MeeshyIcons.MarkChatUnread, labels.markUnread, MeeshyPalette.Indigo400, actions.onMarkUnread,
-        )
-        SwipeKind.OBSOLETE -> SwipeAction(
-            MeeshyIcons.DeleteForever, labels.obsolete, MeeshyPalette.Error, actions.onRequestObsolete,
         )
     }

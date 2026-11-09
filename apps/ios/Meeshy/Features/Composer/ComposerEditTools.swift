@@ -42,12 +42,16 @@ nonisolated enum ComposerEditTools {
 
     /// Ce qu'une prise offre : la photo se recadre ; la vidéo se recadre et se
     /// coupe, et son son se règle si elle en a un ; un son se coupe et se règle.
-    static func offered(_ take: ComposerEditTake) -> [ComposerEditTool] {
+    /// **Un format imposé ne se recadre pas** (#17251) : l'avatar reste rond,
+    /// la bannière 3:1 — la prise s'y place au pincement et au glissé.
+    static func offered(_ take: ComposerEditTake, formatLocked: Bool = false) -> [ComposerEditTool] {
+        let outils: [ComposerEditTool]
         switch take {
-        case .photo: return [.crop, .text]
-        case .video(let son): return son ? [.crop, .text, .trim, .sound] : [.crop, .text, .trim]
-        case .audio: return [.trim, .sound]
+        case .photo: outils = [.crop, .text]
+        case .video(let son): outils = son ? [.crop, .text, .trim, .sound] : [.crop, .text, .trim]
+        case .audio: outils = [.trim, .sound]
         }
+        return formatLocked ? outils.filter { $0 != .crop } : outils
     }
 
     /// **Aucun outil ouvert à l'entrée** (porteur 2026-10-20 : « afficher

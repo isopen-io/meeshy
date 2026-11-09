@@ -131,12 +131,12 @@ final class SceneWindowSizeTests: XCTestCase {
         XCTAssertEqual(RememberedSceneInsets.last?.bottom ?? -1, truth.bottom, accuracy: 0.5)
     }
 
-    /// Les deux écrans plein écran du SDK (lecteur vidéo, éditeur d'image) sont présentés en `fullScreenCover`.
+    /// L'écran plein écran du SDK (lecteur vidéo) est présenté en `fullScreenCover`.
     func test_theSDKFullscreenScreens_neverReadTheWindowInsetsDuringBody() throws {
         let sources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshyUI")
-        for path in ["Media/MeeshyVideoPlayer+Controls.swift", "Media/MeeshyImageEditorView.swift", "Utilities/SceneWindowSize.swift"] {
+        for path in ["Media/MeeshyVideoPlayer+Controls.swift", "Utilities/SceneWindowSize.swift"] {
             let code = try String(contentsOf: sources.appendingPathComponent(path), encoding: .utf8)
             XCTAssertFalse(code.contains("safeAreaEdgeInsets"), "\(path) replie encore sur la fenêtre clé")
             XCTAssertFalse(code.contains("WindowMetrics.safeAreaInsets"), "\(path) lit encore la fenêtre clé")
