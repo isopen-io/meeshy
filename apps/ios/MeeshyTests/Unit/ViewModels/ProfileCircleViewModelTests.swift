@@ -238,6 +238,41 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertTrue(rig.sut.offersBring)
     }
 
+    func test_offersTalkieAndTogether_aServedAccessLevelOfBloodWithoutALink_offersBoth() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .public, grantedByMe: .public, accessLevel: .blood))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersTalkie)
+        XCTAssertTrue(rig.sut.offersTogether)
+        XCTAssertNil(rig.sut.shownLevel, "aucun lien n'est fabriqué")
+    }
+
+    func test_offersTalkieAndTogether_aFriend_areNotOffered_butBringIs() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersBring)
+        XCTAssertFalse(rig.sut.offersTalkie)
+        XCTAssertFalse(rig.sut.offersTogether)
+    }
+
+    func test_offersTalkieAndTogether_aStrangerWithoutAccessLevel_areNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(link("a", .public))
+
+        await rig.sut.load()
+
+        XCTAssertFalse(rig.sut.offersTalkie)
+        XCTAssertFalse(rig.sut.offersTogether)
+    }
+
     // MARK: - Rétrograder d'un cran, annuler le lien à Connaissance (#14910)
 
     func test_offeredLowering_goesDownOneRungAndUnlinksAtAcquaintance() async {
