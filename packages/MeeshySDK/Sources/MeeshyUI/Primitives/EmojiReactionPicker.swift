@@ -503,9 +503,9 @@ public struct EmojiFullPickerSheet: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
                         VStack(spacing: MeeshySpacing.xxs) {
-                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
@@ -626,9 +626,9 @@ public struct CategorizedEmojiPickerSheet: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
                         VStack(spacing: MeeshySpacing.xxs) {
-                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
@@ -690,9 +690,9 @@ public struct EmojiKeyboardPanel: View {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                         } label: {
                             VStack(spacing: MeeshySpacing.xxs) {
-                                Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                                Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                                 Text(category.name)
-                                    .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                    .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                     .foregroundColor(selectedCategory == index
                                         ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                         : (style == .dark ? .white.opacity(0.4) : .gray))

@@ -29,7 +29,7 @@ extension UserProfileSheet {
                 Text(isInteractionDisabled
                      ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions désactivées", bundle: .module)
                      : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -61,14 +61,14 @@ extension UserProfileSheet {
                             )
 
                             Text(conv.name)
-                                .font(.system(size: MeeshyFont.labelSize, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
                                 .foregroundColor(theme.textPrimary)
                                 .lineLimit(1)
 
                             Spacer()
 
                             Image(systemName: "chevron.forward")
-                                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                                .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                                 .foregroundColor(theme.textMuted)
                         }
                         .padding(.horizontal, MeeshySpacing.xl)

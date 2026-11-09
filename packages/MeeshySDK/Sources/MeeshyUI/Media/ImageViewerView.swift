@@ -156,9 +156,9 @@ public struct ImageViewerView: View {
                     Button { onEdit(); HapticFeedback.light() } label: {
                         HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "pencil")
-                                .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                                .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
-                                .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                                .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.sm)
@@ -177,7 +177,7 @@ public struct ImageViewerView: View {
                 HStack {
                     Spacer()
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)

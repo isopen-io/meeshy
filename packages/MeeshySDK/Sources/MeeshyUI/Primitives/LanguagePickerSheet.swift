@@ -238,7 +238,7 @@ public struct LanguagePickerSheet: View {
                     onDismiss?()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xxl))
+                        .meeshyScaledFont(MeeshyIconSize.xxl)
                         .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : Color.gray.opacity(MeeshyOpacity.strong))
                 }
             }
@@ -253,7 +253,7 @@ public struct LanguagePickerSheet: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray)
-                .font(.system(size: MeeshyIconSize.sm))
+                .meeshyScaledFont(MeeshyIconSize.sm)
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))

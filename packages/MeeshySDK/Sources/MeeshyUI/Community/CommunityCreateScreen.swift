@@ -117,7 +117,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(viewModel.name.isEmpty ? String(localized: "community.create.preview.placeholder", defaultValue: "Ma communauté", bundle: .module) : viewModel.name)
-                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                    .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                     .foregroundStyle(Color.white)
                     .lineLimit(2)
 
@@ -160,7 +160,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
             fieldGroup(label: String(localized: "community.create.field.identifier", defaultValue: "Identifiant", bundle: .module), required: false) {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text("mshy_")
-                        .font(.system(size: MeeshyFont.labelSize, weight: .medium, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .monospaced)
                         .foregroundStyle(theme.textMuted)
                     TextField(String(localized: "community.create.field.identifier.placeholder", defaultValue: "mon-groupe", bundle: .module), text: $viewModel.identifier)
                         .textFieldStyle(.plain)
@@ -394,7 +394,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(user.displayName ?? user.username)
-                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold, design: .rounded))
+                        .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold, design: .rounded)
                         .foregroundStyle(theme.textPrimary)
                     Text("@\(user.username)")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, design: .rounded))
@@ -405,7 +405,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xl))
+                        .meeshyScaledFont(MeeshyIconSize.xl)
                         .foregroundStyle(MeeshyColors.successDeep)
                         .transition(.scale.combined(with: .opacity))
                 }

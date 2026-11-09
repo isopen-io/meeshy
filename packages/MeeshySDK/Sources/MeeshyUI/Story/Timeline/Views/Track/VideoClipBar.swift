@@ -265,7 +265,7 @@ public struct VideoClipBar: View, Equatable {
             VStack(spacing: 0) {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(title)
-                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.middle)

@@ -68,7 +68,7 @@ public struct TransitionChromeLane: View {
             Image(systemName: effect.iconName)
                 .font(.system(size: 8, weight: .semibold))
             Text(Self.displayName(effect))
-                .font(.system(size: 8, weight: .semibold))
+                .meeshyScaledFont(8, weight: .semibold)
                 .lineLimit(1)
         }
         .padding(.horizontal, MeeshySpacing.xsPlus)

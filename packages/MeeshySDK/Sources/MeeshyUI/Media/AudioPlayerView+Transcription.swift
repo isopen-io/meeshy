@@ -131,7 +131,7 @@ extension AudioPlayerView {
                         Image(systemName: "text.badge.plus")
                             .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                         Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     .frame(maxWidth: .infinity)
@@ -179,7 +179,7 @@ extension AudioPlayerView {
                         Image(systemName: "text.badge.plus")
                             .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                         Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     .frame(maxWidth: .infinity)
@@ -217,7 +217,7 @@ extension AudioPlayerView {
                     seeMoreButton
                 } else {
                     Text(Self.flatTranscriptionQuote(fullTranscriptionText))
-                        .font(.system(size: MeeshyFont.smallSize))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .italic()
                         .foregroundColor(isDark ? .white.opacity(0.55) : .black.opacity(0.5))
                         .lineLimit(chromePlan.flatTranscriptionLineLimit)
@@ -240,9 +240,9 @@ extension AudioPlayerView {
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "text.badge.plus")
-                        .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
+                        .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
                     Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                        .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                 }
                 .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                 .padding(.vertical, MeeshySpacing.xs)
@@ -346,7 +346,7 @@ extension AudioPlayerView {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(String(localized: "media.audio.transcription.see_more",
                                 defaultValue: "Voir plus", bundle: .module))
-                        .font(.system(size: 10, weight: .semibold))
+                        .meeshyScaledFont(10, weight: .semibold)
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 }
@@ -381,7 +381,7 @@ extension AudioPlayerView {
                     }
                     Text(String(localized: "media.audio.retranscribe",
                                  defaultValue: "Re-transcrire", bundle: .module))
-                        .font(.system(size: 10, weight: .medium))
+                        .meeshyScaledFont(10, weight: .medium)
                 }
                 .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                 .frame(maxWidth: .infinity)
@@ -504,7 +504,7 @@ extension AudioPlayerView {
                 HapticFeedback.light()
             } label: {
                 Text(single.text)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
                     .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -536,7 +536,7 @@ extension AudioPlayerView {
                         HapticFeedback.light()
                     } label: {
                         Text(segment.text + " ")
-                            .font(.system(size: MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
                             .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
                             .padding(.horizontal, isActive ? 2 : 0)
                             .padding(.vertical, isActive ? 1 : 0)

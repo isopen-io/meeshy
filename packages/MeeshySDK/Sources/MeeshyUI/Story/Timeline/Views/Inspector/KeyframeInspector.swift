@@ -166,7 +166,7 @@ public struct KeyframeInspector: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.time",
                         defaultValue: "Instant", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(9, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(spacing: MeeshySpacing.xsPlus) {
                 timeStepButton(systemName: "minus.circle.fill") { onTimeAdjusted(-Self.timeStep) }
@@ -195,7 +195,7 @@ public struct KeyframeInspector: View {
     private var positionSliders: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "story.timeline.keyframe.position", bundle: .module).uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             HStack(spacing: MeeshySpacing.md) {
                 axisSlider(label: "X", value: $posX, range: 0...1) {
@@ -222,7 +222,7 @@ public struct KeyframeInspector: View {
     private var scaleSlider: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.scale", bundle: .module).uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             Slider(value: $scale, in: Self.scaleSliderRange(current: keyframe.scale, floor: keyframe.scaleFloor)) { editing in
                 if !editing { onScaleChanged(scale) }
@@ -235,7 +235,7 @@ public struct KeyframeInspector: View {
     private var opacitySlider: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.opacity", bundle: .module).uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             Slider(value: $opacity, in: 0...1, step: 0.01) { editing in
                 if !editing { onOpacityChanged(opacity) }

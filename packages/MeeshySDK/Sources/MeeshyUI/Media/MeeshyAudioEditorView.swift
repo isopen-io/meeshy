@@ -118,7 +118,7 @@ public struct MeeshyAudioEditorView: View {
                 .scaleEffect(1.2)
             Text(String(localized: "audio.editor.preparing",
                         defaultValue: "Pr\u{00E9}paration de l'audio\u{2026}", bundle: .module))
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
     }
@@ -357,7 +357,7 @@ public struct MeeshyAudioEditorView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: size, weight: .medium))
+                .meeshyScaledFont(size, weight: .medium)
                 .foregroundColor(theme.textPrimary.opacity(0.65))
         }
         .buttonStyle(.plain)
@@ -398,7 +398,7 @@ public struct MeeshyAudioEditorView: View {
                         .foregroundColor(isActive ? .white : accent)
                 }
                 Text(tool.title)
-                    .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                    .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                     .foregroundColor(isActive ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
             }
@@ -430,7 +430,7 @@ public struct MeeshyAudioEditorView: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: version.operation.displayIcon)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .semibold)
                 Text(version.operation.displayLabel)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .lineLimit(1)
@@ -463,7 +463,7 @@ public struct MeeshyAudioEditorView: View {
                           defaultValue: "Appliquer les modifications", bundle: .module)
                  : String(localized: "audio.editor.use",
                           defaultValue: "Utiliser l'audio", bundle: .module))
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
@@ -478,7 +478,7 @@ public struct MeeshyAudioEditorView: View {
     private func errorBanner(_ message: String) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: MeeshyIconSize.xs))
+                .meeshyScaledFont(MeeshyIconSize.xs)
                 .foregroundColor(MeeshyColors.error)
             Text(message)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
@@ -488,7 +488,7 @@ public struct MeeshyAudioEditorView: View {
                 controller.lastError = nil
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                     .foregroundColor(theme.textMuted)
             }
             .buttonStyle(.plain)
@@ -510,7 +510,7 @@ public struct MeeshyAudioEditorView: View {
                 ProgressView().tint(.white).scaleEffect(1.2)
                 Text(String(localized: "audio.editor.processing",
                             defaultValue: "Traitement\u{2026}", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(.white)
             }
             .padding(MeeshySpacing.xxl)

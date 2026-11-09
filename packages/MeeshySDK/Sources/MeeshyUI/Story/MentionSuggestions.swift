@@ -405,7 +405,7 @@ public struct StoryMentionPickerSheet: View {
             Text(String(localized: "reference.audienceWarning",
                         defaultValue: "Cette personne pourra voir ce contenu même hors de l'audience choisie",
                         bundle: .module))
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -415,7 +415,7 @@ public struct StoryMentionPickerSheet: View {
     private func sectionTitle(_ text: String) -> some View {
         HStack {
             Text(text)
-                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -440,7 +440,7 @@ public struct StoryMentionPickerSheet: View {
                     Image(systemName: reference.display.symbolName)
                         .font(.system(size: 11, weight: .semibold))
                     Text("@\(reference.username)")
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .lineLimit(1)
                 }
                 .foregroundStyle(reference.display == .silent ? Color.secondary : Color.primary)

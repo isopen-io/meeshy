@@ -225,7 +225,7 @@ public struct ConversationSettingsView: View {
             .padding(.bottom, -40)
 
             Text(viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title)
-                .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                 .foregroundColor(theme.textPrimary)
                 .padding(.top, MeeshySpacing.sm)
         }
@@ -299,7 +299,7 @@ public struct ConversationSettingsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
-                            .font(.system(size: MeeshyFont.labelSize, weight: .medium, design: .rounded))
+                            .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
                             .foregroundColor(theme.textPrimary)
                         Text(String(localized: "conversation.settings.permissions.announcement.subtitle", defaultValue: "Seuls les admins peuvent écrire", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
@@ -328,7 +328,7 @@ public struct ConversationSettingsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "conversation.settings.permissions.autoTranslate", defaultValue: "Traduction automatique", bundle: .module))
-                            .font(.system(size: MeeshyFont.labelSize, weight: .medium, design: .rounded))
+                            .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
                             .foregroundColor(theme.textPrimary)
                         Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Les messages sont traduits automatiquement", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
@@ -358,7 +358,7 @@ public struct ConversationSettingsView: View {
                         .font(.system(size: MeeshyIconSize.xs, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     TextField(String(localized: "conversation.settings.members.search.placeholder", defaultValue: "Rechercher un membre...", bundle: .module), text: $viewModel.memberSearchText)
-                        .font(.system(size: MeeshyFont.labelSize, design: .rounded))
+                        .meeshyScaledFont(MeeshyFont.labelSize, design: .rounded)
                         .foregroundColor(theme.textPrimary)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
@@ -423,7 +423,7 @@ public struct ConversationSettingsView: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
-                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold, design: .rounded))
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold, design: .rounded)
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 memberRoleBadge(role)
@@ -452,17 +452,17 @@ public struct ConversationSettingsView: View {
         switch role {
         case .creator:
             HStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: "crown.fill").font(.system(size: MeeshyIconSize.xxs))
+                Image(systemName: "crown.fill").meeshyScaledFont(MeeshyIconSize.xxs)
                 Text(String(localized: "conversation.role.creator", defaultValue: "Créateur", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.tileSaffron)
         case .admin:
             HStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: "shield.fill").font(.system(size: MeeshyIconSize.xxs))
+                Image(systemName: "shield.fill").meeshyScaledFont(MeeshyIconSize.xxs)
                 Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.blue500)
         case .moderator:
             HStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: "checkmark.shield.fill").font(.system(size: MeeshyIconSize.xxs))
+                Image(systemName: "checkmark.shield.fill").meeshyScaledFont(MeeshyIconSize.xxs)
                 Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.success)
         case .member:

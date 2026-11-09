@@ -155,7 +155,7 @@ struct MemberRow: View {
 
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: member.communityRole.icon)
-                        .font(.system(size: MeeshyIconSize.xxs))
+                        .meeshyScaledFont(MeeshyIconSize.xxs)
                     Text(member.communityRole.displayName)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }

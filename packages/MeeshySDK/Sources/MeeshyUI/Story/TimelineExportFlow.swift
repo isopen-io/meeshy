@@ -495,7 +495,7 @@ struct TimelineExportPreviewSheet: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xxxl))
+                        .meeshyScaledFont(MeeshyIconSize.xxxl)
                         .foregroundStyle(Color.white.opacity(0.85))
                         .padding()
                 }

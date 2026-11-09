@@ -91,7 +91,7 @@ struct AudioEditorToolPanel: View {
                 Label(String(localized: "audio.editor.fade.in",
                              defaultValue: "Fondu d'entr\u{00E9}e", bundle: .module),
                       systemImage: "arrow.up.right")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textPrimary)
             }
             .tint(accent)
@@ -99,7 +99,7 @@ struct AudioEditorToolPanel: View {
                 Label(String(localized: "audio.editor.fade.out",
                              defaultValue: "Fondu de sortie", bundle: .module),
                       systemImage: "arrow.down.right")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textPrimary)
             }
             .tint(accent)
@@ -137,12 +137,12 @@ struct AudioEditorToolPanel: View {
         VStack(spacing: MeeshySpacing.sm) {
             HStack {
                 Image(systemName: "speaker.fill")
-                    .font(.system(size: MeeshyIconSize.xs))
+                    .meeshyScaledFont(MeeshyIconSize.xs)
                     .foregroundColor(theme.textMuted)
                 Slider(value: $controller.gain, in: 0...2, step: 0.05)
                     .tint(accent)
                 Image(systemName: "speaker.wave.3.fill")
-                    .font(.system(size: MeeshyIconSize.xs))
+                    .meeshyScaledFont(MeeshyIconSize.xs)
                     .foregroundColor(theme.textMuted)
             }
             Text(volumeLabel(controller.gain))
@@ -199,7 +199,7 @@ struct AudioEditorToolPanel: View {
                 ProgressView().tint(accent)
                 Text(String(localized: "audio.editor.transcription.running",
                             defaultValue: "Transcription en cours\u{2026}", bundle: .module))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
             }
         } else {
@@ -254,7 +254,7 @@ struct AudioEditorToolPanel: View {
     private func transcribeMessage(icon: String, text: String, tint: Color) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.xs))
+                .meeshyScaledFont(MeeshyIconSize.xs)
                 .foregroundColor(tint)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))

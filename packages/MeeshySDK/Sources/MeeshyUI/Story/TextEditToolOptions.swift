@@ -220,7 +220,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 16))
                 .foregroundStyle(.secondary)
             Text("\(Int(Self.displayedSize(for: textObject)))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34)
         }
@@ -340,7 +340,7 @@ public struct TextEditToolOptions: View {
                     .foregroundStyle(ink)
                     .storyTextEffect(effect, fontSize: 17, textColor: ink)
                 Text(TextEditLabels.title(for: effect))
-                    .font(.system(size: 9, weight: .semibold))
+                    .meeshyScaledFont(9, weight: .semibold)
                     .foregroundStyle(ink.opacity(0.85))
                     .lineLimit(1)
             }
@@ -498,7 +498,7 @@ public struct TextEditToolOptions: View {
             HapticFeedback.light()
         } label: {
             Text(code.uppercased())
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
                 .frame(minWidth: 38)
                 .frame(height: Self.chipHeight)
@@ -546,7 +546,7 @@ public struct TextEditToolOptions: View {
                         .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 0.5))
                 }
                 Text(StoryTextBackgroundPresets.label(for: style))
-                    .font(.system(size: Self.chipFontSize, weight: .semibold))
+                    .meeshyScaledFont(Self.chipFontSize, weight: .semibold)
             }
             .foregroundStyle(isSel ? Color.white : Color.primary)
             .padding(.horizontal, 9)
@@ -579,7 +579,7 @@ public struct TextEditToolOptions: View {
                         HapticFeedback.light()
                     } label: {
                         Text(TextEditLabels.title(for: shape))
-                            .font(.system(size: Self.chipFontSize, weight: .semibold))
+                            .meeshyScaledFont(Self.chipFontSize, weight: .semibold)
                             .foregroundStyle(isSel ? Color.white : Color.primary)
                             .padding(.horizontal, 10)
                             .frame(height: Self.chipHeight)
@@ -617,7 +617,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
             Text("×\(String(format: "%.1f", textObject.resolvedFramePaddingScale))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 40)
         }
@@ -648,7 +648,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.secondary)
             Text(String(format: "%.1f", textObject.frameBorderWidth ?? 0))
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34)
         }
@@ -749,7 +749,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.secondary)
             Text(Self.outlineWidthLabel(Double(textObject.borderWidth ?? 0)))
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize()

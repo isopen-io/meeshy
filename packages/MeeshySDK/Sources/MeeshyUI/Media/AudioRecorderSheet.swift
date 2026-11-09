@@ -133,7 +133,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 Text(recorder.isRecording
                      ? recordingTimeLabel
                      : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
                     .foregroundColor(recorder.isRecording ? MeeshyColors.brandPrimary : secondaryTextColor)
 
                 if showsLanguageStrip {

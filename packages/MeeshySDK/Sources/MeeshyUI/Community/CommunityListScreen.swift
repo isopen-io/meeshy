@@ -74,7 +74,7 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
             trailing: {
                 Button { onCreateCommunity?() } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: MeeshyIconSize.xxl))
+                        .meeshyScaledFont(MeeshyIconSize.xxl)
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -134,11 +134,11 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
                 )
 
             Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communauté", bundle: .module))
-                .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                 .foregroundStyle(theme.textPrimary)
 
             Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou crée une communauté pour collaborer", bundle: .module))
-                .font(.system(size: MeeshyFont.labelSize, design: .rounded))
+                .meeshyScaledFont(MeeshyFont.labelSize, design: .rounded)
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -308,14 +308,14 @@ private struct VibrantCommunityCard: View, Equatable {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: MeeshyIconSize.xxs))
                         Text(CompactCountLabel.text(community.memberCount))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                     }
 
                     HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "bubble.left.fill")
                             .font(.system(size: MeeshyIconSize.xxs))
                         Text(CompactCountLabel.text(community.conversationCount))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                     }
                 }
                 .foregroundStyle(Color.white.opacity(0.9))

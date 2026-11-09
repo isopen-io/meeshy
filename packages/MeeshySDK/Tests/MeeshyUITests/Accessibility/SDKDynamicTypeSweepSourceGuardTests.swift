@@ -188,7 +188,7 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         fixedGlyphs.contains { $0.file == file && receiver.contains($0.receiver) }
     }
 
-    private static let fixedFontCeiling = 261
+    private static let fixedFontCeiling = 252
 
     func test_scaledPointSize_atDefaultDynamicType_returnsTheExactBaseSize() {
         for size in [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 28, 34] as [CGFloat] {
@@ -242,5 +242,38 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         XCTAssertEqual(offenders, [], "Texte en police figée : utiliser MeeshyFont.relative ou meeshyScaledFont")
     }
 
-    private static let textCeilings: [String: Int] = [:]
+    private static let textCeilings: [String: Int] = [
+        "Community/CommunityCreateScreen.swift": 1,
+        "Community/CommunityEmojiMark.swift": 1,
+        "Community/CommunitySettingsScreen.swift": 1,
+        "Game/GameBadgeView.swift": 1,
+        "Game/GameLeagueBricks.swift": 1,
+        "Game/GameMedalView.swift": 2,
+        "Game/GameReferralBannerView.swift": 2,
+        "Game/LevelRingView.swift": 1,
+        "Game/MeeshCoinFaces.swift": 2,
+        "Game/RankBlasonView.swift": 1,
+        "Game/TrophyView.swift": 1,
+        "Media/AudioPlayerChips.swift": 2,
+        "Media/MediaTranscriptionView.swift": 1,
+        "Media/MeeshyVideoPlayer+InlineRenderer.swift": 2,
+        "Navigation/CollapsibleHeader.swift": 2,
+        "Primitives/AvatarInitialsFace.swift": 1,
+        "Primitives/CachedAsyncImage.swift": 1,
+        "Primitives/EmojiReactionPicker.swift": 6,
+        "Primitives/LanguagePickerSheet.swift": 2,
+        "Primitives/ProfileCompletionRing.swift": 1,
+        "Primitives/UserIdentityBar.swift": 1,
+        "Profile/UserProfileSheet.swift": 1,
+        "Story/SlideMiniPreview.swift": 3,
+        "Story/StickerPickerView+Emoji.swift": 1,
+        "Story/StickerPickerView+Packs.swift": 1,
+        "Story/StickerPickerView+Vertical.swift": 1,
+        "Story/StickerSheetTabBar.swift": 1,
+        "Story/StoryCanvasGuides.swift": 2,
+        "Story/StoryFilterGridView.swift": 1,
+        "Story/TextEditToolOptionsGrid.swift": 1,
+        "Story/Timeline/Views/Overlay/RulerView.swift": 1,
+        "Story/Timeline/Views/Overlay/SnapGuideView.swift": 1
+    ]
 }

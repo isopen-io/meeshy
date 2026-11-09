@@ -215,7 +215,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
             if onEdit != nil {
                 Image(systemName: "slider.horizontal.below.rectangle")
-                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                     .foregroundStyle(tint)
             }
         }

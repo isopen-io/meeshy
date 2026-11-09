@@ -217,7 +217,7 @@ public struct AudioClipBar: View, Equatable {
                         .foregroundStyle(.white)
                         .accessibilityHidden(true)
                     Text(title)
-                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)

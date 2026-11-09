@@ -16,7 +16,7 @@ struct ClipInspectorNumericField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title.uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             HStack(spacing: MeeshySpacing.xxs) {
@@ -35,7 +35,7 @@ struct ClipInspectorNumericField: View {
                 }
                 if !unit.isEmpty {
                     Text(unit)
-                        .font(.system(size: MeeshyFont.microSize))
+                        .meeshyScaledFont(MeeshyFont.microSize)
                         .foregroundStyle(.secondary)
                 }
             }

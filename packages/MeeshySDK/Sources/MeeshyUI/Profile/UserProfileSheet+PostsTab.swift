@@ -83,7 +83,7 @@ private struct ProfilePostRow: View, Equatable {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             if let content = post.content, !content.isEmpty {
                 Text(content)
-                    .font(.system(size: MeeshyFont.labelSize))
+                    .meeshyScaledFont(MeeshyFont.labelSize)
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)

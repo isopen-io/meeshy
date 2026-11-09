@@ -25,14 +25,14 @@ extension StickerPickerView {
                                         defaultValue: "Instants", bundle: .module)) {
                 Text(String(localized: "sticker.sheet.instants.hint",
                             defaultValue: "Ce que vous écrivez s’affiche sur le sticker", bundle: .module))
-                    .font(.system(size: 12, design: .rounded))
+                    .font(MeeshyFont.relative(12, design: .rounded))
                     .foregroundStyle(.secondary)
             }
             ForEach(MeeInstantCatalog.rows(columns: Self.meeColumns)) { row in
                 switch row {
                 case .title(let kind):
                     Text(Self.instantKindTitle(kind))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .padding(.top, Self.instantTitlePull)
                 case .instants(let instants):

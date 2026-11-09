@@ -356,7 +356,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .font(.system(size: MeeshyIconSize.xs))
                     .foregroundStyle(MeeshyColors.brandPrimary)
                 Text(value)
-                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                    .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                     .foregroundStyle(theme.textPrimary)
             }
             Text(label)

@@ -168,7 +168,7 @@ struct StoryAudioCell: View {
 
     private var durationLabel: some View {
         Text(MediaFormat.duration(playback.duration, rounding: .toNearestOrAwayFromZero))
-            .font(.system(size: MeeshyFont.captionSize, weight: .medium, design: .monospaced))
+            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium, design: .monospaced)
             .foregroundColor(secondaryText)
             .frame(minWidth: 32)
     }
