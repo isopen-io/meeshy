@@ -244,7 +244,8 @@ Audits : ${JSON.stringify(audits).slice(0, 14000)}
 3. DIVERGENCES entre plateformes : une clause tenue des deux côtés mais autrement (ordre, mot, icône, état en moins, geste différent) est un
    écart de la plateforme qui s'éloigne de ${PLATEFORMES[REFERENCE].nom}, sauf transposition imposée ; une phrase par divergence dans divergences.
 4. Pour chaque écart confirmé : fichiers = ceux qu'un correctif toucherait ; issue = le numéro d'une issue OUVERTE qui le suit déjà (recherche
-   gh, 0 sinon) ; nature = « decision-produit » quand corriger suppose un choix que la planche ne fait pas, « defaut » sinon ;
+   gh, 0 sinon) ; nature = « decision-produit » quand corriger suppose un choix que la planche ne fait pas, ou quand un témoin ou une
+   garde du dépôt IMPOSE ce que le code fait (l'écart est alors voulu : cite la garde), « defaut » sinon ;
    reflexion = mecanique (libellé, ordre, câblage), standard, ou delicat (machine à états, geste, Prisme, couleur, réseau).
 verdicts : une ligne par clause et par plateforme (${CIBLES.join(', ')}), après tes corrections.`
 
@@ -259,7 +260,8 @@ Incohérences de la planche : ${JSON.stringify(incoherences).slice(0, 12000)}
 - issue : si TOUS les écarts du lot sont déjà suivis par la même issue ouverte, son numéro ; 0 sinon. Les écarts déjà suivis par une issue
   qui couvre autre chose vont dans deja_suivis, pas dans un lot.
 - reflexion du lot = la plus haute de ses écarts. sensible = le lot touche chiffrement, authentification, protection de contenu ou présence.
-- decisions : une entrée par incohérence bloquante et par écart de nature decision-produit ; ces écarts n'entrent dans AUCUN lot.
+- decisions : une entrée par QUESTION, toutes plateformes confondues (jamais la même question une fois par plateforme), pour chaque
+  incohérence bloquante et chaque écart de nature decision-produit ; ces écarts n'entrent dans AUCUN lot.
 clauses de chaque lot = les ids de clause de ses écarts.`
 
 // ---------------------------------------------------------------------------
